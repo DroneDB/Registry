@@ -117,11 +117,11 @@ public sealed class Rq05ErrorModelTests : IDisposable
     [Test]
     public async Task AdminOnlyManagerAction_NonAdminUser_Is403()
     {
-        // GET /users passes the class-level [Authorize]; the manager checks the admin role
+        // GET /users passes the class-level [Authorize]; the Admin policy refuses (RQ-06: one message)
         var (response, problem) = await SendAsync(HttpMethod.Get, "/users", RegularUser);
 
         ShouldBeProblem(response, problem, StatusCodes.Status403Forbidden);
-        problem["detail"]!.GetValue<string>().ShouldBe("User is not admin");
+        problem["detail"]!.GetValue<string>().ShouldBe("Only administrators can perform this operation");
     }
 
     [Test]

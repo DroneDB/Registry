@@ -6,7 +6,7 @@
 # Regenerate on purpose: REGISTRY_UPDATE_SNAPSHOTS=1 dotnet test Registry.Web.UnitTest --filter
 #   "FullyQualifiedName~Rq04ControllerSmokeTests.EndpointAuthorization_MatchesSnapshot"
 ANY /hangfire/{**path} -> Authorize [authenticated] @ /hangfire/{**path}
-ANY /health -> Authorize + Policy(inline: AssertionRequirement) [admin] @ Health checks
+ANY /health -> Authorize + Policy(inline: AdminOrMonitorTokenRequirement) [admin] @ Health checks
 GET /health/live -> AllowAnonymous [anonymous] @ HTTP: GET /health/live
 GET /orgs -> none [open] @ OrganizationsController.GetAll
 POST /orgs -> none [open] @ OrganizationsController.Create
@@ -129,7 +129,7 @@ GET /orgs/{orgSlug}/members -> none [open] @ OrganizationsController.GetMembers
 POST /orgs/{orgSlug}/members -> none [open] @ OrganizationsController.AddMember
 DELETE /orgs/{orgSlug}/members/{userName} -> none [open] @ OrganizationsController.RemoveMember
 PUT /orgs/{orgSlug}/members/{userName} -> none [open] @ OrganizationsController.UpdateMemberPermission
-ANY /quickhealth -> Authorize + Policy(inline: AssertionRequirement) [admin] @ Health checks
+ANY /quickhealth -> Authorize + Policy(inline: AdminOrMonitorTokenRequirement) [admin] @ Health checks
 GET /scalar/favicon.svg -> AllowAnonymous [anonymous] @ HTTP: GET /scalar/favicon.svg
 GET /scalar/scalar.aspnetcore.js -> AllowAnonymous [anonymous] @ HTTP: GET /scalar/scalar.aspnetcore.js
 GET /scalar/scalar.js -> AllowAnonymous [anonymous] @ HTTP: GET /scalar/scalar.js
@@ -149,50 +149,50 @@ GET /stac/collections/{orgSlug}/{dsSlug}/items/{featureId} -> none [open] @ Stac
 GET /stac/conformance -> none [open] @ StacController.GetConformance
 GET /stac/search -> none [open] @ StacController.SearchGet
 POST /stac/search -> none [open] @ StacController.SearchPost
-GET /sys/build-pending-status -> Authorize [authenticated] @ SystemController.GetBuildPendingStatus
+GET /sys/build-pending-status -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.GetBuildPendingStatus
 POST /sys/check-artifact-completeness -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.CheckArtifactCompleteness
-POST /sys/cleanup -> Authorize [authenticated] @ SystemController.Cleanup
-POST /sys/cleanup-jobindices -> Authorize [authenticated] @ SystemController.CleanupJobIndices
-POST /sys/cleanupbatches -> Authorize [authenticated] @ SystemController.CleanupBatches
-POST /sys/cleanupdatasets -> Authorize [authenticated] @ SystemController.CleanupDatasets
+POST /sys/cleanup -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.Cleanup
+POST /sys/cleanup-jobindices -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.CleanupJobIndices
+POST /sys/cleanupbatches -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.CleanupBatches
+POST /sys/cleanupdatasets -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.CleanupDatasets
 GET /sys/config -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.GetConfig
 GET /sys/features -> AllowAnonymous + Authorize [anonymous] @ SystemController.GetFeatures
-POST /sys/fix-invalid-slugs -> Authorize [authenticated] @ SystemController.FixInvalidSlugs
-POST /sys/import-dataset -> Authorize [authenticated] @ SystemController.ImportDataset
-POST /sys/import-organization -> Authorize [authenticated] @ SystemController.ImportOrganization
-POST /sys/merge-organizations -> Authorize [authenticated] @ SystemController.MergeOrganizations
-POST /sys/migratevisibility -> Authorize [authenticated] @ SystemController.MigrateVisibility
-POST /sys/move-datasets -> Authorize [authenticated] @ SystemController.MoveDatasets
+POST /sys/fix-invalid-slugs -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.FixInvalidSlugs
+POST /sys/import-dataset -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.ImportDataset
+POST /sys/import-organization -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.ImportOrganization
+POST /sys/merge-organizations -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.MergeOrganizations
+POST /sys/migratevisibility -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.MigrateVisibility
+POST /sys/move-datasets -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.MoveDatasets
 GET /sys/processingNodes -> Authorize [authenticated] @ SystemController.GetProcessingNodes
 GET /sys/processingNodes/{nodeId}/options -> Authorize [authenticated] @ SystemController.GetProcessingNodeOptions
 GET /sys/processingNodes/{nodeId}/status -> Authorize [authenticated] @ SystemController.GetProcessingNodeStatus
-GET /sys/report -> Authorize [authenticated] @ SystemController.GetGlobalReport
-POST /sys/rescan -> Authorize [authenticated] @ SystemController.Rescan
-GET /sys/tasks -> Authorize [authenticated] @ AdminTasksController.List
-POST /sys/tasks/{id}/delete -> Authorize [authenticated] @ AdminTasksController.Delete
+GET /sys/report -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.GetGlobalReport
+POST /sys/rescan -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.Rescan
+GET /sys/tasks -> Authorize + Authorize(Policy=Admin) [admin] @ AdminTasksController.List
+POST /sys/tasks/{id}/delete -> Authorize + Authorize(Policy=Admin) [admin] @ AdminTasksController.Delete
 POST /sys/upload-probe -> Authorize [authenticated] @ UploadProbeController.Probe
 GET /sys/version -> Authorize [authenticated] @ SystemController.GetVersion
-DELETE /users -> Authorize [authenticated] @ UsersController.DeleteUser
-GET /users -> Authorize [authenticated] @ UsersController.GetAll
-POST /users -> Authorize [authenticated] @ UsersController.CreateUser
+DELETE /users -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.DeleteUser
+GET /users -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.GetAll
+POST /users -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.CreateUser
 POST /users/authenticate -> AllowAnonymous + Authorize [anonymous] @ UsersController.Authenticate
 POST /users/authenticate/refresh -> Authorize [authenticated] @ UsersController.Refresh
 POST /users/changepwd -> Authorize [authenticated] @ UsersController.ChangePasswordPost
-GET /users/detailed -> Authorize [authenticated] @ UsersController.GetAllDetailed
+GET /users/detailed -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.GetAllDetailed
 POST /users/logout -> AllowAnonymous + Authorize [anonymous] @ UsersController.Logout
 GET /users/meta -> Authorize [authenticated] @ UsersController.GetCurrentUserMeta
 GET /users/roles -> Authorize [authenticated] @ UsersController.GetRoles
-POST /users/roles -> Authorize [authenticated] @ UsersController.CreateRole
-DELETE /users/roles/{roleName} -> Authorize [authenticated] @ UsersController.DeleteRole
+POST /users/roles -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.CreateRole
+DELETE /users/roles/{roleName} -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.DeleteRole
 GET /users/storage -> Authorize [authenticated] @ UsersController.GetCurrentUserStorageInfo
-DELETE /users/{userName} -> Authorize [authenticated] @ UsersController.DeleteUserRoute
-PUT /users/{userName} -> Authorize [authenticated] @ UsersController.UpdateUser
+DELETE /users/{userName} -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.DeleteUserRoute
+PUT /users/{userName} -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.UpdateUser
 PUT /users/{userName}/changepwd -> Authorize [authenticated] @ UsersController.ChangePassword
-GET /users/{userName}/meta -> Authorize [authenticated] @ UsersController.GetUserMeta
-POST /users/{userName}/meta -> Authorize [authenticated] @ UsersController.SetUserMeta
-GET /users/{userName}/orgs -> Authorize [authenticated] @ UsersController.GetOrganizations
-POST /users/{userName}/orgs -> Authorize [authenticated] @ UsersController.AddUserToOrganization
-DELETE /users/{userName}/orgs/{orgSlug} -> Authorize [authenticated] @ UsersController.RemoveUserFromOrganization
-PUT /users/{userName}/orgs/{orgSlug} -> Authorize [authenticated] @ UsersController.UpdateUserOrganizationPermissions
-GET /users/{userName}/storage -> Authorize [authenticated] @ UsersController.GetUserStorageInfo
+GET /users/{userName}/meta -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.GetUserMeta
+POST /users/{userName}/meta -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.SetUserMeta
+GET /users/{userName}/orgs -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.GetOrganizations
+POST /users/{userName}/orgs -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.AddUserToOrganization
+DELETE /users/{userName}/orgs/{orgSlug} -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.RemoveUserFromOrganization
+PUT /users/{userName}/orgs/{orgSlug} -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.UpdateUserOrganizationPermissions
+GET /users/{userName}/storage -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.GetUserStorageInfo
 GET /version -> none [open] @ HTTP: GET /version

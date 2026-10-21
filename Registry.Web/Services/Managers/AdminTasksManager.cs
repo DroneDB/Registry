@@ -48,9 +48,6 @@ public sealed class AdminTasksManager : IAdminTasksManager
 
     public async Task<bool> DeleteTaskAsync(string jobId, CancellationToken ct = default)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can delete tasks from the global list");
-
         // Writer performs the direct lookup and terminal-state check
         var (deleted, _, _) = await _writer.DeleteTerminalJobByIdAsync(jobId, ct);
         if (!deleted)
@@ -65,9 +62,6 @@ public sealed class AdminTasksManager : IAdminTasksManager
     public async Task<AdminTaskListDto> ListAsync(string? toolId, string? state, string? userId,
         int skip, int take, CancellationToken ct = default)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can list all tasks");
-
         take = Math.Clamp(take, 1, 200);
         skip = Math.Max(0, skip);
 

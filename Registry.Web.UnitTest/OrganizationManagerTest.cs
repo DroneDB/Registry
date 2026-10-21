@@ -337,19 +337,6 @@ public class OrganizationManagerTest : TestBase
     #region Merge Tests
 
     [Test]
-    public async Task Merge_NonAdminUser_ThrowsForbiddenException()
-    {
-        // Arrange
-        SetupStandardUser("standard-user");
-        await CreateOrganizationWithDatasets("source-org", "admin-id", 1);
-        await CreateOrganizationWithDatasets("dest-org", "admin-id", 0);
-
-        // Act & Assert
-        var action = () => _organizationsManager.Merge("source-org", "dest-org");
-        await Should.ThrowAsync<ForbiddenException>(action);
-    }
-
-    [Test]
     public async Task Merge_SourceSlugEmpty_ThrowsBadRequestException()
     {
         // Arrange

@@ -200,9 +200,6 @@ public class UsersManager : IUsersManager
 
     public async Task<UserDto> CreateUser(string userName, string email, string password, string[] roles)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can create new users");
-
         if (!Caps.SupportsLocalUserManagement)
             throw new ForbiddenException(
                 "Manual user creation is disabled. Users are provisioned automatically on their first login " +
@@ -416,9 +413,6 @@ public class UsersManager : IUsersManager
         if (string.IsNullOrWhiteSpace(userName))
             return _utils.GetUserStorage(user);
 
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Cannot get other user's storage info");
-
         user = await _userManager.FindByNameAsync(userName);
 
         if (user == null)
@@ -437,9 +431,6 @@ public class UsersManager : IUsersManager
         if (string.IsNullOrWhiteSpace(userName))
             return user.Metadata;
 
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Cannot get other user's meta");
-
         user = await _userManager.FindByNameAsync(userName);
 
         if (user == null)
@@ -457,9 +448,6 @@ public class UsersManager : IUsersManager
 
         if (string.IsNullOrWhiteSpace(userName))
             throw new BadRequestException("User name cannot be empty");
-
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Cannot change user data");
 
         user = await _userManager.FindByNameAsync(userName);
 
@@ -489,14 +477,6 @@ public class UsersManager : IUsersManager
         if (string.IsNullOrWhiteSpace(email))
             throw new BadRequestException("Email cannot be empty");
 
-        if (!await _authManager.IsUserAdmin())
-        {
-            // Check if the user is trying to update their own data
-            var currentUser = await _authManager.GetCurrentUser();
-            if (currentUser == null || currentUser.UserName != userName)
-                throw new ForbiddenException("Only admins can update users");
-        }
-
         var user = await _userManager.FindByNameAsync(userName);
 
         if (user == null)
@@ -519,9 +499,6 @@ public class UsersManager : IUsersManager
 
         if (currentUser == null)
             throw new BadRequestException("User does not exist");
-
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Cannot get other user's meta");
 
         var user = await _userManager.FindByNameAsync(userName);
 
@@ -572,9 +549,6 @@ public class UsersManager : IUsersManager
         if (currentUser == null)
             throw new BadRequestException("User does not exist");
 
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can manage user organizations");
-
         var user = await _userManager.FindByNameAsync(userName);
         if (user == null)
             throw new BadRequestException("Cannot find user " + userName);
@@ -618,9 +592,6 @@ public class UsersManager : IUsersManager
         if (currentUser == null)
             throw new BadRequestException("User does not exist");
 
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can manage user organizations");
-
         var user = await _userManager.FindByNameAsync(userName);
         if (user == null)
             throw new BadRequestException("Cannot find user " + userName);
@@ -656,9 +627,6 @@ public class UsersManager : IUsersManager
         if (currentUser == null)
             throw new BadRequestException("User does not exist");
 
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can manage user organizations");
-
         var user = await _userManager.FindByNameAsync(userName);
         if (user == null)
             throw new BadRequestException("Cannot find user " + userName);
@@ -692,9 +660,6 @@ public class UsersManager : IUsersManager
         string successor = null,
         ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.Rename)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can delete users");
-
         if (string.IsNullOrWhiteSpace(userName))
             throw new BadRequestException("userName should not be empty");
 
@@ -862,9 +827,6 @@ public class UsersManager : IUsersManager
 
     public async Task<IEnumerable<UserDto>> GetAll()
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("User is not admin");
-
         var userOrgQuery = from orgusr in _registryContext.OrganizationsUsers
             group orgusr by orgusr.UserId
             into g
@@ -939,9 +901,6 @@ public class UsersManager : IUsersManager
 
     public async Task<IEnumerable<UserDetailDto>> GetAllDetailed()
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("User is not admin");
-
         var userOrgQuery = from orgusr in _registryContext.OrganizationsUsers
             group orgusr by orgusr.UserId
             into g
@@ -1024,9 +983,6 @@ public class UsersManager : IUsersManager
 
     public async Task CreateRole(string roleName)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("User is not admin");
-
         if (string.IsNullOrWhiteSpace(roleName))
             throw new BadRequestException("Role name cannot be empty");
 
@@ -1042,9 +998,6 @@ public class UsersManager : IUsersManager
 
     public async Task DeleteRole(string roleName)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("User is not admin");
-
         if (string.IsNullOrWhiteSpace(roleName))
             throw new BadRequestException("Role name cannot be empty");
 
@@ -1064,9 +1017,6 @@ public class UsersManager : IUsersManager
 
     public async Task UpdateUserRoles(string userName, string[] roles)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("User is not admin");
-
         var user = await _userManager.FindByNameAsync(userName);
         if (user == null)
             throw new BadRequestException($"User '{userName}' not found");

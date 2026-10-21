@@ -76,9 +76,6 @@ public class SystemManager : ISystemManager
 
     public async Task<CleanupDatasetResultDto> CleanupEmptyDatasets()
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can perform system related tasks");
-
         var datasets = _context.Datasets.Include(ds => ds.Organization).ToArray();
 
         _logger.LogInformation("Found {DatasetsCount} with objects count zero", datasets.Length);
@@ -142,9 +139,6 @@ public class SystemManager : ISystemManager
 
     public async Task<FixInvalidSlugsResultDto> FixInvalidSlugs(bool dryRun = true)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can perform system related tasks");
-
         var result = new FixInvalidSlugsResultDto { DryRun = dryRun };
 
         var orgs = _context.Organizations.AsNoTracking().Include(o => o.Datasets).ToArray();
@@ -407,9 +401,6 @@ public class SystemManager : ISystemManager
     public async Task<IEnumerable<MigrateVisibilityEntryDTO>> MigrateVisibility()
     {
 
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can perform system related tasks");
-
         var query = (from ds in _context.Datasets.Include(ds => ds.Organization)
             select new { ds = ds.Slug, ds.InternalRef, Org = ds.Organization.Slug }).ToArray();
 
@@ -456,9 +447,6 @@ public class SystemManager : ISystemManager
 
     public async Task<CleanupBatchesResultDto> CleanupBatches()
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can perform system related tasks");
-
         var expiration = DateTime.Now - _settings.UploadBatchTimeout;
 
         // I'm scared
@@ -540,17 +528,11 @@ public class SystemManager : ISystemManager
 
     public async Task<BuildPendingStatusDto> GetBuildPendingStatus()
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can perform system related tasks");
-
         return _buildPendingService.GetStatus();
     }
 
     public async Task<ImportResultDto> ImportDataset(ImportDatasetRequestDto request)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can perform system related tasks");
-
         if (string.IsNullOrWhiteSpace(request.SourceRegistryUrl))
             throw new BadRequestException("SourceRegistryUrl is required");
 
@@ -647,9 +629,6 @@ public class SystemManager : ISystemManager
 
     public async Task<ImportResultDto> ImportOrganization(ImportOrganizationRequestDto request)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can perform system related tasks");
-
         if (string.IsNullOrWhiteSpace(request.SourceRegistryUrl))
             throw new BadRequestException("SourceRegistryUrl is required");
 
@@ -1556,9 +1535,6 @@ public class SystemManager : ISystemManager
 
     public async Task<CleanupJobIndicesResultDto> CleanupJobIndices(int? retentionDays = null)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can perform system related tasks");
-
         var days = retentionDays ?? _settings.JobIndexRetentionDays;
         if (days <= 0)
             days = 60;
@@ -1581,9 +1557,6 @@ public class SystemManager : ISystemManager
 
     public async Task<GlobalReportDto> GetGlobalReport()
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can perform system related tasks");
-
         var userName = await _authManager.SafeGetCurrentUserName();
 
         var organizations = await _context.Organizations
@@ -1672,9 +1645,6 @@ public class SystemManager : ISystemManager
 
     public async Task<CleanupBuildResultDto> CleanupBuild(CleanupBuildRequestDto request)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can perform system related tasks");
-
         request ??= new CleanupBuildRequestDto();
         var scope = DatasetScope.Parse(request.OrganizationSlug, request.DatasetSlug);
 

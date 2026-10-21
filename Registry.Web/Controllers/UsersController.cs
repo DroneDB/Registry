@@ -99,6 +99,7 @@ public class UsersController : ControllerBaseEx
     /// <param name="model">The user creation request containing username, email, password and roles.</param>
     /// <returns>The created user information.</returns>
     [HttpPost(Name = nameof(CreateUser))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -163,6 +164,7 @@ public class UsersController : ControllerBaseEx
     /// <param name="conflictResolution">How to handle dataset naming conflicts when transferring.</param>
     /// <returns>The result of the deletion operation.</returns>
     [HttpDelete("{userName}", Name = nameof(DeleteUserRoute))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(DeleteUserResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -198,6 +200,7 @@ public class UsersController : ControllerBaseEx
     /// <param name="model">The delete user request containing username and optional successor.</param>
     /// <returns>The result of the deletion operation.</returns>
     [HttpDelete(Name = nameof(DeleteUser))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(DeleteUserResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -216,6 +219,7 @@ public class UsersController : ControllerBaseEx
     /// </summary>
     /// <returns>A list of all users.</returns>
     [HttpGet(Name = nameof(UsersController) + "." + nameof(GetAll))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(IEnumerable<UserDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -231,6 +235,7 @@ public class UsersController : ControllerBaseEx
     /// </summary>
     /// <returns>A list of all users with detailed information including storage usage.</returns>
     [HttpGet("detailed", Name = nameof(GetAllDetailed))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(IEnumerable<UserDetailDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -262,6 +267,7 @@ public class UsersController : ControllerBaseEx
     /// <param name="userName">The username of the user.</param>
     /// <returns>The user's storage information including total and used space.</returns>
     [HttpGet("{userName}/storage", Name = nameof(GetUserStorageInfo))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(UserStorageInfo), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -293,6 +299,7 @@ public class UsersController : ControllerBaseEx
     /// <param name="userName">The username of the user.</param>
     /// <returns>A dictionary containing the user's metadata.</returns>
     [HttpGet("{userName}/meta", Name = nameof(GetUserMeta))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(Dictionary<string, object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -310,6 +317,7 @@ public class UsersController : ControllerBaseEx
     /// <param name="meta">A dictionary containing the metadata to set.</param>
     /// <returns>No content on success.</returns>
     [HttpPost("{userName}/meta", Name = nameof(SetUserMeta))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -330,6 +338,7 @@ public class UsersController : ControllerBaseEx
     /// <param name="userName">The username of the user.</param>
     /// <returns>An array of organizations the user belongs to with membership info.</returns>
     [HttpGet("{userName}/orgs", Name = nameof(GetOrganizations))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(UserOrganizationMembershipDto[]), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -347,6 +356,7 @@ public class UsersController : ControllerBaseEx
     /// <param name="request">The organization and permissions to assign.</param>
     /// <returns>No content on success.</returns>
     [HttpPost("{userName}/orgs", Name = nameof(AddUserToOrganization))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -367,6 +377,7 @@ public class UsersController : ControllerBaseEx
     /// <param name="request">The new permissions.</param>
     /// <returns>No content on success.</returns>
     [HttpPut("{userName}/orgs/{orgSlug}", Name = nameof(UpdateUserOrganizationPermissions))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -387,6 +398,7 @@ public class UsersController : ControllerBaseEx
     /// <param name="orgSlug">The organization slug.</param>
     /// <returns>No content on success.</returns>
     [HttpDelete("{userName}/orgs/{orgSlug}", Name = nameof(RemoveUserFromOrganization))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -409,6 +421,7 @@ public class UsersController : ControllerBaseEx
     /// <param name="request">The role creation request containing the role name.</param>
     /// <returns>No content on success.</returns>
     [HttpPost("roles", Name = nameof(CreateRole))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -428,6 +441,7 @@ public class UsersController : ControllerBaseEx
     /// <param name="roleName">The name of the role to delete.</param>
     /// <returns>No content on success.</returns>
     [HttpDelete("roles/{roleName}", Name = nameof(DeleteRole))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -445,6 +459,7 @@ public class UsersController : ControllerBaseEx
     /// <param name="request">The update request containing email and roles.</param>
     /// <returns>No content on success.</returns>
     [HttpPut("{userName}", Name = nameof(UpdateUser))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]

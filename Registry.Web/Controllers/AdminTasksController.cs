@@ -11,6 +11,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using Registry.Web.Utilities.Auth;
 
 namespace Registry.Web.Controllers;
 
@@ -36,6 +37,7 @@ public class AdminTasksController : ControllerBaseEx
     // ---- GET /sys/tasks ---------------------------------------------------
 
     [HttpGet(Name = nameof(AdminTasksController) + "." + nameof(List))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(AdminTaskListDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -49,6 +51,7 @@ public class AdminTasksController : ControllerBaseEx
     // ---- POST /sys/tasks/{id}/delete ------------------------------------
 
     [HttpPost("{id}/delete", Name = nameof(AdminTasksController) + "." + nameof(Delete))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

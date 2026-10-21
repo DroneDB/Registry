@@ -371,10 +371,6 @@ public class OrganizationsManager : IOrganizationsManager
         ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict,
         bool deleteSourceOrganization = true)
     {
-        // Only admins can perform this operation
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only administrators can merge organizations");
-
         if (string.IsNullOrWhiteSpace(sourceOrgSlug))
             throw new BadRequestException("Source organization slug is required");
 

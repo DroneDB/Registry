@@ -243,16 +243,6 @@ public class RescanManagerTest : TestBase
             CreateRescanManager(context).RescanDatasetIndex("test-org", "test-dataset", new RescanOptions(Extensions: "*.dwg")));
     }
 
-    [Test]
-    public async Task Rescan_NonAdmin_ThrowsForbiddenException()
-    {
-        await using var context = CreateInMemoryContext();
-        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
-
-        await Should.ThrowAsync<ForbiddenException>(() =>
-            CreateRescanManager(context).Rescan(new RescanRequestDto { Extensions = ["dwg"] }));
-    }
-
     [TestCase(null, null, null, null, TestName = "Rescan_NoFilter_ThrowsArgumentException")]
     [TestCase(null, "test-dataset", null, "dwg", TestName = "Rescan_DatasetWithoutOrganization_ThrowsArgumentException")]
     [TestCase("missing-org", null, null, "dwg", TestName = "Rescan_UnknownOrganization_ThrowsArgumentException")]

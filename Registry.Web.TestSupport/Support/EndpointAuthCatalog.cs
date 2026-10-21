@@ -6,6 +6,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -13,6 +14,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.Extensions.DependencyInjection;
 using Registry.Web.Attributes;
+using Registry.Web.Identity.Models;
 using Registry.Web.Utilities.Auth;
 
 namespace Registry.Web.Test.Support;
@@ -90,6 +92,11 @@ public static class EndpointAuthCatalog
         using var scope = services.CreateScope();
         var authorization = scope.ServiceProvider.GetRequiredService<IAuthorizationService>();
 
+        // The admin gate needs the admin claim and an administrator in the identity store (RQ-06): the
+        // admin probe is the factory's default administrator
+        var adminId = (await scope.ServiceProvider.GetRequiredService<UserManager<User>>()
+            .FindByNameAsync(RegistryWebFactory.AdminUserName))?.Id ?? "probe-admin-id";
+
         foreach (var endpoint in endpoints)
         {
             var action = endpoint.Metadata.GetMetadata<ControllerActionDescriptor>();
@@ -99,7 +106,7 @@ public static class EndpointAuthCatalog
                 : endpoint.DisplayName ?? template;
             var controller = action?.ControllerName;
             var declared = Describe(endpoint, action);
-            var gate = await EvaluateGateAsync(endpoint, policyProvider, authorization, scope.ServiceProvider);
+            var gate = await EvaluateGateAsync(endpoint, policyProvider, authorization, scope.ServiceProvider, adminId);
 
             var methods = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods;
             foreach (var method in methods is { Count: > 0 } ? methods : [AnyMethod])
@@ -211,7 +218,7 @@ public static class EndpointAuthCatalog
 
     private static async Task<EndpointGate> EvaluateGateAsync(Endpoint endpoint,
         IAuthorizationPolicyProvider policyProvider, IAuthorizationService authorization,
-        IServiceProvider requestServices)
+        IServiceProvider requestServices, string adminId)
     {
         if (endpoint.Metadata.GetMetadata<IAllowAnonymous>() != null)
             return EndpointGate.Anonymous;
@@ -234,18 +241,18 @@ public static class EndpointAuthCatalog
             return EndpointGate.Anonymous;
         if (await Passes(Principal(false)))
             return EndpointGate.Authenticated;
-        return await Passes(Principal(true)) ? EndpointGate.Admin : EndpointGate.Nobody;
+        return await Passes(Principal(true, adminId)) ? EndpointGate.Admin : EndpointGate.Nobody;
     }
 
     /// <summary>
     /// Anonymous (null), or an authenticated principal with the claims the app's JWT carries.
     /// </summary>
-    private static ClaimsPrincipal Principal(bool? isAdmin) =>
+    private static ClaimsPrincipal Principal(bool? isAdmin, string userId = "probe-user-id") =>
         isAdmin == null
             ? new ClaimsPrincipal(new ClaimsIdentity())
             : new ClaimsPrincipal(new ClaimsIdentity(
             [
-                new Claim(ClaimTypes.Name, "probe-user-id"),
+                new Claim(ClaimTypes.Name, userId),
                 new Claim(Policies.AdminClaimType, isAdmin.Value ? "true" : "false")
             ], "probe"));
 }

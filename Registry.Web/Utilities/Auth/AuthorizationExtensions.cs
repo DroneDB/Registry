@@ -3,9 +3,6 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
-using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Utilities.Auth;
 
@@ -15,33 +12,25 @@ public static class AuthorizationExtensions
 
     /// <summary>
     /// Allows the request when it carries the configured MonitorToken (bearer header, else the
-    /// "token" query parameter) or when the user is an admin (<see cref="Policies.IsAdmin"/>).
+    /// "token" query parameter) or when the user is an admin: <see cref="AdminOrMonitorTokenRequirement"/>,
+    /// checked by <see cref="AdminAuthorizationHandler"/>.
     /// </summary>
     public static IEndpointConventionBuilder RequireAdminOrMonitorToken(
         this IEndpointConventionBuilder builder)
     {
-        return builder.RequireAuthorization(policy =>
-        {
-            policy.RequireAssertion(context =>
-            {
-                if (context.Resource is HttpContext httpContext && HasMonitorToken(httpContext))
-                    return true;
-
-                return Policies.IsAdmin(context.User);
-            });
-        });
+        return builder.RequireAuthorization(policy => policy.AddRequirements(new AdminOrMonitorTokenRequirement()));
     }
 
-    private static bool HasMonitorToken(HttpContext httpContext)
+    /// <summary>Whether the request carries <paramref name="monitorToken"/> (bearer header, else the "token"
+    /// query parameter).</summary>
+    internal static bool HasMonitorToken(HttpContext httpContext, string monitorToken)
     {
-        var appSettings = httpContext.RequestServices.GetRequiredService<IOptions<AppSettings>>();
-
         var authHeader = httpContext.Request.Headers.Authorization.FirstOrDefault();
         var token = !string.IsNullOrEmpty(authHeader) && authHeader.StartsWith(BearerPrefix)
             ? authHeader[BearerPrefix.Length..].Trim()
             : httpContext.Request.Query["token"].FirstOrDefault();
 
-        return TokensMatch(token, appSettings.Value.MonitorToken);
+        return TokensMatch(token, monitorToken);
     }
 
     /// <summary>

@@ -322,3 +322,142 @@ public sealed class Rq06AccessBehaviourTests : Rq06Fixture
         strangerBody.ShouldContain("AccessDenied");
     }
 }
+
+/// <summary>
+/// RQ-06 admin gate, through HTTP: every admin-only endpoint declares the <c>Admin</c> policy, which needs
+/// the token's admin claim and the admin role in the identity store; a denial is a ProblemDetails 403 with
+/// one message; a non-admin cannot half-update a user. Each test fails on <c>d3c2ea8e</c> except the
+/// regression guard of the gate itself.
+/// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~Rq06AdminPolicyTests"
+/// </summary>
+[TestFixture]
+[NonParallelizable]
+[Category(TestCategories.Baseline)]
+public sealed class Rq06AdminPolicyTests : Rq06Fixture
+{
+    private const string AdminMessage = "Only administrators can perform this operation";
+
+    // ---- The Admin policy ----
+
+    private static readonly (HttpMethod Method, string Url)[] AdminEndpoints =
+    [
+        (HttpMethod.Get, "/users"),
+        (HttpMethod.Get, "/users/detailed"),
+        (HttpMethod.Get, "/users/" + StrangerUser + "/orgs"),
+        (HttpMethod.Get, "/users/" + StrangerUser + "/meta"),
+        (HttpMethod.Get, "/users/" + StrangerUser + "/storage"),
+        (HttpMethod.Get, "/sys/report"),
+        (HttpMethod.Get, "/sys/build-pending-status"),
+        (HttpMethod.Get, "/sys/tasks"),
+        (HttpMethod.Get, "/sys/config")
+    ];
+
+    [Test]
+    public async Task AdminEndpoints_NonAdmin_Is403ProblemWithOneMessage()
+    {
+        foreach (var (method, url) in AdminEndpoints)
+        {
+            var (response, _, problem) = await SendAsync(Request(method, url, Caller.Stranger));
+            ShouldBeProblem(response, problem, 403, AdminMessage);
+        }
+    }
+
+    [Test]
+    public async Task AdminEndpoints_AdminRoleWithoutTheAdminClaim_Is403()
+    {
+        // The token predates the promotion: the Hub does not show the admin pages either
+        foreach (var (method, url) in AdminEndpoints)
+        {
+            var (response, body, _) = await SendAsync(Request(method, url, Caller.Promoted));
+            ((int)response.StatusCode).ShouldBe(403, $"{method} {url}: {body}");
+        }
+    }
+
+    [Test]
+    public async Task AdminEndpoints_AdminClaimWithoutTheAdminRole_Is403()
+    {
+        // A demoted administrator whose token is still valid (GET /sys/config used to read the claim only)
+        foreach (var (method, url) in AdminEndpoints)
+        {
+            var (response, body, _) = await SendAsync(Request(method, url, Caller.Demoted));
+            ((int)response.StatusCode).ShouldBe(403, $"{method} {url}: {body}");
+        }
+    }
+
+    [Test]
+    public async Task AdminEndpoints_AnonymousIsChallenged_AdminPasses()
+    {
+        // Regression guard: the gate itself
+        foreach (var (method, url) in AdminEndpoints)
+        {
+            var (anonymous, _, _) = await SendAsync(Request(method, url, Caller.Anonymous));
+            ((int)anonymous.StatusCode).ShouldBe(401, $"{method} {url}");
+
+            // Past the gate (the strict FakeDdbWrapper may fail the action itself, e.g. dataset sizes)
+            var (admin, body, _) = await SendAsync(Request(method, url, Caller.Admin));
+            ((int)admin.StatusCode).ShouldNotBeOneOf([401, 403], $"{method} {url}: {body}");
+        }
+    }
+
+    // Commands: the gate answers before the body is read or anything changes, so no admin call here
+    private static readonly (HttpMethod Method, string Url)[] AdminCommandEndpoints =
+    [
+        (HttpMethod.Post, "/users"),
+        (HttpMethod.Delete, "/users"),
+        (HttpMethod.Delete, "/users/" + StrangerUser),
+        (HttpMethod.Put, "/users/" + StrangerUser),
+        (HttpMethod.Post, "/users/" + StrangerUser + "/meta"),
+        (HttpMethod.Post, "/users/" + StrangerUser + "/orgs"),
+        (HttpMethod.Put, "/users/" + StrangerUser + "/orgs/" + PrivateOrg),
+        (HttpMethod.Delete, "/users/" + StrangerUser + "/orgs/" + PrivateOrg),
+        (HttpMethod.Post, "/users/roles"),
+        (HttpMethod.Delete, "/users/roles/rq06"),
+        (HttpMethod.Post, "/sys/cleanupbatches"),
+        (HttpMethod.Post, "/sys/cleanupdatasets"),
+        (HttpMethod.Post, "/sys/cleanup"),
+        (HttpMethod.Post, "/sys/rescan"),
+        (HttpMethod.Post, "/sys/migratevisibility"),
+        (HttpMethod.Post, "/sys/fix-invalid-slugs"),
+        (HttpMethod.Post, "/sys/import-dataset"),
+        (HttpMethod.Post, "/sys/import-organization"),
+        (HttpMethod.Post, "/sys/move-datasets"),
+        (HttpMethod.Post, "/sys/merge-organizations"),
+        (HttpMethod.Post, "/sys/cleanup-jobindices"),
+        (HttpMethod.Post, "/sys/tasks/rq06/delete")
+    ];
+
+    [Test]
+    public async Task AdminCommandEndpoints_NonAdminCallers_AreRefusedByTheGate()
+    {
+        foreach (var (method, url) in AdminCommandEndpoints)
+        {
+            var (anonymous, _, _) = await SendAsync(Request(method, url, Caller.Anonymous));
+            ((int)anonymous.StatusCode).ShouldBe(401, $"{method} {url}");
+
+            var (stranger, _, problem) = await SendAsync(Request(method, url, Caller.Stranger));
+            ShouldBeProblem(stranger, problem, 403, AdminMessage);
+
+            foreach (var caller in new[] { Caller.Promoted, Caller.Demoted })
+            {
+                var (response, body, _) = await SendAsync(Request(method, url, caller));
+                ((int)response.StatusCode).ShouldBe(403, $"{method} {url} as {caller}: {body}");
+            }
+        }
+    }
+
+    [Test]
+    public async Task UpdateUser_NonAdminSelf_IsRefusedBeforeAnyChange()
+    {
+        // PUT /users/{userName} updates the e-mail and the roles: admin only. It used to commit the
+        // e-mail of a non-admin's own user and then answer 403 on the roles.
+        var request = Request(HttpMethod.Put, "/users/" + StrangerUser, Caller.Stranger,
+            Json("{\"email\":\"changed@example.com\",\"roles\":[]}"));
+
+        var (response, _, problem) = await SendAsync(request);
+
+        ShouldBeProblem(response, problem, 403, AdminMessage);
+        using var scope = Factory.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<Registry.Web.Identity.Models.User>>();
+        (await users.FindByNameAsync(StrangerUser))!.Email.ShouldBe(StrangerUser + "@example.com");
+    }
+}

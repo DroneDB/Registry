@@ -376,10 +376,6 @@ public class DatasetsManager : IDatasetsManager
         string destOrgSlug,
         ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict)
     {
-        // Only admins can perform this operation
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only administrators can move datasets between organizations");
-
         if (string.IsNullOrWhiteSpace(sourceOrgSlug))
             throw new BadRequestException("Source organization slug is required");
 

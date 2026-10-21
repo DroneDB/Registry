@@ -293,15 +293,6 @@ public class SystemManagerFixSlugsTest : TestBase
         context.Datasets.Count().ShouldBe(datasetsBefore);
     }
 
-    [Test]
-    public async Task NonAdmin_Throws()
-    {
-        _authManagerMock.Setup(o => o.IsUserAdmin()).ReturnsAsync(false);
-        await using var context = CreateContext();
-
-        await Should.ThrowAsync<ForbiddenException>(() => CreateManager(context).FixInvalidSlugs());
-    }
-
     #region Setup
 
     private string _dbName = null!;

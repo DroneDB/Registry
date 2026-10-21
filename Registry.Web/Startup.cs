@@ -16,6 +16,8 @@ using Hangfire.MySql;
 using HealthChecks.UI.Client;
 using Registry.Web.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
@@ -207,6 +209,8 @@ public class Startup
             });
 
         services.AddAuthorization(options => options.AddRegistryPolicies());
+        services.AddScoped<IAuthorizationHandler, AdminAuthorizationHandler>();
+        services.AddSingleton<IAuthorizationMiddlewareResultHandler, RegistryAuthorizationResultHandler>();
 
         services.Configure<IdentityOptions>(options =>
         {

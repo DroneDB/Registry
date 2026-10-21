@@ -610,23 +610,6 @@ public class DatasetManagerTest : TestBase
     #region MoveToOrganization Tests
 
     [Test]
-    public async Task MoveToOrganization_NonAdminUser_ThrowsForbiddenException()
-    {
-        // Arrange
-        await using var context = GetMoveTestContext();
-        var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
-        SetupStandardUser();
-
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
-
-        // Act & Assert
-        var action = () => datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "dest-org");
-        await Should.ThrowAsync<ForbiddenException>(action);
-    }
-
-    [Test]
     public async Task MoveToOrganization_SourceSlugEmpty_ThrowsBadRequestException()
     {
         // Arrange

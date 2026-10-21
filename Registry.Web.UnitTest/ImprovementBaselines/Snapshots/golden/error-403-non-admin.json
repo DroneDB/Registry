@@ -2,7 +2,14 @@
   "request": "GET /sys/config",
   "caller": "user (no membership)",
   "status": 403,
-  "contentType": null,
-  "bodyKind": "empty",
-  "body": null
+  "contentType": "application/problem+json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.4",
+    "title": "Forbidden",
+    "status": 403,
+    "detail": "Only administrators can perform this operation",
+    "traceId": "<trace-id>",
+    "noRetry": true
+  }
 }

@@ -89,23 +89,6 @@ public class SystemManagerTest : TestBase
     }
 
     [Test]
-    public async Task GetGlobalReport_NonAdmin_ThrowsForbiddenException()
-    {
-        // Arrange
-        await using var context = CreateInMemoryContext();
-        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
-
-        var systemManager = CreateSystemManager(context);
-
-        // Act
-        Func<Task> act = async () => await systemManager.GetGlobalReport();
-
-        // Assert
-        var ex = await Should.ThrowAsync<ForbiddenException>(act);
-        ex.Message.ShouldContain("Only admins");
-    }
-
-    [Test]
     public async Task GetGlobalReport_Admin_ReturnsReportWithOrgsAndDatasets()
     {
         // Arrange
@@ -172,20 +155,6 @@ public class SystemManagerTest : TestBase
     // -----------------------------------------------------------------------
     // CleanupBuild tests
     // -----------------------------------------------------------------------
-
-    [Test]
-    public async Task CleanupBuild_NonAdmin_ThrowsForbiddenException()
-    {
-        await using var context = CreateInMemoryContext();
-        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
-
-        var systemManager = CreateSystemManager(context);
-
-        Func<Task> act = async () => await systemManager.CleanupBuild(new Registry.Web.Models.DTO.CleanupBuildRequestDto());
-
-        var ex = await Should.ThrowAsync<ForbiddenException>(act);
-        ex.Message.ShouldContain("admins");
-    }
 
     [Test]
     public async Task CleanupBuild_DatasetSlugWithoutOrgSlug_ThrowsArgumentException()

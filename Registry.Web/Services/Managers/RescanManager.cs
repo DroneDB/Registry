@@ -100,9 +100,6 @@ public class RescanManager : IRescanManager
 
     public async Task<RescanJobDto> Rescan(RescanRequestDto request)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new ForbiddenException("Only admins can perform system related tasks");
-
         ArgumentNullException.ThrowIfNull(request);
         var scope = DatasetScope.Parse(request.OrganizationSlug, request.DatasetSlug);
         var filter = RescanFilter.Parse(request.Types, request.Extensions).RequireNotEmpty();

@@ -8,12 +8,17 @@ using Registry.Web.Identity;
 namespace Registry.Web.Utilities.Auth;
 
 /// <summary>
-/// Authorization policy names and the claim rules behind them. Every admin check on the request
-/// principal goes through <see cref="IsAdmin"/>, so all authentication paths agree on who is admin.
+/// Authorization policy names and the claim rules behind them. Every admin claim check on the request
+/// principal goes through <see cref="IsAdmin"/>, so all authentication paths agree on what the token says;
+/// the gates combine it with the identity store (<see cref="AdminAuthorizationHandler"/>).
 /// </summary>
 public static class Policies
 {
-    /// <summary>Requires an authenticated user that carries the admin claim (<see cref="IsAdmin"/>).</summary>
+    /// <summary>
+    /// Requires an administrator (<see cref="AdminRequirement"/>: the admin claim and the admin role of an
+    /// active user). Every admin-only endpoint declares it; a refusal is a ProblemDetails 403
+    /// (<see cref="RegistryAuthorizationResultHandler"/>).
+    /// </summary>
     public const string Admin = "Admin";
 
     /// <summary>Type of the admin flag claim issued by the JWT and by <c>BasicAuthFilter</c>.</summary>
@@ -33,7 +38,7 @@ public static class Policies
     {
         options.AddPolicy(Admin, policy => policy
             .RequireAuthenticatedUser()
-            .RequireAssertion(context => IsAdmin(context.User)));
+            .AddRequirements(new AdminRequirement()));
         return options;
     }
 }

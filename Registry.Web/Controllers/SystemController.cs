@@ -93,6 +93,7 @@ public class SystemController : ControllerBaseEx
     /// </summary>
     /// <returns>The cleanup result with removed batches and any errors encountered.</returns>
     [HttpPost("cleanupbatches", Name = nameof(SystemController) + "." + nameof(CleanupBatches))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(CleanupBatchesResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -107,6 +108,7 @@ public class SystemController : ControllerBaseEx
     /// </summary>
     /// <returns>The cleanup result with removed datasets and any errors encountered.</returns>
     [HttpPost("cleanupdatasets", Name = nameof(SystemController) + "." + nameof(CleanupDatasets))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(CleanupDatasetResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -128,6 +130,7 @@ public class SystemController : ControllerBaseEx
     /// </param>
     /// <returns>The cleanup result with removed entries/builds (sync) or job id (async).</returns>
     [HttpPost("cleanup", Name = nameof(SystemController) + "." + nameof(Cleanup))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(CleanupBuildResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(CleanupBuildResultDto), StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -151,6 +154,7 @@ public class SystemController : ControllerBaseEx
     /// </param>
     /// <returns>The id of the background job that submits the dataset tasks.</returns>
     [HttpPost("rescan", Name = nameof(SystemController) + "." + nameof(Rescan))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(RescanJobDto), StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -164,6 +168,7 @@ public class SystemController : ControllerBaseEx
     /// </summary>
     /// <returns>A list of migrated visibility entries.</returns>
     [HttpPost("migratevisibility", Name = nameof(SystemController) + "." + nameof(MigrateVisibility))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(IEnumerable<MigrateVisibilityEntryDTO>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -179,6 +184,7 @@ public class SystemController : ControllerBaseEx
     /// </summary>
     /// <param name="dryRun">When true (default) only returns the planned renames.</param>
     [HttpPost("fix-invalid-slugs", Name = nameof(SystemController) + "." + nameof(FixInvalidSlugs))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(FixInvalidSlugsResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> FixInvalidSlugs([FromQuery] bool dryRun = true)
@@ -191,6 +197,7 @@ public class SystemController : ControllerBaseEx
     /// </summary>
     /// <returns>The current status of the build pending job including metrics and next scheduled run.</returns>
     [HttpGet("build-pending-status", Name = nameof(SystemController) + "." + nameof(GetBuildPendingStatus))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(BuildPendingStatusDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -205,6 +212,7 @@ public class SystemController : ControllerBaseEx
     /// <param name="request">The import request containing source and destination information.</param>
     /// <returns>The import result with imported items, errors, and statistics.</returns>
     [HttpPost("import-dataset", Name = nameof(SystemController) + "." + nameof(ImportDataset))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(ImportResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -220,6 +228,7 @@ public class SystemController : ControllerBaseEx
     /// <param name="request">The import request containing source and destination organization information.</param>
     /// <returns>The import result with imported items, errors, and statistics.</returns>
     [HttpPost("import-organization", Name = nameof(SystemController) + "." + nameof(ImportOrganization))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(ImportResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -236,6 +245,7 @@ public class SystemController : ControllerBaseEx
     /// <param name="request">The move request containing the source organization slug, dataset slugs, destination organization, and conflict resolution strategy.</param>
     /// <returns>Results of the move operation for each dataset.</returns>
     [HttpPost("move-datasets", Name = nameof(SystemController) + "." + nameof(MoveDatasets))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(IEnumerable<MoveDatasetResultDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -261,6 +271,7 @@ public class SystemController : ControllerBaseEx
     /// <param name="request">The merge request containing destination organization and options.</param>
     /// <returns>Result of the merge operation.</returns>
     [HttpPost("merge-organizations", Name = nameof(SystemController) + "." + nameof(MergeOrganizations))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(MergeOrganizationResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -285,6 +296,7 @@ public class SystemController : ControllerBaseEx
     /// <param name="retentionDays">Optional override for retention period in days. Uses the configured default when omitted.</param>
     /// <returns>Cleanup result with the number of records deleted.</returns>
     [HttpPost("cleanup-jobindices", Name = nameof(SystemController) + "." + nameof(CleanupJobIndices))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(CleanupJobIndicesResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -393,6 +405,7 @@ public class SystemController : ControllerBaseEx
     /// </summary>
     /// <returns>Global report containing user, organizations, datasets, and file statistics.</returns>
     [HttpGet("report", Name = nameof(SystemController) + "." + nameof(GetGlobalReport))]
+    [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(GlobalReportDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]

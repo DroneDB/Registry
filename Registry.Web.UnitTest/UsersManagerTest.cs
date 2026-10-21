@@ -299,17 +299,6 @@ public class UsersManagerTest : TestBase
     }
 
     [Test]
-    public async Task DeleteUser_NonAdmin_ThrowsForbiddenException()
-    {
-        // Arrange
-        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
-
-        // Act & Assert
-        var action = () => _usersManager.DeleteUser("anyuser");
-        await Should.ThrowAsync<ForbiddenException>(action);
-    }
-
-    [Test]
     public async Task DeleteUser_RemovesOrganizationMemberships()
     {
         // Arrange
