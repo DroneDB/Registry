@@ -16,7 +16,7 @@ Mock<IOptions<AppSettings>> in tests	0
 Test helpers in Registry.Common/Test	0
 Category string literals (use TestCategories)	0
 Controller log+rethrow catch blocks	0
-catch (Exception ...) total	268
+catch (Exception ...) total	200
 new ErrorResponse( in controllers	0
 ErrorResponse references (D1)	0
 Controller entry debug traces	0
@@ -29,17 +29,17 @@ RequestAccess + throw blocks	79
 IsUserAdmin() guard + throw blocks	30
 Sync _utils.GetDataset/GetOrganization calls	100
 GetService/GetRequiredService calls	79
-Console.Write* in Program+Startup	41
+Console.Write* in Program+Startup	37
 .Wait() calls	2
-[DllImport] in production code	85
-EntryPointNotFoundException catches	71
+[DllImport] in production code	6
+EntryPointNotFoundException catches	0
 Copied DDB AutomaticRetry attribute	6
 Recurring-job local WriteLine copies	7
 ReadString(JsonElement) copies	9
 Zip-slip normalizer copies	0
 Direct Path.GetTempPath()	8
-Ad-hoc backslash->slash normalizations	24
-Static File./Directory. calls	198
+Ad-hoc backslash->slash normalizations	11
+Static File./Directory. calls	196
 DateTime.Now (local)	6
 Unpinned test_data URLs	0
 Task.Run in managers	10

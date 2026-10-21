@@ -12,8 +12,6 @@ Registry.Adapters/DroneDB/Ddb.cs CS8618 1
 Registry.Adapters/DroneDB/Ddb.cs CS8625 6
 Registry.Adapters/DroneDB/MetaManager.cs CS8603 1
 Registry.Adapters/DroneDB/MetaManager.cs CS8604 2
-Registry.Adapters/DroneDB/NativeDdbWrapper.cs CS8603 1
-Registry.Adapters/DroneDB/NativeDdbWrapper.cs CS8619 2
 Registry.Adapters/Thumbnail/RemoteThumbnailGeneratorSettings.cs CS8618 1
 Registry.Common/CommonUtils.cs CA1305 2
 Registry.Common/CommonUtils.cs CS8632 1
