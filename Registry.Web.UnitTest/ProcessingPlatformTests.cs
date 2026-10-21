@@ -136,7 +136,7 @@ public class ProcessingPlatformTests
         auth.Setup(a => a.IsUserInRole(It.IsAny<string>()))
             .ReturnsAsync((string r) => roleSet.Contains(r));
 
-        return new HeavyToolGating(Microsoft.Extensions.Options.Options.Create(settings), auth.Object);
+        return new HeavyToolGating(TestSettings.Options<ProcessingPlatformSettings>(Microsoft.Extensions.Options.Options.Create(settings)), auth.Object);
     }
 
     [Test]

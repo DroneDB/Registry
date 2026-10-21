@@ -15,6 +15,12 @@ public class NativeConcurrencySettings
     /// <summary>Thumbnails and coverage renders. Default: max(1, cores / 4).</summary>
     public int Heavy { get; set; }
 
-    public int TilesOrDefault => Tiles > 0 ? Tiles : Math.Max(2, Environment.ProcessorCount / 2);
-    public int HeavyOrDefault => Heavy > 0 ? Heavy : Math.Max(1, Environment.ProcessorCount / 4);
+    public int TilesOrDefault => TilesFor(Environment.ProcessorCount);
+    public int HeavyOrDefault => HeavyFor(Environment.ProcessorCount);
+
+    /// <summary>The tiles lane width for a process that may use <paramref name="cores"/> cores.</summary>
+    public int TilesFor(int cores) => Tiles > 0 ? Tiles : Math.Max(2, cores / 2);
+
+    /// <summary>The heavy lane width for a process that may use <paramref name="cores"/> cores.</summary>
+    public int HeavyFor(int cores) => Heavy > 0 ? Heavy : Math.Max(1, cores / 4);
 }

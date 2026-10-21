@@ -34,8 +34,8 @@ public sealed class ThumbnailPrecomputeQueue : IThumbnailPrecomputeQueue, IHoste
     private int _started;
 
     public ThumbnailPrecomputeQueue(ICacheManager cache, IThumbnailGenerator generator,
-        IOptions<AppSettings> settings, ILogger<ThumbnailPrecomputeQueue> logger)
-        : this(cache, generator, settings.Value.Uploads ?? new UploadSettings(), logger)
+        IOptions<UploadSettings> settings, ILogger<ThumbnailPrecomputeQueue> logger)
+        : this(cache, generator, settings.Value, logger)
     {
     }
 

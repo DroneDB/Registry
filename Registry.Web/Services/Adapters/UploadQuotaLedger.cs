@@ -75,8 +75,8 @@ public sealed class UploadQuotaLedger
     private readonly ConcurrentDictionary<string, UserState> _users = new();
     private readonly TimeSpan _window;
 
-    public UploadQuotaLedger(IOptions<AppSettings> settings)
-        : this(TimeSpan.FromSeconds((settings.Value.Uploads ?? new UploadSettings()).QuotaWindowSeconds))
+    public UploadQuotaLedger(IOptions<UploadSettings> settings)
+        : this(TimeSpan.FromSeconds(settings.Value.QuotaWindowSeconds))
     {
     }
 

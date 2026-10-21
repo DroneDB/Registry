@@ -4,42 +4,46 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
+using Registry.Web.Hosting;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Web.Data;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace Registry.Web.Services.Initialization;
 
 /// <summary>
-/// Handles dataset visibility cache preloading during application startup.
-/// Loads all dataset visibilities into cache to avoid filesystem reads on first access.
+/// Background startup task of the web host: loads every dataset visibility into the cache once the host
+/// has started (it opens every .ddb and is non-critical: the cache fills lazily on access anyway).
 /// </summary>
-internal class DatasetVisibilityCacheInitializer
+internal sealed class DatasetVisibilityCacheInitializer : IBackgroundStartupTask
 {
-    private readonly IServiceProvider _services;
-    private readonly ILogger _logger;
+    private readonly RegistryContext _context;
+    private readonly IDdbManager _ddbManager;
+    private readonly ICacheManager _cacheManager;
+    private readonly ILogger<DatasetVisibilityCacheInitializer> _logger;
 
     // Thread-safe counters for parallel operations
     private int _successCount;
     private int _failCount;
 
-    public DatasetVisibilityCacheInitializer(IServiceProvider services, ILogger logger)
+    public DatasetVisibilityCacheInitializer(RegistryContext context, IDdbManager ddbManager, ICacheManager cacheManager,
+        ILogger<DatasetVisibilityCacheInitializer> logger)
     {
-        _services = services ?? throw new ArgumentNullException(nameof(services));
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
+        _cacheManager = cacheManager ?? throw new ArgumentNullException(nameof(cacheManager));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task PreloadAsync(CancellationToken token)
+    public async Task ExecuteAsync(CancellationToken token)
     {
         _logger.LogInformation("Dataset visibility cache preload starting");
 
         try
         {
-            var context = _services.GetRequiredService<RegistryContext>();
-            var ddbManager = _services.GetRequiredService<IDdbManager>();
-            var cacheManager = _services.GetRequiredService<ICacheManager>();
+            var context = _context;
+            var ddbManager = _ddbManager;
+            var cacheManager = _cacheManager;
 
             // Query all datasets (lightweight: only ID, slug, ref)
             var datasets = await context.Datasets

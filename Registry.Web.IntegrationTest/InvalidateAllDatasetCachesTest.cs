@@ -49,7 +49,7 @@ public class InvalidateAllDatasetCachesTest : TestBase
         var ddbFactoryMock = new Mock<IDdbManager>();
         var authManagerMock = new Mock<IAuthManager>();
 
-        var webUtils = new WebUtils(authManagerMock.Object, context, settingsOptions,
+        var webUtils = new WebUtils(authManagerMock.Object, context, TestSettings.Options<AccountOptions>(settingsOptions), TestSettings.Options<HttpHostOptions>(settingsOptions),
             Mock.Of<IHttpContextAccessor>(), TestCaches.Summaries(ddbFactoryMock.Object));
 
         _objectsManager = new ObjectsManagerBuilder(context)

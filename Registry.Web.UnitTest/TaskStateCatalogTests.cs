@@ -12,6 +12,7 @@ using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Ports;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -108,7 +109,7 @@ public class TaskStateCatalogTests
                 MaxConcurrentUrlImportsPerUser = 100
             };
             configure(settings);
-            return new HeavyTaskQuota(_query, Microsoft.Extensions.Options.Options.Create(new AppSettings { ProcessingPlatform = settings }));
+            return new HeavyTaskQuota(_query, TestSettings.Options<ProcessingPlatformSettings>(Microsoft.Extensions.Options.Options.Create(new AppSettings { ProcessingPlatform = settings })));
         }
 
         (await Quota(_ => { }).EvaluateAsync(request, plan)).IsAllowed.ShouldBeTrue();

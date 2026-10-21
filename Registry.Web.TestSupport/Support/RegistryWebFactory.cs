@@ -62,7 +62,7 @@ public sealed class RegistryWebFactory : WebApplicationFactory<Program>
 
     // Process-wide statics the web host mutates; restored on disposal so sibling fixtures are unaffected
     private readonly JobStorage? _savedJobStorage;
-    private readonly HashSet<object> _baselineJobFilters;
+    private readonly GlobalJobFiltersSnapshot _jobFilters;
     private readonly ILogger _savedLogger;
     private bool _cleanedUp;
 
@@ -86,7 +86,7 @@ public sealed class RegistryWebFactory : WebApplicationFactory<Program>
             .Returns((string directory) => Path.Combine(directory, IDDB.DatabaseFolderName));
 
         _savedJobStorage = CurrentJobStorageOrNull();
-        _baselineJobFilters = GlobalJobFilters.Filters.Select(f => f.Instance).ToHashSet();
+        _jobFilters = new GlobalJobFiltersSnapshot();
         _savedLogger = Log.Logger;
     }
 
@@ -204,10 +204,9 @@ public sealed class RegistryWebFactory : WebApplicationFactory<Program>
 
     private void RestoreStatics()
     {
-        // The host registers Hangfire global filters holding its (now disposed) service provider
-        foreach (var filter in GlobalJobFilters.Filters.Select(f => f.Instance)
-                     .Where(i => !_baselineJobFilters.Contains(i)).ToList())
-            GlobalJobFilters.Filters.Remove(filter);
+        // The host registers Hangfire global filters holding its (now disposed) service provider and
+        // replaces the global retry policy
+        _jobFilters.Restore();
 
         // Same contract as JobStorageScope: the static cannot be unset, restore only a real value
         if (_savedJobStorage != null)

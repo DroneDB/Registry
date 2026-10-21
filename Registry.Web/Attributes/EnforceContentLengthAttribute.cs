@@ -11,7 +11,7 @@ namespace Registry.Web.Attributes;
 /// <summary>Which configured limit <see cref="EnforceContentLengthAttribute"/> applies.</summary>
 public enum ContentLengthLimit
 {
-    /// <summary><see cref="AppSettings.MaxRequestBodySize"/> (null: unlimited).</summary>
+    /// <summary><see cref="HttpHostOptions.MaxRequestBodySize"/> (null: unlimited).</summary>
     RequestBody,
 
     /// <summary>One chunk of a resumable upload: <see cref="UploadSettings.MaxChunkBytes"/> plus
@@ -43,12 +43,14 @@ public sealed class EnforceContentLengthFilter : IResourceFilter
     /// <summary>Multipart framing allowed around a chunk (boundaries, part headers, form fields).</summary>
     public const long ChunkFramingBytes = 64 * 1024;
 
-    private readonly AppSettings _settings;
+    private readonly HttpHostOptions _http;
+    private readonly UploadSettings _uploads;
     private readonly ContentLengthLimit _limit;
 
-    public EnforceContentLengthFilter(IOptions<AppSettings> settings, ContentLengthLimit limit)
+    public EnforceContentLengthFilter(IOptions<HttpHostOptions> http, IOptions<UploadSettings> uploads, ContentLengthLimit limit)
     {
-        _settings = settings.Value;
+        _http = http.Value;
+        _uploads = uploads.Value;
         _limit = limit;
     }
 
@@ -59,11 +61,11 @@ public sealed class EnforceContentLengthFilter : IResourceFilter
 
         if (_limit == ContentLengthLimit.Chunk)
         {
-            var maxChunk = (_settings.Uploads ?? new UploadSettings()).MaxChunkBytes;
+            var maxChunk = _uploads.MaxChunkBytes;
             if (length > maxChunk + ChunkFramingBytes)
                 throw new PayloadTooLargeException($"A chunk can be at most {maxChunk} bytes");
         }
-        else if (_settings.MaxRequestBodySize is { } maxBody && length > maxBody)
+        else if (_http.MaxRequestBodySize is { } maxBody && length > maxBody)
         {
             throw new PayloadTooLargeException($"Upload exceeds the maximum allowed size of {maxBody} bytes");
         }

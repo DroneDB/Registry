@@ -17,6 +17,14 @@ public interface IDdbRuntime
     /// <exception cref="DdbInvalidArgumentsException">libddb rejected a value; nothing was changed.</exception>
     void Configure(DdbProcessSettings settings);
 
+    /// <summary>
+    /// Sets the libddb environment variable <paramref name="name"/> (one libddb reads itself, e.g. the
+    /// per-build limits <c>DDB_BUILD_THREADS</c>) to <paramref name="value"/> unless the deployment
+    /// environment already set it; call it before <see cref="RegisterProcess"/>.
+    /// </summary>
+    /// <returns>The value in effect: <paramref name="value"/>, or the deployment's.</returns>
+    string SetEnvironmentDefault(string name, string value);
+
     /// <summary>The settings in effect and where each comes from (<c>DDBGetEffectiveConfig</c>), as JSON.</summary>
     string GetEffectiveConfig();
 

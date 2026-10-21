@@ -113,7 +113,7 @@ public class ObjectsManager : IObjectsManager
         // over the same collaborators (indexing with AddRaw when no queue is given).
         _uploads = uploadManager ?? new UploadManager(NullLogger<UploadManager>.Instance, authManager,
             access, ddbManager, fs, settings, backgroundJob, buildPendingService,
-            new UploadQuotaGuard(new UploadQuotaLedger(settings), utils),
+            new UploadQuotaGuard(new UploadQuotaLedger(Microsoft.Extensions.Options.Options.Create(settings.Value.Uploads ?? new UploadSettings())), utils),
             new DatasetChangeCoalescer(FallbackOgcKeys(), cacheManager, settings.Value.EffectiveDatasetThumbnailCandidates(),
                 TimeSpan.Zero, NullLogger<DatasetChangeCoalescer>.Instance),
             indexQueue: indexQueue);

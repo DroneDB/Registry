@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics.Metrics;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Options;
+using Registry.Web.Utilities;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
 
@@ -12,7 +12,7 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Default <see cref="INativeWorkGate"/>: one semaphore per lane, widths from
-/// <see cref="NativeConcurrencySettings"/>. Reports the calls in flight per lane as the
+/// the host budget (<see cref="HostResourceBudget"/>: <see cref="NativeConcurrencySettings"/> on the cores of this process). Reports the calls in flight per lane as the
 /// <c>registry.native.in_flight</c> gauge (meter <c>Registry.NativeWork</c>).
 /// </summary>
 public sealed class NativeWorkGate : INativeWorkGate, IDisposable
@@ -33,14 +33,20 @@ public sealed class NativeWorkGate : INativeWorkGate, IDisposable
     private readonly int _heavyWidth;
     private readonly Meter _meter;
 
-    public NativeWorkGate(IOptions<AppSettings> settings) : this(settings.Value.NativeConcurrency ?? new NativeConcurrencySettings())
+    /// <summary>The host's gate: the lane widths of the host budget (XI-06).</summary>
+    public NativeWorkGate(HostResourceBudget budget) : this(budget.RenderTiles, budget.RenderHeavy)
     {
     }
 
-    public NativeWorkGate(NativeConcurrencySettings settings)
+    /// <summary>A gate with <paramref name="settings"/> on every core of the process (tests).</summary>
+    public NativeWorkGate(NativeConcurrencySettings settings) : this(settings.TilesOrDefault, settings.HeavyOrDefault)
     {
-        _tilesWidth = settings.TilesOrDefault;
-        _heavyWidth = settings.HeavyOrDefault;
+    }
+
+    private NativeWorkGate(int tilesWidth, int heavyWidth)
+    {
+        _tilesWidth = tilesWidth;
+        _heavyWidth = heavyWidth;
         _tiles = new SemaphoreSlim(_tilesWidth, _tilesWidth);
         _heavy = new SemaphoreSlim(_heavyWidth, _heavyWidth);
 

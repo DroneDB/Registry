@@ -87,7 +87,7 @@ public class DatasetSummaryTests : TestBase
         _user.Metadata[MagicStrings.MaxStorageKey] = 1_000_000_000L;
         auth.Setup(a => a.GetCurrentUser()).ReturnsAsync(_user);
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings { EnableStorageLimiter = true, DatasetsPath = "/tmp" });
-        return new WebUtils(auth.Object, _ctx, settings, Mock.Of<IHttpContextAccessor>(), summaries);
+        return new WebUtils(auth.Object, _ctx, TestSettings.Options<AccountOptions>(settings), TestSettings.Options<HttpHostOptions>(settings), Mock.Of<IHttpContextAccessor>(), summaries);
     }
 
     [Test]

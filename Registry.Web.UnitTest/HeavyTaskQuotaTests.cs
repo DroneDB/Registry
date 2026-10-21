@@ -11,6 +11,7 @@ using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Ports;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -47,7 +48,7 @@ public class HeavyTaskQuotaTests
         {
             ProcessingPlatform = new ProcessingPlatformSettings { MaxConcurrentUrlImportsPerUser = maxUrlImportsPerUser }
         };
-        return new HeavyTaskQuota(query.Object, Microsoft.Extensions.Options.Options.Create(settings));
+        return new HeavyTaskQuota(query.Object, TestSettings.Options<ProcessingPlatformSettings>(Microsoft.Extensions.Options.Options.Create(settings)));
     }
 
     [Test]

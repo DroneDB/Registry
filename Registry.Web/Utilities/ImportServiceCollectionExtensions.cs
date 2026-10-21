@@ -1,6 +1,9 @@
 #nullable enable
 using System;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Registry.Web.Hosting;
 using Registry.Ports.Import;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Ports;
@@ -21,19 +24,21 @@ public static class ImportServiceCollectionExtensions
     /// Registers the import source infrastructure and the import heavy tool.
     /// </summary>
     /// <param name="services">The service collection.</param>
-    /// <param name="appSettings">The application settings.</param>
+    /// <param name="configuration">The host configuration (the options are registered by <c>AddRegistryOptions</c>).</param>
     /// <returns>The same <paramref name="services"/> for chaining.</returns>
-    public static IServiceCollection AddImportSources(this IServiceCollection services, AppSettings appSettings)
+    public static IServiceCollection AddImportSources(this IServiceCollection services, IConfiguration configuration)
     {
-        var importSettings = appSettings.Import ?? new ImportSettings();
+        var importSettings = configuration.GetRegistryOptions<ImportSettings>();
 
         // Shared Data Protection key ring so the worker can decrypt credentials the web host encrypted.
-        services.AddSharedDataProtection(appSettings);
+        services.AddSharedDataProtection(configuration.GetRegistryOptions<CachingOptions>(),
+            configuration.GetRegistryOptions<StorageOptions>());
 
         // HTTP client factory (idempotent if already registered by the host).
         services.AddHttpClient();
 
-        services.AddSingleton(importSettings);
+        // The bound options, for the services that take the settings object itself
+        services.AddSingleton(sp => sp.GetRequiredService<IOptions<ImportSettings>>().Value);
         services.AddSingleton<SsrfGuard>();
 
         // SSRF-hardened named client used by every import source and the legacy admin import path.

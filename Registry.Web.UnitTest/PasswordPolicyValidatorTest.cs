@@ -267,7 +267,7 @@ public class PasswordPolicyValidatorTest
         };
         var options = TestSettings.Options(appSettings);
 
-        return new PasswordPolicyValidator(options);
+        return new PasswordPolicyValidator(TestSettings.Options<IdentityProviderOptions>(options));
     }
 
     #endregion

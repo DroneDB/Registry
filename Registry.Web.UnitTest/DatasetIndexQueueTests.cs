@@ -40,7 +40,7 @@ public class DatasetIndexQueueTests
             IndexQueue = opts ?? new IndexQueueSettings { BatchWindowMs = 20, MaxBatchSize = 64 }
         });
 
-        var queue = new DatasetIndexQueue(scopeFactory, NullLogger<DatasetIndexQueue>.Instance, settings, time);
+        var queue = new DatasetIndexQueue(scopeFactory, NullLogger<DatasetIndexQueue>.Instance, TestSettings.Options<IndexQueueSettings>(settings), time);
         return (queue, ddb);
     }
 
@@ -250,7 +250,7 @@ public class DatasetIndexQueueTests
         });
 
         var queue = new DatasetIndexQueue(provider.GetRequiredService<IServiceScopeFactory>(),
-            NullLogger<DatasetIndexQueue>.Instance, settings);
+            NullLogger<DatasetIndexQueue>.Instance, TestSettings.Options<IndexQueueSettings>(settings));
 
         var key = new DatasetKey("org", Guid.NewGuid());
         var task = queue.EnqueueAsync(key, "a.txt");

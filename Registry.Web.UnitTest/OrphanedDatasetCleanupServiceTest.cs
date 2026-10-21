@@ -67,7 +67,7 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
 
         _settingsOptions.Value = new AppSettings { DatasetsPath = _testDatasetsPath };
 
-        var service = new OrphanedDatasetCleanupService(context, _settingsOptions, _logger);
+        var service = new OrphanedDatasetCleanupService(context, TestSettings.Options<StorageOptions>(_settingsOptions), _logger);
 
         // Act
         await service.CleanupOrphanedFoldersAsync(null);
@@ -99,7 +99,7 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
 
         _settingsOptions.Value = new AppSettings { DatasetsPath = _testDatasetsPath };
 
-        var service = new OrphanedDatasetCleanupService(context, _settingsOptions, _logger);
+        var service = new OrphanedDatasetCleanupService(context, TestSettings.Options<StorageOptions>(_settingsOptions), _logger);
 
         // Act
         await service.CleanupOrphanedFoldersAsync(null);
@@ -117,7 +117,7 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
 
         _settingsOptions.Value = new AppSettings { DatasetsPath = "" };
 
-        var service = new OrphanedDatasetCleanupService(context, _settingsOptions, _logger);
+        var service = new OrphanedDatasetCleanupService(context, TestSettings.Options<StorageOptions>(_settingsOptions), _logger);
 
         // Act & Assert - Should not throw
         await Should.NotThrowAsync(async () => await service.CleanupOrphanedFoldersAsync(null));
@@ -131,7 +131,7 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
 
         _settingsOptions.Value = new AppSettings { DatasetsPath = "/non/existent/path" };
 
-        var service = new OrphanedDatasetCleanupService(context, _settingsOptions, _logger);
+        var service = new OrphanedDatasetCleanupService(context, TestSettings.Options<StorageOptions>(_settingsOptions), _logger);
 
         // Act & Assert - Should not throw
         await Should.NotThrowAsync(async () => await service.CleanupOrphanedFoldersAsync(null));
@@ -152,7 +152,7 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
 
         _settingsOptions.Value = new AppSettings { DatasetsPath = _testDatasetsPath };
 
-        var service = new OrphanedDatasetCleanupService(context, _settingsOptions, _logger);
+        var service = new OrphanedDatasetCleanupService(context, TestSettings.Options<StorageOptions>(_settingsOptions), _logger);
 
         // Act
         await service.CleanupOrphanedFoldersAsync(null);
@@ -176,7 +176,7 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
 
         _settingsOptions.Value = new AppSettings { DatasetsPath = _testDatasetsPath };
 
-        var service = new OrphanedDatasetCleanupService(context, _settingsOptions, _logger);
+        var service = new OrphanedDatasetCleanupService(context, TestSettings.Options<StorageOptions>(_settingsOptions), _logger);
 
         // Act
         await service.CleanupOrphanedFoldersAsync(null);
@@ -205,7 +205,7 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
 
         _settingsOptions.Value = new AppSettings { DatasetsPath = _testDatasetsPath };
 
-        var service = new OrphanedDatasetCleanupService(context, _settingsOptions, _logger);
+        var service = new OrphanedDatasetCleanupService(context, TestSettings.Options<StorageOptions>(_settingsOptions), _logger);
 
         // Act
         await service.CleanupOrphanedFoldersAsync(null);

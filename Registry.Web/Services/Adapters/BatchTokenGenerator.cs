@@ -20,7 +20,7 @@ public class BatchTokenGenerator : IBatchTokenGenerator
 
     public const int MinTokenLength = 8;
 
-    public BatchTokenGenerator(IOptions<AppSettings> settings, ILogger<BatchTokenGenerator> logger)
+    public BatchTokenGenerator(IOptions<ShareOptions> settings, ILogger<BatchTokenGenerator> logger)
     {
         _tokenLength = settings.Value.BatchTokenLength;
 

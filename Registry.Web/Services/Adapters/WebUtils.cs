@@ -25,14 +25,16 @@ public class WebUtils : IUtils
 {
     private readonly IAuthManager _authManager;
     private readonly RegistryContext _context;
-    private readonly AppSettings _settings;
+    private readonly AccountOptions _accounts;
+    private readonly HttpHostOptions _http;
     private readonly IHttpContextAccessor _accessor;
     private readonly IDatasetSummaryProvider _summaries;
     private readonly IDatasetLookupCache _lookups;
 
     public WebUtils(IAuthManager authManager,
         RegistryContext context,
-        IOptions<AppSettings> settings,
+        IOptions<AccountOptions> accounts,
+        IOptions<HttpHostOptions> http,
         IHttpContextAccessor accessor, IDatasetSummaryProvider summaries,
         IDatasetLookupCache lookups = null)
     {
@@ -40,7 +42,8 @@ public class WebUtils : IUtils
         _context = context;
         _accessor = accessor;
         _summaries = summaries;
-        _settings = settings.Value;
+        _accounts = accounts.Value;
+        _http = http.Value;
         _lookups = lookups;
     }
 
@@ -148,9 +151,9 @@ public class WebUtils : IUtils
         bool isHttps;
         string host;
 
-        if (!string.IsNullOrWhiteSpace(_settings.ExternalUrlOverride))
+        if (!string.IsNullOrWhiteSpace(_http.ExternalUrlOverride))
         {
-            var uri = new Uri(_settings.ExternalUrlOverride);
+            var uri = new Uri(_http.ExternalUrlOverride);
 
             isHttps = uri.Scheme.Equals("https", StringComparison.InvariantCultureIgnoreCase);
             host = uri.Host;
@@ -205,7 +208,7 @@ public class WebUtils : IUtils
 
     public async Task<UserStorageInfo> GetCurrentUserStorageLimit()
     {
-        if (!_settings.EnableStorageLimiter) return null;
+        if (!_accounts.EnableStorageLimiter) return null;
 
         // Admins do not have limits
         if (await _authManager.IsUserAdmin()) return null;

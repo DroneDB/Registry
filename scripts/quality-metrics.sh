@@ -95,13 +95,13 @@ list_files_matching() {
 }
 
 # Registration statements (services.AddX<...>( ) of the shared node module
-# (AddProcessingNodeServices) that the web host's composition files (Startup, Hosting/) write again.
+# (AddProcessingNodeServices) that the web host's modules (Startup, Hosting/*ServiceCollectionExtensions) write again.
 redeclared_node_registrations() {
     regs() {
         { git grep --untracked -I -h -o -P 'services\.(Add|TryAdd)[A-Za-z]+(<[^;(]*>)?\(' -- "$@" || true; } |
             tr -d ' ' | sort -u
     }
-    comm -12 <(regs Registry.Web/Startup.cs ':(glob)Registry.Web/Hosting/**/*.cs') \
+    comm -12 <(regs Registry.Web/Startup.cs ':(glob)Registry.Web/Hosting/**/*ServiceCollectionExtensions.cs') \
         <(regs Registry.Web/Utilities/ProcessingNodeServiceCollectionExtensions.cs) | wc -l | tr -d ' '
 }
 

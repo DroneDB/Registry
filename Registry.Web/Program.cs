@@ -1,50 +1,38 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Reflection;
-using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
 using CommandLine;
-using Hangfire;
-using Microsoft.AspNetCore.Builder;
-using Registry.Common;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using MimeMapping;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using Registry.Adapters;
 using Registry.Adapters.DroneDB;
-using Registry.Adapters.Thumbnail;
-using Registry.Ports;
-using Registry.Ports.DroneDB;
+using Registry.Common;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Data;
+using Registry.Web.Hosting;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
-using Registry.Web.Services.Adapters;
-using Registry.Web.Services.Initialization;
-using Registry.Web.Services.Managers;
-using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Serilog;
 
 namespace Registry.Web;
 
+/// <summary>
+/// The command line: parses it, prepares the storage folder (Hub, ddb, settings file) and runs the host of
+/// the instance type (<see cref="RegistryHost"/>), or a maintenance command. Every message goes through
+/// Serilog: a bootstrap logger until a host replaces it (RQ-07).
+/// </summary>
 public class Program
 {
     private const int DefaultPort = 5000;
@@ -55,6 +43,8 @@ public class Program
 
     /// <summary>Environment variable <c>--reset-admin-password</c> reads the new password from (else stdin).</summary>
     public const string AdminPasswordEnvironmentVariable = "REGISTRY_ADMIN_PASSWORD";
+
+    private static ILogger StartupLog => RegistryHost.StartupLog;
 
     /// <summary>Entry point; the process exit code is one of <see cref="ExitCodes"/>.</summary>
     public static int Main(string[] args)
@@ -80,6 +70,8 @@ public class Program
     /// <param name="readAdminPassword">Reads the new password for <c>--reset-admin-password</c>; <c>null</c> = none.</param>
     internal static int Run(string[] args, Func<Options, int> startInstance, Func<string> readAdminPassword)
     {
+        RegistryHost.UseBootstrapLogger();
+
         // Parser.Default's settings, with the help writer bound to the current stderr (the static
         // default keeps the first one it saw)
         using var parser = new Parser(settings => settings.HelpWriter = Console.Error);
@@ -95,11 +87,11 @@ public class Program
 
         if (ddbFolder == null)
         {
-            Console.WriteLine(" !> ddb library not found in PATH");
+            StartupLog.Warning("ddb library not found in PATH");
             return false;
         }
 
-        Console.WriteLine(" ?> Found ddl library in {0}", ddbFolder);
+        StartupLog.Information("Found the ddb library in {DdbFolder}", ddbFolder);
 
         Environment.SetEnvironmentVariable("PATH",
             $"{ddbFolder}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}");
@@ -110,48 +102,37 @@ public class Program
     private static int RunOptions(Options opts, Func<Options, int> startInstance, Func<string> readAdminPassword)
     {
         var appVersion = typeof(Program).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version;
-        var appName = AppDomain.CurrentDomain.FriendlyName;
 
-        CommonUtils.WriteLineColor($"\n\t\t*** {appName} - v{appVersion} ***\n", ConsoleColor.Green);
-
+        StartupLog.Information("{Application} v{Version} ({Build})", AppDomain.CurrentDomain.FriendlyName, appVersion,
 #if DEBUG
-        Console.WriteLine(" ?> Running in DEBUG");
+            "DEBUG");
 #else
-            Console.WriteLine(" ?> Running in RELEASE");
+            "RELEASE");
 #endif
 
         if (!VerifyOptions(opts)) return ExitCodes.InvalidArguments;
 
         // Maintenance commands: no host, no storage folder setup
         if (opts.CheckConfig)
-            return CheckConfiguration(opts.StorageFolder);
+            return CheckConfiguration(opts.StorageFolder, opts.InstanceType);
 
         if (opts.ResetAdminPassword)
             return ResetAdminPassword(opts.StorageFolder, readAdminPassword);
 
-        Console.CancelKeyPress += (sender, e) =>
+        Console.CancelKeyPress += (_, e) =>
         {
             e.Cancel = true;
-            CommonUtils.WriteLineColor("\n -> Exiting...\n", ConsoleColor.Yellow);
+            StartupLog.Information("Exiting...");
         };
 
-        // If we need to initialize ddb from the storage folder
-        var lateDdbInit = false;
-
-        if (opts.ResetDdb)
-            lateDdbInit = true;
-        else
-        {
-            // Ensure the ddb.dll is in the PATH and fix it if needed (only on windows)
-            if (Environment.OSVersion.Platform == PlatformID.Win32NT)
-                lateDdbInit = !FixPath();
-        }
+        // If we need to initialize ddb from the storage folder (only on windows the embedded ddb is used)
+        var lateDdbInit = opts.ResetDdb || (OperatingSystem.IsWindows() && !FixPath());
 
         opts.StorageFolder = Path.GetFullPath(opts.StorageFolder);
         Directory.CreateDirectory(opts.StorageFolder);
         Environment.CurrentDirectory = opts.StorageFolder;
 
-        Console.WriteLine(" ?> Using storage folder '{0}'", opts.StorageFolder);
+        StartupLog.Information("Using storage folder {StorageFolder}", opts.StorageFolder);
 
         // Only the webserver owns the Hub (ClientApp) folder. Processing nodes and
         // thumbnail generators share the same StorageFolder in production deployments,
@@ -159,36 +140,11 @@ public class Program
         // (Directory.Delete + ZipArchive.ExtractToDirectory concurrently on the same path).
         var deployHub = opts.InstanceType is InstanceType.Default or InstanceType.WebServer;
 
-        if (lateDdbInit)
-        {
-            if (!SetupStorageFolder(opts.StorageFolder, opts.ResetHub, opts.ResetDdb, true, deployHub))
-            {
-                CommonUtils.WriteLineColor(" !> Failed to setup storage folder", ConsoleColor.Red);
-                return ExitCodes.Failure;
-            }
+        var ready = lateDdbInit
+            ? SetupStorageFolder(opts.StorageFolder, opts.ResetHub, opts.ResetDdb, true, deployHub) && InitializeDdb()
+            : InitializeDdb() && SetupStorageFolder(opts.StorageFolder, opts.ResetHub, deployHub: deployHub);
 
-            if (!InitializeDdb())
-            {
-                CommonUtils.WriteLineColor(" !> Failed to initialize DroneDB", ConsoleColor.Red);
-                return ExitCodes.Failure;
-            }
-        }
-        else
-        {
-            if (!InitializeDdb())
-            {
-                CommonUtils.WriteLineColor(" !> Failed to initialize DroneDB", ConsoleColor.Red);
-                return ExitCodes.Failure;
-            }
-
-            if (!SetupStorageFolder(opts.StorageFolder, opts.ResetHub, deployHub: deployHub))
-            {
-                CommonUtils.WriteLineColor(" !> Failed to setup storage folder", ConsoleColor.Red);
-                return ExitCodes.Failure;
-            }
-        }
-
-        return RunInstance(opts, startInstance);
+        return ready ? RunInstance(opts, startInstance) : ExitCodes.Failure;
     }
 
     /// <summary>
@@ -203,9 +159,7 @@ public class Program
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine(" !> Error while running application");
-            Console.Error.WriteLine(ex.Message);
-            Log.Fatal(ex, "Host terminated unexpectedly");
+            StartupLog.Fatal(ex, "Host terminated unexpectedly: {Message}", ex.Message);
             return ExitCodes.Failure;
         }
         finally
@@ -214,193 +168,24 @@ public class Program
         }
     }
 
-    /// <summary>Starts the host of <see cref="Options.InstanceType"/> and blocks until it shuts down.</summary>
+    /// <summary>Builds the host of <see cref="Options.InstanceType"/> and blocks until it shuts down.</summary>
     private static int StartInstance(Options opts)
     {
-        switch (opts.InstanceType)
-        {
-            case InstanceType.Default:
-            case InstanceType.WebServer:
-                return RunAsWebApplication(opts);
+        // The processing node has no web server
+        string[] args = opts.InstanceType == InstanceType.ProcessingNode ? [] : ["--urls", $"http://{opts.Address}"];
 
-            case InstanceType.ProcessingNode:
-                return RunAsProcessingNode(opts);
+        StartupLog.Information("Starting {InstanceType}{Address}", opts.InstanceType,
+            args.Length == 0 ? "" : $" on {opts.Address}");
 
-            case InstanceType.ThumbnailGenerator:
-                return RunAsThumbnailGenerator(opts);
-
-            default:
-                CommonUtils.WriteLineColor(" !> Invalid instance type", ConsoleColor.Red);
-                return ExitCodes.InvalidArguments;
-        }
-    }
-
-    /// <summary>Layers the instance type over the host configuration (read by Startup and the log setup).</summary>
-    private static IHostBuilder WithInstanceType(IHostBuilder builder, InstanceType instanceType) =>
-        builder.ConfigureAppConfiguration((_, config) =>
-            config.AddInMemoryCollection(new Dictionary<string, string>
-            {
-                { InstanceTypeKey, instanceType.ToString() }
-            }));
-
-    private static int RunAsThumbnailGenerator(Options opts)
-    {
-        Console.WriteLine(" ?> Using address '{0}'", opts.Address);
-        Console.WriteLine(" -> Starting thumbnail generator");
-
-        var args = new[] { "--urls", $"http://{opts.Address}" };
-
-        using var host = WithInstanceType(Host.CreateDefaultBuilder(args), opts.InstanceType)
-            .UseSerilog(ConfigureSerilog)
-            .ConfigureServices((context, services) =>
-            {
-                services.AddDdbRuntime<NativeDdbRuntime>(context.Configuration);
-                services.AddSingleton(sp => CreateThumbnailRequestHandler(context.Configuration,
-                    sp.GetRequiredService<ILogger<ThumbnailRequestHandler>>()));
-            })
-            .ConfigureWebHostDefaults(webBuilder =>
-            {
-                webBuilder.Configure(app =>
-                {
-                    var handler = app.ApplicationServices.GetRequiredService<ThumbnailRequestHandler>();
-
-                    app.UseRouting();
-                    app.UseEndpoints(endpoints => MapThumbnailGeneratorEndpoints(endpoints, handler));
-                });
-            })
-            .Build();
-
-        // Fail closed: without the shared token the endpoint would read files for anyone
-        try
-        {
-            host.Services.GetRequiredService<ThumbnailRequestHandler>();
-        }
-        catch (ArgumentException ex)
-        {
-            CommonUtils.WriteLineColor(
-                $" !> Cannot start the thumbnail generator: {ex.Message} Set AppSettings:ThumbnailGeneratorToken " +
-                "to the value the web server uses (both read the same appsettings.json).", ConsoleColor.Red);
-            host.Services.GetRequiredService<ILogger<Program>>()
-                .LogCritical(ex, "Thumbnail generator not started: {Message}", ex.Message);
-            return ExitCodes.Failure;
-        }
-
+        using var host = RegistryHost.CreateBuilderFor(opts.InstanceType, args).Build();
         host.Run();
         return ExitCodes.Success;
     }
 
     /// <summary>
-    /// The thumbnail generator host routes:
-    /// <list type="bullet">
-    /// <item><c>POST /generate-thumbnail</c> (form: path, size; header: the shared token); the response is the
-    /// binary thumbnail from <c>DDBWrapper.GenerateThumbnail</c>;</item>
-    /// <item><c>GET /health/live</c>, the anonymous liveness probe used by the container HEALTHCHECK.</item>
-    /// </list>
-    /// </summary>
-    internal static void MapThumbnailGeneratorEndpoints(IEndpointRouteBuilder endpoints,
-        ThumbnailRequestHandler handler)
-    {
-        endpoints.MapPost(ThumbnailRequestHandler.Route, handler.HandleAsync);
-        endpoints.MapLiveness();
-    }
-
-    /// <summary>
-    /// The thumbnail endpoint handler: the shared token and the readable roots (datasets and temp
-    /// folders) come from the <c>AppSettings</c> section.
-    /// </summary>
-    private static ThumbnailRequestHandler CreateThumbnailRequestHandler(IConfiguration configuration,
-        Microsoft.Extensions.Logging.ILogger logger)
-    {
-        var settings = configuration.GetSection("AppSettings").Get<AppSettings>() ?? new AppSettings();
-
-        return new ThumbnailRequestHandler(settings.ThumbnailGeneratorToken,
-            [settings.DatasetsPath, settings.TempPath], new NativeDdbWrapper(), logger);
-    }
-
-    /// <summary>
-    /// Runs the application as a processing node (Hangfire worker only).
-    /// This mode executes background jobs but does not host a web server.
-    ///
-    /// Recurring jobs executed:
-    /// - CleanupExpiredJobs: Daily cleanup of expired Hangfire jobs
-    /// - JobIndexSyncService.SyncJobIndexStates: Sync job index every 5 minutes
-    /// - BuildPendingService.ProcessPendingBuilds: Process pending DDB builds every minute
-    /// - OrphanedDatasetCleanupService.CleanupOrphanedFoldersAsync: Daily cleanup of orphaned dataset folders
-    ///
-    /// On-demand jobs:
-    /// - DatasetCleanupService.CleanupDeletedDatasetAsync: Cleanup after dataset deletion
-    ///
-    /// NOTE: When adding new recurring jobs or services, ensure all dependencies are registered here.
-    /// Only minimal services required for job execution are registered to reduce memory footprint.
-    /// </summary>
-    private static int RunAsProcessingNode(Options opts)
-    {
-        Console.WriteLine(" -> Starting processing node");
-
-        var host = WithInstanceType(Host.CreateDefaultBuilder(), opts.InstanceType)
-            .UseSerilog(ConfigureSerilog)
-            .ConfigureServices((hostContext, services) =>
-            {
-                var configuration = hostContext.Configuration;
-
-                // libddb's lifecycle first: it starts before and stops after every other hosted service
-                services.AddDdbRuntime<NativeDdbRuntime>(configuration);
-
-                var appSettingsSection = configuration.GetSection("AppSettings");
-
-                var appSettings = appSettingsSection.Get<AppSettings>();
-
-                if (appSettings.HangfireProvider == HangfireProvider.InMemory)
-                    throw new NotSupportedException("Hangfire in-memory provider is not supported for processing node");
-
-                var budget = ProcessingBudget.Derive(HostFacts.Current(), appSettings.ProcessingBudget,
-                    appSettings.WorkerThreads);
-
-                Console.WriteLine(" ?> Processing budget: {0}", budget);
-
-                // Register the application services shared by every job-executing host
-                // (incl. IOptions<AppSettings>). Kept in a single extension method so the same
-                // container can be built in tests (ProcessingNodeDiCompletenessTests) to catch
-                // missing registrations before they fail at runtime on a processing node.
-                services.AddProcessingNodeServices(configuration, appSettings);
-
-                services.AddHangfireProvider(appSettings, configuration);
-                services.AddBudgetedHangfireServers(budget);
-
-                // Register Hangfire jobs initializer as hosted service
-                services.AddHostedService<HangfireJobsHostedService>();
-            })
-            .Build();
-
-        // Initialize cache providers (required by BuildPendingService and other services)
-        using (var scope = host.Services.CreateScope())
-        {
-            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-            new CacheInitializer(scope.ServiceProvider, logger).InitializeAsync(CancellationToken.None).Wait();
-        }
-
-        Console.WriteLine(" ?> Processing node started");
-        Console.WriteLine(" ?> Press Ctrl+C to quit");
-
-        host.Run();
-        return ExitCodes.Success;
-    }
-
-    private static int RunAsWebApplication(Options opts)
-    {
-        Console.WriteLine(" ?> Using address '{0}'", opts.Address);
-        Console.WriteLine(" -> Starting web host");
-
-        var args = new[] { "--urls", $"http://{opts.Address}" };
-
-        WithInstanceType(CreateHostBuilder(args), opts.InstanceType).Build().Run();
-        return ExitCodes.Success;
-    }
-
-    /// <summary>
-    /// Builds the web host (Startup pipeline + Serilog). Shared by <see cref="RunAsWebApplication"/>
-    /// and by the integration tests (WebApplicationFactory resolves this method by convention).
-    /// Instance-specific settings (e.g. InstanceType, --urls) are layered on top by the caller.
+    /// The web host builder (<see cref="RegistryHost.CreateWebBuilder"/>; the instance type comes from the
+    /// configuration). Used by the integration tests (WebApplicationFactory resolves this method by
+    /// convention), <c>--reset-admin-password</c> and the EF Core tools.
     /// </summary>
     /// <param name="args">Host arguments (e.g. <c>--urls</c>).</param>
     /// <returns>The configured, not yet built, host builder.</returns>
@@ -412,23 +197,8 @@ public class Program
             return CreateEfToolsHostBuilder(args);
 #endif
 
-        return Host.CreateDefaultBuilder(args)
-            .UseSerilog(ConfigureSerilog)
-            .ConfigureWebHostDefaults(webBuilder => webBuilder.UseStartup<Startup>());
+        return RegistryHost.CreateWebBuilder(null, args);
     }
-
-    /// <summary>
-    /// The one Serilog setup of every host (web server, processing node, thumbnail generator): sinks and
-    /// levels come from the <c>Serilog</c> configuration section, so all instances log the same way. The
-    /// file sink path gets the instance type (<see cref="InstanceLogPaths"/>): containers sharing the
-    /// storage folder never write the same file.
-    /// </summary>
-    internal static void ConfigureSerilog(HostBuilderContext context, IServiceProvider services,
-        LoggerConfiguration configuration) =>
-        configuration
-            .ReadFrom.Configuration(InstanceLogPaths.Apply(context.Configuration))
-            .ReadFrom.Services(services)
-            .Enrich.FromLogContext();
 
     /// <summary>
     /// Fails fast when the libddb on the library path cannot be used (XI-01): it must load, have ABI
@@ -439,16 +209,14 @@ public class Program
     {
         try
         {
-            Console.WriteLine(" ?> DDB: " + DdbAbi.Verify());
+            StartupLog.Information("DDB: {DdbAbi}", DdbAbi.Verify());
             return true;
         }
         catch (DdbAbiMismatchException e)
         {
-            CommonUtils.WriteLineColor($" !> Unable to use the DDB library: {e.Message}", ConsoleColor.Red);
-            Console.WriteLine(
-                $" ?> Check installation instructions on {MagicStrings.DdbInstallPageUrl} and try again.");
-            Console.WriteLine($" ?> Releases page: {MagicStrings.DdbReleasesPageUrl}");
-
+            StartupLog.Error("Unable to use the DDB library: {Message}. Check the installation instructions on " +
+                             "{InstallPage} and try again; releases: {ReleasesPage}", e.Message,
+                MagicStrings.DdbInstallPageUrl, MagicStrings.DdbReleasesPageUrl);
             return false;
         }
     }
@@ -456,19 +224,16 @@ public class Program
     private static bool VerifyOptions(Options opts)
     {
         if (opts.StorageFolder == null)
-        {
-            CommonUtils.WriteColor(" !> Storage folder is not specified", ConsoleColor.Red);
-            return false;
-        }
+            return Invalid("Storage folder is not specified");
+
+        if (!Enum.IsDefined(opts.InstanceType))
+            return Invalid("Invalid instance type");
 
         if (opts.Address == null)
             return true;
 
         if (opts.Address.Length == 0)
-        {
-            CommonUtils.WriteColor(" !> Address not specified", ConsoleColor.Red);
-            return false;
-        }
+            return Invalid("Address not specified");
 
         var parts = opts.Address.Split(':');
 
@@ -484,19 +249,12 @@ public class Program
                         // Try to parse as hostname
                         host = parts[0];
 
-                        if (!host.Equals("localhost", StringComparison.InvariantCultureIgnoreCase) &&
-                            !IPEndPoint.TryParse(host, out _))
-                        {
-                            CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
-                            return false;
-                        }
+                        if (!IsLocalhostOrAddress(host))
+                            return Invalid("Invalid address");
                     }
 
                     if (port is < 1 or > 65535)
-                    {
-                        CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
-                        return false;
-                    }
+                        return Invalid("Invalid port");
 
                     break;
                 }
@@ -504,41 +262,36 @@ public class Program
                 {
                     host = parts[0];
 
-                    if (!host.Equals("localhost", StringComparison.InvariantCultureIgnoreCase) &&
-                        !IPEndPoint.TryParse(host, out _))
-                    {
-                        CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
-                        return false;
-                    }
+                    if (!IsLocalhostOrAddress(host))
+                        return Invalid("Invalid address");
 
-                    if (!int.TryParse(parts[1], out port))
-                    {
-                        CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
-                        return false;
-                    }
-
-                    if (port is < 1 or > 65535)
-                    {
-                        CommonUtils.WriteColor(" !> Invalid port", ConsoleColor.Red);
-                        return false;
-                    }
+                    if (!int.TryParse(parts[1], out port) || port is < 1 or > 65535)
+                        return Invalid("Invalid port");
 
                     break;
                 }
             default:
-                CommonUtils.WriteColor(" !> Invalid address", ConsoleColor.Red);
-                return false;
+                return Invalid("Invalid address");
         }
 
         opts.Address = $"{host}:{port}";
 
         return true;
+
+        static bool IsLocalhostOrAddress(string host) =>
+            host.Equals("localhost", StringComparison.InvariantCultureIgnoreCase) || IPEndPoint.TryParse(host, out _);
+
+        static bool Invalid(string message)
+        {
+            StartupLog.Error("{Error}", message);
+            return false;
+        }
     }
 
     private static bool SetupStorageFolder(string folder, bool resetSpa = false, bool resetDdb = false,
         bool deployDdb = false, bool deployHub = true)
     {
-        Console.WriteLine(" -> Setting up storage folder");
+        StartupLog.Information("Setting up storage folder");
 
         Directory.CreateDirectory(folder);
 
@@ -552,7 +305,7 @@ public class Program
 
         if (deployDdb && !SetupDdb(folder, resetDdb))
         {
-            CommonUtils.WriteLineColor(" !> Failed to deploy DDB to storage folder", ConsoleColor.Red);
+            StartupLog.Error("Failed to deploy DDB to storage folder");
             return false;
         }
 
@@ -561,40 +314,27 @@ public class Program
         // on a shared storage folder during a Hub upgrade.
         if (deployHub && !SetupHub(folder, resetSpa))
         {
-            Console.WriteLine(" !> Error while setting up Hub");
+            StartupLog.Error("Error while setting up Hub");
             return false;
         }
-
-        var settingsFilePath = Path.Combine(folder, MagicStrings.AppSettingsFileName);
-
-        var defaultSettingsConfig = GetDefaultSettings();
-
-        // The appsettings file does not contain only appsettings
-        if (!File.Exists(settingsFilePath))
-        {
-            Console.WriteLine(" -> Creating default appsettings.json");
-
-            File.WriteAllText(MagicStrings.AppSettingsFileName,
-                JsonConvert.SerializeObject(defaultSettingsConfig, Formatting.Indented));
-        }
-
-        if (!TryLoadSettings(settingsFilePath, ToAppSettings(defaultSettingsConfig), out var settingsConfig,
-                out var settings))
-            return false;
 
         try
         {
-            Directory.CreateDirectory(settings.TempPath);
+            var changes = SettingsFile.Prepare(folder);
 
-            // Update settings (persists the values VerifySettings filled in, e.g. generated secrets)
-            Console.WriteLine(" -> Updating settings");
-            settingsConfig["AppSettings"] = JObject.FromObject(settings);
-            File.WriteAllText(settingsFilePath, JsonConvert.SerializeObject(settingsConfig, Formatting.Indented));
+            if (changes.Created)
+                StartupLog.Information("Created the default settings {SettingsFile}", changes.Path);
+            if (changes.GeneratedSecrets.Count > 0)
+                StartupLog.Information("Generated {Secrets} in {SettingsFile}{InPlace}",
+                    string.Join(", ", changes.GeneratedSecrets), changes.Path,
+                    changes.Atomic ? "" : " (a mount point: written in place)");
+
+            // The folder libddb's cache and the scratch files live in; the hosts check the settings
+            Directory.CreateDirectory(SettingsFile.LoadConfiguration(folder).GetRegistryOptions<StorageOptions>().TempPath!);
         }
-        catch (Exception e)
+        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
-            Console.Error.WriteLine(" !> Error while updating settings");
-            Console.Error.WriteLine(e.Message);
+            StartupLog.Error(e, "Error while preparing the settings file: {Message}", e.Message);
             return false;
         }
 
@@ -602,72 +342,46 @@ public class Program
     }
 
     /// <summary>
-    /// Reads <paramref name="settingsFilePath"/> and verifies its <c>AppSettings</c> section
-    /// (<see cref="VerifySettings"/>; errors on stderr). Read-only: the values verification fills in
-    /// (generated secrets, default temp path) are only applied to the returned <paramref name="settings"/>.
-    /// </summary>
-    private static bool TryLoadSettings(string settingsFilePath, AppSettings defaultSettings,
-        out JObject settingsConfig, out AppSettings settings)
-    {
-        Console.WriteLine(" -> Verifying settings");
-
-        settingsConfig = null;
-        settings = null;
-        try
-        {
-            settingsConfig = JsonConvert.DeserializeObject<JObject>(File.ReadAllText(settingsFilePath));
-            settings = ToAppSettings(settingsConfig);
-
-            if (VerifySettings(settings, defaultSettings))
-                return true;
-
-            Console.Error.WriteLine(" !> Error while verifying settings");
-            return false;
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine(" !> Error while verifying settings");
-            Console.Error.WriteLine(e.Message);
-            return false;
-        }
-    }
-
-    private static AppSettings ToAppSettings(JObject settingsConfig) =>
-        settingsConfig?["AppSettings"]?.ToObject<AppSettings>();
-
-    /// <summary>
-    /// <c>--check</c>: verifies the storage folder's <c>appsettings.json</c> without starting a host
-    /// and without writing anything (no default settings, Hub, ddb or temp folder).
+    /// <c>--check</c>: validates the storage folder's configuration (its <c>appsettings.json</c> and the
+    /// environment, as a host reads them) with the rules the host runs at start, for
+    /// <paramref name="role"/>, without starting a host and without writing anything.
     /// </summary>
     /// <returns><see cref="ExitCodes.Success"/> when valid, otherwise <see cref="ExitCodes.Failure"/> (reasons on stderr).</returns>
-    private static int CheckConfiguration(string storageFolder)
+    private static int CheckConfiguration(string storageFolder, InstanceType role)
     {
-        if (!TryLoadStorageSettings(storageFolder, out _))
+        using var log = RegistryHost.CreateCommandLineLogger();
+
+        if (!TryLoadStorageConfiguration(storageFolder, role, log))
             return ExitCodes.Failure;
 
-        CommonUtils.WriteLineColor(" ?> Configuration is valid", ConsoleColor.Green);
+        log.Information("Configuration is valid");
         return ExitCodes.Success;
     }
 
     /// <summary>
-    /// Loads and verifies the settings of an existing storage folder, read-only (shared by the
+    /// Loads and validates the configuration of an existing storage folder, read-only (shared by the
     /// maintenance commands, which never create a storage folder).
     /// </summary>
-    private static bool TryLoadStorageSettings(string storageFolder, out AppSettings settings)
+    private static bool TryLoadStorageConfiguration(string storageFolder, InstanceType role, Serilog.Core.Logger log)
     {
-        settings = null;
-        var settingsFilePath = Path.Combine(Path.GetFullPath(storageFolder), MagicStrings.AppSettingsFileName);
+        log.Information("Using settings {SettingsFile}", SettingsFile.PathIn(storageFolder));
 
-        Console.WriteLine(" ?> Using settings '{0}'", settingsFilePath);
-
-        if (!File.Exists(settingsFilePath))
+        IConfiguration configuration;
+        try
         {
-            Console.Error.WriteLine($" !> '{settingsFilePath}' not found: run the Registry once on this storage " +
-                                    "folder to create it");
+            configuration = SettingsFile.LoadConfiguration(storageFolder);
+        }
+        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        {
+            log.Error("Cannot read the settings: {Message}", e.Message);
             return false;
         }
 
-        return TryLoadSettings(settingsFilePath, ToAppSettings(GetDefaultSettings()), out _, out settings);
+        var errors = RegistryOptions.Validate(configuration, role);
+        foreach (var error in errors)
+            log.Error("Invalid setting: {Error}", error);
+
+        return errors.Count == 0;
     }
 
     /// <summary>
@@ -677,7 +391,9 @@ public class Program
     /// </summary>
     private static int ResetAdminPassword(string storageFolder, Func<string> readAdminPassword)
     {
-        if (!TryLoadStorageSettings(storageFolder, out _))
+        using var log = RegistryHost.CreateCommandLineLogger();
+
+        if (!TryLoadStorageConfiguration(storageFolder, InstanceType.WebServer, log))
             return ExitCodes.Failure;
 
         string password;
@@ -693,7 +409,7 @@ public class Program
 
         if (string.IsNullOrEmpty(password))
         {
-            Console.Error.WriteLine($" !> No password: set {AdminPasswordEnvironmentVariable} or write it to stdin");
+            log.Error("No password: set {Variable} or write it to stdin", AdminPasswordEnvironmentVariable);
             return ExitCodes.Failure;
         }
 
@@ -706,11 +422,11 @@ public class Program
         {
             // The web host's container (identity store, password policy, user manager), built but not started
             using var host = CreateHostBuilder([]).UseContentRoot(storageFolder).Build();
-            return ResetDefaultAdminPasswordAsync(host.Services, password).GetAwaiter().GetResult();
+            return ResetDefaultAdminPasswordAsync(host.Services, password, log).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($" !> Cannot reset the admin password: {ex.Message}");
+            log.Error(ex, "Cannot reset the admin password: {Message}", ex.Message);
             return ExitCodes.Failure;
         }
         finally
@@ -724,15 +440,19 @@ public class Program
     /// <see cref="UserManager{TUser}"/> of <paramref name="services"/> (password policy applies, the
     /// security stamp changes so existing sessions end) and clears a lockout.
     /// </summary>
-    internal static async Task<int> ResetDefaultAdminPasswordAsync(IServiceProvider services, string newPassword)
+    /// <param name="services">The web host's container.</param>
+    /// <param name="newPassword">The new password.</param>
+    /// <param name="log">Where the result goes (the command line's logger).</param>
+    internal static async Task<int> ResetDefaultAdminPasswordAsync(IServiceProvider services, string newPassword,
+        ILogger log)
     {
         using var scope = services.CreateScope();
         var provider = scope.ServiceProvider;
 
-        var userName = provider.GetRequiredService<IOptions<AppSettings>>().Value.DefaultAdmin?.UserName;
+        var userName = provider.GetRequiredService<IOptions<IdentityProviderOptions>>().Value.DefaultAdmin?.UserName;
         if (string.IsNullOrWhiteSpace(userName))
         {
-            Console.Error.WriteLine(" !> AppSettings:DefaultAdmin:UserName is not set");
+            log.Error("AppSettings:DefaultAdmin:UserName is not set");
             return ExitCodes.Failure;
         }
 
@@ -740,7 +460,7 @@ public class Program
         var user = await userManager.FindByNameAsync(userName);
         if (user == null)
         {
-            Console.Error.WriteLine($" !> The default admin '{userName}' does not exist in the identity database");
+            log.Error("The default admin '{UserName}' does not exist in the identity database", userName);
             return ExitCodes.Failure;
         }
 
@@ -748,14 +468,14 @@ public class Program
         var reset = await userManager.ResetPasswordAsync(user, token, newPassword);
         if (!reset.Succeeded)
         {
-            Console.Error.WriteLine($" !> Password not changed: {string.Join(" ", reset.Errors.Select(e => e.Description))}");
+            log.Error("Password not changed: {Errors}", string.Join(" ", reset.Errors.Select(e => e.Description)));
             return ExitCodes.Failure;
         }
 
         await userManager.SetLockoutEndDateAsync(user, null);
         await userManager.ResetAccessFailedCountAsync(user);
 
-        CommonUtils.WriteLineColor($" ?> Password of the default admin '{userName}' changed", ConsoleColor.Green);
+        log.Information("Password of the default admin '{UserName}' changed", userName);
         return ExitCodes.Success;
     }
 
@@ -777,7 +497,7 @@ public class Program
         ReadAdminPassword(Environment.GetEnvironmentVariable,
             Console.IsInputRedirected ? Console.In.ReadLine : ReadHiddenLine);
 
-    /// <summary>Reads a line from the terminal without echoing it (prompt on stderr).</summary>
+    /// <summary>Reads a line from the terminal without echoing it (an interactive prompt on stderr, not a log line).</summary>
     private static string ReadHiddenLine()
     {
         Console.Error.Write(" ?> New password for the default admin: ");
@@ -811,29 +531,29 @@ public class Program
         bool ok;
         if (resetSpa)
         {
-            Console.WriteLine(" -> Resetting Hub (--reset-spa)");
+            StartupLog.Information("Resetting Hub (--reset-spa)");
             if (Directory.Exists(hubRoot))
             {
-                Console.WriteLine(" -> Cleaning hub folder contents (mountpoint-safe)");
+                StartupLog.Information("Cleaning hub folder contents (mountpoint-safe)");
                 CommonUtils.EmptyDirectoryContents(hubRoot);
             }
             ok = ExtractHub(hubRoot, embeddedVersion);
         }
         else if (!Directory.Exists(hubRoot) || Directory.GetFiles(hubRoot).Length == 0)
         {
-            Console.WriteLine($" -> Installing Hub v{embeddedVersion ?? "unknown"}");
+            StartupLog.Information("Installing Hub v{HubVersion}", embeddedVersion ?? "unknown");
             ok = ExtractHub(hubRoot, embeddedVersion);
         }
         else if (Services.Hub.HubVersionComparer.ShouldUpgrade(onDiskVersion, embeddedVersion))
         {
-            Console.WriteLine($" -> Upgrading Hub: {onDiskVersion ?? "unknown"} -> {embeddedVersion}");
-            Console.WriteLine(" -> Cleaning hub folder contents (mountpoint-safe)");
+            StartupLog.Information("Upgrading Hub: {OnDisk} -> {Embedded}; cleaning hub folder contents (mountpoint-safe)",
+                onDiskVersion ?? "unknown", embeddedVersion);
             CommonUtils.EmptyDirectoryContents(hubRoot);
             ok = ExtractHub(hubRoot, embeddedVersion);
         }
         else
         {
-            Console.WriteLine($" ?> Hub folder is ok (v{onDiskVersion ?? "unknown"})");
+            StartupLog.Information("Hub folder is ok (v{HubVersion})", onDiskVersion ?? "unknown");
             ok = true;
         }
 
@@ -863,7 +583,7 @@ public class Program
         }
         catch (Exception e)
         {
-            Console.WriteLine($" !> Failed to read embedded Hub version: {e.Message}");
+            StartupLog.Warning("Failed to read embedded Hub version: {Message}", e.Message);
             return null;
         }
     }
@@ -888,29 +608,25 @@ public class Program
 
         if (resetDdb)
         {
-            Console.WriteLine(" -> Resetting ddb installation");
+            StartupLog.Information("Resetting ddb installation");
             if (Directory.Exists(ddbRoot)) CommonUtils.EmptyDirectoryContents(ddbRoot);
         }
-        else if (
-            Directory.Exists(ddbRoot) &&
-            Directory.GetFiles(ddbRoot).Length != 0)
+        else if (Directory.Exists(ddbRoot) && Directory.GetFiles(ddbRoot).Length != 0)
         {
-            Console.WriteLine(" ?> Ddb folder is ok");
-
-            Environment.SetEnvironmentVariable("PATH",
-                $"{ddbRoot}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}");
-
+            StartupLog.Information("Ddb folder is ok");
+            AddToPath(ddbRoot);
             return true;
         }
 
-        var res = ExtractDdb(ddbRoot);
+        if (!ExtractEmbeddedArchive(MagicStrings.DdbArchive, ddbRoot))
+            return false;
 
-        if (!res) return false;
-
-        Environment.SetEnvironmentVariable("PATH",
-            $"{ddbRoot}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}");
-
+        AddToPath(ddbRoot);
         return true;
+
+        static void AddToPath(string ddbRoot) =>
+            Environment.SetEnvironmentVariable("PATH",
+                $"{ddbRoot}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}");
     }
 
     private static bool ExtractEmbeddedArchive(string archiveName, string folder)
@@ -920,14 +636,14 @@ public class Program
 
         Directory.CreateDirectory(folder);
 
-        Console.WriteLine($" -> Extracting '{archiveName}'");
+        StartupLog.Information("Extracting {Archive}", archiveName);
 
         // Read embedded resource and extract to storage folder
         using var stream = efp.Read(executingAssembly, archiveName + ".zip");
 
         if (stream == null)
         {
-            Console.WriteLine($" !> Failed to read embedded archive");
+            StartupLog.Error("Failed to read the embedded archive {Archive}", archiveName);
             return false;
         }
 
@@ -935,11 +651,11 @@ public class Program
 
         if (zip.Entries.Count == 0)
         {
-            Console.WriteLine($" !> Error while extracting '{archiveName}', empty archive");
+            StartupLog.Error("Error while extracting {Archive}: empty archive", archiveName);
             return false;
         }
 
-        Console.WriteLine(" ?> Found {0} entries", zip.Entries.Count);
+        StartupLog.Information("Found {Count} entries", zip.Entries.Count);
 
         // overwriteFiles: true is a defensive guard in case a previous cleanup left
         // residual files (e.g. on bind-mounted folders where the mount root cannot
@@ -947,11 +663,6 @@ public class Program
         zip.ExtractToDirectory(folder, overwriteFiles: true);
 
         return true;
-    }
-
-    private static bool ExtractDdb(string folder)
-    {
-        return ExtractEmbeddedArchive(MagicStrings.DdbArchive, folder);
     }
 
     private static bool ExtractHub(string folder, string embeddedVersion = null)
@@ -966,160 +677,8 @@ public class Program
             if (!File.Exists(versionPath))
             {
                 try { File.WriteAllText(versionPath, embeddedVersion); }
-                catch (Exception e) { Console.WriteLine($" !> Failed to write Hub version marker: {e.Message}"); }
+                catch (Exception e) { StartupLog.Warning("Failed to write Hub version marker: {Message}", e.Message); }
             }
-        }
-
-        return true;
-    }
-
-    private static JObject GetDefaultSettings()
-    {
-        var efp = new EmbeddedResourceQuery();
-        var executingAssembly = Assembly.GetExecutingAssembly();
-        using var reader = new StreamReader(efp.Read(executingAssembly, MagicStrings.AppSettingsDefaultFileName));
-        return JsonConvert.DeserializeObject<JObject>(reader.ReadToEnd());
-    }
-
-    private static bool VerifySettings(AppSettings settings, AppSettings defaultSettings)
-    {
-        if (settings == null)
-        {
-            Console.Error.WriteLine(" !> Empty settings, check appsettings.json");
-            return false;
-        }
-
-        try
-        {
-            if (string.IsNullOrWhiteSpace(settings.Secret))
-                settings.Secret = CommonUtils.RandomString(64);
-
-            // Shared by the web server and the ThumbnailGenerator host (same appsettings.json)
-            if (string.IsNullOrWhiteSpace(settings.ThumbnailGeneratorToken))
-                settings.ThumbnailGeneratorToken = CommonUtils.RandomString(64);
-
-            var externalUrl = settings.ExternalUrlOverride;
-
-            if (!string.IsNullOrWhiteSpace(externalUrl) && !Uri.TryCreate(externalUrl, UriKind.Absolute, out _))
-            {
-                Console.Error.WriteLine(" !> ExternalUrlOverride is not a valid URL");
-                return false;
-            }
-
-            if (settings.TokenExpirationInDays < 1)
-            {
-                Console.Error.WriteLine(" !> TokenExpirationInDays is not valid (must be greater than 0)");
-                return false;
-            }
-
-            var defaultAdmin = settings.DefaultAdmin;
-
-            if (defaultAdmin?.Email == null || defaultAdmin.Password == null || defaultAdmin.UserName == null)
-            {
-                Console.Error.WriteLine(" !> DefaultAdmin is not valid");
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(settings.DatasetsPath))
-            {
-                Console.Error.WriteLine(" !> DatasetsPath is empty");
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(settings.CachePath))
-            {
-                Console.Error.WriteLine(" !> CachePath is empty");
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(settings.TempPath))
-            {
-                settings.TempPath = defaultSettings.TempPath;
-                Console.WriteLine(" ?> TempPath is empty, using default");
-            }
-
-            if (settings.BatchTokenLength < 8)
-            {
-                Console.Error.WriteLine(" !> BatchTokenLength is not valid (must be at least 8)");
-                return false;
-            }
-
-            if (settings.UploadBatchTimeout.TotalMinutes < 1)
-            {
-                Console.Error.WriteLine(" !> UploadBatchTimeout is not valid (must be at least 1 minute)");
-                return false;
-            }
-
-            if (settings.RandomDatasetNameLength < 8)
-            {
-                Console.Error.WriteLine(" !> RandomDatasetNameLength is not valid (must be at least 8)");
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(settings.AuthCookieName))
-            {
-                Console.Error.WriteLine(" !> AuthCookieName is empty");
-                return false;
-            }
-
-            if (settings.ThumbnailsCacheExpiration.HasValue &&
-                settings.ThumbnailsCacheExpiration.Value.TotalMinutes < 1)
-            {
-                Console.Error.WriteLine(" !> ThumbnailsCacheExpiration is not valid (must be at least 1 minute)");
-                return false;
-            }
-
-            if (settings.TilesCacheExpiration.HasValue && settings.TilesCacheExpiration.Value.TotalMinutes < 1)
-            {
-                Console.Error.WriteLine(" !> TilesCacheExpiration is not valid (must be at least 1 minute)");
-                return false;
-            }
-
-            if (settings.DatasetVisibilityCacheExpiration.HasValue &&
-                settings.DatasetVisibilityCacheExpiration.Value.TotalMinutes < 1)
-            {
-                Console.Error.WriteLine(" !> DatasetVisibilityCacheExpiration is not valid (must be at least 1 minute)");
-                return false;
-            }
-
-            if (settings.ClearCacheInterval.HasValue && settings.ClearCacheInterval.Value.TotalMinutes < 1)
-            {
-                Console.Error.WriteLine(" !> ClearCacheInterval is not valid (must be at least 1 minute)");
-                return false;
-            }
-
-            if (settings.LdapSettings?.Enabled == true)
-            {
-                if (!string.IsNullOrWhiteSpace(settings.ExternalAuthUrl))
-                {
-                    Console.Error.WriteLine(" !> Cannot enable both LDAP and External authentication simultaneously");
-                    return false;
-                }
-
-                if (string.IsNullOrWhiteSpace(settings.LdapSettings.Server))
-                {
-                    Console.Error.WriteLine(" !> LdapSettings.Server is required when LDAP is enabled");
-                    return false;
-                }
-
-                if (string.IsNullOrWhiteSpace(settings.LdapSettings.BaseDn))
-                {
-                    Console.Error.WriteLine(" !> LdapSettings.BaseDn is required when LDAP is enabled");
-                    return false;
-                }
-
-                if (string.IsNullOrWhiteSpace(settings.LdapSettings.SearchFilter) ||
-                     !settings.LdapSettings.SearchFilter.Contains("{0}", StringComparison.Ordinal))
-                {
-                    Console.Error.WriteLine(" !> LdapSettings.SearchFilter must contain the '{0}' placeholder for the username");
-                    return false;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine(" !> Exception: " + ex.Message);
-            return false;
         }
 
         return true;

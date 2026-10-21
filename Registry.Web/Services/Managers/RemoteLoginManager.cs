@@ -18,11 +18,11 @@ namespace Registry.Web.Services.Managers;
 public class RemoteLoginManager : ILoginManager
 {
     private readonly ILogger<ILoginManager> _logger;
-    private readonly AppSettings _settings;
+    private readonly IdentityProviderOptions _settings;
     private readonly IHttpClientFactory _httpClientFactory;
 
     public RemoteLoginManager(ILogger<RemoteLoginManager> logger,
-        IOptions<AppSettings> settings,
+        IOptions<IdentityProviderOptions> settings,
         IHttpClientFactory httpClientFactory)
     {
         _logger = logger;

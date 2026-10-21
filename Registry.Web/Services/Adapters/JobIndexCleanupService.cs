@@ -18,14 +18,14 @@ namespace Registry.Web.Services.Adapters;
 public class JobIndexCleanupService
 {
     private readonly IJobIndexWriter _jobIndexWriter;
-    private readonly AppSettings _settings;
+    private readonly JobScheduleOptions _settings;
     private readonly ILogger<JobIndexCleanupService> _logger;
 
     private const int DefaultRetentionDays = 60;
 
     public JobIndexCleanupService(
         IJobIndexWriter jobIndexWriter,
-        IOptions<AppSettings> settings,
+        IOptions<JobScheduleOptions> settings,
         ILogger<JobIndexCleanupService> logger)
     {
         _jobIndexWriter = jobIndexWriter ?? throw new ArgumentNullException(nameof(jobIndexWriter));

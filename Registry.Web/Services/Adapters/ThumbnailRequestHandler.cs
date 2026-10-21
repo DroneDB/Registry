@@ -4,9 +4,12 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Registry.Common;
 using Registry.Ports;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Utilities.Auth;
 
 namespace Registry.Web.Services.Adapters;
@@ -24,6 +27,18 @@ internal sealed class ThumbnailRequestHandler
     private readonly string[] _allowedRoots;
     private readonly IDdbWrapper _ddbWrapper;
     private readonly ILogger _logger;
+
+    /// <summary>
+    /// The thumbnail generator host's handler: the shared token and the readable roots (the datasets and
+    /// temp folders) come from the options (the host's options validation refuses to start without a token).
+    /// </summary>
+    [ActivatorUtilitiesConstructor]
+    public ThumbnailRequestHandler(IOptions<ThumbnailOptions> thumbnails, IOptions<StorageOptions> storage,
+        IDdbWrapper ddbWrapper, ILogger<ThumbnailRequestHandler> logger)
+        : this(thumbnails.Value.ThumbnailGeneratorToken, [storage.Value.DatasetsPath, storage.Value.TempPath],
+            ddbWrapper, logger)
+    {
+    }
 
     /// <exception cref="ArgumentException"><paramref name="token"/> is empty (fail closed) or no root is given.</exception>
     public ThumbnailRequestHandler(string token, IEnumerable<string> allowedRoots, IDdbWrapper ddbWrapper,

@@ -280,7 +280,7 @@ public class JobIndexCleanupServiceTest : TestBase
         await using var context = GetContextWithMixedRecords();
         var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var settings = CreateSettings(retentionDays: 30);
-        var service = new JobIndexCleanupService(writer, settings, _cleanupLogger);
+        var service = new JobIndexCleanupService(writer, TestSettings.Options<JobScheduleOptions>(settings), _cleanupLogger);
 
         var totalBefore = await context.JobIndices.CountAsync();
 
@@ -322,7 +322,7 @@ public class JobIndexCleanupServiceTest : TestBase
 
         var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var settings = CreateSettings(retentionDays: 1);
-        var service = new JobIndexCleanupService(writer, settings, _cleanupLogger);
+        var service = new JobIndexCleanupService(writer, TestSettings.Options<JobScheduleOptions>(settings), _cleanupLogger);
 
         // Act
         await service.CleanupOldJobIndicesAsync();
@@ -339,7 +339,7 @@ public class JobIndexCleanupServiceTest : TestBase
         await using var context = GetContextWithMixedRecords();
         var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var settings = CreateSettings(retentionDays: 0); // Should fall back to 60
-        var service = new JobIndexCleanupService(writer, settings, _cleanupLogger);
+        var service = new JobIndexCleanupService(writer, TestSettings.Options<JobScheduleOptions>(settings), _cleanupLogger);
 
         // Act - Should not throw and should use 60-day default
         await Should.NotThrowAsync(async () =>
@@ -353,7 +353,7 @@ public class JobIndexCleanupServiceTest : TestBase
         await using var context = GetContextWithMixedRecords();
         var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var settings = CreateSettings(retentionDays: -5); // Should fall back to 60
-        var service = new JobIndexCleanupService(writer, settings, _cleanupLogger);
+        var service = new JobIndexCleanupService(writer, TestSettings.Options<JobScheduleOptions>(settings), _cleanupLogger);
 
         // Act - Should not throw
         await Should.NotThrowAsync(async () =>
@@ -367,7 +367,7 @@ public class JobIndexCleanupServiceTest : TestBase
         await using var context = GetEmptyContext();
         var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var settings = CreateSettings(retentionDays: 60);
-        var service = new JobIndexCleanupService(writer, settings, _cleanupLogger);
+        var service = new JobIndexCleanupService(writer, TestSettings.Options<JobScheduleOptions>(settings), _cleanupLogger);
 
         // Act & Assert
         await Should.NotThrowAsync(async () =>
@@ -439,7 +439,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         await using var context = GetContextWithMixedRecords(new FailFirstDeleteInterceptor());
         var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
-        var service = new JobIndexCleanupService(writer, CreateSettings(30), _cleanupLogger);
+        var service = new JobIndexCleanupService(writer, TestSettings.Options<JobScheduleOptions>(CreateSettings(30)), _cleanupLogger);
 
         await Should.ThrowAsync<SqliteException>(() => service.CleanupOldJobIndicesAsync());
     }

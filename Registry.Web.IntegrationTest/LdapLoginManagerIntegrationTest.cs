@@ -15,6 +15,7 @@ using Registry.Web.Identity;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Managers;
 using Registry.Test.Common;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -194,7 +195,7 @@ public class LdapLoginManagerIntegrationTest
     [Test]
     public async Task LdapHealthCheck_WithServiceBind_IsHealthy()
     {
-        var healthCheck = new LdapHealthCheck(Wrap(BaseSettings()));
+        var healthCheck = new LdapHealthCheck(TestSettings.Options<IdentityProviderOptions>(Wrap(BaseSettings())));
 
         var result = await healthCheck.CheckHealthAsync(new HealthCheckContext());
 
@@ -208,7 +209,7 @@ public class LdapLoginManagerIntegrationTest
         settings.Port = 1; // nothing is listening here
         settings.Timeout = 3;
 
-        var healthCheck = new LdapHealthCheck(Wrap(settings));
+        var healthCheck = new LdapHealthCheck(TestSettings.Options<IdentityProviderOptions>(Wrap(settings)));
 
         var result = await healthCheck.CheckHealthAsync(new HealthCheckContext());
 
@@ -239,7 +240,7 @@ public class LdapLoginManagerIntegrationTest
     };
 
     private static LdapLoginManager CreateManager(LdapSettings settings) =>
-        new(NullLogger<LdapLoginManager>.Instance, Wrap(settings));
+        new(NullLogger<LdapLoginManager>.Instance, TestSettings.Options<IdentityProviderOptions>(Wrap(settings)));
 
     private static IOptions<AppSettings> Wrap(LdapSettings settings) =>
         Microsoft.Extensions.Options.Options.Create(new AppSettings { LdapSettings = settings });

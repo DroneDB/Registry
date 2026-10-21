@@ -1,6 +1,11 @@
 #nullable enable
 using System;
+using System.IO;
+using System.Text;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
+using Registry.Web.Hosting;
 using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Test.Support;
@@ -15,6 +20,9 @@ namespace Registry.Web.Test.Support;
 /// <see cref="IOptions{TOptions}"/> for a SUT built once.</item>
 /// <item><see cref="Mutable"/>: an <see cref="IOptions{TOptions}"/> whose value a test can swap after
 /// the SUT dependencies were wired (what <c>mock.Setup(o =&gt; o.Value).Returns(...)</c> did).</item>
+/// <item><see cref="As{T}"/> / <see cref="Options{T}(IOptions{AppSettings})"/>: a focused options class
+/// (RQ-07) bound from the same keys as an <see cref="AppSettings"/>, as the host binds it, so a test keeps
+/// one settings object for every class it wires.</item>
 /// </list>
 /// </summary>
 public static class TestSettings
@@ -60,6 +68,36 @@ public static class TestSettings
     /// <paramref name="initial"/> (null by default, as an unconfigured mock returned).
     /// </summary>
     public static MutableOptions<AppSettings> Mutable(AppSettings? initial = null) => new() { Value = initial! };
+
+    /// <summary>
+    /// The focused options class <typeparamref name="T"/> of <paramref name="settings"/>: the settings are
+    /// written as the <c>AppSettings</c> section and <typeparamref name="T"/> is bound from its section with
+    /// its defaults (<see cref="RegistryOptions.GetRegistryOptions{T}"/>). Null settings bind nothing.
+    /// </summary>
+    public static T As<T>(AppSettings? settings) where T : class, new()
+    {
+        var json = JsonConvert.SerializeObject(new { AppSettings = settings ?? new AppSettings() });
+        var configuration = new ConfigurationBuilder()
+            .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)))
+            .Build();
+        return configuration.GetRegistryOptions<T>();
+    }
+
+    /// <summary>
+    /// <typeparamref name="T"/> of the current value of <paramref name="settings"/>, read on each access
+    /// (a <see cref="MutableOptions{T}"/> swapped later is seen by a SUT built later).
+    /// </summary>
+    public static IOptions<T> Options<T>(IOptions<AppSettings> settings) where T : class, new() =>
+        new ProjectedOptions<T>(settings);
+
+    /// <summary><typeparamref name="T"/> of <paramref name="settings"/> as fixed options.</summary>
+    public static IOptions<T> Options<T>(AppSettings settings) where T : class, new() =>
+        Microsoft.Extensions.Options.Options.Create(As<T>(settings));
+
+    private sealed class ProjectedOptions<T>(IOptions<AppSettings> source) : IOptions<T> where T : class, new()
+    {
+        public T Value => As<T>(source.Value);
+    }
 }
 
 /// <summary>An <see cref="IOptions{TOptions}"/> whose value tests can set at any time.</summary>

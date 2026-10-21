@@ -91,11 +91,13 @@ public class UsersManagerTest : TestBase
             .Returns(PasswordValidationResult.Success());
 
         // Initialize utils
-        _webUtils = new WebUtils(_authManagerMock.Object, _context, _settingsOptions,
+        _webUtils = new WebUtils(_authManagerMock.Object, _context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
         _usersManager = new UsersManager(
-            _settingsOptions,
+            TestSettings.Options<AuthTokenOptions>(_settingsOptions),
+            TestSettings.Options<IdentityProviderOptions>(_settingsOptions),
+            TestSettings.Options<AccountOptions>(_settingsOptions),
             _loginManagerMock.Object,
             _userManagerMock.Object,
             _roleManagerMock.Object,

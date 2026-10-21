@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
+using Registry.Web.Hosting;
 using Registry.Web.Utilities;
 using Serilog;
 using Shouldly;
@@ -18,7 +19,7 @@ namespace Registry.Web.Test.ImprovementBaselines;
 /// RQ-02 item 10 (follow-up, logs per instance): the web server, the processing nodes and the
 /// thumbnail generator share one storage folder and wrote the same <c>./logs/registry.txt</c>. The
 /// File sink's <c>shared: true</c> serializes writers with a named mutex, which does not cross
-/// containers. The one <c>Program.ConfigureSerilog</c> now derives the file name from the instance
+/// containers. The one <c>RegistryHost.ConfigureSerilog</c> now derives the file name from the instance
 /// type (<c>registry-web</c>, <c>registry-node</c>, <c>registry-thumbs</c>; the default all-in-one
 /// instance keeps the configured name), for whatever path the configuration holds. Several processing
 /// nodes run in one deployment (docker-compose <c>registry_node_1</c>, <c>registry_node_2</c>) on the
@@ -57,7 +58,7 @@ public class Rq02LogPathTests
 
     /// <summary>
     /// Builds the logger of a host of <paramref name="instanceType"/> through
-    /// <c>Program.ConfigureSerilog</c> (shipped Serilog section, file sink moved to the temp folder),
+    /// <c>RegistryHost.ConfigureSerilog</c> (shipped Serilog section, file sink moved to the temp folder),
     /// writes one event and returns the file names written.
     /// </summary>
     private string[] WriteThroughConfigureSerilog(InstanceType? instanceType, string fileName = "registry.txt")
@@ -83,7 +84,7 @@ public class Rq02LogPathTests
         using var services = new ServiceCollection().BuildServiceProvider();
 
         var loggerConfiguration = new LoggerConfiguration();
-        Program.ConfigureSerilog(context, services, loggerConfiguration);
+        RegistryHost.ConfigureSerilog(context, services, loggerConfiguration);
         using (var logger = loggerConfiguration.CreateLogger())
             logger.Warning("rq02 log path");
 

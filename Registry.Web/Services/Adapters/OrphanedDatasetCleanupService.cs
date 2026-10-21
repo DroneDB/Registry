@@ -22,12 +22,12 @@ namespace Registry.Web.Services.Adapters;
 public class OrphanedDatasetCleanupService
 {
     private readonly RegistryContext _context;
-    private readonly AppSettings _settings;
+    private readonly StorageOptions _settings;
     private readonly ILogger<OrphanedDatasetCleanupService> _logger;
 
     public OrphanedDatasetCleanupService(
         RegistryContext context,
-        IOptions<AppSettings> settings,
+        IOptions<StorageOptions> settings,
         ILogger<OrphanedDatasetCleanupService> logger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));

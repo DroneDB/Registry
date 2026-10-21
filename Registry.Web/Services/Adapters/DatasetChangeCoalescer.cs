@@ -39,10 +39,10 @@ public sealed class DatasetChangeCoalescer : IDatasetChangeCoalescer, IHostedSer
     private readonly ILogger<DatasetChangeCoalescer> _logger;
     private readonly ConcurrentDictionary<(string Org, string Ds), Pending> _pending = new();
 
-    public DatasetChangeCoalescer(IOgcCacheKeys ogcKeys, ICacheManager cacheManager, IOptions<AppSettings> settings,
-        ILogger<DatasetChangeCoalescer> logger)
-        : this(ogcKeys, cacheManager, settings.Value.EffectiveDatasetThumbnailCandidates(),
-            TimeSpan.FromMilliseconds((settings.Value.Uploads ?? new UploadSettings()).InvalidationWindowMs), logger)
+    public DatasetChangeCoalescer(IOgcCacheKeys ogcKeys, ICacheManager cacheManager, IOptions<ThumbnailOptions> thumbnails,
+        IOptions<UploadSettings> uploads, ILogger<DatasetChangeCoalescer> logger)
+        : this(ogcKeys, cacheManager, thumbnails.Value.Candidates,
+            TimeSpan.FromMilliseconds(uploads.Value.InvalidationWindowMs), logger)
     {
     }
 

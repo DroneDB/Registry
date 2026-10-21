@@ -91,12 +91,12 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
     /// <param name="time">Clock of the batch window, the idle trim, the enqueue timeout and the
     /// busy-retry delay; <see cref="TimeProvider.System"/> when null.</param>
     public DatasetIndexQueue(IServiceScopeFactory scopeFactory, ILogger<DatasetIndexQueue> logger,
-        IOptions<AppSettings> appSettings, TimeProvider? time = null)
+        IOptions<IndexQueueSettings> settings, TimeProvider? time = null)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
         _time = time ?? TimeProvider.System;
-        _opts = appSettings.Value.IndexQueue ?? new IndexQueueSettings();
+        _opts = settings.Value;
         ValidateSettings(_opts);
     }
 

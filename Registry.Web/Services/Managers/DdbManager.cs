@@ -16,10 +16,10 @@ public class DdbManager : IDdbManager
 {
     private readonly ILogger<DdbManager> _logger;
     private readonly IDdbWrapper _ddbWrapper;
-    private readonly AppSettings _settings;
+    private readonly StorageOptions _settings;
     private readonly InitializedDatasetFolders _initialized;
 
-    public DdbManager(IOptions<AppSettings> settings, ILogger<DdbManager> logger, IDdbWrapper ddbWrapper,
+    public DdbManager(IOptions<StorageOptions> settings, ILogger<DdbManager> logger, IDdbWrapper ddbWrapper,
         InitializedDatasetFolders? initialized = null)
     {
         _logger = logger;

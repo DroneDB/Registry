@@ -37,7 +37,7 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         IHeavyTaskQuota quota,
         IJobIndexQuery query,
         IBackgroundJobsProcessor processor,
-        IOptions<AppSettings> appSettings,
+        IOptions<ProcessingPlatformSettings> settings,
         ILogger<HeavyTaskRunner> log)
     {
         _registry = registry;
@@ -46,7 +46,7 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         _quota = quota;
         _query = query;
         _processor = processor;
-        _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
+        _settings = settings.Value;
         _log = log;
     }
 

@@ -25,7 +25,7 @@ namespace Registry.Web.Services.Adapters;
 /// re-enqueues on-disk files that are not indexed, reports (never deletes) indexed entries whose
 /// file is missing on disk, and ages out old quarantined files
 /// (see <see cref="Managers.ObjectsManager"/>'s <c>.uploads/quarantine</c> compensation).
-/// Scheduled via Hangfire (cron from <see cref="AppSettings.IndexReconciliationCron"/>).
+/// Scheduled via Hangfire (cron from <see cref="JobScheduleOptions.IndexReconciliationCron"/>).
 /// </summary>
 public class IndexReconciliationService
 {
@@ -42,15 +42,13 @@ public class IndexReconciliationService
         RegistryContext context,
         IDdbManager ddbManager,
         IDatasetIndexQueue indexQueue,
-        IOptions<AppSettings> appSettings,
+        IOptions<ReconciliationSettings> settings,
         ILogger<IndexReconciliationService> logger)
     {
-        // Fail-fast policy: hard failures for the three required collaborators; lenient defaults
-        // only for the settings bag (tests construct this service without full DI)
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _indexQueue = indexQueue ?? throw new ArgumentNullException(nameof(indexQueue));
-        _settings = appSettings?.Value?.Reconciliation ?? new ReconciliationSettings();
+        _settings = (settings ?? throw new ArgumentNullException(nameof(settings))).Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 

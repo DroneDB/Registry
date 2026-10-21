@@ -18,17 +18,14 @@ public class LocalLoginManager : ILoginManager
     private readonly UserManager<User> _userManager;
     private readonly SignInManager<User> _signInManager;
     private readonly ILogger<LocalLoginManager> _logger;
-    private readonly AppSettings _settings;
 
     public LocalLoginManager(UserManager<User> userManager,
         SignInManager<User> signInManager,
-        ILogger<LocalLoginManager> logger,
-        IOptions<AppSettings> settings)
+        ILogger<LocalLoginManager> logger)
     {
         _userManager = userManager;
         _logger = logger;
         _signInManager = signInManager;
-        _settings = settings.Value;
     }
 
     public AuthProviderCapabilities Capabilities => AuthProviderCapabilities.Local;

@@ -62,7 +62,7 @@ public class OrganizationManagerTest : TestBase
         SetupDefaultAuthManagerBehavior();
 
         // Initialize utils and manager
-        _webUtils = new WebUtils(_authManagerMock.Object, _context, _settingsOptions,
+        _webUtils = new WebUtils(_authManagerMock.Object, _context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
         _organizationsManager = new OrganizationsManager(
@@ -72,7 +72,7 @@ public class OrganizationManagerTest : TestBase
             _webUtils,
             _datasetManagerMock.Object,
             _appContext,
-            _settingsOptions,
+            TestSettings.Options<AccountOptions>(_settingsOptions),
             _logger,
             new OrganizationMembershipService(_context, _appContext, new UpperInvariantLookupNormalizer(),
                 NullLogger<OrganizationMembershipService>.Instance));

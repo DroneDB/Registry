@@ -34,17 +34,18 @@ public class ProcessingNodeDiCompletenessTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 // Registration-only; the Sqlite provider never opens this connection here.
-                ["ConnectionStrings:RegistryConnection"] = "Data Source=:memory:"
+                ["ConnectionStrings:RegistryConnection"] = "Data Source=:memory:",
+                // The options are validated when a service reads them (RQ-07)
+                ["AppSettings:DatasetsPath"] = "./datasets",
+                ["AppSettings:CachePath"] = "./cache"
             })
             .Build();
 
         // Defaults: Sqlite registry provider and no cache provider (in-memory distributed
         // cache + NullCacheKeyScanner), so no external resources are required.
-        var appSettings = new AppSettings();
-
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddProcessingNodeServices(configuration, appSettings);
+        services.AddProcessingNodeServices(configuration);
         configure?.Invoke(services);
         return services.BuildServiceProvider();
     }

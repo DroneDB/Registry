@@ -13,10 +13,10 @@ namespace Registry.Web.Services.Adapters;
 /// <see cref="IUploadReceiptStore"/> on the distributed cache (shared by every instance), kept
 /// for <see cref="UploadSettings.ReceiptHours"/>.
 /// </summary>
-public sealed class DistributedUploadReceiptStore(IDistributedCache cache, IOptions<AppSettings> settings)
+public sealed class DistributedUploadReceiptStore(IDistributedCache cache, IOptions<UploadSettings> settings)
     : IUploadReceiptStore
 {
-    private readonly TimeSpan _ttl = TimeSpan.FromHours(Math.Max(1, (settings.Value.Uploads ?? new UploadSettings()).ReceiptHours));
+    private readonly TimeSpan _ttl = TimeSpan.FromHours(Math.Max(1, settings.Value.ReceiptHours));
 
     public Task<UploadReceipt?> GetAsync(string orgSlug, string dsSlug, string uploadId) =>
         cache.GetRecordAsync<UploadReceipt?>(Key(orgSlug, dsSlug, uploadId));

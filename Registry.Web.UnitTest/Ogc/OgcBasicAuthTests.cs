@@ -78,7 +78,7 @@ public class OgcBasicAuthTests
             .AddLogging()
             .AddSingleton(usersManager.Object)
             .AddSingleton(userManager.Object)
-            .AddSingleton(Microsoft.Extensions.Options.Options.Create(new AppSettings { AuthCookieName = "jwtToken" }))
+            .AddSingleton(Microsoft.Extensions.Options.Options.Create(new AuthTokenOptions { AuthCookieName = "jwtToken" }))
             .AddSingleton(utils.Object)
             .AddSingleton(auth.Object)
             .AddSingleton(Mock.Of<IDdbManager>())

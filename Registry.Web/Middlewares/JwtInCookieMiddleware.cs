@@ -7,11 +7,11 @@ namespace Registry.Web.Middlewares;
 
 public class JwtInCookieMiddleware : IMiddleware
 {
-    private readonly AppSettings _settings;
+    private readonly AuthTokenOptions _settings;
 
     private const string AuthorizationHeaderKey = "Authorization";
         
-    public JwtInCookieMiddleware(IOptions<AppSettings> settings)
+    public JwtInCookieMiddleware(IOptions<AuthTokenOptions> settings)
     {
         _settings = settings.Value;
     }

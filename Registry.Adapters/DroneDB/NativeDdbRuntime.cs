@@ -44,6 +44,9 @@ public sealed unsafe class NativeDdbRuntime : IDdbRuntime
         return json.ToString(Newtonsoft.Json.Formatting.None);
     }
 
+    public string SetEnvironmentDefault(string name, string value) =>
+        NativeEnvironment.SetIfUnset(name, value) ? value : NativeEnvironment.Get(name) ?? value;
+
     public string GetEffectiveConfig() =>
         NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGetEffectiveConfig),
             (out IntPtr output) => NativeDdb.DDBGetEffectiveConfig(out output));

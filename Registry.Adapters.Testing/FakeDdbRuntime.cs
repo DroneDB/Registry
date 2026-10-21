@@ -48,6 +48,21 @@ public class FakeDdbRuntime : IDdbRuntime
         Settings = settings;
     }
 
+    private readonly Dictionary<string, string> _environment = [];
+
+    /// <summary>
+    /// The deployment environment libddb would see: <see cref="SetEnvironmentDefault"/> keeps a value set
+    /// here (a test sets one to play the deployment) and records the defaults; the process environment is
+    /// never changed.
+    /// </summary>
+    public IDictionary<string, string> Environment => _environment;
+
+    public virtual string SetEnvironmentDefault(string name, string value)
+    {
+        lock (_lock)
+            return _environment.TryAdd(name, value) ? value : _environment[name];
+    }
+
     public virtual string GetEffectiveConfig() =>
         ContractFixture.Load("effective-config").Output.ToString(Formatting.None);
 

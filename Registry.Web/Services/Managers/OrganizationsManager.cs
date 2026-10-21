@@ -31,7 +31,7 @@ public class OrganizationsManager : IOrganizationsManager
     private readonly IUtils _utils;
     private readonly IDatasetsManager _datasetManager;
     private readonly ApplicationDbContext _appContext;
-    private readonly IOptions<AppSettings> _appSettings;
+    private readonly IOptions<AccountOptions> _accounts;
     private readonly ILogger<OrganizationsManager> _logger;
 
     public OrganizationsManager(
@@ -41,7 +41,7 @@ public class OrganizationsManager : IOrganizationsManager
         IUtils utils,
         IDatasetsManager datasetManager,
         ApplicationDbContext appContext,
-        IOptions<AppSettings> appSettings,
+        IOptions<AccountOptions> accounts,
         ILogger<OrganizationsManager> logger,
         IOrganizationMembershipService memberships)
     {
@@ -51,7 +51,7 @@ public class OrganizationsManager : IOrganizationsManager
         _utils = utils;
         _datasetManager = datasetManager;
         _appContext = appContext;
-        _appSettings = appSettings;
+        _accounts = accounts;
         _logger = logger;
         _memberships = memberships;
     }
@@ -448,7 +448,7 @@ public class OrganizationsManager : IOrganizationsManager
 
     #region Member Management
 
-    public bool IsMemberManagementEnabled => _appSettings.Value.EnableOrganizationMemberManagement;
+    public bool IsMemberManagementEnabled => _accounts.Value.EnableOrganizationMemberManagement;
 
     public async Task<IEnumerable<OrganizationMemberDto>> GetMembers(string orgSlug)
     {

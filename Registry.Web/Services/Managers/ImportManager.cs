@@ -52,7 +52,7 @@ public class ImportManager : IImportManager
         IImportCredentialProtector protector,
         IHeavyTaskRunner runner,
         IHttpContextAccessor httpContextAccessor,
-        IOptions<AppSettings> appSettings,
+        IOptions<ImportSettings> settings,
         ILogger<ImportManager> logger)
     {
         _utils = utils;
@@ -63,7 +63,7 @@ public class ImportManager : IImportManager
         _protector = protector;
         _runner = runner;
         _httpContextAccessor = httpContextAccessor;
-        _settings = appSettings.Value.Import ?? new ImportSettings();
+        _settings = settings.Value;
         _logger = logger;
     }
 

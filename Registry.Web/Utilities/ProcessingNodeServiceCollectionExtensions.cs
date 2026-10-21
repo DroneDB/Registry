@@ -1,3 +1,4 @@
+#nullable enable
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Registry.Adapters;
@@ -5,67 +6,65 @@ using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
+using Registry.Web.Hosting;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Initialization;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// DI registration for the application services shared by every host that executes
-/// background jobs and heavy tools (the processing node, and any other Hangfire worker host).
+/// DI registration for the application services shared by every host that executes background jobs
+/// and heavy tools: the processing node, and the web host, which builds on it and adds only its own
+/// services (RQ-07). The same container is built in tests (<c>ProcessingNodeDiCompletenessTests</c>,
+/// <c>Rq03DiValidationTests</c>) to catch a registration a tool needs at runtime.
 /// </summary>
-/// <remarks>
-/// Extracted from <c>Program.RunAsProcessingNode</c> so the exact same container can be built
-/// in tests (see <c>ProcessingNodeDiCompletenessTests</c>) to assert that every service the
-/// heavy tools resolve at runtime is registered - catching the class of bug where a tool
-/// resolves a service that is only registered on the full web host.
-/// </remarks>
 public static class ProcessingNodeServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the application services required to execute background jobs and heavy tools.
-    /// Does not register the Hangfire server or hosted services, which are runtime concerns
-    /// owned by the host.
+    /// Registers the options and the application services required to execute background jobs and
+    /// heavy tools, and the cache startup task. Does not register Hangfire (<c>AddRegistryJobs</c>,
+    /// <c>AddJobServers</c>) or the libddb runtime (<c>RegistryHost</c>): host concerns.
     /// </summary>
     /// <param name="services">The service collection to add registrations to.</param>
-    /// <param name="configuration">The application configuration.</param>
-    /// <param name="appSettings">The strongly-typed application settings.</param>
+    /// <param name="configuration">The application configuration (instance type included).</param>
     /// <returns>The same <paramref name="services"/> instance for chaining.</returns>
-    public static IServiceCollection AddProcessingNodeServices(
-        this IServiceCollection services, IConfiguration configuration, AppSettings appSettings)
+    public static IServiceCollection AddProcessingNodeServices(this IServiceCollection services,
+        IConfiguration configuration)
     {
-        // Strongly-typed settings (IOptions<AppSettings>) consumed by several tools/services.
-        services.Configure<AppSettings>(configuration.GetSection("AppSettings"));
+        services.AddRegistryOptions(configuration, configuration.GetInstanceType());
 
-        // Register database context required for job processing
-        services.AddDbContextWithProvider<RegistryContext>(configuration, appSettings.RegistryProvider,
+        // Registry database (the identity database belongs to the web host)
+        services.AddDbContextWithProvider<RegistryContext>(configuration,
+            configuration.GetRegistryOptions<DataStoreOptions>().RegistryProvider,
             MagicStrings.RegistryConnectionName, "Data");
 
-        // Register cache services (required by BuildPendingService)
+        // Caches (required by BuildPendingService and the managers)
         services.AddMemoryCache();
-        services.AddCacheProvider(appSettings);
+        services.AddCacheProvider(configuration.GetRegistryOptions<CachingOptions>());
+        services.AddSingleton<ICacheManager, CacheManager>();
+        services.AddStartupTask<CacheInitializer>();
 
-        // Register job indexing services (required by JobIndexSyncService and BackgroundJobsProcessor)
+        // Job indexing (required by JobIndexSyncService and BackgroundJobsProcessor)
         services.AddJobIndexing();
 
-        // Register HTTP client factory for services that need to make HTTP calls
+        // HTTP client factory for services that need to make HTTP calls
         services.AddHttpClient();
 
-        // Register core singleton services
-        services.AddSingleton<ICacheManager, CacheManager>();
+        // Native library and file system
         services.AddSingleton<IDdbWrapper, NativeDdbWrapper>();
         services.AddSingleton<IFileSystem, FileSystem>();
 
         // Per-dataset index write coalescer (process-local singleton): coalesces concurrent index
         // writes on THIS host - notably the reconciliation sweep - into one native batch.
         // SQLite serializes across processes regardless, so this does not (and cannot) keep a
-        // cross-process lane shared with the web host; it only keeps this host's write bursts
+        // cross-process lane shared with another host; it only keeps this host's write bursts
         // aligned on a single lane.
         services.AddSingleton<IDatasetIndexQueue, DatasetIndexQueue>();
 
-        // Register scoped services required by background jobs
+        // Datasets and the services the background jobs run
         services.AddScoped<IDdbManager, DdbManager>();
         services.AddSingleton<InitializedDatasetFolders>();
         services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
@@ -83,7 +82,7 @@ public static class ProcessingNodeServiceCollectionExtensions
         services.AddProcessingPlatform();
 
         // Import Dataset feature (the import-dataset heavy tool runs on the worker host).
-        services.AddImportSources(appSettings);
+        services.AddImportSources(configuration);
 
         return services;
     }

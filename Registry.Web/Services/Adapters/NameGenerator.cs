@@ -20,7 +20,7 @@ public class NameGenerator : INameGenerator
     private readonly int _nameLength;
     public const int MinNameLength = 8;
 
-    public NameGenerator(IOptions<AppSettings> settings, ILogger<NameGenerator> logger)
+    public NameGenerator(IOptions<ShareOptions> settings, ILogger<NameGenerator> logger)
     {
         _nameLength = settings.Value.RandomDatasetNameLength;
 

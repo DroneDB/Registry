@@ -414,7 +414,7 @@ public class OrganizationMemberPermissionsTest : TestBase
             _utilsMock.Object,
             _datasetManagerMock.Object,
             _appContext,
-            _settingsOptions,
+            TestSettings.Options<AccountOptions>(_settingsOptions),
             _logger,
             new OrganizationMembershipService(_context, _appContext, new UpperInvariantLookupNormalizer(),
                 NullLogger<OrganizationMembershipService>.Instance)

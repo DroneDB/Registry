@@ -52,7 +52,7 @@ public class DdbFactoryTest : TestBase
     public void Ctor_ExistingDatabase_Ok()
     {
 
-        var factory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var factory = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
@@ -62,7 +62,7 @@ public class DdbFactoryTest : TestBase
     [Test]
     public void Ctor_MissingDatabase_NoException()
     {
-        var factory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var factory = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
         Should.NotThrow(() => factory.Get("vlwefwef", _datasetGuid));
 
@@ -76,7 +76,7 @@ public class DdbFactoryTest : TestBase
         _settings.DatasetsPath = fs.TestFolder;
         _settingsOptions.Value = _settings;
 
-        var factory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var factory = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
         ddb.GetEntry("Sub/20200610_144436.jpg").ShouldNotBeNull(); // leaves an idle native connection
 
@@ -95,7 +95,7 @@ public class DdbFactoryTest : TestBase
         _settings.DatasetsPath = fs.TestFolder;
         _settingsOptions.Value = _settings;
 
-        var factory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var factory = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
@@ -127,7 +127,7 @@ public class DdbFactoryTest : TestBase
         const double expectedLongitude = 10.60667;
         const double expectedAltitude = 141;
 
-        var factory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var factory = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
@@ -182,7 +182,7 @@ public class DdbFactoryTest : TestBase
             [-91.99418833907131, 46.843311240786406, 158.51]
         ];
 
-        var factory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var factory = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
@@ -226,7 +226,7 @@ public class DdbFactoryTest : TestBase
         _settings.DatasetsPath = fs.TestFolder;
         _settingsOptions.Value = _settings;
 
-        var factory = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var factory = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 

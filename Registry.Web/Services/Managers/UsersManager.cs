@@ -38,13 +38,17 @@ public class UsersManager : IUsersManager
     private readonly ILogger<UsersManager> _logger;
     private readonly ILoginManager _loginManager;
     private readonly UserManager<User> _userManager;
-    private readonly AppSettings _appSettings;
+    private readonly AuthTokenOptions _tokens;
+    private readonly IdentityProviderOptions _identity;
+    private readonly AccountOptions _accounts;
     private readonly ApplicationDbContext _applicationDbContext;
     private readonly RegistryContext _registryContext;
     private readonly IPasswordPolicyValidator _passwordPolicyValidator;
 
     public UsersManager(
-        IOptions<AppSettings> appSettings,
+        IOptions<AuthTokenOptions> tokens,
+        IOptions<IdentityProviderOptions> identity,
+        IOptions<AccountOptions> accounts,
         ILoginManager loginManager,
         UserManager<User> userManager,
         RoleManager<IdentityRole> roleManager,
@@ -68,7 +72,9 @@ public class UsersManager : IUsersManager
         _applicationDbContext = applicationDbContext;
         _loginManager = loginManager;
         _userManager = userManager;
-        _appSettings = appSettings.Value;
+        _tokens = tokens.Value;
+        _identity = identity.Value;
+        _accounts = accounts.Value;
     }
 
     /// <summary>Shorthand accessor for the active provider's capability descriptor.</summary>
@@ -136,7 +142,7 @@ public class UsersManager : IUsersManager
     public async Task<AuthenticateResponse> Authenticate(string token)
     {
         // Internal auth does not support token auth
-        if (_appSettings.ExternalAuthUrl == null)
+        if (_identity.ExternalAuthUrl == null)
             return null;
 
         var res = await _loginManager.CheckAccess(token);
@@ -260,7 +266,7 @@ public class UsersManager : IUsersManager
             throw new BadRequestException("Error in creating user");
         }
 
-        if (_appSettings.EnableDefaultUserOrganization)
+        if (_accounts.EnableDefaultUserOrganization)
         {
             await CreateUserDefaultOrganization(user);
         }
@@ -576,7 +582,7 @@ public class UsersManager : IUsersManager
         if (userName == MagicStrings.AnonymousUserName)
             throw new ForbiddenException("Cannot delete the anonymous user");
 
-        if (userName == _appSettings.DefaultAdmin.UserName)
+        if (userName == _identity.DefaultAdmin.UserName)
             throw new ForbiddenException("Cannot delete the default admin");
 
         var user = await _userManager.FindByNameAsync(userName);
@@ -968,9 +974,9 @@ public class UsersManager : IUsersManager
     {
         // Generate token
         var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.ASCII.GetBytes(_appSettings.Secret);
+        var key = Encoding.ASCII.GetBytes(_tokens.Secret);
 
-        var expiresOn = DateTime.UtcNow.AddDays(_appSettings.TokenExpirationInDays);
+        var expiresOn = DateTime.UtcNow.AddDays(_tokens.TokenExpirationInDays);
 
         var tokenDescriptor = new SecurityTokenDescriptor
         {

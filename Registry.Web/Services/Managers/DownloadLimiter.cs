@@ -18,7 +18,7 @@ public class DownloadLimiter : IDownloadLimiter
     private readonly ConcurrentDictionary<string, int> _activeDownloads = new();
     private readonly ILogger<DownloadLimiter> _logger;
 
-    public DownloadLimiter(IOptions<AppSettings> settings, ILogger<DownloadLimiter> logger)
+    public DownloadLimiter(IOptions<DownloadOptions> settings, ILogger<DownloadLimiter> logger)
     {
         _maxConcurrentDownloads = settings.Value.MaxConcurrentDownloadsPerUser;
         _logger = logger;

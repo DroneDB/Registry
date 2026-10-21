@@ -231,7 +231,8 @@ public class Rq01ClientIpTests
             ["AppSettings:KnownNetworks:0"] = network
         });
 
-        var error = Should.Throw<InvalidOperationException>(() => factory.CreateClient());
+        // RQ-07: an options validation error (it was an InvalidOperationException from ConfigureServices)
+        var error = Should.Throw<Microsoft.Extensions.Options.OptionsValidationException>(() => factory.CreateClient());
 
         error.Message.ShouldContain("AppSettings:KnownNetworks");
         error.Message.ShouldContain(network);

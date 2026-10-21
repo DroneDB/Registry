@@ -22,7 +22,8 @@ namespace Registry.Web.Test.ImprovementBaselines;
 
 /// <summary>
 /// RQ-02 item 1 (startup order): the database migrations, the cache provider registration and the
-/// recurring job registration done by <c>AppInitializer</c> complete before any hosted service starts,
+/// recurring job registration (the startup tasks of <c>StartupTaskRunner</c> since RQ-07; <c>AppInitializer</c>
+/// before) complete before any hosted service starts,
 /// so before the real Hangfire <see cref="BackgroundJobServerHostedService"/>s (and the upload queues)
 /// registered ahead of it in <c>Startup</c>. Hosted services start in registration order; the fix runs
 /// the initializer in <c>IHostedLifecycleService.StartingAsync</c>, which the host runs for every
@@ -40,19 +41,6 @@ namespace Registry.Web.Test.ImprovementBaselines;
 [Category(TestCategories.Baseline)]
 public class Rq02StartupOrderTests
 {
-    // Startup.AddBudgetedHangfireServers hands the processing budget to libddb through the native
-    // environment when these are unset: restore them so the boot leaves no process-wide trace.
-    private static readonly string[] NativeBudgetVariables =
-        ["DDB_BUILD_THREADS", "DDB_COG_CACHE_MB", "DDB_WARP_MEMORY_MB"];
-
-    private NativeEnvironmentScope _environment = null!;
-
-    [SetUp]
-    public void SetUp() => _environment = new NativeEnvironmentScope(NativeBudgetVariables);
-
-    [TearDown]
-    public void TearDown() => _environment.Dispose();
-
     [Test]
     public void Initialization_CompletesBeforeAnyHostedServiceStarts_IncludingHangfireServers()
     {

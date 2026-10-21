@@ -100,7 +100,7 @@ public class UploadManagerTests
         _changes = new Mock<IDatasetChangeCoalescer>();
         _receipts = new DistributedUploadReceiptStore(
             new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions())),
-            Microsoft.Extensions.Options.Options.Create(_settings));
+            TestSettings.Options<UploadSettings>(Microsoft.Extensions.Options.Options.Create(_settings)));
     }
 
     [TearDown]
@@ -389,7 +389,8 @@ public class UploadManagerTests
         }
 
         var context = db.NewContext();
-        var utils = new WebUtils(Mock.Of<IAuthManager>(), context, Microsoft.Extensions.Options.Options.Create(new AppSettings()),
+        var utils = new WebUtils(Mock.Of<IAuthManager>(), context, Microsoft.Extensions.Options.Options.Create(new AccountOptions()),
+            Microsoft.Extensions.Options.Options.Create(new HttpHostOptions()),
             Mock.Of<IHttpContextAccessor>(), Mock.Of<IDatasetSummaryProvider>(), lookups);
 
         counter.Reset();

@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
-using Microsoft.Extensions.DependencyInjection;
+using Registry.Web.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.Configuration;
@@ -12,12 +12,14 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Initialization;
 
 /// <summary>
-/// Handles Hangfire recurring job initialization.
+/// Startup task of every host with the job storage (<see cref="StartupTaskOrder.RecurringJobs"/>): defines
+/// the recurring jobs before the Hangfire servers start.
 /// </summary>
-internal class HangfireJobsInitializer
+internal sealed class HangfireJobsInitializer : IStartupTask
 {
-    private readonly IServiceProvider _services;
-    private readonly ILogger _logger;
+    private readonly IRecurringJobManager _recurringJobManager;
+    private readonly JobScheduleOptions _schedule;
+    private readonly ILogger<HangfireJobsInitializer> _logger;
 
     /// <summary>
     /// Recurring job ids retired in newer versions. Removed on startup so older
@@ -25,27 +27,28 @@ internal class HangfireJobsInitializer
     /// </summary>
     private static readonly string[] DeprecatedRecurringJobIds = [];
 
-    public HangfireJobsInitializer(IServiceProvider services, ILogger logger)
+    public HangfireJobsInitializer(IRecurringJobManager recurringJobManager, IOptions<JobScheduleOptions> schedule,
+        ILogger<HangfireJobsInitializer> logger)
     {
-        _services = services ?? throw new ArgumentNullException(nameof(services));
+        _recurringJobManager = recurringJobManager ?? throw new ArgumentNullException(nameof(recurringJobManager));
+        _schedule = (schedule ?? throw new ArgumentNullException(nameof(schedule))).Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public Task InitializeAsync(CancellationToken token)
+    public int Order => StartupTaskOrder.RecurringJobs;
+
+    public Task ExecuteAsync(CancellationToken token)
     {
         _logger.LogInformation("Hangfire jobs initialization starting");
 
-        var appSettings = _services.GetRequiredService<IOptions<AppSettings>>().Value;
-        var recurringJobManager = _services.GetRequiredService<IRecurringJobManager>();
-
-        SetupRecurringJobs(appSettings, recurringJobManager);
+        SetupRecurringJobs(_schedule, _recurringJobManager);
 
         _logger.LogInformation("Hangfire jobs initialization completed");
 
         return Task.CompletedTask;
     }
 
-    private void SetupRecurringJobs(AppSettings appSettings, IRecurringJobManager recurringJobManager)
+    private void SetupRecurringJobs(JobScheduleOptions appSettings, IRecurringJobManager recurringJobManager)
     {
         // Migration: remove recurring jobs retired in newer versions. Surviving jobs
         // are re-scheduled by the AddOrUpdate calls below, which overwrite any cron

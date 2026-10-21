@@ -36,9 +36,9 @@ public sealed class AdminOrMonitorTokenRequirement : IAuthorizationRequirement;
 public sealed class AdminAuthorizationHandler : IAuthorizationHandler
 {
     private readonly IUserAuthSnapshotProvider _snapshots;
-    private readonly AppSettings _settings;
+    private readonly AuthTokenOptions _settings;
 
-    public AdminAuthorizationHandler(IUserAuthSnapshotProvider snapshots, IOptions<AppSettings> settings)
+    public AdminAuthorizationHandler(IUserAuthSnapshotProvider snapshots, IOptions<AuthTokenOptions> settings)
     {
         _snapshots = snapshots;
         _settings = settings.Value;

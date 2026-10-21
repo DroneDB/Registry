@@ -25,9 +25,9 @@ public sealed class HeavyToolGating : IHeavyToolGating
 
     private static readonly HeavyToolConfig DefaultConfig = new();
 
-    public HeavyToolGating(IOptions<AppSettings> appSettings, IAuthManager authManager)
+    public HeavyToolGating(IOptions<ProcessingPlatformSettings> settings, IAuthManager authManager)
     {
-        _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
+        _settings = settings.Value;
         _authManager = authManager;
     }
 

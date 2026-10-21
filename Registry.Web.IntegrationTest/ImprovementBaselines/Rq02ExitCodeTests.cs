@@ -135,7 +135,11 @@ public class Rq02ExitCodeTests
     public void RunInstance_HostThrows_ReturnsFailure()
     {
         var (exitCode, _, error) = CommandLineHarness.Capture(() =>
-            Program.RunInstance(new Options(), _ => throw new InvalidOperationException("host exploded")));
+        {
+            // Program.Run sets the command-line logger up before it runs an instance (RQ-07)
+            Hosting.RegistryHost.UseBootstrapLogger();
+            return Program.RunInstance(new Options(), _ => throw new InvalidOperationException("host exploded"));
+        });
 
         exitCode.ShouldBe(ExitCodes.Failure);
         error.ShouldContain("host exploded");

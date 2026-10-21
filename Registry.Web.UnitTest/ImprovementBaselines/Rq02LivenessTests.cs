@@ -12,6 +12,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
 using Registry.Ports;
+using Registry.Web.Hosting;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Test.Support;
 using Shouldly;
@@ -89,7 +90,7 @@ public class Rq02LivenessTests
                 .Configure(app =>
                 {
                     app.UseRouting();
-                    app.UseEndpoints(endpoints => Program.MapThumbnailGeneratorEndpoints(endpoints, handler));
+                    app.UseEndpoints(endpoints => RegistryHost.MapThumbnailGeneratorEndpoints(endpoints, handler));
                 }))
             .StartAsync();
         using var client = host.GetTestClient();

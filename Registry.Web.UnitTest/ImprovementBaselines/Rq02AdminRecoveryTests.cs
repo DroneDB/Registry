@@ -78,7 +78,10 @@ public class Rq02AdminRecoveryTests
     public async Task ResetDefaultAdminPassword_SeededAdmin_NewPasswordIsValid()
     {
         var exitCode = CommandLineHarness.Capture(() =>
-            Program.ResetDefaultAdminPasswordAsync(_factory.Services, NewPassword).GetAwaiter().GetResult()).ExitCode;
+        {
+            using var log = Hosting.RegistryHost.CreateCommandLineLogger();
+            return Program.ResetDefaultAdminPasswordAsync(_factory.Services, NewPassword, log).GetAwaiter().GetResult();
+        }).ExitCode;
 
         exitCode.ShouldBe(ExitCodes.Success);
         (await CheckAdminPasswordsAsync(NewPassword)).ShouldBe((false, true));
@@ -89,7 +92,10 @@ public class Rq02AdminRecoveryTests
     public async Task ResetDefaultAdminPassword_PasswordAgainstThePolicy_ReturnsFailureAndKeepsTheOldOne()
     {
         var (exitCode, _, error) = CommandLineHarness.Capture(() =>
-            Program.ResetDefaultAdminPasswordAsync(_factory.Services, "short").GetAwaiter().GetResult());
+        {
+            using var log = Hosting.RegistryHost.CreateCommandLineLogger();
+            return Program.ResetDefaultAdminPasswordAsync(_factory.Services, "short", log).GetAwaiter().GetResult();
+        });
 
         exitCode.ShouldBe(ExitCodes.Failure);
         error.ShouldContain("Password not changed");

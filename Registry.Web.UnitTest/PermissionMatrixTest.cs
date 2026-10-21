@@ -1191,7 +1191,7 @@ public class PermissionMatrixTest : TestBase
             _utilsMock.Object,
             _datasetManagerMock.Object,
             _appContext,
-            _settingsOptions,
+            TestSettings.Options<AccountOptions>(_settingsOptions),
             logger,
             new OrganizationMembershipService(_context, _appContext, new UpperInvariantLookupNormalizer(),
                 NullLogger<OrganizationMembershipService>.Instance));

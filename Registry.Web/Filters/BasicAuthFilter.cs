@@ -32,9 +32,9 @@ public class BasicAuthFilter : IAsyncAuthorizationFilter, IAlwaysRunResultFilter
 {
     private readonly IUsersManager _usersManager;
     private readonly UserManager<User> _userManager;
-    private readonly AppSettings _settings;
+    private readonly AuthTokenOptions _settings;
 
-    public BasicAuthFilter(IUsersManager usersManager, UserManager<User> userManager, IOptions<AppSettings> settings)
+    public BasicAuthFilter(IUsersManager usersManager, UserManager<User> userManager, IOptions<AuthTokenOptions> settings)
     {
         _usersManager = usersManager;
         _userManager = userManager;
@@ -83,7 +83,7 @@ public class BasicAuthFilter : IAsyncAuthorizationFilter, IAlwaysRunResultFilter
             return;
         var isAdmin = await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName);
 
-        httpContext.Response.Cookies.Append(_settings.AuthCookieName, res.Token,
+        httpContext.Response.Cookies.Append(_settings.AuthCookieName!, res.Token,
             AuthCookieOptions.For(httpContext.Request));
 
         var identity = new ClaimsIdentity([

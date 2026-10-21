@@ -106,7 +106,7 @@ public class ObjectManagerTest : TestBase
         _settingsOptions.Value = TestSettings.Default;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = ObjectsManagerFor(context, webUtils, _ddbFactoryMock.Object).Build();
@@ -136,7 +136,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
@@ -167,7 +167,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
@@ -216,7 +216,7 @@ public class ObjectManagerTest : TestBase
         wrapper.Setup(w => w.ListEntries(It.IsAny<string>(), It.IsAny<EntryQuery>()))
             .Returns((string ddbPath, EntryQuery query) => DdbWrapper.ListEntries(ddbPath, query));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
         var objectManager = ObjectsManagerFor(context, webUtils, ddbWrapper: wrapper.Object).Build();
 
@@ -252,7 +252,7 @@ public class ObjectManagerTest : TestBase
         wrapper.Setup(w => w.ListEntries(It.IsAny<string>(), It.IsAny<EntryQuery>()))
             .Returns((string ddbPath, EntryQuery q) => DdbWrapper.ListEntries(ddbPath, q));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
         var objectManager = ObjectsManagerFor(context, webUtils, ddbWrapper: wrapper.Object).Build();
 
@@ -279,7 +279,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
@@ -310,7 +310,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
@@ -343,7 +343,7 @@ public class ObjectManagerTest : TestBase
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
@@ -375,7 +375,7 @@ public class ObjectManagerTest : TestBase
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
@@ -429,7 +429,7 @@ public class ObjectManagerTest : TestBase
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
@@ -478,7 +478,7 @@ public class ObjectManagerTest : TestBase
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(currentUser));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         return ObjectsManagerFor(context, webUtils).Build();
@@ -584,7 +584,7 @@ public class ObjectManagerTest : TestBase
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
@@ -637,7 +637,7 @@ public class ObjectManagerTest : TestBase
         await objectManager.AddNew(org, ds, "site.dxf", CadAsset("utm32n_site.dxf"));
         await objectManager.AddNew(org, ds, "site.prj", CadAsset("utm32n_site.prj"));
 
-        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
         var ddb = ddbManager.Get(org, context.Datasets.First(d => d.Slug == ds).InternalRef);
         var hash = ddb.GetEntry("site.dxf")!.Hash;
         var build = Path.Combine(ddb.BuildFolderPath, hash);
@@ -664,7 +664,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         return ObjectsManagerFor(context, webUtils).Build();
@@ -799,7 +799,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         // Simulates a native indexing failure after the file has already been moved into place.
@@ -865,7 +865,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var failingIndexQueue = new Mock<IDatasetIndexQueue>();
@@ -920,7 +920,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var payload = "ok"u8.ToArray(); // tiny file: finalization takes the Level-1 branch
@@ -997,7 +997,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
@@ -1060,7 +1060,7 @@ public class ObjectManagerTest : TestBase
         return new ObjectsManagerBuilder(context)
             .WithLogger(_objectManagerLogger)
             .WithSettings(_settingsOptions)
-            .WithDdbManager(ddbManager ?? new DdbManager(_settingsOptions, _ddbFactoryLogger, ddbWrapper))
+            .WithDdbManager(ddbManager ?? new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, ddbWrapper))
             .WithUtils(utils)
             .WithAuthManager(_authManagerMock.Object)
             .WithCacheManager(_cacheManager)
@@ -1104,7 +1104,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
@@ -1130,7 +1130,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
@@ -1165,7 +1165,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
@@ -1191,7 +1191,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
@@ -1227,10 +1227,10 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
         var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
@@ -1281,10 +1281,10 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
         var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
@@ -1337,10 +1337,10 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
         var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
@@ -1387,10 +1387,10 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
         var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
@@ -1438,10 +1438,10 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
         var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
@@ -1489,10 +1489,10 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
         var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
@@ -1565,10 +1565,10 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
         var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
@@ -1630,10 +1630,10 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
         var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
@@ -1709,10 +1709,10 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
         var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
@@ -1794,10 +1794,10 @@ public class ObjectManagerTest : TestBase
             Email = "admin@test.com"
         }));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var ddbManager = new DdbManager(_settingsOptions, _ddbFactoryLogger, DdbWrapper);
+        var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
         var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
@@ -1852,7 +1852,7 @@ public class ObjectManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = ObjectsManagerFor(context, webUtils, _ddbFactoryMock.Object).Build();
@@ -1892,7 +1892,7 @@ public class ObjectManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var objectManager = ObjectsManagerFor(context, webUtils, _ddbFactoryMock.Object).Build();

@@ -23,11 +23,13 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
     private readonly AppSettings _settings;
     private readonly AppSettings _defaults;
     private readonly IConfiguration _configuration;
+    private readonly HostResourceBudget _budget;
 
-    public ConfigurationDataBuilder(IOptions<AppSettings> settings, IConfiguration configuration)
+    public ConfigurationDataBuilder(IOptions<AppSettings> settings, IConfiguration configuration, HostResourceBudget budget)
     {
         _settings = settings.Value;
         _configuration = configuration;
+        _budget = budget;
         _defaults = LoadDefaults();
     }
 
@@ -88,6 +90,9 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
 
         // 15c. Background job concurrency and native build budget
         sections.Add(BuildProcessingBudgetSection());
+
+        // 15d. The machine shared by the Registry processes (XI-06)
+        sections.Add(BuildHostBudgetSection());
 
         // 16. Import
         sections.Add(BuildImportSection());
@@ -803,7 +808,8 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
     {
         var pb = _settings.ProcessingBudget ?? new ProcessingBudgetSettings();
         var db = _defaults.ProcessingBudget ?? new ProcessingBudgetSettings();
-        var effective = ProcessingBudget.Derive(HostFacts.Current(), pb, _settings.WorkerThreads);
+        // A job host shows its own budget; the web server shows a processing node's on this machine
+        var effective = (_budget.Processing ?? _budget.For(InstanceType.ProcessingNode).Processing)!;
 
         return Section("ProcessingBudget", "Processing Budget",
             $"Background job concurrency and per-build native limits. 0 = derived from the host. Effective: {effective}.",
@@ -827,6 +833,33 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
                 NumberField("BuildWarpMemoryMb", "Build Warp Memory",
                     $"GDAL warp memory during a raster build (DDB_WARP_MEMORY_MB). Effective: {effective.BuildWarpMemoryMb} MB.",
                     pb.BuildWarpMemoryMb, db.BuildWarpMemoryMb, minValue: 0, unit: "MB")
+            ]);
+    }
+
+    private ConfigurationSectionDataDto BuildHostBudgetSection()
+    {
+        var hb = _settings.HostBudget ?? new HostBudgetSettings();
+        var db = _defaults.HostBudget ?? new HostBudgetSettings();
+
+        return Section("HostBudget", "Host Budget",
+            "The machine and the Registry processes that share it: each process takes its weight's share of " +
+            "the cores and memory (processing budget, render lanes, libddb's CPU pool). " +
+            (_budget.Declared ? $"This process: {_budget}." : "Not declared: each process plans the whole machine."),
+            [
+                NumberField("Cores", "Cores", "Logical processors of the machine; 0 = what each process sees.",
+                    hb.Cores, db.Cores, minValue: 0),
+                NumberField("MemoryMb", "Memory", "Memory of the machine; 0 = what each process sees.",
+                    hb.MemoryMb, db.MemoryMb, minValue: 0, unit: "MB"),
+                NumberField("WebServers", "Web Servers", "Web server processes on the machine.",
+                    hb.WebServers, db.WebServers, minValue: 0),
+                NumberField("ProcessingNodes", "Processing Nodes", "Processing node processes on the machine.",
+                    hb.ProcessingNodes, db.ProcessingNodes, minValue: 0),
+                NumberField("ThumbnailGenerators", "Thumbnail Generators",
+                    "Thumbnail generator processes on the machine.",
+                    hb.ThumbnailGenerators, db.ThumbnailGenerators, minValue: 0),
+                NumberField("IoThreads", "I/O Threads",
+                    "Disk-bound threads for the whole machine, split like the cores; 0 = libddb's default per process.",
+                    hb.IoThreads, db.IoThreads, minValue: 0)
             ]);
     }
 

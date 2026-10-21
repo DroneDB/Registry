@@ -28,11 +28,11 @@ public sealed class NodeOdxClient : INodeOdxClient
 
     public NodeOdxClient(
         IHttpClientFactory httpClientFactory,
-        IOptions<AppSettings> appSettings,
+        IOptions<ProcessingPlatformSettings> settings,
         ILogger<NodeOdxClient> log)
     {
         _httpClientFactory = httpClientFactory;
-        var seconds = appSettings.Value.ProcessingPlatform?.RemoteNodeRequestTimeoutSeconds ?? 30;
+        var seconds = settings.Value.RemoteNodeRequestTimeoutSeconds;
         _requestTimeout = TimeSpan.FromSeconds(Math.Max(5, seconds));
         _log = log;
     }

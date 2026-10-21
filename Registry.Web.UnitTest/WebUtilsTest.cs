@@ -50,7 +50,7 @@ public class WebUtilsTest : TestBase
         _settingsOptions.Value = _settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
         const string organizationName = "uav4geo";
@@ -70,7 +70,7 @@ public class WebUtilsTest : TestBase
         _settingsOptions.Value = _settings;
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
         const string organizationName = "public";
@@ -96,7 +96,7 @@ public class WebUtilsTest : TestBase
             isPublic: true, description: organizationName + "-1 organization");
         await context.SaveChangesAsync();
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
         var slug = webUtils.GetFreeOrganizationSlug(organizationName);
@@ -123,7 +123,7 @@ public class WebUtilsTest : TestBase
 
         await context.SaveChangesAsync();
 
-        var webUtils = new WebUtils(_authManagerMock.Object, context, _settingsOptions,
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
 

@@ -57,7 +57,7 @@ public class ImportSettings
 
     /// <summary><see cref="BlockedFileExtensions"/>, or <see cref="DefaultBlockedFileExtensions"/> when not set.</summary>
     public string[] EffectiveBlockedFileExtensions() =>
-        AppSettings.ConfiguredOrDefault(BlockedFileExtensions, DefaultBlockedFileExtensions);
+        ConfigurationLists.ConfiguredOrDefault(BlockedFileExtensions, DefaultBlockedFileExtensions);
 
     /// <summary>
     /// File extensions (with or without the leading dot) that are the ONLY ones accepted by ALL

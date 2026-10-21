@@ -10,15 +10,16 @@ namespace Registry.Web.Models.Configuration;
 /// libddb uses its environment variable (<c>DDB_CPU_POOL_SIZE</c>, <c>DDB_IO_THREADS</c>,
 /// <c>DDB_MIN_FREE_DISK_MB</c>) or its default. The effective values are logged at startup.
 /// <para>
-/// A minimal focused options class: RQ-07 splits <see cref="AppSettings"/> into classes like this
-/// one and adds the host budget split by role (web, nodes) that sets <see cref="CpuPoolSize"/>.
+/// An explicit value here always wins. Left out, <see cref="CpuPoolSize"/> and <see cref="IoThreads"/>
+/// come from the host budget when one is declared (<see cref="HostBudgetSettings"/>, XI-06; computed by
+/// <c>Utilities.HostResourceBudget</c>), unless the libddb environment variable is set.
 /// </para>
 /// </summary>
 public sealed class DdbRuntimeOptions
 {
     public const string SectionName = "Ddb";
 
-    /// <summary>Name of the folder under <see cref="AppSettings.TempPath"/> that is the default <see cref="CacheDir"/>.</summary>
+    /// <summary>Name of the folder under <see cref="StorageOptions.TempPath"/> that is the default <see cref="CacheDir"/>.</summary>
     public const string DefaultCacheFolderName = "ddb-cache";
 
     /// <summary>Worker threads libddb may run at once beside the calling threads (libddb default: cores - 1).</summary>
@@ -35,11 +36,8 @@ public sealed class DdbRuntimeOptions
 
     /// <summary>
     /// Where libddb caches thumbnails, tiles, index templates and DSM tiles. Default:
-    /// <c>&lt;AppSettings.TempPath&gt;/ddb-cache</c>, absolute (before RQ-08 it was the profile folder,
+    /// <c>&lt;StorageOptions.TempPath&gt;/ddb-cache</c>, absolute (before RQ-08 it was the profile folder,
     /// <c>~/.ddb</c>, inside the container layer).
     /// </summary>
     public string? CacheDir { get; set; }
-
-    /// <summary>The <c>DDBConfigure</c> settings.</summary>
-    public DdbProcessSettings ToProcessSettings() => new(CpuPoolSize, IoThreads, MinFreeDiskMb, CacheDir);
 }

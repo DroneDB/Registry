@@ -7,6 +7,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Managers;
 using Shouldly;
 using Registry.Test.Common;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test.ImprovementBaselines;
 
@@ -25,7 +26,7 @@ public class Rq01DownloadLimiterRaceTests
     private const string Key = "user:rq01";
 
     private static DownloadLimiter CreateLimiter(int max) =>
-        new(MsOptions.Create(new AppSettings { MaxConcurrentDownloadsPerUser = max }),
+        new(TestSettings.Options<DownloadOptions>(MsOptions.Create(new AppSettings { MaxConcurrentDownloadsPerUser = max })),
             NullLogger<DownloadLimiter>.Instance);
 
     [Test]

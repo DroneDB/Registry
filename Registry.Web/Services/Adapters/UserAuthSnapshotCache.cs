@@ -12,7 +12,7 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Process-wide store of <see cref="UserAuthSnapshot"/>s (singleton). A snapshot is kept for
-/// <see cref="AppSettings.AuthorizationCacheExpiration"/>; <see cref="Invalidate"/> drops it
+/// <see cref="CachingOptions.AuthorizationCacheExpiration"/>; <see cref="Invalidate"/> drops it
 /// at once. Each invalidation bumps a per-user generation, and a load only stores its result
 /// if the generation did not change while it ran, so a load that read the identity store
 /// before a role change cannot put the old roles back after the invalidation.
@@ -25,7 +25,7 @@ public class UserAuthSnapshotCache
     private readonly TimeSpan _expiration;
     private readonly ConcurrentDictionary<string, long> _generations = new();
 
-    public UserAuthSnapshotCache(IMemoryCache cache, IOptions<AppSettings> settings)
+    public UserAuthSnapshotCache(IMemoryCache cache, IOptions<CachingOptions> settings)
         : this(cache, settings.Value.AuthorizationCacheExpiration ?? DefaultExpiration)
     {
     }

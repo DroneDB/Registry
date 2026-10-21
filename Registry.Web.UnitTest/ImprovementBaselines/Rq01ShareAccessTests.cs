@@ -119,7 +119,7 @@ public class Rq01ShareAccessTests
         _objects = new Mock<IObjectsManager>();
 
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings());
-        var utils = new WebUtils(_auth.Object, _context, settings, Mock.Of<IHttpContextAccessor>(),
+        var utils = new WebUtils(_auth.Object, _context, TestSettings.Options<AccountOptions>(settings), TestSettings.Options<HttpHostOptions>(settings), Mock.Of<IHttpContextAccessor>(),
             Mock.Of<IDatasetSummaryProvider>());
 
         var tokens = new Mock<IBatchTokenGenerator>();

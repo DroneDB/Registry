@@ -27,12 +27,12 @@ namespace Registry.Web.Controllers;
 public class UsersController : ControllerBaseEx
 {
     private readonly IUsersManager _usersManager;
-    private readonly AppSettings _appSettings;
+    private readonly AuthTokenOptions _tokens;
 
-    public UsersController(IUsersManager usersManager, IOptions<AppSettings> appSettings)
+    public UsersController(IUsersManager usersManager, IOptions<AuthTokenOptions> tokens)
     {
         _usersManager = usersManager;
-        _appSettings = appSettings.Value;
+        _tokens = tokens.Value;
     }
 
     /// <summary>
@@ -72,7 +72,7 @@ public class UsersController : ControllerBaseEx
     public IActionResult Logout()
     {
         // Same name and attributes (Path, Secure, SameSite) it was set with, or the browser keeps it
-        Response.Cookies.Delete(_appSettings.AuthCookieName, AuthCookieOptions.For(Request));
+        Response.Cookies.Delete(_tokens.AuthCookieName, AuthCookieOptions.For(Request));
         return Ok();
     }
 

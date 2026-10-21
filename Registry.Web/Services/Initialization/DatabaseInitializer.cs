@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
+using Registry.Web.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Common;
@@ -21,70 +21,61 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Initialization;
 
 /// <summary>
-/// Handles database initialization including migrations, initial data creation, and default admin setup.
+/// Startup task of the web host (<see cref="StartupTaskOrder.Database"/>): migrations of the identity and
+/// registry databases, the initial data and the default admin. The processing nodes never migrate.
 /// </summary>
-internal class DatabaseInitializer
+internal sealed class DatabaseInitializer : IStartupTask
 {
-    private readonly IServiceProvider _services;
-    private readonly ILogger _logger;
+    private readonly ApplicationDbContext _identity;
+    private readonly RegistryContext _registry;
+    private readonly IConfiguration _configuration;
+    private readonly ILoginManager _loginManager;
+    private readonly UserManager<User> _userManager;
+    private readonly RoleManager<IdentityRole> _roleManager;
+    private readonly IdentityProviderOptions _identityProvider;
+    private readonly ILogger<DatabaseInitializer> _logger;
 
-    public DatabaseInitializer(IServiceProvider services, ILogger logger)
+    public DatabaseInitializer(ApplicationDbContext identity, RegistryContext registry, IConfiguration configuration,
+        ILoginManager loginManager, UserManager<User> userManager, RoleManager<IdentityRole> roleManager,
+        IOptions<IdentityProviderOptions> identityProvider, ILogger<DatabaseInitializer> logger)
     {
-        _services = services ?? throw new ArgumentNullException(nameof(services));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _identity = identity;
+        _registry = registry;
+        _configuration = configuration;
+        _loginManager = loginManager;
+        _userManager = userManager;
+        _roleManager = roleManager;
+        _identityProvider = identityProvider.Value;
+        _logger = logger;
     }
 
-    public async Task InitializeAsync(CancellationToken token)
+    public int Order => StartupTaskOrder.Database;
+
+    public async Task ExecuteAsync(CancellationToken token)
     {
         _logger.LogInformation("Database initialization starting");
 
-        await InitializeIdentityDatabaseAsync(token);
-        await InitializeRegistryDatabaseAsync(token);
+        await MigrateAsync(_identity, MagicStrings.IdentityConnectionName, "identity", token);
+        await MigrateAsync(_registry, MagicStrings.RegistryConnectionName, "registry", token);
+
+        await CreateInitialDataAsync(_registry, token);
+        await CreateDefaultAdminAsync(token);
 
         _logger.LogInformation("Database initialization completed");
     }
 
-    private async Task InitializeIdentityDatabaseAsync(CancellationToken token)
+    private async Task MigrateAsync(DbContext context, string connectionName, string name, CancellationToken token)
     {
-        var context = _services.GetRequiredService<ApplicationDbContext>();
-        var configuration = _services.GetRequiredService<IConfiguration>();
-
         var isSqlite = context.Database.IsSqlite();
 
         if (isSqlite)
-        {
-            var connectionString = configuration.GetConnectionString(MagicStrings.IdentityConnectionName);
-            CommonUtils.EnsureFolderCreated(connectionString);
-        }
+            CommonUtils.EnsureFolderCreated(_configuration.GetConnectionString(connectionName));
 
         if (isSqlite || context.Database.IsMySql())
         {
-            _logger.LogInformation("Running identity database migrations");
+            _logger.LogInformation("Running {Database} database migrations", name);
             await context.Database.SafeMigrateAsync(token);
         }
-    }
-
-    private async Task InitializeRegistryDatabaseAsync(CancellationToken token)
-    {
-        var context = _services.GetRequiredService<RegistryContext>();
-        var configuration = _services.GetRequiredService<IConfiguration>();
-
-        var isSqlite = context.Database.IsSqlite();
-
-        if (isSqlite)
-        {
-            var connectionString = configuration.GetConnectionString(MagicStrings.RegistryConnectionName);
-            CommonUtils.EnsureFolderCreated(connectionString);
-        }
-
-        if (isSqlite || context.Database.IsMySql())
-        {
-            _logger.LogInformation("Running registry database migrations");
-            await context.Database.SafeMigrateAsync(token);
-        }
-
-        await CreateInitialDataAsync(context, token);
-        await CreateDefaultAdminAsync(token);
     }
 
     private async Task CreateInitialDataAsync(RegistryContext context, CancellationToken token)
@@ -125,12 +116,10 @@ internal class DatabaseInitializer
 
     private async Task CreateDefaultAdminAsync(CancellationToken token)
     {
-        var loginManager = _services.GetRequiredService<ILoginManager>();
-
         // BEHAVIOR CHANGE (deliberate): when an external identity provider is active
         // (LDAP or Remote), skip creating a local default admin. Admin privileges are granted
         // via the provider's group mapping instead. This change also affects Remote mode.
-        if (!loginManager.Capabilities.SupportsLocalUserManagement)
+        if (!_loginManager.Capabilities.SupportsLocalUserManagement)
         {
             _logger.LogInformation(
                 "Default admin creation skipped: identity is managed by an external provider. " +
@@ -138,12 +127,11 @@ internal class DatabaseInitializer
             return;
         }
 
-        var userManager = _services.GetRequiredService<UserManager<User>>();
-        var roleManager = _services.GetRequiredService<RoleManager<IdentityRole>>();
-        var appSettings = _services.GetRequiredService<IOptions<AppSettings>>().Value;
-        var context = _services.GetRequiredService<RegistryContext>();
+        var userManager = _userManager;
+        var roleManager = _roleManager;
+        var context = _registry;
 
-        var defaultAdmin = appSettings.DefaultAdmin;
+        var defaultAdmin = _identityProvider.DefaultAdmin!;
 
         _logger.LogInformation("Setting up default admin user '{Username}'", defaultAdmin.UserName);
 

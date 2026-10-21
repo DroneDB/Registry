@@ -101,12 +101,10 @@ public class Rq02CleanupExpiredJobsTests
     [Test]
     public async Task Initializer_RegistersExactlyTheOwnedIds()
     {
-        var services = new ServiceCollection()
-            .AddSingleton(Microsoft.Extensions.Options.Options.Create(new AppSettings()))
-            .AddSingleton<IRecurringJobManager>(new RecurringJobManager(_storage))
-            .BuildServiceProvider();
-
-        await new HangfireJobsInitializer(services, NullLogger.Instance).InitializeAsync(CancellationToken.None);
+        await new HangfireJobsInitializer(new RecurringJobManager(_storage),
+                Microsoft.Extensions.Options.Options.Create(new JobScheduleOptions()),
+                NullLogger<HangfireJobsInitializer>.Instance)
+            .ExecuteAsync(CancellationToken.None);
 
         RecurringIds().ShouldBe(RecurringJobIds.Owned, ignoreOrder: true);
     }

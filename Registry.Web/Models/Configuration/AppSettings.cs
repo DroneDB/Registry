@@ -5,8 +5,19 @@ using Registry.Common;
 
 namespace Registry.Web.Models.Configuration;
 
+/// <summary>
+/// The whole <c>AppSettings</c> configuration section as one object: the schema of the section for the
+/// readers that show all of it (<c>GET /sys/config</c>, <c>GET /sys/features</c>) and for the consumers
+/// not yet moved to their focused options class (RQ-07). Services take the focused class they read
+/// (<see cref="AuthTokenOptions"/>, <see cref="StorageOptions"/>, …), bound from the same keys; the
+/// table of classes and sections is <c>Hosting.RegistryOptions</c>, and a test checks that every
+/// property here is bound identically by exactly one of them.
+/// </summary>
 public class AppSettings
 {
+    /// <summary>The configuration section.</summary>
+    public const string SectionName = "AppSettings";
+
     /// <summary>
     /// Secret to generate JWT tokens
     /// </summary>
@@ -129,13 +140,13 @@ public class AppSettings
     /// (whole dataset, folders, or multi-file selections). Single-file downloads remain allowed.
     /// Default: false (anonymous bulk downloads are permitted on public/unlisted datasets).
     /// </summary>
-    public bool DisableAnonymousBulkDownloads { get; set; } = false;
+    public bool DisableAnonymousBulkDownloads { get; set; }
 
     /// <summary>
     /// Enables organization-level member management.
     /// When disabled, only system admins can manage organization members.
     /// </summary>
-    public bool EnableOrganizationMemberManagement { get; set; } = false;
+    public bool EnableOrganizationMemberManagement { get; set; }
 
     /// <summary>
     /// Enables the automatic creation of a default personal organization when a new user is created.
@@ -174,7 +185,7 @@ public class AppSettings
     /// <summary>
     /// Default thumbnail size in pixels when no size is specified
     /// </summary>
-    public int DefaultThumbnailSize { get; set; } = 512;
+    public int DefaultThumbnailSize { get; set; } = ThumbnailOptions.DefaultThumbnailSizePixels;
 
     /// <summary>
     /// File names (in dataset root) considered as dataset thumbnail candidates, in priority order.
@@ -187,15 +198,11 @@ public class AppSettings
 #nullable restore
 
     /// <summary>The dataset thumbnail candidates used when <see cref="DatasetThumbnailCandidates"/> is not set.</summary>
-    public static readonly string[] DefaultDatasetThumbnailCandidates =
-    [
-        "thumbnail.webp", "thumbnail.jpg", "thumbnail.png",
-        "cover.webp", "cover.jpg", "cover.png"
-    ];
+    public static readonly string[] DefaultDatasetThumbnailCandidates = ThumbnailOptions.DefaultDatasetThumbnailCandidates;
 
     /// <summary><see cref="DatasetThumbnailCandidates"/>, or <see cref="DefaultDatasetThumbnailCandidates"/> when not set.</summary>
     public string[] EffectiveDatasetThumbnailCandidates() =>
-        ConfiguredOrDefault(DatasetThumbnailCandidates, DefaultDatasetThumbnailCandidates);
+        ConfigurationLists.ConfiguredOrDefault(DatasetThumbnailCandidates, DefaultDatasetThumbnailCandidates);
 
     /// <summary>
     /// Thumbnails cache expiration
@@ -243,7 +250,7 @@ public class AppSettings
     /// Null means unlimited (no enforcement, backwards compatible).
     /// Default: 1GB (1073741824 bytes).
     /// </summary>
-    public long? MaxExportSizeBytes { get; set; } = 1073741824; // 1GB
+    public long? MaxExportSizeBytes { get; set; } = DownloadOptions.DefaultMaxExportSizeBytes;
 
     /// <summary>
     /// Cron expression for cleanup expired jobs task.
@@ -319,7 +326,7 @@ public class AppSettings
     /// Records older than this are purged by the cleanup job.
     /// Default: 60
     /// </summary>
-    public int JobIndexRetentionDays { get; set; } = 60;
+    public int JobIndexRetentionDays { get; set; } = JobScheduleOptions.DefaultJobIndexRetentionDays;
 
     /// <summary>
     /// Global Hangfire job retention (the expiration timeout applied to succeeded
@@ -328,7 +335,7 @@ public class AppSettings
     /// background jobs. Failed jobs are exempt and kept for diagnostics.
     /// Minimum enforced value is 1 day. Default: 2.
     /// </summary>
-    public int HangfireJobRetentionDays { get; set; } = 2;
+    public int HangfireJobRetentionDays { get; set; } = JobScheduleOptions.DefaultHangfireJobRetentionDays;
 
     /// <summary>
     /// MySQL storage invisibility timeout in hours. When using the MySQL Hangfire
@@ -337,7 +344,7 @@ public class AppSettings
     /// this value when builds can take longer than the default (e.g. large point
     /// clouds or meshes). Default: 4 (hours).
     /// </summary>
-    public int HangfireInvisibilityTimeoutHours { get; set; } = 4;
+    public int HangfireInvisibilityTimeoutHours { get; set; } = JobScheduleOptions.DefaultHangfireInvisibilityTimeoutHours;
 
     /// <summary>
     /// Password complexity policy. When null, no password requirements are enforced.
@@ -372,22 +379,10 @@ public class AppSettings
 #nullable restore
 
     /// <summary>The reverse proxies trusted when <see cref="KnownProxies"/> is not set.</summary>
-    public static readonly string[] DefaultKnownProxies = ["127.0.0.1", "::1"];
+    public static readonly string[] DefaultKnownProxies = HttpHostOptions.DefaultKnownProxies;
 
     /// <summary><see cref="KnownProxies"/>, or <see cref="DefaultKnownProxies"/> when not set.</summary>
-    public string[] EffectiveKnownProxies() => ConfiguredOrDefault(KnownProxies, DefaultKnownProxies);
-
-    /// <summary>
-    /// The one rule for the defaults of a configuration-bound list: the configured list, or
-    /// <paramref name="defaults"/> when it is not set (null or empty, as an empty JSON array binds to no
-    /// item). Such a list must have no initializer: the configuration binder does not replace a list
-    /// that already has items, it appends the configured ones to them (every default would be listed
-    /// twice, and a configured list could never drop a default).
-    /// </summary>
-#nullable enable
-    internal static T[] ConfiguredOrDefault<T>(T[]? configured, T[] defaults) =>
-        configured is { Length: > 0 } ? configured : defaults;
-#nullable restore
+    public string[] EffectiveKnownProxies() => ConfigurationLists.ConfiguredOrDefault(KnownProxies, DefaultKnownProxies);
 
     /// <summary>
     /// Networks (CIDR, e.g. <c>172.16.0.0/12</c>) whose addresses are trusted as reverse proxies, in
@@ -422,6 +417,9 @@ public class AppSettings
 
     /// <summary>Concurrency of native renders (tiles, thumbnails, coverages) in this process.</summary>
     public NativeConcurrencySettings? NativeConcurrency { get; set; }
+
+    /// <summary>The machine and the Registry processes that share it (XI-06).</summary>
+    public HostBudgetSettings? HostBudget { get; set; }
 
     /// <summary>Tuning of the upload pipeline.</summary>
     public UploadSettings? Uploads { get; set; }

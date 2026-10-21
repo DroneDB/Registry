@@ -91,14 +91,14 @@ public class Rq01AdminPasswordTests
     }
 
     /// <summary>Runs the start-up database initialization again (what every restart does).</summary>
-    private async Task RunDatabaseInitializerAsync(AppSettings? settingsOverride = null)
+    private async Task RunDatabaseInitializerAsync(IdentityProviderOptions? settingsOverride = null)
     {
         using var scope = _factory.Services.CreateScope();
-        IServiceProvider services = settingsOverride == null
-            ? scope.ServiceProvider
-            : new OptionsOverridingServiceProvider(scope.ServiceProvider, MsOptions.Create(settingsOverride));
+        var initializer = settingsOverride == null
+            ? ActivatorUtilities.CreateInstance<DatabaseInitializer>(scope.ServiceProvider)
+            : ActivatorUtilities.CreateInstance<DatabaseInitializer>(scope.ServiceProvider, MsOptions.Create(settingsOverride));
 
-        await new DatabaseInitializer(services, NullLogger.Instance).InitializeAsync(CancellationToken.None);
+        await initializer.ExecuteAsync(CancellationToken.None);
     }
 
     [Test]
@@ -154,6 +154,8 @@ public class Rq01AdminPasswordTests
             after[path].ShouldBe(content, $"the admin password must not be written to {path}");
         _factory.Services.GetRequiredService<IOptions<AppSettings>>().Value.DefaultAdmin.Password
             .ShouldBe(RegistryWebFactory.AdminPassword, "a request must not mutate the singleton settings");
+        _factory.Services.GetRequiredService<IOptions<IdentityProviderOptions>>().Value.DefaultAdmin!.Password
+            .ShouldBe(RegistryWebFactory.AdminPassword, "a request must not mutate the singleton settings");
     }
 
     [Test]
@@ -161,7 +163,7 @@ public class Rq01AdminPasswordTests
     {
         const string newEmail = "rq01-admin@example.org";
         var stampBefore = (await FindAdminAsync()).SecurityStamp;
-        var configured = new AppSettings
+        var configured = new IdentityProviderOptions
         {
             DefaultAdmin = new AdminInfo
             {
@@ -184,29 +186,20 @@ public class Rq01AdminPasswordTests
     {
         const string password = "Rq01-Startup-Admin-Secret";
         const string monitorToken = "rq01-startup-monitor-token-42";
-        var settings = new AppSettings
+        var identity = new IdentityProviderOptions
         {
-            DefaultAdmin = new AdminInfo { UserName = "admin", Password = password, Email = "admin@example.com" },
-            MonitorToken = monitorToken
+            DefaultAdmin = new AdminInfo { UserName = "admin", Password = password, Email = "admin@example.com" }
         };
-        using var output = new StringWriter();
+        // RQ-07: the banner's inputs are the HTTP and identity options; the monitor token is in neither
+        var http = new HttpHostOptions { ExternalUrlOverride = null };
 
-        Startup.WriteStartupInfo(output, "Production", ["http://0.0.0.0:5000"], settings);
-
-        var text = output.ToString();
+        var text = string.Join(Environment.NewLine,
+            Hosting.StartupBanner.Lines("Production", ["http://0.0.0.0:5000"], http, identity));
         text.ShouldNotContain(password);
         text.ShouldNotContain(monitorToken);
         // The rest of the banner stays
         text.ShouldContain("Registry url: http://localhost:5000");
         text.ShouldContain("Quick Health: http://localhost:5000/quickhealth");
         text.ShouldContain("Press Ctrl+C to quit");
-    }
-
-    /// <summary>Resolves a replacement <see cref="IOptions{AppSettings}"/>; everything else from the scope.</summary>
-    private sealed class OptionsOverridingServiceProvider(IServiceProvider inner, IOptions<AppSettings> options)
-        : IServiceProvider
-    {
-        public object? GetService(Type serviceType) =>
-            serviceType == typeof(IOptions<AppSettings>) ? options : inner.GetService(serviceType);
     }
 }

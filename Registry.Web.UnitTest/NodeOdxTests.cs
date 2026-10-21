@@ -12,6 +12,7 @@ using NUnit.Framework;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.NodeOdx;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -131,9 +132,9 @@ public class NodeOdxTests
     [Test]
     public void Registry_ResolveByNull_ReturnsFirst()
     {
-        var reg = new NodeOdxNodeRegistry(Settings(
+        var reg = new NodeOdxNodeRegistry(TestSettings.Options<ProcessingPlatformSettings>(Settings(
             new NodeOdxNodeConfig { Id = "a", Url = "http://a:3000" },
-            new NodeOdxNodeConfig { Id = "b", Url = "http://b:3000" }));
+            new NodeOdxNodeConfig { Id = "b", Url = "http://b:3000" })));
 
         reg.HasNodes.ShouldBeTrue();
         reg.Resolve()!.Id.ShouldBe("a");
@@ -142,9 +143,9 @@ public class NodeOdxTests
     [Test]
     public void Registry_ResolveById()
     {
-        var reg = new NodeOdxNodeRegistry(Settings(
+        var reg = new NodeOdxNodeRegistry(TestSettings.Options<ProcessingPlatformSettings>(Settings(
             new NodeOdxNodeConfig { Id = "a", Url = "http://a:3000" },
-            new NodeOdxNodeConfig { Id = "b", Url = "http://b:3000", Token = "t" }));
+            new NodeOdxNodeConfig { Id = "b", Url = "http://b:3000", Token = "t" })));
 
         var node = reg.Resolve("b");
         node!.Url.ShouldBe("http://b:3000");
@@ -154,8 +155,8 @@ public class NodeOdxTests
     [Test]
     public void Registry_ResolveUnknown_ReturnsNull()
     {
-        var reg = new NodeOdxNodeRegistry(Settings(
-            new NodeOdxNodeConfig { Id = "a", Url = "http://a:3000" }));
+        var reg = new NodeOdxNodeRegistry(TestSettings.Options<ProcessingPlatformSettings>(Settings(
+            new NodeOdxNodeConfig { Id = "a", Url = "http://a:3000" })));
 
         reg.Resolve("nope").ShouldBeNull();
     }
@@ -163,7 +164,7 @@ public class NodeOdxTests
     [Test]
     public void Registry_EmptyConfig_HasNoNodes()
     {
-        var reg = new NodeOdxNodeRegistry(Settings());
+        var reg = new NodeOdxNodeRegistry(TestSettings.Options<ProcessingPlatformSettings>(Settings()));
 
         reg.HasNodes.ShouldBeFalse();
         reg.Resolve().ShouldBeNull();
@@ -172,9 +173,9 @@ public class NodeOdxTests
     [Test]
     public void Registry_SkipsNodesWithoutUrl()
     {
-        var reg = new NodeOdxNodeRegistry(Settings(
+        var reg = new NodeOdxNodeRegistry(TestSettings.Options<ProcessingPlatformSettings>(Settings(
             new NodeOdxNodeConfig { Id = "blank", Url = "" },
-            new NodeOdxNodeConfig { Id = "ok", Url = "http://ok:3000" }));
+            new NodeOdxNodeConfig { Id = "ok", Url = "http://ok:3000" })));
 
         reg.All.Count.ShouldBe(1);
         reg.Resolve()!.Id.ShouldBe("ok");
@@ -207,7 +208,7 @@ public class NodeOdxTests
 
     private static NodeOdxClient ClientFor(HttpMessageHandler handler) =>
         new(new StubFactory(handler),
-            Microsoft.Extensions.Options.Options.Create(new AppSettings { ProcessingPlatform = new ProcessingPlatformSettings() }),
+            TestSettings.Options<ProcessingPlatformSettings>(Microsoft.Extensions.Options.Options.Create(new AppSettings { ProcessingPlatform = new ProcessingPlatformSettings() })),
             NullLogger<NodeOdxClient>.Instance);
 
     private static HttpResponseMessage Json(string body) =>

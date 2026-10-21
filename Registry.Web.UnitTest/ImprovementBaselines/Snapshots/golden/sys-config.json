@@ -1716,6 +1716,98 @@
         ]
       },
       {
+        "name": "HostBudget",
+        "title": "Host Budget",
+        "description": "The machine and the Registry processes that share it: each process takes its weight's share of the cores and memory (processing budget, render lanes, libddb's CPU pool). Not declared: each process plans the whole machine.",
+        "isActive": false,
+        "fields": [
+          {
+            "key": "Cores",
+            "displayName": "Cores",
+            "currentValue": "0",
+            "defaultValue": "0",
+            "isSet": false,
+            "description": "Logical processors of the machine; 0 = what each process sees.",
+            "fieldType": "number",
+            "enumOptions": null,
+            "sensitive": false,
+            "minValue": 0,
+            "maxValue": null,
+            "unit": null
+          },
+          {
+            "key": "MemoryMb",
+            "displayName": "Memory",
+            "currentValue": "0",
+            "defaultValue": "0",
+            "isSet": false,
+            "description": "Memory of the machine; 0 = what each process sees.",
+            "fieldType": "number",
+            "enumOptions": null,
+            "sensitive": false,
+            "minValue": 0,
+            "maxValue": null,
+            "unit": "MB"
+          },
+          {
+            "key": "WebServers",
+            "displayName": "Web Servers",
+            "currentValue": "0",
+            "defaultValue": "0",
+            "isSet": false,
+            "description": "Web server processes on the machine.",
+            "fieldType": "number",
+            "enumOptions": null,
+            "sensitive": false,
+            "minValue": 0,
+            "maxValue": null,
+            "unit": null
+          },
+          {
+            "key": "ProcessingNodes",
+            "displayName": "Processing Nodes",
+            "currentValue": "0",
+            "defaultValue": "0",
+            "isSet": false,
+            "description": "Processing node processes on the machine.",
+            "fieldType": "number",
+            "enumOptions": null,
+            "sensitive": false,
+            "minValue": 0,
+            "maxValue": null,
+            "unit": null
+          },
+          {
+            "key": "ThumbnailGenerators",
+            "displayName": "Thumbnail Generators",
+            "currentValue": "0",
+            "defaultValue": "0",
+            "isSet": false,
+            "description": "Thumbnail generator processes on the machine.",
+            "fieldType": "number",
+            "enumOptions": null,
+            "sensitive": false,
+            "minValue": 0,
+            "maxValue": null,
+            "unit": null
+          },
+          {
+            "key": "IoThreads",
+            "displayName": "I/O Threads",
+            "currentValue": "0",
+            "defaultValue": "0",
+            "isSet": false,
+            "description": "Disk-bound threads for the whole machine, split like the cores; 0 = libddb's default per process.",
+            "fieldType": "number",
+            "enumOptions": null,
+            "sensitive": false,
+            "minValue": 0,
+            "maxValue": null,
+            "unit": null
+          }
+        ]
+      },
+      {
         "name": "Import",
         "title": "Import Dataset",
         "description": "Import settings: size limits, allowed source types, SSRF guard, timeouts, and concurrency.",

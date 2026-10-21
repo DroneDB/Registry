@@ -16,7 +16,7 @@ namespace Registry.Web.Services.Adapters;
 /// <summary>
 /// Default <see cref="IDatasetLookupCache"/> in process memory (datasets with their organization and its
 /// members), for
-/// <see cref="AppSettings.DatasetLookupCacheExpiration"/> (default 30 s; zero disables it). An
+/// <see cref="CachingOptions.DatasetLookupCacheExpiration"/> (default 30 s; zero disables it). An
 /// organization-wide invalidation cancels a change token shared by that organization's entries.
 /// Changes made by another process (a processing node) are seen when the entry expires.
 /// </summary>
@@ -28,7 +28,7 @@ public sealed class DatasetLookupCache : IDatasetLookupCache
     private readonly TimeSpan _expiration;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _organizations = new();
 
-    public DatasetLookupCache(IMemoryCache cache, IOptions<AppSettings> settings)
+    public DatasetLookupCache(IMemoryCache cache, IOptions<CachingOptions> settings)
         : this(cache, settings.Value.DatasetLookupCacheExpiration ?? DefaultExpiration)
     {
     }

@@ -5,6 +5,7 @@ using Registry.Test.Common;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Managers;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -25,7 +26,7 @@ public class DownloadLimiterTest : TestBase
         {
             MaxConcurrentDownloadsPerUser = maxConcurrent
         });
-        return new DownloadLimiter(settings, _logger);
+        return new DownloadLimiter(TestSettings.Options<DownloadOptions>(settings), _logger);
     }
 
     [Test]

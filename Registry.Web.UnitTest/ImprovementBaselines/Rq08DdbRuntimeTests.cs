@@ -37,7 +37,8 @@ public class Rq08DdbRuntimeTests
 {
     private static DdbRuntimeService Service(FakeDdbRuntime runtime, DdbRuntimeOptions? options = null,
         ILoggerFactory? loggerFactory = null) =>
-        new(runtime, Microsoft.Extensions.Options.Options.Create(options ?? new DdbRuntimeOptions()),
+        new(runtime, HostResourceBudget.Create(InstanceType.WebServer, new HostFacts(8, 16L << 30),
+                new HostResourceOptions(), options ?? new DdbRuntimeOptions(), _ => null),
             new DdbLogSink(loggerFactory ?? NullLoggerFactory.Instance), NullLogger<DdbRuntimeService>.Instance);
 
     [Test]
