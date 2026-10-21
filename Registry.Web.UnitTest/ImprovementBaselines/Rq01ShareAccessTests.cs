@@ -57,6 +57,7 @@ public class Rq01ShareAccessTests
     private Mock<IDatasetsManager> _datasets = null!;
     private Mock<IObjectsManager> _objects = null!;
     private ShareManager _manager = null!;
+    private readonly FakeTime _time = new(new DateTime(2026, 3, 29, 12, 0, 0, DateTimeKind.Utc));
 
     // Bob's permissions on Alice's organization (null: not a member)
     private OrganizationPermissions? _bobOnAliceOrg;
@@ -130,7 +131,7 @@ public class Rq01ShareAccessTests
         _manager = new ShareManager(settings, NullLogger<ShareManager>.Instance, _objects.Object,
             _datasets.Object, Mock.Of<IOrganizationsManager>(), utils, _auth.Object,
             new DatasetAccessResolver(utils, _auth.Object, Mock.Of<IDdbManager>(), TestPaths.Policy), tokens.Object,
-            names.Object, _context, new FileSystem(), TestScratch.Provider);
+            names.Object, _context, new FileSystem(), TestScratch.Provider, _time);
     }
 
     [TearDown]
@@ -179,6 +180,16 @@ public class Rq01ShareAccessTests
         var batch = BatchOf(result.Token);
         batch.Dataset.Organization.Slug.ShouldBe(AliceOrg);
         batch.Status.ShouldBe(BatchStatus.Running);
+    }
+
+    // RQ-10: the batch start is UTC from the injected clock (it was DateTime.Now, the server's local
+    // time, which the API served as UTC once read back from the database)
+    [Test]
+    public async Task Initialize_StoresTheBatchStartInUtcFromTheClock()
+    {
+        var result = await _manager.Initialize(new ShareInitDto { Tag = $"{BobOrg}/{SharedSlug}" });
+
+        BatchOf(result.Token).Start.ShouldBe(_time.Now);
     }
 
     [Test]

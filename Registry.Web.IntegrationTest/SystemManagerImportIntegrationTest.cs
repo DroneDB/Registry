@@ -123,7 +123,7 @@ public class SystemManagerImportIntegrationTest : TestBase
             _fileSystem,
             Mock.Of<IJobIndexWriter>(),
             new SsrfGuard(new ImportSettings())
-        , TestPaths.Policy);
+        , TestPaths.Policy, TimeProvider.System);
     }
 
     [Test]

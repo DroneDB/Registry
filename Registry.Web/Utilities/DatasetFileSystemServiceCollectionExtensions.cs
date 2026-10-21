@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -37,6 +38,10 @@ public static class DatasetFileSystemServiceCollectionExtensions
 
         // The one archive extraction into a dataset (the host registers IArchiveExtractor)
         services.TryAddSingleton<DatasetArchiveExtractor>();
+
+        // The clock of the managers that store times (share batches, their cleanup): RQ-07 moves it
+        // to the host's platform module
+        services.TryAddSingleton(TimeProvider.System);
         return services;
     }
 }

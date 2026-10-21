@@ -38,6 +38,7 @@ public class ShareManager : IShareManager
     private readonly IFileSystem _fileSystem;
     private readonly IChunkStore _chunks;
     private readonly IScratchFileProvider _scratch;
+    private readonly TimeProvider _time;
     private readonly IDdbManager? _ddbManager;
 
     public ShareManager(
@@ -54,6 +55,7 @@ public class ShareManager : IShareManager
         RegistryContext context,
         IFileSystem fileSystem,
         IScratchFileProvider scratch,
+        TimeProvider time,
         IChunkStore? chunkStore = null,
         IDdbManager? ddbManager = null)
     {
@@ -73,6 +75,7 @@ public class ShareManager : IShareManager
         _chunks = chunkStore ?? new ChunkStore();
         _ddbManager = ddbManager;
         _scratch = scratch;
+        _time = time;
     }
 
     public async Task<BatchDto> GetBatchInfo(string token)
@@ -369,7 +372,7 @@ public class ShareManager : IShareManager
         var batch = new Batch
         {
             Dataset = dataset,
-            Start = DateTime.Now,
+            Start = UtcNow(),
             Token = _batchTokenGenerator.GenerateToken(),
             UserName = await _authManager.SafeGetCurrentUserName(),
             Status = BatchStatus.Running
@@ -429,7 +432,7 @@ public class ShareManager : IShareManager
         // To mitigate this issue we are going to commit the status change of the batch as soon as possible
 
         batch.Status = BatchStatus.Rolledback;
-        batch.End = DateTime.Now;
+        batch.End = UtcNow();
         await _context.SaveChangesAsync();
 
         await _context.Entry(batch).Collection(item => item.Entries).LoadAsync();
@@ -552,7 +555,7 @@ public class ShareManager : IShareManager
         {
             Type = info.Type,
             Hash = info.Hash,
-            AddedOn = DateTime.Now,
+            AddedOn = UtcNow(),
             Path = path,
             Size = info.Size,
             Batch = batch
@@ -581,7 +584,7 @@ public class ShareManager : IShareManager
         _logger.LogInformation("Committing batch '{Token}' @ {BatchEndDate} {BatchEndTime}", token,
             batch.End?.ToLongDateString(), batch.End?.ToLongTimeString());
 
-        batch.End = DateTime.Now;
+        batch.End = UtcNow();
         batch.Status = BatchStatus.Committed;
         await _context.SaveChangesAsync();
 
@@ -685,6 +688,10 @@ public class ShareManager : IShareManager
     }
 
     // Chunks of a share upload live where the dataset's other uploads do (same volume as the dataset)
+    // Batch and entry times are UTC (RQ-10): they were the server's local time, which the API then
+    // served as UTC (Kind is lost in the database)
+    private DateTime UtcNow() => _time.GetUtcNow().UtcDateTime;
+
     private string ChunksRoot(Batch batch) => ChunkedUploadManager.ChunksRoot(DatasetOf(batch));
 
     private IDDB DatasetOf(Batch batch)

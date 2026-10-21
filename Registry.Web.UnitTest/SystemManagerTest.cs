@@ -381,7 +381,32 @@ public class SystemManagerTest : TestBase
             Times.Exactly(2));
     }
 
-    private SystemManager CreateSystemManager(RegistryContext context)
+    // RQ-10: batch times are UTC from the injected clock; the expiry compares UTC with UTC
+    [Test]
+    public async Task CleanupBatches_ExpiresRunningBatchesByTheClock()
+    {
+        await using var context = CreateInMemoryContext();
+        var time = new FakeTime(new DateTime(2026, 3, 29, 12, 0, 0, DateTimeKind.Utc));
+        _settings.UploadBatchTimeout = TimeSpan.FromHours(1);
+        var dataset = await context.Datasets.SingleAsync();
+        context.Batches.Add(RunningBatch("expired", dataset, time.Now - TimeSpan.FromHours(2)));
+        context.Batches.Add(RunningBatch("fresh", dataset, time.Now - TimeSpan.FromMinutes(30)));
+        await context.SaveChangesAsync();
+        _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(Mock.Of<IDDB>());
+
+        var result = await CreateSystemManager(context, time).CleanupBatches();
+
+        result.RemovedBatches.ShouldHaveSingleItem().Token.ShouldBe("expired");
+        (await context.Batches.SingleAsync()).Token.ShouldBe("fresh");
+    }
+
+    private static Batch RunningBatch(string token, Dataset dataset, DateTime lastEntry) => new()
+    {
+        Token = token, Dataset = dataset, UserName = "u", Start = lastEntry, Status = BatchStatus.Running,
+        Entries = [new Registry.Web.Data.Models.Entry { Path = token + ".jpg", Hash = "h", AddedOn = lastEntry }]
+    };
+
+    private SystemManager CreateSystemManager(RegistryContext context, TimeProvider? time = null)
     {
         // Create a real BuildPendingService instance with mocked dependencies
         var buildPendingService = new BuildPendingService(
@@ -405,6 +430,6 @@ public class SystemManagerTest : TestBase
             _fileSystem,
             Mock.Of<IJobIndexWriter>(),
             new SsrfGuard(new ImportSettings())
-        , TestPaths.Policy);
+        , TestPaths.Policy, time ?? TimeProvider.System);
     }
 }

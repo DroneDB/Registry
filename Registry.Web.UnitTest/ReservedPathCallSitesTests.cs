@@ -203,7 +203,7 @@ public class ReservedPathCallSitesTests
             new BuildPendingService(context, ddbManager.Object, backgroundJob.Object, cache.Object,
                 Mock.Of<ILogger<BuildPendingService>>()),
             factory.Object, backgroundJob.Object, cache.Object, new FileSystem(), Mock.Of<IJobIndexWriter>(),
-            new SsrfGuard(new ImportSettings { SsrfAllowPrivateNetworks = true }), TestPaths.Policy);
+            new SsrfGuard(new ImportSettings { SsrfAllowPrivateNetworks = true }), TestPaths.Policy, TimeProvider.System);
 
         return await manager.ImportDataset(new ImportDatasetRequestDto
         {

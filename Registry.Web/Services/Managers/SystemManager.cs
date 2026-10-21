@@ -49,12 +49,14 @@ public class SystemManager : ISystemManager
     private readonly IJobIndexWriter _jobIndexWriter;
     private readonly SsrfGuard _ssrfGuard;
     private readonly DatasetPathPolicy _paths;
+    private readonly TimeProvider _time;
 
     public SystemManager(IAuthManager authManager,
         RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger,
         IObjectsManager objectManager, IOptions<AppSettings> settings, BuildPendingService buildPendingService,
         IHttpClientFactory httpClientFactory, IBackgroundJobsProcessor backgroundJob, ICacheManager cacheManager,
-        IFileSystem fileSystem, IJobIndexWriter jobIndexWriter, SsrfGuard ssrfGuard, DatasetPathPolicy paths)
+        IFileSystem fileSystem, IJobIndexWriter jobIndexWriter, SsrfGuard ssrfGuard, DatasetPathPolicy paths,
+        TimeProvider time)
     {
         _authManager = authManager;
         _context = context;
@@ -70,6 +72,7 @@ public class SystemManager : ISystemManager
         _jobIndexWriter = jobIndexWriter;
         _ssrfGuard = ssrfGuard;
         _paths = paths;
+        _time = time;
     }
 
     // Legacy import calls go through the SSRF-hardened client (connect-time IP validation + redirect
@@ -449,7 +452,8 @@ public class SystemManager : ISystemManager
 
     public async Task<CleanupBatchesResultDto> CleanupBatches()
     {
-        var expiration = DateTime.Now - _settings.UploadBatchTimeout;
+        // Batch entry times are UTC since RQ-10 (rows written before hold the server's local time)
+        var expiration = _time.GetUtcNow().UtcDateTime - _settings.UploadBatchTimeout;
 
         // I'm scared
         var toRemove = (from batch in _context.Batches
