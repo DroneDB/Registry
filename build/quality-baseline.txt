@@ -43,9 +43,9 @@ Hangfire storage configuration copies	1
 UseSerilog call sites	1
 HttpContextAccessor registrations	1
 Hangfire dashboard registrations	1
-IOptions<AppSettings> uses	22
-Files consuming IOptions<AppSettings>	21
-Inline ?? new XSettings() defaults	27
+IOptions<AppSettings> uses	5
+Files consuming IOptions<AppSettings>	5
+Inline ?? new XSettings() defaults	11
 Service-locator calls in Services/Initialization	0
 .Wait() / Task.Delay in startup code	0
 Console helper calls in Program+Startup	0
