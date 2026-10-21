@@ -397,10 +397,18 @@ public class Program
     /// </summary>
     /// <param name="args">Host arguments (e.g. <c>--urls</c>).</param>
     /// <returns>The configured, not yet built, host builder.</returns>
-    public static IHostBuilder CreateHostBuilder(string[] args) =>
-        Host.CreateDefaultBuilder(args)
+    public static IHostBuilder CreateHostBuilder(string[] args)
+    {
+#if DEBUG_EF
+        // dotnet-ef resolves this method before Main: route its invocations to the design-time host
+        if (IsEfTool(args))
+            return CreateEfToolsHostBuilder(args);
+#endif
+
+        return Host.CreateDefaultBuilder(args)
             .UseSerilog(ConfigureSerilog)
             .ConfigureWebHostDefaults(webBuilder => webBuilder.UseStartup<Startup>());
+    }
 
     /// <summary>
     /// The one Serilog setup of every host (web server, processing node, thumbnail generator): sinks and
@@ -1176,22 +1184,66 @@ public class Program
 
     */
 
-#if DEBUG_EF
-        private static bool IsEfTool(string[] args)
+    private const string EfProviderOption = "--provider";
+
+    /// <summary>
+    /// Reads the provider of an EF Core tools invocation (<c>dotnet ef ... -- --provider MySql</c>).
+    /// dotnet-ef hands the arguments after <c>--</c> to the startup assembly in no fixed order and
+    /// may add others (e.g. <c>--applicationName</c>, as one <c>--name=value</c> token or two), so
+    /// the option is looked up anywhere, in both the <c>--provider value</c> and
+    /// <c>--provider=value</c> forms. The application's own command line has no such option.
+    /// </summary>
+    /// <param name="args">The arguments the host receives.</param>
+    /// <param name="provider">The provider name (e.g. <c>Sqlite</c>, <c>MySql</c>) when found.</param>
+    /// <returns>True when the arguments carry a provider, i.e. they come from the EF Core tools.</returns>
+    internal static bool TryGetEfToolProvider(IReadOnlyList<string> args, out string provider)
+    {
+        provider = null;
+        if (args == null)
+            return false;
+
+        for (var i = 0; i < args.Count; i++)
         {
-            return args.Length == 4 && args[0] == "--provider" && args[2] == "--applicationName";
+            var arg = args[i];
+            if (arg == null)
+                continue;
+
+            if (arg.Equals(EfProviderOption, StringComparison.OrdinalIgnoreCase))
+            {
+                var value = i + 1 < args.Count ? args[i + 1] : null;
+                if (!string.IsNullOrWhiteSpace(value) && !value.StartsWith("--", StringComparison.Ordinal))
+                    provider = value;
+            }
+            else if (arg.StartsWith(EfProviderOption + "=", StringComparison.OrdinalIgnoreCase))
+            {
+                var value = arg[(EfProviderOption.Length + 1)..];
+                if (!string.IsNullOrWhiteSpace(value))
+                    provider = value;
+            }
         }
 
-        private static void RunEfToolsHost(string[] args)
+        return provider != null;
+    }
+
+#if DEBUG_EF
+        private static bool IsEfTool(string[] args) => TryGetEfToolProvider(args, out _);
+
+        private static void RunEfToolsHost(string[] args) => CreateEfToolsHostBuilder(args).Build().Run();
+
+        /// <summary>
+        /// The design-time host for the EF Core tools: only the two DbContexts, on the provider
+        /// passed with <c>--provider</c> (<see cref="TryGetEfToolProvider"/>), default Sqlite.
+        /// </summary>
+        private static IHostBuilder CreateEfToolsHostBuilder(string[] args)
         {
-            Host.CreateDefaultBuilder(args)
+            var provider = TryGetEfToolProvider(args, out var requested) ? requested : "Sqlite";
+
+            return Host.CreateDefaultBuilder(args)
                 .ConfigureAppConfiguration(x => x.AddJsonFile("appsettings-eftools.json"))
                 .ConfigureServices(
                     (hostContext, services) =>
                     {
-                        // Set the active provider via configuration
                         var configuration = hostContext.Configuration;
-                        var provider = configuration.GetValue("Provider", "Sqlite");
 
                         var registrySqliteConnectionString =
                             configuration.GetConnectionString("RegistrySqliteConnection");
@@ -1233,9 +1285,7 @@ public class Program
 
                                 _ => throw new Exception($"Unsupported provider: {provider}")
                             });
-                    })
-                .Build()
-                .Run();
+                    });
         }
 #endif
 

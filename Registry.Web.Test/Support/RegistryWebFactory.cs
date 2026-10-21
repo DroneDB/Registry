@@ -193,6 +193,10 @@ public sealed class RegistryWebFactory : WebApplicationFactory<Program>
         if (_savedJobStorage != null)
             JobStorage.Current = _savedJobStorage;
 
+        // The host registered the Hangfire.Console dashboard route: a later UseConsole in the same
+        // process (a fixture configuring Hangfire directly) would otherwise throw "already initialized"
+        HangfireConsoleRegistration.Reset();
+
         Log.Logger = _savedLogger;
     }
 

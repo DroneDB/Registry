@@ -81,6 +81,19 @@ public class UsersManager : IUsersManager
     private static string GenerateExternalUserPassword()
         => "!" + CommonUtils.RandomString(29) + "Aa1";
 
+    /// <summary>
+    /// Stores the metadata the login provider returned for <paramref name="user"/>, saving only when it
+    /// changed. A provider may return none: <see cref="User.Metadata"/> stores null as empty.
+    /// </summary>
+    private async Task SyncMetadata(User user, Dictionary<string, object> metadata)
+    {
+        var previous = user.Metadata;
+        user.Metadata = metadata;
+
+        if (!previous.IsSameAs(user.Metadata))
+            await _applicationDbContext.SaveChangesAsync();
+    }
+
     public async Task<AuthenticateResponse> Authenticate(string userName, string password)
     {
         var res = await _loginManager.CheckAccess(userName, password);
@@ -107,11 +120,7 @@ public class UsersManager : IUsersManager
             return null;
         }
 
-        if (!user.Metadata.IsSameAs(res.Metadata))
-        {
-            user.Metadata = res.Metadata;
-            await _applicationDbContext.SaveChangesAsync();
-        }
+        await SyncMetadata(user, res.Metadata);
 
         await SyncRoles(user);
 
@@ -144,11 +153,7 @@ public class UsersManager : IUsersManager
             return null;
         }
 
-        if (!user.Metadata.IsSameAs(res.Metadata))
-        {
-            user.Metadata = res.Metadata;
-            await _applicationDbContext.SaveChangesAsync();
-        }
+        await SyncMetadata(user, res.Metadata);
 
         await SyncRoles(user);
 
