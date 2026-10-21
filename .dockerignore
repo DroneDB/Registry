@@ -1,21 +1,42 @@
-.git
-.github
-.gitignore
-.vscode
-.vs
-*.md
+# Allow-list: the image build needs the solution props, the production projects, the Hub
+# sources and three docker/ files. Everything else (local data such as
+# Registry.Web/registry-data, test projects and their downloaded data, build outputs,
+# node_modules) stays out of the build context.
+*
 
-**/node_modules
+!global.json
+!Directory.Build.props
+!Directory.Packages.props
+!Registry.Web
+!Registry.Adapters
+!Registry.Common
+!Registry.Ports
+!Registry.Web.Data
+!Registry.Web.Data.MySqlMigrations
+!Registry.Web.Data.SqliteMigrations
+!Registry.Web.Identity
+!Registry.Web.Identity.MySqlMigrations
+!Registry.Web.Identity.SqliteMigrations
+!docker/entrypoint.sh
+!docker/healthcheck.sh
+!docker/FolderProfile.xml
+
+# Excluded again inside the allowed folders
 **/bin
 **/obj
-
-Registry-Deploy
-Registry.Adapters.Test/Data
-Registry.Web.Test/Data
+**/node_modules
+**/TestResults
+**/*.md
+**/*.lscache
+Registry.Web/registry-data
+Registry.Web/data
 Registry.Web/uploads
 Registry.Web/logs
 Registry.Web/temp
 Registry.Web/ddbstore
-Registry.Web/*.csv
 Registry.Web/App_Data
-
+Registry.Web/*.csv
+Registry.Web/ClientApp/build
+Registry.Web/ClientApp/coverage
+Registry.Web/ClientApp/stats.json
+Registry.Web/ClientApp/.git
