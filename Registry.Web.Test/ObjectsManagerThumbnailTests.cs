@@ -21,6 +21,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Shouldly;
 using Entry = Registry.Ports.DroneDB.Entry;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -109,10 +110,7 @@ public class ObjectsManagerThumbnailTests : TestBase
 
     private ObjectsManager CreateManager()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        var ctx = new RegistryContext(options);
+        var ctx = TestDb.CreateContext<RegistryContext>();
         var buildPending = new BuildPendingService(
             ctx, _ddbManagerMock.Object, _backgroundJobMock.Object,
             _cacheManagerMock.Object, Mock.Of<ILogger<BuildPendingService>>());

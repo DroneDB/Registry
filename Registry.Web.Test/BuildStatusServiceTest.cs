@@ -18,6 +18,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -44,9 +45,7 @@ public class BuildStatusServiceTest : TestBase
     [SetUp]
     public void Setup()
     {
-        _context = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("BuildStatus-" + Guid.NewGuid())
-            .Options);
+        _context = TestDb.CreateContext<RegistryContext>();
         _jobIndexQuery = new JobIndexQuery(_context);
         _ddbMock = new Mock<IDDB>();
         _logger = CreateTestLogger<BuildStatusService>();

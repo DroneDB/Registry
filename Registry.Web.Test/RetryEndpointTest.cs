@@ -31,6 +31,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -59,8 +60,7 @@ public class RetryEndpointTest : IDisposable
     [SetUp]
     public void SetUp()
     {
-        _db = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase($"RetryTest_{Guid.NewGuid()}").Options);
+        _db = TestDb.CreateContext<RegistryContext>();
 
         // Default live state: no jobs in Hangfire (GetStateData returns null). Individual tests
         // override via SetLiveState; the client's Requeue defaults to success (stock semantics).

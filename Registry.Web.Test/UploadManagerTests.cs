@@ -28,6 +28,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Shouldly;
 using Entry = Registry.Ports.DroneDB.Entry;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -119,8 +120,7 @@ public class UploadManagerTests
         var ddbManager = new Mock<IDdbManager>();
         ddbManager.Setup(m => m.Get(Org, _dataset.InternalRef)).Returns(_ddb.Object);
         var options = Microsoft.Extensions.Options.Options.Create(_settings);
-        var context = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("upl-mgr-" + Guid.NewGuid()).Options);
+        var context = TestDb.CreateContext<RegistryContext>();
         var jobs = Mock.Of<IBackgroundJobsProcessor>();
         var buildPending = new BuildPendingService(context, ddbManager.Object, jobs, Mock.Of<ICacheManager>(),
             NullLogger<BuildPendingService>.Instance);
@@ -377,12 +377,10 @@ public class UploadManagerTests
     {
         var lookups = new DatasetLookupCache(new MemoryCache(new MemoryCacheOptions()), TimeSpan.FromMinutes(1));
         var counter = new QueryCounter();
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("lookup-" + Guid.NewGuid())
-            .AddInterceptors(new DatasetChangeInterceptor(lookups), counter)
-            .Options;
+        await using var db = TestDb.Create<RegistryContext>(b =>
+            b.AddInterceptors(new DatasetChangeInterceptor(lookups), counter));
 
-        await using (var seed = new RegistryContext(options))
+        await using (var seed = db.NewContext())
         {
             var org = new Organization { Slug = "acme", Name = "Acme", OwnerId = "u1", CreationDate = DateTime.UtcNow };
             seed.Organizations.Add(org);
@@ -390,7 +388,7 @@ public class UploadManagerTests
             await seed.SaveChangesAsync();
         }
 
-        await using var context = new RegistryContext(options);
+        var context = db.NewContext();
         var utils = new WebUtils(Mock.Of<IAuthManager>(), context, Microsoft.Extensions.Options.Options.Create(new AppSettings()),
             Mock.Of<IHttpContextAccessor>(), Mock.Of<IDatasetSummaryProvider>(), lookups);
 

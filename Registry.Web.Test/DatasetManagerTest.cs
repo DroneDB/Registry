@@ -25,6 +25,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Models.DTO;
 using Entry = Registry.Ports.DroneDB.Entry;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -1129,11 +1130,7 @@ public class DatasetManagerTest : TestBase
 
     private static RegistryContext GetMoveTestContext()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: $"RegistryDatabase-{Guid.NewGuid()}")
-            .Options;
-
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
             var sourceOrg = new Organization
             {
@@ -1163,18 +1160,12 @@ public class DatasetManagerTest : TestBase
 
             context.Organizations.AddRange(sourceOrg, destOrg);
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        });
     }
 
     private static RegistryContext GetMoveTestContextWithConflict()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: $"RegistryDatabase-{Guid.NewGuid()}")
-            .Options;
-
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
             var sourceOrg = new Organization
             {
@@ -1206,18 +1197,12 @@ public class DatasetManagerTest : TestBase
 
             context.Organizations.AddRange(sourceOrg, destOrg);
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        });
     }
 
     private static RegistryContext GetMoveTestContextWithMultipleConflicts()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: $"RegistryDatabase-{Guid.NewGuid()}")
-            .Options;
-
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
             var sourceOrg = new Organization
             {
@@ -1251,18 +1236,12 @@ public class DatasetManagerTest : TestBase
 
             context.Organizations.AddRange(sourceOrg, destOrg);
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        });
     }
 
     private static RegistryContext GetMoveTestContextWithMixedConflicts()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: $"RegistryDatabase-{Guid.NewGuid()}")
-            .Options;
-
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
             var sourceOrg = new Organization
             {
@@ -1295,9 +1274,7 @@ public class DatasetManagerTest : TestBase
 
             context.Organizations.AddRange(sourceOrg, destOrg);
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        });
     }
 
     #endregion
@@ -1339,12 +1316,8 @@ public class DatasetManagerTest : TestBase
 
     private static RegistryContext GetTest1Context()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "RegistryDatabase-" + Guid.NewGuid())
-            .Options;
-
         // Insert seed data into the database using one instance of the context
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
 
             var entity = new Organization
@@ -1371,18 +1344,12 @@ public class DatasetManagerTest : TestBase
             context.Organizations.Add(entity);
 
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        });
     }
 
     private static RegistryContext GetContextWithMultipleDatasets()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "RegistryDatabase-" + Guid.NewGuid())
-            .Options;
-
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
             var entity = new Organization
             {
@@ -1413,9 +1380,7 @@ public class DatasetManagerTest : TestBase
 
             context.Organizations.Add(entity);
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        });
     }
 
     #endregion

@@ -17,6 +17,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Registry.Web.Test.Support;
 using Shouldly;
 using Entry = Registry.Ports.DroneDB.Entry;
 
@@ -123,10 +124,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
 
     private ObjectsManager CreateManager()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        var ctx = new RegistryContext(options);
+        var ctx = TestDb.CreateContext<RegistryContext>();
         var buildPending = new BuildPendingService(
             ctx, _ddbManagerMock.Object, _backgroundJobMock.Object,
             _cacheManagerMock.Object, Mock.Of<ILogger<BuildPendingService>>());

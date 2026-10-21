@@ -14,6 +14,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -219,20 +220,12 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
 
     private RegistryContext GetEmptyContext()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "OrphanedCleanupTestDb_" + Guid.NewGuid())
-            .Options;
-
-        return new RegistryContext(options);
+        return TestDb.CreateContext<RegistryContext>();
     }
 
     private RegistryContext GetContextWithDataset(string orgSlug, Guid internalRef)
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "OrphanedCleanupTestDb_" + Guid.NewGuid())
-            .Options;
-
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
             var org = new Organization
             {
@@ -253,8 +246,6 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
             org.Datasets = new List<Dataset> { ds };
             context.Organizations.Add(org);
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        });
     }
 }

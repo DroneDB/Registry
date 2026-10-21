@@ -22,6 +22,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Shouldly;
 using Entry = Registry.Ports.DroneDB.Entry;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test.ImprovementBaselines;
 
@@ -129,8 +130,7 @@ public class UploadPerFileOverheadBaselineTests : TestBase
 
     private (UploadManager Uploads, DatasetChangeCoalescer Changes, ThumbnailPrecomputeQueue Thumbnails) CreatePipeline()
     {
-        var ctx = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("upl01-" + Guid.NewGuid()).Options);
+        var ctx = TestDb.CreateContext<RegistryContext>();
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings { DatasetsPath = _root, DefaultThumbnailSize = 512 });
         var jobs = new Mock<IBackgroundJobsProcessor>();
         var buildPending = new BuildPendingService(ctx, _ddbManager.Object, jobs.Object, _cache.Object,

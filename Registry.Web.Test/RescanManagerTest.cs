@@ -19,6 +19,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -303,10 +304,7 @@ public class RescanManagerTest : TestBase
 
     private static RegistryContext CreateInMemoryContext()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        var context = new RegistryContext(options);
+        var context = TestDb.CreateContext<RegistryContext>();
 
         var org = new Organization
         {

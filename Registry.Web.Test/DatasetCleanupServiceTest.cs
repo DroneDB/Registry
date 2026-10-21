@@ -14,6 +14,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -213,20 +214,12 @@ public class DatasetCleanupServiceTest : TestBase
 
     private RegistryContext GetEmptyContext()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "CleanupTestDb_" + Guid.NewGuid())
-            .Options;
-
-        return new RegistryContext(options);
+        return TestDb.CreateContext<RegistryContext>();
     }
 
     private RegistryContext GetContextWithJobIndices(string orgSlug, string dsSlug)
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "CleanupTestDb_" + Guid.NewGuid())
-            .Options;
-
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
             context.JobIndices.AddRange(
                 new JobIndex { JobId = "job-1", OrgSlug = orgSlug, DsSlug = dsSlug, CurrentState = "Succeeded", CreatedAtUtc = DateTime.UtcNow },
@@ -234,8 +227,6 @@ public class DatasetCleanupServiceTest : TestBase
                 new JobIndex { JobId = "job-3", OrgSlug = orgSlug, DsSlug = dsSlug, CurrentState = "Processing", CreatedAtUtc = DateTime.UtcNow }
             );
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        });
     }
 }

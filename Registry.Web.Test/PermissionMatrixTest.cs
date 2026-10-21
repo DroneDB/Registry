@@ -26,6 +26,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Registry.Web.Exceptions;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -348,22 +349,14 @@ public class PermissionMatrixTest : TestBase
 
     private static async Task<RegistryContext> CreateTestRegistryContext()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: $"RegistryDatabase-{Guid.NewGuid()}")
-            .Options;
-
-        var context = new RegistryContext(options);
+        var context = TestDb.CreateContext<RegistryContext>();
         await context.Database.EnsureCreatedAsync();
         return context;
     }
 
     private static async Task<ApplicationDbContext> CreateTestApplicationContext()
     {
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(databaseName: $"RegistryAppDatabase-{Guid.NewGuid()}")
-            .Options;
-
-        var context = new ApplicationDbContext(options);
+        var context = TestDb.CreateContext<ApplicationDbContext>();
         await context.Database.EnsureCreatedAsync();
         return context;
     }

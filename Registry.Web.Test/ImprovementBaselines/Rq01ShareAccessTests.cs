@@ -22,6 +22,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test.ImprovementBaselines;
 
@@ -62,8 +63,7 @@ public class Rq01ShareAccessTests
     [SetUp]
     public void SetUp()
     {
-        _context = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("Rq01ShareAccess_" + Guid.NewGuid()).Options);
+        _context = TestDb.CreateContext<RegistryContext>();
 
         var aliceOrg = new Organization
             { Slug = AliceOrg, Name = AliceOrg, OwnerId = AliceId, CreationDate = DateTime.UtcNow };

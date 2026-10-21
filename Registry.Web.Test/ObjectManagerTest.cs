@@ -35,6 +35,7 @@ using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Registry.Web.Identity.Models;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -81,10 +82,7 @@ public class ObjectManagerTest : TestBase
         _jobIndexQueryMock = new Mock<IJobIndexQuery>();
         _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
 
-        var bpsOptions = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("BuildPendingServiceTest_" + Guid.NewGuid())
-            .Options;
-        var bpsContext = new RegistryContext(bpsOptions);
+        var bpsContext = TestDb.CreateContext<RegistryContext>();
         _buildPendingService = new BuildPendingService(
             bpsContext, _ddbFactoryMock.Object, _backgroundJobsProcessor, _cacheManager,
             Mock.Of<ILogger<BuildPendingService>>());
@@ -1021,7 +1019,6 @@ public class ObjectManagerTest : TestBase
     [Test]
     public async Task EndToEnd_HappyPath()
     {
-
         // 1) List files
         // 3) Add folder 'Test'
         // 4) Add file 'DJI_0021.JPG' inside folder 'Test'
@@ -1135,12 +1132,8 @@ public class ObjectManagerTest : TestBase
 
     private static RegistryContext GetTest1Context()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "RegistryDatabase-" + Guid.NewGuid())
-            .Options;
-
         // Insert seed data into the database using one instance of the context
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
             var entity = new Organization
             {
@@ -1186,9 +1179,7 @@ public class ObjectManagerTest : TestBase
             context.Organizations.Add(entity);
 
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        });
     }
 
     #endregion

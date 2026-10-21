@@ -21,6 +21,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -248,12 +249,8 @@ public class WebUtilsTest : TestBase
 
     private static RegistryContext GetTest1Context()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "RegistryDatabase-" + Guid.NewGuid())
-            .Options;
-
         // Insert seed data into the database using one instance of the context
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
 
             var entity = new Organization
@@ -280,9 +277,7 @@ public class WebUtilsTest : TestBase
             context.Organizations.Add(entity);
 
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        });
     }
 
     #endregion

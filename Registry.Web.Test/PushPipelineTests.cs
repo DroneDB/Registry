@@ -31,6 +31,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -73,8 +74,7 @@ public class PushPipelineTests : TestBase
 
         var org = new Organization { Slug = "org", Name = "Org", OwnerId = "u", CreationDate = DateTime.UtcNow };
         _ds = new Dataset { Id = 1, Slug = "ds", InternalRef = Guid.NewGuid(), CreationDate = DateTime.UtcNow, Organization = org };
-        _ctx = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("reg10-" + Guid.NewGuid()).Options);
+        _ctx = TestDb.CreateContext<RegistryContext>();
 
         _delta = new Delta
         {

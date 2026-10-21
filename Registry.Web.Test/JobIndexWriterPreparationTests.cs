@@ -1,11 +1,9 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using NUnit.Framework;
@@ -15,12 +13,12 @@ using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
 /// <summary>
-/// Forward-only JobIndex preparation and the conditional state update, on a relational provider
-/// (SQLite, set-based paths) and on the EF in-memory provider (tracked fallback paths).
+/// Forward-only JobIndex preparation and the conditional state update, on SQLite (set-based paths).
 /// </summary>
 [TestFixture]
 [NonParallelizable]
@@ -34,19 +32,15 @@ public class JobIndexWriterPreparationTests
 
     private sealed class Sqlite : IDisposable
     {
-        public SqliteConnection Connection { get; } = new("Data Source=:memory:");
-        public DbContextOptions<RegistryContext> Options { get; }
+        private readonly TestDb<RegistryContext> _db;
+        public DbContextOptions<RegistryContext> Options => _db.Options;
         public RegistryContext Db { get; }
         public JobIndexWriter Writer { get; }
 
         public Sqlite(params IInterceptor[] interceptors)
         {
-            Connection.Open();
-            var b = new DbContextOptionsBuilder<RegistryContext>().UseSqlite(Connection);
-            if (interceptors.Length > 0) b.AddInterceptors(interceptors);
-            Options = b.Options;
-            Db = new RegistryContext(Options);
-            Db.Database.EnsureCreated();
+            _db = TestDb.Create<RegistryContext>(b => b.AddInterceptors(interceptors));
+            Db = _db.NewContext();
             Writer = PublicationEnv.NewWriter(Db);
         }
 
@@ -63,11 +57,7 @@ public class JobIndexWriterPreparationTests
             db.SaveChanges();
         }
 
-        public void Dispose()
-        {
-            Db.Dispose();
-            Connection.Dispose();
-        }
+        public void Dispose() => _db.Dispose();
     }
 
     private static JobIndex Telemetry(string id, string state, DateTime created, IndexPayload? p = null)
@@ -280,28 +270,18 @@ public class JobIndexWriterPreparationTests
     [Test]
     public async Task Prepare_ConcurrentPreparers_ConvergeOnOneRow()
     {
-        var path = Path.Combine(Path.GetTempPath(), "prepare-" + Guid.NewGuid().ToString("N") + ".sqlite");
-        try
-        {
-            var options = new DbContextOptionsBuilder<RegistryContext>().UseSqlite("Data Source=" + path).Options;
-            using (var init = new RegistryContext(options)) init.Database.EnsureCreated();
+        using var file = TestDb.CreateFile<RegistryContext>();
 
-            var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(async () =>
-            {
-                using var db = new RegistryContext(options);
-                return await PublicationEnv.NewWriter(db).PrepareForPublicationAsync("1", Payload(), Created, "m");
-            })));
-
-            results.Count(r => r == JobIndexPreparationResult.Inserted).ShouldBe(1);
-            results.Count(r => r == JobIndexPreparationResult.Compatible).ShouldBe(7);
-            using var check = new RegistryContext(options);
-            check.JobIndices.Count().ShouldBe(1);
-        }
-        finally
+        var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(async () =>
         {
-            SqliteConnection.ClearAllPools();
-            File.Delete(path);
-        }
+            using var db = new RegistryContext(file.Options);
+            return await PublicationEnv.NewWriter(db).PrepareForPublicationAsync("1", Payload(), Created, "m");
+        })));
+
+        results.Count(r => r == JobIndexPreparationResult.Inserted).ShouldBe(1);
+        results.Count(r => r == JobIndexPreparationResult.Compatible).ShouldBe(7);
+        using var check = file.NewContext();
+        check.JobIndices.Count().ShouldBe(1);
     }
 
     // ---------------------------------------------------------------- failure handling in a reused context
@@ -353,38 +333,6 @@ public class JobIndexWriterPreparationTests
         using var t = new Sqlite(new FailingSaveInterceptor(_ => new DbUpdateException("always")));
         await Should.ThrowAsync<DbUpdateException>(() => t.Writer.PrepareForPublicationAsync("1", Payload(), Created, null));
         t.Db.ChangeTracker.Entries().ShouldBeEmpty();
-    }
-
-    // ---------------------------------------------------------------- non-relational provider
-
-    private static (RegistryContext Db, JobIndexWriter Writer) InMemory()
-    {
-        var db = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("prep-" + Guid.NewGuid()).Options);
-        return (db, PublicationEnv.NewWriter(db));
-    }
-
-    [Test]
-    public async Task InMemoryProvider_InsertCompatibleIncompatibleReplace()
-    {
-        var (db, writer) = InMemory();
-        using var _ = db;
-
-        (await writer.PrepareForPublicationAsync("1", Payload(), Created, null)).ShouldBe(JobIndexPreparationResult.Inserted);
-        db.JobIndices.AsNoTracking().Single().CurrentState.ShouldBe("Indexing");
-
-        await writer.UpdateStateAsync("1", "Processing", Created.AddSeconds(5));
-        var processing = Snap(db.JobIndices.AsNoTracking().Single());
-        (await writer.PrepareForPublicationAsync("1", Payload(), Created, null)).ShouldBe(JobIndexPreparationResult.Compatible);
-        (await writer.PrepareForPublicationAsync("1", Payload(org: "x"), Created, null)).ShouldBe(JobIndexPreparationResult.Incompatible);
-        Snap(db.JobIndices.AsNoTracking().Single()).ShouldBe(processing);
-
-        (await writer.PrepareForPublicationAsync("1", Payload(org: "x"), Created.AddDays(1), null))
-            .ShouldBe(JobIndexPreparationResult.Replaced);
-        var row = db.JobIndices.AsNoTracking().Single();
-        row.CurrentState.ShouldBe("Indexing");
-        row.OrgSlug.ShouldBe("x");
-        row.ProcessingAtUtc.ShouldBeNull();
     }
 
     // ---------------------------------------------------------------- UpdateStateIfCurrentAsync
@@ -470,44 +418,5 @@ public class JobIndexWriterPreparationTests
         (await t.Writer.UpdateStateIfCurrentAsync("a", ["Indexing"], "Deleted", Changed)).ShouldBeFalse();
         t.Row("a")!.CurrentState.ShouldBe("Processing");
         t.Row("a")!.DeletedAtUtc.ShouldBeNull();
-    }
-
-    [Test]
-    public async Task UpdateIfCurrent_InMemoryProvider_TrueAndFalsePaths()
-    {
-        var (db, writer) = InMemory();
-        using var _ = db;
-        db.JobIndices.Add(Telemetry("a", "Indexing", Created));
-        db.JobIndices.Add(Telemetry("b", "Processing", Created));
-        await db.SaveChangesAsync();
-        db.ChangeTracker.Clear();
-
-        (await writer.UpdateStateIfCurrentAsync("a", ["Indexing"], "Deleted", Changed)).ShouldBeTrue();
-        (await writer.UpdateStateIfCurrentAsync("b", ["Indexing"], "Deleted", Changed)).ShouldBeFalse();
-        (await writer.UpdateStateIfCurrentAsync("zzz", ["Indexing"], "Deleted", Changed)).ShouldBeFalse();
-
-        var a = db.JobIndices.AsNoTracking().Single(x => x.JobId == "a");
-        a.CurrentState.ShouldBe("Deleted");
-        a.DeletedAtUtc.ShouldBe(Changed);
-        db.JobIndices.AsNoTracking().Single(x => x.JobId == "b").CurrentState.ShouldBe("Processing");
-    }
-
-    [Test]
-    public async Task UpdateIfCurrent_FailedSave_DoesNotPoisonContext_InMemoryProviderPath()
-    {
-        var db = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("prep-" + Guid.NewGuid())
-            .AddInterceptors(new FailingSaveInterceptor(n => n == 2 ? new InvalidOperationException("boom") : null))
-            .Options);
-        using var _ = db;
-        var writer = PublicationEnv.NewWriter(db);
-        db.JobIndices.Add(Telemetry("a", "Indexing", Created));
-        await db.SaveChangesAsync();                                   // save #1
-        db.ChangeTracker.Clear();
-
-        await Should.ThrowAsync<InvalidOperationException>(() =>       // save #2 fails
-            writer.UpdateStateIfCurrentAsync("a", ["Indexing"], "Deleted", Changed));
-        db.ChangeTracker.Entries().ShouldBeEmpty();
-        (await writer.UpdateStateIfCurrentAsync("a", ["Indexing"], "Deleted", Changed)).ShouldBeTrue();
     }
 }

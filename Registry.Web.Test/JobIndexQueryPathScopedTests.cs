@@ -7,6 +7,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Services.Adapters;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -22,9 +23,7 @@ public class JobIndexQueryPathScopedTests
     [SetUp]
     public void Setup()
     {
-        _context = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("JobIndexPaths-" + Guid.NewGuid())
-            .Options);
+        _context = TestDb.CreateContext<RegistryContext>();
         _query = new JobIndexQuery(_context);
     }
 

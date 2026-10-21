@@ -22,6 +22,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities.Auth;
+using Registry.Web.Test.Support;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -84,6 +85,7 @@ public class WarmDatasetAccessTests
             Task.FromResult(new UserAuthSnapshot(true, userId, false, false));
     }
 
+    private TestDb<RegistryContext> _db = null!;
     private DbContextOptions<RegistryContext> _options = null!;
     private DatasetLookupCache _lookups = null!;
     private CountingCache _redis = null!;
@@ -99,10 +101,8 @@ public class WarmDatasetAccessTests
     {
         _lookups = new DatasetLookupCache(new MemoryCache(new MemoryCacheOptions()), TimeSpan.FromMinutes(1));
         _rows = new RowCounter();
-        _options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("warm-access-" + Guid.NewGuid())
-            .AddInterceptors(new DatasetChangeInterceptor(_lookups), _rows)
-            .Options;
+        _db = TestDb.Create<RegistryContext>(b => b.AddInterceptors(new DatasetChangeInterceptor(_lookups), _rows));
+        _options = _db.Options;
 
         await using (var seed = new RegistryContext(_options))
         {
@@ -131,6 +131,9 @@ public class WarmDatasetAccessTests
         var access = new DatasetAccessControl(new Snapshots(), context, NullLogger.Instance, _ddb, _cache);
         return await access.CanAccessDataset(utils.GetDataset(Org, Ds), AccessType.Read, userId);
     }
+
+    [TearDown]
+    public void TearDown() => _db.Dispose();
 
     [Test]
     public async Task WarmMemberRequest_MakesNoQueryAndNoRedisRead()

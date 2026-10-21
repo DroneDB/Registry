@@ -24,6 +24,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using MetaManager = Registry.Web.Services.Managers.MetaManager;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -186,12 +187,8 @@ internal class MetaManagerTest : TestBase
 
     private static RegistryContext GetTest1Context()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "RegistryDatabase-" + Guid.NewGuid())
-            .Options;
-
         // Insert seed data into the database using one instance of the context
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
             var entity = new Organization
             {
@@ -237,9 +234,7 @@ internal class MetaManagerTest : TestBase
             context.Organizations.Add(entity);
 
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        });
     }
 
     #endregion

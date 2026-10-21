@@ -17,6 +17,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Shouldly;
 using DdbEntry = Registry.Ports.DroneDB.Entry;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -415,19 +416,12 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
 
     private static RegistryContext GetEmptyContext()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("RegistryDatabase-" + Guid.NewGuid())
-            .Options;
-        return new RegistryContext(options);
+        return TestDb.CreateContext<RegistryContext>();
     }
 
     private static RegistryContext GetTest1Context()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("RegistryDatabase-" + Guid.NewGuid())
-            .Options;
-
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
             var org = new Organization
             {
@@ -447,8 +441,6 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
             org.Datasets = new List<Dataset> { ds };
             context.Organizations.Add(org);
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        });
     }
 }

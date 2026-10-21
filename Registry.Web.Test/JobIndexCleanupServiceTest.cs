@@ -1,7 +1,11 @@
 using System;
+using System.Data.Common;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -14,6 +18,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -225,11 +230,9 @@ public class JobIndexCleanupServiceTest : TestBase
     public async Task DeleteTerminalForDatasetAsync_ToolFilter_OnlyRemovesMatchingTool()
     {
         // Arrange - two terminal tasks in the same dataset produced by different tools
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "JobIndexClearToolTestDb_" + Guid.NewGuid())
-            .Options;
+        await using var db = TestDb.Create<RegistryContext>();
 
-        await using (var seed = new RegistryContext(options))
+        await using (var seed = db.NewContext())
         {
             seed.JobIndices.AddRange(
                 new JobIndex { JobId = "build-done", OrgSlug = "org1", DsSlug = "ds1", ToolId = "build", CurrentState = "Succeeded", CreatedAtUtc = DateTime.UtcNow, LastStateChangeUtc = DateTime.UtcNow },
@@ -238,7 +241,7 @@ public class JobIndexCleanupServiceTest : TestBase
             await seed.SaveChangesAsync();
         }
 
-        await using var context = new RegistryContext(options);
+        var context = db.NewContext();
         var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
 
         // Act - clear only the archive-extract tool
@@ -373,6 +376,76 @@ public class JobIndexCleanupServiceTest : TestBase
 
     #endregion
 
+    #region Database errors propagate
+
+    // Fails the first DELETE statement as a busy database would. The old client-side fallback
+    // swallowed this failure into a warning and deleted the rows with tracked entities instead.
+    private sealed class FailFirstDeleteInterceptor : DbCommandInterceptor
+    {
+        public int Failures { get; private set; }
+
+        private void FailIfFirstDelete(DbCommand command)
+        {
+            if (Failures > 0 || !command.CommandText.TrimStart().StartsWith("DELETE", StringComparison.OrdinalIgnoreCase))
+                return;
+            Failures++;
+            throw new SqliteException("database is locked", 5 /* SQLITE_BUSY */);
+        }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            FailIfFirstDelete(command);
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            FailIfFirstDelete(command);
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
+
+    [Test]
+    public async Task DeleteTerminalBeforeAsync_DatabaseError_PropagatesAndDeletesNothing()
+    {
+        var failure = new FailFirstDeleteInterceptor();
+        await using var context = GetContextWithMixedRecords(failure);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
+
+        var ex = await Should.ThrowAsync<SqliteException>(() => writer.DeleteTerminalBeforeAsync(DateTime.UtcNow.AddDays(-30)));
+
+        ex.SqliteErrorCode.ShouldBe(5);
+        failure.Failures.ShouldBe(1);
+        (await context.JobIndices.CountAsync()).ShouldBe(10, "a failed bulk delete must not fall back to another delete");
+    }
+
+    [Test]
+    public async Task DeleteTerminalForDatasetAsync_DatabaseError_PropagatesAndDeletesNothing()
+    {
+        var failure = new FailFirstDeleteInterceptor();
+        await using var context = GetContextWithMixedRecords(failure);
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
+
+        await Should.ThrowAsync<SqliteException>(() => writer.DeleteTerminalForDatasetAsync("org1", "ds1"));
+
+        failure.Failures.ShouldBe(1);
+        (await context.JobIndices.CountAsync()).ShouldBe(10);
+    }
+
+    [Test]
+    public async Task CleanupOldJobIndicesAsync_DatabaseError_FailsTheJobSoHangfireRetries()
+    {
+        await using var context = GetContextWithMixedRecords(new FailFirstDeleteInterceptor());
+        var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
+        var service = new JobIndexCleanupService(writer, CreateSettings(30), _cleanupLogger);
+
+        await Should.ThrowAsync<SqliteException>(() => service.CleanupOldJobIndicesAsync());
+    }
+
+    #endregion
+
     #region Helpers
 
     private static IOptions<AppSettings> CreateSettings(int retentionDays)
@@ -385,27 +458,19 @@ public class JobIndexCleanupServiceTest : TestBase
 
     private static RegistryContext GetEmptyContext()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "JobIndexCleanupTestDb_" + Guid.NewGuid())
-            .Options;
-
-        return new RegistryContext(options);
+        return TestDb.CreateContext<RegistryContext>();
     }
 
     /// <summary>
     /// Creates a context with a mix of old/recent and terminal/active records.
     /// Old = 90 days ago. Recent = 5 days ago.
     /// </summary>
-    private static RegistryContext GetContextWithMixedRecords()
+    private static RegistryContext GetContextWithMixedRecords(params IInterceptor[] interceptors)
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "JobIndexCleanupTestDb_" + Guid.NewGuid())
-            .Options;
-
         var oldDate = DateTime.UtcNow.AddDays(-90);
         var recentDate = DateTime.UtcNow.AddDays(-5);
 
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
             context.JobIndices.AddRange(
                 // Old terminal records (should be deleted with 30-day retention)
@@ -425,9 +490,7 @@ public class JobIndexCleanupServiceTest : TestBase
                 new JobIndex { JobId = "recent-failed", OrgSlug = "org2", DsSlug = "ds2", CurrentState = "Failed", CreatedAtUtc = recentDate.AddHours(-1), LastStateChangeUtc = recentDate }
             );
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        }, b => b.AddInterceptors(interceptors));
     }
 
     #endregion

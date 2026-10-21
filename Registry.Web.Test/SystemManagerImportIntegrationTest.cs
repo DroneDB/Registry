@@ -22,6 +22,7 @@ using Registry.Web.Services.Import;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -75,10 +76,7 @@ public class SystemManagerImportIntegrationTest : TestBase
 
     private RegistryContext CreateInMemoryContext()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        return new RegistryContext(options);
+        return TestDb.CreateContext<RegistryContext>();
     }
 
     private SystemManager CreateSystemManager(RegistryContext context, Mock<IDdbManager> ddbManagerMock)

@@ -21,6 +21,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Shouldly;
 using Entry = Registry.Ports.DroneDB.Entry;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -47,8 +48,7 @@ public class DatasetSummaryTests : TestBase
     {
         _infoCalls = 0;
         _fingerprints.Clear();
-        _ctx = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("reg06-" + Guid.NewGuid()).Options);
+        _ctx = TestDb.CreateContext<RegistryContext>();
         var org = new Organization
         {
             Slug = "org", Name = "Org", OwnerId = _user.Id, CreationDate = DateTime.UtcNow,

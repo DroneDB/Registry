@@ -20,6 +20,7 @@ using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Ports;
 using Shouldly;
 using DdbEntry = Registry.Ports.DroneDB.Entry;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -121,10 +122,7 @@ public class IndexRescanServiceTest : TestBase
 
     private RegistryContext CreateContext(params (string Org, string Ds, DdbEntry[] Entries)[] datasets)
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options;
-        var context = new RegistryContext(options);
+        var context = TestDb.CreateContext<RegistryContext>();
 
         foreach (var group in datasets.GroupBy(d => d.Org))
         {

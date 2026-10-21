@@ -59,7 +59,6 @@ Registry.Web.Test/BuildJobFailureFilterTests.cs CS8625 1
 Registry.Web.Test/BuildPendingServiceTest.cs CA1001 1
 Registry.Web.Test/BuildPendingServiceTest.cs CA1822 1
 Registry.Web.Test/BuildPendingServiceTest.cs CA2201 1
-Registry.Web.Test/BuildStatusServiceTest.cs CA1001 1
 Registry.Web.Test/BuildToolTests.cs CS8625 2
 Registry.Web.Test/ChunkStoreTests.cs CA1859 2
 Registry.Web.Test/DatasetCleanupServiceTest.cs CA1822 2
@@ -68,7 +67,6 @@ Registry.Web.Test/DatasetIndexQueueTests.cs CA2201 1
 Registry.Web.Test/DatasetIndexQueueTests.cs CS8632 1
 Registry.Web.Test/DatasetIndexQueueUploadTests.cs CS8632 1
 Registry.Web.Test/DatasetManagerTest.cs CA1829 3
-Registry.Web.Test/DatasetSummaryTests.cs CA1001 1
 Registry.Web.Test/DdbBuildBusyPassthroughTests.cs CS8632 2
 Registry.Web.Test/DdbFactoryTest.cs CA1829 2
 Registry.Web.Test/DdbFactoryTest.cs CA1859 1
@@ -84,7 +82,6 @@ Registry.Web.Test/ImprovementBaselines/Rq01AuthHardeningTests.cs CA1001 2
 Registry.Web.Test/ImprovementBaselines/Rq01AuthHardeningTests.cs CA1822 1
 Registry.Web.Test/ImprovementBaselines/Rq01LogoutCookieTests.cs CA1001 1
 Registry.Web.Test/ImprovementBaselines/Rq01LogoutCookieTests.cs CA1305 1
-Registry.Web.Test/ImprovementBaselines/Rq01ShareAccessTests.cs CA1001 1
 Registry.Web.Test/ImprovementBaselines/Rq02AdminRecoveryTests.cs CA1001 1
 Registry.Web.Test/ImprovementBaselines/Rq02CleanupExpiredJobsTests.cs CA1001 1
 Registry.Web.Test/ImprovementBaselines/Rq02ExitCodeTests.cs CA1001 1
@@ -103,7 +100,6 @@ Registry.Web.Test/IndexedJobPublicationRecoveryTests.cs CA1001 1
 Registry.Web.Test/IndexedJobPublicationRecoveryTests.cs CA1305 1
 Registry.Web.Test/IndexedJobPublicationRecoveryTests.cs CA2016 1
 Registry.Web.Test/IndexedJobPublicationRecoveryTests.cs CS0672 1
-Registry.Web.Test/JobIndexQueryPathScopedTests.cs CA1001 1
 Registry.Web.Test/JobIndexSyncIndexingTests.cs CA1001 1
 Registry.Web.Test/JobIndexWriterPreparationTests.cs CA1806 1
 Registry.Web.Test/ListingMarshallingTests.cs CS1734 1
@@ -130,7 +126,6 @@ Registry.Web.Test/PendingRecoveryIntegrationTests.cs CS0618 1
 Registry.Web.Test/ProcessingNodeDiCompletenessTests.cs CS8632 2
 Registry.Web.Test/ProcessingPlatformTests.cs CA1861 1
 Registry.Web.Test/ProcessingPlatformTests.cs CS8632 5
-Registry.Web.Test/PushPipelineTests.cs CA1001 1
 Registry.Web.Test/PushPipelineTests.cs CS8604 1
 Registry.Web.Test/RescanIndexToolTest.cs CA1859 1
 Registry.Web.Test/RescanIndexToolTest.cs CS8625 5

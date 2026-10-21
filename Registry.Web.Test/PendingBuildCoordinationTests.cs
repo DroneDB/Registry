@@ -30,6 +30,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -62,8 +63,7 @@ public class PendingBuildCoordinationTests
         _delays.Clear();
         _enqueued = 0;
         _storage = new InMemoryStorage();
-        _context = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        _context = TestDb.CreateContext<RegistryContext>();
         var organization = new Organization { Slug = Org, Name = Org, CreationDate = DateTime.UtcNow };
         organization.Datasets = [new Dataset
         {

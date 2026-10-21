@@ -28,7 +28,6 @@
     <PackageReference Include="Shouldly" />
     <PackageReference Include="Hangfire.Core" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Moq" />
     <PackageReference Include="NetTopologySuite.Core" />

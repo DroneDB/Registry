@@ -17,6 +17,7 @@ using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Ports;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -286,20 +287,14 @@ public class ProcessingPlatformTests
 
     private static RegistryContext NewContext(params JobIndex[] seed)
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("ProcPlatformTestDb_" + Guid.NewGuid())
-            .Options;
-
-        using (var ctx = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(ctx =>
         {
             if (seed.Length > 0)
             {
                 ctx.JobIndices.AddRange(seed);
                 ctx.SaveChanges();
             }
-        }
-
-        return new RegistryContext(options);
+        });
     }
 
     private static JobIndex Job(string id, string state, string toolId = "build",

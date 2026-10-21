@@ -21,6 +21,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -73,8 +74,7 @@ public class BuildJobFailureFilterTests
             .Returns(Mock.Of<IDisposable>());
         var storage = new TestJobStorage(Mock.Of<IMonitoringApi>(), _connMock.Object);
         _storageScope = new JobStorageScope(storage);
-        _registryContext = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        _registryContext = TestDb.CreateContext<RegistryContext>();
 
         var services = new ServiceCollection();
         services.AddSingleton(_cacheMock.Object);

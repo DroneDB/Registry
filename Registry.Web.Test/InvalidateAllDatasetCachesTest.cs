@@ -20,6 +20,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
 using Shouldly;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -52,10 +53,7 @@ public class InvalidateAllDatasetCachesTest : TestBase
         var backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
         var fileSystem = new FileSystem();
 
-        var dbOptions = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("InvalidateCacheTest_" + Guid.NewGuid())
-            .Options;
-        var context = new RegistryContext(dbOptions);
+        var context = TestDb.CreateContext<RegistryContext>();
 
         var webUtils = new WebUtils(authManagerMock.Object, context, appSettingsMock.Object,
             httpContextAccessorMock.Object, TestCaches.Summaries(ddbFactoryMock.Object));

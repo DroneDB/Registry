@@ -25,6 +25,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -215,11 +216,7 @@ public class StacManagerTest : TestBase
 
     private static RegistryContext GetContextWithDatasets(params string[] slugs)
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "RegistryDatabase-" + Guid.NewGuid())
-            .Options;
-
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
             context.Organizations.Add(new Organization
             {
@@ -233,9 +230,7 @@ public class StacManagerTest : TestBase
                 }).ToList()
             });
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        });
     }
 
 
@@ -271,12 +266,8 @@ public class StacManagerTest : TestBase
 
     private static RegistryContext GetTest1Context()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "RegistryDatabase-" + Guid.NewGuid())
-            .Options;
-
         // Insert seed data into the database using one instance of the context
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
             var entity = new Organization
             {
@@ -301,19 +292,13 @@ public class StacManagerTest : TestBase
             context.Organizations.Add(entity);
 
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        });
     }
 
     private static ApplicationDbContext GetAppTest1Context()
     {
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(databaseName: "RegistryAppDatabase-" + Guid.NewGuid())
-            .Options;
-
         // Insert seed data into the database using one instance of the context
-        using (var context = new ApplicationDbContext(options))
+        return TestDb.CreateContext<ApplicationDbContext>(context =>
         {
             var adminRole = new IdentityRole
             {
@@ -352,9 +337,7 @@ public class StacManagerTest : TestBase
             });
 
             context.SaveChanges();
-        }
-
-        return new ApplicationDbContext(options);
+        });
     }
 
     #endregion

@@ -16,6 +16,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -774,21 +775,13 @@ public class BuildPendingServiceTest : TestBase
 
     private RegistryContext GetEmptyContext()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "EmptyTestDb_" + Guid.NewGuid())
-            .Options;
-
-        var context = new RegistryContext(options);
+        var context = TestDb.CreateContext<RegistryContext>();
         return context;
     }
 
     private static RegistryContext GetTest1Context()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "RegistryDatabase-" + Guid.NewGuid())
-            .Options;
-
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
             var entity = new Organization
             {
@@ -811,8 +804,6 @@ public class BuildPendingServiceTest : TestBase
             context.Organizations.Add(entity);
 
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        });
     }
 }

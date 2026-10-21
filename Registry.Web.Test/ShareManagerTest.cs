@@ -40,6 +40,7 @@ using Registry.Web.Identity.Models;
 using Registry.Web.Services;
 using Entry = Registry.Ports.DroneDB.Entry;
 using IMetaManager = Registry.Ports.DroneDB.IMetaManager;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -102,10 +103,7 @@ class ShareManagerTest : TestBase
         _thumbnailGeneratorMock = new Mock<IThumbnailGenerator>();
         _jobIndexQueryMock = new Mock<IJobIndexQuery>();
 
-        var bpsOptions = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("ShareManagerTest_BPS_" + Guid.NewGuid())
-            .Options;
-        var bpsContext = new RegistryContext(bpsOptions);
+        var bpsContext = TestDb.CreateContext<RegistryContext>();
         _buildPendingService = new BuildPendingService(
             bpsContext, _ddbFactoryMock.Object, _backgroundJobsProcessor, _cacheManager,
             Mock.Of<ILogger<BuildPendingService>>());
@@ -1016,12 +1014,8 @@ class ShareManagerTest : TestBase
 
     private static RegistryContext GetTest1Context()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: "RegistryDatabase-" + Guid.NewGuid())
-            .Options;
-
         // Insert seed data into the database using one instance of the context
-        using (var context = new RegistryContext(options))
+        return TestDb.CreateContext<RegistryContext>(context =>
         {
             var entity = new Organization
             {
@@ -1047,19 +1041,13 @@ class ShareManagerTest : TestBase
             context.Organizations.Add(entity);
 
             context.SaveChanges();
-        }
-
-        return new RegistryContext(options);
+        });
     }
 
     private static ApplicationDbContext GetAppTest1Context()
     {
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(databaseName: "RegistryAppDatabase-" + Guid.NewGuid())
-            .Options;
-
         // Insert seed data into the database using one instance of the context
-        using (var context = new ApplicationDbContext(options))
+        return TestDb.CreateContext<ApplicationDbContext>(context =>
         {
 
             var adminRole = new IdentityRole
@@ -1099,9 +1087,7 @@ class ShareManagerTest : TestBase
             });
 
             context.SaveChanges();
-        }
-
-        return new ApplicationDbContext(options);
+        });
     }
 
 

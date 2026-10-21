@@ -18,6 +18,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Shouldly;
 using Entry = Registry.Ports.DroneDB.Entry;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -35,10 +36,7 @@ public class IndexReconciliationServiceTests
         dsSlug = "ds";
         internalRef = Guid.NewGuid();
 
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase("IndexReconciliationServiceTest_" + Guid.NewGuid())
-            .Options;
-        var context = new RegistryContext(options);
+        var context = TestDb.CreateContext<RegistryContext>();
 
         context.Organizations.Add(new Organization
         {

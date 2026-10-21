@@ -37,7 +37,6 @@ namespace Registry.Web.Test;
 /// those organizations and datasets unreachable. FixInvalidSlugs renames them in the database
 /// and on disk.
 /// </summary>
-[TestFixture("inmemory")]
 [TestFixture("sqlite")] // relational: real primary/foreign keys and cascades
 [TestFixture(RetryingProvider)] // retrying execution strategy, as MySQL runs in production
 public class SystemManagerFixSlugsTest : TestBase
@@ -316,8 +315,7 @@ public class SystemManagerFixSlugsTest : TestBase
             "sqlite" => builder.UseSqlite(sqlitePath),
             RetryingProvider => builder.UseSqlite(sqlitePath,
                 o => o.ExecutionStrategy(d => new RetryingTestStrategy(d))),
-            _ => builder.UseInMemoryDatabase(_dbName)
-                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            _ => throw new NotSupportedException($"Unknown test provider '{_provider}'")
         }).Options;
     }
 

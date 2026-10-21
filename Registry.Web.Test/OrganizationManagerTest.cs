@@ -24,6 +24,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Identity;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -1335,11 +1336,7 @@ public class OrganizationManagerTest : TestBase
 
     private static async Task<RegistryContext> CreateTestRegistryContext()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: $"RegistryDatabase-{Guid.NewGuid()}")
-            .Options;
-
-        var context = new RegistryContext(options);
+        var context = TestDb.CreateContext<RegistryContext>();
 
         var publicOrg = new Organization
         {
@@ -1368,11 +1365,7 @@ public class OrganizationManagerTest : TestBase
 
     private static async Task<ApplicationDbContext> CreateTestApplicationContext()
     {
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(databaseName: $"RegistryAppDatabase-{Guid.NewGuid()}")
-            .Options;
-
-        var context = new ApplicationDbContext(options);
+        var context = TestDb.CreateContext<ApplicationDbContext>();
 
         var adminRole = new IdentityRole
         {

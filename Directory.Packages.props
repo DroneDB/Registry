@@ -35,7 +35,6 @@
         <PackageVersion Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="$(DotNetPackagesVersion)" />
-        <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="$(DotNetPackagesVersion)" />

@@ -22,6 +22,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using System.Net.Http;
 using Hangfire;
+using Registry.Web.Test.Support;
 
 // ──────────────────────────────────────────────────────────────────────
 // Add a unit test that asserts GetVersion() always returns major.minor.patch
@@ -59,10 +60,7 @@ public class SystemManagerGetVersionTests : TestBase
         var cacheManagerMock = new Mock<ICacheManager>();
         var httpClientFactoryMock = new Mock<IHttpClientFactory>();
 
-        await using var context = new RegistryContext(
-            new DbContextOptionsBuilder<RegistryContext>()
-                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-                .Options);
+        await using var context = TestDb.CreateContext<RegistryContext>();
 
         var ddbManagerMock = new Mock<IDdbManager>();
         var objectsManagerMock = new Mock<IObjectsManager>();

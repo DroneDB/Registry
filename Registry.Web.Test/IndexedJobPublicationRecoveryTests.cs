@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
@@ -13,7 +12,6 @@ using Hangfire.InMemory;
 using Hangfire.Server;
 using Hangfire.States;
 using Hangfire.Storage;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,6 +25,7 @@ using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using Registry.Web.Test.Support;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -141,8 +140,8 @@ internal sealed class PublicationEnv : IDisposable
 
     public InMemoryStorage Storage { get; } = new();
     public BackgroundJobClient Client { get; }
-    public SqliteConnection Connection { get; }
-    public DbContextOptions<RegistryContext> Options { get; }
+    private readonly TestDb<RegistryContext> _db = TestDb.Create<RegistryContext>();
+    public DbContextOptions<RegistryContext> Options => _db.Options;
     public RegistryContext Db { get; }
     public JobIndexWriter Writer { get; }
     public FakeTime Time { get; }
@@ -153,11 +152,7 @@ internal sealed class PublicationEnv : IDisposable
         _previousHandlers = GlobalStateHandlers.Handlers.ToArray();
         IndexingStateHandler.EnsureRegistered();
 
-        Connection = new SqliteConnection("Data Source=:memory:");
-        Connection.Open();
-        Options = new DbContextOptionsBuilder<RegistryContext>().UseSqlite(Connection).Options;
-        Db = new RegistryContext(Options);
-        Db.Database.EnsureCreated();
+        Db = _db.NewContext();
         Writer = NewWriter(Db);
         Client = new BackgroundJobClient(Storage);
         // Aligned to a whole minute: set scores are minute-granular, so a member is due exactly
@@ -296,8 +291,7 @@ internal sealed class PublicationEnv : IDisposable
     public void Dispose()
     {
         foreach (var d in _extra) d.Dispose();
-        Db.Dispose();
-        Connection.Dispose();
+        _db.Dispose();
         GlobalStateHandlers.Handlers.Clear();
         foreach (var h in _previousHandlers) GlobalStateHandlers.Handlers.Add(h);
     }
@@ -557,36 +551,23 @@ public class IndexedJobPublicationRecoveryTests
     public async Task TwoParallelRecoveryPasses_ExactlyOneWins()
     {
         // Real concurrency needs a file database (an in-memory connection is single-threaded).
-        var path = Path.Combine(Path.GetTempPath(), "recovery-" + Guid.NewGuid().ToString("N") + ".sqlite");
-        try
-        {
-            var options = new DbContextOptionsBuilder<RegistryContext>().UseSqlite("Data Source=" + path).Options;
-            using (var init = new RegistryContext(options)) init.Database.EnsureCreated();
-            using var db1 = new RegistryContext(options);
-            using var db2 = new RegistryContext(options);
-            var s1 = _env.NewService(PublicationEnv.NewWriter(db1));
-            var s2 = _env.NewService(PublicationEnv.NewWriter(db2));
+        using var file = TestDb.CreateFile<RegistryContext>();
+        var s1 = _env.NewService(PublicationEnv.NewWriter(file.NewContext()));
+        var s2 = _env.NewService(PublicationEnv.NewWriter(file.NewContext()));
 
-            const int jobs = 6;
-            var ids = Enumerable.Range(0, jobs)
-                .Select(_ => _env.CreateIndexing(_env.Immediate(TimeSpan.FromMinutes(3)))).ToList();
+        const int jobs = 6;
+        var ids = Enumerable.Range(0, jobs)
+            .Select(_ => _env.CreateIndexing(_env.Immediate(TimeSpan.FromMinutes(3)))).ToList();
 
-            var results = await Task.WhenAll(
-                Task.Run(() => s1.RunPassAsync(_env.Storage, new BackgroundJobClient(_env.Storage), default)),
-                Task.Run(() => s2.RunPassAsync(_env.Storage, new BackgroundJobClient(_env.Storage), default)));
+        var results = await Task.WhenAll(
+            Task.Run(() => s1.RunPassAsync(_env.Storage, new BackgroundJobClient(_env.Storage), default)),
+            Task.Run(() => s2.RunPassAsync(_env.Storage, new BackgroundJobClient(_env.Storage), default)));
 
-            // Every job is published exactly once, whoever got it.
-            ids.ForEach(i => _env.StateHistoryCount(i, "Enqueued").ShouldBe(1));
-            results.Sum(r => r.Published).ShouldBe(jobs);
-            _env.SetSize().ShouldBe(0);
-            using var check = new RegistryContext(options);
-            check.JobIndices.Count().ShouldBe(jobs);
-        }
-        finally
-        {
-            SqliteConnection.ClearAllPools();
-            File.Delete(path);
-        }
+        // Every job is published exactly once, whoever got it.
+        ids.ForEach(i => _env.StateHistoryCount(i, "Enqueued").ShouldBe(1));
+        results.Sum(r => r.Published).ShouldBe(jobs);
+        _env.SetSize().ShouldBe(0);
+        file.NewContext().JobIndices.Count().ShouldBe(jobs);
     }
 
     // ---------------------------------------------------------------- stale members / Deleted

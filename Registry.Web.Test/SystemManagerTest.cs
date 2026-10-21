@@ -23,6 +23,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using System.Net.Http;
 using Hangfire;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -62,10 +63,7 @@ public class SystemManagerTest : TestBase
 
     private RegistryContext CreateInMemoryContext()
     {
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        var context = new RegistryContext(options);
+        var context = TestDb.CreateContext<RegistryContext>();
 
         // Seed test data
         var org = new Organization
@@ -352,10 +350,7 @@ public class SystemManagerTest : TestBase
     public async Task CleanupBuild_AllOrgs_NoDatasets_ReturnsSyncEmptyResult()
     {
         // Empty context (no orgs/datasets seeded)
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        await using var context = new RegistryContext(options);
+        await using var context = TestDb.CreateContext<RegistryContext>();
 
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
         _authManagerMock.Setup(x => x.GetCurrentUser())
@@ -380,10 +375,7 @@ public class SystemManagerTest : TestBase
     public async Task CleanupBuild_AllOrgs_PopulatesJobIdsPerDataset()
     {
         // Seed two datasets across two orgs
-        var options = new DbContextOptionsBuilder<RegistryContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        await using var context = new RegistryContext(options);
+        await using var context = TestDb.CreateContext<RegistryContext>();
 
         var orgA = new Organization { Slug = "org-a", Name = "A", CreationDate = DateTime.UtcNow, OwnerId = "u" };
         var orgB = new Organization { Slug = "org-b", Name = "B", CreationDate = DateTime.UtcNow, OwnerId = "u" };
