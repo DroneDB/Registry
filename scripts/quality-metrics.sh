@@ -196,6 +196,21 @@ metrics() {
     m "Copied DDB AutomaticRetry attribute"          "$(prod Registry.Web | lines 'DelaysInSeconds = \[15, 60, 180, 600, 1800\]')"
     m "Recurring-job local WriteLine copies"         "$(prod Registry.Web | lines 'void WriteLine\(string message\)')"
     m "ReadString(JsonElement) copies"               "$(prod Registry.Web | lines 'static string\? ReadString\(JsonElement')"
+    # Added for RQ-09 (2026-10-21): jobs without DroneDB objects in their arguments (D4), injected
+    # Hangfire services, one console, one lenient parameter reader
+    m "Recurring jobs without CancellationToken"     "$(prod Registry.Web | lines 'public async Task \w+\(PerformContext\? context = null\)')"
+    m "HangfireUtils static call sites"              "$({ prod Registry.Web; paths ':(exclude,glob)**/HangfireUtils.cs'; } | lines 'HangfireUtils\.\w+\(')"
+    m "JobStorage.Current uses"                      "$(prod Registry.Web | lines 'JobStorage\.Current')"
+    m "context != null ? ... : Log copies"           "$(prod Registry.Web | lines 'context != null \?')"
+    m "Lenient JsonElement reader copies"            "$(prod Registry.Web | lines 'static [\w<>\[\]?]+ Read(String|Bool|Long|StringArray|Paths|RawJsonArray)\(JsonElement')"
+    m "Job expressions passing an IDDB (D4)"         "$(prod Registry.Web |
+        multiline '(?:(?:Enqueue|Schedule)\w*\(\s*\(\)\s*=>|Expression<Action>\s+\w+\s*=\s*\(\)\s*=>)\s*(?:\w+\.)?\w+\(\s*(?:ctx\.Ddb|ddb)\s*,')"
+    m "Hangfire filters taking IServiceProvider"     "$(prod Registry.Web |
+        multiline '(?s)class \w+\(\s*IServiceProvider sp\b[^{]*\b(?:IApplyStateFilter|IServerFilter|IClientFilter|IElectStateFilter)\b')"
+    m "UseFilter(new ...) in the Hangfire configuration" "$(prod Registry.Web | lines 'UseFilter\(new ')"
+    m "Hangfire static facade calls"                 "$(prod Registry.Web | lines '\b(BackgroundJob|RecurringJob)\.(Enqueue|Schedule|AddOrUpdate|Delete|Requeue|ContinueJobWith)')"
+    m "Read-after-write artifact hash copies"        "$(prod Registry.Web | lines 'static async Task<string> ComputeSha256Async')"
+    m "ApplyDelta calls without verified hashes"     "$(prod Registry.Web | lines '\.ApplyDelta\((?![^;]*verified)')"
 
     # File system, paths, clock (RQ-10)
     m "Zip-slip normalizer copies"                   "$(prod Registry.Web | lines 'private static string\?? (SafeJoin|SafeRelative)\(')"

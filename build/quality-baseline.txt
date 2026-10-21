@@ -55,6 +55,17 @@ EntryPointNotFoundException catches	0
 Copied DDB AutomaticRetry attribute	6
 Recurring-job local WriteLine copies	7
 ReadString(JsonElement) copies	9
+Recurring jobs without CancellationToken	8
+HangfireUtils static call sites	31
+JobStorage.Current uses	13
+context != null ? ... : Log copies	6
+Lenient JsonElement reader copies	19
+Job expressions passing an IDDB (D4)	21
+Hangfire filters taking IServiceProvider	4
+UseFilter(new ...) in the Hangfire configuration	5
+Hangfire static facade calls	2
+Read-after-write artifact hash copies	2
+ApplyDelta calls without verified hashes	1
 Zip-slip normalizer copies	0
 Direct Path.GetTempPath()	0
 Ad-hoc backslash->slash normalizations	1
