@@ -46,8 +46,8 @@ internal class MetaManagerTest : TestBase
 
     private const string BaseTestFolder = "ObjectManagerTest";
 
-    private const string Test4ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test4-new.zip";
-    private const string Test5ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test5-new.zip";
+    private static readonly string Test4ArchiveUrl = TestData.Url("registry/Test4-new.zip");
+    private static readonly string Test5ArchiveUrl = TestData.Url("registry/Test5-new.zip");
 
     private readonly Guid _defaultDatasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
 

@@ -32,7 +32,7 @@ public class DdbFactoryTest : TestBase
     private const string TestDataFolder = @"Data/Ddb";
     private const string DdbTestDataFolder = @"Data/DdbTest";
 
-    private const string DbTest1ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/DdbFactoryTest/testdb2.zip";
+    private static readonly string DbTest1ArchiveUrl = TestData.Url("registry/DdbFactoryTest/testdb2.zip");
 
     private readonly Guid _datasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
 
@@ -237,7 +237,7 @@ public class DdbFactoryTest : TestBase
         var path = Path.Combine(TestDataFolder, fileName);
 
         if (!File.Exists(path))
-            CommonUtils.SmartDownloadFile("https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName, path);
+            CommonUtils.SmartDownloadFile(TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName), path);
 
         ddb.Add(fileName, File.ReadAllBytes(path));
 

@@ -112,7 +112,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
         if (!string.IsNullOrWhiteSpace(folder))
         {
             CommonUtils.ValidateRelativePath(folder, ctx.Ddb.DatasetFolderPath);
-            if (IsReservedPath(folder))
+            if (DatasetPathRules.IsReserved(folder))
                 throw new ArgumentException($"'{folder}' is a reserved path.");
         }
 
@@ -161,7 +161,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
 
             // Destination path safety.
             CommonUtils.ValidateRelativePath(destPath, ctx.Ddb.DatasetFolderPath);
-            if (IsReservedPath(destPath))
+            if (DatasetPathRules.IsReserved(destPath))
                 throw new ArgumentException($"'{destPath}' is a reserved path.");
 
             var destEntry = ctx.Ddb.GetEntry(destPath);
@@ -349,7 +349,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
                 if (archiveEntry.IsDirectory) continue;
 
                 // Path sanitization (anti zip-slip + reserved-folder guard).
-                var target = SafeJoin(destPath, archiveEntry.Key);
+                var target = DatasetPathRules.JoinArchiveEntry(destPath, archiveEntry.Key);
                 CommonUtils.ValidateRelativePath(target, root);
 
                 // Extension policy (allow-list / block-list): skip disallowed types with
@@ -532,34 +532,6 @@ public sealed class PhotogrammetryTool : IHeavyTool
                 .Where(e => e.Type is EntryType.Image or EntryType.GeoImage)
         ];
     }
-
-    private static string SafeJoin(string destPath, string entryKey)
-    {
-        var key = (entryKey ?? string.Empty).Replace('\\', '/').Trim();
-        while (key.StartsWith('/'))
-            key = key[1..];
-
-        if (string.IsNullOrWhiteSpace(key))
-            throw new InvalidOperationException("Archive entry has an empty name.");
-
-        if (Path.IsPathRooted(key) || key.Split('/').Any(seg => seg == ".."))
-            throw new InvalidOperationException($"Unsafe archive entry path (zip-slip): '{entryKey}'.");
-
-        // Normalize segments: Windows reserved device names, trailing dots/spaces, invalid chars.
-        key = FileImportPolicy.SanitizePathSegments(key);
-        if (string.IsNullOrWhiteSpace(key))
-            throw new InvalidOperationException($"Archive entry name is empty after sanitization: '{entryKey}'.");
-
-        var combined = CommonUtils.SafeCombine(destPath ?? string.Empty, key);
-
-        if (IsReservedPath(combined))
-            throw new InvalidOperationException($"Archive entry targets a reserved path: '{combined}'.");
-
-        return combined;
-    }
-
-    private static bool IsReservedPath(string path)
-        => path.Replace('\\', '/').TrimStart('/').StartsWith(IDDB.DatabaseFolderName, StringComparison.Ordinal);
 
     private static void ReportProgress(IProgress<HeavyToolProgress> progress, int done, int total, string currentKey, double baseFraction)
     {

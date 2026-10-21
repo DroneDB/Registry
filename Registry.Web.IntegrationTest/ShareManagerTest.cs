@@ -75,7 +75,7 @@ class ShareManagerTest : TestBase
 
     private const string BaseTestFolder = "ShareManagerTest";
 
-    private const string Test4ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test4-new.zip";
+    private static readonly string Test4ArchiveUrl = TestData.Url("registry/Test4-new.zip");
 
     public ShareManagerTest()
     {
@@ -439,9 +439,7 @@ class ShareManagerTest : TestBase
         const string datasetTestName = "First";
         const string organizationTestSlug = "test";
         const string datasetTestSlug = "first";
-        const string newFileUrl =
-            "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" +
-            fileName;
+        var newFileUrl = TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName);
 
         // ListBatches
         var batches =
@@ -580,9 +578,7 @@ class ShareManagerTest : TestBase
         const string datasetTestName = "First";
         const string organizationTestSlug = "test";
         const string datasetTestSlug = "first";
-        const string newFileUrl =
-            "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" +
-            fileName;
+        var newFileUrl = TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName);
 
         // ListBatches
         var batches =
@@ -726,8 +722,7 @@ class ShareManagerTest : TestBase
         const string datasetTestName = "First";
         const string organizationTestSlug = "test";
         const string datasetTestSlug = "first";
-        const string newFileUrl =
-            "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
+        var newFileUrl = TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName);
 
         await organizationsManager.AddNew(new OrganizationDto
         {
@@ -857,9 +852,7 @@ class ShareManagerTest : TestBase
         const string datasetTestName = "First";
         const string organizationTestSlug = "test";
         const string datasetTestSlug = "first";
-        const string newFileUrl =
-            "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" +
-            fileName;
+        var newFileUrl = TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName);
 
         // ListBatches
         var batches =

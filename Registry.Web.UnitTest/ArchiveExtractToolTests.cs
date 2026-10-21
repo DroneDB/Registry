@@ -180,6 +180,38 @@ public class ArchiveExtractToolTests
                 Ctx(ddb.Object), CancellationToken.None));
     }
 
+    // XI-09: the reserved rule is libddb's, a ".ddb" segment at any depth (libddb would skip it).
+    [TestCase("sub/.ddb")]
+    [TestCase(@"sub\.ddb\evil")]
+    public void ValidateAsync_NestedReservedDestPath_Throws(string destPath)
+    {
+        var local = Path.Combine(_dir, "flight.zip");
+        CreateZip(local, "a.txt", "hello");
+        var ddb = MockDdb("flight.zip", local);
+
+        var (tool, _) = CreateTool();
+
+        Should.Throw<ArgumentException>(async () =>
+            await tool.ValidateAsync(
+                Request(new { sourcePath = "flight.zip", destPath }),
+                Ctx(ddb.Object), CancellationToken.None));
+    }
+
+    // XI-09: ".ddbx" only starts like the index folder; it is an ordinary folder.
+    [Test]
+    public async Task ValidateAsync_DdbLookalikeDestPath_Passes()
+    {
+        var local = Path.Combine(_dir, "flight.zip");
+        CreateZip(local, "a.txt", "hello");
+        var ddb = MockDdb("flight.zip", local);
+
+        var (tool, _) = CreateTool();
+
+        await tool.ValidateAsync(
+            Request(new { sourcePath = "flight.zip", destPath = ".ddbx" }),
+            Ctx(ddb.Object), CancellationToken.None);
+    }
+
     [Test]
     public void ValidateAsync_DestPathTraversal_Throws()
     {

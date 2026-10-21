@@ -60,8 +60,8 @@ public class ObjectManagerTest : TestBase
 
     private const string BaseTestFolder = "ObjectManagerTest";
 
-    private const string Test4ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test4-new.zip";
-    private const string Test5ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/Test5-new.zip";
+    private static readonly string Test4ArchiveUrl = TestData.Url("registry/Test4-new.zip");
+    private static readonly string Test5ArchiveUrl = TestData.Url("registry/Test5-new.zip");
 
     private readonly Guid _defaultDatasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
 
@@ -601,9 +601,7 @@ public class ObjectManagerTest : TestBase
 
         res.Count().ShouldBe(0);
 
-        var newFileUrl =
-            "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" +
-            fileName;
+        var newFileUrl = TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName);
 
         var ret = await objectManager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             fileName, CommonUtils.SmartDownloadData(newFileUrl));
@@ -626,7 +624,7 @@ public class ObjectManagerTest : TestBase
             if (!string.IsNullOrEmpty(local))
                 return new MemoryStream(File.ReadAllBytes(Path.Combine(local, name)));
             return new MemoryStream(CommonUtils.SmartDownloadData(
-                "https://github.com/DroneDB/test_data/raw/refs/heads/master/vector/autocad/" + name));
+                TestData.Url("vector/autocad/" + name)));
         }
 
         await using var context = GetTest1Context();
@@ -714,8 +712,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = BuildStreamedUploadObjectsManager(test.TestFolder, context);
 
-        var newFileUrl =
-            "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
+        var newFileUrl = TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName);
         var data = CommonUtils.SmartDownloadData(newFileUrl);
 
         await using var ms = new MemoryStream(data);
@@ -817,8 +814,7 @@ public class ObjectManagerTest : TestBase
             .WithIndexQueue(failingIndexQueue.Object)
             .Build();
 
-        var newFileUrl =
-            "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" + fileName;
+        var newFileUrl = TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName);
         var data = CommonUtils.SmartDownloadData(newFileUrl);
 
         await using var ms = new MemoryStream(data);
@@ -1014,9 +1010,7 @@ public class ObjectManagerTest : TestBase
         //newres.ContentType.ShouldBeNull();
         newres.Path.ShouldBe("Test");
 
-        const string newFileUrl =
-            "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/" +
-            fileName;
+        var newFileUrl = TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName);
 
         await objectManager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "Test/" + fileName, CommonUtils.SmartDownloadData(newFileUrl));

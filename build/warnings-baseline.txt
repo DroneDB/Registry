@@ -260,4 +260,3 @@ Registry.Web/Utilities/Ogc/WmsValidator.cs CS8632 7
 Registry.Web/Utilities/Ogc/WmtsConformance.cs CS8632 5
 Registry.Web/Utilities/StartupExtenders.cs CS0618 1
 Registry.Web/Utilities/SyncWriteBufferingStream.cs CA1725 3
-Registry.Web/Utilities/UploadPathPolicy.cs CA1310 2

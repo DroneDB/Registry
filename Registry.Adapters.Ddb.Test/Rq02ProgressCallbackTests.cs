@@ -24,8 +24,7 @@ public class Rq02ProgressCallbackTests : TestBase
 {
     private const string BaseTestFolder = nameof(Rq02ProgressCallbackTests);
 
-    private const string TestGeoTiffUrl =
-        "https://github.com/DroneDB/test_data/raw/master/brighton/odm_orthophoto.tif";
+    private static readonly string TestGeoTiffUrl = TestData.Url("brighton/odm_orthophoto.tif");
 
     private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper(true);
 

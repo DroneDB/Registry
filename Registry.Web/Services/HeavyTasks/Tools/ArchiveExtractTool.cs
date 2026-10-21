@@ -103,7 +103,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
         if (!string.IsNullOrEmpty(destPath))
         {
             CommonUtils.ValidateRelativePath(destPath, ctx.Ddb.DatasetFolderPath);
-            if (IsReservedPath(destPath))
+            if (DatasetPathRules.IsReserved(destPath))
                 throw new ArgumentException($"'{destPath}' is a reserved path.");
 
             var destEntry = ctx.Ddb.GetEntry(destPath);
@@ -226,7 +226,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
                 if (archiveEntry.IsDirectory) continue;
 
                 // Path sanitization (anti zip-slip + reserved-folder guard).
-                var target = SafeJoin(destPath, archiveEntry.Key);
+                var target = DatasetPathRules.JoinArchiveEntry(destPath, archiveEntry.Key);
                 CommonUtils.ValidateRelativePath(target, root); // defense in depth
 
                 // Extension policy (allow-list / block-list): skip disallowed types (e.g. executables
@@ -409,41 +409,11 @@ public sealed class ArchiveExtractTool : IHeavyTool
         }
     }
 
-    private static string SafeJoin(string destPath, string entryKey)
-    {
-        var key = (entryKey ?? string.Empty).Replace('\\', '/').Trim();
-        while (key.StartsWith('/'))
-            key = key[1..];
-
-        if (string.IsNullOrWhiteSpace(key))
-            throw new InvalidOperationException("Archive entry has an empty name.");
-
-        if (Path.IsPathRooted(key) || key.Split('/').Any(seg => seg == ".."))
-            throw new InvalidOperationException($"Unsafe archive entry path (zip-slip): '{entryKey}'.");
-
-        // Normalize every path segment (invalid chars, Windows reserved device names, trailing
-        // dots/spaces, length). Leading dots are preserved so the reserved-folder guard below still
-        // recognizes the ".ddb" index folder.
-        key = FileImportPolicy.SanitizePathSegments(key);
-        if (string.IsNullOrWhiteSpace(key))
-            throw new InvalidOperationException($"Archive entry name is empty after sanitization: '{entryKey}'.");
-
-        var combined = CommonUtils.SafeCombine(destPath ?? string.Empty, key);
-
-        if (IsReservedPath(combined))
-            throw new InvalidOperationException($"Archive entry targets a reserved path: '{combined}'.");
-
-        return combined;
-    }
-
     private static void ReportProgress(IProgress<HeavyToolProgress> progress, int done, int total, string currentKey)
     {
         var fraction = total > 0 ? (double)done / total : -1;
         progress.Report(new HeavyToolProgress(fraction, "extracting", Message: currentKey));
     }
-
-    private static bool IsReservedPath(string path)
-        => path.Replace('\\', '/').TrimStart('/').StartsWith(IDDB.DatabaseFolderName, StringComparison.Ordinal);
 
     private static string? ReadString(JsonElement obj, string name)
     {

@@ -147,6 +147,12 @@ metrics() {
     m "Static File./Directory. calls"                "$(prod Registry.Web Registry.Adapters | matches '\b(File|Directory)\.[A-Z]\w+\(')"
     m "DateTime.Now (local)"                         "$(prod '' | lines 'DateTime\.Now\b')"
 
+    # Cross-repository contract (XI-09): test_data is downloaded only through TestData.Url, which
+    # pins the commit of DroneDB's tests/test-data.sha; a branch URL (raw/master) is unpinned.
+    m "Unpinned test_data URLs"                      "$(paths ':(exclude,glob)**/ClientApp/**' \
+        ':(exclude)Registry.Test.Common/TestData.cs' |
+        lines '(github\.com/DroneDB/test_data/(raw|blob)/|githubusercontent\.com/(media/)?DroneDB/test_data/)(?![0-9a-f]{40}/)')"
+
     # Managers and API contracts (RQ-12, RQ-14)
     m "Task.Run in managers"                         "$(prod Registry.Web/Services/Managers | lines 'Task\.Run\(')"
     m "Hand-built Content-Disposition"               "$(prod Registry.Web | lines 'attachment; filename=')"

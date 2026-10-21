@@ -29,10 +29,11 @@ EntryPointNotFoundException catches	71
 Copied DDB AutomaticRetry attribute	6
 Recurring-job local WriteLine copies	7
 ReadString(JsonElement) copies	9
-Zip-slip normalizer copies	3
+Zip-slip normalizer copies	0
 Direct Path.GetTempPath()	8
-Ad-hoc backslash->slash normalizations	29
+Ad-hoc backslash->slash normalizations	24
 Static File./Directory. calls	198
 DateTime.Now (local)	6
+Unpinned test_data URLs	0
 Task.Run in managers	10
 Hand-built Content-Disposition	2

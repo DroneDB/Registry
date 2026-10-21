@@ -22,24 +22,21 @@ namespace Registry.Adapters.Ddb.Test;
 public class NativeDdbWrapperTests : TestBase
 {
     private const string BaseTestFolder = nameof(NativeDdbWrapperTests);
-    private const string TestFileUrl =
-        "https://github.com/DroneDB/test_data/raw/master/test-datasets/drone_dataset_brighton_beach/DJI_0023.JPG";
-    private const string Test1ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/registry/DdbFactoryTest/testdb1.zip";
-    private const string Test3ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/ddb-test/Test3.zip";
+    private static readonly string TestFileUrl =
+        TestData.Url("test-datasets/drone_dataset_brighton_beach/DJI_0023.JPG");
+    private static readonly string Test1ArchiveUrl = TestData.Url("registry/DdbFactoryTest/testdb1.zip");
+    private static readonly string Test3ArchiveUrl = TestData.Url("ddb-test/Test3.zip");
 
     private const string DdbFolder = ".ddb";
 
-    private const string TestGeoTiffUrl =
-        "https://github.com/DroneDB/test_data/raw/master/brighton/odm_orthophoto.tif";
+    private static readonly string TestGeoTiffUrl = TestData.Url("brighton/odm_orthophoto.tif");
 
-    private const string TestDelta1ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/delta/first.zip";
-    private const string TestDelta2ArchiveUrl = "https://github.com/DroneDB/test_data/raw/master/delta/second.zip";
+    private static readonly string TestDelta1ArchiveUrl = TestData.Url("delta/first.zip");
+    private static readonly string TestDelta2ArchiveUrl = TestData.Url("delta/second.zip");
 
-    private const string TestPointCloudUrl =
-        "https://github.com/DroneDB/test_data/raw/master/brighton/point_cloud.laz";
+    private static readonly string TestPointCloudUrl = TestData.Url("brighton/point_cloud.laz");
 
-    private const string TestPointCloud2Url =
-        "https://github.com/DroneDB/test_data/raw/master/point-clouds/brighton-beach.laz";
+    private static readonly string TestPointCloud2Url = TestData.Url("point-clouds/brighton-beach.laz");
 
     private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper(true);
 

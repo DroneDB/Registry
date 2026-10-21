@@ -16,6 +16,7 @@ using Registry.Ports.DroneDB;
 using Registry.Ports.Import;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Import;
 
@@ -178,8 +179,9 @@ public sealed class ArchiveUrlImportSource : IImportSource
             ct.ThrowIfCancellationRequested();
             if (entry.IsDirectory) continue;
 
-            var relative = SafeRelative(entry.Key);
-            if (relative is null) continue; // skipped (.ddb or unsafe)
+            // Anti zip-slip (throws on unsafe names); empty names and reserved paths (.ddb) are skipped.
+            var relative = DatasetPathRules.NormalizeArchiveEntry(entry.Key);
+            if (relative is null || DatasetPathRules.IsReserved(relative)) continue;
 
             // Extension policy (allow-list / block-list): skip disallowed types (e.g. executables
             // or scripts) with a warning; the rest of the archive still extracts.
@@ -215,31 +217,6 @@ public sealed class ArchiveUrlImportSource : IImportSource
         if (string.IsNullOrWhiteSpace(p.Username)) return;
         var raw = Encoding.UTF8.GetBytes($"{p.Username}:{p.Password}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(raw));
-    }
-
-    // Anti zip-slip: rejects rooted paths and ".." traversal; skips the reserved .ddb folder.
-    private static string? SafeRelative(string entryKey)
-    {
-        var key = (entryKey ?? string.Empty).Replace('\\', '/').Trim();
-        while (key.StartsWith('/')) key = key[1..];
-
-        if (string.IsNullOrWhiteSpace(key)) return null;
-
-        // Reject embedded null bytes: on some native paths a NUL truncates the string, which could
-        // sidestep the rooted-path / ".." checks below (defense in depth).
-        if (key.Contains('\0'))
-            throw new InvalidOperationException($"Unsafe archive entry path (null byte): '{entryKey}'.");
-
-        if (Path.IsPathRooted(key) || key.Split('/').Any(seg => seg == ".."))
-            throw new InvalidOperationException($"Unsafe archive entry path (zip-slip): '{entryKey}'.");
-
-        if (key.StartsWith(IDDB.DatabaseFolderName + "/", StringComparison.Ordinal))
-            return null;
-
-        // Normalize every path segment (invalid chars, Windows reserved device names, trailing
-        // dots/spaces, length); leading dots are preserved (hidden files).
-        key = FileImportPolicy.SanitizePathSegments(key);
-        return string.IsNullOrWhiteSpace(key) ? null : key;
     }
 
     private ArchiveParams ReadParams(JsonElement parameters)

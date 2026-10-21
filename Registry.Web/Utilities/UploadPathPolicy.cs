@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using Registry.Common;
-using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 
@@ -13,16 +12,20 @@ namespace Registry.Web.Utilities;
 /// </summary>
 public static class UploadPathPolicy
 {
-    /// <summary>Whether <paramref name="path"/> is inside a folder the Registry owns (index, uploads).</summary>
-    public static bool IsReserved(string path) =>
-        path.StartsWith(IDDB.DatabaseFolderName) || path.StartsWith(IDDB.UploadsFolderName);
+    /// <summary>
+    /// Whether <paramref name="path"/> is inside a folder the Registry or libddb owns (index, uploads).
+    /// The rule is <see cref="DatasetPathRules.IsReserved"/>.
+    /// </summary>
+    public static bool IsReserved(string path) => DatasetPathRules.IsReserved(path);
 
     /// <summary>
-    /// Throws when a file cannot be uploaded to <paramref name="path"/>: path traversal, a reserved
-    /// folder, or an extension the import policy blocks.
+    /// Throws when a file cannot be uploaded to <paramref name="path"/>: a NUL byte, path traversal,
+    /// a reserved folder, or an extension the import policy blocks.
     /// </summary>
     public static void Validate(string path, string datasetFolderPath, ImportSettings import)
     {
+        DatasetPathRules.EnsureNoNulByte(path);
+
         // Validate path to prevent path traversal attacks
         CommonUtils.ValidateRelativePath(path, datasetFolderPath);
 
