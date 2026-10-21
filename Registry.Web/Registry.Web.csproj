@@ -110,8 +110,9 @@
     </ProjectExtensions>
 
     <PropertyGroup>
-        <!-- DdbVersion and DdbWindowsZipSha256: Directory.Build.props -->
+        <!-- The DroneDB pin (DdbSource, DdbVersion, DdbWindowsZipSha256, ...): Directory.Build.props -->
         <DdbReleaseUrl>https://github.com/DroneDB/DroneDB/releases/download/v$(DdbVersion)/ddb-$(DdbVersion)-Windows.zip</DdbReleaseUrl>
+        <DdbReleaseScript>$(MSBuildThisFileDirectory)../scripts/ddb-release.sh</DdbReleaseScript>
     </PropertyGroup>
 
     <Target Name="HandleNPMErrors">
@@ -127,33 +128,52 @@
 
 
     <!--
-      Embeds the pinned ddb Windows release. The zip is verified against DdbWindowsZipSha256 on every
-      build: a cached zip that does not match (another DdbVersion, a broken download) is downloaded
-      again, and a download that does not match fails the build and is deleted.
+      Embeds the pinned ddb Windows build (Directory.Build.props). The zip is verified against
+      DdbWindowsZipSha256 on every build: a cached zip that does not match (another pin, a broken
+      download) is downloaded again, and a download that does not match fails the build and is deleted.
+        - DdbSource release: MSBuild downloads the release asset (no bash needed on Windows).
+        - DdbSource ci: scripts/ddb-release.sh fetch-windows-zip downloads the CI artifact, which
+          needs bash, curl, unzip and DRONEDB_ARTIFACT_TOKEN (or a gh login).
+        - DDB_LOCAL_BUILD=<path to a ddb Windows zip>: that zip is embedded instead, unverified
+          (developer override).
     -->
     <Target Name="EmbedDdbRelease">
         <PropertyGroup>
             <DdbReleasePath>$(OutputPath)ddb.zip</DdbReleasePath>
+            <DdbDownloadDir>$(OutputPath)ddb-download</DdbDownloadDir>
+            <DdbLocalZip Condition="'$(DDB_LOCAL_BUILD)' != '' And $(DDB_LOCAL_BUILD.EndsWith('.zip'))">$(DDB_LOCAL_BUILD)</DdbLocalZip>
         </PropertyGroup>
 
-        <Error Condition="'$(DdbWindowsZipSha256)' == ''" Text="DdbWindowsZipSha256 is not set (Directory.Build.props): the embedded ddb release cannot be verified." />
+        <Error Condition="'$(DdbWindowsZipSha256)' == ''" Text="DdbWindowsZipSha256 is not set (Directory.Build.props): the embedded ddb build cannot be verified." />
 
-        <GetFileHash Condition="Exists('$(DdbReleasePath)')" Files="$(DdbReleasePath)" Algorithm="SHA256">
+        <!-- Developer override -->
+        <Warning Condition="'$(DdbLocalZip)' != ''" Text="DDB_LOCAL_BUILD: embedding $(DdbLocalZip) instead of the pinned DroneDB build; it is not checksum-verified." />
+        <Copy Condition="'$(DdbLocalZip)' != ''" SourceFiles="$(DdbLocalZip)" DestinationFiles="$(DdbReleasePath)" />
+
+        <!-- The pinned build: reuse a cached zip only when it is the pinned one -->
+        <GetFileHash Condition="'$(DdbLocalZip)' == '' And Exists('$(DdbReleasePath)')" Files="$(DdbReleasePath)" Algorithm="SHA256">
             <Output TaskParameter="Hash" PropertyName="DdbCachedReleaseHash" />
         </GetFileHash>
-        <Message Condition="Exists('$(DdbReleasePath)') And '$(DdbCachedReleaseHash)' != '$(DdbWindowsZipSha256)'" Text="Ddb release at $(DdbReleasePath) is not ddb $(DdbVersion) (SHA256 $(DdbCachedReleaseHash)), downloading it again" Importance="high" />
-        <Delete Condition="Exists('$(DdbReleasePath)') And '$(DdbCachedReleaseHash)' != '$(DdbWindowsZipSha256)'" Files="$(DdbReleasePath)" />
+        <Message Condition="'$(DdbLocalZip)' == '' And Exists('$(DdbReleasePath)') And '$(DdbCachedReleaseHash)' != '$(DdbWindowsZipSha256)'" Text="Ddb build at $(DdbReleasePath) is not the pinned one (SHA256 $(DdbCachedReleaseHash)), downloading it again" Importance="high" />
+        <Delete Condition="'$(DdbLocalZip)' == '' And Exists('$(DdbReleasePath)') And '$(DdbCachedReleaseHash)' != '$(DdbWindowsZipSha256)'" Files="$(DdbReleasePath)" />
+        <Message Condition="'$(DdbLocalZip)' == '' And Exists('$(DdbReleasePath)')" Text="Pinned ddb $(DdbVersion) ($(DdbSource)) already at $(DdbReleasePath), skipping download" Importance="high" />
 
-        <Message Condition="Exists('$(DdbReleasePath)')" Text="Ddb release $(DdbVersion) already exists at $(DdbReleasePath), skipping download" Importance="high" />
-        <Message Condition="!Exists('$(DdbReleasePath)')" Text="Embedding ddb version $(DdbVersion), downloading from $(DdbReleaseUrl)" Importance="high" />
+        <Message Condition="'$(DdbLocalZip)' == '' And !Exists('$(DdbReleasePath)') And '$(DdbSource)' == 'release'" Text="Embedding ddb $(DdbVersion), downloading $(DdbReleaseUrl)" Importance="high" />
+        <DownloadFile Condition="'$(DdbLocalZip)' == '' And !Exists('$(DdbReleasePath)') And '$(DdbSource)' == 'release'" SourceUrl="$(DdbReleaseUrl)" DestinationFolder="$(OutputPath)" DestinationFileName="ddb.zip" />
 
-        <DownloadFile Condition="!Exists('$(DdbReleasePath)')" SourceUrl="$(DdbReleaseUrl)" DestinationFolder="$(OutputPath)" DestinationFileName="ddb.zip" />
+        <Message Condition="'$(DdbLocalZip)' == '' And !Exists('$(DdbReleasePath)') And '$(DdbSource)' == 'ci'" Text="Embedding the pinned ddb CI build $(DdbCiCommit) (run $(DdbCiRunId)), downloading it with scripts/ddb-release.sh" Importance="high" />
+        <Exec Condition="'$(DdbLocalZip)' == '' And !Exists('$(DdbReleasePath)') And '$(DdbSource)' == 'ci'" Command="bash &quot;$(DdbReleaseScript)&quot; fetch-windows-zip &quot;$(DdbDownloadDir)&quot;" ContinueOnError="true">
+            <Output TaskParameter="ExitCode" PropertyName="DdbFetchExitCode" />
+        </Exec>
+        <Error Condition="'$(DdbFetchExitCode)' != '' And '$(DdbFetchExitCode)' != '0'" Text="Cannot download the pinned ddb CI build (exit $(DdbFetchExitCode)). It needs bash, curl, unzip and DRONEDB_ARTIFACT_TOKEN (see scripts/ddb-release.sh); or set DDB_LOCAL_BUILD to a ddb Windows zip." />
+        <Copy Condition="'$(DdbFetchExitCode)' == '0'" SourceFiles="$(DdbDownloadDir)/ddb-$(DdbVersion)-Windows.zip" DestinationFiles="$(DdbReleasePath)" />
+        <RemoveDir Condition="'$(DdbFetchExitCode)' == '0'" Directories="$(DdbDownloadDir)" />
 
-        <GetFileHash Files="$(DdbReleasePath)" Algorithm="SHA256">
+        <GetFileHash Condition="'$(DdbLocalZip)' == ''" Files="$(DdbReleasePath)" Algorithm="SHA256">
             <Output TaskParameter="Hash" PropertyName="DdbReleaseHash" />
         </GetFileHash>
-        <Delete Condition="'$(DdbReleaseHash)' != '$(DdbWindowsZipSha256)'" Files="$(DdbReleasePath)" />
-        <Error Condition="'$(DdbReleaseHash)' != '$(DdbWindowsZipSha256)'" Text="Checksum mismatch for $(DdbReleaseUrl): SHA256 $(DdbReleaseHash), expected $(DdbWindowsZipSha256) (DdbWindowsZipSha256, Directory.Build.props). The download was deleted." />
+        <Delete Condition="'$(DdbLocalZip)' == '' And '$(DdbReleaseHash)' != '$(DdbWindowsZipSha256)'" Files="$(DdbReleasePath)" />
+        <Error Condition="'$(DdbLocalZip)' == '' And '$(DdbReleaseHash)' != '$(DdbWindowsZipSha256)'" Text="Checksum mismatch for the pinned ddb Windows build: SHA256 $(DdbReleaseHash), expected $(DdbWindowsZipSha256) (DdbWindowsZipSha256, Directory.Build.props). The download was deleted." />
 
         <ItemGroup>
             <EmbeddedResource Include="$(DdbReleasePath)">

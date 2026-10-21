@@ -34,7 +34,11 @@ jobs:
         run: |
           cd registry/Registry.Web/ClientApp
           npm ci && npm run build:prod
+      # The win-* publishes embed the pinned DroneDB Windows build (Registry.Web.csproj); a pinned
+      # DroneDB CI build is downloaded with DRONEDB_ARTIFACT_TOKEN
       - name: Publish
+        env:
+          DRONEDB_ARTIFACT_TOKEN: ${{ secrets.DRONEDB_ARTIFACT_TOKEN }}
         run: |
           cd registry
           pwd

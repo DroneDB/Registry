@@ -55,6 +55,10 @@ jobs:
           context: .
           file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
+          # The Dockerfile installs the DroneDB build pinned in Directory.Build.props; a pinned
+          # DroneDB CI build needs this token (scripts/ddb-release.sh). Build secrets never reach a layer.
+          secrets: |
+            dronedb_artifact_token=${{ secrets.DRONEDB_ARTIFACT_TOKEN }}
           tags: |
             ${{ steps.docker_meta.outputs.tags }}
             ${{ github.ref == 'refs/heads/master' && 'dronedb/registry:latest' || '' }}

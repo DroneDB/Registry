@@ -56,16 +56,18 @@ FROM ubuntu:noble AS runner
 ARG DEBIAN_FRONTEND=noninteractive
 ENV DOTNET_GENERATE_ASPNET_CERTIFICATE=false
 
-# DroneDB: the release pinned in Directory.Build.props (DdbVersion, DdbDebSha256), never the latest
-# one. The download is verified with sha256sum -c. scripts/ddb-release.sh check (CI) fails when these
-# defaults differ from Directory.Build.props.
-ARG DDB_VERSION=1.12.2
-ARG DDB_DEB_SHA256=b1c2c86c368d2915ebf14112b835f475d4c47f4cafb46224c31e02b7566473c4
+# DroneDB: the build pinned in Directory.Build.props (scripts/ddb-release.sh fetch-deb downloads it
+# and checks it with sha256sum -c), never the latest one. A pinned CI build (DdbSource ci) needs a
+# token, passed as a build secret, never as an ARG or a layer:
+#   docker build --secret id=dronedb_artifact_token,env=DRONEDB_ARTIFACT_TOKEN .
+COPY Directory.Build.props /tmp/ddb-pin/
+COPY scripts/ddb-release.sh /tmp/ddb-pin/scripts/
 
 # Install runtime dependencies in single layer including SkiaSharp dependencies.
 # No .NET runtime: the app is published self-contained (docker/FolderProfile.xml).
 # tzdata: the image runs in UTC; set TZ (e.g. TZ=Europe/Rome, see docker/production) to change it.
-RUN apt-get update \
+RUN --mount=type=secret,id=dronedb_artifact_token \
+    apt-get update \
     && apt-get install -y --fix-missing --no-install-recommends \
         ca-certificates \
         tzdata \
@@ -85,11 +87,11 @@ RUN apt-get update \
         libldap2 \
         libldap-common \
         libsasl2-2 \
-    && curl -fsSL --retry 3 -o /tmp/dronedb.deb \
-        "https://github.com/DroneDB/DroneDB/releases/download/v${DDB_VERSION}/ddb_${DDB_VERSION}_amd64.deb" \
-    && echo "${DDB_DEB_SHA256}  /tmp/dronedb.deb" | sha256sum -c - \
-    && apt-get install -y /tmp/dronedb.deb \
-    && rm /tmp/dronedb.deb \
+        unzip \
+    && deb="$(bash /tmp/ddb-pin/scripts/ddb-release.sh fetch-deb /tmp/ddb)" \
+    && apt-get install -y "$deb" \
+    && rm -rf /tmp/ddb /tmp/ddb-pin \
+    && apt-get purge -y unzip \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Ensure SkiaSharp can find native libraries

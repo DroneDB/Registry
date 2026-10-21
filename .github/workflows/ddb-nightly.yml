@@ -71,28 +71,18 @@ jobs:
       # conclusion: a run whose registry_contract job failed still carries a tested .deb (the
       # artifact is uploaded only after build_ubuntu's own tests passed), and skipping it would
       # hide the drift this job looks for. Runs from forks are never used: their .deb is installed
-      # with sudo below.
+      # with sudo below. The lookup and the download are scripts/ddb-release.sh's, the same code
+      # that downloads the pinned DroneDB CI build (Directory.Build.props).
       - name: Download the newest DroneDB Linux-Binaries artifact
         env:
-          GH_TOKEN: ${{ secrets.DRONEDB_ARTIFACT_TOKEN }}
+          DRONEDB_ARTIFACT_TOKEN: ${{ secrets.DRONEDB_ARTIFACT_TOKEN }}
           DEST: ${{ runner.temp }}/ddb-package
         run: |
           set -euo pipefail
-          runs=$(gh api "repos/DroneDB/DroneDB/actions/workflows/c-cpp.yml/runs?branch=${DRONEDB_BRANCH}&status=completed&per_page=20" \
-            --jq '.workflow_runs[] | select(.head_repository.id == .repository.id) | "\(.id) \(.head_sha) \(.conclusion)"')
-          while read -r run sha conclusion; do
-            [[ -n "$run" ]] || continue
-            found=$(gh api "repos/DroneDB/DroneDB/actions/runs/${run}/artifacts?name=Linux-Binaries" \
-              --jq '[.artifacts[] | select(.expired | not)] | length' </dev/null)
-            if [[ "$found" -gt 0 ]]; then
-              gh run download "$run" --repo DroneDB/DroneDB --name Linux-Binaries --dir "$DEST" </dev/null
-              echo "DroneDB ${DRONEDB_BRANCH} @ ${sha}: run ${run} (${conclusion})" | tee -a "$GITHUB_STEP_SUMMARY"
-              echo "DDB_RUN_URL=https://github.com/DroneDB/DroneDB/actions/runs/${run}" >> "$GITHUB_ENV"
-              exit 0
-            fi
-          done <<< "$runs"
-          echo "::error title=No DroneDB artifact::No completed c-cpp.yml run of DroneDB ${DRONEDB_BRANCH} has an unexpired Linux-Binaries artifact."
-          exit 1
+          read -r artifact run sha conclusion < <(bash scripts/ddb-release.sh latest-ci-artifact "$DRONEDB_BRANCH" Linux-Binaries)
+          bash scripts/ddb-release.sh fetch-ci-artifact "$artifact" "$DEST"
+          echo "DroneDB ${DRONEDB_BRANCH} @ ${sha}: run ${run} (${conclusion})" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "DDB_RUN_URL=https://github.com/DroneDB/DroneDB/actions/runs/${run}" >> "$GITHUB_ENV"
 
       - name: Install the DroneDB package
         run: |

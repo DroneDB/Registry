@@ -30,24 +30,47 @@
     </PropertyGroup>
 
     <!--
-        The DroneDB (libddb) release Registry is built and tested against (RQ-02 item 10, XI-01).
+        The DroneDB (libddb) build Registry is built and tested against (RQ-02 item 10, XI-01).
 
-        This is the only place the version and the checksums are written:
-          - Registry.Web.csproj embeds ddb-<DdbVersion>-Windows.zip in Windows builds and fails the
-            build when its SHA256 is not DdbWindowsZipSha256;
-          - CI installs ddb_<DdbVersion>_amd64.deb through scripts/ddb-release.sh, which reads these
-            values and runs sha256sum -c;
-          - the Dockerfile has the same values as ARG defaults. scripts/ddb-release.sh check (CI)
-            fails when they differ from these, or when anything downloads releases/latest.
+        This is the only place it is written. scripts/ddb-release.sh reads it for everything that
+        installs libddb, downloads exactly this build and checks it with sha256sum -c:
+          - CI installs the .deb (scripts/ddb-release.sh fetch-deb);
+          - the Dockerfile installs the same .deb (fetch-deb, token as a build secret for a CI build);
+          - Registry.Web.csproj embeds the Windows zip in Windows builds (release: downloaded by
+            MSBuild; ci: fetch-windows-zip) and fails the build when its SHA256 differs.
+        scripts/ddb-release.sh check (CI) fails when the pin is malformed or written elsewhere, or
+        when anything downloads releases/latest. Startup checks the ABI of the loaded library
+        (DdbAbi: major 1, minor >= 1), not this version number.
 
-        To move to a new DroneDB release, change the three values here and the two Dockerfile ARGs.
-        The checksums are the "digest" field of each asset (sha256 of the uploaded file) in:
-            gh api repos/DroneDB/DroneDB/releases/tags/v<version>
+        DdbSource:
+          release  a published release: DdbVersion, and the SHA256 of ddb_<DdbVersion>_amd64.deb and
+                   ddb-<DdbVersion>-Windows.zip (the "digest" of each asset, or SHA256SUMS, in
+                   gh api repos/DroneDB/DroneDB/releases/tags/v<version>). Remove the Ci and
+                   ArtifactId properties.
+          ci       an unreleased DroneDB CI build (c-cpp.yml): the DroneDB commit, its run, the ids
+                   of its "Linux-Binaries" and "Windows Binaries" artifacts
+                   (gh api repos/DroneDB/DroneDB/actions/runs/<run>/artifacts), DdbVersion as that
+                   build names its files, and the SHA256 of the .deb and of the zip inside them.
+                   Downloading an artifact needs DRONEDB_ARTIFACT_TOKEN (see scripts/ddb-release.sh);
+                   artifacts expire 90 days after their run.
+
+        Pinned now (2026-10-21): DroneDB 2.0.0 (libddb ABI 1.1) is not tagged until Registry is proven
+        on it, so Registry pins a CI build of DroneDB fixes-and-optimizations: commit c1a9515, the last
+        one before the 2.0.0 version bump (1f171e5, package.json only), so the files still say 1.12.2.
+        Its run is a pull request run of DroneDB#472, built from the merge with master; the Linux build,
+        its tests, the Windows build and the Registry contract job passed (the ASan job failed on a
+        test-harness assertion, fixed by the next DroneDB commit). Next: the CI build of the 2.0.0
+        commit (DdbVersion 2.0.0), then the v2.0.0 release (DdbSource release) once it is tagged.
     -->
     <PropertyGroup>
+        <DdbSource>ci</DdbSource>
         <DdbVersion>1.12.2</DdbVersion>
-        <DdbDebSha256>b1c2c86c368d2915ebf14112b835f475d4c47f4cafb46224c31e02b7566473c4</DdbDebSha256>
-        <DdbWindowsZipSha256>2aa183060ffe279b4652ef22ab57ccd795ee6bd2d1d87ec79fa2b44e04604afd</DdbWindowsZipSha256>
+        <DdbCiCommit>c1a9515058c8c0b98bdf80594253441cface0fbc</DdbCiCommit>
+        <DdbCiRunId>39617343191</DdbCiRunId>
+        <DdbDebArtifactId>12356382618</DdbDebArtifactId>
+        <DdbWindowsArtifactId>12357102894</DdbWindowsArtifactId>
+        <DdbDebSha256>3a8c806d6b68592e2cbcd846c841442ac605599418963eb37175d4be7e842712</DdbDebSha256>
+        <DdbWindowsZipSha256>bb68b5fc2b8b6d573bf0980dfef74a3f94eac322716ba68316f82ac4ac56f770</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>

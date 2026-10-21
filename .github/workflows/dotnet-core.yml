@@ -27,9 +27,9 @@ jobs:
       run: |
         cd registry
         bash scripts/quality-metrics.sh --check
-    # One DroneDB release (Directory.Build.props): the Dockerfile ARG defaults must match it and no
-    # build may download releases/latest
-    - name: DroneDB release pin (Directory.Build.props, Dockerfile)
+    # One DroneDB build (Directory.Build.props): well-formed, written nowhere else, installed by the
+    # Dockerfile through scripts/ddb-release.sh, and no build may download releases/latest
+    - name: DroneDB pin (Directory.Build.props)
       run: |
         cd registry
         bash scripts/ddb-release.sh check
@@ -75,10 +75,20 @@ jobs:
         cd registry
         if ldconfig -p | grep -q 'libddb\.so'; then echo "libddb is installed: the unit tests must run without it" >&2; exit 1; fi
         dotnet test Registry.Web.UnitTest/Registry.Web.UnitTest.csproj -c Release --verbosity minimal --blame-hang-timeout 10m --collect "Code Coverage;Format=cobertura" --results-directory TestResults
-    # The release pinned in Directory.Build.props (DdbVersion), verified with sha256sum -c (DdbDebSha256)
-    - name: Download and install the pinned DroneDB release
+    # The build pinned in Directory.Build.props, verified with sha256sum -c (DdbDebSha256). A pinned
+    # DroneDB CI build (DdbSource ci, before DroneDB 2.0.0 is tagged) is an Actions artifact of
+    # DroneDB/DroneDB: it needs the repository secret DRONEDB_ARTIFACT_TOKEN.
+    - name: Download and install the pinned DroneDB build
+      env:
+        DRONEDB_ARTIFACT_TOKEN: ${{ secrets.DRONEDB_ARTIFACT_TOKEN }}
       run: |
         cd registry
+        if [[ "$(bash scripts/ddb-release.sh get DdbSource)" == "ci" && -z "$DRONEDB_ARTIFACT_TOKEN" ]]; then
+          msg="Secret DRONEDB_ARTIFACT_TOKEN is not set: Registry pins an unreleased DroneDB CI build ($(bash scripts/ddb-release.sh describe)) and cannot download it. Add the repository secret DRONEDB_ARTIFACT_TOKEN (a token with Actions read access to DroneDB/DroneDB, see scripts/ddb-release.sh)."
+          echo "::error title=DRONEDB_ARTIFACT_TOKEN missing::$msg"
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+        fi
         deb="$(bash scripts/ddb-release.sh fetch-deb "$RUNNER_TEMP/ddb")"
         sudo apt-get update && sudo apt-get install -y "$deb"
     # Everything but the unit tests: Registry.Web.IntegrationTest (native libddb, test data
