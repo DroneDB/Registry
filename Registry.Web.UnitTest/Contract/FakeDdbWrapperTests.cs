@@ -28,13 +28,21 @@ public sealed class FakeDdbWrapperTests
 
     private static readonly string[] AddedFiles = ["a.txt", "cloud.las", "layer.geojson", "ortho.tif", "sub"];
 
+    // Another dataset, the destination of the recorded build copy
+    private static readonly string OtherRoot = Path.Combine(Path.GetTempPath(), "contract-ds-2");
+
+    // The hash of the built ortho.tif of the build-artifacts fixtures
+    private const string BuiltHash = "d0d2b869615dca09ef0055f2014401bab298503e3e1f10e339f14f5788ea702f";
+
     private readonly FakeDdbWrapper _ddb = new();
 
     /// <summary>One fake call per fixture: a vendored fixture the fake does not serve fails <see cref="EveryFixture_IsServed"/>.</summary>
     private static readonly Dictionary<string, Func<FakeDdbWrapper, object?>> Calls = new()
     {
         ["add"] = d => d.Add(Root, AddedFiles.Select(p => Path.Combine(Root, p)).ToArray(), true),
-        ["build-status"] = d => d.GetBuildStatus(Root, ["ortho.tif", "layer.geojson", "a.txt", "missing.tif"]),
+        ["build-artifacts"] = d => d.GetBuildArtifacts(Root, ["ortho.tif", "layer.geojson", "cloud.las", "a.txt", "sub", "missing.tif"]),
+        ["copy-build-artifacts"] = d => d.CopyBuildArtifacts(Root, OtherRoot, BuiltHash),
+        ["entry-types"] = d => d.GetEntryTypes(),
         ["get-drone-image"] = d => d.GetEntry(Root, "DJI_0018.JPG"),
         ["get-folder"] = d => d.GetEntry(Root, "sub"),
         ["get-image"] = d => d.GetEntry(Root, "sub/img.jpg"),
@@ -60,6 +68,7 @@ public sealed class FakeDdbWrapperTests
         ["meta-set"] = d => d.MetaSet(Root, "annotation", """{ "level": 2, "note": "tree" }""", "sub/img.jpg"),
         ["meta-unset"] = d => d.MetaUnset(Root, "name"),
         ["pending-build-info-none"] = d => d.GetPendingBuildInfo(Root),
+        ["resolve-build-file"] = d => d.ResolveBuildFile(Root, BuiltHash, "cog/cog.tif"),
         ["raster-info"] = d => d.GetRasterInfo(Path.Combine(Root, "ortho.tif")),
         ["raster-metadata"] = d => d.GetRasterMetadata(Path.Combine(Root, "ortho.tif")),
         ["raster-metadata-formula"] = d => d.GetRasterMetadata(Path.Combine(Root, "ortho.tif"), "VARI", "RGB"),
@@ -70,21 +79,38 @@ public sealed class FakeDdbWrapperTests
         ["stac-item-image"] = d => d.Stac(Root, "sub/img.jpg", CollectionRoot, "survey", CatalogRoot)
     };
 
-    // Recorded on another dataset (a Shapefile without .shx): read directly, not served by the fake
+    /// <summary>The fixtures <see cref="FakeDdbRuntime"/> serves.</summary>
+    private static readonly Dictionary<string, Func<FakeDdbRuntime, object?>> RuntimeCalls = new()
+    {
+        ["capabilities"] = r => r.Capabilities,
+        ["effective-config"] = r => r.GetEffectiveConfig()
+    };
+
     private static readonly string[] NotServed =
     [
-        "pending-build-info",
-        // The libddb ABI 1.1 outputs (DroneDB 2.0.0), not behind IDdbWrapper yet (RQ-08)
-        "build-artifacts", "build-artifacts-pending", "capabilities", "copy-build-artifacts", "effective-config",
-        "entry-types", "list-entries-ex", "normalize-path", "normalize-path-rejected", "resolve-build-file",
+        // Recorded on another dataset (a Shapefile without .shx): read directly
+        "pending-build-info", "build-artifacts-pending",
+        // A deprecated export Registry no longer calls (GetBuildArtifacts replaces it, XI-04)
+        "build-status",
+        // ABI 1.1 outputs with no port member yet: the listing with build objects (RQ-11), the path
+        // rules (DatasetPathPolicy, RQ-10) and the data-only STAC (StacManager)
+        "list-entries-ex", "normalize-path", "normalize-path-rejected",
         "stac-data-collection", "stac-data-item-collection", "stac-data-item-georaster", "stac-data-item-image"
     ];
 
     [Test]
     public void EveryFixture_IsServed()
     {
-        Calls.Keys.Concat(NotServed).Order().ShouldBe(ContractFixture.Names.Order());
+        Calls.Keys.Concat(RuntimeCalls.Keys).Concat(NotServed).Order().ShouldBe(ContractFixture.Names.Order());
     }
+
+    [TestCaseSource(nameof(ServedRuntimeFixtures))]
+    public void RuntimeCall_AnswersFromItsFixture(string fixture)
+    {
+        RuntimeCalls[fixture](new FakeDdbRuntime()).ShouldNotBeNull();
+    }
+
+    private static string[] ServedRuntimeFixtures() => [.. RuntimeCalls.Keys];
 
     [TestCaseSource(nameof(ServedFixtures))]
     public void Call_AnswersFromItsFixture(string fixture)
@@ -176,15 +202,85 @@ public sealed class FakeDdbWrapperTests
     }
 
     [Test]
-    public void BuildStatus_AnswersAnyRecordedPaths_InTheCallersOrder()
+    public void BuildArtifacts_AnswerAnyRecordedPaths_InTheCallersOrder_WithTheCallersRoot()
     {
-        var statuses = _ddb.GetBuildStatus(Root, ["a.txt", "ortho.tif"]);
+        var artifacts = _ddb.GetBuildArtifacts(Root, ["a.txt", "ortho.tif", "missing.tif"]);
 
-        statuses.Select(s => (s.Path, s.Buildable, s.Complete)).ShouldBe([("a.txt", false, false), ("ortho.tif", true, true)]);
-        _ddb.IsBuildable(Root, "layer.geojson").ShouldBeTrue();
-        _ddb.IsBuildComplete(Root, "layer.geojson").ShouldBeFalse();
+        artifacts.Select(a => (a.Path, a.Exists, a.Build?.Buildable, a.Build?.State))
+            .ShouldBe([("a.txt", true, false, BuildState.None), ("ortho.tif", true, true, BuildState.Complete),
+                ("missing.tif", false, null, null)]);
+        var cog = artifacts[1].Build!.Artifacts.ShouldHaveSingleItem();
+        (cog.Role, cog.Path, cog.Kind, cog.DownloadName).ShouldBe((ArtifactRoles.RasterCog, "cog/cog.tif", "file", "cog.tif"));
+        cog.MediaType.ShouldBe("image/tiff; application=geotiff; profile=cloud-optimized");
+        artifacts[1].Build!.Root.ShouldBe($"{GenericRoot}/.ddb/build/{BuiltHash}");
         _ddb.IsBuildPending(Root).ShouldBeFalse();
-        Should.Throw<NotSupportedException>(() => _ddb.GetBuildStatus(Root, ["cloud.las"]));
+        Should.Throw<NotSupportedException>(() => _ddb.GetBuildArtifacts(Root, ["roads.shp"]));
+    }
+
+    [Test]
+    public void BuildArtifactsPending_OfTheShapefileDataset_ReadsDirectly()
+    {
+        var pending = ContractFixture.Load("build-artifacts-pending").Output.ToObject<EntryBuildArtifacts[]>()!
+            .ShouldHaveSingleItem().Build!;
+
+        pending.State.ShouldBe(BuildState.Pending);
+        pending.MissingDependencies.ShouldBe(["roads.shx"]);
+        pending.LastAttempt.ShouldBe(0);
+    }
+
+    [Test]
+    public void ResolveBuildFile_RecordedFile_UnknownHashIsNull_OtherFilesAreNotSupported()
+    {
+        _ddb.ResolveBuildFile(Root, BuiltHash, "cog/cog.tif").ShouldBe($"{GenericRoot}/.ddb/build/{BuiltHash}/cog/cog.tif");
+        _ddb.ResolveBuildFile(Root, new string('0', 64), "cog/cog.tif").ShouldBeNull();
+        Should.Throw<NotSupportedException>(() => _ddb.ResolveBuildFile(Root, BuiltHash, "cog/other.tif"));
+    }
+
+    [Test]
+    public void EntryTypes_AreLibddbs()
+    {
+        var types = _ddb.GetEntryTypes();
+
+        types.Select(t => t.Id).ShouldBe(Enum.GetValues<EntryType>());
+        types.Single(t => t.Id == EntryType.PointCloud).Roles.ShouldBe([ArtifactRoles.PointCloudCopc, ArtifactRoles.PointCloudEpt]);
+        types.Single(t => t.Id == EntryType.Vector).SidecarExtensions.ShouldContain("dbf");
+        types.Where(t => t.Buildable).Select(t => t.Id).ShouldContain(EntryType.GeoRaster);
+    }
+
+    [Test]
+    public void CopyBuildArtifacts_RecordedCopy()
+    {
+        var copied = _ddb.CopyBuildArtifacts(Root, OtherRoot, BuiltHash);
+
+        copied.Hash.ShouldBe(BuiltHash);
+        copied.Pending.ShouldBeFalse();
+        copied.Artifacts.ShouldHaveSingleItem().Role.ShouldBe(ArtifactRoles.RasterCog);
+        Should.Throw<NotSupportedException>(() => _ddb.CopyBuildArtifacts(Root, OtherRoot, new string('0', 64)));
+    }
+
+    [Test]
+    public void Runtime_CapabilitiesAreTheRecordedLibrarys()
+    {
+        var capabilities = new FakeDdbRuntime().Capabilities;
+
+        (capabilities.AbiMajor, capabilities.AbiMinor).ShouldBe((DdbAbi.Major, DdbAbi.Minor));
+        capabilities.ErrorCodes["INVALIDARGS"].ShouldBe((int)DdbResult.InvalidArgs);
+        capabilities.ErrorReasons.ShouldBe(["idleTimeout", "lowDiskSpace", "noSpaceOnDevice"], ignoreOrder: true);
+        capabilities.IsCancellable("DDBBuild").ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// XI-01: every export the adapter declares is in the library's symbol list (the vendored
+    /// capabilities fixture, which DroneDB records from its ddb.symbols manifest): an import that the
+    /// pinned libddb does not export fails here, in the unit tests, before any native code runs.
+    /// </summary>
+    [Test]
+    public void AdapterImports_AreAllExportedByTheContractLibrary()
+    {
+        var exported = new FakeDdbRuntime().Capabilities.Symbols;
+
+        DdbAbi.RequiredSymbols.ShouldNotBeEmpty();
+        DdbAbi.RequiredSymbols.Where(s => !exported.Contains(s)).ShouldBeEmpty();
     }
 
     [Test]

@@ -6,6 +6,7 @@ using System.Linq;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
+using Registry.Web.Test.Support;
 using Serilog;
 using Shouldly;
 using Registry.Test.Common;
@@ -61,15 +62,6 @@ public class Rq02LoggingConfigTests
             JToken.DeepEquals(args[key], expected).ShouldBeTrue($"{source}: {key} = {args[key]}, expected {expected}");
     }
 
-    /// <summary>Walks up from the test output folder to the repository root (holds Registry.sln).</summary>
-    private static string? FindRepositoryRoot()
-    {
-        for (var dir = new DirectoryInfo(TestContext.CurrentContext.TestDirectory); dir != null; dir = dir.Parent)
-            if (File.Exists(Path.Combine(dir.FullName, "Registry.sln")))
-                return dir.FullName;
-        return null;
-    }
-
     /// <summary>The embedded default (what a new storage folder's appsettings.json is created from).</summary>
     [Test]
     public void DefaultSettings_FileSink_RollsRetainsAndIsShared()
@@ -82,10 +74,9 @@ public class Rq02LoggingConfigTests
     [TestCase("docker/testing/appsettings-testing.json")]
     public void DockerTemplates_FileSink_MatchTheDefault(string relativePath)
     {
-        var root = FindRepositoryRoot();
-        Assume.That(root, Is.Not.Null, "repository sources not available next to the test output");
+        Assume.That(RepositoryFiles.Root, Is.Not.Null, "repository sources not available next to the test output");
 
-        ShouldHaveRollingSharedArgs(FileSinkArgs(File.ReadAllText(Path.Combine(root!, relativePath))), relativePath);
+        ShouldHaveRollingSharedArgs(FileSinkArgs(File.ReadAllText(RepositoryFiles.PathOf(relativePath))), relativePath);
     }
 
     /// <summary>

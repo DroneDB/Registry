@@ -121,6 +121,11 @@ public static class HangfireUtils
     // reflection per job method; an indicator attribute is not supported, and a helper would add
     // indirection without a measurable gain. Keeping the policy text inline next to each job is
     // the cost of that discovery model (review round 2, finding 7).
+    //
+    // A build's DdbRetryableException (low disk, tool idle timeout) is not retried here: the build
+    // fails, and the pending-build coordinator (BuildPendingService) owns the retry of a transient
+    // build failure, with its own budgeted backoff; ArtifactCompletenessCheckerService does not count
+    // it as a content failure. A second retry loop here would keep the job from failing (XI-02).
     [AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
         OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
@@ -388,7 +393,7 @@ public static class HangfireUtils
     // Same retry policy as BuildWrapper (intentionally duplicated inline - see there).
     [AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
-        OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
+        OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException), typeof(DdbRetryableException)])]
     public static void CleanupWrapper(IDDB ddb, PerformContext context)
     {
         Action<string> writeLine = CreateJobWriteLine(context, ddb.DatasetFolderPath);
@@ -402,7 +407,7 @@ public static class HangfireUtils
     // Same retry policy as BuildWrapper (intentionally duplicated inline - see there).
     [AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
-        OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
+        OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException), typeof(DdbRetryableException)])]
     public static void GenerateThumbnailWrapper(IDDB ddb, string path, int size, string dest,
         PerformContext context)
     {
@@ -619,7 +624,7 @@ public static class HangfireUtils
     // Same retry policy as BuildWrapper (intentionally duplicated inline - see there).
     [AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
-        OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
+        OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException), typeof(DdbRetryableException)])]
     public static void MaskBordersWrapper(IDDB ddb, string inputPath, string outputPath,
         int nearDist, bool white, PerformContext context)
     {

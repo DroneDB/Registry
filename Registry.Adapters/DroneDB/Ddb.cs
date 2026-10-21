@@ -43,8 +43,9 @@ public class DDB : IDDB
     {
         BuildFolderPath = Path.Combine(DatasetFolderPath, IDDB.DatabaseFolderName, IDDB.BuildFolderName);
 
-        // NOTE: If this was deserialized it's from hangfire, so we need the native wrapper
-        _ddbWrapper = new NativeDdbWrapper(false);
+        // NOTE: If this was deserialized it's from hangfire, so we need the native wrapper (libddb is
+        // initialized by the host at startup; D4/RQ-09 stops storing DDB in job data)
+        _ddbWrapper = new NativeDdbWrapper();
         Meta = new MetaManager(this, _ddbWrapper);
     }
 
@@ -65,43 +66,31 @@ public class DDB : IDDB
 
     public byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash)
     {
-        try
+        return Wrap(() =>
         {
             var fullPath = GetLocalPath(inputPath);
             return _ddbWrapper.GenerateMemoryTile(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
                 inputPathHash);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot generate tile of '{inputPath}'", ex);
-        }
+        }, ex => $"Cannot generate tile of '{inputPath}'");
     }
 
     public byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash, string outputFormat)
     {
-        try
+        return Wrap(() =>
         {
             var fullPath = GetLocalPath(inputPath);
             return _ddbWrapper.GenerateMemoryTile(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
                 inputPathHash, outputFormat);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot generate tile of '{inputPath}' (format={outputFormat})", ex);
-        }
+        }, ex => $"Cannot generate tile of '{inputPath}' (format={outputFormat})");
     }
 
     public void Init()
     {
-        try
+        Wrap(() =>
         {
             var res = _ddbWrapper.Init(DatasetFolderPath);
             Debug.WriteLine(res);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot initialize ddb in folder '{DatasetFolderPath}'", ex);
-        }
+        }, ex => $"Cannot initialize ddb in folder '{DatasetFolderPath}'");
     }
 
 
@@ -170,14 +159,8 @@ public class DDB : IDDB
         if (string.IsNullOrEmpty(relativePath))
             return null;
 
-        try
-        {
-            return _ddbWrapper.GetEntry(DatasetFolderPath, relativePath);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot get '{path}' from ddb '{DatasetFolderPath}'", ex);
-        }
+        return Wrap(() => _ddbWrapper.GetEntry(DatasetFolderPath, relativePath),
+            ex => $"Cannot get '{path}' from ddb '{DatasetFolderPath}'");
     }
 
     public bool EntryExists(string path)
@@ -188,7 +171,7 @@ public class DDB : IDDB
 
     public IEnumerable<Entry> Search(string path, bool recursive = false)
     {
-        try
+        return Wrap(() =>
         {
             var fullPath = path != null ? GetLocalPath(path) : DatasetFolderPath;
 
@@ -201,11 +184,7 @@ public class DDB : IDDB
             }
 
             return entries;
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot list '{path}' to ddb '{DatasetFolderPath}'", ex);
-        }
+        }, ex => $"Cannot list '{path}' to ddb '{DatasetFolderPath}'");
     }
 
     public IReadOnlyList<Entry> Find(EntryQuery query) => FindWith(query, _ddbWrapper.ListEntries);
@@ -218,14 +197,8 @@ public class DDB : IDDB
         ArgumentNullException.ThrowIfNull(query);
         var folder = ToDatasetRelative(query.Path) ??
                      throw new ArgumentException($"Path '{query.Path}' is outside the dataset", nameof(query));
-        try
-        {
-            return list(DatasetFolderPath, query with { Path = folder });
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot list '{query.Path}' in ddb '{DatasetFolderPath}'", ex);
-        }
+        return Wrap(() => list(DatasetFolderPath, query with { Path = folder }),
+            ex => $"Cannot list '{query.Path}' in ddb '{DatasetFolderPath}'");
     }
 
     public void Add(string path, byte[] data)
@@ -236,81 +209,36 @@ public class DDB : IDDB
 
     public void Remove(string path)
     {
-        try
+        Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
 
             _ddbWrapper.Remove(DatasetFolderPath, fullPath);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot remove '{path}' from ddb '{DatasetFolderPath}'", ex);
-        }
+        }, ex => $"Cannot remove '{path}' from ddb '{DatasetFolderPath}'");
     }
 
     public void Move(string source, string dest)
     {
-        try
-        {
-            _ddbWrapper.MoveEntry(DatasetFolderPath, NormalizePath(source), NormalizePath(dest));
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot move '{source}' to {dest} from ddb '{DatasetFolderPath}'",
-                ex);
-        }
+        Wrap(() => _ddbWrapper.MoveEntry(DatasetFolderPath, NormalizePath(source), NormalizePath(dest)),
+            ex => $"Cannot move '{source}' to {dest} from ddb '{DatasetFolderPath}'");
     }
 
     public void Build(string path, string dest = null, bool force = false)
     {
-        try
-        {
-            _ddbWrapper.Build(DatasetFolderPath, path != null ? NormalizePath(path) : null, dest, force);
-        }
-        catch (DdbBuildInProgressException)
-        {
-            // Recoverable: propagate untouched so callers (e.g. HangfireUtils.BuildWrapper)
-            // can apply their backoff + force-retry strategy.
-            throw;
-        }
-        // DdbBusyException passes through the filtered catch below: callers
-        // (Hangfire retry decorators) need the typed transient outcome, not an IOE wrapper.
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot build '{path}' from ddb '{DatasetFolderPath}'", ex);
-        }
+        Wrap(() => _ddbWrapper.Build(DatasetFolderPath, path != null ? NormalizePath(path) : null, dest, force),
+            ex => $"Cannot build '{path}' from ddb '{DatasetFolderPath}'");
     }
 
     public void BuildAll(string dest = null, bool force = false)
     {
-        try
-        {
-            _ddbWrapper.Build(DatasetFolderPath, null, dest, force);
-        }
-        catch (DdbBuildInProgressException)
-        {
-            throw;
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot build all from ddb '{DatasetFolderPath}'", ex);
-        }
+        Wrap(() => _ddbWrapper.Build(DatasetFolderPath, null, dest, force),
+            ex => $"Cannot build all from ddb '{DatasetFolderPath}'");
     }
 
     public void BuildPending(string dest = null, bool force = false)
     {
-        try
-        {
-            _ddbWrapper.Build(DatasetFolderPath, null, dest, force, true);
-        }
-        catch (DdbBuildInProgressException)
-        {
-            throw;
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot build pending from ddb '{DatasetFolderPath}'", ex);
-        }
+        Wrap(() => _ddbWrapper.Build(DatasetFolderPath, null, dest, force, true),
+            ex => $"Cannot build pending from ddb '{DatasetFolderPath}'");
     }
 
     public string GetTmpFolder(string path)
@@ -320,52 +248,22 @@ public class DDB : IDDB
         return fullPath;
     }
 
-    public bool IsBuildable(string path)
-    {
-        try
-        {
-            return _ddbWrapper.IsBuildable(DatasetFolderPath, NormalizePath(path));
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot call IsBuildable from ddb '{DatasetFolderPath}'", ex);
-        }
-    }
+    // RQ-11 shims: the per-entry build probes of IDdbBuild answered from libddb's build manifest
+    // (DDBGetBuildArtifacts, XI-04), the only build query of the IDdbWrapper port. RQ-11 moves their
+    // callers to the role-based resolver and removes them from IDdbBuild.
 
-    public bool IsBuildActive(string path)
-    {
-        try
-        {
-            return _ddbWrapper.IsBuildActive(DatasetFolderPath, NormalizePath(path));
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot call IsBuildActive from ddb '{DatasetFolderPath}'", ex);
-        }
-    }
+    public bool IsBuildable(string path) => BuildOf(path, nameof(IsBuildable))?.Buildable ?? false;
 
-    public bool IsBuildComplete(string path)
-    {
-        try
-        {
-            return _ddbWrapper.IsBuildComplete(DatasetFolderPath, NormalizePath(path));
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot call IsBuildComplete from ddb '{DatasetFolderPath}'", ex);
-        }
-    }
+    /// <summary>A live build holds the entry's build lock (a stale lock is not a build, and stays in place).</summary>
+    public bool IsBuildActive(string path) => BuildOf(path, nameof(IsBuildActive))?.State == BuildState.Building;
+
+    /// <summary>The artifacts are complete (libddb's "complete" state: not building, not pending).</summary>
+    public bool IsBuildComplete(string path) => BuildOf(path, nameof(IsBuildComplete))?.State == BuildState.Complete;
 
     public bool IsBuildPending()
     {
-        try
-        {
-            return _ddbWrapper.IsBuildPending(DatasetFolderPath);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot call IsBuildPending from ddb '{DatasetFolderPath}'", ex);
-        }
+        return Wrap(() => _ddbWrapper.IsBuildPending(DatasetFolderPath),
+            ex => $"Cannot call IsBuildPending from ddb '{DatasetFolderPath}'");
     }
 
     public EntryBuildStatus[] GetBuildStatus(string[] paths)
@@ -373,38 +271,37 @@ public class DDB : IDDB
         if (paths.Length == 0)
             return [];
 
-        try
-        {
-            return _ddbWrapper.GetBuildStatus(DatasetFolderPath, paths.Select(NormalizePath).ToArray());
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot call GetBuildStatus from ddb '{DatasetFolderPath}'", ex);
-        }
+        return GetBuildArtifacts(paths, nameof(GetBuildStatus))
+            .Select(a => new EntryBuildStatus
+            {
+                Path = a.Path,
+                Exists = a.Exists,
+                Buildable = a.Build?.Buildable ?? false,
+                Complete = a.Build?.State == BuildState.Complete
+            })
+            .ToArray();
+    }
+
+    private EntryBuild? BuildOf(string path, string operation) =>
+        GetBuildArtifacts([path], operation)[0].Build;
+
+    private EntryBuildArtifacts[] GetBuildArtifacts(string[] paths, string operation)
+    {
+        var normalized = paths.Select(NormalizePath).ToArray();
+        return Wrap(() => _ddbWrapper.GetBuildArtifacts(DatasetFolderPath, normalized),
+            ex => $"Cannot call {operation} from ddb '{DatasetFolderPath}'");
     }
 
     public PendingBuildInfo[] GetPendingBuildInfo()
     {
-        try
-        {
-            return _ddbWrapper.GetPendingBuildInfo(DatasetFolderPath);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot call GetPendingBuildInfo from ddb '{DatasetFolderPath}'", ex);
-        }
+        return Wrap(() => _ddbWrapper.GetPendingBuildInfo(DatasetFolderPath),
+            ex => $"Cannot call GetPendingBuildInfo from ddb '{DatasetFolderPath}'");
     }
 
     public DdbCleanupResult Cleanup()
     {
-        try
-        {
-            return _ddbWrapper.Cleanup(DatasetFolderPath);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot call Cleanup from ddb '{DatasetFolderPath}'", ex);
-        }
+        return Wrap(() => _ddbWrapper.Cleanup(DatasetFolderPath),
+            ex => $"Cannot call Cleanup from ddb '{DatasetFolderPath}'");
     }
 
     public Entry GetInfo()
@@ -426,32 +323,20 @@ public class DDB : IDDB
 
     public byte[] GenerateThumbnail(string imagePath, int size)
     {
-        try
+        return Wrap(() =>
         {
             var fullPath = GetLocalPath(imagePath);
             return _ddbWrapper.GenerateThumbnail(fullPath, size);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException(
-                $"Cannot generate thumbnail of '{imagePath}' with size '{size}'", ex);
-        }
+        }, ex => $"Cannot generate thumbnail of '{imagePath}' with size '{size}'");
     }
 
     public void AddRaw(string path)
     {
-        try
+        Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
             _ddbWrapper.Add(DatasetFolderPath, fullPath);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            // Transient DdbBusyException passes through unfiltered: callers (IDatasetIndexQueue, the
-            // API filter's 503+Retry-After path) need to distinguish contention from a permanent
-            // failure.
-            throw new InvalidOperationException($"Cannot add '{path}' to ddb '{DatasetFolderPath}'", ex);
-        }
+        }, ex => $"Cannot add '{path}' to ddb '{DatasetFolderPath}'");
     }
 
     public IReadOnlyList<Entry> AddRawBatch(IReadOnlyList<string> paths)
@@ -459,7 +344,7 @@ public class DDB : IDDB
         if (paths == null || paths.Count == 0)
             return Array.Empty<Entry>();
 
-        try
+        return Wrap(() =>
         {
             // Resolve all dataset-relative paths to local absolute paths and index them
             // in a single native call: the C++ side wraps the whole batch in one
@@ -469,13 +354,7 @@ public class DDB : IDDB
                 fullPaths[i] = GetLocalPath(paths[i]);
 
             return _ddbWrapper.Add(DatasetFolderPath, fullPaths);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            // Transient DdbBusyException passes through unfiltered (see AddRaw).
-            throw new InvalidOperationException(
-                $"Cannot batch-add {paths.Count} file(s) to ddb '{DatasetFolderPath}'", ex);
-        }
+        }, ex => $"Cannot batch-add {paths.Count} file(s) to ddb '{DatasetFolderPath}'");
     }
 
     public BatchAddResult AddRawBatchWithOptions(IReadOnlyList<string> paths, bool stopOnError = false) =>
@@ -486,79 +365,51 @@ public class DDB : IDDB
         if (items == null || items.Count == 0)
             return new BatchAddResult();
 
-        try
+        return Wrap(() =>
         {
             var files = new AddItem[items.Count];
             for (var i = 0; i < items.Count; i++)
                 files[i] = items[i] with { Path = GetLocalPath(items[i].Path) };
 
             return _ddbWrapper.AddWithHints(DatasetFolderPath, files, stopOnError);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            // Transient DdbBusyException passes through unfiltered (see AddRaw).
-            throw new InvalidOperationException(
-                $"Cannot batch-add {items.Count} file(s) (with options) to ddb '{DatasetFolderPath}'", ex);
-        }
+        }, ex => $"Cannot batch-add {items.Count} file(s) (with options) to ddb '{DatasetFolderPath}'");
     }
 
     public void Add(string path, Stream? stream = null)
     {
-        if (stream == null)
+        var localPath = GetLocalPath(path);
+        try
         {
-            string? folderPath = null;
-
-            try
+            if (stream == null)
             {
-                folderPath = GetLocalPath(path);
-
-                Directory.CreateDirectory(folderPath);
-
-                _ddbWrapper.Add(DatasetFolderPath, folderPath);
+                Directory.CreateDirectory(localPath);
+                Wrap(() => _ddbWrapper.Add(DatasetFolderPath, localPath),
+                    ex => $"Cannot add folder '{path}' to ddb '{DatasetFolderPath}'");
             }
-            catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
+            else
             {
-                throw new InvalidOperationException($"Cannot add folder '{path}' to ddb '{DatasetFolderPath}'", ex);
-            }
-            finally
-            {
-                if (folderPath != null && Directory.Exists(folderPath))
-                {
-                    if (!FileSystem.SafeFolderDelete(folderPath))
-                        Debug.WriteLine($"Cannot delete folder '{folderPath}'");
-                }
-            }
-        }
-        else
-        {
-            string? filePath = null;
-
-            try
-            {
-                filePath = GetLocalPath(path);
-
                 stream.SafeReset();
+                FileSystem.EnsureParentFolderExists(localPath);
 
-                FileSystem.EnsureParentFolderExists(filePath);
-
-                using (var writer = File.OpenWrite(filePath))
+                using (var writer = File.OpenWrite(localPath))
                 {
                     stream.CopyTo(writer);
                 }
 
-                _ddbWrapper.Add(DatasetFolderPath, filePath);
+                Wrap(() => _ddbWrapper.Add(DatasetFolderPath, localPath),
+                    ex => $"Cannot add '{path}' to ddb '{DatasetFolderPath}'");
             }
-            catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
+        }
+        finally
+        {
+            if (stream == null)
             {
-                throw new InvalidOperationException($"Cannot add '{path}' to ddb '{DatasetFolderPath}'", ex);
+                if (Directory.Exists(localPath) && !FileSystem.SafeFolderDelete(localPath))
+                    Debug.WriteLine($"Cannot delete folder '{localPath}'");
             }
-            finally
+            else if (File.Exists(localPath) && !FileSystem.SafeDelete(localPath))
             {
-                if (filePath != null && File.Exists(filePath))
-                {
-                    if (!FileSystem.SafeDelete(filePath))
-                        Debug.WriteLine($"Cannot delete file '{filePath}'");
-                }
+                Debug.WriteLine($"Cannot delete file '{localPath}'");
             }
         }
     }
@@ -567,6 +418,40 @@ public class DDB : IDDB
     public override string ToString()
     {
         return DatasetFolderPath;
+    }
+
+    /// <summary>
+    /// Runs a libddb call: a generic native failure (a plain <see cref="DdbException"/>) becomes an
+    /// <see cref="InvalidOperationException"/> with the call's context, as it always did; every
+    /// typed outcome passes through unchanged: the transient ones (<see cref="DdbBusyException"/>,
+    /// <see cref="DdbBuildInProgressException"/>, <see cref="DdbRetryableException"/>,
+    /// <see cref="DdbShutdownException"/>) for the retry policies and the 503 path,
+    /// <see cref="DdbInvalidArgumentsException"/> (400), <see cref="DdbNotFoundException"/> (404)
+    /// and cancellation.
+    /// </summary>
+    private static T Wrap<T>(Func<T> call, Func<DdbException, string> message)
+    {
+        try
+        {
+            return call();
+        }
+        catch (DdbException ex) when (ex.GetType() == typeof(DdbException))
+        {
+            throw new InvalidOperationException(message(ex), ex);
+        }
+    }
+
+    /// <inheritdoc cref="Wrap{T}"/>
+    private static void Wrap(Action call, Func<DdbException, string> message)
+    {
+        try
+        {
+            call();
+        }
+        catch (DdbException ex) when (ex.GetType() == typeof(DdbException))
+        {
+            throw new InvalidOperationException(message(ex), ex);
+        }
     }
 
     public Stamp GetStamp()
@@ -588,14 +473,8 @@ public class DDB : IDDB
 
     public List<RescanResult> RescanIndex(RescanOptions? options = null)
     {
-        try
-        {
-            return _ddbWrapper.RescanIndex(DatasetFolderPath, options);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot rescan index in folder '{DatasetFolderPath}'", ex);
-        }
+        return Wrap(() => _ddbWrapper.RescanIndex(DatasetFolderPath, options),
+            ex => $"Cannot rescan index in folder '{DatasetFolderPath}'");
     }
 
     public void ClearBuildCache()
@@ -610,141 +489,98 @@ public class DDB : IDDB
 
     public string GetRasterInfo(string path)
     {
-        try
+        return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
             return _ddbWrapper.GetRasterInfo(fullPath);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot get raster info of '{path}'", ex);
-        }
+        }, ex => $"Cannot get raster info of '{path}'");
     }
 
     public string GetRasterMetadata(string path, string? formula = null, string? bandFilter = null)
     {
-        try
+        return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
             return _ddbWrapper.GetRasterMetadata(fullPath, formula, bandFilter);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot get raster metadata of '{path}'", ex);
-        }
+        }, ex => $"Cannot get raster metadata of '{path}'");
     }
 
     public byte[] GenerateThumbnailEx(string imagePath, int size, string? preset = null,
         string? bands = null, string? formula = null, string? bandFilter = null,
         string? colormap = null, string? rescale = null)
     {
-        try
+        return Wrap(() =>
         {
             var fullPath = GetLocalPath(imagePath);
             return _ddbWrapper.GenerateThumbnailEx(fullPath, size, preset, bands, formula, bandFilter,
                 colormap, rescale);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException(
-                $"Cannot generate thumbnail ex of '{imagePath}' with size '{size}'", ex);
-        }
+        }, ex => $"Cannot generate thumbnail ex of '{imagePath}' with size '{size}'");
     }
 
     public byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
         string? preset = null, string? bands = null, string? formula = null,
         string? bandFilter = null, string? colormap = null, string? rescale = null)
     {
-        try
+        return Wrap(() =>
         {
             var fullPath = GetLocalPath(inputPath);
             return _ddbWrapper.GenerateMemoryTileEx(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
                 inputPathHash, preset, bands, formula, bandFilter, colormap, rescale);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot generate tile ex of '{inputPath}'", ex);
-        }
+        }, ex => $"Cannot generate tile ex of '{inputPath}'");
     }
 
     public string ValidateMergeMultispectral(string[] paths)
     {
-        try
+        return Wrap(() =>
         {
             var fullPaths = paths.Select(GetLocalPath).ToArray();
             return _ddbWrapper.ValidateMergeMultispectral(fullPaths);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException("Cannot validate merge multispectral", ex);
-        }
+        }, ex => "Cannot validate merge multispectral");
     }
 
     public byte[] PreviewMergeMultispectral(string[] paths, string? previewBands = null, int thumbSize = 512)
     {
-        try
+        return Wrap(() =>
         {
             var fullPaths = paths.Select(GetLocalPath).ToArray();
             return _ddbWrapper.PreviewMergeMultispectral(fullPaths, previewBands, thumbSize);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException("Cannot preview merge multispectral", ex);
-        }
+        }, ex => "Cannot preview merge multispectral");
     }
 
     public void MergeMultispectral(string[] paths, string outputCog)
     {
-        try
+        Wrap(() =>
         {
             var fullPaths = paths.Select(GetLocalPath).ToArray();
             var fullOutputCog = GetLocalPath(outputCog);
             _ddbWrapper.MergeMultispectral(fullPaths, fullOutputCog);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot merge multispectral: {ex.Message}", ex);
-        }
+        }, ex => $"Cannot merge multispectral: {ex.Message}");
     }
 
     public string ValidateAlignRaster(string sourcePath, string referencePath)
     {
-        try
-        {
-            return _ddbWrapper.ValidateAlignRaster(GetLocalPath(sourcePath), GetLocalPath(referencePath));
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException("Cannot validate align raster", ex);
-        }
+        return Wrap(() => _ddbWrapper.ValidateAlignRaster(GetLocalPath(sourcePath), GetLocalPath(referencePath)),
+            ex => "Cannot validate align raster");
     }
 
     public string AlignRaster(string sourcePath, string referencePath, string outputPath, string mode = "similarity")
     {
-        try
+        return Wrap(() =>
         {
             return _ddbWrapper.AlignRaster(GetLocalPath(sourcePath), GetLocalPath(referencePath),
                 GetLocalPath(outputPath), mode);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot align raster: {ex.Message}", ex);
-        }
+        }, ex => $"Cannot align raster: {ex.Message}");
     }
 
     public void ExportRaster(string inputPath, string outputPath,
         string? preset = null, string? bands = null, string? formula = null,
         string? bandFilter = null, string? colormap = null, string? rescale = null)
     {
-        try
+        Wrap(() =>
         {
             var fullInputPath = GetLocalPath(inputPath);
             _ddbWrapper.ExportRaster(fullInputPath, outputPath, preset, bands, formula, bandFilter, colormap, rescale);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot export raster '{inputPath}'", ex);
-        }
+        }, ex => $"Cannot export raster '{inputPath}'");
     }
 
     public void ExportRaster(string inputPath, string outputPath,
@@ -752,117 +588,73 @@ public class DDB : IDDB
         string? colormap, string? rescale, int tileSize,
         Action<double, string?>? progress, CancellationToken cancellationToken)
     {
-        try
-        {
-            var fullInputPath = GetLocalPath(inputPath);
-            _ddbWrapper.ExportRaster(fullInputPath, outputPath, preset, bands, formula, bandFilter,
-                colormap, rescale, tileSize, progress, cancellationToken);
-        }
-        catch (DdbCanceledException)
-        {
-            throw;
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot export raster '{inputPath}'", ex);
-        }
+        // A cancellation (DdbCanceledException) is not a DdbException: it passes through
+        Wrap(() => _ddbWrapper.ExportRaster(GetLocalPath(inputPath), outputPath, preset, bands, formula, bandFilter,
+                colormap, rescale, tileSize, progress, cancellationToken),
+            ex => $"Cannot export raster '{inputPath}'");
     }
 
     public string GetRasterValueInfo(string path)
     {
-        try
+        return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
             return _ddbWrapper.GetRasterValueInfo(fullPath);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException("Could not read raster value info.", ex);
-        }
+        }, ex => "Could not read raster value info.");
     }
 
     public string GetRasterPointValue(string path, int x, int y)
     {
-        try
+        return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
             return _ddbWrapper.GetRasterPointValue(fullPath, x, y);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException("Could not read raster value at the requested pixel.", ex);
-        }
+        }, ex => "Could not read raster value at the requested pixel.");
     }
 
     public string GetRasterAreaStats(string path, int x0, int y0, int x1, int y1)
     {
-        try
+        return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
             return _ddbWrapper.GetRasterAreaStats(fullPath, x0, y0, x1, y1);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException("Could not compute raster area statistics.", ex);
-        }
+        }, ex => "Could not compute raster area statistics.");
     }
 
     public string GetRasterProfile(string path, string geoJsonLineString, int samples)
     {
-        try
+        return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
             return _ddbWrapper.GetRasterProfile(fullPath, geoJsonLineString, samples);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException("Could not compute raster profile for the requested line.", ex);
-        }
+        }, ex => "Could not compute raster profile for the requested line.");
     }
 
     public string CalculateVolume(string path, string polygonGeoJson, string baseMethod, double flatElevation)
     {
-        try
+        return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
             return _ddbWrapper.CalculateVolume(fullPath, polygonGeoJson, baseMethod, flatElevation);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException(
-                "Cannot calculate volume for this area. Make sure the polygon falls inside the raster and contains valid elevation data.",
-                ex);
-        }
+        }, ex => "Cannot calculate volume for this area. Make sure the polygon falls inside the raster and contains valid elevation data.");
     }
 
     public string DetectStockpile(string path, double lat, double lon, double radiusMeters, float sensitivity)
     {
-        try
+        return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
             return _ddbWrapper.DetectStockpile(fullPath, lat, lon, radiusMeters, sensitivity);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException(
-                "No stockpile detected at the selected location. Try clicking closer to a clearly elevated area, increase the search radius, or lower the sensitivity.",
-                ex);
-        }
+        }, ex => "No stockpile detected at the selected location. Try clicking closer to a clearly elevated area, increase the search radius, or lower the sensitivity.");
     }
 
     public string DetectAllStockpiles(string path, float sensitivity, double minAreaM2, int maxResults)
     {
-        try
+        return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
             return _ddbWrapper.DetectAllStockpiles(fullPath, sensitivity, minAreaM2, maxResults);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException(
-                "No stockpiles could be detected on this raster. Try lowering the sensitivity or reducing the minimum area.",
-                ex);
-        }
+        }, ex => "No stockpiles could be detected on this raster. Try lowering the sensitivity or reducing the minimum area.");
     }
 
     public string GenerateContours(string path,
@@ -874,29 +666,21 @@ public class DDB : IDDB
                                    double simplifyTolerance = 0.0,
                                    int bandIndex = 1)
     {
-        try
+        return Wrap(() =>
         {
             var fullPath = GetLocalPath(path);
             return _ddbWrapper.GenerateContours(fullPath, interval, count, baseOffset,
                                                 minElev, maxElev, simplifyTolerance, bandIndex);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException("Could not generate contour lines for this raster.", ex);
-        }
+        }, ex => "Could not generate contour lines for this raster.");
     }
 
     public void MaskBorders(string input, string output, int nearDist = 15, bool white = false)
     {
-        try
+        Wrap(() =>
         {
             var fullInput = GetLocalPath(input);
             var fullOutput = GetLocalPath(output);
             _ddbWrapper.MaskBorders(fullInput, fullOutput, nearDist, white);
-        }
-        catch (DdbException ex) when (ex is not DdbBusyException && ex is not DdbBuildInProgressException)
-        {
-            throw new InvalidOperationException($"Cannot mask borders of '{input}'", ex);
-        }
+        }, ex => $"Cannot mask borders of '{input}'");
     }
 }

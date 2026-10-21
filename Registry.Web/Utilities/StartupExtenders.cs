@@ -170,6 +170,7 @@ public static class StartupExtenders
 
         services.AddHangfireServer(options =>
         {
+            options.ShutdownTimeout = ShutdownTimeouts.HangfireServer;
             options.ServerName = $"{Environment.MachineName}:builds";
             options.WorkerCount = budget.HeavyWorkers;
             options.Queues = [JobQueues.Builds];
@@ -177,6 +178,7 @@ public static class StartupExtenders
 
         services.AddHangfireServer(options =>
         {
+            options.ShutdownTimeout = ShutdownTimeouts.HangfireServer;
             options.ServerName = $"{Environment.MachineName}:jobs";
             options.WorkerCount = budget.LightWorkers;
             // "tasks" carries the heavy-task substrate jobs that do not build (exports run on

@@ -23,25 +23,16 @@ namespace Registry.Adapters.Ddb.Test;
 
 /// <summary>
 /// The libddb ABI 1.1 contract (XI-01, XI-09; DroneDB P3-10): one test per export added in ABI
-/// 1.1, called through the P/Invoke declarations of <see cref="NativeDdbAbi11"/> the way RQ-08
-/// will call them (UTF-8 strings, 1-byte bools, <see cref="DdbListEntriesOptions"/>, outputs freed
-/// with DDBFree), with the outputs checked against DroneDB's contract fixtures
+/// 1.1, called through the P/Invoke declarations of <see cref="NativeDdb"/>, the adapter's one
+/// native-methods home (UTF-8 strings, 1-byte bools, <see cref="DdbListEntriesOptions"/>, outputs
+/// freed with DDBFree), with the outputs checked against DroneDB's contract fixtures
 /// (tests/contract/fixtures, named in each test) and the documented error codes.
 /// <para>
-/// <b>The gate (the ABI handshake decides, never a missing export).</b> The fixture first reads
-/// <c>DDBGetAbiVersion</c>:
-/// <list type="bullet">
-/// <item>the export does not exist, or the library reports ABI 1.0: the library predates ABI 1.1
-/// (libddb 1.12.x, the release Registry's own CI pins), so every test here is <b>inconclusive</b>
-/// (Assert.Inconclusive in the one-time setup), not failed;</item>
-/// <item>the library reports ABI 1.x with x &gt;= 1: the contract applies in full. Every ABI 1.1
-/// export must exist and behave as documented: a missing export (EntryPointNotFoundException) or a
-/// wrong result <b>fails</b>, as the rest of this suite does (DroneDBTests: a missing export fails,
-/// it is never ignored);</item>
-/// <item>another ABI major: the adapter cannot use the library, so the fixture <b>fails</b>.</item>
-/// </list>
-/// So DroneDB's registry_contract job (the freshly built .deb, ABI 1.1) runs every test, and
-/// Registry's CI on libddb 1.12.2 reports them inconclusive until DdbVersion moves to 1.13.
+/// <b>The gate.</b> The fixture runs the adapter's startup handshake (<see cref="DdbAbi.Verify"/>):
+/// ABI 1.x with x &gt;= 1 and every export the adapter declares. Since RQ-08 Registry runs on ABI 1.1
+/// only, so a library that fails the handshake fails the fixture; a wrong result fails its test.
+/// DroneDB's registry_contract job (the freshly built .deb) and Registry's CI (the pinned DroneDB
+/// build) run every test.
 /// </para>
 /// <para>
 /// DDBShutdown is process-final, so it runs in a child process (<see cref="Abi11ShutdownProbe"/>).
@@ -59,17 +50,13 @@ public unsafe class Abi11ContractTests : TestBase
 
     // A 20x20 GeoTIFF (EPSG:26711): a GeoRaster that builds a COG in a moment
     private static readonly string GeoRasterUrl = TestData.Url("testdata/raster/byte.tif");
-    private const string GeoRasterName = "byte.tif";
 
     // tests/contract/inputs/a.txt and the roads.shp of the pending fixtures, byte for byte, and the
     // mtime of the contract dataset: the entries get the fixtures' hashes, sizes and mtimes
-    private const string TextName = "a.txt";
-    private const string TextContent = "DroneDB contract fixture input\n";
     private const string TextHash = "457ca8f0e0b21bbad706ae2c3f7bfaace967212b6c8cbf5cfeb478e388560ff7";
     private const string ShapefileName = "roads.shp";
     private const string ShapefileContent = "not a real shapefile: its .shx and .dbf are missing";
     private const string ShapefileHash = "afe1bd97fb41ff4dd3fc4134a9c32e95ed6a1a0af81c20e88e20b92bbc73a30c";
-    private static readonly DateTime ContractMtime = DateTimeOffset.FromUnixTimeSeconds(1700000000).UtcDateTime;
 
     private const string RootPlaceholder = "<root>";
 
@@ -113,18 +100,11 @@ public unsafe class Abi11ContractTests : TestBase
         UseDdbFolder();
 
         var (gate, message) = CheckAbi();
-        switch (gate)
-        {
-            case Gate.NotApplicable:
-                Assert.Inconclusive(message);
-                break;
-            case Gate.Incompatible:
-                Assert.Fail(message);
-                break;
-        }
+        if (gate != Gate.Applies)
+            Assert.Fail(message);
 
         // The first call of every DDB process (GDAL drivers, PROJ data): ABI 1.1 returns DDBErr
-        Ok(NativeDdbAbi11.DDBRegisterProcess(false), "DDBRegisterProcess");
+        Ok(NativeDdb.DDBRegisterProcess(false), "DDBRegisterProcess");
         TestContext.Progress.WriteLine($"{nameof(Abi11ContractTests)}: {message}, libddb {DdbWrapper.GetVersion()}");
         _geoRaster = TestDownloadCache.GetOrDownload(GeoRasterUrl, Path.Combine(Path.GetTempPath(), BaseTestFolder));
     }
@@ -141,7 +121,7 @@ public unsafe class Abi11ContractTests : TestBase
     [Test]
     public void GetAbiVersion_IsAbi1AtLeast1_1_AndTheCapabilitiesAgree()
     {
-        var version = NativeDdbAbi11.DDBGetAbiVersion();
+        var version = NativeDdb.DDBGetAbiVersion();
         var (major, minor) = DdbAbi.Decode(version);
 
         major.ShouldBe(DdbAbi.Major);
@@ -158,7 +138,7 @@ public unsafe class Abi11ContractTests : TestBase
     public void GetCapabilities_HasTheErrorCodesOfDdbResult_TheReasons_AndASortedSymbolList()
     {
         // Built once, owned by the library: the same pointer on every call
-        NativeDdbAbi11.DDBGetCapabilities().ShouldBe(NativeDdbAbi11.DDBGetCapabilities());
+        NativeDdb.DDBGetCapabilities().ShouldBe(NativeDdb.DDBGetCapabilities());
 
         var capabilities = Capabilities();
         ((string?)capabilities["version"]).ShouldBe(DdbWrapper.GetVersion());
@@ -188,7 +168,7 @@ public unsafe class Abi11ContractTests : TestBase
     public void EveryExportRegistryDeclares_ResolvesAndIsListedInTheCapabilities()
     {
         var declared = DeclaredExports();
-        declared.ShouldContain(nameof(NativeDdbAbi11.DDBApplyDeltaEx), "the LibraryImport stubs are found");
+        declared.ShouldContain(nameof(NativeDdb.DDBApplyDeltaEx), "the LibraryImport stubs are found");
         declared.ShouldContain("DDBAddWithHints", "the wrapper's DllImports are found");
 
         NativeLibrary.TryLoad("ddb", typeof(NativeDdbWrapper).Assembly, null, out var library)
@@ -209,18 +189,18 @@ public unsafe class Abi11ContractTests : TestBase
     [Test]
     public void RegisterProcess_AgainReturnsNone()
     {
-        Ok(NativeDdbAbi11.DDBRegisterProcess(false), "DDBRegisterProcess");
+        Ok(NativeDdb.DDBRegisterProcess(false), "DDBRegisterProcess");
         LastError().ShouldBe("");
     }
 
     [Test]
     public void GetLastErrorReason_IsEmptyAfterASuccessAndForAFailureWithoutAReason()
     {
-        Ok(NativeDdbAbi11.DDBNormalizePath("a", null, out var output), "DDBNormalizePath");
+        Ok(NativeDdb.DDBNormalizePath("a", null, out var output), "DDBNormalizePath");
         TakeString(output);
         LastErrorReason().ShouldBe("");
 
-        Fails(NativeDdbAbi11.DDBNormalizePath(null, null, out _), DdbResult.InvalidArgs, "DDBNormalizePath(NULL)");
+        Fails(NativeDdb.DDBNormalizePath(null, null, out _), DdbResult.InvalidArgs, "DDBNormalizePath(NULL)");
         LastErrorReason().ShouldBe("", "an invalid argument is not transient");
         // The accessors never touch the last error
         LastError().ShouldNotBeNullOrWhiteSpace();
@@ -243,7 +223,7 @@ public unsafe class Abi11ContractTests : TestBase
     [TestCase("sub/.ddb/x", null, """{"rejected": "reserved"}""")]
     public void NormalizePath_MatchesTheFixturesAndVectors(string path, string? reservedJson, string expected)
     {
-        Ok(NativeDdbAbi11.DDBNormalizePath(path, reservedJson, out var output), "DDBNormalizePath");
+        Ok(NativeDdb.DDBNormalizePath(path, reservedJson, out var output), "DDBNormalizePath");
         ShouldEqualJson(TakeJson(output), ParseJson(expected));
     }
 
@@ -253,7 +233,7 @@ public unsafe class Abi11ContractTests : TestBase
     [TestCase("a", "[\"..\"]")]
     public void NormalizePath_InvalidArguments_AreInvalidArgs(string? path, string? reservedJson)
     {
-        Fails(NativeDdbAbi11.DDBNormalizePath(path, reservedJson, out _), DdbResult.InvalidArgs, "DDBNormalizePath");
+        Fails(NativeDdb.DDBNormalizePath(path, reservedJson, out _), DdbResult.InvalidArgs, "DDBNormalizePath");
     }
 
     // fixtures/stac-data-collection.json, stac-data-item-georaster.json (README "Data-only STAC")
@@ -263,7 +243,7 @@ public unsafe class Abi11ContractTests : TestBase
         using var area = new TestArea(nameof(StacData_HasNoIdsLinksOrHrefs_AndNotFoundForAMissingEntry));
         var root = CreateDataset(area, "dataset", withGeoRaster: true);
 
-        Ok(NativeDdbAbi11.DDBStacData(root, null, out var output), "DDBStacData(collection)");
+        Ok(NativeDdb.DDBStacData(root, null, out var output), "DDBStacData(collection)");
         var collection = (JObject)TakeJson(output);
         ((string?)collection["type"]).ShouldBe("Collection");
         ((string?)collection["stac_version"]).ShouldBe("1.1.0");
@@ -274,7 +254,7 @@ public unsafe class Abi11ContractTests : TestBase
         ShouldEqualJson(collection["assets"]!, ParseJson("""{"a.txt": {"title": "a.txt"}}"""));
         ShouldBeDataOnly(collection);
 
-        Ok(NativeDdbAbi11.DDBStacData(root, GeoRasterName, out output), "DDBStacData(item)");
+        Ok(NativeDdb.DDBStacData(root, GeoRasterName, out output), "DDBStacData(item)");
         var item = (JObject)TakeJson(output);
         item.Properties().Select(p => p.Name).Order(StringComparer.Ordinal)
             .ShouldBe(["assets", "bbox", "geometry", "properties", "stac_extensions", "stac_version", "type"]);
@@ -287,8 +267,8 @@ public unsafe class Abi11ContractTests : TestBase
             ParseJson("""{"roles": ["thumbnail"], "title": "Thumbnail", "type": "image/webp"}"""));
         ShouldBeDataOnly(item);
 
-        Fails(NativeDdbAbi11.DDBStacData(root, "missing.tif", out _), DdbResult.NotFound, "DDBStacData(missing)");
-        Fails(NativeDdbAbi11.DDBStacData(null, null, out _), DdbResult.InvalidArgs, "DDBStacData(NULL)");
+        Fails(NativeDdb.DDBStacData(root, "missing.tif", out _), DdbResult.NotFound, "DDBStacData(missing)");
+        Fails(NativeDdb.DDBStacData(null, null, out _), DdbResult.InvalidArgs, "DDBStacData(NULL)");
     }
 
     // fixtures/stac-data-item-collection.json
@@ -298,7 +278,7 @@ public unsafe class Abi11ContractTests : TestBase
         using var area = new TestArea(nameof(StacItemCollectionData_IsTheItemCollectionWithoutLinks));
         var root = CreateDataset(area, "dataset", withGeoRaster: true);
 
-        Ok(NativeDdbAbi11.DDBStacItemCollectionData(root, "", "", 10, 0, out var output), "DDBStacItemCollectionData");
+        Ok(NativeDdb.DDBStacItemCollectionData(root, "", "", 10, 0, out var output), "DDBStacItemCollectionData");
         var collection = (JObject)TakeJson(output);
         ((string?)collection["type"]).ShouldBe("FeatureCollection");
         var features = collection["features"]!.Children<JObject>().ToArray();
@@ -308,9 +288,9 @@ public unsafe class Abi11ContractTests : TestBase
         features.ShouldAllBe(f => (string?)f["type"] == "Feature");
         ShouldBeDataOnly(collection);
 
-        Fails(NativeDdbAbi11.DDBStacItemCollectionData(root, "1,2,3", "", 10, 0, out _), DdbResult.InvalidArgs,
+        Fails(NativeDdb.DDBStacItemCollectionData(root, "1,2,3", "", 10, 0, out _), DdbResult.InvalidArgs,
             "DDBStacItemCollectionData(bbox of 3 numbers)");
-        Fails(NativeDdbAbi11.DDBStacItemCollectionData(null, "", "", 10, 0, out _), DdbResult.InvalidArgs,
+        Fails(NativeDdb.DDBStacItemCollectionData(null, "", "", 10, 0, out _), DdbResult.InvalidArgs,
             "DDBStacItemCollectionData(NULL)");
     }
 
@@ -322,7 +302,7 @@ public unsafe class Abi11ContractTests : TestBase
     [Test]
     public void GetEntryTypes_NamesEveryEntryTypeOfRegistry_WithItsRules()
     {
-        Ok(NativeDdbAbi11.DDBGetEntryTypes(out var output), "DDBGetEntryTypes");
+        Ok(NativeDdb.DDBGetEntryTypes(out var output), "DDBGetEntryTypes");
         var types = TakeJson(output).Children<JObject>().ToDictionary(t => (int)t["id"]!);
 
         foreach (var type in Enum.GetValues<EntryType>())
@@ -378,14 +358,14 @@ public unsafe class Abi11ContractTests : TestBase
             """));
         ShouldEqualJson(artifacts[2], ParseJson("""{"exists": false, "path": "missing.tif"}"""));
 
-        Ok(NativeDdbAbi11.DDBGetBuildArtifacts(root, [], 0, out var output), "DDBGetBuildArtifacts(0 paths)");
+        Ok(NativeDdb.DDBGetBuildArtifacts(root, [], 0, out var output), "DDBGetBuildArtifacts(0 paths)");
         ShouldEqualJson(TakeJson(output), new JArray());
 
-        Fails(NativeDdbAbi11.DDBGetBuildArtifacts(root, [TextName], -1, out _), DdbResult.InvalidArgs,
+        Fails(NativeDdb.DDBGetBuildArtifacts(root, [TextName], -1, out _), DdbResult.InvalidArgs,
             "DDBGetBuildArtifacts(numPaths -1)");
-        Fails(NativeDdbAbi11.DDBGetBuildArtifacts(root, [TextName, null], 2, out _), DdbResult.InvalidArgs,
+        Fails(NativeDdb.DDBGetBuildArtifacts(root, [TextName, null], 2, out _), DdbResult.InvalidArgs,
             "DDBGetBuildArtifacts(a NULL path)");
-        Fails(NativeDdbAbi11.DDBGetBuildArtifacts("", [TextName], 1, out _), DdbResult.InvalidArgs,
+        Fails(NativeDdb.DDBGetBuildArtifacts("", [TextName], 1, out _), DdbResult.InvalidArgs,
             "DDBGetBuildArtifacts(empty ddbPath)");
     }
 
@@ -436,23 +416,23 @@ public unsafe class Abi11ContractTests : TestBase
 
         foreach (var path in new[] { "cog/cog.tif", "cog\\cog.tif" })
         {
-            Ok(NativeDdbAbi11.DDBResolveBuildFile(root, hash, path, out var output), $"DDBResolveBuildFile({path})");
+            Ok(NativeDdb.DDBResolveBuildFile(root, hash, path, out var output), $"DDBResolveBuildFile({path})");
             var resolved = TakeString(output);
             Path.GetFullPath(resolved).ShouldBe(expected);
             File.Exists(resolved).ShouldBeTrue();
         }
 
-        Fails(NativeDdbAbi11.DDBResolveBuildFile(root, hash, "cog/missing.tif", out _), DdbResult.NotFound,
+        Fails(NativeDdb.DDBResolveBuildFile(root, hash, "cog/missing.tif", out _), DdbResult.NotFound,
             "DDBResolveBuildFile(a file that does not exist)");
-        Fails(NativeDdbAbi11.DDBResolveBuildFile(root, new string('0', 64), "cog/cog.tif", out _), DdbResult.NotFound,
+        Fails(NativeDdb.DDBResolveBuildFile(root, new string('0', 64), "cog/cog.tif", out _), DdbResult.NotFound,
             "DDBResolveBuildFile(a hash no entry has)");
-        Fails(NativeDdbAbi11.DDBResolveBuildFile(root, hash, "../cog/cog.tif", out _), DdbResult.InvalidArgs,
+        Fails(NativeDdb.DDBResolveBuildFile(root, hash, "../cog/cog.tif", out _), DdbResult.InvalidArgs,
             "DDBResolveBuildFile(traversal)");
-        Fails(NativeDdbAbi11.DDBResolveBuildFile(root, hash, "/cog/cog.tif", out _), DdbResult.InvalidArgs,
+        Fails(NativeDdb.DDBResolveBuildFile(root, hash, "/cog/cog.tif", out _), DdbResult.InvalidArgs,
             "DDBResolveBuildFile(absolute)");
-        Fails(NativeDdbAbi11.DDBResolveBuildFile(root, "xyz", "cog/cog.tif", out _), DdbResult.InvalidArgs,
+        Fails(NativeDdb.DDBResolveBuildFile(root, "xyz", "cog/cog.tif", out _), DdbResult.InvalidArgs,
             "DDBResolveBuildFile(malformed hash)");
-        Fails(NativeDdbAbi11.DDBResolveBuildFile(root, hash, null, out _), DdbResult.InvalidArgs,
+        Fails(NativeDdb.DDBResolveBuildFile(root, hash, null, out _), DdbResult.InvalidArgs,
             "DDBResolveBuildFile(NULL path)");
     }
 
@@ -466,18 +446,18 @@ public unsafe class Abi11ContractTests : TestBase
         DdbWrapper.Build(source, GeoRasterName);
         var hash = GeoRasterHash();
 
-        Ok(NativeDdbAbi11.DDBCopyBuildArtifacts(source, destination, hash, out var output), "DDBCopyBuildArtifacts");
+        Ok(NativeDdb.DDBCopyBuildArtifacts(source, destination, hash, out var output), "DDBCopyBuildArtifacts");
         ShouldEqualJson(TakeJson(output), ParseJson($$"""
             {"artifacts": [{{CogArtifactJson}}], "hash": "{{hash}}", "pending": false}
             """));
         File.Exists(Path.Combine(destination, ".ddb", "build", hash, "cog", "cog.tif")).ShouldBeTrue();
         ((string?)GetBuildArtifacts(destination, GeoRasterName)[0]["build"]!["state"]).ShouldBe("complete");
 
-        Fails(NativeDdbAbi11.DDBCopyBuildArtifacts(source, destination, TextHash, out _), DdbResult.NotFound,
+        Fails(NativeDdb.DDBCopyBuildArtifacts(source, destination, TextHash, out _), DdbResult.NotFound,
             "DDBCopyBuildArtifacts(the hash of an entry that is not buildable)");
-        Fails(NativeDdbAbi11.DDBCopyBuildArtifacts(source, source, hash, out _), DdbResult.InvalidArgs,
+        Fails(NativeDdb.DDBCopyBuildArtifacts(source, source, hash, out _), DdbResult.InvalidArgs,
             "DDBCopyBuildArtifacts(same dataset)");
-        Fails(NativeDdbAbi11.DDBCopyBuildArtifacts(source, destination, "xyz", out _), DdbResult.InvalidArgs,
+        Fails(NativeDdb.DDBCopyBuildArtifacts(source, destination, "xyz", out _), DdbResult.InvalidArgs,
             "DDBCopyBuildArtifacts(malformed hash)");
     }
 
@@ -490,16 +470,16 @@ public unsafe class Abi11ContractTests : TestBase
         var destination = CreateDataset(area, "destination", withGeoRaster: true);
         DdbWrapper.Build(source, GeoRasterName);
 
-        Ok(NativeDdbAbi11.DDBConfigure("""{"minFreeDiskMb": 10000000000000}"""), "DDBConfigure(minFreeDiskMb 10^13)");
+        Ok(NativeDdb.DDBConfigure("""{"minFreeDiskMb": 10000000000000}"""), "DDBConfigure(minFreeDiskMb 10^13)");
         try
         {
-            Fails(NativeDdbAbi11.DDBCopyBuildArtifacts(source, destination, GeoRasterHash(), out _), DdbResult.Retryable,
+            Fails(NativeDdb.DDBCopyBuildArtifacts(source, destination, GeoRasterHash(), out _), DdbResult.Retryable,
                 "DDBCopyBuildArtifacts(no free space)");
             LastErrorReason().ShouldBe("lowDiskSpace");
         }
         finally
         {
-            Ok(NativeDdbAbi11.DDBConfigure("""{"minFreeDiskMb": null}"""), "DDBConfigure(reset)");
+            Ok(NativeDdb.DDBConfigure("""{"minFreeDiskMb": null}"""), "DDBConfigure(reset)");
         }
     }
 
@@ -540,21 +520,21 @@ public unsafe class Abi11ContractTests : TestBase
 
         var tooSmall = DdbListEntriesOptions.Create(true, false, true);
         tooSmall.StructSize = 4;
-        Fails(NativeDdbAbi11.DDBListEntriesEx(root, "", "", "", tooSmall, out _), DdbResult.InvalidArgs,
+        Fails(NativeDdb.DDBListEntriesEx(root, "", "", "", tooSmall, out _), DdbResult.InvalidArgs,
             "DDBListEntriesEx(structSize 4)");
 
         // The struct of a later ABI (structSize 16): accepted while the fields this library does not know are zero
         var later = new LaterListEntriesOptions { Known = DdbListEntriesOptions.Create(true, false, false) };
         later.Known.StructSize = (uint)sizeof(LaterListEntriesOptions);
-        Ok(NativeDdbAbi11.DDBListEntriesEx(root, "", "", "", in later.Known, out var laterOutput),
+        Ok(NativeDdb.DDBListEntriesEx(root, "", "", "", in later.Known, out var laterOutput),
             "DDBListEntriesEx(structSize 16, unknown fields zero)");
         ShouldEqualJson(TakeJson(laterOutput), withoutBuild);
         later.Unknown = 1;
-        Fails(NativeDdbAbi11.DDBListEntriesEx(root, "", "", "", in later.Known, out _), DdbResult.InvalidArgs,
+        Fails(NativeDdb.DDBListEntriesEx(root, "", "", "", in later.Known, out _), DdbResult.InvalidArgs,
             "DDBListEntriesEx(structSize 16, a non-zero unknown field)");
-        Fails(NativeDdbAbi11.DDBListEntriesEx(root, "", "", "nonsense", DdbListEntriesOptions.Create(true, false, false),
+        Fails(NativeDdb.DDBListEntriesEx(root, "", "", "nonsense", DdbListEntriesOptions.Create(true, false, false),
             out _), DdbResult.InvalidArgs, "DDBListEntriesEx(unknown type)");
-        Fails(NativeDdbAbi11.DDBListEntriesEx("", "", "", "", DdbListEntriesOptions.Create(true, false, false), out _),
+        Fails(NativeDdb.DDBListEntriesEx("", "", "", "", DdbListEntriesOptions.Create(true, false, false), out _),
             DdbResult.InvalidArgs, "DDBListEntriesEx(empty ddbPath)");
     }
 
@@ -570,7 +550,7 @@ public unsafe class Abi11ContractTests : TestBase
         var cache = Path.Combine(area.TestFolder, "cache");
         Directory.CreateDirectory(cache);
 
-        Ok(NativeDdbAbi11.DDBConfigure(new JObject
+        Ok(NativeDdb.DDBConfigure(new JObject
         {
             ["cacheDir"] = cache, ["cpuPoolSize"] = 3, ["ioThreads"] = 2, ["minFreeDiskMb"] = 256
         }.ToString(Formatting.None)), "DDBConfigure");
@@ -597,12 +577,12 @@ public unsafe class Abi11ContractTests : TestBase
                          null, "[]", "not json", """{"cpuPoolSizee": 1}""", """{"ioThreads": 0}""",
                          """{"cpuPoolSize": 1, "minFreeDiskMb": -1}""", """{"cacheDir": "relative/folder"}"""
                      })
-                Fails(NativeDdbAbi11.DDBConfigure(invalid), DdbResult.InvalidArgs, $"DDBConfigure({invalid ?? "NULL"})");
+                Fails(NativeDdb.DDBConfigure(invalid), DdbResult.InvalidArgs, $"DDBConfigure({invalid ?? "NULL"})");
             ShouldEqualJson(EffectiveConfig(), before, "an invalid DDBConfigure changes nothing");
         }
         finally
         {
-            Ok(NativeDdbAbi11.DDBConfigure(
+            Ok(NativeDdb.DDBConfigure(
                 """{"cacheDir": null, "cpuPoolSize": null, "ioThreads": null, "minFreeDiskMb": null}"""),
                 "DDBConfigure(reset)");
         }
@@ -617,19 +597,19 @@ public unsafe class Abi11ContractTests : TestBase
         using var area = new TestArea(nameof(CancelToken_CanceledBeforeACancellableCall_StopsItWithCanceled_ForThatCallOnly));
         var root = CreateDataset(area, "dataset", withGeoRaster: true);
 
-        Ok(NativeDdbAbi11.DDBCreateCancelToken(out var token), "DDBCreateCancelToken");
+        Ok(NativeDdb.DDBCreateCancelToken(out var token), "DDBCreateCancelToken");
         token.ShouldNotBe(IntPtr.Zero);
         try
         {
             // A live token: the call works
-            Ok(NativeDdbAbi11.DDBSetThreadCancelToken(token), "DDBSetThreadCancelToken");
+            Ok(NativeDdb.DDBSetThreadCancelToken(token), "DDBSetThreadCancelToken");
             DdbWrapper.Build(root, GeoRasterName, force: true);
 
-            Ok(NativeDdbAbi11.DDBCancel(token), "DDBCancel");
-            Ok(NativeDdbAbi11.DDBCancel(token), "DDBCancel(again)");
+            Ok(NativeDdb.DDBCancel(token), "DDBCancel");
+            Ok(NativeDdb.DDBCancel(token), "DDBCancel(again)");
 
             // DDBBuild is "cancellable" (capabilities); NativeDdbWrapper.Build calls it first on this thread
-            Ok(NativeDdbAbi11.DDBSetThreadCancelToken(token), "DDBSetThreadCancelToken");
+            Ok(NativeDdb.DDBSetThreadCancelToken(token), "DDBSetThreadCancelToken");
             Should.Throw<DdbCanceledException>(() => DdbWrapper.Build(root, GeoRasterName, force: true))
                 .Message.ShouldContain("Canceled by the cancel token");
 
@@ -638,12 +618,12 @@ public unsafe class Abi11ContractTests : TestBase
         }
         finally
         {
-            Ok(NativeDdbAbi11.DDBFreeCancelToken(token), "DDBFreeCancelToken");
+            Ok(NativeDdb.DDBFreeCancelToken(token), "DDBFreeCancelToken");
         }
 
-        Fails(NativeDdbAbi11.DDBCancel(IntPtr.Zero), DdbResult.InvalidArgs, "DDBCancel(NULL)");
-        Ok(NativeDdbAbi11.DDBFreeCancelToken(IntPtr.Zero), "DDBFreeCancelToken(NULL)");
-        Ok(NativeDdbAbi11.DDBSetThreadCancelToken(IntPtr.Zero), "DDBSetThreadCancelToken(NULL)");
+        Fails(NativeDdb.DDBCancel(IntPtr.Zero), DdbResult.InvalidArgs, "DDBCancel(NULL)");
+        Ok(NativeDdb.DDBFreeCancelToken(IntPtr.Zero), "DDBFreeCancelToken(NULL)");
+        Ok(NativeDdb.DDBSetThreadCancelToken(IntPtr.Zero), "DDBSetThreadCancelToken(NULL)");
     }
 
     [Test]
@@ -651,7 +631,7 @@ public unsafe class Abi11ContractTests : TestBase
     {
         var log = new LogCollector();
         var handle = GCHandle.Alloc(log);
-        Ok(NativeDdbAbi11.DDBSetLogCallback(&OnLog, (int)DdbLogLevel.Warning, GCHandle.ToIntPtr(handle)),
+        Ok(NativeDdb.DDBSetLogCallback(&OnLog, (int)DdbLogLevel.Warning, GCHandle.ToIntPtr(handle)),
             "DDBSetLogCallback");
         try
         {
@@ -659,7 +639,7 @@ public unsafe class Abi11ContractTests : TestBase
             var notARaster = Path.Combine(area.TestFolder, "not-a-raster.tif");
             File.WriteAllText(notARaster, "not a raster");
 
-            Ok(NativeDdbAbi11.DDBSetThreadOperation(42), "DDBSetThreadOperation");
+            Ok(NativeDdb.DDBSetThreadOperation(42), "DDBSetThreadOperation");
             Should.Throw<DdbException>(() => DdbWrapper.GetRasterInfo(notARaster));
             // The operation id was for that call only
             Should.Throw<DdbException>(() => DdbWrapper.GetRasterInfo(notARaster));
@@ -667,7 +647,7 @@ public unsafe class Abi11ContractTests : TestBase
         finally
         {
             // Returns once no thread is inside the callback any more
-            Ok(NativeDdbAbi11.DDBSetLogCallback(null, 0, IntPtr.Zero), "DDBSetLogCallback(NULL)");
+            Ok(NativeDdb.DDBSetLogCallback(null, 0, IntPtr.Zero), "DDBSetLogCallback(NULL)");
             handle.Free();
         }
 
@@ -678,9 +658,9 @@ public unsafe class Abi11ContractTests : TestBase
         string.Join(",", records.Select(r => r.OpId).Distinct().Order())
             .ShouldBe("0,42", "the first call logs with operation 42, the second with none");
 
-        Fails(NativeDdbAbi11.DDBSetLogCallback(&OnLog, (int)DdbLogLevel.Fatal + 1, IntPtr.Zero), DdbResult.InvalidArgs,
+        Fails(NativeDdb.DDBSetLogCallback(&OnLog, (int)DdbLogLevel.Fatal + 1, IntPtr.Zero), DdbResult.InvalidArgs,
             "DDBSetLogCallback(minLevel 6)");
-        Fails(NativeDdbAbi11.DDBSetLogCallback(&OnLog, -1, IntPtr.Zero), DdbResult.InvalidArgs,
+        Fails(NativeDdb.DDBSetLogCallback(&OnLog, -1, IntPtr.Zero), DdbResult.InvalidArgs,
             "DDBSetLogCallback(minLevel -1)");
     }
 
@@ -745,16 +725,16 @@ public unsafe class Abi11ContractTests : TestBase
                      $$"""{"a.txt": "{{TextHash}}", "b.txt": "{{TextHash}}"}""" // b.txt is not in the delta
                  })
         {
-            Fails(NativeDdbAbi11.DDBApplyDeltaEx(deltaJson, source, destination, (int)MergeStrategy.KeepTheirs, "[]",
+            Fails(NativeDdb.DDBApplyDeltaEx(deltaJson, source, destination, (int)MergeStrategy.KeepTheirs, "[]",
                 invalid, out _), DdbResult.InvalidArgs, $"DDBApplyDeltaEx({invalid})");
             File.Exists(Path.Combine(source, TextName)).ShouldBeTrue("an invalid call changes nothing");
             File.Exists(Path.Combine(destination, TextName)).ShouldBeFalse("an invalid call changes nothing");
         }
 
-        Fails(NativeDdbAbi11.DDBApplyDeltaEx(null, source, destination, (int)MergeStrategy.KeepTheirs, "[]", null, out _),
+        Fails(NativeDdb.DDBApplyDeltaEx(null, source, destination, (int)MergeStrategy.KeepTheirs, "[]", null, out _),
             DdbResult.InvalidArgs, "DDBApplyDeltaEx(NULL delta)");
 
-        Ok(NativeDdbAbi11.DDBApplyDeltaEx(deltaJson, source, destination, (int)MergeStrategy.KeepTheirs, "[]",
+        Ok(NativeDdb.DDBApplyDeltaEx(deltaJson, source, destination, (int)MergeStrategy.KeepTheirs, "[]",
             $$"""{"a.txt": "{{TextHash}}"}""", out var conflicts), "DDBApplyDeltaEx");
         ShouldEqualJson(TakeJson(conflicts), new JArray());
         File.ReadAllText(Path.Combine(destination, TextName)).ShouldBe(TextContent);
@@ -786,7 +766,7 @@ public unsafe class Abi11ContractTests : TestBase
 
     private static JObject Capabilities()
     {
-        var ptr = NativeDdbAbi11.DDBGetCapabilities();
+        var ptr = NativeDdb.DDBGetCapabilities();
         ptr.ShouldNotBe(IntPtr.Zero);
         // Owned by the library: not freed
         return (JObject)ParseJson(Marshal.PtrToStringUTF8(ptr)!);
@@ -813,13 +793,13 @@ public unsafe class Abi11ContractTests : TestBase
 
     private static JObject EffectiveConfig()
     {
-        Ok(NativeDdbAbi11.DDBGetEffectiveConfig(out var output), "DDBGetEffectiveConfig");
+        Ok(NativeDdb.DDBGetEffectiveConfig(out var output), "DDBGetEffectiveConfig");
         return (JObject)TakeJson(output);
     }
 
     private static JArray GetBuildArtifacts(string root, params string[] paths)
     {
-        Ok(NativeDdbAbi11.DDBGetBuildArtifacts(root, paths, paths.Length, out var output), "DDBGetBuildArtifacts");
+        Ok(NativeDdb.DDBGetBuildArtifacts(root, paths, paths.Length, out var output), "DDBGetBuildArtifacts");
         var artifacts = (JArray)TakeJson(output);
         artifacts.Count.ShouldBe(paths.Length, "one element per input path");
         return artifacts;
@@ -827,7 +807,7 @@ public unsafe class Abi11ContractTests : TestBase
 
     private static JArray ListEntriesEx(string root, DdbListEntriesOptions options)
     {
-        Ok(NativeDdbAbi11.DDBListEntriesEx(root, "", "", "", options, out var output), "DDBListEntriesEx");
+        Ok(NativeDdb.DDBListEntriesEx(root, "", "", "", options, out var output), "DDBListEntriesEx");
         return (JArray)TakeJson(output);
     }
 
@@ -835,32 +815,11 @@ public unsafe class Abi11ContractTests : TestBase
     /// A dataset folder <paramref name="name"/> with the contract's a.txt and, optionally, the
     /// GeoRaster, both with the contract mtime, indexed.
     /// </summary>
-    private string CreateDataset(TestArea area, string name, bool withGeoRaster)
-    {
-        var root = Path.Combine(area.TestFolder, name);
-        Directory.CreateDirectory(root);
-        DdbWrapper.Init(root);
+    private string CreateDataset(TestArea area, string name, bool withGeoRaster) =>
+        Abi11Native.CreateDataset(DdbWrapper, area, name, withGeoRaster ? _geoRaster : null);
 
-        var files = new List<string> { WriteContractFile(root, TextName, TextContent) };
-        if (withGeoRaster)
-        {
-            var raster = Path.Combine(root, GeoRasterName);
-            File.Copy(_geoRaster!, raster);
-            File.SetLastWriteTimeUtc(raster, ContractMtime);
-            files.Add(raster);
-        }
-
-        DdbWrapper.Add(root, files.ToArray());
-        return root;
-    }
-
-    private static string WriteContractFile(string root, string name, string content)
-    {
-        var path = Path.Combine(root, name);
-        File.WriteAllText(path, content, new UTF8Encoding(false));
-        File.SetLastWriteTimeUtc(path, ContractMtime);
-        return path;
-    }
+    private static string WriteContractFile(string root, string name, string content) =>
+        Abi11Native.WriteContractFile(root, name, content);
 
     private string GeoRasterHash()
     {

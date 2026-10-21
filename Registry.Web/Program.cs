@@ -253,8 +253,11 @@ public class Program
         using var host = WithInstanceType(Host.CreateDefaultBuilder(args), opts.InstanceType)
             .UseSerilog(ConfigureSerilog)
             .ConfigureServices((context, services) =>
+            {
+                services.AddDdbRuntime<NativeDdbRuntime>(context.Configuration);
                 services.AddSingleton(sp => CreateThumbnailRequestHandler(context.Configuration,
-                    sp.GetRequiredService<ILogger<ThumbnailRequestHandler>>())))
+                    sp.GetRequiredService<ILogger<ThumbnailRequestHandler>>()));
+            })
             .ConfigureWebHostDefaults(webBuilder =>
             {
                 webBuilder.Configure(app =>
@@ -339,6 +342,10 @@ public class Program
             .ConfigureServices((hostContext, services) =>
             {
                 var configuration = hostContext.Configuration;
+
+                // libddb's lifecycle first: it starts before and stops after every other hosted service
+                services.AddDdbRuntime<NativeDdbRuntime>(configuration);
+
                 var appSettingsSection = configuration.GetSection("AppSettings");
 
                 var appSettings = appSettingsSection.Get<AppSettings>();
@@ -423,46 +430,21 @@ public class Program
             .ReadFrom.Services(services)
             .Enrich.FromLogContext();
 
+    /// <summary>
+    /// Fails fast when the libddb on the library path cannot be used (XI-01): it must load, have ABI
+    /// 1.x with x >= 1 and export every function Registry calls (<see cref="DdbAbi.Verify"/>). The
+    /// library itself is configured and initialized by each host's <c>DdbRuntimeService</c>.
+    /// </summary>
     private static bool InitializeDdb()
     {
         try
         {
-
-            var nativeDdbWrapper = new NativeDdbWrapper();
-
-#if DEBUG
-            nativeDdbWrapper.RegisterProcess(true);
-            Console.WriteLine(" ?> Initialized DDB - Verbose");
-#else
-            nativeDdbWrapper.RegisterProcess(false);
-            Console.WriteLine(" ?> Initialized DDB");
-#endif
-
-            var rawVersion = nativeDdbWrapper.GetVersion();
-            Console.WriteLine(" ?> DDB version " + rawVersion);
-
-            // Remove git commit string
-            rawVersion = rawVersion.Contains(' ') ? rawVersion[..rawVersion.IndexOf(' ')] : rawVersion;
-
-            var ddbVersion = new Version(rawVersion);
-
-            if (ddbVersion < MinDdbVersion)
-            {
-                CommonUtils.WriteLineColor(
-                    $" !> DDB version is too old, please upgrade to {MinDdbVersion} or higher: {MagicStrings.DdbReleasesPageUrl}",
-                    ConsoleColor.Red);
-                return false;
-            }
-
+            Console.WriteLine(" ?> DDB: " + DdbAbi.Verify());
             return true;
         }
-        catch (Exception e)
+        catch (DdbAbiMismatchException e)
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($" !> Unable to load DDB lib: {e.Message}");
-            Console.ResetColor();
-            Console.WriteLine();
-
+            CommonUtils.WriteLineColor($" !> Unable to use the DDB library: {e.Message}", ConsoleColor.Red);
             Console.WriteLine(
                 $" ?> Check installation instructions on {MagicStrings.DdbInstallPageUrl} and try again.");
             Console.WriteLine($" ?> Releases page: {MagicStrings.DdbReleasesPageUrl}");
@@ -1141,26 +1123,6 @@ public class Program
         }
 
         return true;
-    }
-
-    /// <summary>
-    /// The minimum required version of DroneDB (taken from assembly metadata)
-    /// </summary>
-    private static readonly Version MinDdbVersion = GetMinDdbVersion();
-
-    private static Version GetMinDdbVersion()
-    {
-        var assembly = typeof(Program).Assembly;
-        var ddbVersionAttribute = assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
-            .FirstOrDefault(attr => attr.Key == "DdbVersion");
-
-        if (ddbVersionAttribute?.Value != null && Version.TryParse(ddbVersionAttribute.Value, out var version))
-        {
-            return version;
-        }
-
-        // Fallback to default version if not found
-        return new Version(1, 2, 0);
     }
 
     #region EF Tool

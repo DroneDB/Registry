@@ -38,7 +38,7 @@ public class NativeDdbWrapperTests : TestBase
 
     private static readonly string TestPointCloud2Url = TestData.Url("point-clouds/brighton-beach.laz");
 
-    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper(true);
+    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper();
 
     [OneTimeSetUp]
     public void Setup()
@@ -56,8 +56,14 @@ public class NativeDdbWrapperTests : TestBase
         }
 
 
-        DdbWrapper.RegisterProcess(true);
+        // The startup handshake, then the initialization (DdbRuntimeService does both in a host)
+        DdbAbi.Verify();
+        new NativeDdbRuntime().RegisterProcess(true);
     }
+
+    /// <summary>The build object of one entry (DDBGetBuildArtifacts), null for a path that is not indexed.</summary>
+    private static EntryBuild BuildOf(string ddbPath, string path) =>
+        DdbWrapper.GetBuildArtifacts(ddbPath, [path]).ShouldHaveSingleItem().Build;
 
     [Test]
     public void GetVersion_HasValue()
@@ -80,8 +86,9 @@ public class NativeDdbWrapperTests : TestBase
         Action act = () => DdbWrapper.Init("nonexistant");
         Should.Throw<DdbException>(act);
 
+        // A null argument is a programming error, rejected before libddb is called (RQ-08)
         act = () => DdbWrapper.Init(null);
-        Should.Throw<DdbException>(act);
+        Should.Throw<ArgumentNullException>(act);
 
     }
 
@@ -105,7 +112,7 @@ public class NativeDdbWrapperTests : TestBase
         Should.Throw<DdbException>(act);
 
         act = () => DdbWrapper.Add(null, "test");
-        Should.Throw<DdbException>(act);
+        Should.Throw<ArgumentNullException>(act);
 
         act = () => DdbWrapper.Add("nonexistant", (string)null);
         Should.Throw<DdbException>(act);
@@ -224,7 +231,7 @@ public class NativeDdbWrapperTests : TestBase
         Should.Throw<DdbException>(act);
 
         act = () => DdbWrapper.List(null, "wefrfwef");
-        Should.Throw<DdbException>(act);
+        Should.Throw<ArgumentNullException>(act);
 
 /*        act = () => DdbWrapper.List("invalid", (string)null);
         act.Should().Throw<DdbException>();
@@ -438,7 +445,7 @@ public class NativeDdbWrapperTests : TestBase
         Should.Throw<DdbException>(act);
 
         act = () => DdbWrapper.Remove(null, "wefrfwef");
-        Should.Throw<DdbException>(act);
+        Should.Throw<ArgumentNullException>(act);
 
     }
 
@@ -847,12 +854,12 @@ public class NativeDdbWrapperTests : TestBase
 
         res.Count.ShouldBe(1);
 
-        DdbWrapper.IsBuildable(ddbPath, Path.GetFileName(destPath)).ShouldBeTrue();
+        BuildOf(ddbPath, Path.GetFileName(destPath))!.Buildable.ShouldBeTrue();
 
     }
 
     [Test]
-    public void GetBuildStatus_MatchesPerEntryCalls()
+    public void GetBuildArtifacts_OneElementPerPath_InInputOrder()
     {
         using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
 
@@ -865,20 +872,24 @@ public class NativeDdbWrapperTests : TestBase
         var cloud = Path.GetFileName(destPath);
 
         string[] paths = [cloud, "DJI_0027.JPG", "Sub", "missing.tif"];
-        var statuses = DdbWrapper.GetBuildStatus(ddbPath, paths);
+        var artifacts = DdbWrapper.GetBuildArtifacts(ddbPath, paths);
 
-        statuses.Select(s => s.Path).ShouldBe(paths);
-        statuses[0].Exists.ShouldBeTrue();
-        statuses[0].Buildable.ShouldBeTrue();
-        statuses[0].Complete.ShouldBe(DdbWrapper.IsBuildComplete(ddbPath, cloud));
-        statuses[1].Buildable.ShouldBe(DdbWrapper.IsBuildable(ddbPath, "DJI_0027.JPG"));
-        statuses[2].Exists.ShouldBeTrue();
-        statuses[2].Buildable.ShouldBeFalse();
-        statuses[3].Exists.ShouldBeFalse();
-        statuses[3].Buildable.ShouldBeFalse();
-        statuses[3].Complete.ShouldBeFalse();
+        artifacts.Select(a => a.Path).ShouldBe(paths);
+        artifacts[0].Exists.ShouldBeTrue();
+        artifacts[0].Type.ShouldBe(EntryType.PointCloud);
+        artifacts[0].Build!.Buildable.ShouldBeTrue();
+        artifacts[0].Build!.Source.ShouldBe(cloud);
+        artifacts[0].Build!.Hash.ShouldBe(artifacts[0].Hash);
+        artifacts[0].Build!.State.ShouldBe(BuildState.None);
+        artifacts[0].Build!.Artifacts.ShouldBeEmpty();
+        artifacts[1].Build!.Buildable.ShouldBeFalse();
+        artifacts[2].Exists.ShouldBeTrue();
+        artifacts[2].Hash.ShouldBeNull();
+        artifacts[2].Build!.Buildable.ShouldBeFalse();
+        artifacts[3].Exists.ShouldBeFalse();
+        artifacts[3].Build.ShouldBeNull();
 
-        DdbWrapper.GetBuildStatus(ddbPath, []).ShouldBeEmpty();
+        DdbWrapper.GetBuildArtifacts(ddbPath, []).ShouldBeEmpty();
     }
 
     [Test]
@@ -887,7 +898,7 @@ public class NativeDdbWrapperTests : TestBase
 
         using var test = new TestFS(TestDelta2ArchiveUrl, BaseTestFolder);
 
-        DdbWrapper.IsBuildable(test.TestFolder, "lol.txt").ShouldBeFalse();
+        BuildOf(test.TestFolder, "lol.txt")!.Buildable.ShouldBeFalse();
 
     }
 
@@ -909,15 +920,15 @@ public class NativeDdbWrapperTests : TestBase
         res.Count.ShouldBe(1);
 
         // Test that IsBuildActive is consistent for buildable files
-        var isActive = DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath));
+        var isActive = (BuildOf(ddbPath, Path.GetFileName(destPath))!.State == BuildState.Building);
 
         // For buildable files, the API should work without exceptions
         // The exact result depends on whether there are pending builds or not
         TestContext.WriteLine($"IsBuildActive for point cloud file returns: {isActive}");
 
         // Call it multiple times to ensure consistency
-        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).ShouldBe(isActive);
-        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).ShouldBe(isActive);
+        (BuildOf(ddbPath, Path.GetFileName(destPath))!.State == BuildState.Building).ShouldBe(isActive);
+        (BuildOf(ddbPath, Path.GetFileName(destPath))!.State == BuildState.Building).ShouldBe(isActive);
     }
 
     [Test]
@@ -926,7 +937,7 @@ public class NativeDdbWrapperTests : TestBase
         using var test = new TestFS(TestDelta2ArchiveUrl, BaseTestFolder);
 
         // Text files are not buildable, so build should never be active
-        DdbWrapper.IsBuildActive(test.TestFolder, "lol.txt").ShouldBeFalse();
+        (BuildOf(test.TestFolder, "lol.txt")!.State == BuildState.Building).ShouldBeFalse();
     }
 
     [Test]
@@ -946,7 +957,7 @@ public class NativeDdbWrapperTests : TestBase
 
         res.Count.ShouldBe(1);
 
-        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).ShouldBeFalse();
+        (BuildOf(ddbPath, Path.GetFileName(destPath))!.State == BuildState.Building).ShouldBeFalse();
 
         // The build takes "<build>/<hash>/<output>.building" and writes its PID into it once it
         // holds the kernel lock: that write is the moment the build is active. The hash folder is
@@ -965,11 +976,11 @@ public class NativeDdbWrapperTests : TestBase
         locked.Wait(TimeSpan.FromMinutes(2)).ShouldBeTrue("the build never took its lock");
 
         // While the build is in progress, IsBuildActive should return true
-        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).ShouldBeTrue();
+        (BuildOf(ddbPath, Path.GetFileName(destPath))!.State == BuildState.Building).ShouldBeTrue();
 
         build.GetAwaiter().GetResult();
 
-        DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).ShouldBeFalse();
+        (BuildOf(ddbPath, Path.GetFileName(destPath))!.State == BuildState.Building).ShouldBeFalse();
 
     }
 
@@ -982,10 +993,10 @@ public class NativeDdbWrapperTests : TestBase
         var textFile = "lol.txt";
 
         // Verify it's not buildable
-        DdbWrapper.IsBuildable(test.TestFolder, textFile).ShouldBeFalse();
+        BuildOf(test.TestFolder, textFile)!.Buildable.ShouldBeFalse();
 
         // Test IsBuildActive on non-buildable file
-        var isActive = DdbWrapper.IsBuildActive(test.TestFolder, textFile);
+        var isActive = (BuildOf(test.TestFolder, textFile)!.State == BuildState.Building);
 
         // For non-buildable files, build should never be active
         isActive.ShouldBeFalse();

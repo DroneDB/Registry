@@ -35,7 +35,7 @@ public class InvalidateAllDatasetCachesTest : TestBase
     private Mock<ICacheManager> _cacheManagerMock;
     private ObjectsManager _objectsManager;
 
-    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper(true);
+    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper();
 
     [SetUp]
     public void Setup()

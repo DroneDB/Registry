@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
+using System.Runtime.InteropServices.Marshalling;
 using System.Threading;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -14,500 +14,150 @@ using Registry.Ports.DroneDB;
 namespace Registry.Adapters.DroneDB;
 
 /// <summary>
-/// P/Invoke wrapper for the native DroneDB C API.
+/// <see cref="IDdbWrapper"/> over the libddb C ABI 1.1 (<see cref="NativeDdb"/>). Each member validates
+/// its arguments, then makes one call through <see cref="NativeCall"/>, which owns the error, free and
+/// deserialize envelope. The process lifecycle (configuration, initialization, shutdown) is
+/// <see cref="NativeDdbRuntime"/>'s; the ABI is checked once at startup (<see cref="DdbAbi"/>).
 /// </summary>
 public class NativeDdbWrapper : IDdbWrapper
 {
-    [DllImport("ddb", EntryPoint = "DDBRegisterProcess")]
-    private static extern void _RegisterProcess(bool verbose = false);
+    // DDBAddWithOptions policy, not caller-configurable: never recurse (a recursive native walk would
+    // report paths the caller never provided, breaking the completeness contract) and keep the native
+    // conflict-retry budget at its default of 2
+    private const int MaxConflictRetries = 2;
 
-    public NativeDdbWrapper()
-    {
-    }
+    // The entry types never change in a process
+    private static readonly Lazy<IReadOnlyList<EntryTypeInfo>> EntryTypes = new(() =>
+        NativeCall.Invoke<List<EntryTypeInfo>>(nameof(NativeDdb.DDBGetEntryTypes),
+            (out IntPtr output) => NativeDdb.DDBGetEntryTypes(out output)));
 
-    public NativeDdbWrapper(bool verbose)
-    {
-        _RegisterProcess(verbose);
-    }
-
-    public void RegisterProcess(bool verbose = false)
-    {
-        _RegisterProcess(verbose);
-    }
-
-    public string TileMimeType { get; } = "image/png";
-    public string ThumbnailMimeType { get; } = "image/webp";
-
-    [DllImport("ddb", EntryPoint = "DDBGetVersion")]
-    private static extern IntPtr _GetVersion();
+    public string TileMimeType => "image/png";
+    public string ThumbnailMimeType => "image/webp";
 
     public string GetVersion()
     {
-        var ptr = _GetVersion();
-
-        var res = Marshal.PtrToStringUTF8(ptr);
-
-        if (string.IsNullOrWhiteSpace(res))
-            throw new DdbException("Unable to get version");
-
-        return res;
+        var version = Marshal.PtrToStringUTF8(NativeDdb.DDBGetVersion());
+        return string.IsNullOrWhiteSpace(version) ? throw new DdbException("Unable to get version") : version;
     }
 
-    // Thin forwarders: implementation lives in DdbResultMapper (public static, unit-testable
-    // without InternalsVisibleTo); call sites in this class keep their unqualified names.
-    private static string SafeGetLastError(string? operation = null) => DdbResultMapper.SafeGetLastError(operation);
-
-    private static void ThrowForFinalResult(DdbResult result, string operation) => DdbResultMapper.ThrowForFinalResult(result, operation);
-
-    [DllImport("ddb", EntryPoint = "DDBInit")]
-    private static extern DdbResult _Init([MarshalAs(UnmanagedType.LPUTF8Str)] string directory, out IntPtr outPath);
+    // ---------------------------------------------------------------- index
 
     public string Init(string directory)
     {
-        DdbResult result;
-        try
-        {
-            result = _Init(directory, out var outPath);
-            if (result == DdbResult.Success)
-            {
-                var res = MarshalAndFreeUtf8(outPath);
-
-                if (string.IsNullOrWhiteSpace(res))
-                    throw new DdbException("Unable to init");
-
-                return res;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("init")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "init");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("init"));
+        ArgumentNullException.ThrowIfNull(directory);
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBInit),
+            (out IntPtr output) => NativeDdb.DDBInit(directory, out output));
     }
 
-    /// <summary>
-    /// Allocates an array of IntPtr, each pointing to a null-terminated UTF-8 encoded copy of the corresponding string.
-    /// The caller must free each pointer with Marshal.FreeHGlobal after use.
-    /// </summary>
-    private static IntPtr[] MarshalStringArrayToUtf8(string[] strings)
-    {
-        var ptrs = new IntPtr[strings.Length];
-        for (var i = 0; i < strings.Length; i++)
-        {
-            var bytes = Encoding.UTF8.GetBytes(strings[i] + '\0');
-            ptrs[i] = Marshal.AllocHGlobal(bytes.Length);
-            Marshal.Copy(bytes, 0, ptrs[i], bytes.Length);
-        }
-        return ptrs;
-    }
-
-    private static void FreeUtf8StringArray(IntPtr[] ptrs)
-    {
-        foreach (var ptr in ptrs)
-        {
-            if (ptr != IntPtr.Zero)
-                Marshal.FreeHGlobal(ptr);
-        }
-    }
-
-    private static string? MarshalAndFreeUtf8(IntPtr ptr)
-    {
-        var str = Marshal.PtrToStringUTF8(ptr);
-        _DDBFree(ptr);
-        return str;
-    }
-
-    /// <summary>
-    /// Deserializes a native JSON result in place (<see cref="NativeJson"/>) and frees it.
-    /// A missing or null result throws <see cref="DdbException"/> with <paramref name="emptyMessage"/>.
-    /// </summary>
-    private static T DeserializeAndFree<T>(IntPtr output, string emptyMessage) where T : class
-    {
-        try
-        {
-            return NativeJson.Deserialize<T>(output) ?? throw new DdbException(emptyMessage);
-        }
-        finally
-        {
-            if (output != IntPtr.Zero)
-                _DDBFree(output);
-        }
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBAdd")]
-    private static extern DdbResult _Add([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        IntPtr[] paths,
-        int numPaths, out IntPtr output, bool recursive);
-
-    public List<Entry> Add(string ddbPath, string path, bool recursive = false)
-    {
-        return Add(ddbPath, [path], recursive);
-    }
+    public List<Entry> Add(string ddbPath, string path, bool recursive = false) => Add(ddbPath, [path], recursive);
 
     public List<Entry> Add(string ddbPath, string[] paths, bool recursive = false)
     {
-        paths = paths.Select(p => p?.Replace('\\', '/')).ToArray();
-        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
-        var result = DdbResult.Exception;
-        try
-        {
-            result = _Add(ddbPath, utf8Ptrs, paths.Length, out var output, recursive);
-            if (result == DdbResult.Success)
-            {
-                return DeserializeAndFree<List<Entry>>(output, "Unable to add");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("add")}\", check inner exception for details",
-                ex);
-        }
-        finally
-        {
-            FreeUtf8StringArray(utf8Ptrs);
-        }
-
-        // Non-success results map to typed exceptions (Busy → DdbBusyException) so callers can
-        // retry instead of matching on a message string.
-        ThrowForFinalResult(result, "add");
-
-        // Unreachable in practice (Success returns above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("add"));
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        var normalized = NormalizeSeparators(paths);
+        return NativeCall.Invoke<List<Entry>>(nameof(NativeDdb.DDBAdd),
+            (out IntPtr output) => NativeDdb.DDBAdd(ddbPath, normalized, normalized.Length, out output, recursive));
     }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct NativeAddOptions
-    {
-        [MarshalAs(UnmanagedType.I1)] public bool Recursive;
-        [MarshalAs(UnmanagedType.I1)] public bool StopOnError;
-        public int MaxConflictRetries;
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBAddWithOptions")]
-    private static extern DdbResult _AddWithOptions([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        IntPtr[] paths, int numPaths, ref NativeAddOptions options, out IntPtr output);
-
-    // Fixed policy (not caller-configurable): never recurse (a recursive native walk would report
-    // paths the caller never provided, breaking the completeness contract) and keep the native
-    // conflict-retry budget at its default of 2. The NativeAddOptions struct and the
-    // DDBAddWithOptions ABI are unchanged.
-    private static NativeAddOptions BatchAddOptions(bool stopOnError) =>
-        new() { Recursive = false, StopOnError = stopOnError, MaxConflictRetries = 2 };
 
     public BatchAddResult AddWithOptions(string ddbPath, string[] paths, bool stopOnError = false)
     {
-        paths = paths.Select(p => p == null ? null! : NormalizeSeparators(p)).ToArray();
-        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
-        var options = BatchAddOptions(stopOnError);
-        try
-        {
-            return RunBatchAdd("addWithOptions",
-                (out IntPtr output) => _AddWithOptions(ddbPath, utf8Ptrs, paths.Length, ref options, out output));
-        }
-        finally
-        {
-            FreeUtf8StringArray(utf8Ptrs);
-        }
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        var normalized = NormalizeSeparators(paths);
+        var options = DdbAddOptions.Create(false, stopOnError, MaxConflictRetries);
+        return NativeCall.Invoke<BatchAddResult>(nameof(NativeDdb.DDBAddWithOptions),
+            (out IntPtr output) =>
+                NativeDdb.DDBAddWithOptions(ddbPath, normalized, normalized.Length, in options, out output));
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct NativeAddHint
+    public unsafe BatchAddResult AddWithHints(string ddbPath, IReadOnlyList<AddItem> files, bool stopOnError = false)
     {
-        public IntPtr Path;
-        public IntPtr Sha256;
-        public long Size;
-        public double Mtime;
-    }
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        ArgumentNullException.ThrowIfNull(files);
 
-    [DllImport("ddb", EntryPoint = "DDBAddWithHints")]
-    private static extern DdbResult _AddWithHints([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [In] NativeAddHint[] files, int numFiles, ref NativeAddOptions options, out IntPtr output);
-
-    private static int _hintsUnsupported;
-
-    public BatchAddResult AddWithHints(string ddbPath, IReadOnlyList<AddItem> files, bool stopOnError = false)
-    {
-        // An older libddb has no DDBAddWithHints: the hints only save a re-read, so add as before
-        if (Volatile.Read(ref _hintsUnsupported) != 0 || files.All(f => f.Hint == null))
+        if (files.All(f => f.Hint == null))
             return AddWithOptions(ddbPath, files.Select(f => f.Path).ToArray(), stopOnError);
 
-        var paths = MarshalStringArrayToUtf8(files.Select(f => NormalizeSeparators(f.Path)).ToArray());
-        var hashes = MarshalStringArrayToUtf8(files.Select(f => f.Hint?.Sha256 ?? string.Empty).ToArray());
-        var hints = new NativeAddHint[files.Count];
-        for (var i = 0; i < files.Count; i++)
+        // DDBAddHint holds UTF-8 pointers owned by the caller for the duration of the call
+        var hints = new DdbAddHint[files.Count];
+        try
         {
-            var hint = files[i].Hint;
-            hints[i] = new NativeAddHint
+            for (var i = 0; i < files.Count; i++)
             {
-                Path = paths[i],
-                Sha256 = hashes[i],
-                Size = hint?.Size ?? -1,
-                Mtime = hint == null ? 0 : (hint.ModifiedUtc.ToUniversalTime() - DateTime.UnixEpoch).TotalSeconds
-            };
-        }
+                var hint = files[i].Hint;
+                hints[i] = new DdbAddHint
+                {
+                    Path = (IntPtr)Utf8StringMarshaller.ConvertToUnmanaged(NormalizeSeparators(files[i].Path)),
+                    Sha256 = (IntPtr)Utf8StringMarshaller.ConvertToUnmanaged(hint?.Sha256 ?? string.Empty),
+                    Size = hint?.Size ?? -1,
+                    Mtime = hint == null ? 0 : (hint.ModifiedUtc.ToUniversalTime() - DateTime.UnixEpoch).TotalSeconds
+                };
+            }
 
-        var options = BatchAddOptions(stopOnError);
-        try
-        {
-            return RunBatchAdd("addWithHints",
-                (out IntPtr output) => _AddWithHints(ddbPath, hints, hints.Length, ref options, out output));
-        }
-        catch (DdbException ex) when (ex.InnerException is EntryPointNotFoundException)
-        {
-            Interlocked.Exchange(ref _hintsUnsupported, 1);
-            return AddWithOptions(ddbPath, files.Select(f => f.Path).ToArray(), stopOnError);
+            var options = DdbAddOptions.Create(false, stopOnError, MaxConflictRetries);
+            fixed (DdbAddHint* pointer = hints)
+            {
+                var first = (IntPtr)pointer;
+                return NativeCall.Invoke<BatchAddResult>(nameof(NativeDdb.DDBAddWithHints),
+                    (out IntPtr output) =>
+                        NativeDdb.DDBAddWithHints(ddbPath, (DdbAddHint*)first, hints.Length, in options, out output));
+            }
         }
         finally
         {
-            FreeUtf8StringArray(paths);
-            FreeUtf8StringArray(hashes);
+            foreach (var hint in hints)
+            {
+                Utf8StringMarshaller.Free((byte*)hint.Path);
+                Utf8StringMarshaller.Free((byte*)hint.Sha256);
+            }
         }
     }
 
-    private delegate DdbResult BatchAddCall(out IntPtr output);
-
-    // Runs a native batch add and maps its JSON result, translating failures as the other calls do
-    private static BatchAddResult RunBatchAdd(string operation, BatchAddCall call)
-    {
-        var result = DdbResult.Exception;
-        try
-        {
-            result = call(out var output);
-            if (result == DdbResult.Success)
-                return DeserializeAndFree<BatchAddResult>(output, "Unable to add");
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError(operation)}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, operation);
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError(operation));
-    }
-
-    private static string NormalizeSeparators(string path) => path.Replace('\\', '/');
-
-    [DllImport("ddb", EntryPoint = "DDBRemove")]
-    private static extern DdbResult _Remove([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        IntPtr[] paths,
-        int numPaths);
-
-    public void Remove(string ddbPath, string path)
-    {
-        Remove(ddbPath, [path]);
-    }
+    public void Remove(string ddbPath, string path) => Remove(ddbPath, [path]);
 
     public void Remove(string ddbPath, string[] paths)
     {
-        paths = paths.Select(p => p?.Replace('\\', '/')).ToArray();
-        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
-        DdbResult result;
-        try
-        {
-            result = _Remove(ddbPath, utf8Ptrs, paths?.Length ?? 0);
-            if (result == DdbResult.Success) return;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError()}\", check inner exception for details",
-                ex);
-        }
-        finally
-        {
-            FreeUtf8StringArray(utf8Ptrs);
-        }
-
-        ThrowForFinalResult(result, "remove");
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        var normalized = NormalizeSeparators(paths);
+        NativeCall.Invoke(nameof(NativeDdb.DDBRemove),
+            () => NativeDdb.DDBRemove(ddbPath, normalized, normalized.Length));
     }
 
-    [DllImport("ddb", EntryPoint = "DDBInfo")]
-    private static extern DdbResult _Info(
-        IntPtr[] paths,
-        int numPaths,
-        out IntPtr output,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string format, bool recursive = false,
-        int maxRecursionDepth = 0, [MarshalAs(UnmanagedType.LPUTF8Str)] string geometry = "auto",
-        bool withHash = false, bool stopOnError = true);
+    public List<Entry> Info(string path, bool recursive = false, int maxRecursionDepth = 0, bool withHash = false) =>
+        Info([path], recursive, maxRecursionDepth, withHash);
 
-    public List<Entry> Info(string path, bool recursive = false, int maxRecursionDepth = 0,
-        bool withHash = false)
+    public List<Entry> Info(string[] paths, bool recursive = false, int maxRecursionDepth = 0, bool withHash = false)
     {
-        return Info([path], recursive, maxRecursionDepth, withHash);
+        ArgumentNullException.ThrowIfNull(paths);
+        return NativeCall.Invoke<List<Entry>>(nameof(NativeDdb.DDBInfo),
+            (out IntPtr output) => NativeDdb.DDBInfo(paths, paths.Length, out output, "json", recursive,
+                maxRecursionDepth, "auto", withHash, true));
     }
-
-    public List<Entry> Info(string[] paths, bool recursive = false, int maxRecursionDepth = 0,
-        bool withHash = false)
-    {
-        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
-        DdbResult result;
-        try
-        {
-            result = _Info(utf8Ptrs, paths?.Length ?? 0, out var output, "json", recursive, maxRecursionDepth, "auto",
-                                    withHash);
-            if (result == DdbResult.Success)
-            {
-                return DeserializeAndFree<List<Entry>>(output, "Unable get info");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-
-        catch (DdbException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("info")}\", check inner exception for details",
-                ex);
-        }
-        finally
-        {
-            FreeUtf8StringArray(utf8Ptrs);
-        }
-
-        ThrowForFinalResult(result, "info");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("info"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBReleaseConnections")]
-    private static extern DdbResult _ReleaseConnections([MarshalAs(UnmanagedType.LPUTF8Str)] string path,
-        out int closed);
 
     public int ReleaseConnections(string path)
     {
-        if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("Path is null or empty");
-
-        try
-        {
-            var result = _ReleaseConnections(path, out var closed);
-            ThrowForFinalResult(result, "release connections");
-            return closed;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var closed = 0;
+        NativeCall.Invoke(nameof(NativeDdb.DDBReleaseConnections),
+            () => NativeDdb.DDBReleaseConnections(path, out closed));
+        return closed;
     }
-
-    [DllImport("ddb", EntryPoint = "DDBCheckpoint")]
-    private static extern DdbResult _Checkpoint([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        out int complete);
-
-    private static int _checkpointUnsupported;
 
     public bool Checkpoint(string ddbPath)
     {
-        if (string.IsNullOrWhiteSpace(ddbPath))
-            throw new ArgumentException("DDB path is null or empty");
-
-        // A libddb without DDBCheckpoint checkpoints every connection that wrote when it is
-        // released: its database file already holds the data
-        if (Volatile.Read(ref _checkpointUnsupported) != 0)
-            return true;
-
-        try
-        {
-            var result = _Checkpoint(ddbPath, out var complete);
-            ThrowForFinalResult(result, "checkpoint");
-            return complete != 0;
-        }
-        catch (EntryPointNotFoundException)
-        {
-            Interlocked.Exchange(ref _checkpointUnsupported, 1);
-            return true;
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(ddbPath);
+        var complete = 0;
+        NativeCall.Invoke(nameof(NativeDdb.DDBCheckpoint), () => NativeDdb.DDBCheckpoint(ddbPath, out complete));
+        return complete != 0;
     }
-
-    [DllImport("ddb", EntryPoint = "DDBGet")]
-    private static extern DdbResult _Get([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out IntPtr output);
 
     public Entry? GetEntry(string ddbPath, string path)
     {
-        if (ddbPath == null)
-            throw new ArgumentException("DDB path is null");
-
-        if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("Path is null or empty");
-
-        try
-        {
-            var result = _Get(ddbPath, path.Replace('\\', '/'), out var output);
-
-            if (result == DdbResult.NotFound)
-                return null;
-
-            ThrowForFinalResult(result, "get");
-
-            return DeserializeAndFree<Entry>(output, "Unable to get entry");
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get")}\", check inner exception for details",
-                ex);
-        }
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var relative = NormalizeSeparators(path);
+        return NativeCall.InvokeOrNotFound<Entry>(nameof(NativeDdb.DDBGet),
+            (out IntPtr output) => NativeDdb.DDBGet(ddbPath, relative, out output));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBListEntries")]
-    private static extern DdbResult _ListEntries([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string folder,
-        [MarshalAs(UnmanagedType.I1)] bool recursive,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string namePattern,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string types,
-        [MarshalAs(UnmanagedType.I1)] bool withDetails,
-        out IntPtr output);
 
     public List<Entry> ListEntries(string ddbPath, EntryQuery query) => ListEntries<Entry>(ddbPath, query, true);
 
@@ -523,2209 +173,489 @@ public class NativeDdbWrapper : IDdbWrapper
         var types = query.Types is { Count: > 0 }
             ? string.Join(',', query.Types.Distinct().Select(t => t.ToString().ToLowerInvariant()))
             : string.Empty;
+        var folder = NormalizeSeparators(query.Path ?? string.Empty);
+        var namePattern = query.NamePattern ?? string.Empty;
 
-        try
-        {
-            var result = _ListEntries(ddbPath, (query.Path ?? string.Empty).Replace('\\', '/'), query.Recursive,
-                query.NamePattern ?? string.Empty, types, withDetails, out var output);
-            ThrowForFinalResult(result, "list entries");
-            return DeserializeAndFree<List<T>>(output, "Unable to list entries");
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("list entries")}\", check inner exception for details",
-                ex);
-        }
+        return NativeCall.Invoke<List<T>>(nameof(NativeDdb.DDBListEntries),
+            (out IntPtr output) => NativeDdb.DDBListEntries(ddbPath, folder, query.Recursive, namePattern, types,
+                withDetails, out output));
     }
 
-    [DllImport("ddb", EntryPoint = "DDBList")]
-    private static extern DdbResult _List([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        IntPtr[] paths,
-        int numPaths,
-        out IntPtr output,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string format,
-        bool recursive,
-        int maxRecursionDepth = 0);
-
-    public List<Entry> List(string ddbPath, string path, bool recursive = false, int maxRecursionDepth = 0)
-    {
-        return List(ddbPath, [path], recursive, maxRecursionDepth);
-    }
+    public List<Entry> List(string ddbPath, string path, bool recursive = false, int maxRecursionDepth = 0) =>
+        List(ddbPath, [path], recursive, maxRecursionDepth);
 
     public List<Entry> List(string ddbPath, string[] paths, bool recursive = false, int maxRecursionDepth = 0)
     {
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        ArgumentNullException.ThrowIfNull(paths);
         if (paths.Length == 0)
-            throw new ArgumentException("Paths is empty");
+            throw new ArgumentException("Paths is empty", nameof(paths));
 
-        paths = paths.Select(item => item.Replace('\\', '/')).ToArray();
-        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
-        DdbResult lst;
-        try
-        {
-            lst = _List(ddbPath, utf8Ptrs, paths.Length, out var output, "json", recursive, maxRecursionDepth);
-
-            if (lst == DdbResult.Success)
-            {
-                return DeserializeAndFree<List<Entry>>(output, "Unable get list");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError()}\", check inner exception for details",
-                ex);
-        }
-        finally
-        {
-            FreeUtf8StringArray(utf8Ptrs);
-        }
-
-        ThrowForFinalResult(lst, "list");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("list"));
+        var normalized = NormalizeSeparators(paths);
+        return NativeCall.Invoke<List<Entry>>(nameof(NativeDdb.DDBList),
+            (out IntPtr output) => NativeDdb.DDBList(ddbPath, normalized, normalized.Length, out output, "json",
+                recursive, maxRecursionDepth));
     }
 
-    [DllImport("ddb", EntryPoint = "DDBAppendPassword")]
-    private static extern DdbResult _AppendPassword(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string password);
-
-    public void AppendPassword(string ddbPath, string password)
-    {
-        DdbResult result;
-        try
-        {
-            result = _AppendPassword(ddbPath, password);
-            if (result == DdbResult.Success) return;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("append password")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "append password");
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBVerifyPassword")]
-    private static extern DdbResult _VerifyPassword(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string password,
-        out bool verified);
+    public void AppendPassword(string ddbPath, string password) =>
+        NativeCall.Invoke(nameof(NativeDdb.DDBAppendPassword), () => NativeDdb.DDBAppendPassword(ddbPath, password));
 
     public bool VerifyPassword(string ddbPath, string password)
     {
-        DdbResult result;
-        try
-        {
-            result = _VerifyPassword(ddbPath, password, out var res);
-            if (result == DdbResult.Success) return res;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("verify password")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "verify password");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("verify password"));
+        var verified = false;
+        NativeCall.Invoke(nameof(NativeDdb.DDBVerifyPassword),
+            () => NativeDdb.DDBVerifyPassword(ddbPath, password, out verified));
+        return verified;
     }
 
-    [DllImport("ddb", EntryPoint = "DDBClearPasswords")]
-    private static extern DdbResult _ClearPasswords(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath);
-
-    public void ClearPasswords(string ddbPath)
-    {
-        DdbResult result;
-        try
-        {
-            result = _ClearPasswords(ddbPath);
-            if (result == DdbResult.Success) return;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError()}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "clear passwords");
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBChattr")]
-    private static extern DdbResult _ChangeAttributes(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath, [MarshalAs(UnmanagedType.LPUTF8Str)] string attributesJson,
-        out IntPtr jsonOutput);
+    public void ClearPasswords(string ddbPath) =>
+        NativeCall.Invoke(nameof(NativeDdb.DDBClearPasswords), () => NativeDdb.DDBClearPasswords(ddbPath));
 
     public Dictionary<string, object> ChangeAttributes(string ddbPath, Dictionary<string, object> attributes)
     {
-        if (attributes == null)
-            throw new ArgumentException("Attributes is null");
-
-        DdbResult result;
-        try
-        {
-            var attrs = JsonConvert.SerializeObject(attributes);
-
-            result = _ChangeAttributes(ddbPath, attrs, out var output);
-            if (result == DdbResult.Success)
-            {
-                var res = MarshalAndFreeUtf8(output);
-
-                if (string.IsNullOrWhiteSpace(res))
-                    throw new InvalidOperationException("Unable get attributes");
-
-                var rs = JsonConvert.DeserializeObject<Dictionary<string, object>>(res);
-
-                if (rs == null)
-                    throw new InvalidOperationException($"Unable to deserialize attributes result: {res}");
-
-                return rs;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("change attributes")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "change attributes");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("change attributes"));
+        ArgumentNullException.ThrowIfNull(attributes);
+        var json = JsonConvert.SerializeObject(attributes);
+        return NativeCall.Invoke<Dictionary<string, object>>(nameof(NativeDdb.DDBChattr),
+            (out IntPtr output) => NativeDdb.DDBChattr(ddbPath, json, out output));
     }
 
-    public Dictionary<string, object> GetAttributes(string ddbPath)
-    {
-        return ChangeAttributes(ddbPath, new Dictionary<string, object>());
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBGenerateThumbnail")]
-    private static extern DdbResult _GenerateThumbnail(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string filePath, int size, [MarshalAs(UnmanagedType.LPUTF8Str)] string destPath);
-
-    public void GenerateThumbnail(string filePath, int size, string destPath)
-    {
-        if (filePath == null)
-            throw new ArgumentException("filePath is null");
-
-        if (destPath == null)
-            throw new ArgumentException("destPath is null");
-
-        if (size <= 0)
-            throw new ArgumentException("size must be positive");
-
-        // Validate file exists before calling native code to prevent segfault
-        if (!File.Exists(filePath))
-            throw new DdbException($"File not found: '{filePath}'. Cannot generate thumbnail for non-existent file.");
-
-        DdbResult result;
-        try
-        {
-            result = _GenerateThumbnail(filePath, size, destPath);
-            if (result == DdbResult.Success) return;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate thumbnail")}\", check inner exception for details",
-                ex);
-        }
-
-        // Preserving the file context in the message (generic mapper drops call-site context).
-        if (result == DdbResult.Busy)
-            throw new DdbBusyException($"{SafeGetLastError("generate thumbnail")} (file: '{filePath}', size: {size}, dest: '{destPath}')");
-
-        throw new DdbException($"{SafeGetLastError("generate thumbnail")} (file: '{filePath}', size: {size}, dest: '{destPath}')");
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBVSIFree")]
-    private static extern DdbResult _DDBVSIFree(
-        IntPtr buffer);
-
-    [DllImport("ddb", EntryPoint = "DDBFree")]
-    private static extern DdbResult _DDBFree(IntPtr ptr);
-
-    [DllImport("ddb", EntryPoint = "DDBGenerateMemoryThumbnail")]
-    private static extern DdbResult _GenerateMemoryThumbnail(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string filePath, int size, out IntPtr outBuffer, out int outBufferSize);
-
-    public byte[] GenerateThumbnail(string filePath, int size)
-    {
-        if (filePath == null)
-            throw new ArgumentException("filePath is null");
-
-        if (size <= 0)
-            throw new ArgumentException("size must be positive");
-
-        // Validate file exists before calling native code to prevent segfault
-        if (!File.Exists(filePath))
-            throw new DdbException($"File not found: '{filePath}'. Cannot generate thumbnail for non-existent file.");
-
-        DdbResult result;
-        try
-        {
-            result = _GenerateMemoryThumbnail(filePath, size, out var outBuffer, out var outBufferSize);
-            if (result == DdbResult.Success)
-            {
-                var destBuf = new byte[outBufferSize];
-                Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
-
-                _DDBVSIFree(outBuffer);
-
-                return destBuf;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate memory thumbnail")}\", check inner exception for details",
-                ex);
-        }
-
-        // Preserving the file context in the message (generic mapper drops call-site context).
-        if (result == DdbResult.Busy)
-            throw new DdbBusyException($"{SafeGetLastError("generate memory thumbnail")} (file: '{filePath}', size: {size})");
-
-        throw new DdbException($"{SafeGetLastError("generate memory thumbnail")} (file: '{filePath}', size: {size})");
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBTile")]
-    private static extern DdbResult _GenerateTile(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath, int tz, int tx, int ty, out IntPtr outputTilePath,
-        int tileSize, bool tms, bool forceRecreate);
-
-    public string GenerateTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
-        bool forceRecreate = false)
-    {
-        if (inputPath == null)
-            throw new ArgumentException("inputPath is null");
-
-        DdbResult result;
-        try
-        {
-            result = _GenerateTile(inputPath, tz, tx, ty, out var output, tileSize, tms, forceRecreate);
-            if (result == DdbResult.Success)
-            {
-                var res = MarshalAndFreeUtf8(output);
-
-                if (string.IsNullOrWhiteSpace(res))
-                    throw new DdbException("Unable get tile path");
-
-                return res;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate tile")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "generate tile");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("generate tile"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBMemoryTile")]
-    private static extern DdbResult _GenerateMemoryTile(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath, int tz, int tx, int ty, out IntPtr outBuffer,
-        out int outBufferSize, int tileSize, bool tms, bool forceRecreate,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPathHash);
-
-    public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
-        bool forceRecreate = false, string inputPathHash = "")
-    {
-        if (inputPath == null)
-            throw new ArgumentException("inputPath is null");
-
-        DdbResult result;
-        try
-        {
-            result = _GenerateMemoryTile(inputPath, tz, tx, ty, out var outBuffer, out var outBufferSize, tileSize, tms,
-                                    forceRecreate, inputPathHash);
-            if (result == DdbResult.Success)
-            {
-                var destBuf = new byte[outBufferSize];
-                Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
-
-                _DDBVSIFree(outBuffer);
-
-                return destBuf;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate memory tile")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "generate memory tile");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("generate memory tile"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBMemoryTileFmt")]
-    private static extern DdbResult _GenerateMemoryTileFmt(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath, int tz, int tx, int ty, out IntPtr outBuffer,
-        out int outBufferSize, int tileSize, bool tms, bool forceRecreate,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPathHash,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputFormat);
-
-    public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
-        bool forceRecreate, string inputPathHash, string outputFormat)
-    {
-        if (inputPath == null)
-            throw new ArgumentException("inputPath is null");
-
-        DdbResult result;
-        try
-        {
-            result = _GenerateMemoryTileFmt(inputPath, tz, tx, ty, out var outBuffer, out var outBufferSize, tileSize, tms,
-                                    forceRecreate, inputPathHash ?? string.Empty, outputFormat ?? "png");
-            if (result == DdbResult.Success)
-            {
-                var destBuf = new byte[outBufferSize];
-                Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
-                _DDBVSIFree(outBuffer);
-                return destBuf;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate memory tile fmt")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "generate memory tile fmt");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("generate memory tile fmt"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBSetTag")]
-    private static extern DdbResult _SetTag([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string newTag);
+    public Dictionary<string, object> GetAttributes(string ddbPath) =>
+        ChangeAttributes(ddbPath, new Dictionary<string, object>());
 
     public void SetTag(string ddbPath, string newTag)
     {
-        if (ddbPath == null)
-            throw new ArgumentException("DDB path is null");
-
-        if (newTag == null)
-            throw new ArgumentException("New tag is null");
-
-        DdbResult result;
-        try
-        {
-            result = _SetTag(ddbPath, newTag);
-            if (result == DdbResult.Success) return;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("set tag")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "set tag");
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        ArgumentNullException.ThrowIfNull(newTag);
+        NativeCall.Invoke(nameof(NativeDdb.DDBSetTag), () => NativeDdb.DDBSetTag(ddbPath, newTag));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBGetTag")]
-    private static extern DdbResult _GetTag([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath, out IntPtr outTag);
 
     public string? GetTag(string ddbPath)
     {
-        if (ddbPath == null)
-            throw new ArgumentException("DDB path is null");
-
-        try
-        {
-            var result = _GetTag(ddbPath, out var outTag);
-            ThrowForFinalResult(result, "get tag");
-
-            var res = MarshalAndFreeUtf8(outTag);
-
-            return res == null || string.IsNullOrWhiteSpace(res) ? null : res;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException)
-        {
-            // Keep typed outcomes (e.g. DdbBusyException from the helper) unwrapped.
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get tag")}\", check inner exception for details",
-                ex);
-        }
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        var tag = NativeCall.InvokeString(nameof(NativeDdb.DDBGetTag),
+            (out IntPtr output) => NativeDdb.DDBGetTag(ddbPath, out output));
+        return string.IsNullOrWhiteSpace(tag) ? null : tag;
     }
-
-    [DllImport("ddb", EntryPoint = "DDBGetStamp")]
-    private static extern DdbResult _DDBGetStamp([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath, out IntPtr output);
 
     public Stamp GetStamp(string ddbPath)
     {
-        if (ddbPath == null)
-            throw new ArgumentException("DDB path is null");
-
-        DdbResult result;
-        try
-        {
-            result = _DDBGetStamp(ddbPath, out var output);
-            if (result == DdbResult.Success)
-            {
-                return DeserializeAndFree<Stamp>(output, "No result from DDBGetStamp call");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get stamp")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "get stamp");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("get stamp"));
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        return NativeCall.Invoke<Stamp>(nameof(NativeDdb.DDBGetStamp),
+            (out IntPtr output) => NativeDdb.DDBGetStamp(ddbPath, out output));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBGetStampChecksum")]
-    private static extern DdbResult _DDBGetStampChecksum([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath, out IntPtr output);
 
     public string GetStampChecksum(string ddbPath)
     {
-        if (ddbPath == null)
-            throw new ArgumentException("DDB path is null");
-
-        try
-        {
-            var result = _DDBGetStampChecksum(ddbPath, out var output);
-            ThrowForFinalResult(result, "get stamp checksum");
-
-            var res = MarshalAndFreeUtf8(output);
-            if (string.IsNullOrWhiteSpace(res))
-                throw new InvalidOperationException("No result from DDBGetStampChecksum call");
-
-            return res;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException)
-        {
-            // Keep typed outcomes (e.g. DdbBusyException from the helper) unwrapped.
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get stamp checksum")}\", check inner exception for details",
-                ex);
-        }
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGetStampChecksum),
+            (out IntPtr output) => NativeDdb.DDBGetStampChecksum(ddbPath, out output));
     }
 
-    [DllImport("ddb", EntryPoint = "DDBDelta")]
-    private static extern DdbResult _Delta([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbSourceStamp,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbTargetStamp, out IntPtr output,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string format);
+    public Delta Delta(string ddbPath, string ddbTarget) => Delta(GetStamp(ddbPath), GetStamp(ddbTarget));
 
-    public Delta Delta(string ddbPath, string ddbTarget)
+    public Delta Delta(Stamp source, Stamp target)
     {
-        return Delta(GetStamp(ddbPath), GetStamp(ddbTarget));
+        var sourceJson = JsonConvert.SerializeObject(source);
+        var targetJson = JsonConvert.SerializeObject(target);
+        return NativeCall.Invoke<Delta>(nameof(NativeDdb.DDBDelta),
+            (out IntPtr output) => NativeDdb.DDBDelta(sourceJson, targetJson, out output, "json"));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBApplyDelta")]
-    private static extern DdbResult _ApplyDelta([MarshalAs(UnmanagedType.LPUTF8Str)] string delta,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string sourcePath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath, int mergeStrategy,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string sourceMetaDump, out IntPtr conflicts);
 
     public List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,
         string? sourceMetaDump = null)
     {
-        DdbResult result;
-        try
-        {
-            var deltaJson = JsonConvert.SerializeObject(delta);
-
-            result = _ApplyDelta(deltaJson, sourcePath, ddbPath, (int)mergeStrategy, sourceMetaDump ?? "[]",
-                                    out var conflictsPtr);
-            if (result == DdbResult.Success)
-            {
-                return DeserializeAndFree<List<string>>(conflictsPtr, "Unable get applydelta result");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("apply delta")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "apply delta");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("apply delta"));
+        var deltaJson = JsonConvert.SerializeObject(delta);
+        var metaDump = sourceMetaDump ?? "[]";
+        return NativeCall.Invoke<List<string>>(nameof(NativeDdb.DDBApplyDelta),
+            (out IntPtr output) => NativeDdb.DDBApplyDelta(deltaJson, sourcePath, ddbPath, (int)mergeStrategy,
+                metaDump, out output));
     }
-
-
-    public Delta Delta(Stamp source, Stamp target)
-    {
-        DdbResult result;
-        try
-        {
-            var sourceJson = JsonConvert.SerializeObject(source);
-            var targetJson = JsonConvert.SerializeObject(target);
-
-            result = _Delta(sourceJson, targetJson, out var output, "json");
-            if (result == DdbResult.Success)
-            {
-                return DeserializeAndFree<Delta>(output, "Unable get delta");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("delta")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "delta");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("delta"));
-    }
-
-
-    [DllImport("ddb", EntryPoint = "DDBComputeDeltaLocals")]
-    private static extern DdbResult _ComputeDeltaLocals([MarshalAs(UnmanagedType.LPUTF8Str)] string delta,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath, [MarshalAs(UnmanagedType.LPUTF8Str)] string hlDestFolder,
-        out IntPtr output);
 
     public Dictionary<string, bool> ComputeDeltaLocals(Delta delta, string ddbPath, string hlDestFolder = "")
     {
-        DdbResult result;
-        try
-        {
-            var deltaJson = JsonConvert.SerializeObject(delta);
-
-            result = _ComputeDeltaLocals(deltaJson, ddbPath, hlDestFolder, out var outputPtr);
-            if (result == DdbResult.Success)
-            {
-                return DeserializeAndFree<Dictionary<string, bool>>(outputPtr, "Unable get ComputeDeltaLocals result");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("compute delta locals")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "compute delta locals");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("compute delta locals"));
+        var deltaJson = JsonConvert.SerializeObject(delta);
+        return NativeCall.Invoke<Dictionary<string, bool>>(nameof(NativeDdb.DDBComputeDeltaLocals),
+            (out IntPtr output) => NativeDdb.DDBComputeDeltaLocals(deltaJson, ddbPath, hlDestFolder, out output));
     }
-
-
-    [DllImport("ddb", EntryPoint = "DDBMoveEntry")]
-    private static extern DdbResult _MoveEntry([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbSource,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string source, [MarshalAs(UnmanagedType.LPUTF8Str)] string dest);
 
     public void MoveEntry(string ddbPath, string source, string dest)
     {
-        source = source.Replace('\\', '/');
-        dest = dest.Replace('\\', '/');
-        DdbResult result;
-        try
-        {
-            result = _MoveEntry(ddbPath, source, dest);
-            if (result == DdbResult.Success) return;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("move entry")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "move entry");
+        var from = NormalizeSeparators(source);
+        var to = NormalizeSeparators(dest);
+        NativeCall.Invoke(nameof(NativeDdb.DDBMoveEntry), () => NativeDdb.DDBMoveEntry(ddbPath, from, to));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBBuild")]
-    private static extern DdbResult _Build([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbSource,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? source, [MarshalAs(UnmanagedType.LPUTF8Str)] string? dest, bool force,
-        bool pendingOnly);
-
-    public void Build(string ddbPath, string? source = null, string? dest = null, bool force = false,
-        bool pendingOnly = false)
-    {
-        source = source?.Replace('\\', '/');
-        dest = dest?.Replace('\\', '/');
-        try
-        {
-            var result = _Build(ddbPath, source, dest, force, pendingOnly);
-
-            // Success: build scheduled/committed. BuildDependencyMissing: a dependency is not
-            // indexed yet, so the build is intentionally skipped (legacy silent-return — NOT an
-            // error; see the Ddb.BuildDependencyMissing adapter contract), so both return here.
-            if (result == DdbResult.Success || result == DdbResult.BuildDependencyMissing)
-                return;
-
-            // BuildInProgress (kernel build lock held) and Busy (transient DB contention) surface
-            // as typed exceptions via the shared mapper so Hangfire retry decorators
-            // (OnlyOn = DdbBusyException / DdbBuildInProgressException) can retry with backoff.
-            ThrowForFinalResult(result, "build");
-        }
-        catch (DdbBuildInProgressException)
-        {
-            throw;
-        }
-        catch (DdbBusyException)
-        {
-            throw;
-        }
-        catch (DdbException)
-        {
-            // Keep typed outcomes from the helper unwrapped (it throws DdbException-family types).
-            throw;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("build")}\", check inner exception for details",
-                ex);
-        }
-
-        // Unreachable (every path returns or throws earlier); kept as a compiler fallback.
-        throw new DdbException(SafeGetLastError("build"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBIsBuildable")]
-    private static extern DdbResult _IsBuildable([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbSource,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out bool isBuildable);
-
-    public bool IsBuildable(string ddbPath, string path)
-    {
-        path = path.Replace('\\', '/');
-        DdbResult result;
-        try
-        {
-            result = _IsBuildable(ddbPath, path, out var isBuildable);
-            if (result == DdbResult.Success) return isBuildable;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("is buildable")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "is buildable");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("is buildable"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBIsBuildActive")]
-    private static extern DdbResult _IsBuildActive([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out bool isBuildActive);
-
-    public bool IsBuildActive(string ddbPath, string path)
-    {
-        path = path.Replace('\\', '/');
-        DdbResult result;
-        try
-        {
-            result = _IsBuildActive(ddbPath, path, out var isBuildActive);
-            if (result == DdbResult.Success) return isBuildActive;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("is build active")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "is build active");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("is build active"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBIsBuildComplete")]
-    private static extern DdbResult _IsBuildComplete([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out bool isBuildComplete);
-
-    public bool IsBuildComplete(string ddbPath, string path)
-    {
-        path = path.Replace('\\', '/');
-        DdbResult result;
-        try
-        {
-            result = _IsBuildComplete(ddbPath, path, out var isBuildComplete);
-            if (result == DdbResult.Success) return isBuildComplete;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("is build complete")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "is build complete");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("is build complete"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBGetBuildStatus")]
-    private static extern DdbResult _GetBuildStatus([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        IntPtr[] paths, int numPaths, out IntPtr output);
-
-    public EntryBuildStatus[] GetBuildStatus(string ddbPath, string[] paths)
-    {
-        if (ddbPath == null)
-            throw new ArgumentException("DDB path is null");
-
-        if (paths.Length == 0)
-            return [];
-
-        paths = paths.Select(p => p.Replace('\\', '/')).ToArray();
-        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
-        var result = DdbResult.Exception;
-        try
-        {
-            result = _GetBuildStatus(ddbPath, utf8Ptrs, paths.Length, out var output);
-            if (result == DdbResult.Success)
-            {
-                return DeserializeAndFree<EntryBuildStatus[]>(output, "Unable to get build status");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get build status")}\", check inner exception for details",
-                ex);
-        }
-        finally
-        {
-            FreeUtf8StringArray(utf8Ptrs);
-        }
-
-        ThrowForFinalResult(result, "get build status");
-
-        // Unreachable in practice (Success returns above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("get build status"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBIsBuildPending")]
-    private static extern DdbResult _IsBuildPending([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        out bool isBuildPending);
-
-    public bool IsBuildPending(string ddbPath)
-    {
-        try
-        {
-            var result = _IsBuildPending(ddbPath, out var isBuildPending);
-            ThrowForFinalResult(result, "is build pending");
-
-            return isBuildPending;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException)
-        {
-            // Keep typed outcomes (e.g. DdbBusyException from the helper) unwrapped.
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("is build pending")}\", check inner exception for details",
-                ex);
-        }
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBGetPendingBuildInfo")]
-    private static extern DdbResult _GetPendingBuildInfo([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        out IntPtr output);
-
-    public PendingBuildInfo[] GetPendingBuildInfo(string ddbPath)
-    {
-        DdbResult result;
-        try
-        {
-            result = _GetPendingBuildInfo(ddbPath, out var output);
-            if (result == DdbResult.Success)
-            {
-                return DeserializeAndFree<PendingBuildInfo[]>(output, "No result from DDBGetPendingBuildInfo call");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get pending build info")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "get pending build info");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("get pending build info"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBCleanup")]
-    private static extern DdbResult _Cleanup([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath, out IntPtr output);
-
-    public DdbCleanupResult Cleanup(string ddbPath)
-    {
-        DdbResult result;
-        try
-        {
-            result = _Cleanup(ddbPath, out var output);
-            if (result == DdbResult.Success)
-            {
-                return DeserializeAndFree<DdbCleanupResult>(output, "No result from DDBCleanup call");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("cleanup")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "cleanup");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("cleanup"));
-    }
-
-
-    [DllImport("ddb", EntryPoint = "DDBMetaAdd")]
-    private static extern DdbResult _MetaAdd([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string key, [MarshalAs(UnmanagedType.LPUTF8Str)] string data, out IntPtr output);
-
-    public Meta MetaAdd(string ddbPath, string key, string data, string? path = null)
-    {
-        DdbResult result;
-        try
-        {
-            result = _MetaAdd(ddbPath, path ?? string.Empty, key, data, out var output);
-            if (result == DdbResult.Success)
-            {
-                return DeserializeAndFree<Meta>(output, "No result from DDBMetaAdd call");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("meta add")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "meta add");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("meta add"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBMetaSet")]
-    private static extern DdbResult _MetaSet([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string key, [MarshalAs(UnmanagedType.LPUTF8Str)] string data, out IntPtr output);
-
-    public Meta MetaSet(string ddbPath, string key, string data, string? path = null)
-    {
-        DdbResult result;
-        try
-        {
-            result = _MetaSet(ddbPath, path ?? string.Empty, key, data, out var output);
-            if (result == DdbResult.Success)
-            {
-                return DeserializeAndFree<Meta>(output, "No result from DDBMetaSet call");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("meta set")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "meta set");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("meta set"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBMetaRemove")]
-    private static extern DdbResult _MetaRemove([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string id, out IntPtr output);
-
-    public int MetaRemove(string ddbPath, string id)
-    {
-        DdbResult result;
-        try
-        {
-            result = _MetaRemove(ddbPath, id, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (json == null)
-                    throw new InvalidOperationException("No result from DDBMetaRemove call");
-
-                var obj = JsonConvert.DeserializeObject<JObject>(json);
-
-                if (obj == null || !obj.ContainsKey("removed"))
-                    throw new InvalidOperationException($"Expected 'removed' field but got '{json}'");
-
-                // ReSharper disable once PossibleNullReferenceException
-                return obj["removed"]!.ToObject<int>();
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("meta remove")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "meta remove");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("meta remove"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBMetaGet")]
-    private static extern DdbResult _MetaGet([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string key, out IntPtr output);
-
-    public string? MetaGet(string ddbPath, string key, string? path = null)
-    {
-        DdbResult result;
-        try
-        {
-            result = _MetaGet(ddbPath, path ?? string.Empty, key, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-
-                return json;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("meta get")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "meta get");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("meta get"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBMetaUnset")]
-    private static extern DdbResult _MetaUnset([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string key, out IntPtr output);
-
-    public int MetaUnset(string ddbPath, string key, string? path = null)
-    {
-        DdbResult result;
-        try
-        {
-            result = _MetaUnset(ddbPath, path ?? string.Empty, key, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-
-                if (json == null)
-                    throw new InvalidOperationException("No result from DDBMetaUnset call");
-
-                var obj = JsonConvert.DeserializeObject<JObject>(json);
-
-                if (obj == null || !obj.ContainsKey("removed"))
-                    throw new InvalidOperationException($"Expected 'removed' field but got '{json}'");
-
-                // ReSharper disable once PossibleNullReferenceException
-                return obj["removed"]!.ToObject<int>();
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("meta unset")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "meta unset");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("meta unset"));
-    }
-
-
-    [DllImport("ddb", EntryPoint = "DDBMetaList")]
-    private static extern DdbResult _MetaList([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out IntPtr output);
-
-    public List<MetaListItem> MetaList(string ddbPath, string? path = null)
-    {
-        DdbResult result;
-        try
-        {
-            result = _MetaList(ddbPath, path ?? string.Empty, out var output);
-            if (result == DdbResult.Success)
-            {
-                return DeserializeAndFree<List<MetaListItem>>(output, "No result from DDBMetaList call");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("meta list")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "meta list");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("meta list"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBMetaDump")]
-    private static extern DdbResult _MetaDump([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string ids, out IntPtr output);
-
-    public List<MetaDump> MetaDump(string ddbPath, string? ids = null)
-    {
-        DdbResult result;
-        try
-        {
-            result = _MetaDump(ddbPath, ids ?? "[]", out var output);
-            if (result == DdbResult.Success)
-            {
-                return DeserializeAndFree<List<MetaDump>>(output, "No result from DDBMetaDump call");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("meta dump")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "meta dump");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("meta dump"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBStac")]
-    private static extern DdbResult _Stac([MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? entry,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string stacCollectionRoot, [MarshalAs(UnmanagedType.LPUTF8Str)] string id,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string stacCatalogRoot, out IntPtr output);
-
-    public JToken Stac(string ddbPath, string? entry, string stacCollectionRoot, string id,
-        string stacCatalogRoot)
-    {
-        DdbResult result;
-        try
-        {
-            result = _Stac(ddbPath, entry ?? string.Empty, stacCollectionRoot, id, stacCatalogRoot, out var output);
-            if (result == DdbResult.Success)
-            {
-                return DeserializeAndFree<JToken>(output, "No result from DDBStac call");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError()}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "stac");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("stac"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBStacItemCollection")]
-    private static extern DdbResult _StacItemCollection(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string stacCollectionRoot,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string id,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string stacCatalogRoot,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bbox,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? datetime,
-        int limit, int offset, out IntPtr output);
-
-    public JToken StacItemCollection(string ddbPath, string stacCollectionRoot, string id,
-        string stacCatalogRoot, string? bbox, string? datetime, int limit, int offset)
-    {
-        DdbResult result;
-        try
-        {
-            result = _StacItemCollection(ddbPath, stacCollectionRoot, id, stacCatalogRoot,
-                                    bbox ?? string.Empty, datetime ?? string.Empty, limit, offset, out var output);
-            if (result == DdbResult.Success)
-            {
-                return DeserializeAndFree<JToken>(output, "No result from DDBStacItemCollection call");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError()}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "stac item collection");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("stac item collection"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBRescan")]
-    private static extern DdbResult _Rescan(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        out IntPtr output,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string types,
-        bool stopOnError);
-
-    [DllImport("ddb", EntryPoint = "DDBRescanEx")]
-    private static extern DdbResult _RescanEx(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string ddbPath,
-        out IntPtr output,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string types,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string extensions,
-        bool stopOnError);
 
     public List<RescanResult> RescanIndex(string ddbPath, RescanOptions? options = null)
     {
         options ??= new RescanOptions();
         var types = options.Types ?? string.Empty;
+        var extensions = options.Extensions;
 
-        DdbResult result;
-        try
-        {
-            // DDBRescanEx is only called with an extension filter, so libraries without it
-            // still serve the type-only rescan.
-            IntPtr output;
-            result = string.IsNullOrWhiteSpace(options.Extensions)
-                ? _Rescan(ddbPath, out output, types, options.StopOnError)
-                : _RescanEx(ddbPath, out output, types, options.Extensions, options.StopOnError);
-            if (result == DdbResult.Success)
-            {
-                return DeserializeAndFree<List<RescanResult>>(output, "Unable to get rescan results");
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("rescan")}\", check inner exception for details",
-                ex);
-        }
-
-        ThrowForFinalResult(result, "rescan");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("rescan"));
+        // DDBRescanEx only with an extension filter: the type-only rescan stays the call it always was
+        return string.IsNullOrWhiteSpace(extensions)
+            ? NativeCall.Invoke<List<RescanResult>>(nameof(NativeDdb.DDBRescan),
+                (out IntPtr output) => NativeDdb.DDBRescan(ddbPath, out output, types, options.StopOnError))
+            : NativeCall.Invoke<List<RescanResult>>(nameof(NativeDdb.DDBRescanEx),
+                (out IntPtr output) =>
+                    NativeDdb.DDBRescanEx(ddbPath, out output, types, extensions, options.StopOnError));
     }
 
-    #region Multispectral P/Invoke
+    // ---------------------------------------------------------------- build
 
-    [DllImport("ddb", EntryPoint = "DDBGetRasterInfo")]
-    private static extern DdbResult _GetRasterInfo(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out IntPtr output);
-
-    public string GetRasterInfo(string path)
+    public void Build(string ddbPath, string? source = null, string? dest = null, bool force = false,
+        bool pendingOnly = false)
     {
-        if (path == null) throw new ArgumentException("path is null");
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        var result = NativeDdb.DDBBuild(ddbPath, source == null ? null : NormalizeSeparators(source),
+            dest == null ? null : NormalizeSeparators(dest), force, pendingOnly);
 
-        DdbResult result;
-        try
-        {
-            result = _GetRasterInfo(path, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to get raster info");
-                return json;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster info")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "get raster info");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("get raster info"));
+        // BuildDependencyMissing: a dependency is not indexed yet, so the build is deferred (a
+        // pending marker), not failed. BuildInProgress and Busy surface as typed exceptions, which
+        // the Hangfire retry policies retry with backoff.
+        if (result != DdbResult.BuildDependencyMissing)
+            NativeCall.Check(result, nameof(NativeDdb.DDBBuild));
     }
 
-    [DllImport("ddb", EntryPoint = "DDBGetRasterMetadata")]
-    private static extern DdbResult _GetRasterMetadata(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? formula,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bandFilter,
-        out IntPtr output);
-
-    public string GetRasterMetadata(string path, string? formula = null, string? bandFilter = null)
+    public EntryBuildArtifacts[] GetBuildArtifacts(string ddbPath, string[] paths)
     {
-        if (path == null) throw new ArgumentException("path is null");
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        ArgumentNullException.ThrowIfNull(paths);
+        if (paths.Length == 0)
+            return [];
 
-        DdbResult result;
-        try
-        {
-            result = _GetRasterMetadata(path, formula, bandFilter, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to get raster metadata");
-                return json;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster metadata")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "get raster metadata");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("get raster metadata"));
+        var normalized = NormalizeSeparators(paths);
+        return NativeCall.Invoke<EntryBuildArtifacts[]>(nameof(NativeDdb.DDBGetBuildArtifacts),
+            (out IntPtr output) => NativeDdb.DDBGetBuildArtifacts(ddbPath, normalized, normalized.Length, out output));
     }
 
-    [DllImport("ddb", EntryPoint = "DDBGenerateMemoryThumbnailEx")]
-    private static extern DdbResult _GenerateMemoryThumbnailEx(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string filePath, int size,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? preset,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bands,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? formula,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bandFilter,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? colormap,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? rescale,
-        out IntPtr outBuffer, out int outBufferSize);
+    public string? ResolveBuildFile(string ddbPath, string hash, string path)
+    {
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        ArgumentNullException.ThrowIfNull(hash);
+        ArgumentNullException.ThrowIfNull(path);
+        return NativeCall.InvokeStringOrNotFound(nameof(NativeDdb.DDBResolveBuildFile),
+            (out IntPtr output) => NativeDdb.DDBResolveBuildFile(ddbPath, hash, path, out output));
+    }
+
+    public IReadOnlyList<EntryTypeInfo> GetEntryTypes() => EntryTypes.Value;
+
+    public CopiedBuildArtifacts CopyBuildArtifacts(string sourceDdbPath, string destinationDdbPath, string hash)
+    {
+        ArgumentNullException.ThrowIfNull(sourceDdbPath);
+        ArgumentNullException.ThrowIfNull(destinationDdbPath);
+        ArgumentNullException.ThrowIfNull(hash);
+        return NativeCall.Invoke<CopiedBuildArtifacts>(nameof(NativeDdb.DDBCopyBuildArtifacts),
+            (out IntPtr output) =>
+                NativeDdb.DDBCopyBuildArtifacts(sourceDdbPath, destinationDdbPath, hash, out output));
+    }
+
+    public bool IsBuildPending(string ddbPath)
+    {
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        var pending = false;
+        NativeCall.Invoke(nameof(NativeDdb.DDBIsBuildPending), () => NativeDdb.DDBIsBuildPending(ddbPath, out pending));
+        return pending;
+    }
+
+    public PendingBuildInfo[] GetPendingBuildInfo(string ddbPath)
+    {
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        return NativeCall.Invoke<PendingBuildInfo[]>(nameof(NativeDdb.DDBGetPendingBuildInfo),
+            (out IntPtr output) => NativeDdb.DDBGetPendingBuildInfo(ddbPath, out output));
+    }
+
+    public DdbCleanupResult Cleanup(string ddbPath) =>
+        NativeCall.Invoke<DdbCleanupResult>(nameof(NativeDdb.DDBCleanup),
+            (out IntPtr output) => NativeDdb.DDBCleanup(ddbPath, out output));
+
+    // ---------------------------------------------------------------- meta
+
+    public Meta MetaAdd(string ddbPath, string key, string data, string? path = null) =>
+        NativeCall.Invoke<Meta>(nameof(NativeDdb.DDBMetaAdd),
+            (out IntPtr output) => NativeDdb.DDBMetaAdd(ddbPath, path ?? string.Empty, key, data, out output));
+
+    public Meta MetaSet(string ddbPath, string key, string data, string? path = null) =>
+        NativeCall.Invoke<Meta>(nameof(NativeDdb.DDBMetaSet),
+            (out IntPtr output) => NativeDdb.DDBMetaSet(ddbPath, path ?? string.Empty, key, data, out output));
+
+    public int MetaRemove(string ddbPath, string id) =>
+        Removed(nameof(NativeDdb.DDBMetaRemove),
+            NativeCall.Invoke<JObject>(nameof(NativeDdb.DDBMetaRemove),
+                (out IntPtr output) => NativeDdb.DDBMetaRemove(ddbPath, id, out output)));
+
+    public string? MetaGet(string ddbPath, string key, string? path = null) =>
+        NativeCall.InvokeString(nameof(NativeDdb.DDBMetaGet),
+            (out IntPtr output) => NativeDdb.DDBMetaGet(ddbPath, path ?? string.Empty, key, out output));
+
+    public int MetaUnset(string ddbPath, string key, string? path = null) =>
+        Removed(nameof(NativeDdb.DDBMetaUnset),
+            NativeCall.Invoke<JObject>(nameof(NativeDdb.DDBMetaUnset),
+                (out IntPtr output) => NativeDdb.DDBMetaUnset(ddbPath, path ?? string.Empty, key, out output)));
+
+    public List<MetaListItem> MetaList(string ddbPath, string? path = null) =>
+        NativeCall.Invoke<List<MetaListItem>>(nameof(NativeDdb.DDBMetaList),
+            (out IntPtr output) => NativeDdb.DDBMetaList(ddbPath, path ?? string.Empty, out output));
+
+    public List<MetaDump> MetaDump(string ddbPath, string? ids = null) =>
+        NativeCall.Invoke<List<MetaDump>>(nameof(NativeDdb.DDBMetaDump),
+            (out IntPtr output) => NativeDdb.DDBMetaDump(ddbPath, ids ?? "[]", out output));
+
+    // The meta-count output: {"removed": n}
+    private static int Removed(string operation, JObject output) =>
+        output.TryGetValue("removed", out var removed)
+            ? removed.ToObject<int>()
+            : throw new DdbException($"{operation} returned no 'removed' count: {output.ToString(Formatting.None)}");
+
+    // ---------------------------------------------------------------- STAC
+
+    public JToken Stac(string ddbPath, string? entry, string stacCollectionRoot, string id, string stacCatalogRoot) =>
+        NativeCall.Invoke<JToken>(nameof(NativeDdb.DDBStac),
+            (out IntPtr output) => NativeDdb.DDBStac(ddbPath, entry ?? string.Empty, stacCollectionRoot, id,
+                stacCatalogRoot, out output));
+
+    public JToken StacItemCollection(string ddbPath, string stacCollectionRoot, string id, string stacCatalogRoot,
+        string? bbox, string? datetime, int limit, int offset) =>
+        NativeCall.Invoke<JToken>(nameof(NativeDdb.DDBStacItemCollection),
+            (out IntPtr output) => NativeDdb.DDBStacItemCollection(ddbPath, stacCollectionRoot, id, stacCatalogRoot,
+                bbox ?? string.Empty, datetime ?? string.Empty, limit, offset, out output));
+
+    // ---------------------------------------------------------------- thumbnails and tiles
+
+    public void GenerateThumbnail(string filePath, int size, string destPath)
+    {
+        ArgumentNullException.ThrowIfNull(filePath);
+        ArgumentNullException.ThrowIfNull(destPath);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(size);
+        RequireFile(filePath);
+
+        NativeCall.Invoke(nameof(NativeDdb.DDBGenerateThumbnail),
+            () => NativeDdb.DDBGenerateThumbnail(filePath, size, destPath),
+            $"file: '{filePath}', size: {size}, dest: '{destPath}'");
+    }
+
+    public byte[] GenerateThumbnail(string filePath, int size)
+    {
+        ArgumentNullException.ThrowIfNull(filePath);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(size);
+        RequireFile(filePath);
+
+        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBGenerateMemoryThumbnail),
+            (out IntPtr buffer, out int length) =>
+                NativeDdb.DDBGenerateMemoryThumbnail(filePath, size, out buffer, out length),
+            $"file: '{filePath}', size: {size}");
+    }
 
     public byte[] GenerateThumbnailEx(string filePath, int size, string? preset = null,
         string? bands = null, string? formula = null, string? bandFilter = null,
         string? colormap = null, string? rescale = null)
     {
-        if (filePath == null) throw new ArgumentException("filePath is null");
-        if (size <= 0) throw new ArgumentException("size must be positive");
+        ArgumentNullException.ThrowIfNull(filePath);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(size);
+        RequireFile(filePath);
 
-        if (!File.Exists(filePath))
-            throw new DdbException($"File not found: '{filePath}'. Cannot generate thumbnail for non-existent file.");
-
-        DdbResult result;
-        try
-        {
-            result = _GenerateMemoryThumbnailEx(filePath, size, preset, bands, formula, bandFilter,
-                    colormap, rescale, out var outBuffer, out var outBufferSize);
-            if (result == DdbResult.Success)
-            {
-                var destBuf = new byte[outBufferSize];
-                Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
-                _DDBVSIFree(outBuffer);
-                return destBuf;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate memory thumbnail ex")}\", check inner exception for details", ex);
-        }
-
-        throw new DdbException($"{SafeGetLastError("generate memory thumbnail ex")} (file: '{filePath}', size: {size})");
+        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBGenerateMemoryThumbnailEx),
+            (out IntPtr buffer, out int length) => NativeDdb.DDBGenerateMemoryThumbnailEx(filePath, size, preset,
+                bands, formula, bandFilter, colormap, rescale, out buffer, out length),
+            $"file: '{filePath}', size: {size}");
     }
 
-    [DllImport("ddb", EntryPoint = "DDBMemoryTileEx")]
-    private static extern DdbResult _GenerateMemoryTileEx(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
-        int tz, int tx, int ty,
-        int tileSize, bool tms, bool forceRecreate,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPathHash,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? preset,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bands,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? formula,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bandFilter,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? colormap,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? rescale,
-        out IntPtr outBuffer, out int outBufferSize);
+    public string GenerateTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
+        bool forceRecreate = false)
+    {
+        ArgumentNullException.ThrowIfNull(inputPath);
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBTile),
+            (out IntPtr output) => NativeDdb.DDBTile(inputPath, tz, tx, ty, out output, tileSize, tms, forceRecreate));
+    }
+
+    public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
+        bool forceRecreate = false, string inputPathHash = "")
+    {
+        ArgumentNullException.ThrowIfNull(inputPath);
+        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBMemoryTile),
+            (out IntPtr buffer, out int length) => NativeDdb.DDBMemoryTile(inputPath, tz, tx, ty, out buffer,
+                out length, tileSize, tms, forceRecreate, inputPathHash ?? string.Empty));
+    }
+
+    public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
+        bool forceRecreate, string inputPathHash, string outputFormat)
+    {
+        ArgumentNullException.ThrowIfNull(inputPath);
+        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBMemoryTileFmt),
+            (out IntPtr buffer, out int length) => NativeDdb.DDBMemoryTileFmt(inputPath, tz, tx, ty, out buffer,
+                out length, tileSize, tms, forceRecreate, inputPathHash ?? string.Empty, outputFormat ?? "png"));
+    }
 
     public byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
         int tileSize, bool tms, bool forceRecreate, string inputPathHash,
         string? preset = null, string? bands = null, string? formula = null,
         string? bandFilter = null, string? colormap = null, string? rescale = null)
     {
-        if (inputPath == null) throw new ArgumentException("inputPath is null");
-
-        DdbResult result;
-        try
-        {
-            result = _GenerateMemoryTileEx(inputPath, tz, tx, ty, tileSize, tms, forceRecreate,
-                                    inputPathHash, preset, bands, formula, bandFilter, colormap, rescale,
-                                    out var outBuffer, out var outBufferSize);
-            if (result == DdbResult.Success)
-            {
-                var destBuf = new byte[outBufferSize];
-                Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
-                _DDBVSIFree(outBuffer);
-                return destBuf;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate memory tile ex")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "generate memory tile ex");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("generate memory tile ex"));
+        ArgumentNullException.ThrowIfNull(inputPath);
+        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBMemoryTileEx),
+            (out IntPtr buffer, out int length) => NativeDdb.DDBMemoryTileEx(inputPath, tz, tx, ty, tileSize, tms,
+                forceRecreate, inputPathHash ?? string.Empty, preset, bands, formula, bandFilter, colormap, rescale,
+                out buffer, out length));
     }
 
-    [DllImport("ddb", EntryPoint = "DDBValidateMergeMultispectral")]
-    private static extern DdbResult _ValidateMergeMultispectral(
-        IntPtr[] paths, int numPaths, out IntPtr output);
+    // ---------------------------------------------------------------- rasters
+
+    public string GetRasterInfo(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGetRasterInfo),
+            (out IntPtr output) => NativeDdb.DDBGetRasterInfo(path, out output));
+    }
+
+    public string GetRasterMetadata(string path, string? formula = null, string? bandFilter = null)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGetRasterMetadata),
+            (out IntPtr output) => NativeDdb.DDBGetRasterMetadata(path, formula, bandFilter, out output));
+    }
 
     public string ValidateMergeMultispectral(string[] paths)
     {
-        if (paths == null || paths.Length == 0)
-            throw new ArgumentException("paths is null or empty");
-
-        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
-        DdbResult result;
-        try
-        {
-            result = _ValidateMergeMultispectral(utf8Ptrs, paths.Length, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to validate merge multispectral");
-                return json;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("validate merge multispectral")}\", check inner exception for details", ex);
-        }
-        finally
-        {
-            FreeUtf8StringArray(utf8Ptrs);
-        }
-
-        ThrowForFinalResult(result, "validate merge multispectral");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("validate merge multispectral"));
+        RequirePaths(paths);
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBValidateMergeMultispectral),
+            (out IntPtr output) => NativeDdb.DDBValidateMergeMultispectral(paths, paths.Length, out output));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBPreviewMergeMultispectral")]
-    private static extern DdbResult _PreviewMergeMultispectral(
-        IntPtr[] paths, int numPaths,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? previewBands,
-        int thumbSize,
-        out IntPtr outBuffer, out int outBufferSize);
 
     public byte[] PreviewMergeMultispectral(string[] paths, string? previewBands = null, int thumbSize = 512)
     {
-        if (paths == null || paths.Length == 0)
-            throw new ArgumentException("paths is null or empty");
-
-        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
-        DdbResult result;
-        try
-        {
-            result = _PreviewMergeMultispectral(utf8Ptrs, paths.Length, previewBands, thumbSize,
-                                    out var outBuffer, out var outBufferSize);
-            if (result == DdbResult.Success)
-            {
-                var destBuf = new byte[outBufferSize];
-                Marshal.Copy(outBuffer, destBuf, 0, outBufferSize);
-                _DDBVSIFree(outBuffer);
-                return destBuf;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("preview merge multispectral")}\", check inner exception for details", ex);
-        }
-        finally
-        {
-            FreeUtf8StringArray(utf8Ptrs);
-        }
-
-        ThrowForFinalResult(result, "preview merge multispectral");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("preview merge multispectral"));
+        RequirePaths(paths);
+        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBPreviewMergeMultispectral),
+            (out IntPtr buffer, out int length) => NativeDdb.DDBPreviewMergeMultispectral(paths, paths.Length,
+                previewBands, thumbSize, out buffer, out length));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBMergeMultispectral")]
-    private static extern DdbResult _MergeMultispectral(
-        IntPtr[] paths, int numPaths,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputCog);
 
     public void MergeMultispectral(string[] paths, string outputCog)
     {
-        if (paths == null || paths.Length == 0)
-            throw new ArgumentException("paths is null or empty");
-        if (string.IsNullOrWhiteSpace(outputCog))
-            throw new ArgumentException("outputCog is null or empty");
-
-        var utf8Ptrs = MarshalStringArrayToUtf8(paths);
-        DdbResult result;
-        try
-        {
-            result = _MergeMultispectral(utf8Ptrs, paths.Length, outputCog);
-            if (result == DdbResult.Success) return;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("merge multispectral")}\", check inner exception for details", ex);
-        }
-        finally
-        {
-            FreeUtf8StringArray(utf8Ptrs);
-        }
-
-        ThrowForFinalResult(result, "merge multispectral");
+        RequirePaths(paths);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputCog);
+        NativeCall.Invoke(nameof(NativeDdb.DDBMergeMultispectral),
+            () => NativeDdb.DDBMergeMultispectral(paths, paths.Length, outputCog));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBValidateAlignRaster")]
-    private static extern DdbResult _ValidateAlignRaster(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string sourcePath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string referencePath,
-        out IntPtr output);
 
     public string ValidateAlignRaster(string sourcePath, string referencePath)
     {
-        if (string.IsNullOrWhiteSpace(sourcePath))
-            throw new ArgumentException("sourcePath is null or empty");
-        if (string.IsNullOrWhiteSpace(referencePath))
-            throw new ArgumentException("referencePath is null or empty");
-
-        DdbResult result;
-        try
-        {
-            result = _ValidateAlignRaster(sourcePath, referencePath, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to validate align raster");
-                return json;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("validate align raster")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "validate align raster");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("validate align raster"));
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(referencePath);
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBValidateAlignRaster),
+            (out IntPtr output) => NativeDdb.DDBValidateAlignRaster(sourcePath, referencePath, out output));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBAlignRaster")]
-    private static extern DdbResult _AlignRaster(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string sourcePath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string referencePath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? mode,
-        out IntPtr output);
 
     public string AlignRaster(string sourcePath, string referencePath, string outputPath, string mode = "similarity")
     {
-        if (string.IsNullOrWhiteSpace(sourcePath))
-            throw new ArgumentException("sourcePath is null or empty");
-        if (string.IsNullOrWhiteSpace(referencePath))
-            throw new ArgumentException("referencePath is null or empty");
-        if (string.IsNullOrWhiteSpace(outputPath))
-            throw new ArgumentException("outputPath is null or empty");
-
-        DdbResult result;
-        try
-        {
-            result = _AlignRaster(sourcePath, referencePath, outputPath, mode, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to align raster");
-                return json;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("align raster")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "align raster");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("align raster"));
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(referencePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBAlignRaster),
+            (out IntPtr output) => NativeDdb.DDBAlignRaster(sourcePath, referencePath, outputPath, mode, out output));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBExportRaster")]
-    private static extern DdbResult _ExportRaster(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? preset,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bands,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? formula,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bandFilter,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? colormap,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? rescale);
 
     public void ExportRaster(string inputPath, string outputPath,
         string? preset = null, string? bands = null, string? formula = null,
         string? bandFilter = null, string? colormap = null, string? rescale = null)
     {
-        if (string.IsNullOrWhiteSpace(inputPath))
-            throw new ArgumentException("inputPath is null or empty");
-        if (string.IsNullOrWhiteSpace(outputPath))
-            throw new ArgumentException("outputPath is null or empty");
-
-        DdbResult result;
-        try
-        {
-            result = _ExportRaster(inputPath, outputPath, preset, bands, formula, bandFilter,
-                                    colormap, rescale);
-            if (result == DdbResult.Success)
-                return;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("export raster")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "export raster");
+        ArgumentException.ThrowIfNullOrWhiteSpace(inputPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+        NativeCall.Invoke(nameof(NativeDdb.DDBExportRaster),
+            () => NativeDdb.DDBExportRaster(inputPath, outputPath, preset, bands, formula, bandFilter, colormap,
+                rescale));
     }
 
-    // Progress callback contract: DdbProgressCallbackNative (bridged by NativeProgressCallback)
-    [DllImport("ddb", EntryPoint = "DDBExportRaster2")]
-    private static extern DdbResult _ExportRaster2(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? preset,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bands,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? formula,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bandFilter,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? colormap,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? rescale,
-        int tileSize,
-        DdbProgressCallbackNative? progress,
-        IntPtr progressUserData);
-
     /// <summary>
-    /// Export raster with visualization params applied as GeoTIFF using the
-    /// block-windowed implementation (bounded peak memory). Supports incremental
-    /// progress reporting and cooperative cancellation.
+    /// Export raster with visualization params applied as GeoTIFF using the block-windowed
+    /// implementation (bounded peak memory), with progress reporting and cooperative cancellation.
     /// </summary>
     /// <param name="tileSize">Tile size in pixels for windowed processing; 0 = auto.</param>
     /// <param name="progress">Optional callback invoked with (fraction 0..1, phase). May be null.</param>
     /// <param name="cancellationToken">Cancels the operation cooperatively; raises <see cref="DdbCanceledException"/>.</param>
-    public void ExportRaster(string inputPath, string outputPath,
+    public unsafe void ExportRaster(string inputPath, string outputPath,
         string? preset, string? bands, string? formula, string? bandFilter,
         string? colormap, string? rescale,
         int tileSize, Action<double, string?>? progress, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(inputPath))
-            throw new ArgumentException("inputPath is null or empty");
-        if (string.IsNullOrWhiteSpace(outputPath))
-            throw new ArgumentException("outputPath is null or empty");
+        ArgumentException.ThrowIfNullOrWhiteSpace(inputPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
 
-        // Bridge managed progress + cancellation to the native callback contract; the bridge is
-        // only allocated when there is something to observe.
-        var callback = NativeProgressCallback.Create(progress, cancellationToken);
+        // The bridge is only allocated when there is something to observe
+        using var callback = NativeProgressCallback.Create(progress, cancellationToken);
 
-        DdbResult result;
-        try
-        {
-            result = _ExportRaster2(inputPath, outputPath, preset, bands, formula,
-                bandFilter, colormap, rescale, tileSize, callback?.Native, IntPtr.Zero);
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("export raster")}\", check inner exception for details", ex);
-        }
-        finally
-        {
-            // Keep the delegate alive across the synchronous P/Invoke.
-            GC.KeepAlive(callback);
-        }
+        var result = NativeDdb.DDBExportRaster2(inputPath, outputPath, preset, bands, formula, bandFilter, colormap,
+            rescale, tileSize, callback == null ? null : NativeProgressCallback.FunctionPointer,
+            callback?.UserData ?? IntPtr.Zero);
 
-        // An exception thrown by the progress observer canceled the native call: it wins over the
-        // canceled result. Otherwise canceled -> DdbCanceledException, other failures -> typed exceptions.
+        // An exception thrown by the observer canceled the call: it wins over the canceled result.
+        // ThrowIfFaulted makes no libddb call, so the last error is still the export's.
         callback?.ThrowIfFaulted();
-        ThrowForFinalResult(result, "export raster");
+        NativeCall.Check(result, nameof(NativeDdb.DDBExportRaster2));
     }
-
-    #endregion
-
-    #region Raster Analysis P/Invoke
-
-    [DllImport("ddb", EntryPoint = "DDBGetRasterValueInfo")]
-    private static extern DdbResult _GetRasterValueInfo(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, out IntPtr output);
 
     public string GetRasterValueInfo(string path)
     {
-        if (path == null) throw new ArgumentException("path is null");
-
-        DdbResult result;
-        try
-        {
-            result = _GetRasterValueInfo(path, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to get raster value info");
-                return json;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster value info")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "get raster value info");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("get raster value info"));
+        ArgumentNullException.ThrowIfNull(path);
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGetRasterValueInfo),
+            (out IntPtr output) => NativeDdb.DDBGetRasterValueInfo(path, out output));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBGetRasterPointValue")]
-    private static extern DdbResult _GetRasterPointValue(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, int x, int y, out IntPtr output);
 
     public string GetRasterPointValue(string path, int x, int y)
     {
-        if (path == null) throw new ArgumentException("path is null");
-
-        DdbResult result;
-        try
-        {
-            result = _GetRasterPointValue(path, x, y, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to get raster point value");
-                return json;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster point value")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "get raster point value");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("get raster point value"));
+        ArgumentNullException.ThrowIfNull(path);
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGetRasterPointValue),
+            (out IntPtr output) => NativeDdb.DDBGetRasterPointValue(path, x, y, out output));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBGetRasterAreaStats")]
-    private static extern DdbResult _GetRasterAreaStats(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, int x0, int y0, int x1, int y1, out IntPtr output);
 
     public string GetRasterAreaStats(string path, int x0, int y0, int x1, int y1)
     {
-        if (path == null) throw new ArgumentException("path is null");
-
-        DdbResult result;
-        try
-        {
-            result = _GetRasterAreaStats(path, x0, y0, x1, y1, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to get raster area stats");
-                return json;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster area stats")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "get raster area stats");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("get raster area stats"));
+        ArgumentNullException.ThrowIfNull(path);
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGetRasterAreaStats),
+            (out IntPtr output) => NativeDdb.DDBGetRasterAreaStats(path, x0, y0, x1, y1, out output));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBGetRasterProfile")]
-    private static extern DdbResult _GetRasterProfile(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string geoJsonLineString,
-        int samples,
-        out IntPtr output);
 
     public string GetRasterProfile(string path, string geoJsonLineString, int samples)
     {
-        if (path == null) throw new ArgumentException("path is null");
-        if (geoJsonLineString == null) throw new ArgumentException("geoJsonLineString is null");
-
-        DdbResult result;
-        try
-        {
-            result = _GetRasterProfile(path, geoJsonLineString, samples, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to get raster profile");
-                return json;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("get raster profile")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "get raster profile");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("get raster profile"));
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(geoJsonLineString);
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGetRasterProfile),
+            (out IntPtr output) => NativeDdb.DDBGetRasterProfile(path, geoJsonLineString, samples, out output));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBCalculateVolume")]
-    private static extern DdbResult _CalculateVolume(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string rasterPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string polygonGeoJson,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string baseMethod,
-        double flatElevation,
-        out IntPtr output);
 
     public string CalculateVolume(string path, string polygonGeoJson, string baseMethod, double flatElevation)
     {
-        if (path == null) throw new ArgumentException("path is null");
-        if (polygonGeoJson == null) throw new ArgumentException("polygonGeoJson is null");
-        baseMethod ??= string.Empty;
-
-        DdbResult result;
-        try
-        {
-            result = _CalculateVolume(path, polygonGeoJson, baseMethod, flatElevation, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to calculate volume");
-                return json;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("calculate volume")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "calculate volume");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("calculate volume"));
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(polygonGeoJson);
+        var method = baseMethod ?? string.Empty;
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBCalculateVolume),
+            (out IntPtr output) => NativeDdb.DDBCalculateVolume(path, polygonGeoJson, method, flatElevation,
+                out output));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBDetectStockpile")]
-    private static extern DdbResult _DetectStockpile(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string rasterPath,
-        double lat,
-        double lon,
-        double radius,
-        float sensitivity,
-        out IntPtr output);
 
     public string DetectStockpile(string path, double lat, double lon, double radiusMeters, float sensitivity)
     {
-        if (path == null) throw new ArgumentException("path is null");
-        if (!(radiusMeters > 0)) throw new ArgumentException("radius must be positive", nameof(radiusMeters));
+        ArgumentNullException.ThrowIfNull(path);
+        if (!(radiusMeters > 0))
+            throw new ArgumentException("radius must be positive", nameof(radiusMeters));
 
-        DdbResult result;
-        try
-        {
-            result = _DetectStockpile(path, lat, lon, radiusMeters, sensitivity, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to detect stockpile");
-                return json;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("detect stockpile")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "detect stockpile");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("detect stockpile"));
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBDetectStockpile),
+            (out IntPtr output) => NativeDdb.DDBDetectStockpile(path, lat, lon, radiusMeters, sensitivity, out output));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBDetectAllStockpiles")]
-    private static extern DdbResult _DetectAllStockpiles(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string rasterPath,
-        float sensitivity,
-        double minAreaM2,
-        int maxResults,
-        out IntPtr output);
 
     public string DetectAllStockpiles(string path, float sensitivity, double minAreaM2, int maxResults)
     {
-        if (path == null) throw new ArgumentException("path is null");
-        if (sensitivity < 0f || sensitivity > 1f) throw new ArgumentException("sensitivity must be in [0,1]", nameof(sensitivity));
-        if (minAreaM2 < 0.0) throw new ArgumentException("minAreaM2 must be >= 0", nameof(minAreaM2));
-        if (maxResults <= 0) throw new ArgumentException("maxResults must be > 0", nameof(maxResults));
+        ArgumentNullException.ThrowIfNull(path);
+        if (sensitivity is < 0f or > 1f)
+            throw new ArgumentException("sensitivity must be in [0,1]", nameof(sensitivity));
+        if (minAreaM2 < 0.0)
+            throw new ArgumentException("minAreaM2 must be >= 0", nameof(minAreaM2));
+        if (maxResults <= 0)
+            throw new ArgumentException("maxResults must be > 0", nameof(maxResults));
 
-        DdbResult result;
-        try
-        {
-            result = _DetectAllStockpiles(path, sensitivity, minAreaM2, maxResults, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to detect stockpiles");
-                return json;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("detect all stockpiles")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "detect all stockpiles");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("detect all stockpiles"));
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBDetectAllStockpiles),
+            (out IntPtr output) =>
+                NativeDdb.DDBDetectAllStockpiles(path, sensitivity, minAreaM2, maxResults, out output));
     }
 
-    [DllImport("ddb", EntryPoint = "DDBGenerateContours")]
-    private static extern DdbResult _GenerateContours(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string rasterPath,
-        double interval,
-        int count,
-        double baseOffset,
-        double minElev,
-        double maxElev,
-        double simplifyTolerance,
-        int bandIndex,
-        out IntPtr output);
-
-    /// <summary>
-    /// Generate contour lines (GeoJSON FeatureCollection of LineStrings with
-    /// an `elev` property) from a single-band elevation raster.
-    /// </summary>
-    /// <param name="path">Path to the raster (DEM/DSM/DTM).</param>
-    /// <param name="interval">Contour interval (raster units). When null, <paramref name="count"/> drives the spacing.</param>
-    /// <param name="count">Target number of contour levels. Used when <paramref name="interval"/> is null.</param>
-    /// <param name="baseOffset">Reference base elevation for level alignment.</param>
-    /// <param name="minElev">Drop contours below this elevation. Null disables the bound.</param>
-    /// <param name="maxElev">Drop contours above this elevation. Null disables the bound.</param>
-    /// <param name="simplifyTolerance">Geometry simplification tolerance in raster CRS units (0 = none).</param>
-    /// <param name="bandIndex">1-based raster band index (defaults to 1).</param>
     public string GenerateContours(string path,
                                    double? interval,
                                    int? count,
@@ -2735,395 +665,159 @@ public class NativeDdbWrapper : IDdbWrapper
                                    double simplifyTolerance = 0.0,
                                    int bandIndex = 1)
     {
-        if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("path is null or empty", nameof(path));
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
         if (!interval.HasValue && !count.HasValue)
             throw new ArgumentException("Either interval or count must be specified");
-        if (interval.HasValue && interval.Value <= 0.0)
+        if (interval is <= 0.0)
             throw new ArgumentException("interval must be > 0", nameof(interval));
-        if (count.HasValue && count.Value <= 0)
+        if (count is <= 0)
             throw new ArgumentException("count must be > 0", nameof(count));
         if (simplifyTolerance < 0.0)
             throw new ArgumentException("simplifyTolerance must be >= 0", nameof(simplifyTolerance));
         if (bandIndex <= 0)
             throw new ArgumentException("bandIndex must be > 0", nameof(bandIndex));
 
-        var iv = interval ?? 0.0;        // <= 0 => unset on native side
-        var cnt = count ?? 0;            // <= 0 => unset on native side
-        var lo = minElev ?? double.NaN;  // NaN => unset on native side
-        var hi = maxElev ?? double.NaN;  // NaN => unset on native side
+        // Native "unset" values: <= 0 for interval and count, NaN for the bounds
+        var iv = interval ?? 0.0;
+        var cnt = count ?? 0;
+        var lo = minElev ?? double.NaN;
+        var hi = maxElev ?? double.NaN;
 
-        DdbResult result;
-        try
-        {
-            result = _GenerateContours(path, iv, cnt, baseOffset, lo, hi,
-                                                  simplifyTolerance, bandIndex, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to generate contours");
-                return json;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("generate contours")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "generate contours");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("generate contours"));
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGenerateContours),
+            (out IntPtr output) => NativeDdb.DDBGenerateContours(path, iv, cnt, baseOffset, lo, hi, simplifyTolerance,
+                bandIndex, out output));
     }
-
-    #endregion
-
-    [DllImport("ddb", EntryPoint = "DDBMaskBorders")]
-    private static extern DdbResult _MaskBorders(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string input,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string output,
-        int nearDist,
-        [MarshalAs(UnmanagedType.Bool)] bool white);
 
     public void MaskBorders(string input, string output, int nearDist = 15, bool white = false)
     {
-        if (string.IsNullOrWhiteSpace(input))
-            throw new ArgumentException("input is null or empty");
-        if (string.IsNullOrWhiteSpace(output))
-            throw new ArgumentException("output is null or empty");
-
-        DdbResult result;
-        try
-        {
-            result = _MaskBorders(input, output, nearDist, white);
-            if (result == DdbResult.Success) return;
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("mask borders")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "mask borders");
+        ArgumentException.ThrowIfNullOrWhiteSpace(input);
+        ArgumentException.ThrowIfNullOrWhiteSpace(output);
+        NativeCall.Invoke(nameof(NativeDdb.DDBMaskBorders), () => NativeDdb.DDBMaskBorders(input, output, nearDist, white));
     }
 
-    #region OGC services (raster region + vector query/describe) P/Invoke
-
-    [DllImport("ddb", EntryPoint = "DDBRenderRasterRegionEx")]
-    private static extern DdbResult _RenderRasterRegionEx(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
-        [In] double[] bbox,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string bboxSrs,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputCrs,
-        [In] int[] bands,
-        int bandCount,
-        int width, int height,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string format,
-        out IntPtr outBuffer, out int outBufferSize);
+    // ---------------------------------------------------------------- OGC
 
     public byte[] RenderRasterRegion(string inputPath, double[] bbox, string bboxSrs,
                                      int width, int height, string format,
                                      int[]? bands = null, string? outputCrs = null)
     {
-        if (string.IsNullOrWhiteSpace(inputPath))
-            throw new ArgumentException("inputPath is null or empty");
-        if (bbox == null || bbox.Length != 4)
-            throw new ArgumentException("bbox must contain exactly 4 elements: [minX,minY,maxX,maxY]");
-        if (width <= 0 || height <= 0)
-            throw new ArgumentException("width and height must be positive");
-        if (string.IsNullOrWhiteSpace(format))
-            throw new ArgumentException("format is null or empty");
+        ArgumentException.ThrowIfNullOrWhiteSpace(inputPath);
+        RequireBbox(bbox);
+        RequireSize(width, height);
+        ArgumentException.ThrowIfNullOrWhiteSpace(format);
 
-        // Always go through the Ex entry point so both legacy and OGC WCS
-        // (band subset + alternate output CRS) callers share the same path.
-        var bandArr = bands ?? [];
-
-        DdbResult result;
-        try
-        {
-            result = _RenderRasterRegionEx(inputPath, bbox, bboxSrs ?? string.Empty,
-                                                      outputCrs ?? string.Empty,
-                                                      bandArr, bandArr.Length,
-                                                      width, height, format,
-                                                      out var outBuffer, out var outSize);
-            if (result == DdbResult.Success)
-            {
-                var dest = new byte[outSize];
-                Marshal.Copy(outBuffer, dest, 0, outSize);
-                _DDBVSIFree(outBuffer);
-                return dest;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("render raster region")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "render raster region");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("render raster region"));
+        // Always the Ex entry point, so legacy and OGC WCS callers (band subset, output CRS) share one path
+        var bandArray = bands ?? [];
+        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBRenderRasterRegionEx),
+            (out IntPtr buffer, out int length) => NativeDdb.DDBRenderRasterRegionEx(inputPath, bbox,
+                bboxSrs ?? string.Empty, outputCrs ?? string.Empty, bandArray, bandArray.Length, width, height,
+                format, out buffer, out length));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBRenderRasterIndex")]
-    private static extern DdbResult _RenderRasterIndex(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string indexName,
-        [In] double[] bbox,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string bboxSrs,
-        int width, int height,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string format,
-        out IntPtr outBuffer, out int outBufferSize);
 
     public byte[] RenderRasterIndex(string inputPath, string indexName, double[] bbox,
                                     string bboxSrs, int width, int height, string format)
     {
-        if (string.IsNullOrWhiteSpace(inputPath))
-            throw new ArgumentException("inputPath is null or empty");
-        if (string.IsNullOrWhiteSpace(indexName))
-            throw new ArgumentException("indexName is null or empty");
-        if (bbox == null || bbox.Length != 4)
-            throw new ArgumentException("bbox must contain exactly 4 elements: [minX,minY,maxX,maxY]");
-        if (width <= 0 || height <= 0)
-            throw new ArgumentException("width and height must be positive");
-        if (string.IsNullOrWhiteSpace(format))
-            throw new ArgumentException("format is null or empty");
+        ArgumentException.ThrowIfNullOrWhiteSpace(inputPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(indexName);
+        RequireBbox(bbox);
+        RequireSize(width, height);
+        ArgumentException.ThrowIfNullOrWhiteSpace(format);
 
-        DdbResult result;
-        try
-        {
-            result = _RenderRasterIndex(inputPath, indexName, bbox, bboxSrs ?? string.Empty,
-                                                   width, height, format,
-                                                   out var outBuffer, out var outSize);
-            if (result == DdbResult.Success)
-            {
-                var dest = new byte[outSize];
-                Marshal.Copy(outBuffer, dest, 0, outSize);
-                _DDBVSIFree(outBuffer);
-                return dest;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("render raster index")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "render raster index");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("render raster index"));
+        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBRenderRasterIndex),
+            (out IntPtr buffer, out int length) => NativeDdb.DDBRenderRasterIndex(inputPath, indexName, bbox,
+                bboxSrs ?? string.Empty, width, height, format, out buffer, out length));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBQueryRasterPoint")]
-    private static extern DdbResult _QueryRasterPoint(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
-        double x, double y,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string srs,
-        out IntPtr output);
 
     public string QueryRasterPoint(string inputPath, double x, double y, string? srs = null)
     {
-        if (string.IsNullOrWhiteSpace(inputPath))
-            throw new ArgumentException("inputPath is null or empty");
-
-        DdbResult result;
-        try
-        {
-            result = _QueryRasterPoint(inputPath, x, y, srs ?? string.Empty, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to query raster point");
-                return json;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("query raster point")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "query raster point");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("query raster point"));
-    }
-
-    [DllImport("ddb", EntryPoint = "DDBQueryVectorEx")]
-    private static extern DdbResult _QueryVectorEx(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string vectorPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? layerName,
-        [In] double[]? bbox,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bboxSrs,
-        [In] long[]? fids, int numFids,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? where,
-        int maxFeatures, int startIndex,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputFormat,
-        out IntPtr output);
-
-    [DllImport("ddb", EntryPoint = "DDBCountVector")]
-    private static extern DdbResult _CountVector(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string vectorPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? layerName,
-        [In] double[]? bbox,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? bboxSrs,
-        [In] long[]? fids, int numFids,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? where,
-        out long count);
-
-    private static void ValidateVectorQuery(string vectorPath, VectorQuery query)
-    {
-        if (string.IsNullOrWhiteSpace(vectorPath))
-            throw new ArgumentException("vectorPath is null or empty");
-        ArgumentNullException.ThrowIfNull(query);
-        if (query.Bbox != null && query.Bbox.Length != 4)
-            throw new ArgumentException("bbox must contain exactly 4 elements when provided");
+        ArgumentException.ThrowIfNullOrWhiteSpace(inputPath);
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBQueryRasterPoint),
+            (out IntPtr output) => NativeDdb.DDBQueryRasterPoint(inputPath, x, y, srs ?? string.Empty, out output));
     }
 
     public string QueryVector(string vectorPath, VectorQuery query)
     {
         ValidateVectorQuery(vectorPath, query);
         var fids = query.Fids?.ToArray();
-
-        return CallVector("query vector", () =>
-        {
-            var result = _QueryVectorEx(vectorPath, query.LayerName, query.Bbox, query.BboxSrs, fids,
-                fids?.Length ?? 0, query.Where, query.MaxFeatures, query.StartIndex,
-                query.OutputFormat ?? "application/json",
-                out var output);
-            ThrowForFinalResult(result, "query vector");
-            var data = MarshalAndFreeUtf8(output);
-            if (string.IsNullOrWhiteSpace(data))
-                throw new DdbException("Unable to query vector");
-            return data;
-        });
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBQueryVectorEx),
+            (out IntPtr output) => NativeDdb.DDBQueryVectorEx(vectorPath, query.LayerName, query.Bbox, query.BboxSrs,
+                fids, fids?.Length ?? 0, query.Where, query.MaxFeatures, query.StartIndex,
+                query.OutputFormat ?? "application/json", out output));
     }
 
     public long CountVector(string vectorPath, VectorQuery query)
     {
         ValidateVectorQuery(vectorPath, query);
         var fids = query.Fids?.ToArray();
-
-        return CallVector("count vector", () =>
-        {
-            var result = _CountVector(vectorPath, query.LayerName, query.Bbox, query.BboxSrs, fids,
-                fids?.Length ?? 0, query.Where, out var count);
-            ThrowForFinalResult(result, "count vector");
-            return count;
-        });
+        var count = 0L;
+        NativeCall.Invoke(nameof(NativeDdb.DDBCountVector),
+            () => NativeDdb.DDBCountVector(vectorPath, query.LayerName, query.Bbox, query.BboxSrs, fids,
+                fids?.Length ?? 0, query.Where, out count));
+        return count;
     }
 
-    /// <summary>Runs a vector call, mapping interop failures to <see cref="DdbException"/>.</summary>
-    private static T CallVector<T>(string operation, Func<T> call)
+    public string DescribeVector(string vectorPath, string? layerName = null)
     {
-        try
-        {
-            return call();
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError(operation)}\", check inner exception for details", ex);
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(vectorPath);
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBDescribeVector),
+            (out IntPtr output) => NativeDdb.DDBDescribeVector(vectorPath, layerName, out output));
     }
-
-    [DllImport("ddb", EntryPoint = "DDBMakeCadPrj")]
-    private static extern DdbResult _MakeCadPrj([MarshalAs(UnmanagedType.LPUTF8Str)] string crs, out IntPtr output);
 
     public string MakeCadPrj(string crs)
     {
         ArgumentNullException.ThrowIfNull(crs);
-
-        DdbResult result;
-        IntPtr output;
         try
         {
-            result = _MakeCadPrj(crs, out output);
+            return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBMakeCadPrj),
+                (out IntPtr output) => NativeDdb.DDBMakeCadPrj(crs, out output));
         }
-        catch (EntryPointNotFoundException ex)
+        catch (DdbException ex) when (ex is DdbInvalidArgumentsException || ex.GetType() == typeof(DdbException))
         {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
+            // The port's contract: a value that is not a coordinate system is an argument error
+            throw new ArgumentException(ex.Message, nameof(crs), ex);
         }
-
-        if (result != DdbResult.Success)
-            throw new ArgumentException(SafeGetLastError("make CAD prj"));
-        return MarshalAndFreeUtf8(output);
     }
 
-    [DllImport("ddb", EntryPoint = "DDBDescribeVector")]
-    private static extern DdbResult _DescribeVector(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string vectorPath,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string? layerName,
-        out IntPtr output);
+    // ---------------------------------------------------------------- helpers
 
-    public string DescribeVector(string vectorPath, string? layerName = null)
+    private static string NormalizeSeparators(string path) => path.Replace('\\', '/');
+
+    private static string[] NormalizeSeparators(string[] paths)
     {
-        if (string.IsNullOrWhiteSpace(vectorPath))
-            throw new ArgumentException("vectorPath is null or empty");
-
-        DdbResult result;
-        try
-        {
-            result = _DescribeVector(vectorPath, layerName, out var output);
-            if (result == DdbResult.Success)
-            {
-                var json = MarshalAndFreeUtf8(output);
-                if (string.IsNullOrWhiteSpace(json))
-                    throw new DdbException("Unable to describe vector");
-                return json;
-            }
-        }
-        catch (EntryPointNotFoundException ex)
-        {
-            throw new DdbException($"Error in calling ddb lib: incompatible versions ({ex.Message})", ex);
-        }
-        catch (DdbException) { throw; }
-        catch (Exception ex)
-        {
-            throw new DdbException(
-                $"Error in calling ddb lib. Last error: \"{SafeGetLastError("describe vector")}\", check inner exception for details", ex);
-        }
-
-        ThrowForFinalResult(result, "describe vector");
-
-        // Unreachable in practice (Success bails above); kept for exhaustiveness.
-        throw new DdbException(SafeGetLastError("describe vector"));
+        ArgumentNullException.ThrowIfNull(paths);
+        return Array.ConvertAll(paths, p => p == null ? null! : NormalizeSeparators(p));
     }
 
-    #endregion
+    // A missing file is a clear managed error, not a native one
+    private static void RequireFile(string filePath)
+    {
+        if (!File.Exists(filePath))
+            throw new DdbException($"File not found: '{filePath}'. Cannot generate thumbnail for non-existent file.");
+    }
+
+    private static void RequirePaths(string[] paths)
+    {
+        if (paths == null || paths.Length == 0)
+            throw new ArgumentException("paths is null or empty", nameof(paths));
+    }
+
+    private static void RequireBbox(double[] bbox)
+    {
+        if (bbox == null || bbox.Length != 4)
+            throw new ArgumentException("bbox must contain exactly 4 elements: [minX,minY,maxX,maxY]", nameof(bbox));
+    }
+
+    private static void RequireSize(int width, int height)
+    {
+        if (width <= 0 || height <= 0)
+            throw new ArgumentException("width and height must be positive");
+    }
+
+    private static void ValidateVectorQuery(string vectorPath, VectorQuery query)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(vectorPath);
+        ArgumentNullException.ThrowIfNull(query);
+        if (query.Bbox != null && query.Bbox.Length != 4)
+            throw new ArgumentException("bbox must contain exactly 4 elements when provided", nameof(query));
+    }
 }

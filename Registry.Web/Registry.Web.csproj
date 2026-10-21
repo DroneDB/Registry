@@ -17,10 +17,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <AssemblyMetadata Include="DdbVersion" Value="$(DdbVersion)" />
-    </ItemGroup>
-
-    <ItemGroup>
         <InternalsVisibleTo Include="Registry.Web.UnitTest" />
         <InternalsVisibleTo Include="Registry.Web.IntegrationTest" />
         <InternalsVisibleTo Include="Registry.Web.TestSupport" />

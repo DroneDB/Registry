@@ -51,7 +51,7 @@ internal class MetaManagerTest : TestBase
 
     private readonly Guid _defaultDatasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
 
-    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper(true);
+    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper();
 
     [SetUp]
     public void Setup()

@@ -167,7 +167,7 @@ public class PendingRecoveryIntegrationTests
             _provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<JobIndexStateFilter>>()));
         InstallFailureFilters(failureFirst: true);
         GlobalJobFilters.Filters.Add(_gate);
-        var native = new NativeDdbWrapper(false);
+        var native = new NativeDdbWrapper();
         TestContext.Progress.WriteLine($"Native artifact: {native.GetVersion()}; MySQL prefix: {_prefix}; workers: 4");
     }
 
@@ -607,7 +607,9 @@ public class PendingRecoveryIntegrationTests
         await WaitForState(stagedId!, "Failed");
         var failed = (await Rows(ds)).Single(x => x.JobId == stagedId);
         failed.CurrentState.ShouldBe("Failed");
-        failed.ErrorType.ShouldBe(nameof(InvalidOperationException));
+        // XI-02: the low-disk failure is typed (libddb's reason "lowDiskSpace"), so the completeness
+        // checker treats it as transient; before libddb ABI 1.1 it was a generic InvalidOperationException
+        failed.ErrorType.ShouldBe(nameof(DdbRetryableException));
         var retry = await WaitForRetry(ds, 1);
         _environment.Set("DDB_MIN_FREE_DISK_MB", "0");
         MakeDue(ddb, "model.obj");
@@ -616,7 +618,7 @@ public class PendingRecoveryIntegrationTests
             (await Rows(ds)).Any(x => x.Path == "model.obj" && x.JobId != stagedId && x.CurrentState == "Succeeded"));
         var retained = (await Rows(ds)).Single(x => x.JobId == stagedId);
         retained.CurrentState.ShouldBe("Failed");
-        retained.ErrorType.ShouldBe(nameof(InvalidOperationException));
+        retained.ErrorType.ShouldBe(nameof(DdbRetryableException));
     }
 
     private void InstallFailureFilters(bool failureFirst)
@@ -644,7 +646,7 @@ public class PendingRecoveryIntegrationTests
     {
         var path = Path.Combine(_root, slug);
         Directory.CreateDirectory(path);
-        var ddb = new DDB(path, new NativeDdbWrapper(false));
+        var ddb = new DDB(path, new NativeDdbWrapper());
         ddb.Init();
         var id = Guid.NewGuid();
         _datasets[id] = ddb;

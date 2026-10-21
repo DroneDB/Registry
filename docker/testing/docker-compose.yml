@@ -39,6 +39,9 @@ services:
         depends_on:
             - db
         image: dronedb/registry:dev
+        # Graceful stop (Registry.Web/Utilities/ShutdownTimeouts.cs): Hangfire drains (15 s), libddb
+        # checkpoints its indexes (DDBShutdown, 10 s), the host allows 30 s; Docker must wait longer
+        stop_grace_period: 40s
         environment:
             - TZ=Europe/Rome
         tmpfs:

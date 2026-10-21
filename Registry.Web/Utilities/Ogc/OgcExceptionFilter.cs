@@ -61,7 +61,9 @@ public class OgcExceptionFilter : IExceptionFilter
                 status = 503;
                 context.HttpContext.Response.Headers.RetryAfter = "2";
                 break;
-            case DdbException dex:
+            // The generic native failure; the typed ones (retryable, shutdown, invalid arguments, not
+            // found) take the API's mapping in the default arm
+            case DdbException dex when dex.GetType() == typeof(DdbException):
                 // DroneDB native errors surface here. Map missing-dependency / build-in-progress
                 // patterns from the message; otherwise return 500 with the original message
                 // (avoids leaking implementation details while preserving diagnostic info).

@@ -22,12 +22,21 @@ call and normalisation):
 * The fake has no state: the fixtures are one recorded sequence, so a meta add does not change a
   later meta list.
 
-Served: `GetVersion`, `TileMimeType`, `ThumbnailMimeType`, `RegisterProcess` (no-op), `Add` (the
-recorded add), `Info`, `GetEntry`, `List`, `ListEntries`, `ListEntrySummaries`, `GetBuildStatus`,
-`IsBuildable`, `IsBuildComplete`, `GetPendingBuildInfo`, `IsBuildPending`, `MetaAdd`, `MetaSet`,
+Served: `GetVersion`, `TileMimeType`, `ThumbnailMimeType`, `Add` (the recorded add), `Info`,
+`GetEntry`, `List`, `ListEntries`, `ListEntrySummaries`, `GetBuildArtifacts` (per path, like the
+build-artifacts fixture), `ResolveBuildFile` (the recorded file; null for an unknown hash),
+`GetEntryTypes`, `CopyBuildArtifacts`, `GetPendingBuildInfo`, `IsBuildPending`, `MetaAdd`, `MetaSet`,
 `MetaGet`, `MetaUnset`, `MetaRemove`, `MetaList`, `MetaDump`, `Stac`, `StacItemCollection`,
-`GetRasterInfo`, `GetRasterMetadata`. The `pending-build-info` fixture records another dataset:
-read it with `ContractFixture.Load("pending-build-info")`.
+`GetRasterInfo`, `GetRasterMetadata`. The `pending-build-info` and `build-artifacts-pending` fixtures
+record another dataset: read them with `ContractFixture.Load(...)`.
+
+## FakeDdbRuntime
+
+An `IDdbRuntime` that never loads libddb: `Capabilities` is the `capabilities` fixture,
+`GetEffectiveConfig` the `effective-config` fixture, and the lifecycle calls (`Configure`,
+`SetLogSink`, `RegisterProcess`, `Shutdown`) are recorded in order, so a test can check the order a
+host makes them in; every call but `Shutdown` after `Shutdown` throws, as libddb refuses it.
+`RegistryWebFactory.DdbRuntime` is the one its host uses.
 
 `Registry.Web.UnitTest/Contract/FakeDdbWrapperTests.cs` checks that every vendored fixture is
 served (or listed as not served).

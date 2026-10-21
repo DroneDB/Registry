@@ -41,7 +41,8 @@ namespace Registry.Web.Test.Support;
 /// <item>native ddb: <see cref="DdbWrapper"/> is the resolved <see cref="IDdbWrapper"/>: a mock over
 /// <see cref="FakeDdbWrapper"/> (<c>CallBase</c>), so a call a test does not set up is answered from
 /// the libddb contract fixtures, or throws <see cref="NotSupportedException"/> when no fixture records
-/// it. Native libddb is never loaded.</item>
+/// it; <see cref="DdbRuntime"/> (a <see cref="FakeDdbRuntime"/>) is the <see cref="IDdbRuntime"/>.
+/// Native libddb is never loaded.</item>
 /// </list>
 /// Identity: <see cref="TestAuthHandler"/> (header <c>X-Test-User</c>) and peer address
 /// <see cref="TestPeerIpStartupFilter"/> (header <c>X-Test-Peer-IP</c>); see
@@ -102,6 +103,12 @@ public sealed class RegistryWebFactory : WebApplicationFactory<Program>
     public Mock<FakeDdbWrapper> DdbWrapper { get; }
 
     /// <summary>
+    /// The <see cref="IDdbRuntime"/> registered in the container (replaces the native one): records
+    /// the libddb lifecycle calls the host's DdbRuntimeService makes, without loading libddb.
+    /// </summary>
+    public FakeDdbRuntime DdbRuntime { get; } = new();
+
+    /// <summary>
     /// Creates a local user (optionally in the admin role) so it can be used with
     /// <see cref="TestRequestExtensions.AsUser"/>.
     /// </summary>
@@ -141,6 +148,8 @@ public sealed class RegistryWebFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<IDdbWrapper>();
             services.AddSingleton<IDdbWrapper>(DdbWrapper.Object);
+            services.RemoveAll<IDdbRuntime>();
+            services.AddSingleton<IDdbRuntime>(DdbRuntime);
 
             services.AddAuthentication()
                 .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName,

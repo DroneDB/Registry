@@ -51,7 +51,7 @@ internal static unsafe class Abi11ShutdownProbe
             if (gate != Gate.Applies)
                 return 3;
 
-            Ok(NativeDdbAbi11.DDBRegisterProcess(false), "DDBRegisterProcess");
+            Ok(NativeDdb.DDBRegisterProcess(false), "DDBRegisterProcess");
             Step("DDBRegisterProcess returns DDBERR_NONE");
 
             // A dataset with a pooled index connection, for the checkpoint and close
@@ -61,7 +61,7 @@ internal static unsafe class Abi11ShutdownProbe
             var file = Path.Combine(folder, "a.txt");
             File.WriteAllText(file, "a");
             wrapper.Add(folder, [file]);
-            Ok(NativeDdbAbi11.DDBListEntriesEx(folder, "", "", "", DdbListEntriesOptions.Create(true, false, true),
+            Ok(NativeDdb.DDBListEntriesEx(folder, "", "", "", DdbListEntriesOptions.Create(true, false, true),
                 out var listing), "DDBListEntriesEx");
             TakeString(listing);
             Step("dataset indexed and listed");
@@ -72,9 +72,9 @@ internal static unsafe class Abi11ShutdownProbe
             var wal = Path.Combine(folder, ".ddb", "dbase.sqlite-wal");
             WalLength(wal).ShouldBeGreaterThan(0, "the index WAL before DDBShutdown");
 
-            Ok(NativeDdbAbi11.DDBShutdown(30_000), "DDBShutdown");
+            Ok(NativeDdb.DDBShutdown(30_000), "DDBShutdown");
             Step("DDBShutdown(30 s) returns DDBERR_NONE");
-            Ok(NativeDdbAbi11.DDBShutdown(0), "DDBShutdown(again)");
+            Ok(NativeDdb.DDBShutdown(0), "DDBShutdown(again)");
             Step("DDBShutdown is idempotent");
 
             // The TRUNCATE checkpoint of the pooled connection emptied it
@@ -82,17 +82,17 @@ internal static unsafe class Abi11ShutdownProbe
             Step("index WAL checkpointed (non-empty before, empty after)");
 
             // The exempt accessors still work
-            DdbAbi.Decode(NativeDdbAbi11.DDBGetAbiVersion()).Major.ShouldBe(DdbAbi.Major);
-            NativeDdbAbi11.DDBGetCapabilities().ShouldNotBe(IntPtr.Zero);
+            DdbAbi.Decode(NativeDdb.DDBGetAbiVersion()).Major.ShouldBe(DdbAbi.Major);
+            NativeDdb.DDBGetCapabilities().ShouldNotBe(IntPtr.Zero);
             wrapper.GetVersion().ShouldNotBeNullOrWhiteSpace();
-            Ok(NativeDdbAbi11.DDBFreeCancelToken(IntPtr.Zero), "DDBFreeCancelToken(NULL)");
+            Ok(NativeDdb.DDBFreeCancelToken(IntPtr.Zero), "DDBFreeCancelToken(NULL)");
             Step("exempt accessors work after the shutdown");
 
             // Every other call is refused, DDBRegisterProcess and DDBConfigure too
-            Fails(NativeDdbAbi11.DDBNormalizePath("a", null, out _), DdbResult.Shutdown, "DDBNormalizePath");
-            Fails(NativeDdbAbi11.DDBRegisterProcess(false), DdbResult.Shutdown, "DDBRegisterProcess");
-            Fails(NativeDdbAbi11.DDBConfigure("{}"), DdbResult.Shutdown, "DDBConfigure");
-            Fails(NativeDdbAbi11.DDBListEntriesEx(folder, "", "", "", DdbListEntriesOptions.Create(true, false, false),
+            Fails(NativeDdb.DDBNormalizePath("a", null, out _), DdbResult.Shutdown, "DDBNormalizePath");
+            Fails(NativeDdb.DDBRegisterProcess(false), DdbResult.Shutdown, "DDBRegisterProcess");
+            Fails(NativeDdb.DDBConfigure("{}"), DdbResult.Shutdown, "DDBConfigure");
+            Fails(NativeDdb.DDBListEntriesEx(folder, "", "", "", DdbListEntriesOptions.Create(true, false, false),
                 out _), DdbResult.Shutdown, "DDBListEntriesEx");
             Should.Throw<DdbException>(() => wrapper.Init(Path.Combine(folder, "late")));
             Step("later calls return DDBERR_SHUTDOWN");
@@ -125,19 +125,19 @@ internal static unsafe class Abi11ShutdownProbe
         var notARaster = Path.Combine(folder, "not-a-raster.tif");
         File.WriteAllText(notARaster, "not a raster");
 
-        Ok(NativeDdbAbi11.DDBSetLogCallback(&ShutdownOnLog, (int)DdbLogLevel.Warning, IntPtr.Zero), "DDBSetLogCallback");
+        Ok(NativeDdb.DDBSetLogCallback(&ShutdownOnLog, (int)DdbLogLevel.Warning, IntPtr.Zero), "DDBSetLogCallback");
         try
         {
             Should.Throw<DdbException>(() => wrapper.GetRasterInfo(notARaster));
         }
         finally
         {
-            Ok(NativeDdbAbi11.DDBSetLogCallback(null, 0, IntPtr.Zero), "DDBSetLogCallback(NULL)");
+            Ok(NativeDdb.DDBSetLogCallback(null, 0, IntPtr.Zero), "DDBSetLogCallback(NULL)");
         }
 
         ((DdbResult)Volatile.Read(ref _shutdownFromCallback)).ShouldBe(DdbResult.InvalidArgs,
             "DDBShutdown from the log callback");
-        Ok(NativeDdbAbi11.DDBNormalizePath("a", null, out var output), "DDBNormalizePath after it");
+        Ok(NativeDdb.DDBNormalizePath("a", null, out var output), "DDBNormalizePath after it");
         TakeString(output);
         Step("DDBShutdown from the log callback returns DDBERR_INVALIDARGS, the library keeps running");
     }
@@ -147,7 +147,7 @@ internal static unsafe class Abi11ShutdownProbe
     {
         // ddb.h: DDBShutdown called from the log callback returns DDBERR_INVALIDARGS. First record only.
         if (Volatile.Read(ref _shutdownFromCallback) == NotRun)
-            Interlocked.CompareExchange(ref _shutdownFromCallback, (int)NativeDdbAbi11.DDBShutdown(0), NotRun);
+            Interlocked.CompareExchange(ref _shutdownFromCallback, (int)NativeDdb.DDBShutdown(0), NotRun);
     }
 
     private static long WalLength(string wal) => File.Exists(wal) ? new FileInfo(wal).Length : 0;

@@ -14,8 +14,10 @@
     </ItemGroup>
 
     <ItemGroup>
-      <!-- The ABI 1.1 contract tests call the internal NativeDdbAbi11 declarations (XI-01) -->
+      <!-- The adapter tests call the internal NativeDdb declarations and NativeCall (RQ-08) -->
       <InternalsVisibleTo Include="Registry.Adapters.Ddb.Test" />
+      <!-- The struct layout and marshalling rules of NativeDdb, checked without loading libddb -->
+      <InternalsVisibleTo Include="Registry.Adapters.Test" />
     </ItemGroup>
 
     <ItemGroup>

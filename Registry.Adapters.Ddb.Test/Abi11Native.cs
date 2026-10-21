@@ -1,11 +1,14 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Runtime.InteropServices;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
+using Registry.Test.Common;
 using Shouldly;
 
 namespace Registry.Adapters.Ddb.Test;
@@ -20,13 +23,10 @@ internal static class Abi11Native
     /// <summary>The outcome of the ABI handshake for the ABI 1.1 contract.</summary>
     internal enum Gate
     {
-        /// <summary>ABI 1.x with x &gt;= 1: every ABI 1.1 export must exist and work.</summary>
+        /// <summary>ABI 1.x with x &gt;= 1 and every export Registry calls: the contract applies in full.</summary>
         Applies,
 
-        /// <summary>ABI 1.0 (no <c>DDBGetAbiVersion</c>): the ABI 1.1 contract does not apply.</summary>
-        NotApplicable,
-
-        /// <summary>Another ABI major: the adapter cannot use this library at all.</summary>
+        /// <summary>The adapter cannot use this library (another ABI, ABI 1.0, a missing export).</summary>
         Incompatible
     }
 
@@ -41,30 +41,27 @@ internal static class Abi11Native
         CommonUtils.SetDefaultDllPath(ddbFolder);
     }
 
-    /// <summary>Checks the loaded libddb against the ABI these tests are written for (see the rule in <see cref="Abi11ContractTests"/>).</summary>
+    /// <summary>
+    /// The startup handshake of the adapter (<see cref="DdbAbi.Verify"/>): since RQ-08 Registry runs on
+    /// libddb ABI 1.1 only, so a library that fails it fails the tests, it never makes them inconclusive.
+    /// </summary>
     internal static (Gate Gate, string Message) CheckAbi()
     {
-        var loaded = DdbAbi.Loaded();
-        if (loaded is null)
-            return (Gate.NotApplicable,
-                $"libddb {new NativeDdbWrapper().GetVersion()} has no DDBGetAbiVersion (ABI 1.0): the ABI 1.1 " +
-                "contract does not apply. It runs against libddb >= 1.13 (DroneDB's registry_contract job).");
-
-        var (major, minor) = loaded.Value;
-        if (major != DdbAbi.Major)
-            return (Gate.Incompatible,
-                $"libddb reports ABI {major}.{minor}: Registry's adapter is written for ABI {DdbAbi.Major}.x");
-
-        return minor < DdbAbi.Minor
-            ? (Gate.NotApplicable, $"libddb reports ABI {major}.{minor}: the ABI {DdbAbi.Major}.{DdbAbi.Minor} contract does not apply")
-            : (Gate.Applies, $"libddb ABI {major}.{minor}");
+        try
+        {
+            return (Gate.Applies, DdbAbi.Verify().ToString());
+        }
+        catch (DdbAbiMismatchException ex)
+        {
+            return (Gate.Incompatible, ex.Message);
+        }
     }
 
     /// <summary>The message of the last failed call on this thread ("" when it succeeded).</summary>
-    internal static string LastError() => DdbResultMapper.GetNativeLastError() ?? "";
+    internal static string LastError() => DdbResultMapper.GetNativeLastError();
 
     /// <summary>The reason of the last failed call on this thread ("" for none).</summary>
-    internal static string LastErrorReason() => Marshal.PtrToStringUTF8(NativeDdbAbi11.DDBGetLastErrorReason()) ?? "";
+    internal static string LastErrorReason() => DdbResultMapper.GetNativeLastErrorReason();
 
     /// <summary>Asserts that a native call succeeded, with its native message otherwise.</summary>
     internal static void Ok(DdbResult result, string call) =>
@@ -87,12 +84,55 @@ internal static class Abi11Native
         }
         finally
         {
-            NativeDdbAbi11.DDBFree(output);
+            NativeDdb.DDBFree(output);
         }
     }
 
     /// <summary>The JSON output of a native call, freed with DDBFree.</summary>
     internal static JToken TakeJson(IntPtr output) => ParseJson(TakeString(output));
+
+    /// <summary>The mtime of the contract dataset's files (DroneDB tests/contract): entries get the fixtures' mtimes.</summary>
+    internal static readonly DateTime ContractMtime = DateTimeOffset.FromUnixTimeSeconds(1700000000).UtcDateTime;
+
+    /// <summary>The contract's a.txt (tests/contract/inputs/a.txt, byte for byte).</summary>
+    internal const string TextName = "a.txt";
+
+    internal const string TextContent = "DroneDB contract fixture input\n";
+
+    /// <summary>The name of the GeoRaster in a dataset of <see cref="CreateDataset"/>.</summary>
+    internal const string GeoRasterName = "byte.tif";
+
+    /// <summary>
+    /// A dataset folder <paramref name="name"/> in <paramref name="area"/> with the contract's a.txt and,
+    /// when <paramref name="geoRaster"/> is set, a copy of that GeoRaster as <see cref="GeoRasterName"/>,
+    /// both with the contract mtime, indexed.
+    /// </summary>
+    internal static string CreateDataset(NativeDdbWrapper wrapper, TestArea area, string name, string? geoRaster)
+    {
+        var root = Path.Combine(area.TestFolder, name);
+        Directory.CreateDirectory(root);
+        wrapper.Init(root);
+
+        var files = new List<string> { WriteContractFile(root, TextName, TextContent) };
+        if (geoRaster != null)
+        {
+            var raster = Path.Combine(root, GeoRasterName);
+            File.Copy(geoRaster, raster);
+            File.SetLastWriteTimeUtc(raster, ContractMtime);
+            files.Add(raster);
+        }
+
+        wrapper.Add(root, files.ToArray());
+        return root;
+    }
+
+    internal static string WriteContractFile(string root, string name, string content)
+    {
+        var path = Path.Combine(root, name);
+        File.WriteAllText(path, content, new UTF8Encoding(false));
+        File.SetLastWriteTimeUtc(path, ContractMtime);
+        return path;
+    }
 
     /// <summary>JSON as libddb wrote it: strings stay strings (no date parsing), so values compare exactly.</summary>
     internal static JToken ParseJson(string json)

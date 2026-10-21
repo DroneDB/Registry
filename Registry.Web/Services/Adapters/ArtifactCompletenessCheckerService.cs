@@ -239,7 +239,8 @@ public class ArtifactCompletenessCheckerService
     // (AutomaticRetry) and they never count towards the back-off.
     private static readonly HashSet<string> TransientErrorTypes = new(StringComparer.Ordinal)
     {
-        "DdbBusyException", "DdbBuildInProgressException"
+        nameof(DdbBusyException), nameof(DdbBuildInProgressException), nameof(DdbRetryableException),
+        nameof(DdbShutdownException)
     };
 
     private const int MaxBackoffDays = 30;
@@ -248,9 +249,9 @@ public class ArtifactCompletenessCheckerService
     /// Exponential back-off per entry content: after n consecutive failed builds of the
     /// same hash (latest first), the next nightly retry waits 2^(n-1) days, at most
     /// <see cref="MaxBackoffDays"/>. A build that keeps failing (an unreadable file)
-    /// fades to a monthly attempt instead of failing every night, while a transient
-    /// failure (disk full, tool timeout: they reach Registry with the same generic
-    /// exception type) is still retried within a day or two. A new upload (new hash)
+    /// fades to a monthly attempt instead of failing every night. A transient failure
+    /// (contention, disk full, tool timeout: libddb ABI 1.1 reports them as
+    /// <see cref="DdbRetryableException"/>) never counts. A new upload (new hash)
     /// or any non-failed build (e.g. a manual retry that succeeded) resets the count.
     /// </summary>
     internal static bool ShouldBackOff(IReadOnlyList<BuildAttempt> jobsLatestFirst, string hash, DateTime now,

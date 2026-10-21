@@ -40,6 +40,9 @@ services:
             db:
                 condition: service_healthy
         image: dronedb/registry:latest
+        # Graceful stop (Registry.Web/Utilities/ShutdownTimeouts.cs): Hangfire drains (15 s), libddb
+        # checkpoints its indexes (DDBShutdown, 10 s), the host allows 30 s; Docker must wait longer
+        stop_grace_period: 40s
         # Anonymous liveness (GET /health/live; /quickhealth needs the monitor token). The image
         # HEALTHCHECK runs the same script; it is repeated here for the longer start period: the
         # first start after the switch to the non-root user hands ./data to it (see entrypoint.sh).
@@ -83,6 +86,9 @@ services:
             registry_webserver:
                 condition: service_healthy
         image: dronedb/registry:latest
+        # Graceful stop (Registry.Web/Utilities/ShutdownTimeouts.cs): Hangfire drains (15 s), libddb
+        # checkpoints its indexes (DDBShutdown, 10 s), the host allows 30 s; Docker must wait longer
+        stop_grace_period: 40s
         # Fixed host name: the node's log file is logs/registry-node-<host name>.txt (the nodes share
         # ./data), so it must not change when the container is recreated
         hostname: node-a
@@ -116,6 +122,9 @@ services:
             registry_webserver:
                 condition: service_healthy
         image: dronedb/registry:latest
+        # Graceful stop (Registry.Web/Utilities/ShutdownTimeouts.cs): Hangfire drains (15 s), libddb
+        # checkpoints its indexes (DDBShutdown, 10 s), the host allows 30 s; Docker must wait longer
+        stop_grace_period: 40s
         # Fixed host name: the node's log file is logs/registry-node-<host name>.txt (the nodes share
         # ./data), so it must not change when the container is recreated
         hostname: node-b

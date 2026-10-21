@@ -34,9 +34,11 @@ public class GlobalSetup
             CommonUtils.SetDefaultDllPath(ddbFolder);
         }
 
-        var nativeDdbWrapper = new NativeDdbWrapper(true);
+        // What a host does at startup: the ABI handshake, then the initialization (DdbRuntimeService)
+        var capabilities = DdbAbi.Verify();
+        new NativeDdbRuntime().RegisterProcess(true);
 
-        Debug.WriteLine($"Initialized ddb version: {nativeDdbWrapper.GetVersion()}");
+        Debug.WriteLine($"Initialized ddb: {capabilities}");
     }
 
     [OneTimeTearDown]

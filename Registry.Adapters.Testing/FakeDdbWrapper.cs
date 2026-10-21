@@ -78,18 +78,17 @@ public class FakeDdbWrapper : IDdbWrapper
     private static readonly Lazy<HashSet<string>> IndexedPaths = new(() =>
         ContractFixture.Load("list").Output.Select(e => (string)e["path"]!).ToHashSet(StringComparer.Ordinal));
 
-    private static readonly Lazy<EntryBuildStatus[]> BuildStatuses =
-        new(() => Deserialize<EntryBuildStatus[]>(ContractFixture.Load("build-status").Output));
+    // The build-artifacts fixture, one element per recorded path (<root> still in place)
+    private static readonly Lazy<JArray> BuildArtifacts = new(() => (JArray)ContractFixture.Load("build-artifacts").Output);
+
+    // The recorded DDBResolveBuildFile and DDBCopyBuildArtifacts calls: the built ortho.tif
+    private const string BuiltHash = "d0d2b869615dca09ef0055f2014401bab298503e3e1f10e339f14f5788ea702f";
+    private const string BuiltFile = "cog/cog.tif";
 
     public virtual string TileMimeType => "image/png";
     public virtual string ThumbnailMimeType => "image/webp";
 
     public virtual string GetVersion() => Version;
-
-    /// <summary>Nothing to initialise: the fake has no native state.</summary>
-    public virtual void RegisterProcess(bool verbose = false)
-    {
-    }
 
     // ---------------------------------------------------------------- index
 
@@ -172,22 +171,47 @@ public class FakeDdbWrapper : IDdbWrapper
 
     // ---------------------------------------------------------------- build
 
-    public virtual EntryBuildStatus[] GetBuildStatus(string ddbPath, string[] paths)
+    /// <summary>
+    /// The build object of each path, from the <c>build-artifacts</c> fixture (built <c>ortho.tif</c>,
+    /// unbuilt <c>layer.geojson</c> and <c>cloud.las</c>, <c>a.txt</c>, <c>sub</c>, the unindexed
+    /// <c>missing.tif</c>): any recorded paths, in any order, with <c>&lt;root&gt;</c> as the caller's folder.
+    /// </summary>
+    public virtual EntryBuildArtifacts[] GetBuildArtifacts(string ddbPath, string[] paths)
     {
-        // Each status is a fact about one path: any recorded paths, in any order, are answered
-        var statuses = new EntryBuildStatus[paths.Length];
-        for (var i = 0; i < paths.Length; i++)
-            statuses[i] = BuildStatus(Generic(paths[i]))
-                          ?? throw NoFixture($"GetBuildStatus({ddbPath}, [{string.Join(", ", paths)}])");
+        var root = Generic(ddbPath);
+        var answers = new JArray();
+        foreach (var path in paths)
+        {
+            var recorded = BuildArtifacts.Value.FirstOrDefault(e => (string?)e["path"] == Generic(path))
+                           ?? throw NoFixture($"GetBuildArtifacts({ddbPath}, [{string.Join(", ", paths)}])");
+            answers.Add(WithRoot(recorded.DeepClone(), root));
+        }
 
-        return statuses;
+        return Deserialize<EntryBuildArtifacts[]>(answers);
     }
 
-    public virtual bool IsBuildable(string ddbPath, string path) =>
-        (BuildStatus(Generic(path)) ?? throw NoFixture($"IsBuildable({ddbPath}, {path})")).Buildable;
+    /// <summary>
+    /// The recorded <c>cog/cog.tif</c> of the built <c>ortho.tif</c> (<c>resolve-build-file</c>); null,
+    /// libddb's not-found answer, for a hash no entry of the contract dataset has.
+    /// </summary>
+    public virtual string? ResolveBuildFile(string ddbPath, string hash, string path)
+    {
+        if (hash == BuiltHash && Generic(path) == BuiltFile)
+            return (string)WithRoot(ContractFixture.Load("resolve-build-file").Output, Generic(ddbPath))!;
 
-    public virtual bool IsBuildComplete(string ddbPath, string path) =>
-        (BuildStatus(Generic(path)) ?? throw NoFixture($"IsBuildComplete({ddbPath}, {path})")).Complete;
+        if (!BuildArtifacts.Value.Any(e => (string?)e["build"]?["hash"] == hash))
+            return null;
+
+        throw NoFixture($"ResolveBuildFile({ddbPath}, {hash}, {path})");
+    }
+
+    public virtual IReadOnlyList<EntryTypeInfo> GetEntryTypes() =>
+        Serve<List<EntryTypeInfo>>("entry-types", "GetEntryTypes()");
+
+    /// <summary>The recorded copy of the built <c>ortho.tif</c> to another dataset (<c>copy-build-artifacts</c>).</summary>
+    public virtual CopiedBuildArtifacts CopyBuildArtifacts(string sourceDdbPath, string destinationDdbPath, string hash) =>
+        Serve<CopiedBuildArtifacts>(hash == BuiltHash ? "copy-build-artifacts" : null,
+            $"CopyBuildArtifacts({sourceDdbPath}, {destinationDdbPath}, {hash})");
 
     /// <summary>
     /// The contract dataset has nothing pending (<c>pending-build-info-none</c>). The
@@ -378,7 +402,6 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual void Build(string ddbPath, string? source = null, string? dest = null, bool force = false,
         bool pendingOnly = false) => throw Unsupported();
 
-    public virtual bool IsBuildActive(string ddbPath, string path) => throw Unsupported();
     public virtual DdbCleanupResult Cleanup(string ddbPath) => throw Unsupported();
     public virtual List<RescanResult> RescanIndex(string ddbPath, RescanOptions? options = null) => throw Unsupported();
 
@@ -497,9 +520,6 @@ public class FakeDdbWrapper : IDdbWrapper
 
     private static string RasterText(string? fixture, string call) =>
         fixture == null ? throw NoFixture(call) : ContractFixture.Load(fixture).Output.ToString(Formatting.None);
-
-    private static EntryBuildStatus? BuildStatus(string path) =>
-        BuildStatuses.Value.FirstOrDefault(s => s.Path == path);
 
     private static bool IsRasterFile(string path)
     {

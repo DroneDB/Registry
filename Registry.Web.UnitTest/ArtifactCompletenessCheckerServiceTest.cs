@@ -411,6 +411,10 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
             [new("h", "Succeeded", null, now.AddDays(-0.5)), Failed(1), Failed(2)], "h", now, out _, out _).ShouldBeFalse();
         ArtifactCompletenessCheckerService.ShouldBackOff(
             [Failed(0.1, type: "DdbBusyException")], "h", now, out _, out _).ShouldBeFalse();
+        // XI-02: a full disk or a tool timeout (libddb ABI 1.1 reason) is transient, not a content failure
+        ArtifactCompletenessCheckerService.ShouldBackOff(
+            [Failed(0.1, type: nameof(DdbRetryableException)), Failed(0.2, type: nameof(DdbRetryableException))],
+            "h", now, out _, out _).ShouldBeFalse();
         ArtifactCompletenessCheckerService.ShouldBackOff([Failed(0.1, hash: "old")], "h", now, out _, out _).ShouldBeFalse();
     }
 

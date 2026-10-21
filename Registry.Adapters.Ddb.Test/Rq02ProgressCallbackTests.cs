@@ -27,7 +27,7 @@ public class Rq02ProgressCallbackTests : TestBase
 
     private static readonly string TestGeoTiffUrl = TestData.Url("brighton/odm_orthophoto.tif");
 
-    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper(true);
+    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper();
 
     private string _outputFolder = null!;
 
@@ -48,7 +48,8 @@ public class Rq02ProgressCallbackTests : TestBase
             CommonUtils.SetDefaultDllPath(ddbFolder);
         }
 
-        DdbWrapper.RegisterProcess(true);
+        DdbAbi.Verify();
+        new NativeDdbRuntime().RegisterProcess(true);
     }
 
     [SetUp]

@@ -20,8 +20,26 @@ This project adheres to the [Contributor Covenant](CONDUCT.md). By participating
 
 - **.NET 10 SDK** (or later)
 - **Node.js >= 18** (for the Vue.js frontend)
-- **DroneDB C++ library** (`ddb.dll`/`libddb.so`) available in system PATH
+- **DroneDB C++ library** (`ddb.dll`/`libddb.so`) available in system PATH: the build pinned in
+  `Directory.Build.props` (libddb ABI 1.1; Registry refuses to start on another ABI, see below)
 - **Git** for version control
+
+### The DroneDB build (libddb)
+
+`Directory.Build.props` pins one DroneDB build (`DdbSource`, `DdbVersion`, checksums) and
+`scripts/ddb-release.sh` downloads exactly that build for CI, Docker and the Windows embed. At startup
+Registry checks the loaded library (ABI 1.x with x >= 1, every export it calls) and fails with one
+message otherwise.
+
+```bash
+bash scripts/ddb-release.sh describe                 # which DroneDB build is pinned
+bash scripts/ddb-release.sh fetch-deb /tmp/ddb       # download and verify the pinned .deb
+# A pinned CI build (DdbSource ci) is a GitHub Actions artifact: set DRONEDB_ARTIFACT_TOKEN (a token
+# with Actions read access to DroneDB/DroneDB) or log in with the GitHub CLI (gh auth login)
+
+# Run Registry and its tests on a DroneDB build of your own (a folder with libddb.so)
+eval "$(DDB_LOCAL_BUILD=../DroneDB/build bash scripts/ddb-release.sh dev-env)"
+```
 
 ### Backend (.NET Core)
 

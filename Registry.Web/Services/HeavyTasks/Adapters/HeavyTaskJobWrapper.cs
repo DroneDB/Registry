@@ -55,7 +55,7 @@ public sealed class HeavyTaskJobWrapper
     // because Hangfire discovers AutomaticRetry per-job-method via reflection (see there).
     [AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
-        OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
+        OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException), typeof(DdbRetryableException)])]
     // No [Queue]: BuildQueueRoutingFilter routes this job to "tasks" or "builds" by tool.
     public async Task Run(string toolId, string toolVersion, string requestJson,
         PerformContext ctx, CancellationToken cancellationToken)

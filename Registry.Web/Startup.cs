@@ -78,6 +78,9 @@ public class Startup
 
     public void ConfigureServices(IServiceCollection services)
     {
+        // libddb's lifecycle first: it starts before and stops after every other hosted service
+        services.AddDdbRuntime<NativeDdbRuntime>(Configuration);
+
         services.AddCors();
         services.AddControllers(o => o.Filters.Add<ApiExceptionFilter>());
 

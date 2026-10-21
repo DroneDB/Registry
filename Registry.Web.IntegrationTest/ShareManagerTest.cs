@@ -71,7 +71,7 @@ class ShareManagerTest : TestBase
 
     private readonly FileSystem _fileSystem = new FileSystem();
 
-    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper(true);
+    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper();
 
     private const string BaseTestFolder = "ShareManagerTest";
 

@@ -1,14 +1,16 @@
 using System;
+using System.Threading;
 
 namespace Registry.Ports.DroneDB;
 
 /// <summary>
-/// Thrown when a long-running DroneDB operation was cooperatively canceled by
-/// its progress callback (native result <c>DDBERR_CANCELED</c>). Distinct from
-/// <see cref="DdbException"/> so callers can distinguish a user/host-initiated
-/// cancellation from a genuine failure without resorting to string matching.
+/// A DroneDB call stopped because it was canceled (native result <c>DDBERR_CANCELED</c>: its
+/// progress callback or its cancel token asked it to). It is an
+/// <see cref="OperationCanceledException"/>, not a <see cref="DdbException"/>: a cancellation is
+/// not a failure, so it is never wrapped or counted as one, and code that handles cancellation
+/// handles it.
 /// </summary>
-public class DdbCanceledException : DdbException
+public class DdbCanceledException : OperationCanceledException
 {
     public DdbCanceledException()
     {
@@ -19,6 +21,10 @@ public class DdbCanceledException : DdbException
     }
 
     public DdbCanceledException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
+
+    public DdbCanceledException(string message, CancellationToken token) : base(message, token)
     {
     }
 }

@@ -27,8 +27,6 @@ public interface IDdbWrapper
     /// <see cref="AddWithOptions"/> for files with the hash their writer computed
     /// (DDBAddWithHints): DroneDB uses a hint only while the file still has its size and write
     /// time, so a stale hint is never indexed. Paths are absolute; folders are not expanded.
-    /// With a libddb that predates DDBAddWithHints the files are added (and hashed) through
-    /// <see cref="AddWithOptions"/>.
     /// </summary>
     public BatchAddResult AddWithHints(string ddbPath, IReadOnlyList<AddItem> files, bool stopOnError = false);
 
@@ -125,35 +123,51 @@ public interface IDdbWrapper
     public void Build(string ddbPath, string? source = null, string? dest = null, bool force = false,
         bool pendingOnly = false);
 
-    public bool IsBuildable(string ddbPath, string path);
-
-    public bool IsBuildActive(string ddbPath, string path);
+    /// <summary>
+    /// The build state and the existing artifacts of several entries with one index open
+    /// (DDBGetBuildArtifacts, XI-04): one element per path, in input order. libddb owns the build
+    /// layout, the states and the type rules; Registry serves the paths it returns.
+    /// </summary>
+    /// <param name="ddbPath">Dataset folder (parent of .ddb)</param>
+    /// <param name="paths">Dataset-relative entry paths (exact match)</param>
+    public EntryBuildArtifacts[] GetBuildArtifacts(string ddbPath, string[] paths);
 
     /// <summary>
-    /// Checks whether the build output for an entry is complete (artifacts
-    /// exist on disk AND contain non-empty content). For Vector entries it
-    /// requires BOTH <c>vec/source.gpkg</c> AND <c>mvt/metadata.json</c> to be
-    /// present and non-empty. For PointCloud / GeoRaster / Model it requires
-    /// the <c>copc/</c> / <c>cog/</c> / <c>nxs/</c> folder to exist and contain
-    /// at least one non-empty file (recursively). Returns false for entries
-    /// that are not buildable.
+    /// The absolute path of a file of a build, checked by libddb (DDBResolveBuildFile, XI-04): it
+    /// serves <c>.../build/{hash}/{path}</c>, tiles included.
     /// </summary>
-    public bool IsBuildComplete(string ddbPath, string path);
+    /// <param name="ddbPath">Dataset folder (parent of .ddb)</param>
+    /// <param name="hash">The hash of the build (<see cref="EntryBuild.Hash"/>)</param>
+    /// <param name="path">The file, relative to the build root (an artifact path or a file below a directory artifact)</param>
+    /// <returns>The absolute path, or null when no build has this hash or the file is not one of its artifacts</returns>
+    /// <exception cref="DdbInvalidArgumentsException">The hash is malformed or the path breaks the dataset path rules.</exception>
+    public string? ResolveBuildFile(string ddbPath, string hash, string path);
 
+    /// <summary>The entry types of libddb and what it does with them (DDBGetEntryTypes, XI-04).</summary>
+    public IReadOnlyList<EntryTypeInfo> GetEntryTypes();
+
+    /// <summary>
+    /// Copies the build of an entry (its artifacts and pending marker) to another dataset
+    /// (DDBCopyBuildArtifacts, XI-04), so a copied or moved file needs no rebuild.
+    /// </summary>
+    /// <exception cref="DdbNotFoundException">No buildable entry of the source has this hash.</exception>
+    /// <exception cref="DdbBuildInProgressException">A build of it runs in either dataset (nothing copied).</exception>
+    /// <exception cref="DdbRetryableException">The destination's disk is (nearly) full.</exception>
+    public CopiedBuildArtifacts CopyBuildArtifacts(string sourceDdbPath, string destinationDdbPath, string hash);
+
+    /// <summary>
+    /// Whether the dataset has pending (deferred) builds (DDBIsBuildPending, deprecated in libddb
+    /// ABI 1.1). Kept for the pending-build scheduling until RQ-11/RQ-12 hand it to libddb
+    /// (DDBBuild pendingOnly, XI-04): ABI 1.1 has no other dataset-wide pending query.
+    /// </summary>
     public bool IsBuildPending(string ddbPath);
 
     /// <summary>
-    /// Gets information about pending (deferred) builds, i.e. builds skipped
-    /// because one or more dependencies were missing at the time of the
-    /// attempt. Read-only: does not consume pending markers or trigger builds.
+    /// The pending (deferred) builds of the dataset: builds skipped because a dependency was
+    /// missing at the last attempt (DDBGetPendingBuildInfo, deprecated in libddb ABI 1.1).
+    /// Read-only. Kept until RQ-11/RQ-12, like <see cref="IsBuildPending"/>.
     /// </summary>
     public PendingBuildInfo[] GetPendingBuildInfo(string ddbPath);
-
-    /// <summary>
-    /// Buildability and build completeness of several entries with one index open
-    /// (DDBGetBuildStatus). One status per path, in input order.
-    /// </summary>
-    public EntryBuildStatus[] GetBuildStatus(string ddbPath, string[] paths);
 
     /// <summary>
     /// Cleans up a dataset by removing index entries whose underlying files no
@@ -190,8 +204,6 @@ public interface IDdbWrapper
     /// <param name="options">What to rescan; null rescans every entry and stops on the first error</param>
     /// <returns>List of rescan results for each processed entry</returns>
     public List<RescanResult> RescanIndex(string ddbPath, RescanOptions? options = null);
-
-    void RegisterProcess(bool verbose = false);
 
     string TileMimeType { get; }
     string ThumbnailMimeType { get; }

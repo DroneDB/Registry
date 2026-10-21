@@ -32,8 +32,8 @@ public readonly record struct ApiErrorDescriptor(
 /// level: a new client error is a subclass or a throw site, never a new arm here.</item>
 /// <item>D2: a <see cref="ForbiddenException"/> answers 403 to an authenticated request and 401 to an
 /// anonymous one; <see cref="UnauthorizedException"/> (no valid credentials) is always 401.</item>
-/// <item>The other arms are types the Registry does not own: cancellation, the DDB port's transient
-/// errors, Kestrel's request errors (413 body too large) and <see cref="ArgumentException"/> from the
+/// <item>The other arms are types the Registry does not own: cancellation, the DDB port's typed
+/// errors (transient: 503; invalid arguments: 400; not found: 404), Kestrel's request errors (413 body too large) and <see cref="ArgumentException"/> from the
 /// lower layers' validators (<c>Registry.Common</c>, <c>Registry.Ports</c>), which have no
 /// <see cref="RegistryException"/> to throw.</item>
 /// <item>Anything else is a server fault: 500 with a generic message (details are logged). Masking a
@@ -80,6 +80,12 @@ public static class ApiExceptionClassifier
             // before the 500 default: both derive from DdbException.
             DdbBusyException e => new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, 2, false, e.Message, LogLevel.Warning),
             DdbBuildInProgressException e => new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, 2, false, e.Message, LogLevel.Warning),
+            // libddb ABI 1.1 (XI-02): a transient failure (disk full, tool timeout) and a process that
+            // is shutting down can succeed later; an invalid argument or a missing build never can
+            DdbRetryableException e => new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, 60, false, e.Message, LogLevel.Warning),
+            DdbShutdownException e => new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, 5, false, e.Message, LogLevel.Warning),
+            DdbInvalidArgumentsException e => new ApiErrorDescriptor(StatusCodes.Status400BadRequest, null, true, e.Message, LogLevel.Information),
+            DdbNotFoundException e => new ApiErrorDescriptor(StatusCodes.Status404NotFound, null, true, e.Message, LogLevel.Information),
 
             // Kestrel: the body grew past MaxRequestBodySize while it was read
             BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } =>

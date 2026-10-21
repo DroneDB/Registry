@@ -72,6 +72,21 @@ public class OgcExceptionFilterTest
         r.Content.ShouldContain("NoApplicableCode");
     }
 
+    /// <summary>RQ-08 (XI-02): the typed libddb errors take the API's status in the OGC envelope.</summary>
+    [TestCase(typeof(DdbInvalidArgumentsException), 400, "InvalidParameterValue")]
+    [TestCase(typeof(DdbNotFoundException), 404, "NotFound")]
+    [TestCase(typeof(DdbRetryableException), 503, "ServiceUnavailable")]
+    [TestCase(typeof(DdbShutdownException), 503, "ServiceUnavailable")]
+    public void TypedDdbException_MapsToItsStatus(Type type, int status, string code)
+    {
+        var ex = (Exception)Activator.CreateInstance(type, "native message")!;
+        var ctx = MakeContext("/orgs/o/ds/d/wms", ex);
+        NewFilter().OnException(ctx);
+        var r = (ContentResult)ctx.Result!;
+        r.StatusCode.ShouldBe(status);
+        r.Content.ShouldContain(code);
+    }
+
     [Test]
     public void ConflictException_Maps409()
     {

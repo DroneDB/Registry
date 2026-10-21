@@ -104,7 +104,8 @@
         },
         "properties": {},
         "type": "Feature"
-      }
+      },
+      "buildStatus": "queued"
     },
     {
       "path": "layer.geojson",
@@ -190,7 +191,8 @@
         },
         "properties": {},
         "type": "Feature"
-      }
+      },
+      "buildStatus": "queued"
     },
     {
       "path": "ortho.tif",
