@@ -65,13 +65,16 @@ jobs:
         cd registry
         bash scripts/check-warnings.sh
     # Coverage comes from the Microsoft.CodeCoverage collector that Microsoft.NET.Test.Sdk ships:
-    # one Cobertura file per test project, reported, not gated
+    # one Cobertura file per test project, reported, not gated. The MySQL tests start the
+    # production MariaDB image through Testcontainers (Docker is on the runner; CI=true makes a
+    # missing Docker fail them instead of skipping). --blame-hang-timeout names a test stuck on a
+    # signal wait and dumps it instead of letting the job time out.
     - name: Run tests (with code coverage)
       run: |
         cd registry
         whereis ddb
         ddb --version --debug
-        dotnet test -c Release --verbosity minimal --collect "Code Coverage;Format=cobertura" --results-directory TestResults
+        dotnet test -c Release --verbosity minimal --blame-hang-timeout 10m --collect "Code Coverage;Format=cobertura" --results-directory TestResults
     - name: Upload code coverage
       if: ${{ !cancelled() }}
       uses: actions/upload-artifact@v4

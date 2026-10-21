@@ -42,9 +42,9 @@ namespace Registry.Web.Test;
 /// <summary>
 /// Joint native/Registry regressions using the shipped MySQL Hangfire provider,
 /// four real workers, serialized DDB arguments, a real JobIndex and CacheManager.
-/// Set REGISTRY_TEST_MYSQL_CONNECTION to an isolated test database and provide
-/// the freshly built libddb on the native loader path. Each test owns only its
-/// random table prefix and temporary dataset directory.
+/// MySQL is the shared MariaDB test server (<see cref="MariaDbServer"/>, Docker);
+/// the freshly built libddb must be on the native loader path. Each test owns only
+/// its random table prefix and temporary dataset directory.
 /// </summary>
 [TestFixture]
 [NonParallelizable]
@@ -74,9 +74,7 @@ public class PendingRecoveryIntegrationTests
     [SetUp]
     public async Task SetUp()
     {
-        _connection = Environment.GetEnvironmentVariable("REGISTRY_TEST_MYSQL_CONNECTION")!;
-        if (string.IsNullOrWhiteSpace(_connection))
-            Assert.Ignore("Set REGISTRY_TEST_MYSQL_CONNECTION to run real MySQL/native worker regressions.");
+        _connection = (await MariaDbServer.GetAsync()).ConnectionString;
 
         _root = Path.Combine(Path.GetTempPath(), "registry-joint-" + Guid.NewGuid().ToString("N"));
         _prefix = "joint" + Guid.NewGuid().ToString("N")[..12];

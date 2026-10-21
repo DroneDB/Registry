@@ -37,6 +37,7 @@
     <PackageReference Include="Serilog.Extensions.Logging" />
     <PackageReference Include="Serilog.Sinks.NUnit" />
     <PackageReference Include="Testcontainers" />
+    <PackageReference Include="Testcontainers.MariaDb" />
   </ItemGroup>
 
   <ItemGroup>

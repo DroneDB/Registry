@@ -1,9 +1,11 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
+using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
@@ -28,4 +30,7 @@ public class GlobalSetup
 
         Debug.WriteLine($"Initialized ddb version: {nativeDdbWrapper.GetVersion()}");
     }
+
+    [OneTimeTearDown]
+    public Task RunAfterAllTests() => MariaDbServer.StopAsync();
 }

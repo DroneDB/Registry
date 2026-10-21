@@ -90,7 +90,10 @@ public class WarmDatasetAccessTests
     private DatasetLookupCache _lookups = null!;
     private CountingCache _redis = null!;
     private CacheManager _cache = null!;
-    private RowCounter _rows = null!;
+    // One instance for the fixture (tests read deltas): a materialization interceptor is a singleton
+    // interceptor, part of EF's internal service provider key, so a new instance per test would build
+    // a new internal provider per test and exhaust EF's per-process limit (ManyServiceProvidersCreatedWarning)
+    private readonly RowCounter _rows = new();
     private Visibility _visibility;
 
     // One instance: the visibility key includes it, as the singleton in the application
@@ -100,7 +103,6 @@ public class WarmDatasetAccessTests
     public async Task SetUp()
     {
         _lookups = new DatasetLookupCache(new MemoryCache(new MemoryCacheOptions()), TimeSpan.FromMinutes(1));
-        _rows = new RowCounter();
         _db = TestDb.Create<RegistryContext>(b => b.AddInterceptors(new DatasetChangeInterceptor(_lookups), _rows));
         _options = _db.Options;
 

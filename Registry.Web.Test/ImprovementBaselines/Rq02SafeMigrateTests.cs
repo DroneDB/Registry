@@ -22,7 +22,7 @@ namespace Registry.Web.Test.ImprovementBaselines;
 /// <para>
 /// Assumption (shared with the production code): a history-less database is exactly at the baseline
 /// (first) migration. Covered on SQLite with the real <see cref="RegistryContext"/> migrations; MySQL
-/// (non-transactional DDL) waits for the Testcontainers fixture of Phase 2.
+/// (non-transactional DDL), for both contexts, in <see cref="Rq02MySqlLiveTests"/>.
 /// </para>
 /// Run: dotnet test Registry.Web.Test --filter "FullyQualifiedName~Rq02SafeMigrateTests"
 /// </summary>

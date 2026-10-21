@@ -6,12 +6,12 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Registry.Web.Data;
 using Registry.Web.Identity;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Test.Support;
 using Registry.Web.Utilities;
 using Shouldly;
 
@@ -26,8 +26,10 @@ namespace Registry.Web.Test.ImprovementBaselines;
 /// SQLite needs none for the comparison, and MySQL uses a pinned server version
 /// (<see cref="MySqlServerVersionCache.PinnedVersionKey"/>), so it never probes a server.
 /// <para>
-/// A failure means a migration is missing for that provider: add it with <c>dotnet ef migrations
-/// add</c> against the named assembly; do not change this test.
+/// A failure means a migration is missing for that provider: add it against the named assembly
+/// through the DebugEF design-time host, as the commands in <c>Program.cs</c> show (<c>dotnet ef
+/// migrations add Name --project &lt;assembly&gt; --context &lt;context&gt; --configuration DebugEF
+/// --startup-project Registry.Web -- --provider Sqlite|MySql</c>); do not change this test.
 /// </para>
 /// Run: dotnet test Registry.Web.Test --filter "FullyQualifiedName~Rq04ModelChangesTests"
 /// </summary>
@@ -38,57 +40,33 @@ public class Rq04ModelChangesTests
     // Production runs MariaDB 10.6 (docker/production); MySQL 8 is the other supported server
     private static readonly string[] MySqlVersions = ["10.6.0-mariadb", "8.0.36-mysql"];
 
-    /// <summary>
-    /// Known defect found by this test (reported, not fixed here: it needs a migration).
-    /// Registry.Web.Identity.MySqlMigrations has only the 2021 InitialCreate, generated before the
-    /// Identity project enabled nullable reference types: the model now has AspNetUsers.Metadata
-    /// NOT NULL (the column is nullable in the database) and the IdentityColumn annotation on the
-    /// claims Id columns (snapshot-only: the database columns are already AUTO_INCREMENT).
-    /// Remove the ignore once the migration exists.
-    /// </summary>
-    private const string IdentityMySqlDefect =
-        "RQ-04 defect: Registry.Web.Identity.MySqlMigrations needs a migration (AspNetUsers.Metadata NOT NULL, " +
-        "claims Id IdentityColumn annotation); see the class remarks";
-
     private static IEnumerable<TestCaseData> Cases(string context)
     {
         yield return new TestCaseData(DbProvider.Sqlite, null).SetName($"{context}, Sqlite");
         foreach (var version in MySqlVersions)
-        {
-            var mySql = new TestCaseData(DbProvider.Mysql, version).SetName($"{context}, MySql {version}");
-            yield return context == nameof(ApplicationDbContext) ? mySql.Ignore(IdentityMySqlDefect) : mySql;
-        }
+            yield return new TestCaseData(DbProvider.Mysql, version).SetName($"{context}, MySql {version}");
     }
 
     [TestCaseSource(nameof(Cases), new object[] { nameof(RegistryContext) })]
     public void Registry_HasNoPendingModelChanges(DbProvider provider, string? serverVersion) =>
-        AssertNoPendingModelChanges<RegistryContext>(provider, serverVersion, MagicStrings.RegistryConnectionName, "Data");
+        AssertNoPendingModelChanges<RegistryContext>(provider, serverVersion);
 
     [TestCaseSource(nameof(Cases), new object[] { nameof(ApplicationDbContext) })]
     public void Identity_HasNoPendingModelChanges(DbProvider provider, string? serverVersion) =>
-        AssertNoPendingModelChanges<ApplicationDbContext>(provider, serverVersion, MagicStrings.IdentityConnectionName,
-            "Identity");
+        AssertNoPendingModelChanges<ApplicationDbContext>(provider, serverVersion);
 
-    private static void AssertNoPendingModelChanges<TContext>(DbProvider provider, string? serverVersion,
-        string connectionName, string migrationsNamespace) where TContext : DbContext
+    private static void AssertNoPendingModelChanges<TContext>(DbProvider provider, string? serverVersion)
+        where TContext : DbContext
     {
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            // Never opened: the comparison needs the provider, not a database
-            [$"ConnectionStrings:{connectionName}"] = provider == DbProvider.Sqlite
-                ? "Data Source=model-changes.sqlite"
-                : "Server=127.0.0.1;Port=1;Database=ModelChanges;Uid=u;Pwd=p;",
-            [MySqlServerVersionCache.PinnedVersionKey] = serverVersion
-        }).Build();
-
-        var services = new ServiceCollection();
-        services.AddDbContextWithProvider<TContext>(configuration, provider, connectionName, migrationsNamespace);
-        using var root = services.BuildServiceProvider();
+        // Never opened: the comparison needs the provider, not a database
+        var connectionString = provider == DbProvider.Sqlite
+            ? "Data Source=model-changes.sqlite"
+            : "Server=127.0.0.1;Port=1;Database=ModelChanges;Uid=u;Pwd=p;";
+        using var root = HostDbContexts.Build<TContext>(provider, connectionString, serverVersion);
         using var scope = root.CreateScope();
         using var context = scope.ServiceProvider.GetRequiredService<TContext>();
 
-        var expectedAssembly =
-            $"Registry.Web.{migrationsNamespace}.{(provider == DbProvider.Sqlite ? "Sqlite" : "MySql")}Migrations";
+        var expectedAssembly = HostDbContexts.MigrationsAssembly<TContext>(provider);
         var migrations = context.GetService<IMigrationsAssembly>();
         migrations.Assembly.GetName().Name.ShouldBe(expectedAssembly);
         migrations.ModelSnapshot.ShouldNotBeNull($"{expectedAssembly} has no model snapshot");

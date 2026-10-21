@@ -33,8 +33,8 @@ namespace Registry.Web.Test;
 /// <summary>
 /// Spike gate for the indexed-job publication/recovery design against the shipped MySQL Hangfire provider:
 /// atomic state + recovery-set member, exact float score round-trip, expected-state transitions and
-/// bounded lowest-score traversal. Set REGISTRY_TEST_MYSQL_CONNECTION to an isolated test database;
-/// each test owns only its random table prefix.
+/// bounded lowest-score traversal, on the shared MariaDB test server (<see cref="MariaDbServer"/>,
+/// Docker); each test owns only its random table prefix.
 /// </summary>
 [TestFixture]
 [NonParallelizable]
@@ -54,11 +54,9 @@ public class IndexedJobPublicationMySqlIntegrationTests
     public static void Noop() { }
 
     [SetUp]
-    public void SetUp()
+    public async Task SetUp()
     {
-        _connection = Environment.GetEnvironmentVariable("REGISTRY_TEST_MYSQL_CONNECTION")!;
-        if (string.IsNullOrWhiteSpace(_connection))
-            Assert.Ignore("Set REGISTRY_TEST_MYSQL_CONNECTION to run real MySQL publication regressions.");
+        _connection = (await MariaDbServer.GetAsync()).ConnectionString;
 
         _root = Path.Combine(Path.GetTempPath(), "registry-pub-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
@@ -525,7 +523,10 @@ public static class PubProbe
     public static void Run(string tag, PerformContext? context = null)
     {
         var id = context!.BackgroundJob.Id;
-        Checks[id] = Inspect?.Invoke(context) ?? "";
+        // A failing inspection is a finding, not a job failure: the test reads it from Checks at once
+        // instead of timing out on a job that never signalled
+        try { Checks[id] = Inspect?.Invoke(context) ?? ""; }
+        catch (Exception e) { Checks[id] = "inspection failed: " + e; }
         Runs.AddOrUpdate(id, 1, (_, n) => n + 1);
         Signal(id).TrySetResult();
     }
@@ -564,11 +565,10 @@ public class IndexedJobPublicationWorkerIntegrationTests
     [SetUp]
     public async Task SetUp()
     {
-        _connection = Environment.GetEnvironmentVariable("REGISTRY_TEST_MYSQL_CONNECTION")!;
-        if (string.IsNullOrWhiteSpace(_connection))
-            Assert.Ignore("Set REGISTRY_TEST_MYSQL_CONNECTION to run real MySQL publication regressions.");
+        _connection = (await MariaDbServer.GetAsync()).ConnectionString;
 
         PubProbe.Reset();
+        lock (_log.Entries) _log.Entries.Clear();
         _root = Path.Combine(Path.GetTempPath(), "registry-pubw-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
         _prefix = "pubw" + Guid.NewGuid().ToString("N")[..12];
@@ -624,7 +624,12 @@ public class IndexedJobPublicationWorkerIntegrationTests
     {
         if (!_initialized) return;
         if (TestContext.CurrentContext.Result.Outcome.Status == NUnit.Framework.Interfaces.TestStatus.Failed)
+        {
             foreach (var e in _log.Entries) TestContext.Out.WriteLine($"[recovery {e}]");
+            // A job that failed before its body ran never signals PubProbe: show why
+            foreach (var failed in _storage.GetMonitoringApi().FailedJobs(0, 10))
+                TestContext.Out.WriteLine($"[failed job {failed.Key}] {failed.Value.ExceptionType}: {failed.Value.ExceptionMessage}");
+        }
         _server?.Dispose();
         _server = null;
         _provider?.Dispose();
@@ -719,8 +724,11 @@ public class IndexedJobPublicationWorkerIntegrationTests
 
     private static Job ProbeJob(string tag = "t") => Job.FromExpression(() => PubProbe.Run(tag, null!));
 
+    // Own activator: the worker begins an activator scope even for static jobs, and the process-global
+    // JobActivator.Current may still be the one a disposed test host (Hangfire.AspNetCore) installed
     private void StartServer() => _server = new BackgroundJobServer(new BackgroundJobServerOptions
     {
+        Activator = new JobActivator(),
         WorkerCount = 2,
         Queues = ["pq", "default"],
         SchedulePollingInterval = TimeSpan.FromSeconds(1),

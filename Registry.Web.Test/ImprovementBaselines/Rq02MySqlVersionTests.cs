@@ -23,9 +23,9 @@ namespace Registry.Web.Test.ImprovementBaselines;
 /// resolved once per connection string, lazily on first use (a database that is not ready yet must
 /// not crash start-up), and a pinned <c>AppSettings:MySqlServerVersion</c> skips the probe entirely.
 /// <para>
-/// Measurement (code inspection, no MySQL server in this environment): before, 1 AutoDetect
-/// connection per context per scope; after, 1 per connection string per process (0 when pinned).
-/// A live connection count waits for the Testcontainers fixture of Phase 2.
+/// Measurement: before, 1 AutoDetect connection per context per scope; after, 1 per connection
+/// string per process (0 when pinned). The live connection count on MariaDB is
+/// <see cref="Rq02MySqlLiveTests.VersionProbe_ManyScopesOfBothContexts_OpenOneConnectionPerConnectionString"/>.
 /// </para>
 /// Run: dotnet test Registry.Web.Test --filter "FullyQualifiedName~Rq02MySqlVersionTests"
 /// </summary>
