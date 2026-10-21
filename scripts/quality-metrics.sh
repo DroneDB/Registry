@@ -87,6 +87,13 @@ bom_files() {
 
 files() { list_files | tr -cd '\0' | wc -c | tr -d ' '; }
 
+# Files (count) in the given pathspecs, read NUL-separated from stdin, with a line matching the pattern (PCRE).
+list_files_matching() {
+    local pattern="$1" specs=()
+    mapfile -d '' specs
+    { git grep --untracked -I -P -l -e "$pattern" -- "${specs[@]}" || true; } | wc -l | tr -d ' '
+}
+
 tests() { printf '%s\0' "${TEST_CODE[@]}"; }
 paths() { printf '%s\0' "$@"; }
 
@@ -118,10 +125,18 @@ metrics() {
         multiline 'catch \(Exception \w+\)\s*\{\s*_logger\.Log\w+\([^;]*;\s*throw;')"
     m "catch (Exception ...) total"                  "$(prod '' | lines 'catch \(Exception\b')"
     m "new ErrorResponse( in controllers"            "$(prod Registry.Web/Controllers | lines 'new ErrorResponse\(')"
+    m "ErrorResponse references (D1)"                "$(prod Registry.Web | lines '\bErrorResponse\b')"
+    m "Controller entry debug traces"                "$(paths ':(glob)Registry.Web/Controllers/**/*.cs' |
+        multiline '_logger\.LogDebug\(\s*"[^"]*[Cc]ontroller')"
+    m "Controller Content-Length pre-checks"         "$(prod Registry.Web/Controllers | lines 'Request\.ContentLength is \{ \} \w+ && \w+ >')"
+    m "InvalidOperationException thrown by managers" "$(prod Registry.Web/Services/Managers | lines 'throw new InvalidOperationException')"
+    m "ArgumentException thrown by managers"         "$(prod Registry.Web/Services/Managers | lines 'throw new ArgumentException\(')"
+    m "UnauthorizedException thrown by managers"     "$(prod Registry.Web/Services/Managers | lines 'throw new UnauthorizedException')"
+    m "Web files importing Registry.Adapters"        "$(prod Registry.Web | list_files_matching '^using Registry\.Adapters')"
 
     # Access and authorization (RQ-06)
     m "RequestAccess + throw blocks"                 "$(prod Registry.Web/Services |
-        multiline 'RequestAccess\(\w+, AccessType\.\w+\)\)\s*\n\s*throw new UnauthorizedException\(')"
+        multiline 'RequestAccess\(\w+, AccessType\.\w+\)\)\s*\n\s*throw new (Unauthorized|Forbidden)Exception\(')"
     m "IsUserAdmin() guard + throw blocks"           "$(prod Registry.Web/Services |
         multiline 'if \(!await _authManager\.IsUserAdmin\(\)\)\s*\n\s*throw new')"
     m "Sync _utils.GetDataset/GetOrganization calls" "$(prod Registry.Web | lines '_utils\.(GetDataset|GetOrganization)\(')"

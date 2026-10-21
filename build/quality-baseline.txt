@@ -18,6 +18,13 @@ Category string literals (use TestCategories)	0
 Controller log+rethrow catch blocks	130
 catch (Exception ...) total	402
 new ErrorResponse( in controllers	66
+ErrorResponse references (D1)	425
+Controller entry debug traces	115
+Controller Content-Length pre-checks	3
+InvalidOperationException thrown by managers	65
+ArgumentException thrown by managers	73
+UnauthorizedException thrown by managers	127
+Web files importing Registry.Adapters	17
 RequestAccess + throw blocks	81
 IsUserAdmin() guard + throw blocks	30
 Sync _utils.GetDataset/GetOrganization calls	102
