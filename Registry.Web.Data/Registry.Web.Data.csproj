@@ -36,7 +36,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
+    <ProjectReference Include="..\Registry.Ports\Registry.Ports.csproj" />
     <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
   </ItemGroup>
 

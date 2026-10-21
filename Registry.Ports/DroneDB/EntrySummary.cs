@@ -1,6 +1,5 @@
 using System;
 using Newtonsoft.Json;
-using Registry.Common;
 
 namespace Registry.Ports.DroneDB;
 

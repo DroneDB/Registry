@@ -4,7 +4,6 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-using Registry.Common.Model;
 
 namespace Registry.Ports.DroneDB;
 

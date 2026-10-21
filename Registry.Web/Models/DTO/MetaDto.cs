@@ -1,6 +1,7 @@
 using System;
 using Newtonsoft.Json;
 using Registry.Common;
+using Registry.Ports;
 
 namespace Registry.Web.Models.DTO;
 
