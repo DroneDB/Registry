@@ -8,7 +8,6 @@ using System.Xml;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
-using Registry.Common.Model;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;

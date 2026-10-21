@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Registry.Ports;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Utilities;
@@ -17,7 +18,8 @@ public static class DatasetFileSystemServiceCollectionExtensions
 {
     /// <summary>
     /// Registers <see cref="DatasetPathPolicy"/> (libddb's dataset path rule, through
-    /// <see cref="IDdbWrapper"/>) and <see cref="IScratchFileProvider"/> (<see cref="ScratchOptions"/>).
+    /// <see cref="IDdbWrapper"/>), <see cref="IScratchFileProvider"/> (<see cref="ScratchOptions"/>) and
+    /// <see cref="VolumeHeadroom"/> (over <see cref="Registry.Ports.DroneDB.IDdbRuntime"/>).
     /// The host registers the adapters (<see cref="IFileSystem"/>, <see cref="IDdbWrapper"/>).
     /// </summary>
     public static IServiceCollection AddDatasetFileSystem(this IServiceCollection services)
@@ -28,6 +30,9 @@ public static class DatasetFileSystemServiceCollectionExtensions
         services.AddOptions<ScratchOptions>()
             .Configure<IOptions<AppSettings>>((scratch, app) => scratch.TempPath = app.Value.TempPath);
         services.TryAddSingleton<IScratchFileProvider, ScratchFileProvider>();
+
+        // The disk-space API: the path's own volume plus libddb's free-disk floor (IDdbRuntime)
+        services.TryAddSingleton<VolumeHeadroom>();
         return services;
     }
 }

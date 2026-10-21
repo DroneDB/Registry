@@ -1,6 +1,5 @@
 using System;
 using System.ComponentModel.DataAnnotations;
-using Registry.Common.Model;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Data.Models;

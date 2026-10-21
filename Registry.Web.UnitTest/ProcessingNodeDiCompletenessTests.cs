@@ -1,3 +1,4 @@
+using Registry.Adapters.Testing;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -45,6 +46,8 @@ public class ProcessingNodeDiCompletenessTests
         // cache + NullCacheKeyScanner), so no external resources are required.
         var services = new ServiceCollection();
         services.AddLogging();
+        // As the processing-node host (RegistryHost): libddb's runtime first (the fake: no native library here)
+        services.AddDdbRuntime<FakeDdbRuntime>();
         services.AddProcessingNodeServices(configuration);
         configure?.Invoke(services);
         return services.BuildServiceProvider();

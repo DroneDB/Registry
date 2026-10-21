@@ -96,6 +96,5 @@ public class Rq02VolumeInfoTests
         volume.ShouldNotBeNull();
         volume.TotalBytes.ShouldBeGreaterThan(0);
         volume.AvailableFreeBytes.ShouldBeInRange(0, volume.TotalBytes);
-        CommonUtils.GetStorageInfo(Path.GetTempPath())!.TotalSize.ShouldBe(volume.TotalBytes);
     }
 }

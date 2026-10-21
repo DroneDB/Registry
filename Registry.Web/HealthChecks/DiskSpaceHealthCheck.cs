@@ -24,16 +24,18 @@ public class DiskSpaceHealthCheck : IHealthCheck
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = new CancellationToken())
     {
 
-        var info = CommonUtils.GetStorageInfo(_path);
+        // The path's own volume (RQ-02), the one disk-space API (RQ-10)
+        var volume = VolumeInfo.For(_path);
+        float? freePerc = volume is { TotalBytes: > 0 } ? (float)volume.AvailableFreeBytes / volume.TotalBytes : null;
 
         var data = new Dictionary<string, object>
         {
-            {"StorageTotalSize", info?.TotalSize},
-            {"StorageFreeSpace", info?.FreeSpace},
-            {"StorageFreeSpacePerc", info?.FreeSpacePerc}
+            {"StorageTotalSize", volume?.TotalBytes},
+            {"StorageFreeSpace", volume?.AvailableFreeBytes},
+            {"StorageFreeSpacePerc", freePerc}
         };
-            
-        if (info != null && info.FreeSpacePerc <= _freeSpacePercWarningThreshold)
+
+        if (freePerc <= _freeSpacePercWarningThreshold)
             return Task.FromResult(HealthCheckResult.Degraded("Low on available disk space", null, data));
 
         return Task.FromResult(HealthCheckResult.Healthy("Free disk space is fine", data));

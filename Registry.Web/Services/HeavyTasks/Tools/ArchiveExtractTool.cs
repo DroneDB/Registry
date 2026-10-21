@@ -56,6 +56,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
     private readonly ProcessingPlatformSettings _settings;
     private readonly ImportSettings _importSettings;
     private readonly DatasetPathPolicy _paths;
+    private readonly VolumeHeadroom _headroom;
     private readonly ILogger<ArchiveExtractTool> _logger;
 
     public ArchiveExtractTool(
@@ -63,8 +64,10 @@ public sealed class ArchiveExtractTool : IHeavyTool
         IServiceScopeFactory scopeFactory,
         IOptions<AppSettings> appSettings,
         DatasetPathPolicy paths,
+        VolumeHeadroom headroom,
         ILogger<ArchiveExtractTool> logger)
     {
+        _headroom = headroom;
         _extractor = extractor;
         _paths = paths;
         _scopeFactory = scopeFactory;
@@ -147,9 +150,10 @@ public sealed class ArchiveExtractTool : IHeavyTool
                 await utils.CheckCurrentUserStorage(uncompressed.Value); // throws QuotaExceededException
             }
 
-            // Free disk space on the dataset volume (best-effort). Runs in both
-            // contexts: at execution time it is the worker's disk that matters.
-            EnsureDiskSpace(ctx.Ddb.DatasetFolderPath, uncompressed.Value);
+            // Free disk space on the dataset volume, keeping the head-room (the safety margin plus
+            // libddb's free-disk floor). Runs in both contexts: at execution time it is the worker's
+            // disk that matters.
+            _headroom.EnsureFree(ctx.Ddb.DatasetFolderPath, uncompressed.Value, _settings.DiskSafetyMarginBytes);
         }
     }
 
@@ -202,7 +206,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
         // AFTER the loop, so on abort nothing has been added to the index yet - we just
         // delete the files written so far.
         // Cap (primary) + disk head-room (secondary, re-sampled) consolidated in ExtractionBudget.
-        var budget = new ExtractionBudget(_settings.MaxArchiveExtractSizeBytes, root, _settings.DiskSafetyMarginBytes);
+        var budget = _headroom.CreateBudget(_settings.MaxArchiveExtractSizeBytes, root, _settings.DiskSafetyMarginBytes);
 
         // The session (and its underlying file handle) is closed as soon as the
         // extraction loop finishes, BEFORE indexing and deleteArchive. This is critical:
@@ -374,31 +378,6 @@ public sealed class ArchiveExtractTool : IHeavyTool
         progress.Report(new HeavyToolProgress(1, "done",
             LogChunk: $"Extraction complete: {extracted} extracted, {skipped} skipped"));
         return null;
-    }
-
-    private void EnsureDiskSpace(string datasetFolderPath, long requiredBytes)
-    {
-        try
-        {
-            // The dataset volume, not Path.GetPathRoot (always "/" on Linux)
-            var volume = VolumeInfo.For(datasetFolderPath);
-            if (volume == null) return;
-
-            if (volume.AvailableFreeBytes < requiredBytes)
-                throw new QuotaExceededException(
-                    "Not enough free disk space to extract the archive. " +
-                    $"Required: {CommonUtils.GetBytesReadable(requiredBytes)}, " +
-                    $"available: {CommonUtils.GetBytesReadable(volume.AvailableFreeBytes)}.");
-        }
-        catch (QuotaExceededException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not determine free disk space for '{Path}'; skipping disk-space guard.",
-                datasetFolderPath);
-        }
     }
 
     // Removes the files written during a failed extraction run. Index entries are added

@@ -43,6 +43,7 @@ public sealed class GuardedHttpDownloader
 
     private readonly SsrfGuard _ssrfGuard;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly VolumeHeadroom _headroom;
     private readonly ILogger<GuardedHttpDownloader> _logger;
     private readonly TimeProvider _time;
 
@@ -51,13 +52,15 @@ public sealed class GuardedHttpDownloader
     /// </summary>
     /// <param name="ssrfGuard">The SSRF guard used to pre-validate the target host.</param>
     /// <param name="httpClientFactory">Factory for the SSRF-hardened named client.</param>
+    /// <param name="headroom">The disk guard of the destination volume (with libddb's free-disk floor).</param>
     /// <param name="logger">The logger.</param>
     /// <param name="time">Clock of the low-speed and stall guards; <see cref="TimeProvider.System"/> when null.</param>
-    public GuardedHttpDownloader(SsrfGuard ssrfGuard, IHttpClientFactory httpClientFactory,
+    public GuardedHttpDownloader(SsrfGuard ssrfGuard, IHttpClientFactory httpClientFactory, VolumeHeadroom headroom,
         ILogger<GuardedHttpDownloader> logger, TimeProvider? time = null)
     {
         _ssrfGuard = ssrfGuard;
         _httpClientFactory = httpClientFactory;
+        _headroom = headroom;
         _logger = logger;
         _time = time ?? TimeProvider.System;
     }
@@ -151,7 +154,7 @@ public sealed class GuardedHttpDownloader
         Directory.CreateDirectory(destFolder);
 
         // Size cap (primary) + disk head-room (secondary) enforced per chunk, before each write.
-        var budget = new ExtractionBudget(maxBytes, destFolder, diskSafetyMarginBytes);
+        var budget = _headroom.CreateBudget(maxBytes, destFolder, diskSafetyMarginBytes);
 
         await using var http = await response.Content.ReadAsStreamAsync(ct);
         await using var file = File.Create(destFile);

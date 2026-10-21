@@ -87,6 +87,7 @@ public sealed class Rq10FileUrlImportVolumeTests
         var settings = new ImportSettings { SsrfAllowPrivateNetworks = true };
         var guard = new SsrfGuard(settings);
         var downloader = new GuardedHttpDownloader(guard, new HandlerFactory(handler),
+            TestHeadroom.Default,
             NullLogger<GuardedHttpDownloader>.Instance);
         var options = Microsoft.Extensions.Options.Options.Create(new AppSettings
         {

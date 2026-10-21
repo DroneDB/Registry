@@ -40,6 +40,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
     private readonly long _diskSafetyMarginBytes;
     private readonly DatasetPathPolicy _paths;
     private readonly IScratchFileProvider _scratch;
+    private readonly VolumeHeadroom _headroom;
     private readonly ILogger<ArchiveUrlImportSource> _logger;
 
     /// <summary>
@@ -52,12 +53,14 @@ public sealed class ArchiveUrlImportSource : IImportSource
     /// <param name="appSettings">The application settings (import cap + disk safety margin).</param>
     /// <param name="paths">The dataset path rule (archive entry names, containment).</param>
     /// <param name="scratch">Where the downloaded archive is written (the configured temp folder).</param>
+    /// <param name="headroom">The disk guard of the dataset volume (with libddb's free-disk floor).</param>
     /// <param name="logger">The logger.</param>
     public ArchiveUrlImportSource(IArchiveExtractor extractor, SsrfGuard ssrfGuard,
         IHttpClientFactory httpClientFactory, GuardedHttpDownloader downloader,
         IOptions<AppSettings> appSettings, DatasetPathPolicy paths, IScratchFileProvider scratch,
-        ILogger<ArchiveUrlImportSource> logger)
+        VolumeHeadroom headroom, ILogger<ArchiveUrlImportSource> logger)
     {
+        _headroom = headroom;
         _scratch = scratch;
         _extractor = extractor;
         _paths = paths;
@@ -173,7 +176,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
         // Cap (primary, MaxImportSizeBytes) + disk head-room (secondary, re-sampled) consolidated in
         // ExtractionBudget: enforced per chunk, so a single entry whose header under-reports its size
         // cannot fill the volume. The outer ImportDatasetTool sink still enforces the per-user quota.
-        var budget = new ExtractionBudget(_maxImportSizeBytes, destFolder, _diskSafetyMarginBytes);
+        var budget = _headroom.CreateBudget(_maxImportSizeBytes, destFolder, _diskSafetyMarginBytes);
         var done = 0;
 
         foreach (var entry in session.Entries())

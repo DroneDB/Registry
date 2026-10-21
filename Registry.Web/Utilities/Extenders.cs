@@ -12,7 +12,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Newtonsoft.Json;
-using Registry.Common.Model;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;

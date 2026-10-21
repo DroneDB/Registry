@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Registry.Common.Model;
 using Registry.Ports;
 using Registry.Web.Exceptions;
 using Registry.Web.Filters;

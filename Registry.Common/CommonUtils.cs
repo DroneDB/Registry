@@ -6,7 +6,6 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
-using Registry.Common.Model;
 
 namespace Registry.Common;
 
@@ -102,16 +101,6 @@ public static class CommonUtils
         File.Delete(tmp);
 
         return data;
-    }
-
-    /// <summary>
-    /// Size and free space of the volume backing <paramref name="path"/> (the longest matching mount
-    /// point, see <see cref="VolumeInfo.For(string)"/>), or null when it cannot be determined.
-    /// </summary>
-    public static StorageInfo GetStorageInfo(string path)
-    {
-        var volume = VolumeInfo.For(path);
-        return volume == null ? null : new StorageInfo(volume.TotalBytes, volume.AvailableFreeBytes);
     }
 
     /// <summary>

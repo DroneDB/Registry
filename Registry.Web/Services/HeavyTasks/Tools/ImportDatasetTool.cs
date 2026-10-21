@@ -58,6 +58,7 @@ public sealed class ImportDatasetTool : IHeavyTool
     private readonly long _diskSafetyMarginBytes;
     private readonly IFileSystem _fs;
     private readonly DatasetPathPolicy _paths;
+    private readonly VolumeHeadroom _headroom;
     private readonly ILogger<ImportDatasetTool> _logger;
 
     /// <summary>
@@ -75,8 +76,10 @@ public sealed class ImportDatasetTool : IHeavyTool
         IOptions<AppSettings> appSettings,
         IFileSystem fs,
         DatasetPathPolicy paths,
+        VolumeHeadroom headroom,
         ILogger<ImportDatasetTool> logger)
     {
+        _headroom = headroom;
         _factory = factory;
         _fs = fs;
         _paths = paths;
@@ -167,11 +170,13 @@ public sealed class ImportDatasetTool : IHeavyTool
         var before = EnumerateRelativeFiles(root).ToHashSet(StringComparer.Ordinal);
 
         // Effective cap = the tightest of: per-user remaining quota (budgetBytes), the absolute
-        // MaxImportSizeBytes ceiling, and the free disk space (minus a safety margin).
+        // MaxImportSizeBytes ceiling, and the free disk space minus the head-room (the safety
+        // margin plus libddb's free-disk floor, VolumeHeadroom)
         var cap = long.MaxValue;
         if (_settings.MaxImportSizeBytes > 0) cap = Math.Min(cap, _settings.MaxImportSizeBytes);
         if (budgetBytes is >= 0) cap = Math.Min(cap, budgetBytes.Value);
-        var freeAtStart = ExtractionBudget.GetAvailableDiskBytes(root);
+        var freeAtStart = _headroom.AvailableBytes(root);
+        var headroom = _headroom.MarginBytes(_diskSafetyMarginBytes);
 
         long bytesSoFar = 0;
         var breached = false;
@@ -195,7 +200,7 @@ public sealed class ImportDatasetTool : IHeavyTool
             if (p.BytesSoFar is { } b)
             {
                 bytesSoFar = b;
-                if ((cap != long.MaxValue && b > cap) || freeAtStart - b < _diskSafetyMarginBytes)
+                if ((cap != long.MaxValue && b > cap) || freeAtStart - b < headroom)
                 {
                     breached = true;
                     // ReSharper disable once AccessToDisposedClosure

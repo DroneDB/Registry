@@ -18,7 +18,6 @@ using Microsoft.Net.Http.Headers;
 using Microsoft.VisualBasic.CompilerServices;
 using MimeMapping;
 using Registry.Common;
-using Registry.Common.Model;
 using Registry.Ports.DroneDB;
 using Registry.Web.Attributes;
 using Registry.Web.Exceptions;

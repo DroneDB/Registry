@@ -37,6 +37,7 @@ public class FileUrlImportToolTests
 
         var guard = new SsrfGuard(settings);
         var downloader = new GuardedHttpDownloader(guard, new SimpleFactory(),
+            TestHeadroom.Default,
             NullLogger<GuardedHttpDownloader>.Instance);
         var options = Microsoft.Extensions.Options.Options.Create(new AppSettings
         {

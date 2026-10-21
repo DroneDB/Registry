@@ -70,6 +70,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
     private readonly ImportSettings _importSettings;
     private readonly DatasetPathPolicy _paths;
     private readonly IScratchFileProvider _scratch;
+    private readonly VolumeHeadroom _headroom;
     private readonly ILogger<PhotogrammetryTool> _logger;
     private readonly TimeSpan _pollInterval;
 
@@ -81,8 +82,10 @@ public sealed class PhotogrammetryTool : IHeavyTool
         IOptions<AppSettings> appSettings,
         DatasetPathPolicy paths,
         IScratchFileProvider scratch,
+        VolumeHeadroom headroom,
         ILogger<PhotogrammetryTool> logger)
     {
+        _headroom = headroom;
         _scratch = scratch;
         _client = client;
         _paths = paths;
@@ -315,7 +318,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
         int total;
         var extractedPaths = new List<string>();
 
-        var budget = new ExtractionBudget(_settings.MaxArchiveExtractSizeBytes, root, _settings.DiskSafetyMarginBytes);
+        var budget = _headroom.CreateBudget(_settings.MaxArchiveExtractSizeBytes, root, _settings.DiskSafetyMarginBytes);
 
         using (var session = _extractor.Open(archivePath))
         {
