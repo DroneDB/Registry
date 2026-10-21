@@ -254,6 +254,12 @@ public sealed class RegistryWebFactory : WebApplicationFactory<Program>
             ["AppSettings:DefaultAdmin:Email"] = AdminEmail,
             ["AppSettings:DefaultAdmin:UserName"] = AdminUserName,
             ["AppSettings:DefaultAdmin:Password"] = AdminPassword,
+            // The processing budget is derived from the host cores and memory when unset: pin it so
+            // GET /sys/config (and its golden) reads the same on every machine, and hosts switched to
+            // the Default instance type run the same small set of Hangfire workers everywhere
+            ["AppSettings:ProcessingBudget:HeavyWorkers"] = "1",
+            ["AppSettings:ProcessingBudget:LightWorkers"] = "2",
+            ["AppSettings:ProcessingBudget:BuildThreads"] = "2",
             ["ConnectionStrings:IdentityConnection"] = $"Data Source={Sub("identity.db")};Mode=ReadWriteCreate",
             ["ConnectionStrings:RegistryConnection"] = $"Data Source={Sub("registry.db")};Mode=ReadWriteCreate",
             // The default Serilog file sink writes to ./logs (the test bin folder): keep it in the temp root

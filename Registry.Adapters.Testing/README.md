@@ -58,3 +58,4 @@ when a file is missing or when an unlisted file is added, so the fixtures change
 ### Updates
 
 * 2026-10-21: first vendoring, DroneDB `d5500af5b66d5d2f804c4441ab0ac334cdb666c4` (libddb 1.12.2).
+* 2026-10-21: DroneDB `66390f4ed8e68abdbd9e67a3c500d81d38ddd922`, README only (`release_deb` -> `release_assets`), no fixture or schema change.
