@@ -1,5 +1,5 @@
 # Allow-list: the image build needs the solution props, the production projects, the Hub
-# sources and three docker/ files. Everything else (local data such as
+# sources, three docker/ files and the libddb pin script (scripts/ddb-release.sh). Everything else (local data such as
 # Registry.Web/registry-data, test projects and their downloaded data, build outputs,
 # node_modules) stays out of the build context.
 *
@@ -20,6 +20,7 @@
 !docker/entrypoint.sh
 !docker/healthcheck.sh
 !docker/FolderProfile.xml
+!scripts/ddb-release.sh
 
 # Excluded again inside the allowed folders
 **/bin
