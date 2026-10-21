@@ -27,10 +27,12 @@ renamed or retyped for them, including the mixed casing:
 | `inputs/` | The committed input files (byte for byte, see `.gitattributes`) |
 | `schemas/` | JSON Schemas (draft 2020-12), one per output shape |
 | `fixtures/` | One golden file per output: `<name>.json` |
+| `vectors/entry-paths.json` | The golden path vectors: input → normalized path or rejection (see [Path vectors](#path-vectors)) |
 | `check_schemas.py` | Optional cross-check with python-jsonschema |
 | `../contract_fixtures.{h,cpp}` | The test harness: normalise, validate, compare or rewrite |
 | `../json_schema_check.{h,cpp}` | The schema checker the C++ tests use |
 | `../unit/contract_test.cpp` | The offline fixtures (unit binary) |
+| `../unit/entry_path_test.cpp` | The path vectors, through `ddb::normalizeEntryPath` and `DDBNormalizePath` |
 | `../integration/contract_drone_image_test.cpp` | The drone image fixtures (downloads one asset) |
 
 ## Inputs
@@ -76,9 +78,21 @@ with ddb).
 | `stac-collection` | `DDBStac(<root>, "", <collection URL>, "contract", <catalog URL>)` | `stac-collection` | - |
 | `stac-item-georaster`, `stac-item-image` | `DDBStac(<root>, "ortho.tif" / "sub/img.jpg", ...)` | `stac-item` | - |
 | `stac-item-collection` | `DDBStacItemCollection(<root>, ..., limit=10, offset=0)` | `stac-item-collection` | - |
+| `stac-data-collection` | `DDBStacData(<root>, NULL)`: data only (see [Data-only STAC](#data-only-stac)) | `stac-data-collection` | - |
+| `stac-data-item-georaster`, `stac-data-item-image` | `DDBStacData(<root>, "ortho.tif" / "sub/img.jpg")` | `stac-data-item` | - |
+| `stac-data-item-collection` | `DDBStacItemCollectionData(<root>, "", "", limit=10, offset=0)` | `stac-data-item-collection` | - |
 | `raster-info` | `DDBGetRasterInfo(<root>/ortho.tif)` | `raster-info` | - |
 | `raster-metadata` | `DDBGetRasterMetadata(<root>/ortho.tif, NULL, NULL)`: per-band statistics | `raster-metadata` | - |
 | `raster-metadata-formula` | `DDBGetRasterMetadata(<root>/ortho.tif, "VARI", "RGB")`: formula statistics and histogram | `raster-metadata` | - |
+| `build-artifacts` | `DDBBuild(<root>, "ortho.tif")`, then `DDBGetBuildArtifacts` of a built (COG), two buildable and not built, a non-buildable file, a folder and a missing path (see [Build manifest](#build-manifest)) | `build-artifacts` | - |
+| `build-artifacts-pending` | The `pending-build-info` dataset (`roads.shp` deferred), then `DDBGetBuildArtifacts(<root>, ["roads.shp"])` | `build-artifacts` | `lastAttempt` |
+| `list-entries-ex` | `DDBBuild(<root>, "ortho.tif")`, then `DDBListEntriesEx(<root>, "", "", "", {recursive=true, withDetails=false, withBuild=true})` | `list-entries-ex` | - |
+| `resolve-build-file` | `DDBResolveBuildFile(<root>, <hash of ortho.tif>, "cog/cog.tif")` after its build: a path, held as a JSON string | `build-file` | - |
+| `copy-build-artifacts` | `DDBCopyBuildArtifacts(<root>, <root2>, <hash of ortho.tif>)` after its build, `<root2>` a dataset with `ortho.tif` | `copy-build-artifacts` | - |
+| `entry-types` | `DDBGetEntryTypes()` (no dataset) | `entry-types` | - |
+| `capabilities` | `DDBGetCapabilities()` (no dataset): ABI version, error codes, error reasons, cancellable exports, the symbol manifest | `capabilities` | `version` |
+| `effective-config` | `DDBConfigure({"cacheDir": <cache>, "cpuPoolSize": 3, "ioThreads": 2, "minFreeDiskMb": 256})`, then `DDBGetEffectiveConfig()` (no dataset; see `ddb.h`, "Process configuration") | `effective-config` | `hardwareThreads` |
+| `normalize-path`, `normalize-path-rejected` | `DDBNormalizePath("photos\\2024/./a.jpg", "[\".uploads\"]")`, `DDBNormalizePath(".uploads/x", "[\".uploads\"]")` (no dataset) | `normalize-path` | - |
 | `info-drone-image`, `get-drone-image`, `stac-item-drone-image` | `DDBInfo`, `DDBGet`, `DDBStac` of `DJI_0018.JPG` (integration) | `entries`, `entry`, `stac-item` | `depth` (info) |
 
 Each fixture file holds:
@@ -93,6 +107,86 @@ Each fixture file holds:
 }
 ```
 
+## Data-only STAC
+
+`DDBStacData` and `DDBStacItemCollectionData` (XI-09, ABI 1.1) return the documents of `DDBStac`
+(with `id` NULL) and `DDBStacItemCollection` without any member built from a URL or an ID, which
+Registry owns: no `id`, `collection` or `links`, and no asset `href`. Every other member is the
+same, value for value (`ContractFixtures.StacDataIsStacWithoutUrlsAndIds` compares them). A
+caller builds the rest from what is left:
+
+* an Item's entry path is `properties.title` and the key of its data asset (role `data`); the
+  `thumbnail` asset (role `thumbnail`) is there when libddb can render a thumbnail of the entry;
+* a Collection's assets are keyed by entry path; its `title` is the dataset name, else the dataset
+  folder name;
+* `DDBStacData` returns `DDBERR_NOTFOUND` for an entry that is not in the index (`DDBStac`
+  keeps returning `DDBERR_EXCEPTION`).
+
+The existing `DDBStac` and `DDBStacItemCollection` outputs are unchanged (their fixtures did not
+change).
+
+## Build manifest
+
+`DDBGetEntryTypes`, `DDBGetBuildArtifacts`, `DDBResolveBuildFile`, `DDBCopyBuildArtifacts` and
+`DDBListEntriesEx` (XI-04, ABI 1.1) let a host serve builds without knowing their layout
+(decision D8). The vocabulary and the fields are documented in `ddb.h` ("Build manifest");
+`build-artifacts.schema.json` holds the shared shapes: `$defs/build` (the build object of an
+entry, also embedded by `DDBListEntriesEx`) and `$defs/artifact`.
+
+* An artifact is identified by its `role`; its `path` is relative to the build `root` and to the
+  URL `.../build/{hash}/`. A host never composes `cog/cog.tif` itself.
+* Only artifacts that exist are listed; a directory artifact (`kind: "dir"`) exists when its
+  `index` does. A `legacy` artifact (`pointcloud.ept`) is listed only when none of the type's
+  current artifacts exists.
+* `mediaType` is the media type of the file a client opens: the file itself, or the index of a
+  directory (so `vector.mvt` is `application/json`, its TileJSON; the tiles are served by file
+  name). The values: `raster.cog` `image/tiff; application=geotiff; profile=cloud-optimized`,
+  `pointcloud.copc` `application/vnd.laszip+copc`, `vector.gpkg`
+  `application/geopackage+sqlite3` (the IANA registration), `model.nexus`, `gsplat.lod`,
+  `gsplat.spz` `application/octet-stream`, the JSON artifacts and directory indexes
+  `application/json`.
+* `downloadName` is set for the three artifacts a download offers today: `cog.tif`,
+  `cloud.copc.laz`, `source.gpkg`.
+* `state` reads the build lock without reclaiming it (`BuildLock::isHeld`), so a listing never
+  changes the dataset.
+
+`DDBResolveBuildFile` returns a plain string, not JSON: its fixture holds it as a JSON string
+under the `<root>` placeholder.
+
+## Path vectors
+
+`vectors/entry-paths.json` pins libddb's dataset path rules (XI-09, `src/include/entry_path.h`,
+`DDBNormalizePath` in `ddb.h`). libddb's unit tests run every vector, and Registry's
+`DatasetPathPolicy` tests are meant to run the same file against `DDBNormalizePath`, so both
+sides accept and reject the same paths.
+
+```json
+{
+  "description": "...",
+  "vectors": [
+    {"input": "sub/.ddb/x", "expected": {"rejected": "reserved"}, "note": "optional, for humans"},
+    {"input": ".uploads/x", "reserved": [".uploads"], "expected": {"rejected": "reserved"}},
+    {"input": "a\u0000b", "cString": false, "expected": {"rejected": "nul"}}
+  ]
+}
+```
+
+| Key | Meaning |
+| --- | --- |
+| `input` | The path, a JSON string (UTF-8) |
+| `reserved` | Optional: the `reservedJson` argument, an array of names reserved as the first segment only. Absent: `NULL` |
+| `cString` | Optional, default `true`. `false` for an input with a NUL byte: the C API takes a NUL-terminated string and cannot receive it, so only `ddb::normalizeEntryPath` runs it (Registry rejects NUL before it calls libddb) |
+| `expected` | The exact output of `DDBNormalizePath`: `{"path": "<normalized>"}` or `{"rejected": "<code>"}` (`schemas/normalize-path.schema.json`) |
+| `note` | Optional explanation |
+
+The rules, checked in this order: `empty` (the input is ""), `nul`, `encoding` (not valid UTF-8),
+`absolute` (a leading `/` or `\`, which covers POSIX roots, UNC and device paths, or a drive
+`X:`), `traversal` (a `..` segment), `empty` (nothing left once empty and `.` segments are
+dropped), `reserved` (a `.ddb` segment at any depth, or a caller name as the first segment). `/`
+and `\` both separate segments, as in Registry. Names are compared byte for byte (`.DDB`,
+`.ddbx` and `photos/.uploads/x` are ordinary) and are not Unicode-normalized. A JSON string
+cannot hold invalid UTF-8, so the `encoding` rejection is tested in `entry_path_test.cpp` only.
+
 ## Normalisation
 
 Only values that change from run to run or from machine to machine are normalised, and the
@@ -104,6 +198,8 @@ normalised output keeps the JSON types, so it still matches its schema.
 | volatile key `depth`: value 0 | `info-*` | `DDBInfo` counts the folders of the absolute path |
 | volatile keys `id` (`"<volatile>"`) and `mtime` (0) | meta items, meta dump | a new random UUID and the current time on every write |
 | volatile key `lastAttempt`: value 0 | `pending-build-info` | the time of the build attempt |
+| volatile key `version`: `"<volatile>"` | `capabilities` | the library version and git commit of the build |
+| `<cache>` placeholder, volatile key `hardwareThreads`: value 0 | `effective-config` | the cache folder is a temporary folder; the cores of the machine |
 | sorted by `path`, `key`, `data` | `meta-dump` | libddb orders the dump by `id`, a random UUID |
 
 Not normalised, fixed at the source instead: mtimes (set on the inputs), hashes and sizes
@@ -146,6 +242,40 @@ Registry has to adopt first.
 ### Changes
 
 * 2026-10-21: baseline (DroneDB `fixes-and-optimizations` after `7ee39d2`).
+* 2026-10-21: `capabilities` added (XI-01, ABI 1.1). Its `symbols` list is
+  `src/include/ddb.symbols`, so every new export updates this fixture too.
+* 2026-10-21: `normalize-path`, `normalize-path-rejected` and `vectors/entry-paths.json` added
+  (XI-09, ABI 1.1: `DDBNormalizePath`); `capabilities` lists the new export.
+* 2026-10-21: `stac-data-collection`, `stac-data-item-georaster`, `stac-data-item-image` and
+  `stac-data-item-collection` added with their schemas (XI-09, ABI 1.1: `DDBStacData`,
+  `DDBStacItemCollectionData`); `capabilities` lists the new exports. The shared parts of
+  `stac-item.schema.json` (`stacExtensions`, `geometry`, `bbox`, `properties`) and
+  `stac-collection.schema.json` (`extent`) moved to their `$defs`, unchanged, so the data-only
+  schemas reference them.
+* 2026-10-21: `capabilities` gains the error codes `INVALIDARGS` (7), `RETRYABLE` (8) and
+  `SHUTDOWN` (9), the `errorReasons` array (the reasons of `DDBGetLastErrorReason`) and the new
+  export `DDBGetLastErrorReason` (XI-02, DQ-10, ABI 1.1).
+
+* 2026-10-21: `build-artifacts`, `build-artifacts-pending`, `list-entries-ex`,
+  `resolve-build-file`, `copy-build-artifacts` and `entry-types` added with their schemas
+  (XI-04, ABI 1.1: `DDBGetBuildArtifacts`, `DDBListEntriesEx`, `DDBResolveBuildFile`,
+  `DDBCopyBuildArtifacts`, `DDBGetEntryTypes`; see [Build manifest](#build-manifest));
+  `capabilities` lists the new exports. The existing fixtures did not change.
+
+* 2026-10-21: `effective-config` added with its schema (DQ-15, XI-06, ABI 1.1: `DDBConfigure`,
+  `DDBGetEffectiveConfig`); `capabilities` lists the new exports. The existing fixtures did not
+  change.
+
+* 2026-10-21: `capabilities` lists the new exports of DQ-15 (XI-07, XI-08, ABI 1.1):
+  `DDBShutdown`, `DDBCreateCancelToken`, `DDBCancel`, `DDBFreeCancelToken`,
+  `DDBSetThreadCancelToken`, `DDBSetLogCallback`, `DDBSetThreadOperation`. Its `cancellable` list
+  now names the exports whose work checks a cancel token (the render paths, the thumbnails,
+  `DDBExportRaster`/`DDBExportRaster2`, `DDBBuild`) instead of `DDBExportRaster2` only; the
+  schema describes it so. The other fixtures did not change.
+
+* 2026-10-21: `capabilities` lists the new export `DDBApplyDeltaEx` (XI-05, ABI 1.1). Its output
+  is the conflict list of `DDBApplyDelta` (a JSON array of paths), so it has no fixture of its
+  own. The other fixtures did not change.
 
 ## Cross-repository CI
 

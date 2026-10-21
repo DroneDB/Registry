@@ -34,7 +34,7 @@ served (or listed as not served).
 
 ## Vendored contract files
 
-`Contract/` holds `README.md`, `schemas/` and `fixtures/` of DroneDB `tests/contract/`, byte for
+`Contract/` holds `README.md`, `schemas/`, `fixtures/` and `vectors/` of DroneDB `tests/contract/`, byte for
 byte, embedded in the assembly (`ContractFiles`). `Contract/SOURCE` records the DroneDB commit and
 the sha256 of every vendored file; `Contract/.gitattributes` keeps git from converting line endings.
 `Registry.Web.UnitTest/Contract/ContractSourceTests.cs` fails when a file differs from `SOURCE`,
@@ -59,3 +59,7 @@ when a file is missing or when an unlisted file is added, so the fixtures change
 
 * 2026-10-21: first vendoring, DroneDB `d5500af5b66d5d2f804c4441ab0ac334cdb666c4` (libddb 1.12.2).
 * 2026-10-21: DroneDB `66390f4ed8e68abdbd9e67a3c500d81d38ddd922`, README only (`release_deb` -> `release_assets`), no fixture or schema change.
+* 2026-10-21: DroneDB `c1a9515058c8c0b98bdf80594253441cface0fbc` (DroneDB 2.0.0, libddb ABI 1.1): `vectors/`
+  (`entry-paths.json`, the `DDBNormalizePath` golden vectors) is vendored too; 14 new fixtures and 11 new
+  schemas (build artifacts, entry types, resolve/copy build files, capabilities, effective config, list
+  entries with build, normalize path, data-only STAC); the STAC collection and item schemas changed.

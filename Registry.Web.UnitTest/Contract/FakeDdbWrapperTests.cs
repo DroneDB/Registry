@@ -71,7 +71,14 @@ public sealed class FakeDdbWrapperTests
     };
 
     // Recorded on another dataset (a Shapefile without .shx): read directly, not served by the fake
-    private static readonly string[] NotServed = ["pending-build-info"];
+    private static readonly string[] NotServed =
+    [
+        "pending-build-info",
+        // The libddb ABI 1.1 outputs (DroneDB 2.0.0), not behind IDdbWrapper yet (RQ-08)
+        "build-artifacts", "build-artifacts-pending", "capabilities", "copy-build-artifacts", "effective-config",
+        "entry-types", "list-entries-ex", "normalize-path", "normalize-path-rejected", "resolve-build-file",
+        "stac-data-collection", "stac-data-item-collection", "stac-data-item-georaster", "stac-data-item-image"
+    ];
 
     [Test]
     public void EveryFixture_IsServed()

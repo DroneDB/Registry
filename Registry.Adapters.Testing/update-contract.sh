@@ -20,15 +20,15 @@ commit="$(git -C "$ddb_repo" rev-parse --verify "$2^{commit}")"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 contract="$here/Contract"
 source_dir="tests/contract"
-# What Registry consumes: the schemas, the golden fixtures and their README
-vendored=("$source_dir/README.md" "$source_dir/schemas" "$source_dir/fixtures")
+# What Registry consumes: the schemas, the golden fixtures, the golden vectors and their README
+vendored=("$source_dir/README.md" "$source_dir/schemas" "$source_dir/fixtures" "$source_dir/vectors")
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 git -C "$ddb_repo" archive "$commit" "${vendored[@]}" | tar -x -C "$tmp"
 
-rm -rf "$contract/README.md" "$contract/schemas" "$contract/fixtures"
+rm -rf "$contract/README.md" "$contract/schemas" "$contract/fixtures" "$contract/vectors"
 mkdir -p "$contract"
 cp -R "$tmp/$source_dir/." "$contract/"
 
