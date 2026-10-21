@@ -348,12 +348,13 @@ public class NativeDdbWrapper : IDdbWrapper
             return rejected;
 
         var reservedJson = reservedFirstSegments is { Count: > 0 }
-            ? JsonConvert.SerializeObject(reservedFirstSegments)
+            ? System.Text.Json.JsonSerializer.Serialize(reservedFirstSegments)
             : null;
         try
         {
-            return NativeCall.Invoke<NormalizedEntryPath>(nameof(NativeDdb.DDBNormalizePath),
-                (out IntPtr output) => NativeDdb.DDBNormalizePath(path, reservedJson, out output));
+            // Called once per path (archive entries, dataset walks): read in place, not through Json.NET
+            return NativeCall.InvokeUtf8(nameof(NativeDdb.DDBNormalizePath),
+                (out IntPtr output) => NativeDdb.DDBNormalizePath(path, reservedJson, out output), ReadNormalizedPath);
         }
         catch (DdbInvalidArgumentsException ex)
         {
@@ -802,6 +803,33 @@ public class NativeDdbWrapper : IDdbWrapper
     }
 
     // ---------------------------------------------------------------- helpers
+
+    // DDBNormalizePath's output: {"path": "a/b"} or {"rejected": "<code>"}
+    private static NormalizedEntryPath ReadNormalizedPath(ReadOnlySpan<byte> utf8)
+    {
+        var reader = new System.Text.Json.Utf8JsonReader(utf8);
+        if (!reader.Read() || reader.TokenType != System.Text.Json.JsonTokenType.StartObject)
+            throw new DdbException("DDBNormalizePath returned no JSON object");
+
+        string? path = null;
+        string? rejected = null;
+        while (reader.Read() && reader.TokenType == System.Text.Json.JsonTokenType.PropertyName)
+        {
+            var isPath = reader.ValueTextEquals("path"u8);
+            var isRejected = reader.ValueTextEquals("rejected"u8);
+            reader.Read();
+            if (isPath)
+                path = reader.GetString();
+            else if (isRejected)
+                rejected = reader.GetString();
+            else
+                reader.Skip();
+        }
+
+        return rejected != null
+            ? NormalizedEntryPath.Rejection(rejected)
+            : NormalizedEntryPath.Accepted(path ?? throw new DdbException("DDBNormalizePath returned neither 'path' nor 'rejected'"));
+    }
 
     private static string NormalizeSeparators(string path) => path.ToDdbPath();
 

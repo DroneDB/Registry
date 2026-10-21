@@ -19,6 +19,9 @@ internal static class NativeCall
 
     internal delegate DdbResult BufferCall(out IntPtr buffer, out int size);
 
+    /// <summary>Reads a value out of a native UTF-8 JSON output, in place.</summary>
+    internal delegate T Utf8Reader<out T>(ReadOnlySpan<byte> utf8);
+
     /// <summary>
     /// Throws the mapped exception of a failed call. Must run right after the call, on its thread.
     /// <paramref name="context"/> (the call's subject, e.g. its file) is appended to the message.
@@ -137,6 +140,35 @@ internal static class NativeCall
         {
             if (buffer != IntPtr.Zero)
                 NativeDdb.DDBVSIFree(buffer);
+        }
+    }
+
+    /// <summary>
+    /// A call whose small JSON output is read in place with <paramref name="read"/>
+    /// (<c>System.Text.Json.Utf8JsonReader</c>): no Json.NET serializer and no UTF-16 copy per call,
+    /// for exports called once per item (the path rule, once per archive entry or walked file).
+    /// </summary>
+    internal static unsafe T InvokeUtf8<T>(string operation, OutputCall call, Utf8Reader<T> read)
+    {
+        var output = IntPtr.Zero;
+        try
+        {
+            Check(call(out output), operation);
+            if (output == IntPtr.Zero)
+                throw new DdbException($"{operation} returned no output");
+
+            try
+            {
+                return read(MemoryMarshal.CreateReadOnlySpanFromNullTerminated((byte*)output));
+            }
+            catch (System.Text.Json.JsonException ex)
+            {
+                throw new DdbException($"{operation} returned JSON that is not a {typeof(T).Name}: {ex.Message}", ex);
+            }
+        }
+        finally
+        {
+            FreeString(output);
         }
     }
 
