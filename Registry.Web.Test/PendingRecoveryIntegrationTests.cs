@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
@@ -306,9 +305,11 @@ public class PendingRecoveryIntegrationTests
         await Until(() => Task.FromResult(_gate.CoordinatorsStarted >= 3));
         await WaitForState(other, "Succeeded");
         // MySqlStorage's table lock lease alone expires after its five-second
-        // acquisition horizon. Keep the holder beyond that horizon and observe
-        // the contender's typed finite retry, then retry against the fresh index.
-        await Task.Delay(TimeSpan.FromSeconds(6.5));
+        // acquisition horizon. The holder stays blocked until the contender's typed
+        // finite retry is observed: the contender reaches Scheduled only when its
+        // five-second session-lock wait (GET_LOCK) gives up, which started after the
+        // holder took both locks, so the holder is by then past the lease horizon.
+        // Then retry against the fresh index.
         await WaitForState(second, "Scheduled");
         (await Rows("independent")).Count(x => x.Path == "model.obj").ShouldBe(1);
         Volatile.Read(ref _gate.BlockedSnapshots).ShouldBe(1);
@@ -597,7 +598,8 @@ public class PendingRecoveryIntegrationTests
                 connection.GetStateData(stagedId).Name.ShouldBe(IndexedJobEnqueuer.PreparationStateName);
                 connection.GetJobParameter(stagedId, JobParamKeys.Path).ShouldBe("model.obj");
             }
-            await Task.Delay(200);
+            // Staged in the preparation state, which is not a queue: no worker can fetch the job
+            // (so none can fail it early) while publication is held at the barrier
             (await Rows(ds)).ShouldBeEmpty();
         }
         finally { releaseIndex.Set(); }
@@ -743,16 +745,9 @@ public class PendingRecoveryIntegrationTests
         TestContext.Progress.WriteLine($"{DateTime.UtcNow:O} job {id}: {state}");
     }
 
-    private static async Task Until(Func<Task<bool>> condition)
-    {
-        var stopwatch = Stopwatch.StartNew();
-        while (!await condition())
-        {
-            if (stopwatch.Elapsed > TimeSpan.FromSeconds(45))
-                Assert.Fail("Expected worker/cache state was not reached within 45 seconds.");
-            await Task.Delay(25);
-        }
-    }
+    // Worker state is committed by Hangfire's MySQL transactions: no event to await
+    private static Task Until(Func<Task<bool>> condition) =>
+        Eventually.Until(condition, "expected worker/cache state", TimeSpan.FromSeconds(45));
 
     private static void MakeDue(IDDB ddb, string path)
     {

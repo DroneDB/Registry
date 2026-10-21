@@ -952,26 +952,26 @@ public class NativeDdbWrapperTests : TestBase
 
         DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).ShouldBeFalse();
 
-        var isActive = false;
-
-        var task = Task.Run(() =>
+        // The build takes "<build>/<hash>/<output>.building" and writes its PID into it once it
+        // holds the kernel lock: that write is the moment the build is active. The hash folder is
+        // created here (the build creates it too) so that it is watched before the build starts.
+        var hashFolder = Path.Combine(ddbPath, IDDB.DatabaseFolderName, IDDB.BuildFolderName, res[0].Hash);
+        Directory.CreateDirectory(hashFolder);
+        using var locked = new ManualResetEventSlim();
+        using var watcher = new FileSystemWatcher(hashFolder, "*.building")
         {
-            isActive = true;
-            TestContext.WriteLine($"Build started");
-            DdbWrapper.Build(ddbPath);
-            TestContext.WriteLine($"Build finished");
-            isActive = false;
-        });
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size
+        };
+        watcher.Changed += (_, _) => locked.Set();
+        watcher.EnableRaisingEvents = true;
 
-        // Wait until the build starts
-        while(!isActive) Thread.Sleep(10);
+        var build = Task.Run(() => DdbWrapper.Build(ddbPath));
+        locked.Wait(TimeSpan.FromMinutes(2)).ShouldBeTrue("the build never took its lock");
 
         // While the build is in progress, IsBuildActive should return true
         DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).ShouldBeTrue();
 
-        task.Wait();
-
-        isActive.ShouldBeFalse();
+        build.GetAwaiter().GetResult();
 
         DdbWrapper.IsBuildActive(ddbPath, Path.GetFileName(destPath)).ShouldBeFalse();
 

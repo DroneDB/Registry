@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,6 +9,7 @@ using Registry.Adapters.DroneDB;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
+using Registry.Web.Test.Support;
 using Shouldly;
 using static Registry.Web.Test.DatasetIndexQueueTests;
 
@@ -44,19 +44,22 @@ public class DatasetIndexQueueUploadTests
 
     private static AddItem Hinted(string path) => new(path, new FileHashHint("sha-" + path, 1, DateTime.UtcNow));
 
+    // The queues below run on a clock that only the test moves: a batch that commits while the
+    // clock stands still did not wait for its window
+    private static readonly TimeSpan LongWindowSpan = TimeSpan.FromMilliseconds(LongWindow.BatchWindowMs);
+
     [Test]
     public async Task SingleRegisteredUpload_CommitsWithoutWaitingForTheWindow()
     {
-        var (queue, ddb) = CreateQueue(LongWindow);
+        var time = new FakeTime(DateTime.UtcNow);
+        var (queue, ddb) = CreateQueue(LongWindow, time);
         var batches = new List<IReadOnlyList<AddItem>>();
         AcceptAll(ddb, batches);
         var key = new DatasetKey("org", Guid.NewGuid());
 
-        var watch = Stopwatch.StartNew();
         using var ticket = queue.BeginUpload(key);
         var outcomes = await queue.EnqueueAsync(key, [Hinted("a.jpg")], ticket);
 
-        watch.ElapsedMilliseconds.ShouldBeLessThan(LongWindow.BatchWindowMs / 2);
         outcomes.Single().Entry!.Path.ShouldBe("a.jpg");
         ticket.Ended.ShouldBeTrue();
     }
@@ -64,21 +67,31 @@ public class DatasetIndexQueueUploadTests
     [Test]
     public async Task UnregisteredCallers_KeepTheWindow()
     {
-        var (queue, ddb) = CreateQueue(new IndexQueueSettings { BatchWindowMs = 300, MaxBatchSize = 64 });
+        var settings = new IndexQueueSettings { BatchWindowMs = 300, MaxBatchSize = 64 };
+        var window = TimeSpan.FromMilliseconds(settings.BatchWindowMs);
+        var time = new FakeTime(DateTime.UtcNow);
+        var (queue, ddb) = CreateQueue(settings, time);
         var batches = new List<IReadOnlyList<AddItem>>();
         AcceptAll(ddb, batches);
 
-        var watch = Stopwatch.StartNew();
-        await queue.EnqueueAsync(new DatasetKey("org", Guid.NewGuid()), "a.txt");
+        var windowArmed = time.WhenTimerArmed(window);
+        var done = queue.EnqueueAsync(new DatasetKey("org", Guid.NewGuid()), "a.txt");
+        await windowArmed;
 
         // The legacy path cannot know whether more callers are coming: it still waits
-        watch.ElapsedMilliseconds.ShouldBeGreaterThanOrEqualTo(250);
+        time.Advance(window - TimeSpan.FromMilliseconds(1));
+        done.IsCompleted.ShouldBeFalse();
+        batches.ShouldBeEmpty();
+
+        time.Advance(TimeSpan.FromMilliseconds(1));
+        (await done).Path.ShouldBe("a.txt");
     }
 
     [Test]
     public async Task UploadStillStreaming_KeepsTheBatchOpenUntilItEnqueues()
     {
-        var (queue, ddb) = CreateQueue(LongWindow);
+        var time = new FakeTime(DateTime.UtcNow);
+        var (queue, ddb) = CreateQueue(LongWindow, time);
         var batches = new List<IReadOnlyList<AddItem>>();
         AcceptAll(ddb, batches);
         var key = new DatasetKey("org", Guid.NewGuid());
@@ -86,16 +99,16 @@ public class DatasetIndexQueueUploadTests
         using var first = queue.BeginUpload(key);
         using var second = queue.BeginUpload(key);
 
+        var windowArmed = time.WhenTimerArmed(LongWindowSpan);
         var firstDone = queue.EnqueueAsync(key, [Hinted("a.jpg")], first);
-        // The second upload is still streaming: the first one's file waits for it...
-        (await Task.WhenAny(firstDone, Task.Delay(200))).ShouldNotBe(firstDone);
+        // The batch holds the first upload's file and waits: the second upload is still streaming...
+        await windowArmed;
+        firstDone.IsCompleted.ShouldBeFalse();
 
         // ...and both commit in one batch as soon as it enqueues
-        var watch = Stopwatch.StartNew();
         var secondDone = queue.EnqueueAsync(key, [Hinted("b.jpg")], second);
         await Task.WhenAll(firstDone, secondDone);
 
-        watch.ElapsedMilliseconds.ShouldBeLessThan(LongWindow.BatchWindowMs / 2);
         batches.Count.ShouldBe(1);
         batches[0].Select(i => i.Path).ShouldBe(["a.jpg", "b.jpg"], ignoreOrder: true);
     }
@@ -103,7 +116,8 @@ public class DatasetIndexQueueUploadTests
     [Test]
     public async Task UploadEndingWithoutFiles_ReleasesTheBatch()
     {
-        var (queue, ddb) = CreateQueue(LongWindow);
+        var time = new FakeTime(DateTime.UtcNow);
+        var (queue, ddb) = CreateQueue(LongWindow, time);
         var batches = new List<IReadOnlyList<AddItem>>();
         AcceptAll(ddb, batches);
         var key = new DatasetKey("org", Guid.NewGuid());
@@ -111,14 +125,15 @@ public class DatasetIndexQueueUploadTests
         using var uploading = queue.BeginUpload(key);
         var failed = queue.BeginUpload(key);
 
+        var windowArmed = time.WhenTimerArmed(LongWindowSpan);
         var done = queue.EnqueueAsync(key, [Hinted("a.jpg")], uploading);
-        (await Task.WhenAny(done, Task.Delay(200))).ShouldNotBe(done);
+        await windowArmed;
+        done.IsCompleted.ShouldBeFalse();
 
         // The other request failed before enqueuing anything: disposing its ticket wakes the batch
-        var watch = Stopwatch.StartNew();
         failed.Dispose();
-        await done;
-        watch.ElapsedMilliseconds.ShouldBeLessThan(LongWindow.BatchWindowMs / 2);
+        (await done).Single().Entry!.Path.ShouldBe("a.jpg");
+        batches.Count.ShouldBe(1);
     }
 
     [Test]

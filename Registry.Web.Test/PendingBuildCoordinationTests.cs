@@ -309,7 +309,18 @@ public class PendingBuildCoordinationTests
     {
         using var firstReading = new ManualResetEventSlim();
         using var releaseFirst = new ManualResetEventSlim();
-        using var secondStarted = new ManualResetEventSlim();
+        using var secondAtLock = new ManualResetEventSlim();
+        var isSecond = new AsyncLocal<bool>();
+        // Tells when the second coordinator asks for the dataset lock (the first one holds it)
+        var storage = new FaultyStorage(_storage)
+        {
+            ConnectionHook = (method, _) =>
+            {
+                if (method.Name == nameof(IStorageConnection.AcquireDistributedLock) && isSecond.Value)
+                    secondAtLock.Set();
+                return (false, null);
+            }
+        };
         var snapshots = 0;
         var rows = new List<JobIndex>();
         var ddb = new Mock<IDDB>();
@@ -339,14 +350,15 @@ public class PendingBuildCoordinationTests
                 return id;
             });
         void Run() => HangfireUtils.BuildPendingWrapper(ddb.Object, null, jobs.Object, index.Object, Org, Ds,
-            () => 1_800_000_000, _storage);
+            () => 1_800_000_000, storage);
         var first = Task.Run(Run);
         firstReading.Wait(TimeSpan.FromSeconds(5)).ShouldBeTrue();
-        var second = Task.Run(() => { secondStarted.Set(); Run(); });
-        secondStarted.Wait(TimeSpan.FromSeconds(5)).ShouldBeTrue();
+        var second = Task.Run(() => { isSecond.Value = true; Run(); });
         try
         {
-            await Task.Delay(100);
+            // The second coordinator reached the lock the first one holds: a snapshot taken
+            // outside the lock would already be counted
+            secondAtLock.Wait(TimeSpan.FromSeconds(5)).ShouldBeTrue();
             Volatile.Read(ref snapshots).ShouldBe(1);
         }
         finally { releaseFirst.Set(); }

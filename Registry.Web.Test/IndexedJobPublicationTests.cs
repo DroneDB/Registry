@@ -14,6 +14,7 @@ using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using Registry.Web.Test.Support;
 using Shouldly;
 
 namespace Registry.Web.Test;

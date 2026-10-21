@@ -64,19 +64,25 @@ public class TaskEventsTests
     public async Task Events_StreamsATasksEventOnEveryChange()
     {
         var notifier = new InMemoryTaskChangeNotifier();
+        var subscribed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var manager = new Mock<ITasksManager>();
         manager.Setup(m => m.SubscribeAsync("org", "ds", It.IsAny<Action>()))
-            .Returns((string o, string d, Action a) => Task.FromResult(notifier.Subscribe(o, d, a)));
+            .Returns((string o, string d, Action a) =>
+            {
+                var subscription = notifier.Subscribe(o, d, a);
+                subscribed.SetResult();
+                return Task.FromResult(subscription);
+            });
 
         var context = new DefaultHttpContext();
-        var body = new MemoryStream();
+        var body = new ObservedStream("event: tasks\n");
         context.Response.Body = body;
         using var cts = new CancellationTokenSource();
 
         var stream = Controller(manager, context).Events("org", "ds", cts.Token);
-        await Task.Delay(100);
+        await subscribed.Task;
         notifier.Publish("org", "ds");
-        await Task.Delay(100);
+        await body.MarkerWritten;
         await cts.CancelAsync();
         await stream;
 
@@ -85,5 +91,34 @@ public class TaskEventsTests
         text.ShouldContain("event: tasks\n");
         context.Response.ContentType.ShouldBe("text/event-stream");
         context.Response.Headers["X-Accel-Buffering"].ToString().ShouldBe("no");
+    }
+
+    /// <summary>Response body that completes <see cref="MarkerWritten"/> once the marker has been written.</summary>
+    private sealed class ObservedStream(string marker) : MemoryStream
+    {
+        private readonly TaskCompletionSource _written = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task MarkerWritten => _written.Task;
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            base.Write(buffer, offset, count);
+            Observe();
+        }
+
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await base.WriteAsync(buffer, cancellationToken);
+            Observe();
+        }
+
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+        private void Observe()
+        {
+            if (Encoding.UTF8.GetString(ToArray()).Contains(marker, StringComparison.Ordinal))
+                _written.TrySetResult();
+        }
     }
 }

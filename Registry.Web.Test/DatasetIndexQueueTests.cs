@@ -16,6 +16,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
+using Registry.Web.Test.Support;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -23,7 +24,8 @@ namespace Registry.Web.Test;
 [TestFixture]
 public class DatasetIndexQueueTests
 {
-    internal static (DatasetIndexQueue Queue, Mock<IDDB> Ddb) CreateQueue(IndexQueueSettings? opts = null)
+    internal static (DatasetIndexQueue Queue, Mock<IDDB> Ddb) CreateQueue(IndexQueueSettings? opts = null,
+        TimeProvider time = null)
     {
         var ddb = new Mock<IDDB>();
         var ddbManager = new Mock<IDdbManager>();
@@ -39,7 +41,7 @@ public class DatasetIndexQueueTests
             IndexQueue = opts ?? new IndexQueueSettings { BatchWindowMs = 20, MaxBatchSize = 64 }
         });
 
-        var queue = new DatasetIndexQueue(scopeFactory, NullLogger<DatasetIndexQueue>.Instance, settings);
+        var queue = new DatasetIndexQueue(scopeFactory, NullLogger<DatasetIndexQueue>.Instance, settings, time);
         return (queue, ddb);
     }
 
@@ -289,16 +291,17 @@ public class DatasetIndexQueueTests
     /// <summary>
     /// Idle trim retires a lane while callers keep enqueueing. Every request must still resolve:
     /// requests accepted by the retiring lane are committed by it, the rest replay on a fresh lane.
+    /// Each round lets the idle deadline elapse and enqueues at once, so the next request races
+    /// the retirement; every interleaving must resolve the request.
     /// </summary>
     [Test]
     public async Task EnqueueAsync_ConcurrentWithIdleTrim_LosesNoCompletion()
     {
-        var (queue, ddb) = CreateQueue(new IndexQueueSettings
-        {
-            BatchWindowMs = 5,
-            MaxBatchSize = 8,
-            IdleLaneTrimSeconds = 1
-        });
+        var settings = new IndexQueueSettings { BatchWindowMs = 5, MaxBatchSize = 8, IdleLaneTrimSeconds = 1 };
+        var window = TimeSpan.FromMilliseconds(settings.BatchWindowMs);
+        var idle = TimeSpan.FromSeconds(settings.IdleLaneTrimSeconds);
+        var time = new FakeTime(DateTime.UtcNow);
+        var (queue, ddb) = CreateQueue(settings, time);
         var key = new DatasetKey("org-trim", Guid.NewGuid());
 
         ddb.Setup(d => d.AddRawBatchWithOptions(It.IsAny<IReadOnlyList<string>>(), It.IsAny<bool>()))
@@ -307,17 +310,28 @@ public class DatasetIndexQueueTests
                 Entries = paths.Select(p => MakeAdded(p)).ToList()
             });
 
-        // Span more than IdleLaneTrimSeconds, with gaps long enough for the lane to go idle.
-        var deadline = DateTime.UtcNow.AddSeconds(4);
-        var i = 0;
-        while (DateTime.UtcNow < deadline)
+        async Task<Entry> Enqueue(string path)
         {
-            var path = $"f{i++}.txt";
-            var entry = await queue.EnqueueAsync(key, path);
-            entry.Path.ShouldBe(path);
-            await Task.Delay(300);
+            var windowArmed = time.WhenTimerArmed(window);
+            var pending = queue.EnqueueAsync(key, path);
+
+            // Accepted by a lane that was retiring: committed by it, without a batch window
+            if (await Task.WhenAny(pending, windowArmed) == pending)
+                return await pending;
+
+            var idleArmed = time.WhenTimerArmed(idle);
+            time.Advance(window);
+            var entry = await pending;
+            await idleArmed; // the lane waits for its next request again, with a fresh idle deadline
+            return entry;
         }
 
-        i.ShouldBeGreaterThan(1);
+        const int rounds = 8;
+        for (var i = 0; i < rounds; i++)
+        {
+            var path = $"f{i}.txt";
+            (await Enqueue(path)).Path.ShouldBe(path);
+            time.Advance(idle);
+        }
     }
 }

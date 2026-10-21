@@ -55,6 +55,7 @@ public class UploadPerFileOverheadBaselineTests : TestBase
     private int _getDatasetCalls, _requestAccessCalls, _getCurrentUserCalls, _quotaEvaluations, _ogcInvalidations;
     private int _thumbInFlight, _thumbPeak, _thumbCalls;
     private readonly SemaphoreSlim _thumbGate = new(0);
+    private readonly SemaphoreSlim _thumbStarted = new(0);
 
     [SetUp]
     public void Setup()
@@ -112,6 +113,7 @@ public class UploadPerFileOverheadBaselineTests : TestBase
                 var now = Interlocked.Increment(ref _thumbInFlight);
                 int peak;
                 do { peak = _thumbPeak; } while (now > peak && Interlocked.CompareExchange(ref _thumbPeak, now, peak) != peak);
+                _thumbStarted.Release();
                 await _thumbGate.WaitAsync(); // held until the test releases it: models a 100 ms native generation
                 Interlocked.Decrement(ref _thumbInFlight);
             });
@@ -180,7 +182,10 @@ public class UploadPerFileOverheadBaselineTests : TestBase
     {
         var (uploads, _, thumbnails) = CreatePipeline();
         await UploadBurst(uploads, "jpg");
-        await Task.Delay(300);
+
+        // Every worker took a thumbnail and holds it: no further generation can start until the gate opens
+        for (var i = 0; i < new UploadSettings().ThumbnailPrecomputeWorkers; i++)
+            await _thumbStarted.WaitAsync();
 
         TestContext.Out.WriteLine($"thumbnail generations started={_thumbCalls}, peak concurrent={_thumbPeak}");
         _thumbPeak.ShouldBeLessThanOrEqualTo(2);  // bounded background worker, not one Task.Run per upload

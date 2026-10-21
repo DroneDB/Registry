@@ -30,34 +30,6 @@ using Shouldly;
 
 namespace Registry.Web.Test;
 
-/// <summary>Controllable clock: wall time and the monotonic timestamp advance together.</summary>
-internal sealed class FakeTime : TimeProvider
-{
-    private DateTime _now;
-    private long _timestamp;
-
-    public FakeTime(DateTime utcNow) => _now = DateTime.SpecifyKind(utcNow, DateTimeKind.Utc);
-
-    public DateTime Now => _now;
-    public override DateTimeOffset GetUtcNow() => new(_now, TimeSpan.Zero);
-    public override long GetTimestamp() => _timestamp;
-    public override long TimestampFrequency => TimeSpan.TicksPerSecond;
-
-    public void Advance(TimeSpan by)
-    {
-        _now += by;
-        _timestamp += by.Ticks;
-    }
-
-    /// <summary>Moves wall time (not the monotonic timestamp).</summary>
-    public void Set(DateTime utcNow) => _now = DateTime.SpecifyKind(utcNow, DateTimeKind.Utc);
-
-    /// <summary>Rounds up to a whole minute (set scores are whole minutes since a fixed epoch).</summary>
-    public static DateTime CeilMinute(DateTime value) =>
-        new(((value.Ticks + TimeSpan.TicksPerMinute - 1) / TimeSpan.TicksPerMinute) * TimeSpan.TicksPerMinute,
-            DateTimeKind.Utc);
-}
-
 /// <summary>Records log calls so tests can assert on levels and messages.</summary>
 internal sealed class CapturingLogger<T> : ILogger<T>
 {

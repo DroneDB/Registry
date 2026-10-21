@@ -24,6 +24,7 @@ using Registry.Web.Middlewares;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Registry.Web.Test.Support;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -186,14 +187,17 @@ public class AuthSnapshotTests
     [Test]
     public async Task Expiration_BoundsChangesMadeElsewhere()
     {
-        _snapshots = new UserAuthSnapshotCache(new MemoryCache(new MemoryCacheOptions()),
+        var time = new FakeTime(DateTime.UtcNow);
+        _snapshots = new UserAuthSnapshotCache(new MemoryCache(new MemoryCacheOptions { Clock = time.SystemClock }),
             TimeSpan.FromMilliseconds(200));
         (await Request(_member).RequestAccess(_privateDataset, AccessType.Read)).ShouldBeTrue();
 
         // Deactivated by another instance: no invalidation reaches this one
         _roles.Add((_member.Id, ApplicationDbContext.DeactivatedRoleName));
-        await Task.Delay(400);
+        time.Advance(TimeSpan.FromMilliseconds(199));
+        (await Request(_member).RequestAccess(_privateDataset, AccessType.Read)).ShouldBeTrue("cached until it expires");
 
+        time.Advance(TimeSpan.FromMilliseconds(201));
         (await Request(_member).RequestAccess(_privateDataset, AccessType.Read)).ShouldBeFalse();
     }
 

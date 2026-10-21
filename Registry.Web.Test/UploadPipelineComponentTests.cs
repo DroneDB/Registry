@@ -21,6 +21,7 @@ using Registry.Web.Services;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Registry.Web.Test.Support;
 using Registry.Web.Utilities;
 using Shouldly;
 
@@ -173,15 +174,20 @@ public class UploadPipelineComponentTests
     [Test]
     public async Task ChangeCoalescer_FlushesByItselfAtTheEndOfTheWindow()
     {
-        var invalidated = new TaskCompletionSource();
+        var invalidated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var keys = new Mock<IOgcCacheKeys>();
         keys.Setup(k => k.InvalidateAsync("org", "ds")).Callback(() => invalidated.TrySetResult()).Returns(Task.CompletedTask);
+        var time = new FakeTime(DateTime.UtcNow);
         var coalescer = new DatasetChangeCoalescer(keys.Object, Mock.Of<ICacheManager>(), [],
-            TimeSpan.FromMilliseconds(50), NullLogger<DatasetChangeCoalescer>.Instance);
+            TimeSpan.FromMilliseconds(50), NullLogger<DatasetChangeCoalescer>.Instance, time);
 
         coalescer.FilesAdded("org", "ds", ["a.tif"]);
+        time.Advance(TimeSpan.FromMilliseconds(49));
+        invalidated.Task.IsCompleted.ShouldBeFalse("the window is still open");
 
-        (await Task.WhenAny(invalidated.Task, Task.Delay(5000))).ShouldBe(invalidated.Task);
+        time.Advance(TimeSpan.FromMilliseconds(1));
+        await invalidated.Task;
+        time.ArmedTimers.ShouldBe(0);
     }
 
     // ---- generation-scoped OGC keys (C.3)
@@ -262,25 +268,43 @@ public class UploadPipelineComponentTests
     [Test]
     public async Task NativeWorkGate_NeverRunsMoreThanTheLaneWidth()
     {
-        var gate = new NativeWorkGate(new NativeConcurrencySettings { Tiles = 2, Heavy = 1 });
+        using var gate = new NativeWorkGate(new NativeConcurrencySettings { Tiles = 2, Heavy = 1 });
+
+        (await PeakOf(gate, NativeLane.Tiles, width: 2, callers: 12)).ShouldBe(2);
+        (await PeakOf(gate, NativeLane.Heavy, width: 1, callers: 6)).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="callers"/> blocking works on <paramref name="lane"/>. Each holds its slot
+    /// until the lane is full (<paramref name="width"/> works inside), so the lane is saturated
+    /// while every other caller waits; then all are released. Returns the peak seen inside.
+    /// </summary>
+    private static async Task<int> PeakOf(NativeWorkGate gate, NativeLane lane, int width, int callers)
+    {
         var running = 0;
         var peak = 0;
+        using var entered = new SemaphoreSlim(0);
+        using var release = new ManualResetEventSlim();
 
         int Work()
         {
             var now = Interlocked.Increment(ref running);
             InterlockedMax(ref peak, now);
-            Thread.Sleep(20);
+            entered.Release();
+            release.Wait();
             Interlocked.Decrement(ref running);
             return now;
         }
 
-        await Task.WhenAll(Enumerable.Range(0, 12).Select(_ => gate.RunAsync(NativeLane.Tiles, Work)));
-        peak.ShouldBe(2);
+        var works = Enumerable.Range(0, callers).Select(_ => gate.RunAsync(lane, Work)).ToArray();
+        for (var i = 0; i < width; i++)
+            await entered.WaitAsync();
+        gate.InFlight(lane).ShouldBe(width);
+        Volatile.Read(ref running).ShouldBe(width);
 
-        peak = 0;
-        await Task.WhenAll(Enumerable.Range(0, 6).Select(_ => gate.RunAsync(NativeLane.Heavy, Work)));
-        peak.ShouldBe(1);
+        release.Set();
+        await Task.WhenAll(works);
+        return peak;
     }
 
     [Test]
@@ -312,7 +336,9 @@ public class UploadPipelineComponentTests
     [Test]
     public async Task ThumbnailPrecomputeQueue_RunsAtMostItsWorkers_AndRefusesWhenFull()
     {
-        var gate = new SemaphoreSlim(0);
+        using var gate = new SemaphoreSlim(0);
+        using var started = new SemaphoreSlim(0);
+        using var finished = new SemaphoreSlim(0);
         var running = 0;
         var peak = 0;
         var done = 0;
@@ -321,9 +347,11 @@ public class UploadPipelineComponentTests
             .Returns(async () =>
             {
                 InterlockedMax(ref peak, Interlocked.Increment(ref running));
+                started.Release();
                 await gate.WaitAsync();
                 Interlocked.Decrement(ref running);
                 Interlocked.Increment(ref done);
+                finished.Release();
             });
         var cache = new Mock<ICacheManager>();
         cache.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()))
@@ -336,14 +364,17 @@ public class UploadPipelineComponentTests
         var accepted = Enumerable.Range(0, 10)
             .Count(i => queue.TryEnqueue(new ThumbnailPrecomputeRequest("org", "ds", "h" + i, "/x" + i, 512)));
 
-        await Task.Delay(200);
+        // Both workers took a request and hold it: nothing else can start until the gate opens
+        await started.WaitAsync();
+        await started.WaitAsync();
         peak.ShouldBe(2);
         accepted.ShouldBeInRange(3, 5); // 3 queued + up to 2 already taken by the workers
         gate.Release(10);
 
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (done < accepted && DateTime.UtcNow < deadline) await Task.Delay(10);
+        for (var i = 0; i < accepted; i++)
+            await finished.WaitAsync();
         done.ShouldBe(accepted);
+        peak.ShouldBe(2);
         await queue.StopAsync(CancellationToken.None);
     }
 

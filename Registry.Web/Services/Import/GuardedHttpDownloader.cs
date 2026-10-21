@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -45,6 +44,7 @@ public sealed class GuardedHttpDownloader
     private readonly SsrfGuard _ssrfGuard;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<GuardedHttpDownloader> _logger;
+    private readonly TimeProvider _time;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="GuardedHttpDownloader"/> class.
@@ -52,12 +52,14 @@ public sealed class GuardedHttpDownloader
     /// <param name="ssrfGuard">The SSRF guard used to pre-validate the target host.</param>
     /// <param name="httpClientFactory">Factory for the SSRF-hardened named client.</param>
     /// <param name="logger">The logger.</param>
+    /// <param name="time">Clock of the low-speed and stall guards; <see cref="TimeProvider.System"/> when null.</param>
     public GuardedHttpDownloader(SsrfGuard ssrfGuard, IHttpClientFactory httpClientFactory,
-        ILogger<GuardedHttpDownloader> logger)
+        ILogger<GuardedHttpDownloader> logger, TimeProvider? time = null)
     {
         _ssrfGuard = ssrfGuard;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
+        _time = time ?? TimeProvider.System;
     }
 
     // Outbound calls go through the SSRF-hardened client (connect-time IP validation + redirect guard).
@@ -158,7 +160,7 @@ public sealed class GuardedHttpDownloader
         long downloaded = 0;
 
         var lowSpeedOn = minSpeedBytesPerSec > 0 && lowSpeedGraceSeconds > 0;
-        var window = Stopwatch.StartNew();
+        var windowStart = _time.GetTimestamp();
         long windowStartBytes = 0;
 
         while (true)
@@ -167,13 +169,13 @@ public sealed class GuardedHttpDownloader
             if (lowSpeedOn)
             {
                 // Hard stall guard: a single read that outlasts the grace window means ~0 B/s.
-                using var readCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                readCts.CancelAfter(TimeSpan.FromSeconds(lowSpeedGraceSeconds + 5));
+                using var stall = new CancellationTokenSource(TimeSpan.FromSeconds(lowSpeedGraceSeconds + 5), _time);
+                using var readCts = CancellationTokenSource.CreateLinkedTokenSource(ct, stall.Token);
                 try
                 {
                     read = await http.ReadAsync(buffer, readCts.Token);
                 }
-                catch (OperationCanceledException) when (readCts.IsCancellationRequested && !ct.IsCancellationRequested)
+                catch (OperationCanceledException) when (stall.IsCancellationRequested && !ct.IsCancellationRequested)
                 {
                     throw new TimeoutException("The download stalled (no data received).");
                 }
@@ -192,16 +194,17 @@ public sealed class GuardedHttpDownloader
 
             // Rolling low-speed guard: at each grace boundary the window's average speed must meet
             // the minimum, otherwise the transfer is aborted.
-            if (lowSpeedOn && window.Elapsed.TotalSeconds >= lowSpeedGraceSeconds)
+            var windowElapsed = _time.GetElapsedTime(windowStart);
+            if (lowSpeedOn && windowElapsed.TotalSeconds >= lowSpeedGraceSeconds)
             {
                 var windowBytes = downloaded - windowStartBytes;
-                var speed = windowBytes / window.Elapsed.TotalSeconds;
+                var speed = windowBytes / windowElapsed.TotalSeconds;
                 if (speed < minSpeedBytesPerSec)
                     throw new TimeoutException(
                         $"The download is too slow ({speed:F0} B/s is below the required " +
                         $"{minSpeedBytesPerSec} B/s over {lowSpeedGraceSeconds}s).");
 
-                window.Restart();
+                windowStart = _time.GetTimestamp();
                 windowStartBytes = downloaded;
             }
 

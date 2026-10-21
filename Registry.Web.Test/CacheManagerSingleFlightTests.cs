@@ -105,17 +105,31 @@ public class CacheManagerSingleFlightTests
     [Test]
     public async Task GetAsync_ConcurrentMissesOnThreadPool_GenerateOncePerKey()
     {
+        // Generations hold until every caller has joined a flight: none can finish early and let a
+        // late caller start a second generation of its key.
+        const int count = 100;
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _sut.Register(Seed, async p =>
         {
             Interlocked.Increment(ref _invocations);
-            await Task.Delay(50);
+            await gate.Task;
             return [(byte)(int)p[0]];
         });
 
-        // 4 keys x 25 callers racing from the thread pool.
-        var callers = Enumerable.Range(0, 100)
-            .Select(i => Task.Run(() => _sut.GetAsync(Seed, Category, i % 4)))
+        // 4 keys x 25 callers racing from the thread pool. GetAsync has joined (or started) the
+        // flight of its key by the time it returns its pending task (the fake cache is synchronous).
+        var joined = 0;
+        var allJoined = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var callers = Enumerable.Range(0, count)
+            .Select(i => Task.Run(() =>
+            {
+                var call = _sut.GetAsync(Seed, Category, i % 4);
+                if (Interlocked.Increment(ref joined) == count) allJoined.SetResult();
+                return call;
+            }))
             .ToArray();
+        await allJoined.Task;
+        gate.SetResult();
         var results = await Task.WhenAll(callers);
 
         _invocations.ShouldBe(4);

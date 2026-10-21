@@ -11,6 +11,7 @@ using NUnit.Framework;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Import;
+using Registry.Web.Test.Support;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -25,11 +26,11 @@ public class GuardedHttpDownloaderTests
 {
     private static readonly Uri Url = new("http://download.test/data.laz");
 
-    private static GuardedHttpDownloader DownloaderFor(HttpMessageHandler handler)
+    private static GuardedHttpDownloader DownloaderFor(HttpMessageHandler handler, TimeProvider? time = null)
     {
         var guard = new SsrfGuard(new ImportSettings { SsrfAllowPrivateNetworks = true });
         return new GuardedHttpDownloader(guard, new StubFactory(handler),
-            NullLogger<GuardedHttpDownloader>.Instance);
+            NullLogger<GuardedHttpDownloader>.Instance, time);
     }
 
     private static string TempFile() => Path.Combine(Path.GetTempPath(), "ddb-dltest-" + Guid.NewGuid().ToString("N"));
@@ -102,11 +103,12 @@ public class GuardedHttpDownloaderTests
     {
         // 10 bytes, then a >1s stall before the next 10 bytes: with a 1s window and a 1 MB/s floor the
         // rolling low-speed guard must abort.
+        var time = new FakeTime(DateTime.UtcNow);
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StreamContent(new SlowStream(chunkSize: 10, delayMs: 1200, maxReads: 3))
+            Content = new StreamContent(new SlowStream(chunkSize: 10, TimeSpan.FromMilliseconds(1200), maxReads: 3, time))
         });
-        var dl = DownloaderFor(handler);
+        var dl = DownloaderFor(handler, time);
         var dest = TempFile();
 
         try
@@ -210,8 +212,11 @@ public class GuardedHttpDownloaderTests
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
-    /// <summary>Delivers <paramref name="chunkSize"/> bytes per read, stalling after the first read.</summary>
-    private sealed class SlowStream(int chunkSize, int delayMs, int maxReads) : Stream
+    /// <summary>
+    /// Delivers <paramref name="chunkSize"/> bytes per read; every read after the first takes
+    /// <paramref name="stall"/> on <paramref name="time"/>.
+    /// </summary>
+    private sealed class SlowStream(int chunkSize, TimeSpan stall, int maxReads, FakeTime time) : Stream
     {
         private int _reads;
         public override bool CanRead => true;
@@ -221,14 +226,15 @@ public class GuardedHttpDownloaderTests
         public override long Position { get => 0; set => throw new NotSupportedException(); }
         public override void Flush() { }
 
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
         {
-            if (_reads >= maxReads) return 0;
-            if (_reads > 0) await Task.Delay(delayMs, ct);
+            ct.ThrowIfCancellationRequested();
+            if (_reads >= maxReads) return ValueTask.FromResult(0);
+            if (_reads > 0) time.Advance(stall);
             _reads++;
             var n = Math.Min(chunkSize, buffer.Length);
             buffer.Span[..n].Clear();
-            return n;
+            return ValueTask.FromResult(n);
         }
 
         public override int Read(byte[] buffer, int offset, int count)

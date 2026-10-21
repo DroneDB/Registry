@@ -15,6 +15,7 @@ using NUnit.Framework;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Initialization;
 using Registry.Web.Utilities;
+using Registry.Web.Test.Support;
 using Shouldly;
 
 namespace Registry.Web.Test.ImprovementBaselines;

@@ -25,6 +25,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
+using Registry.Web.Test.Support;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -324,17 +325,21 @@ public class IndexedJobPublicationMySqlIntegrationTests
         var inside = 0;
         var maxInside = 0;
         using var gate = new ManualResetEventSlim();
+        using var requested = new CountdownEvent(n);
         var tasks = Enumerable.Range(0, n).Select(_ => Task.Run(() =>
         {
             using var c = _storage.GetConnection();
             gate.Wait();
+            requested.Signal();
             using (c.AcquireDistributedLock("job:spike:state-lock", TimeSpan.FromSeconds(30)))
             {
                 var now = Interlocked.Increment(ref inside);
                 int seen;
                 while ((seen = Volatile.Read(ref maxInside)) < now &&
                        Interlocked.CompareExchange(ref maxInside, now, seen) != seen) { }
-                Thread.Sleep(50);
+                // Hold the lock until every caller is asking for it: an exclusive lock keeps them
+                // all out meanwhile (they signal before acquiring, so this cannot deadlock)
+                requested.Wait();
                 Interlocked.Decrement(ref inside);
             }
         })).ToArray();
@@ -495,6 +500,8 @@ public static class PubProbe
 {
     public static readonly ConcurrentDictionary<string, int> Runs = new();
 
+    private static readonly ConcurrentDictionary<string, TaskCompletionSource> RunSignals = new();
+
     /// <summary>Per job id: empty when parameters and JobIndex row existed at execution time, otherwise the problem.</summary>
     public static readonly ConcurrentDictionary<string, string> Checks = new();
 
@@ -505,14 +512,22 @@ public static class PubProbe
     {
         Runs.Clear();
         Checks.Clear();
+        RunSignals.Clear();
         Inspect = null;
     }
+
+    /// <summary>Completes when a worker has run the job (signalled by the job body itself).</summary>
+    public static Task WhenRun(string id) => Signal(id).Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+    private static TaskCompletionSource Signal(string id) =>
+        RunSignals.GetOrAdd(id, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
 
     public static void Run(string tag, PerformContext? context = null)
     {
         var id = context!.BackgroundJob.Id;
         Checks[id] = Inspect?.Invoke(context) ?? "";
         Runs.AddOrUpdate(id, 1, (_, n) => n + 1);
+        Signal(id).TrySetResult();
     }
 }
 
@@ -688,16 +703,16 @@ public class IndexedJobPublicationWorkerIntegrationTests
             .SingleOrDefaultAsync(x => x.JobId == id);
     }
 
-    private static async Task WaitUntil(Func<Task<bool>> condition, string what, int seconds = 30)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(seconds);
-        while (DateTime.UtcNow < deadline)
-        {
-            if (await condition()) return;
-            await Task.Delay(100);
-        }
-        Assert.Fail("Timed out waiting for: " + what);
-    }
+    // JobIndex rows and queue rows change in worker transactions: no event to await
+    private static Task WaitUntil(Func<Task<bool>> condition, string what) =>
+        Eventually.Until(condition, what, TimeSpan.FromSeconds(30));
+
+    /// <summary>
+    /// Rows of the job in the provider's queue table. A worker only runs a job it fetched from
+    /// there, so a job without a row (and in a non-enqueued state) cannot run.
+    /// </summary>
+    private Task<long> QueuedRows(string id) =>
+        Scalar("JobQueue", "`JobId`=" + long.Parse(id, System.Globalization.CultureInfo.InvariantCulture));
 
     private static IndexPayload Payload(string ds = "ds", string queue = "pq") =>
         new("org", ds, "hash-1", "user-1", queue, "model.obj", "build", "7", "rh-" + ds, "parent-1", "wf-1");
@@ -752,7 +767,7 @@ public class IndexedJobPublicationWorkerIntegrationTests
 
         State(id)!.Name.ShouldBe("Indexing");
         (await SetRows()).Select(r => r.Value).ShouldBe([id]);
-        await Task.Delay(2500);
+        (await QueuedRows(id)).ShouldBe(0, "a worker must not run a job that was never published");
         PubProbe.Runs.ShouldNotContainKey(id, "a worker must not run a job that was never published");
         (await JobCount()).ShouldBe(1);
 
@@ -762,9 +777,11 @@ public class IndexedJobPublicationWorkerIntegrationTests
         TestContext.Out.WriteLine(summary.ToString());
         summary.Published.ShouldBe(1);
 
-        await WaitUntil(() => Task.FromResult(PubProbe.Runs.ContainsKey(id)), "recovered job execution");
+        await PubProbe.WhenRun(id);
         await WaitUntil(async () => (await Row(id))?.CurrentState == "Succeeded", "Succeeded JobIndex row");
-        await Task.Delay(2000);
+        // Succeeded is final and the job left the queue: nothing can run it again
+        await WaitUntil(async () => await QueuedRows(id) == 0, "queue row of the finished job removed");
+        State(id)!.Name.ShouldBe("Succeeded");
         PubProbe.Runs[id].ShouldBe(1);
         PubProbe.Checks[id].ShouldBe("", "parameters and JobIndex row must exist before the job executes");
         PubProbe.Runs.Count.ShouldBe(1);
@@ -802,12 +819,14 @@ public class IndexedJobPublicationWorkerIntegrationTests
         var history = _storage.GetMonitoringApi().JobDetails(pastId).History;
         var scheduled = history.Single(h => h.StateName == "Scheduled");
         JobHelper.DeserializeDateTime(scheduled.Data["EnqueueAt"]).ShouldBe(pastDue.EnqueueAtUtc!.Value, TimeSpan.FromSeconds(1));
-        await WaitUntil(() => Task.FromResult(PubProbe.Runs.ContainsKey(pastId)), "scheduler dispatch of the past-due job");
+        await PubProbe.WhenRun(pastId);
         PubProbe.Checks[pastId].ShouldBe("");
 
-        await Task.Delay(2500);
-        PubProbe.Runs.ShouldNotContainKey(futureId);
+        // The scheduler only moves due members (score up to now); the future one is 25 minutes
+        // ahead: still Scheduled, never queued, so no worker can run it
         State(futureId)!.Name.ShouldBe("Scheduled");
+        (await QueuedRows(futureId)).ShouldBe(0);
+        PubProbe.Runs.ShouldNotContainKey(futureId);
         PubProbe.Runs[pastId].ShouldBe(1);
         (await JobCount()).ShouldBe(2);
         (await SetRows()).ShouldBeEmpty();
@@ -950,7 +969,8 @@ public class IndexedJobPublicationWorkerIntegrationTests
         row.CurrentState.ShouldBe("Deleted");
         row.ErrorType.ShouldBe("InvalidPublicationRecord");
         (await SetRows()).ShouldBeEmpty();
-        await Task.Delay(1500);
+        // Deleted, and never queued: no worker can run it
+        (await QueuedRows(id)).ShouldBe(0);
         PubProbe.Runs.ShouldNotContainKey(id);
         using var c = _storage.GetConnection();
         c.GetJobParameter(id, JobParamKeys.OrgSlug).ShouldBeNull("nothing is published for an invalid record");

@@ -51,8 +51,8 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         /// </summary>
         public volatile bool Retired;
 
-        /// <summary>Ticks of the last enqueue activity (best-effort, for idle trimming).</summary>
-        public long LastActivityTicks;
+        /// <summary>Timestamp (<see cref="TimeProvider.GetTimestamp"/>) of the last enqueue activity (best-effort, for idle trimming).</summary>
+        public long LastActivityTimestamp;
 
         /// <summary>Uploads registered with <see cref="BeginUpload"/> that have not enqueued yet.</summary>
         public int Streaming;
@@ -83,16 +83,20 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<DatasetIndexQueue> _logger;
     private readonly IndexQueueSettings _opts;
+    private readonly TimeProvider _time;
     private readonly ConcurrentDictionary<DatasetKey, DatasetLane> _lanes = new();
     private readonly CancellationTokenSource _shutdown = new();
 
     private const int MaxIdleLaneTrimSeconds = 86_400;
 
+    /// <param name="time">Clock of the batch window, the idle trim, the enqueue timeout and the
+    /// busy-retry delay; <see cref="TimeProvider.System"/> when null.</param>
     public DatasetIndexQueue(IServiceScopeFactory scopeFactory, ILogger<DatasetIndexQueue> logger,
-        IOptions<AppSettings> appSettings)
+        IOptions<AppSettings> appSettings, TimeProvider? time = null)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _time = time ?? TimeProvider.System;
         _opts = appSettings.Value.IndexQueue ?? new IndexQueueSettings();
         ValidateSettings(_opts);
     }
@@ -145,7 +149,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
     {
         var lane = AcquireLane(dataset);
         Interlocked.Increment(ref lane.Streaming);
-        Volatile.Write(ref lane.LastActivityTicks, Environment.TickCount64);
+        Volatile.Write(ref lane.LastActivityTimestamp, _time.GetTimestamp());
         return new LaneTicket(lane);
     }
 
@@ -158,7 +162,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             return [];
         }
 
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(_opts.EnqueueTimeoutSeconds));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(_opts.EnqueueTimeoutSeconds), _time);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token, _shutdown.Token);
 
         try
@@ -169,7 +173,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
                 linked.Token.ThrowIfCancellationRequested();
 
                 var lane = AcquireLane(dataset);
-                Volatile.Write(ref lane.LastActivityTicks, Environment.TickCount64);
+                Volatile.Write(ref lane.LastActivityTimestamp, _time.GetTimestamp());
 
                 var tasks = new Task<Entry>[items.Count];
                 var accepted = 0;
@@ -295,7 +299,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             Key = key,
             Channel = channel,
             DrainLoop = Task.CompletedTask,
-            LastActivityTicks = Environment.TickCount64
+            LastActivityTimestamp = _time.GetTimestamp()
         };
         lane.DrainLoop = Task.Run(() => DrainLoopAsync(lane));
         return lane;
@@ -321,7 +325,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             {
                 // The wait needs a deadline, otherwise the loop parks here forever and the trim
                 // check above is never re-evaluated on a quiet dataset.
-                using var idle = new CancellationTokenSource(TimeSpan.FromSeconds(_opts.IdleLaneTrimSeconds));
+                using var idle = new CancellationTokenSource(TimeSpan.FromSeconds(_opts.IdleLaneTrimSeconds), _time);
                 using var idleLinked =
                     CancellationTokenSource.CreateLinkedTokenSource(idle.Token, _shutdown.Token);
                 try
@@ -342,7 +346,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
                 // stragglers from other concurrently-enqueuing callers. A batch made only of
                 // registered uploads stops waiting as soon as no registered upload is still
                 // streaming: nothing else can arrive for it (UPL-01 C.5).
-                using var window = new CancellationTokenSource(_opts.BatchWindowMs);
+                using var window = new CancellationTokenSource(TimeSpan.FromMilliseconds(_opts.BatchWindowMs), _time);
                 using var windowLinked =
                     CancellationTokenSource.CreateLinkedTokenSource(window.Token, _shutdown.Token);
                 var untracked = batch.Count(r => !r.Tracked);
@@ -428,8 +432,8 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
     {
         if (reader.TryPeek(out _) || Volatile.Read(ref lane.Streaming) > 0)
             return false; // work queued or announced - not idle
-        var idleMs = Environment.TickCount64 - Volatile.Read(ref lane.LastActivityTicks);
-        if (idleMs < _opts.IdleLaneTrimSeconds * 1000L)
+        var idle = _time.GetElapsedTime(Volatile.Read(ref lane.LastActivityTimestamp));
+        if (idle < TimeSpan.FromSeconds(_opts.IdleLaneTrimSeconds))
             return false;
 
         lane.Retired = true;
@@ -506,7 +510,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
                 key.OrgSlug, key.InternalRef);
             try
             {
-                await Task.Delay(Random.Shared.Next(50, 250));
+                await Task.Delay(TimeSpan.FromMilliseconds(Random.Shared.Next(50, 250)), _time);
                 IDdbIndex ddb = ddbManager.Get(key.OrgSlug, key.InternalRef);
                 result = hinted
                 ? ddb.AddRawBatchWithOptions(items, stopOnError: false)

@@ -28,13 +28,14 @@ public sealed class DatasetChangeCoalescer : IDatasetChangeCoalescer, IHostedSer
     private sealed class Pending
     {
         public bool ThumbnailCandidate;
-        public Timer? Timer;
+        public ITimer? Timer;
     }
 
     private readonly IOgcCacheKeys _ogcKeys;
     private readonly ICacheManager _cacheManager;
     private readonly string[] _thumbnailCandidates;
     private readonly TimeSpan _window;
+    private readonly TimeProvider _time;
     private readonly ILogger<DatasetChangeCoalescer> _logger;
     private readonly ConcurrentDictionary<(string Org, string Ds), Pending> _pending = new();
 
@@ -45,14 +46,16 @@ public sealed class DatasetChangeCoalescer : IDatasetChangeCoalescer, IHostedSer
     {
     }
 
+    /// <param name="time">Clock of the invalidation window; <see cref="TimeProvider.System"/> when null.</param>
     public DatasetChangeCoalescer(IOgcCacheKeys ogcKeys, ICacheManager cacheManager, string[] thumbnailCandidates,
-        TimeSpan window, ILogger<DatasetChangeCoalescer> logger)
+        TimeSpan window, ILogger<DatasetChangeCoalescer> logger, TimeProvider? time = null)
     {
         _ogcKeys = ogcKeys;
         _cacheManager = cacheManager;
         _thumbnailCandidates = thumbnailCandidates;
         _window = window < TimeSpan.Zero ? TimeSpan.Zero : window;
         _logger = logger;
+        _time = time ?? TimeProvider.System;
     }
 
     public void FilesAdded(string orgSlug, string dsSlug, IEnumerable<string> paths)
@@ -70,7 +73,7 @@ public sealed class DatasetChangeCoalescer : IDatasetChangeCoalescer, IHostedSer
                     continue;
 
                 pending.ThumbnailCandidate |= candidate;
-                pending.Timer ??= new Timer(_ => _ = FlushAsync(key), null, _window, Timeout.InfiniteTimeSpan);
+                pending.Timer ??= _time.CreateTimer(_ => _ = FlushAsync(key), null, _window, Timeout.InfiniteTimeSpan);
                 return;
             }
         }
