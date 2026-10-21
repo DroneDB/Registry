@@ -409,7 +409,7 @@ public class OrganizationMemberPermissionsTest : TestBase
     {
         return new OrganizationsManager(
             _authManagerMock.Object,
-            new DatasetAccessResolver(_utilsMock.Object, _authManagerMock.Object, Mock.Of<IDdbManager>()),
+            new DatasetAccessResolver(_utilsMock.Object, _authManagerMock.Object, Mock.Of<IDdbManager>(), TestPaths.Policy),
             _context,
             _utilsMock.Object,
             _datasetManagerMock.Object,

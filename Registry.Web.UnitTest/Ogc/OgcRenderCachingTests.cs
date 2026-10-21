@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Test.Support;
 using System;
 using System.Threading;
 using System.Collections.Generic;
@@ -98,7 +99,7 @@ public class OgcRenderCachingTests
 
     // One per test (a request scope): the filter and the managers of a request share its grants
     private IDatasetAccessResolver? _resolver;
-    private IDatasetAccessResolver Resolver => _resolver ??= new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object);
+    private IDatasetAccessResolver Resolver => _resolver ??= new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object, TestPaths.Policy);
 
     private WmsManager CreateWms() => new(Resolver, _artifacts.Object,
         _wrapper.Object, _catalog.Object, _cache, new HttpContextAccessor { HttpContext = _http },

@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Registry.Common;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.HeavyTasks.Tools;
 
@@ -17,7 +18,7 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// place (re-indexes the merged output) so it produces no downloadable artifact.
 /// Mirrors the legacy <c>ObjectsManager.MergeMultispectral</c> behaviour exactly.
 /// </summary>
-public sealed class MergeMultispectralTool : IHeavyTool
+public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : IHeavyTool
 {
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
@@ -51,10 +52,9 @@ public sealed class MergeMultispectralTool : IHeavyTool
         if (string.IsNullOrWhiteSpace(outputPath))
             throw new ArgumentException("An output path is required.");
 
-        // Path-traversal validation (parity with ObjectsManager.MergeMultispectral).
-        var root = ctx.Ddb.DatasetFolderPath;
-        CommonUtils.ValidateRelativePath(outputPath, root);
-        CommonUtils.ValidateRelativePaths(paths, root);
+        // libddb's path rule (parity with ObjectsManager.MergeMultispectral)
+        outputPath = pathPolicy.Normalize(outputPath, "output path");
+        paths = Array.ConvertAll(paths, p => pathPolicy.Normalize(p));
 
         // Native validation of the band set (CRS/size/type compatibility).
         var json = ctx.Ddb.ValidateMergeMultispectral(paths);
@@ -111,10 +111,10 @@ public sealed class MergeMultispectralTool : IHeavyTool
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
-        var paths = ReadStringArray(request.Params, "paths")
-                    ?? throw new InvalidOperationException("Band paths are required.");
-        var outputPath = ReadString(request.Params, "outputPath")
-                         ?? throw new InvalidOperationException("An output path is required.");
+        // Validated at submit; normalized again on the worker (a job enqueued by an older version)
+        var paths = Array.ConvertAll(ReadStringArray(request.Params, "paths")
+                    ?? throw new InvalidOperationException("Band paths are required."), p => pathPolicy.Normalize(p));
+        var outputPath = pathPolicy.Normalize(ReadString(request.Params, "outputPath"), "output path");
 
         progress.Report(new HeavyToolProgress(-1, "merging",
             LogChunk: $"Merging {paths.Length} bands → {outputPath}"));

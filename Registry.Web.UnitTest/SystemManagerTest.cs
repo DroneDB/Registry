@@ -405,6 +405,6 @@ public class SystemManagerTest : TestBase
             _fileSystem,
             Mock.Of<IJobIndexWriter>(),
             new SsrfGuard(new ImportSettings())
-        );
+        , TestPaths.Policy);
     }
 }

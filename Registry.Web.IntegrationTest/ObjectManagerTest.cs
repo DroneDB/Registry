@@ -743,11 +743,11 @@ public class ObjectManagerTest : TestBase
         var (tempPath, bytes, _) = await objectManager.StreamToTempAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ms);
 
-        // Committing onto the reserved uploads folder must be rejected
+        // Committing onto the reserved uploads folder must be rejected (RQ-10: a 400, it was a 500)
         var act = async () => await objectManager.CommitStreamedAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ".uploads/evil.bin", Streamed(tempPath, bytes));
 
-        await Should.ThrowAsync<InvalidOperationException>(act);
+        (await Should.ThrowAsync<InvalidDatasetPathException>(act)).Rejection.ShouldBe(EntryPathRejection.Reserved);
 
         // The temp file is cleaned up when the commit is rejected
         File.Exists(tempPath).ShouldBeFalse();
@@ -1149,7 +1149,55 @@ public class ObjectManagerTest : TestBase
             "admin", "7kd0gxti9qoemsrk", "/etc/passwd",
             false
         ));
-        ex2.Message.ShouldContain("path traversal");
+        ex2.Message.ShouldContain("absolute paths are not allowed");
+
+        // RQ-10: a Windows drive, a UNC path and a device path are absolute on every OS (libddb's
+        // rule); Path.IsPathRooted accepted them on Linux
+        foreach (var windowsAbsolute in new[] { @"C:\x.jpg", "c:/x.jpg", @"\\server\share\x.jpg", @"\\?\C:\x.jpg" })
+        {
+            var ex3 = await Should.ThrowAsync<InvalidDatasetPathException>(async () => await objectManager.Transfer(
+                MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
+                "admin", "7kd0gxti9qoemsrk", windowsAbsolute, false));
+            ex3.Rejection.ShouldBe(EntryPathRejection.Absolute);
+        }
+    }
+
+    // RQ-10: ".." inside a name is ordinary (libddb's rule); Contains("..") refused this destination
+    [Test]
+    public async Task Transfer_DestinationWithDotsInAName_IsAccepted()
+    {
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+        using var test2 = new TestFS(Test5ArchiveUrl, nameof(Transfer_DestinationWithDotsInAName_IsAccepted));
+
+        await using var context = GetTest1Context();
+
+        var settings = TestSettings.Default;
+        settings.DatasetsPath = test.TestFolder;
+        settings.EnableStorageLimiter = false;
+
+        _settingsOptions.Value = settings;
+        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
+            .Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        {
+            Id = Guid.NewGuid().ToString(),
+            UserName = "admin",
+            Email = "admin@test.com"
+        }));
+
+        var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions),
+            TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object,
+            TestCaches.Summaries(_ddbFactoryMock.Object));
+        var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
+        var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
+
+        await objectManager.Transfer(
+            MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
+            "admin", "7kd0gxti9qoemsrk", "./flights/DJI..0027.JPG", false);
+
+        var destFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", null, true);
+        destFiles.ShouldContain(f => f.Path == "flights/DJI..0027.JPG");
     }
 
     [Test]

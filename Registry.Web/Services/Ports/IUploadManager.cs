@@ -31,8 +31,13 @@ public interface IUploadManager
     Task<UploadRequestContext> BeginAsync(string orgSlug, string dsSlug, long? expectedBytes = null,
         string? uploadId = null);
 
-    /// <summary>Throws when no file can be uploaded to <paramref name="path"/> (before streaming it).</summary>
-    void ValidatePath(UploadRequestContext ctx, string path);
+    /// <summary>
+    /// The normalized dataset path a file uploaded to <paramref name="path"/> is stored at; throws when
+    /// no file can be uploaded there (before streaming it).
+    /// </summary>
+    /// <exception cref="Registry.Web.Exceptions.InvalidDatasetPathException">Not a dataset path (NUL, absolute, "..", reserved).</exception>
+    /// <exception cref="Registry.Web.Exceptions.ExtensionBlockedException">The import policy blocks the extension.</exception>
+    string ValidatePath(UploadRequestContext ctx, string path);
 
     /// <summary>Streams one file part to a temp file in the dataset, hashing it on the way.</summary>
     Task<StreamedFile> StreamAsync(UploadRequestContext ctx, Stream body, CancellationToken ct = default);

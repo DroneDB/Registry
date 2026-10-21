@@ -68,6 +68,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ProcessingPlatformSettings _settings;
     private readonly ImportSettings _importSettings;
+    private readonly DatasetPathPolicy _paths;
     private readonly ILogger<PhotogrammetryTool> _logger;
     private readonly TimeSpan _pollInterval;
 
@@ -77,9 +78,11 @@ public sealed class PhotogrammetryTool : IHeavyTool
         IArchiveExtractor extractor,
         IServiceScopeFactory scopeFactory,
         IOptions<AppSettings> appSettings,
+        DatasetPathPolicy paths,
         ILogger<PhotogrammetryTool> logger)
     {
         _client = client;
+        _paths = paths;
         _nodes = nodes;
         _extractor = extractor;
         _scopeFactory = scopeFactory;
@@ -108,19 +111,13 @@ public sealed class PhotogrammetryTool : IHeavyTool
 
         // Validate the optional image folder path (empty = whole dataset). Reject
         // rooted paths and traversal so a clean dataset-relative path is required.
-        var folder = ReadString(request.Params, "folder");
-        if (!string.IsNullOrWhiteSpace(folder))
-        {
-            CommonUtils.ValidateRelativePath(folder, ctx.Ddb.DatasetFolderPath);
-            if (DatasetPathRules.IsReserved(folder))
-                throw new ArgumentException($"'{folder}' is a reserved path.");
-        }
+        _paths.NormalizeFolder(ReadString(request.Params, "folder"));
 
         // Validate explicit image list before collecting.
         var explicitImages = ReadStringArray(request.Params, "images");
         if (explicitImages is { Count: > 0 })
         {
-            var missing = explicitImages.Where(p => !ctx.Ddb.EntryExists(p)).ToList();
+            var missing = explicitImages.Where(p => !ctx.Ddb.EntryExists(_paths.Normalize(p))).ToList();
             if (missing.Count > 0)
                 throw new ArgumentException(
                     $"The following image paths do not exist in the dataset: {string.Join(", ", missing.Select(p => $"'{p}'"))}");
@@ -159,10 +156,8 @@ public sealed class PhotogrammetryTool : IHeavyTool
             if (string.IsNullOrWhiteSpace(destPath))
                 throw new ArgumentException("A destination folder path (destPath) is required unless createNewDataset is true.");
 
-            // Destination path safety.
-            CommonUtils.ValidateRelativePath(destPath, ctx.Ddb.DatasetFolderPath);
-            if (DatasetPathRules.IsReserved(destPath))
-                throw new ArgumentException($"'{destPath}' is a reserved path.");
+            // libddb's path rule
+            destPath = _paths.NormalizeFolder(destPath);
 
             var destEntry = ctx.Ddb.GetEntry(destPath);
             if (destEntry != null && destEntry.Type != EntryType.Directory)
@@ -245,7 +240,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
             var targetRoot = ctx.Ddb.DatasetFolderPath;
             var targetOrgSlug = request.OrgSlug;
             var targetDsSlug = request.DsSlug;
-            var destPath = ReadString(request.Params, "destPath") ?? string.Empty;
+            var destPath = _paths.NormalizeFolder(ReadString(request.Params, "destPath"));
 
             if (createNewDataset)
             {
@@ -348,9 +343,21 @@ public sealed class PhotogrammetryTool : IHeavyTool
                 ct.ThrowIfCancellationRequested();
                 if (archiveEntry.IsDirectory) continue;
 
-                // Path sanitization (anti zip-slip + reserved-folder guard).
-                var target = DatasetPathRules.JoinArchiveEntry(destPath, archiveEntry.Key);
-                CommonUtils.ValidateRelativePath(target, root);
+                // libddb's path rule: an unsafe name fails the extraction (zip-slip); a folder
+                // entry or a reserved path (.ddb, the root .uploads) is skipped
+                var key = _paths.NormalizeArchiveKey(archiveEntry.Key);
+                var check = key.Path == null ? key : _paths.CheckIn(destPath, key.Path);
+                if (check.Path == null)
+                {
+                    if (check.Rejected == EntryPathRejection.Reserved)
+                        _logger.LogWarning("Skipping reserved path during photogrammetry extraction: '{Key}'", archiveEntry.Key);
+                    skipped++;
+                    done++;
+                    ReportProgress(progress, done, total, archiveEntry.Key, 0.96);
+                    continue;
+                }
+
+                var target = check.Path;
 
                 // Extension policy (allow-list / block-list): skip disallowed types with
                 // a warning, mirroring ArchiveExtractTool semantics.
@@ -508,7 +515,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
         _ => "processing"
     };
 
-    private static List<Entry> CollectImageEntries(HeavyToolRequest request, IDDB ddb)
+    private List<Entry> CollectImageEntries(HeavyToolRequest request, IDDB ddb)
     {
         var explicitImages = ReadStringArray(request.Params, "images");
         IEnumerable<Entry> entries;
@@ -516,13 +523,13 @@ public sealed class PhotogrammetryTool : IHeavyTool
         if (explicitImages is { Count: > 0 })
         {
             entries = explicitImages
-                .Select(ddb.GetEntry)
+                .Select(p => ddb.GetEntry(_paths.Normalize(p)))
                 .Where(e => e is not null)
                 .Select(e => e!);
         }
         else
         {
-            var folder = ReadString(request.Params, "folder") ?? request.Path ?? string.Empty;
+            var folder = _paths.NormalizeFolder(ReadString(request.Params, "folder") ?? request.Path);
             entries = ddb.Find(EntryQuery.OfTypes(folder, EntryType.Image, EntryType.GeoImage));
         }
 

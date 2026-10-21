@@ -135,21 +135,18 @@ public class DDB : IDDB
         return CommonUtils.SafeCombine(DatasetFolderPath, path);
     }
 
-    private static string NormalizePath(string path) => path.Replace('\\', '/');
-
     /// <summary>
     /// Dataset-relative form of <paramref name="path"/>, resolved like the native listing
     /// ("./a", "a/../b", "dir/"): "" for the dataset root, null outside the dataset.
     /// </summary>
     private string? ToDatasetRelative(string? path)
     {
-        var relativePath = NormalizePath(Path.GetRelativePath(DatasetFolderPath, GetLocalPath(path ?? string.Empty)))
-            .TrimEnd('/');
+        var local = GetLocalPath(path ?? string.Empty);
+        var relativePath = Path.GetRelativePath(DatasetFolderPath, local).ToDdbPath().TrimEnd('/');
         if (relativePath is "." or "")
             return string.Empty;
-        if (relativePath == ".." || relativePath.StartsWith("../") || Path.IsPathRooted(relativePath))
-            return null;
-        return relativePath;
+        // Outside the dataset (a ".." escape, another drive): nothing there is indexed
+        return CommonUtils.IsUnder(DatasetFolderPath, local) ? relativePath : null;
     }
 
     public Entry? GetEntry(string path)
@@ -219,13 +216,13 @@ public class DDB : IDDB
 
     public void Move(string source, string dest)
     {
-        Wrap(() => _ddbWrapper.MoveEntry(DatasetFolderPath, NormalizePath(source), NormalizePath(dest)),
+        Wrap(() => _ddbWrapper.MoveEntry(DatasetFolderPath, source.ToDdbPath(), dest.ToDdbPath()),
             ex => $"Cannot move '{source}' to {dest} from ddb '{DatasetFolderPath}'");
     }
 
     public void Build(string path, string dest = null, bool force = false)
     {
-        Wrap(() => _ddbWrapper.Build(DatasetFolderPath, path != null ? NormalizePath(path) : null, dest, force),
+        Wrap(() => _ddbWrapper.Build(DatasetFolderPath, path?.ToDdbPath(), dest, force),
             ex => $"Cannot build '{path}' from ddb '{DatasetFolderPath}'");
     }
 
@@ -287,7 +284,7 @@ public class DDB : IDDB
 
     private EntryBuildArtifacts[] GetBuildArtifacts(string[] paths, string operation)
     {
-        var normalized = paths.Select(NormalizePath).ToArray();
+        var normalized = paths.Select(p => p.ToDdbPath()).ToArray();
         return Wrap(() => _ddbWrapper.GetBuildArtifacts(DatasetFolderPath, normalized),
             ex => $"Cannot call {operation} from ddb '{DatasetFolderPath}'");
     }

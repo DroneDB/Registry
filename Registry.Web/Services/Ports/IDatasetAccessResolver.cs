@@ -23,13 +23,14 @@ public interface IDatasetAccessResolver
     /// <summary>
     /// The dataset <paramref name="dsSlug"/> of <paramref name="orgSlug"/>, after checking that the current
     /// user has <paramref name="access"/> to it. With a <paramref name="path"/>, the result also carries
-    /// the normalized dataset-relative path (<see cref="Utilities.DatasetPathRules.NormalizeRequestPath"/>:
-    /// no NUL byte, no traversal) and the entry at that path, if any.
+    /// the normalized dataset-relative path (<see cref="Utilities.DatasetPathPolicy.NormalizeRequestPath"/>:
+    /// libddb's path rule, one leading '/' dropped) and the entry at that path, if any.
     /// </summary>
     /// <exception cref="Exceptions.BadRequestException">A slug is missing or invalid.</exception>
     /// <exception cref="Exceptions.NotFoundException">There is no such dataset.</exception>
     /// <exception cref="Exceptions.ForbiddenException">The current user may not access it.</exception>
-    /// <exception cref="ArgumentException">The path is empty, contains a NUL byte or escapes the dataset.</exception>
+    /// <exception cref="Exceptions.InvalidDatasetPathException">The path is not a dataset path (empty,
+    /// NUL byte, absolute, "..", reserved).</exception>
     Task<DatasetAccess> ResolveAsync(string orgSlug, string dsSlug, AccessType access, string? path = null,
         CancellationToken ct = default);
 

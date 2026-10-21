@@ -27,13 +27,14 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Registry.Web.Utilities;
+using Registry.Web.Exceptions;
 using Shouldly;
 
 namespace Registry.Web.Test;
 
 /// <summary>
 /// The dataset walkers and remote importers classify reserved paths with the one shared rule,
-/// <see cref="DatasetPathRules.IsReserved"/> (libddb's: a ".ddb" segment at any depth, ordinal;
+/// <see cref="DatasetPathPolicy.IsReserved"/> (libddb's: a ".ddb" segment at any depth, ordinal;
 /// ".uploads" only as the first segment). Each used its own rule before: the import walker and
 /// both remote importers only skipped a root ".ddb/" prefix, so a nested ".ddb" file was indexed
 /// or downloaded and the ".uploads" staging folder was indexed or written into.
@@ -69,7 +70,7 @@ public class ReservedPathCallSitesTests
     }
 
     [Test]
-    public void ImportDatasetTool_EnumerateRelativeFiles_SkipsReservedPathsOnly()
+    public void DatasetWalker_EnumerateFiles_SkipsReservedPathsOnly()
     {
         foreach (var rel in RemotePaths)
         {
@@ -78,7 +79,8 @@ public class ReservedPathCallSitesTests
             File.WriteAllText(local, "x");
         }
 
-        var files = ImportDatasetTool.EnumerateRelativeFiles(_root).OrderBy(p => p, StringComparer.Ordinal);
+        // The one walker of ImportDatasetTool and IndexReconciliationService
+        var files = TestPaths.Policy.EnumerateFiles(new FileSystem(), _root).OrderBy(p => p, StringComparer.Ordinal);
 
         files.ShouldBe(ExpectedImported);
     }
@@ -104,7 +106,7 @@ public class ReservedPathCallSitesTests
         var handler = new FakeRegistryHandler();
         var unsafePath = UnsafePath(absolute);
 
-        await Should.ThrowAsync<ArgumentException>(async () =>
+        await Should.ThrowAsync<InvalidDatasetPathException>(async () =>
             await DownloadWithRemoteClientAsync(handler, ["ok.jpg", unsafePath]));
 
         handler.Downloaded.ShouldBeEmpty();
@@ -167,6 +169,7 @@ public class ReservedPathCallSitesTests
         factory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(() => ClientFor(handler));
 
         var client = new RemoteRegistryClient(factory.Object, new ImportSettings(),
+            TestPaths.Policy,
             NullLogger<RemoteRegistryClient>.Instance);
 
         var entries = paths.Select(p => new EntryDto { Path = p, Type = EntryType.Image, Size = 4 }).ToArray();
@@ -200,7 +203,7 @@ public class ReservedPathCallSitesTests
             new BuildPendingService(context, ddbManager.Object, backgroundJob.Object, cache.Object,
                 Mock.Of<ILogger<BuildPendingService>>()),
             factory.Object, backgroundJob.Object, cache.Object, new FileSystem(), Mock.Of<IJobIndexWriter>(),
-            new SsrfGuard(new ImportSettings { SsrfAllowPrivateNetworks = true }));
+            new SsrfGuard(new ImportSettings { SsrfAllowPrivateNetworks = true }), TestPaths.Policy);
 
         return await manager.ImportDataset(new ImportDatasetRequestDto
         {

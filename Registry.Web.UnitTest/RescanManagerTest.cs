@@ -307,7 +307,7 @@ public class RescanManagerTest : TestBase
     }
 
     private RescanManager CreateRescanManager(RegistryContext context) =>
-        new(_authManagerMock.Object, new DatasetAccessResolver(Mock.Of<IUtils>(), _authManagerMock.Object, _ddbManagerMock.Object),
+        new(_authManagerMock.Object, new DatasetAccessResolver(Mock.Of<IUtils>(), _authManagerMock.Object, _ddbManagerMock.Object, TestPaths.Policy),
             context, _ddbManagerMock.Object, _backgroundJobMock.Object,
             new RescanRebuild(_cacheInvalidatorMock.Object, CreateTestLogger<RescanRebuild>()),
             CreateTestLogger<RescanManager>());

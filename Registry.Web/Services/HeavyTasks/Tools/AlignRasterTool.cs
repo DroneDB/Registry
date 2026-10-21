@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Registry.Common;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.HeavyTasks.Tools;
 
@@ -18,7 +19,7 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// artifact is produced. The caller (frontend) is responsible for submitting a
 /// separate "build" task for the output file after this task succeeds.
 /// </summary>
-public sealed class AlignRasterTool : IHeavyTool
+public sealed class AlignRasterTool(DatasetPathPolicy paths) : IHeavyTool
 {
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
@@ -58,10 +59,9 @@ public sealed class AlignRasterTool : IHeavyTool
         if (string.IsNullOrWhiteSpace(outputPath))
             throw new ArgumentException("outputPath is required.");
 
-        var root = ctx.Ddb.DatasetFolderPath;
-        CommonUtils.ValidateRelativePath(sourcePath, root);
-        CommonUtils.ValidateRelativePath(referencePath, root);
-        CommonUtils.ValidateRelativePath(outputPath, root);
+        sourcePath = paths.Normalize(sourcePath, "source path");
+        referencePath = paths.Normalize(referencePath, "reference path");
+        outputPath = paths.Normalize(outputPath, "output path");
 
         // Native validation (CRS, overlap, type compatibility)
         var validationJson = ctx.Ddb.ValidateAlignRaster(sourcePath, referencePath);
@@ -115,12 +115,10 @@ public sealed class AlignRasterTool : IHeavyTool
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
-        var sourcePath = ReadString(request.Params, "sourcePath")
-                         ?? throw new InvalidOperationException("sourcePath is required.");
-        var referencePath = ReadString(request.Params, "referencePath")
-                            ?? throw new InvalidOperationException("referencePath is required.");
-        var outputPath = ReadString(request.Params, "outputPath")
-                         ?? throw new InvalidOperationException("outputPath is required.");
+        // Validated at submit; normalized again on the worker (a job enqueued by an older version)
+        var sourcePath = paths.Normalize(ReadString(request.Params, "sourcePath"), "source path");
+        var referencePath = paths.Normalize(ReadString(request.Params, "referencePath"), "reference path");
+        var outputPath = paths.Normalize(ReadString(request.Params, "outputPath"), "output path");
         var mode = ReadString(request.Params, "mode") ?? "similarity";
 
         progress.Report(new HeavyToolProgress(-1, "aligning",

@@ -125,9 +125,10 @@ public class UploadManagerTests
             NullLogger<BuildPendingService>.Instance);
 
         return new UploadManager(NullLogger<UploadManager>.Instance, _auth.Object,
-            new DatasetAccessResolver(_utils.Object, _auth.Object, ddbManager.Object), ddbManager.Object,
+            new DatasetAccessResolver(_utils.Object, _auth.Object, ddbManager.Object, TestPaths.Policy), ddbManager.Object,
             new Registry.Adapters.FileSystem(), options, jobs, buildPending,
             new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _utils.Object), _changes.Object,
+            TestPaths.Policy,
             _receipts, _queue.Object);
     }
 
@@ -167,7 +168,7 @@ public class UploadManagerTests
 
         results[0].Status.ShouldBe(StatusCodes.Status201Created);
         results[1].Status.ShouldBe(StatusCodes.Status400BadRequest);           // blocked extension
-        results[2].Status.ShouldBe(StatusCodes.Status500InternalServerError);  // reserved path
+        results[2].Status.ShouldBe(StatusCodes.Status400BadRequest);           // reserved path (RQ-10: was 500)
         results[3].Error.ShouldNotBeNull();                                    // index failure
         File.Exists(Path.Combine(_root, "ok.txt")).ShouldBeTrue();
         File.Exists(Path.Combine(_root, "tool.exe")).ShouldBeFalse();
@@ -225,9 +226,22 @@ public class UploadManagerTests
         using var ctx = await uploads.BeginAsync(Org, Ds);
 
         Should.Throw<ExtensionBlockedException>(() => uploads.ValidatePath(ctx, "setup.exe"));
-        Should.Throw<InvalidOperationException>(() => uploads.ValidatePath(ctx, ".uploads/x.bin"));
-        Should.Throw<ArgumentException>(() => uploads.ValidatePath(ctx, "../outside.txt"));
-        uploads.ValidatePath(ctx, "photos/ok.jpg");
+        // RQ-10: one rule (libddb's) and one 400 for every refused path; a reserved path was a 500
+        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(ctx, ".uploads/x.bin"))
+            .Rejection.ShouldBe(EntryPathRejection.Reserved);
+        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(ctx, "../outside.txt"))
+            .Rejection.ShouldBe(EntryPathRejection.Traversal);
+        // Absolute on every OS (libddb's rule); Path.IsPathRooted accepted these on Linux
+        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(ctx, @"C:\evil.txt"))
+            .Rejection.ShouldBe(EntryPathRejection.Absolute);
+        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(ctx, @"\\server\share\evil.txt"))
+            .Rejection.ShouldBe(EntryPathRejection.Absolute);
+        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(ctx, "a\0.txt"))
+            .Rejection.ShouldBe(EntryPathRejection.Nul);
+        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(ctx, "sub/.ddb/x.txt"))
+            .Rejection.ShouldBe(EntryPathRejection.Reserved);
+        uploads.ValidatePath(ctx, "photos/ok.jpg").ShouldBe("photos/ok.jpg");
+        uploads.ValidatePath(ctx, "./photos//ok.jpg").ShouldBe("photos/ok.jpg");
     }
 
     [Test]

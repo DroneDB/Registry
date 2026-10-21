@@ -137,7 +137,7 @@ public class DatasetSummaryTests : TestBase
         var cache = new MemoryDistributedCache(
             Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
         var auth = Mock.Of<IAuthManager>();
-        var stac = new StacManager(auth, new DatasetAccessResolver(utils.Object, auth, ddbManager.Object), _ctx, utils.Object,
+        var stac = new StacManager(auth, new DatasetAccessResolver(utils.Object, auth, ddbManager.Object, TestPaths.Policy), _ctx, utils.Object,
             ddbManager.Object, cache,
             CreateTestLogger<StacManager>(), TestCaches.WithDatasetVisibility(cache));
 

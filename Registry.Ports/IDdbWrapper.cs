@@ -147,6 +147,18 @@ public interface IDdbWrapper
     public IReadOnlyList<EntryTypeInfo> GetEntryTypes();
 
     /// <summary>
+    /// libddb's dataset path rule (DDBNormalizePath, XI-09): the normalized form of
+    /// <paramref name="path"/> or the first rule it breaks. No dataset is opened.
+    /// </summary>
+    /// <param name="path">A dataset-relative path, '/' or '\' separated. A NUL byte or a lone
+    /// surrogate, which the C API cannot receive, is rejected by the adapter itself
+    /// (<see cref="NormalizedEntryPath.RejectUnmarshallable"/>).</param>
+    /// <param name="reservedFirstSegments">Names reserved as the first segment only (Registry's
+    /// ".uploads"); null or empty reserves none. ".ddb" is always reserved, at any depth.</param>
+    /// <exception cref="System.ArgumentException">A reserved name is not a single segment.</exception>
+    public NormalizedEntryPath NormalizePath(string path, IReadOnlyCollection<string>? reservedFirstSegments = null);
+
+    /// <summary>
     /// Copies the build of an entry (its artifacts and pending marker) to another dataset
     /// (DDBCopyBuildArtifacts, XI-04), so a copied or moved file needs no rebuild.
     /// </summary>

@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Test.Support;
 using System;
 using System.Threading;
 using System.Collections.Generic;
@@ -96,11 +97,11 @@ public class WfsFeatureQueryTests
     private IDistributedCache Cache() =>
         new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
 
-    private WfsManager CreateWfs() => new(new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object), _artifacts.Object,
+    private WfsManager CreateWfs() => new(new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object, TestPaths.Policy), _artifacts.Object,
         _wrapper.Object, _catalog.Object, Cache(), new HttpContextAccessor { HttpContext = new DefaultHttpContext() },
         NullLogger<WfsManager>.Instance);
 
-    private OgcApiFeaturesManager CreateFeatures() => new(new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object),
+    private OgcApiFeaturesManager CreateFeatures() => new(new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object, TestPaths.Policy),
         _artifacts.Object, _wrapper.Object, _catalog.Object, Cache(),
         new HttpContextAccessor { HttpContext = new DefaultHttpContext() }, NullLogger<OgcApiFeaturesManager>.Instance);
 

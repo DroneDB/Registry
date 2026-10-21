@@ -36,6 +36,8 @@ public class IndexReconciliationService
     private readonly IDdbManager _ddbManager;
     private readonly IDatasetIndexQueue _indexQueue;
     private readonly ReconciliationSettings _settings;
+    private readonly IFileSystem _fs;
+    private readonly DatasetPathPolicy _paths;
     private readonly ILogger<IndexReconciliationService> _logger;
 
     public IndexReconciliationService(
@@ -43,12 +45,16 @@ public class IndexReconciliationService
         IDdbManager ddbManager,
         IDatasetIndexQueue indexQueue,
         IOptions<ReconciliationSettings> settings,
+        IFileSystem fs,
+        DatasetPathPolicy paths,
         ILogger<IndexReconciliationService> logger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _indexQueue = indexQueue ?? throw new ArgumentNullException(nameof(indexQueue));
         _settings = (settings ?? throw new ArgumentNullException(nameof(settings))).Value;
+        _fs = fs ?? throw new ArgumentNullException(nameof(fs));
+        _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -104,35 +110,11 @@ public class IndexReconciliationService
         var sw = Stopwatch.StartNew();
         var root = ddb.DatasetFolderPath;
 
-        // 1. Enumerate files on disk. Walk directories iteratively and prune the reserved
-        //    folders during the walk (review round 2): Directory.EnumerateFiles with
-        //    SearchOption.AllDirectories would recurse into .ddb, holding the live database,
-        //    and scan every staged/quarantined upload; neither should ever count as
-        //    "unindexed". Both the prune and the per-file post-filter apply the one dataset rule,
-        //    DatasetPathRules.IsReserved: a ".ddb" folder at any depth (libddb never indexes it)
-        //    and ".uploads" only at the root (a nested ".uploads" is an ordinary user folder).
-        var onDisk = new HashSet<string>(StringComparer.Ordinal);
-        if (Directory.Exists(root))
-        {
-            var stack = new Stack<string>();
-            stack.Push(root);
-            while (stack.Count > 0)
-            {
-                var dir = stack.Pop();
-                foreach (var file in Directory.EnumerateFiles(dir))
-                {
-                    var rel = Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/');
-                    if (!DatasetPathRules.IsReserved(rel))
-                        onDisk.Add(rel);
-                }
-                foreach (var sub in Directory.EnumerateDirectories(dir))
-                {
-                    if (DatasetPathRules.IsReserved(Path.GetRelativePath(root, sub)))
-                        continue; // Live database and upload staging/quarantine folders
-                    stack.Push(sub);
-                }
-            }
-        }
+        // 1. Enumerate files on disk with the one dataset walker (DatasetPathPolicy.EnumerateFiles):
+        //    the reserved folders are pruned during the walk (review round 2), so the live database
+        //    (.ddb at any depth) and the staged/quarantined uploads (the root .uploads) are never
+        //    scanned and never count as "unindexed"; a nested ".uploads" is an ordinary user folder.
+        var onDisk = new HashSet<string>(_paths.EnumerateFiles(_fs, root), StringComparer.Ordinal);
 
         // 2. Compare against the index (files only - directories have no on-disk counterpart to diff).
         var indexed = new HashSet<string>(
@@ -179,19 +161,19 @@ public class IndexReconciliationService
     private int AgeOutQuarantine(string datasetRoot, Action<string> writeLine)
     {
         var quarantineDir = Path.Combine(datasetRoot, IDDB.UploadsFolderName, IDDB.QuarantineFolderName);
-        if (!Directory.Exists(quarantineDir))
+        if (!_fs.FolderExists(quarantineDir))
             return 0;
 
         var cutoff = DateTime.UtcNow.AddDays(-Math.Max(0, _settings.QuarantineRetentionDays));
         var removed = 0;
 
-        foreach (var file in Directory.EnumerateFiles(quarantineDir))
+        foreach (var file in _fs.EnumerateFiles(quarantineDir))
         {
             try
             {
-                if (File.GetLastWriteTimeUtc(file) < cutoff)
+                if (_fs.GetLastWriteTime(file).ToUniversalTime() < cutoff)
                 {
-                    File.Delete(file);
+                    _fs.Delete(file);
                     removed++;
                 }
             }

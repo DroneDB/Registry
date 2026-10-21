@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Test.Support;
 using System;
 using System.Threading;
 using System.IO;
@@ -60,7 +61,7 @@ public class CadCrsManagerTests
         utils.Setup(u => u.GetDatasetAsync(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(dataset);
         var ddbManager = new Mock<IDdbManager>();
         ddbManager.Setup(m => m.Get(Org, dataset.InternalRef)).Returns(_ddb.Object);
-        return new CadCrsManager(new DatasetAccessResolver(utils.Object, _auth.Object, ddbManager.Object), _wrapper.Object, _objects.Object,
+        return new CadCrsManager(new DatasetAccessResolver(utils.Object, _auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper.Object, _objects.Object,
             NullLogger<CadCrsManager>.Instance);
     }
 

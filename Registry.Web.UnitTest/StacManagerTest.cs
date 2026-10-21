@@ -84,7 +84,7 @@ public class StacManagerTest : TestBase
             Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
 
         var stacManager = new StacManager(_authManagerMock.Object,
-            new DatasetAccessResolver(utilsMock.Object, _authManagerMock.Object, _ddbManagerMock.Object), context,
+            new DatasetAccessResolver(utilsMock.Object, _authManagerMock.Object, _ddbManagerMock.Object, TestPaths.Policy), context,
             utilsMock.Object, _ddbManagerMock.Object, cache, _stacManagerLogger, TestCaches.WithDatasetVisibility(cache));
 
         var catalog = await stacManager.GetCatalog();
@@ -213,7 +213,7 @@ public class StacManagerTest : TestBase
             Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
 
         return (new StacManager(_authManagerMock.Object,
-            new DatasetAccessResolver(utilsMock.Object, _authManagerMock.Object, _ddbManagerMock.Object), context,
+            new DatasetAccessResolver(utilsMock.Object, _authManagerMock.Object, _ddbManagerMock.Object, TestPaths.Policy), context,
             utilsMock.Object, _ddbManagerMock.Object,
             cache, _stacManagerLogger, TestCaches.WithDatasetVisibility(cache)), utilsMock, cache);
     }

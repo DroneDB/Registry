@@ -1,3 +1,4 @@
+using Registry.Adapters;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -65,6 +66,8 @@ public class IndexReconciliationServiceTests
         var appSettings = Microsoft.Extensions.Options.Options.Create(new AppSettings { Reconciliation = settings ?? new ReconciliationSettings() });
 
         return new IndexReconciliationService(context, ddbManager.Object, indexQueue.Object, TestSettings.Options<ReconciliationSettings>(appSettings),
+            new FileSystem(),
+            TestPaths.Policy,
             NullLogger<IndexReconciliationService>.Instance);
     }
 
@@ -180,7 +183,7 @@ public class IndexReconciliationServiceTests
 
     /// <summary>
     /// The scan classifies paths with the shared reserved rule
-    /// (<see cref="Registry.Web.Utilities.DatasetPathRules.IsReserved"/>): a ".ddb" segment at any
+    /// (<see cref="Registry.Web.Utilities.DatasetPathPolicy.IsReserved"/>): a ".ddb" segment at any
     /// depth, ".uploads" only at the root. The old prefix test (StartsWith with no separator)
     /// hid ".ddbx/..", ".ddb_notes.txt" and ".uploadsfoo.jpg", and the walk pruned a nested
     /// ".uploads" folder, so those unindexed user files were never re-enqueued.

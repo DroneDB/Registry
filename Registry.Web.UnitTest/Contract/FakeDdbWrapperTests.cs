@@ -67,6 +67,8 @@ public sealed class FakeDdbWrapperTests
         ["meta-remove"] = d => d.MetaRemove(Root, d.MetaAdd(Root, "tags", "\"survey\"").Id),
         ["meta-set"] = d => d.MetaSet(Root, "annotation", """{ "level": 2, "note": "tree" }""", "sub/img.jpg"),
         ["meta-unset"] = d => d.MetaUnset(Root, "name"),
+        ["normalize-path"] = d => d.NormalizePath("photos\\2024/./a.jpg", [".uploads"]),
+        ["normalize-path-rejected"] = d => d.NormalizePath(".uploads/x", [".uploads"]),
         ["pending-build-info-none"] = d => d.GetPendingBuildInfo(Root),
         ["resolve-build-file"] = d => d.ResolveBuildFile(Root, BuiltHash, "cog/cog.tif"),
         ["raster-info"] = d => d.GetRasterInfo(Path.Combine(Root, "ortho.tif")),
@@ -92,9 +94,9 @@ public sealed class FakeDdbWrapperTests
         "pending-build-info", "build-artifacts-pending",
         // A deprecated export Registry no longer calls (GetBuildArtifacts replaces it, XI-04)
         "build-status",
-        // ABI 1.1 outputs with no port member yet: the listing with build objects (RQ-11), the path
-        // rules (DatasetPathPolicy, RQ-10) and the data-only STAC (StacManager)
-        "list-entries-ex", "normalize-path", "normalize-path-rejected",
+        // ABI 1.1 outputs with no port member yet: the listing with build objects (RQ-11) and the
+        // data-only STAC (StacManager)
+        "list-entries-ex",
         "stac-data-collection", "stac-data-item-collection", "stac-data-item-georaster", "stac-data-item-image"
     ];
 
@@ -119,6 +121,44 @@ public sealed class FakeDdbWrapperTests
     }
 
     private static string[] ServedFixtures() => [.. Calls.Keys];
+
+    [TestCase("normalize-path")]
+    [TestCase("normalize-path-rejected")]
+    public void NormalizePath_EqualsItsFixture(string fixture)
+    {
+        var expected = Newtonsoft.Json.JsonConvert.DeserializeObject<NormalizedEntryPath>(
+            ContractFixture.Load(fixture).Output.ToString(Newtonsoft.Json.Formatting.None));
+
+        Calls[fixture](_ddb).ShouldBe(expected);
+    }
+
+    private static PathVector[] Vectors() => [.. PathVectors.All];
+
+    // XI-09: the fake answers DDBNormalizePath with a copy of libddb's rule; every golden vector pins
+    // it (Registry.Adapters.Ddb.Test runs the same vectors through native libddb)
+    [TestCaseSource(nameof(Vectors))]
+    public void NormalizePath_AnswersEveryGoldenVector(PathVector vector)
+    {
+        _ddb.NormalizePath(vector.Input, vector.Reserved).ShouldBe(vector.Expected);
+    }
+
+    [Test]
+    public void PathVectors_AreAllLoaded()
+    {
+        // The vendored file has 54 vectors (DroneDB 2.0.0), 3 of them for the C++ API only (NUL)
+        PathVectors.All.Count.ShouldBe(54);
+        PathVectors.All.Count(v => !v.CString).ShouldBe(3);
+    }
+
+    [TestCase("[\"a/b\"]")]
+    [TestCase("[\"..\"]")]
+    [TestCase("[\".\"]")]
+    [TestCase("[\"\"]")]
+    public void NormalizePath_InvalidReservedName_IsAnArgumentError(string reservedJson)
+    {
+        var names = Newtonsoft.Json.JsonConvert.DeserializeObject<string[]>(reservedJson)!;
+        Should.Throw<ArgumentException>(() => _ddb.NormalizePath("a", names));
+    }
 
     [Test]
     public void List_DeserializesLikeTheNativeAdapter()

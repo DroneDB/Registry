@@ -45,35 +45,29 @@ public class ObjectsController : ControllerBaseEx
     private readonly ILogger<ObjectsController> _logger;
     private readonly FormOptions _formOptions;
     private readonly AppSettings _appSettings;
+    private readonly DatasetPathPolicy _paths;
 
     public ObjectsController(IObjectsManager datasetsManager, ILogger<ObjectsController> logger,
-        IOptions<FormOptions> formOptions, IOptions<AppSettings> appSettings)
+        IOptions<FormOptions> formOptions, IOptions<AppSettings> appSettings, DatasetPathPolicy paths)
     {
         _objectsManager = datasetsManager;
         _logger = logger;
         _formOptions = formOptions.Value;
         _appSettings = appSettings.Value;
+        _paths = paths;
     }
 
-    private static bool IsTraversalPath(string path) =>
-        string.IsNullOrWhiteSpace(path) ||
-        Path.IsPathRooted(path) ||
-        path.Split('/', '\\').Any(s => s is "." or "..");
+    // libddb's path rule before the manager runs (RQ-11 replaces these with a DatasetPath model binder)
+    private void EnsureValidPath(string path) => _paths.Normalize(path);
 
-    private static void EnsureValidPath(string path)
-    {
-        if (IsTraversalPath(path))
-            throw new BadRequestException("Invalid path");
-    }
-
-    private static void EnsureValidPaths(IReadOnlyCollection<string>? paths, string? outputPath = null)
+    private void EnsureValidPaths(IReadOnlyCollection<string>? paths, string? outputPath = null)
     {
         if (paths == null || paths.Count == 0)
             throw new BadRequestException("paths is required");
-        if (paths.Any(IsTraversalPath))
-            throw new BadRequestException("Invalid input path");
-        if (outputPath != null && IsTraversalPath(outputPath))
-            throw new BadRequestException("Invalid output path");
+        foreach (var path in paths)
+            _paths.Normalize(path, "input path");
+        if (outputPath != null)
+            _paths.Normalize(outputPath, "output path");
     }
 
     /// <summary>

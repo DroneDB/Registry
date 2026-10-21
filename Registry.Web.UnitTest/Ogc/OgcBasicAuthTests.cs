@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Test.Support;
 using System;
 using System.Threading;
 using System.Collections.Generic;
@@ -83,6 +84,7 @@ public class OgcBasicAuthTests
             .AddSingleton(auth.Object)
             .AddSingleton(Mock.Of<IDdbManager>())
             .AddScoped<IDatasetAccessResolver, DatasetAccessResolver>()
+            .AddSingleton(TestPaths.Policy)
             .AddScoped<BasicAuthFilter>()
             .AddScoped<OgcAuthorizationFilter>()
             .BuildServiceProvider();

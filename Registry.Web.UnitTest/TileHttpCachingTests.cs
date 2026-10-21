@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Test.Support;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -47,7 +48,7 @@ public class TileHttpCachingTests
     {
         var controller = new ObjectsController(_manager.Object, NullLogger<ObjectsController>.Instance,
             Microsoft.Extensions.Options.Options.Create(new FormOptions()),
-            Microsoft.Extensions.Options.Options.Create(new AppSettings()))
+            Microsoft.Extensions.Options.Options.Create(new AppSettings()), TestPaths.Policy)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };

@@ -48,12 +48,13 @@ public class SystemManager : ISystemManager
     private readonly IFileSystem _fileSystem;
     private readonly IJobIndexWriter _jobIndexWriter;
     private readonly SsrfGuard _ssrfGuard;
+    private readonly DatasetPathPolicy _paths;
 
     public SystemManager(IAuthManager authManager,
         RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger,
         IObjectsManager objectManager, IOptions<AppSettings> settings, BuildPendingService buildPendingService,
         IHttpClientFactory httpClientFactory, IBackgroundJobsProcessor backgroundJob, ICacheManager cacheManager,
-        IFileSystem fileSystem, IJobIndexWriter jobIndexWriter, SsrfGuard ssrfGuard)
+        IFileSystem fileSystem, IJobIndexWriter jobIndexWriter, SsrfGuard ssrfGuard, DatasetPathPolicy paths)
     {
         _authManager = authManager;
         _context = context;
@@ -68,6 +69,7 @@ public class SystemManager : ISystemManager
         _fileSystem = fileSystem;
         _jobIndexWriter = jobIndexWriter;
         _ssrfGuard = ssrfGuard;
+        _paths = paths;
     }
 
     // Legacy import calls go through the SSRF-hardened client (connect-time IP validation + redirect
@@ -1143,7 +1145,7 @@ public class SystemManager : ISystemManager
             // (a rooted/".." path fails the import, as in RemoteRegistryClient, so the remote cannot
             // write outside the dataset folder) and skip reserved paths: ".ddb" files - we'll handle
             // metadata separately - and the ".uploads" staging folder.
-            var targets = DatasetPathRules.ResolveUntrustedPaths(destPath, remoteFiles, e => e.Path);
+            var targets = _paths.ResolveUntrustedPaths(destPath, remoteFiles, e => e.Path);
 
             _fileSystem.FolderCreate(destPath);
 

@@ -56,6 +56,7 @@ public static class ProcessingNodeServiceCollectionExtensions
         // Native library and file system
         services.AddSingleton<IDdbWrapper, NativeDdbWrapper>();
         services.AddSingleton<IFileSystem, FileSystem>();
+        services.AddDatasetFileSystem();
 
         // Per-dataset index write coalescer (process-local singleton): coalesces concurrent index
         // writes on THIS host - notably the reconciliation sweep - into one native batch.

@@ -208,6 +208,15 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual IReadOnlyList<EntryTypeInfo> GetEntryTypes() =>
         Serve<List<EntryTypeInfo>>("entry-types", "GetEntryTypes()");
 
+    /// <summary>
+    /// libddb's path rule for any input (<see cref="EntryPathRule"/>, a copy of
+    /// <c>ddb::normalizeEntryPath</c>): the golden vectors (<see cref="PathVectors"/>) pin every rule
+    /// and the fake's tests run all of them, so this is the one call the fake answers without a
+    /// recorded output.
+    /// </summary>
+    public virtual NormalizedEntryPath NormalizePath(string path, IReadOnlyCollection<string>? reservedFirstSegments = null) =>
+        EntryPathRule.Normalize(path, reservedFirstSegments);
+
     /// <summary>The recorded copy of the built <c>ortho.tif</c> to another dataset (<c>copy-build-artifacts</c>).</summary>
     public virtual CopiedBuildArtifacts CopyBuildArtifacts(string sourceDdbPath, string destinationDdbPath, string hash) =>
         Serve<CopiedBuildArtifacts>(hash == BuiltHash ? "copy-build-artifacts" : null,

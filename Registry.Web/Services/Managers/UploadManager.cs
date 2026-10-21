@@ -43,12 +43,13 @@ public sealed partial class UploadManager : IUploadManager
     private readonly IDatasetIndexQueue? _indexQueue;
     private readonly IDatasetChangeCoalescer _changes;
     private readonly IThumbnailPrecomputeQueue? _thumbnails;
+    private readonly DatasetPathPolicy _paths;
 
     public UploadManager(ILogger<UploadManager> logger, IAuthManager authManager,
         IDatasetAccessResolver access, IDdbManager ddbManager, IFileSystem fs, IOptions<AppSettings> settings,
         IBackgroundJobsProcessor backgroundJob, BuildPendingService buildPendingService, IUploadQuotaGuard quota,
-        IDatasetChangeCoalescer changes, IUploadReceiptStore? receipts = null, IDatasetIndexQueue? indexQueue = null,
-        IThumbnailPrecomputeQueue? thumbnails = null)
+        IDatasetChangeCoalescer changes, DatasetPathPolicy paths, IUploadReceiptStore? receipts = null,
+        IDatasetIndexQueue? indexQueue = null, IThumbnailPrecomputeQueue? thumbnails = null)
     {
         _logger = logger;
         _authManager = authManager;
@@ -64,6 +65,7 @@ public sealed partial class UploadManager : IUploadManager
         _indexQueue = indexQueue;
         _changes = changes;
         _thumbnails = thumbnails;
+        _paths = paths;
     }
 
     // Client-generated ids: GUIDs or similar tokens, never anything that could shape a cache key
@@ -120,8 +122,15 @@ public sealed partial class UploadManager : IUploadManager
         }
     }
 
-    public void ValidatePath(UploadRequestContext ctx, string path) =>
-        UploadPathPolicy.Validate(path, ctx.Ddb.DatasetFolderPath, _import);
+    public string ValidatePath(UploadRequestContext ctx, string path)
+    {
+        // libddb's path rule (NUL, absolute, "..", reserved), then the extension policy: refused
+        // before anything is written into the dataset
+        var normalized = _paths.Normalize(path);
+        if (!_import.IsExtensionAllowed(normalized))
+            throw new ExtensionBlockedException(normalized, _import, _import.AllowedFileExtensions.Length > 0);
+        return normalized;
+    }
 
     public async Task<StreamedFile> StreamAsync(UploadRequestContext ctx, Stream body, CancellationToken ct = default)
     {
@@ -220,15 +229,17 @@ public sealed partial class UploadManager : IUploadManager
         {
             await SetReceiptAsync(ctx, UploadReceiptState.Committing, null);
 
-            // Validation first: a refused file is never moved into the dataset
+            // Validation first: a refused file is never moved into the dataset; a valid one is moved
+            // to its normalized path
             var valid = new List<int>();
             var sizes = new long[parts.Count];
+            var targets = new string[parts.Count];
             for (var i = 0; i < parts.Count; i++)
             {
                 try
                 {
                     ValidateTempFile(ctx, parts[i].File.TempPath);
-                    ValidatePath(ctx, parts[i].Path);
+                    targets[i] = ValidatePath(ctx, parts[i].Path);
                     sizes[i] = ActualSize(parts[i].File);
                     valid.Add(i);
                 }
@@ -244,7 +255,7 @@ public sealed partial class UploadManager : IUploadManager
 
             foreach (var i in valid)
             {
-                var part = parts[i];
+                var part = parts[i] with { Path = targets[i] };
                 var localFilePath = ctx.Ddb.GetLocalPath(part.Path);
                 _fs.EnsureParentFolderExists(localFilePath);
 

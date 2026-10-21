@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Web.Test.Support;
 using System;
 using System.Net.Http;
 using System.Text.Json;
@@ -16,6 +17,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.Import;
+using Registry.Web.Exceptions;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -43,7 +45,7 @@ public class FileUrlImportToolTests
         });
 
         return new FileUrlImportTool(downloader, guard, Mock.Of<IImportCredentialProtector>(),
-            Mock.Of<IServiceScopeFactory>(), options, NullLogger<FileUrlImportTool>.Instance);
+            Mock.Of<IServiceScopeFactory>(), options, TestPaths.Policy, NullLogger<FileUrlImportTool>.Instance);
     }
 
     private static IHeavyToolValidationContext Ctx(bool entryExists = false)
@@ -98,12 +100,12 @@ public class FileUrlImportToolTests
         var tool = CreateTool();
         var req = Req(new { url = "http://download.test/cloud.laz", fileName = "cloud.laz", folder, overwrite = false });
 
-        await Should.ThrowAsync<ArgumentException>(async () =>
+        await Should.ThrowAsync<InvalidDatasetPathException>(async () =>
             await tool.ValidateAsync(req, Ctx(), CancellationToken.None));
     }
 
     /// <summary>
-    /// The destination applies the shared reserved rule (<see cref="Registry.Web.Utilities.DatasetPathRules.IsReserved"/>):
+    /// The destination applies the shared reserved rule (<see cref="Registry.Web.Utilities.DatasetPathPolicy.IsReserved"/>):
     /// a ".ddb" segment at any depth (libddb never indexes it) and ".uploads" at the root. The old
     /// check only matched ".ddb" at the root.
     /// </summary>
@@ -116,7 +118,7 @@ public class FileUrlImportToolTests
         var tool = CreateTool();
         var req = Req(new { url = "http://download.test/cloud.laz", fileName = "cloud.laz", folder, overwrite = false });
 
-        await Should.ThrowAsync<ArgumentException>(async () =>
+        await Should.ThrowAsync<InvalidDatasetPathException>(async () =>
             await tool.ValidateAsync(req, Ctx(), CancellationToken.None));
     }
 

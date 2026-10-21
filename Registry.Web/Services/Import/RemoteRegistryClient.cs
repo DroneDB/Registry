@@ -26,6 +26,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ImportSettings _settings;
+    private readonly DatasetPathPolicy _paths;
     private readonly ILogger<RemoteRegistryClient> _logger;
 
     /// <summary>
@@ -35,10 +36,11 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
     /// <param name="settings">The import settings (download concurrency / retry policy).</param>
     /// <param name="logger">The logger.</param>
     public RemoteRegistryClient(IHttpClientFactory httpClientFactory, ImportSettings settings,
-        ILogger<RemoteRegistryClient> logger)
+        DatasetPathPolicy paths, ILogger<RemoteRegistryClient> logger)
     {
         _httpClientFactory = httpClientFactory;
         _settings = settings;
+        _paths = paths;
         _logger = logger;
     }
 
@@ -118,7 +120,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         // Extension policy (allow-list / block-list): disallowed file types (e.g. executables/scripts)
         // are skipped here too, mirroring every other ingestion path (ArchiveExtractTool,
         // ArchiveUrlImportSource, PhotogrammetryTool, FileUrlImportTool).
-        var toDownload = DatasetPathRules.ResolveUntrustedPaths(destFolder, files, e => e.Path)
+        var toDownload = _paths.ResolveUntrustedPaths(destFolder, files, e => e.Path)
             .Where(t =>
             {
                 if (_settings.IsExtensionAllowed(t.Item.Path)) return true;

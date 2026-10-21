@@ -44,13 +44,14 @@ public class PushManager : IPushManager
     private readonly ImportSettings _importSettings;
     private readonly IPushSessionStore _sessionStore;
     private readonly IUploadQuotaGuard _quota;
+    private readonly DatasetPathPolicy _paths;
 
     public PushManager(IUtils utils, IDdbManager ddbManager,
         IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager,
         IAuthManager authManager, IDatasetAccessResolver access, IDdbWrapper ddbWrapper,
         IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings, ICacheManager cacheManager,
         IFileSystem fileSystem, BuildPendingService buildPendingService, IPushSessionStore sessionStore,
-        IUploadQuotaGuard quota)
+        IUploadQuotaGuard quota, DatasetPathPolicy paths)
     {
         _utils = utils;
         _ddbManager = ddbManager;
@@ -68,6 +69,7 @@ public class PushManager : IPushManager
         _importSettings = settings.Value.Import ?? new ImportSettings();
         _sessionStore = sessionStore;
         _quota = quota;
+        _paths = paths;
     }
 
     public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp)
@@ -204,11 +206,11 @@ public class PushManager : IPushManager
         if (!_sessionStore.Exists(baseTempFolder))
             throw new ConflictException("Cannot upload file before initializing push");
 
-        var addTempFolder = Path.Combine(baseTempFolder, AddsTempFolder);
-        CommonUtils.ValidateRelativePath(path, addTempFolder);
+        // The entry path of the delta: libddb's path rule, as for any upload
+        path = _paths.Normalize(path);
 
         // Move the streamed file (same volume) to its place in the push folder
-        var filePath = Path.Combine(addTempFolder, path);
+        var filePath = DatasetPathPolicy.ToLocalPath(Path.Combine(baseTempFolder, AddsTempFolder), path);
         _fileSystem.EnsureParentFolderExists(filePath);
         if (_fileSystem.Exists(filePath))
             _fileSystem.Delete(filePath);

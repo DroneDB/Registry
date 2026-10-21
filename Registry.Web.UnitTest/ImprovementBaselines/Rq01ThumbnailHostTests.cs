@@ -19,6 +19,9 @@ using Registry.Adapters.Thumbnail;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Exceptions;
+using Registry.Web.Test.Support;
+using Registry.Web.Utilities;
 using Shouldly;
 using Registry.Test.Common;
 
@@ -271,11 +274,12 @@ public class Rq01ThumbnailHostTests
         CommonUtils.IsUnder(root!, candidate!).ShouldBeFalse();
     }
 
+    // RQ-10: CommonUtils.ValidateRelativePath became DatasetPathPolicy (libddb's rule)
     [Test]
-    public void ValidateRelativePath_StillRejectsTraversalAndAcceptsNested()
+    public void DatasetPathPolicy_StillRejectsTraversalAndAcceptsNested()
     {
-        Should.NotThrow(() => CommonUtils.ValidateRelativePath("a/b.png", _datasets));
-        Should.Throw<ArgumentException>(() => CommonUtils.ValidateRelativePath("../datasets2/b.png", _datasets));
-        Should.Throw<ArgumentException>(() => CommonUtils.ValidateRelativePath("/etc/passwd", _datasets));
+        Should.NotThrow(() => DatasetPathPolicy.ToLocalPath(_datasets, TestPaths.Policy.Normalize("a/b.png")));
+        Should.Throw<InvalidDatasetPathException>(() => TestPaths.Policy.Normalize("../datasets2/b.png"));
+        Should.Throw<InvalidDatasetPathException>(() => TestPaths.Policy.Normalize("/etc/passwd"));
     }
 }

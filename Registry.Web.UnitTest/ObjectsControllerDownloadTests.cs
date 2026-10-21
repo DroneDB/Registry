@@ -1,3 +1,4 @@
+using Registry.Web.Test.Support;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -70,7 +71,7 @@ public class ObjectsControllerDownloadTests
             CreateManager().Object,
             Mock.Of<ILogger<ObjectsController>>(),
             MSOptions.Create(new FormOptions()),
-            MSOptions.Create(new AppSettings()))
+            MSOptions.Create(new AppSettings()), TestPaths.Policy)
         {
             ControllerContext = new ControllerContext { HttpContext = httpContext }
         };

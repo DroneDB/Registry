@@ -53,8 +53,7 @@ public class ObjectsManager : IObjectsManager
     private readonly IBuildStatusService _buildStatusService;
     private readonly IUploadManager _uploads;
     private readonly INativeWorkGate _nativeGate;
-
-    private static bool IsReservedPath(string path) => UploadPathPolicy.IsReserved(path);
+    private readonly DatasetPathPolicy _paths;
 
     public ObjectsManager(ILogger<ObjectsManager> logger,
         RegistryContext context,
@@ -70,6 +69,7 @@ public class ObjectsManager : IObjectsManager
         IThumbnailGenerator thumbnailGenerator,
         IJobIndexQuery jobIndexQuery,
         BuildPendingService buildPendingService,
+        DatasetPathPolicy paths,
         IZipArchiveBuilder? zipArchiveBuilder = null,
         IOgcLayerCatalog? ogcLayerCatalog = null,
         IDatasetCacheInvalidator? datasetCacheInvalidator = null,
@@ -95,6 +95,7 @@ public class ObjectsManager : IObjectsManager
         _thumbnailGenerator = thumbnailGenerator;
         _jobIndexQuery = jobIndexQuery;
         _buildPendingService = buildPendingService;
+        _paths = paths;
         // Stateless; the DI-registered singleton is injected in production, while a
         // local instance keeps direct (test) construction working without wiring.
         _zipArchiveBuilder = zipArchiveBuilder ?? new ZipArchiveBuilder();
@@ -116,7 +117,7 @@ public class ObjectsManager : IObjectsManager
             new UploadQuotaGuard(new UploadQuotaLedger(Microsoft.Extensions.Options.Options.Create(settings.Value.Uploads ?? new UploadSettings())), utils),
             new DatasetChangeCoalescer(FallbackOgcKeys(), cacheManager, settings.Value.EffectiveDatasetThumbnailCandidates(),
                 TimeSpan.Zero, NullLogger<DatasetChangeCoalescer>.Instance),
-            indexQueue: indexQueue);
+            paths, indexQueue: indexQueue);
         return;
 
         // Only for the fallbacks of a direct construction (tests): production wires the shared keys
@@ -245,11 +246,8 @@ public class ObjectsManager : IObjectsManager
         {
             var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write)).Ddb;
 
-            // Validate path to prevent path traversal attacks
-            CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
-
-            if (IsReservedPath(path))
-                throw new BadRequestException($"'{path}' is a reserved path");
+            // libddb's path rule: no traversal, no absolute path, not reserved
+            path = _paths.Normalize(path);
 
             if (ddb.EntryExists(path))
                 throw new ConflictException("Cannot create a folder on another entry");
@@ -395,13 +393,8 @@ public class ObjectsManager : IObjectsManager
             _logger.LogInformation("Destination path not specified, using source name: '{DestPath}'", destPath);
         }
 
-        // Validate destination path to prevent path traversal attacks
-
-        if (destPath.Contains("..") || Path.IsPathRooted(destPath))
-            throw new BadRequestException("Invalid destination path: path traversal or absolute paths are not allowed");
-
-        if (IsReservedPath(destPath))
-            throw new BadRequestException($"'{destPath}' is a reserved path");
+        // libddb's path rule: no traversal, no absolute path, not reserved
+        destPath = _paths.Normalize(destPath, "destination path");
 
         // Calculate entry size for storage check
         var entrySize = await GetEntrySizeAsync(sourceDdb, sourceEntry);
@@ -660,14 +653,14 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = access.Ddb;
 
+        source = _paths.Normalize(source, "source path");
+        dest = _paths.Normalize(dest, "destination path");
+
         var sourceEntry = ddb.GetEntry(source);
 
         // Checking if source exists
         if (sourceEntry == null)
             throw new NotFoundException("Cannot find source entry: '" + source + "'");
-
-        if (IsReservedPath(dest))
-            throw new BadRequestException($"'{dest}' is a reserved path");
 
         // Short circuit!
         if ((dest + "/").StartsWith(source + "/"))
@@ -775,12 +768,9 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = access.Ddb;
 
-        // Validate paths to prevent path traversal attacks
-        CommonUtils.ValidateRelativePath(source, ddb.DatasetFolderPath);
-        CommonUtils.ValidateRelativePath(dest, ddb.DatasetFolderPath);
-
-        if (IsReservedPath(dest))
-            throw new BadRequestException($"'{dest}' is a reserved path");
+        // libddb's path rule: no traversal, no absolute path, not reserved
+        source = _paths.Normalize(source, "source path");
+        dest = _paths.Normalize(dest, "destination path");
 
         if (source == dest)
             throw new BadRequestException("Source and destination cannot be the same");
@@ -1054,8 +1044,8 @@ public class ObjectsManager : IObjectsManager
 
         _logger.LogInformation("In Delete('{OrgSlug}/{DsSlug}', {PathCount} paths)", orgSlug, dsSlug, paths.Length);
 
-        if (paths.Any(IsReservedPath))
-            throw new BadRequestException("One or more specified paths are reserved paths");
+        // libddb's path rule (a reserved path is refused like any other invalid path)
+        paths = [.. paths.Select(p => _paths.Normalize(p))];
 
         var ddb = access.Ddb;
 
@@ -1193,19 +1183,23 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = access.Ddb;
 
-        foreach (var path in paths)
+        foreach (var requested in paths)
         {
+            var check = _paths.Check(requested);
+            if (check.Path == null)
+            {
+                failed[requested] = check.Rejected == EntryPathRejection.Reserved
+                    ? "Path is reserved and cannot be deleted"
+                    : $"Invalid path ({check.Rejected})";
+                continue;
+            }
+
+            var path = check.Path;
             try
             {
-                if (IsReservedPath(path))
-                {
-                    failed[path] = "Path is reserved and cannot be deleted";
-                    continue;
-                }
-
                 if (!ddb.EntryExists(path))
                 {
-                    failed[path] = "Path not found in dataset";
+                    failed[requested] = "Path not found in dataset";
                     continue;
                 }
 
@@ -1241,7 +1235,7 @@ public class ObjectsManager : IObjectsManager
             catch (Exception ex)
             {
                 _logger.LogWarning("Failed to delete {ObjPath}: {Reason}", path, ex.Message);
-                failed[path] = ex.Message;
+                failed[requested] = ex.Message;
             }
         }
 
@@ -1663,9 +1657,8 @@ public class ObjectsManager : IObjectsManager
 
         EnsureNoWildcardOrEmptyPaths(path);
 
-        Debug.Assert(path != null, nameof(path) + " != null");
-        if (Path.IsPathRooted(path) || path.Contains(".."))
-            throw new BadRequestException("Rooted or relative paths are not supported");
+        // A file of a build, relative to its folder: libddb's path rule (RQ-11 moves this to DDBResolveBuildFile)
+        path = _paths.Normalize(path, "build file path");
 
         var ddb = access.Ddb;
 
@@ -1691,9 +1684,8 @@ public class ObjectsManager : IObjectsManager
 
         EnsureNoWildcardOrEmptyPaths(path);
 
-        Debug.Assert(path != null, nameof(path) + " != null");
-        if (Path.IsPathRooted(path) || path.Contains(".."))
-            throw new BadRequestException("Rooted or relative paths are not supported");
+        // A file of a build, relative to its folder: libddb's path rule (RQ-11 moves this to DDBResolveBuildFile)
+        path = _paths.Normalize(path, "build file path");
 
         var ddb = access.Ddb;
 
@@ -1986,8 +1978,7 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = access.Ddb;
 
-        // Validate each input path to prevent path traversal
-        CommonUtils.ValidateRelativePaths(paths, ddb.DatasetFolderPath);
+        paths = NormalizeAll(paths);
 
         return await Task.Run(() => ddb.ValidateMergeMultispectral(paths));
     }
@@ -1997,15 +1988,9 @@ public class ObjectsManager : IObjectsManager
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
 
-        return await Task.Run(() =>
-        {
-            var ddb = access.Ddb;
+        paths = NormalizeAll(paths);
 
-            // Validate each input path to prevent path traversal
-            CommonUtils.ValidateRelativePaths(paths, ddb.DatasetFolderPath);
-
-            return ddb.PreviewMergeMultispectral(paths, previewBands, thumbSize);
-        });
+        return await Task.Run(() => access.Ddb.PreviewMergeMultispectral(paths, previewBands, thumbSize));
     }
 
     public async Task MergeMultispectral(string orgSlug, string dsSlug, string[] paths, string outputPath)
@@ -2014,11 +1999,8 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = access.Ddb;
 
-        // Validate outputPath to prevent path traversal
-        CommonUtils.ValidateRelativePath(outputPath, ddb.DatasetFolderPath);
-
-        // Validate each input path to prevent path traversal
-        CommonUtils.ValidateRelativePaths(paths, ddb.DatasetFolderPath);
+        outputPath = _paths.Normalize(outputPath, "output path");
+        paths = NormalizeAll(paths);
 
         var outputFullPath = ddb.GetLocalPath(outputPath);
 
@@ -2045,9 +2027,8 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = access.Ddb;
 
-        // Validate input paths to prevent path traversal
-        CommonUtils.ValidateRelativePath(sourcePath, ddb.DatasetFolderPath);
-        CommonUtils.ValidateRelativePath(referencePath, ddb.DatasetFolderPath);
+        sourcePath = _paths.Normalize(sourcePath, "source path");
+        referencePath = _paths.Normalize(referencePath, "reference path");
 
         return await Task.Run(() => ddb.ValidateAlignRaster(sourcePath, referencePath));
     }
@@ -2259,8 +2240,7 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = access.Ddb;
 
-        // Validate path to prevent path traversal
-        CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
+        path = _paths.Normalize(path);
 
         var outputPath = GetMaskedOutputPath(path);
         var entry = ddb.GetEntry(outputPath);
@@ -2280,8 +2260,7 @@ public class ObjectsManager : IObjectsManager
 
         var ddb = access.Ddb;
 
-        // Validate path
-        CommonUtils.ValidateRelativePath(path, ddb.DatasetFolderPath);
+        path = _paths.Normalize(path);
 
         var entry = ddb.GetEntry(path);
         if (entry == null)
@@ -2310,13 +2289,19 @@ public class ObjectsManager : IObjectsManager
         _logger.LogInformation("Background job id is {JobId}", jobId);
     }
 
+    // The masked copy of a normalized path, next to it
     private static string GetMaskedOutputPath(string path)
     {
-        var outputPath = Path.GetFileNameWithoutExtension(path) + "_masked.tif";
-        var dir = Path.GetDirectoryName(path);
-        if (!string.IsNullOrEmpty(dir))
-            outputPath = Path.Combine(dir, outputPath).Replace('\\', '/');
-        return outputPath;
+        var fileName = Path.GetFileNameWithoutExtension(path) + "_masked.tif";
+        var slash = path.LastIndexOf('/');
+        return slash < 0 ? fileName : path[..(slash + 1)] + fileName;
+    }
+
+    private string[] NormalizeAll(string[] paths)
+    {
+        if (paths == null || paths.Length == 0)
+            throw new BadRequestException("paths is required");
+        return Array.ConvertAll(paths, p => _paths.Normalize(p));
     }
 
     private async Task EnsureNoActiveJob(string orgSlug, string dsSlug, string path, string methodName)

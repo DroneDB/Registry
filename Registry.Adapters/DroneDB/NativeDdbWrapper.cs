@@ -339,6 +339,28 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public IReadOnlyList<EntryTypeInfo> GetEntryTypes() => EntryTypes.Value;
 
+    public NormalizedEntryPath NormalizePath(string path, IReadOnlyCollection<string>? reservedFirstSegments = null)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        // The UTF-8 marshaller would pass "a\0b" as "a": answer for the path given, not a shorter one
+        if (NormalizedEntryPath.RejectUnmarshallable(path) is { } rejected)
+            return rejected;
+
+        var reservedJson = reservedFirstSegments is { Count: > 0 }
+            ? JsonConvert.SerializeObject(reservedFirstSegments)
+            : null;
+        try
+        {
+            return NativeCall.Invoke<NormalizedEntryPath>(nameof(NativeDdb.DDBNormalizePath),
+                (out IntPtr output) => NativeDdb.DDBNormalizePath(path, reservedJson, out output));
+        }
+        catch (DdbInvalidArgumentsException ex)
+        {
+            // The only invalid argument left is the reserved list (a name with a separator, "..")
+            throw new ArgumentException(ex.Message, nameof(reservedFirstSegments), ex);
+        }
+    }
+
     public CopiedBuildArtifacts CopyBuildArtifacts(string sourceDdbPath, string destinationDdbPath, string hash)
     {
         ArgumentNullException.ThrowIfNull(sourceDdbPath);

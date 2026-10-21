@@ -99,7 +99,7 @@ public class RetryEndpointTest : IDisposable
             new JobIndexQuery(_db),
             writer,
             authManager.Object,
-            new DatasetAccessResolver(_utils.Object, authManager.Object, ddbManager.Object),
+            new DatasetAccessResolver(_utils.Object, authManager.Object, ddbManager.Object, TestPaths.Policy),
             _utils.Object,
             new BackgroundJobsProcessor(_client.Object, NullIndexedEnqueuer.Create(), _storage.Object),
             ddbManager.Object,

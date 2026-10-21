@@ -57,6 +57,7 @@ public sealed class FileUrlImportTool : IHeavyTool
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ImportSettings _importSettings;
     private readonly long _diskSafetyMarginBytes;
+    private readonly DatasetPathPolicy _paths;
     private readonly ILogger<FileUrlImportTool> _logger;
 
     /// <summary>
@@ -67,6 +68,7 @@ public sealed class FileUrlImportTool : IHeavyTool
     /// <param name="protector">The credential protector used to decrypt the basic-auth password.</param>
     /// <param name="scopeFactory">Scope factory for per-execution scoped services.</param>
     /// <param name="appSettings">The application settings.</param>
+    /// <param name="paths">The dataset path rule (destination folder and file).</param>
     /// <param name="logger">The logger.</param>
     public FileUrlImportTool(
         GuardedHttpDownloader downloader,
@@ -74,9 +76,11 @@ public sealed class FileUrlImportTool : IHeavyTool
         IImportCredentialProtector protector,
         IServiceScopeFactory scopeFactory,
         IOptions<AppSettings> appSettings,
+        DatasetPathPolicy paths,
         ILogger<FileUrlImportTool> logger)
     {
         _downloader = downloader;
+        _paths = paths;
         _ssrfGuard = ssrfGuard;
         _protector = protector;
         _scopeFactory = scopeFactory;
@@ -116,8 +120,7 @@ public sealed class FileUrlImportTool : IHeavyTool
         if (!_importSettings.IsExtensionAllowed(fileName))
             throw new ArgumentException($"Files of type '{Path.GetExtension(fileName)}' are not allowed.");
 
-        var target = BuildTargetPath(ReadString(request.Params, "folder"), fileName);
-        ValidateTarget(target);
+        var target = TargetPath(ReadString(request.Params, "folder"), fileName);
 
         var overwrite = ReadBool(request.Params, "overwrite");
         if (!overwrite && ctx.Ddb.EntryExists(target))
@@ -145,8 +148,7 @@ public sealed class FileUrlImportTool : IHeavyTool
         if (!_importSettings.IsExtensionAllowed(fileName))
             throw new InvalidOperationException($"Files of type '{Path.GetExtension(fileName)}' are not allowed.");
 
-        var target = BuildTargetPath(ReadString(request.Params, "folder"), fileName);
-        ValidateTarget(target);
+        var target = TargetPath(ReadString(request.Params, "folder"), fileName);
 
         var overwrite = ReadBool(request.Params, "overwrite");
         if (!overwrite && ctx.Ddb.EntryExists(target))
@@ -255,27 +257,12 @@ public sealed class FileUrlImportTool : IHeavyTool
         return null;
     }
 
-    // Combines an optional folder with the (already sanitized) file name into a forward-slash
-    // relative path.
-    private static string BuildTargetPath(string? folder, string fileName)
+    // The dataset path of the (already sanitized) file name in the optional folder: libddb's path
+    // rule on the whole path, so a reserved result (the root ".uploads", any ".ddb") is refused
+    private string TargetPath(string? folder, string fileName)
     {
-        var f = (folder ?? string.Empty).Replace('\\', '/').Trim().Trim('/');
-        return string.IsNullOrEmpty(f) ? fileName : $"{f}/{fileName}";
-    }
-
-    // Rejects rooted paths, "." / ".." segments and reserved paths (DatasetPathRules.IsReserved: a
-    // ".ddb" segment at any depth, ".uploads" at the root). The reserved rule is ordinal, as in
-    // libddb, so ".DDB" is an ordinary folder name, exactly as for uploads.
-    private static void ValidateTarget(string target)
-    {
-        if (string.IsNullOrWhiteSpace(target) || Path.IsPathRooted(target))
-            throw new ArgumentException("Invalid destination path.");
-
-        if (target.Split('/').Any(s => s is "." or ".."))
-            throw new ArgumentException("Invalid destination path.");
-
-        if (DatasetPathRules.IsReserved(target))
-            throw new ArgumentException($"'{target}' is a reserved path.");
+        var f = _paths.NormalizeFolder(folder);
+        return _paths.Normalize(f.Length == 0 ? fileName : $"{f}/{fileName}", "destination path");
     }
 
     private string DecryptPassword(string? raw)

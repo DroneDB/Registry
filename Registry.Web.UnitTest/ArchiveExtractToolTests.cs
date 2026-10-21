@@ -1,3 +1,4 @@
+using Registry.Web.Test.Support;
 using System;
 using System.IO;
 using System.IO.Compression;
@@ -71,6 +72,7 @@ public class ArchiveExtractToolTests
 
         var tool = new ArchiveExtractTool(
             extractor, scopeFactory, Microsoft.Extensions.Options.Options.Create(settings),
+            TestPaths.Policy,
             NullLogger<ArchiveExtractTool>.Instance);
 
         return (tool, utils);
@@ -174,7 +176,7 @@ public class ArchiveExtractToolTests
 
         var (tool, _) = CreateTool();
 
-        Should.Throw<ArgumentException>(async () =>
+        Should.Throw<InvalidDatasetPathException>(async () =>
             await tool.ValidateAsync(
                 Request(new { sourcePath = "flight.zip", destPath = ".ddb/evil" }),
                 Ctx(ddb.Object), CancellationToken.None));
@@ -191,7 +193,7 @@ public class ArchiveExtractToolTests
 
         var (tool, _) = CreateTool();
 
-        Should.Throw<ArgumentException>(async () =>
+        Should.Throw<InvalidDatasetPathException>(async () =>
             await tool.ValidateAsync(
                 Request(new { sourcePath = "flight.zip", destPath }),
                 Ctx(ddb.Object), CancellationToken.None));
@@ -221,7 +223,7 @@ public class ArchiveExtractToolTests
 
         var (tool, _) = CreateTool();
 
-        Should.Throw<ArgumentException>(async () =>
+        Should.Throw<InvalidDatasetPathException>(async () =>
             await tool.ValidateAsync(
                 Request(new { sourcePath = "flight.zip", destPath = "../escape" }),
                 Ctx(ddb.Object), CancellationToken.None));

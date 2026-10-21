@@ -55,15 +55,18 @@ public sealed class ArchiveExtractTool : IHeavyTool
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ProcessingPlatformSettings _settings;
     private readonly ImportSettings _importSettings;
+    private readonly DatasetPathPolicy _paths;
     private readonly ILogger<ArchiveExtractTool> _logger;
 
     public ArchiveExtractTool(
         IArchiveExtractor extractor,
         IServiceScopeFactory scopeFactory,
         IOptions<AppSettings> appSettings,
+        DatasetPathPolicy paths,
         ILogger<ArchiveExtractTool> logger)
     {
         _extractor = extractor;
+        _paths = paths;
         _scopeFactory = scopeFactory;
         _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
         _importSettings = appSettings.Value.Import ?? new ImportSettings();
@@ -87,8 +90,10 @@ public sealed class ArchiveExtractTool : IHeavyTool
         var sourcePath = ReadString(request.Params, "sourcePath");
         if (string.IsNullOrWhiteSpace(sourcePath))
             throw new ArgumentException("A source archive path is required.");
+        sourcePath = _paths.Normalize(sourcePath, "archive path");
 
-        var destPath = ReadString(request.Params, "destPath") ?? string.Empty;
+        // Destination: libddb's path rule ("" is the dataset root)
+        var destPath = _paths.NormalizeFolder(ReadString(request.Params, "destPath"));
 
         // Source must exist, be a file (not a directory) and a supported archive.
         var entry = ctx.Ddb.GetEntry(sourcePath)
@@ -98,14 +103,9 @@ public sealed class ArchiveExtractTool : IHeavyTool
         if (!_extractor.IsSupported(sourcePath))
             throw new ArgumentException($"'{sourcePath}' is not a supported archive format.");
 
-        // Destination path safety (no traversal, not under the reserved .ddb folder,
-        // and not targeting an existing non-folder entry).
-        if (!string.IsNullOrEmpty(destPath))
+        // The destination may not be an existing non-folder entry
+        if (destPath.Length > 0)
         {
-            CommonUtils.ValidateRelativePath(destPath, ctx.Ddb.DatasetFolderPath);
-            if (DatasetPathRules.IsReserved(destPath))
-                throw new ArgumentException($"'{destPath}' is a reserved path.");
-
             var destEntry = ctx.Ddb.GetEntry(destPath);
             if (destEntry != null && destEntry.Type != EntryType.Directory)
                 throw new ArgumentException($"The destination '{destPath}' is not a folder.");
@@ -181,9 +181,8 @@ public sealed class ArchiveExtractTool : IHeavyTool
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
-        var sourcePath = ReadString(request.Params, "sourcePath")
-                         ?? throw new InvalidOperationException("A source archive path is required.");
-        var destPath = ReadString(request.Params, "destPath") ?? string.Empty;
+        var sourcePath = _paths.Normalize(ReadString(request.Params, "sourcePath"), "archive path");
+        var destPath = _paths.NormalizeFolder(ReadString(request.Params, "destPath"));
         var deleteArchive = ReadBool(request.Params, "deleteArchive") ?? false;
         var overwrite = ReadBool(request.Params, "overwrite") ?? false;
 
@@ -225,9 +224,21 @@ public sealed class ArchiveExtractTool : IHeavyTool
                 ct.ThrowIfCancellationRequested();
                 if (archiveEntry.IsDirectory) continue;
 
-                // Path sanitization (anti zip-slip + reserved-folder guard).
-                var target = DatasetPathRules.JoinArchiveEntry(destPath, archiveEntry.Key);
-                CommonUtils.ValidateRelativePath(target, root); // defense in depth
+                // libddb's path rule: an unsafe name fails the extraction (zip-slip); a folder
+                // entry or a reserved path (.ddb, the root .uploads) is skipped
+                var key = _paths.NormalizeArchiveKey(archiveEntry.Key);
+                var check = key.Path == null ? key : _paths.CheckIn(destPath, key.Path);
+                if (check.Path == null)
+                {
+                    if (check.Rejected == EntryPathRejection.Reserved)
+                        _logger.LogWarning("Skipping reserved path during extraction: '{Key}'", archiveEntry.Key);
+                    skipped++;
+                    done++;
+                    ReportProgress(progress, done, total, archiveEntry.Key);
+                    continue;
+                }
+
+                var target = check.Path;
 
                 // Extension policy (allow-list / block-list): skip disallowed types (e.g. executables
                 // or scripts) with a warning, mirroring the overwrite=false skip semantics.

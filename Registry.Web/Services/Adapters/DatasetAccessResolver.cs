@@ -22,15 +22,18 @@ public sealed class DatasetAccessResolver : IDatasetAccessResolver
     private readonly IUtils _utils;
     private readonly IAuthManager _authManager;
     private readonly IDdbManager _ddbManager;
+    private readonly DatasetPathPolicy _paths;
 
     // Datasets granted in this scope, by (organization, dataset, access): authorize once per request
     private readonly ConcurrentDictionary<(string OrgSlug, string DsSlug, AccessType Access), Dataset> _grants = new();
 
-    public DatasetAccessResolver(IUtils utils, IAuthManager authManager, IDdbManager ddbManager)
+    public DatasetAccessResolver(IUtils utils, IAuthManager authManager, IDdbManager ddbManager,
+        DatasetPathPolicy paths)
     {
         _utils = utils;
         _authManager = authManager;
         _ddbManager = ddbManager;
+        _paths = paths;
     }
 
     public async Task<DatasetAccess> ResolveAsync(string orgSlug, string dsSlug, AccessType access,
@@ -41,8 +44,8 @@ public sealed class DatasetAccessResolver : IDatasetAccessResolver
         if (path == null)
             return new DatasetAccess(dataset, () => _ddbManager.Get(orgSlug, dataset.InternalRef));
 
+        var normalized = _paths.NormalizeRequestPath(path);
         var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
-        var normalized = DatasetPathRules.NormalizeRequestPath(path, ddb.DatasetFolderPath);
         return new DatasetAccess(dataset, () => ddb, normalized, ddb.GetEntry(normalized));
     }
 

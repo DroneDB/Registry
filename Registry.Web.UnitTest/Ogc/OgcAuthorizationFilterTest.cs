@@ -1,3 +1,4 @@
+using Registry.Web.Test.Support;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading;
@@ -37,7 +38,7 @@ public class OgcAuthorizationFilterTest
     {
         _utils = new Mock<IUtils>();
         _auth = new Mock<IAuthManager>();
-        _filter = new OgcAuthorizationFilter(new DatasetAccessResolver(_utils.Object, _auth.Object, Mock.Of<IDdbManager>()),
+        _filter = new OgcAuthorizationFilter(new DatasetAccessResolver(_utils.Object, _auth.Object, Mock.Of<IDdbManager>(), TestPaths.Policy),
             NullLogger<OgcAuthorizationFilter>.Instance);
     }
 

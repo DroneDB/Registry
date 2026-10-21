@@ -143,8 +143,8 @@ public class PushPipelineTests : TestBase
             Mock.Of<ILogger<BuildPendingService>>());
         return new PushManager(_utils.Object, ddbManager.Object, _objects.Object,
             CreateTestLogger<PushManager>(Serilog.Events.LogEventLevel.Warning), Mock.Of<IDatasetsManager>(),
-            auth.Object, new DatasetAccessResolver(_utils.Object, auth.Object, ddbManager.Object), _wrapper.Object, _jobs.Object, settings, cache.Object, fileSystem, buildPending,
-            new PushSessionStore(fileSystem), new UploadQuotaGuard(_ledger, _utils.Object));
+            auth.Object, new DatasetAccessResolver(_utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper.Object, _jobs.Object, settings, cache.Object, fileSystem, buildPending,
+            new PushSessionStore(fileSystem), new UploadQuotaGuard(_ledger, _utils.Object), TestPaths.Policy);
     }
 
     private static StampDto ClientStamp() => new() { Checksum = "client", Entries = [], Meta = [] };
@@ -272,8 +272,8 @@ public class PushPipelineTests : TestBase
 
         Should.Throw<ConflictException>(() => mgr.Upload(upload, "a.jpg", Guid.NewGuid().ToString()));
         Should.Throw<BadRequestException>(() => mgr.Upload(upload, "a.jpg", "../../x"));
-        Should.Throw<ArgumentException>(() => mgr.Upload(upload, "../a.jpg", token));
-        Should.Throw<ArgumentException>(() => mgr.Upload(upload, "/etc/a.jpg", token));
+        Should.Throw<InvalidDatasetPathException>(() => mgr.Upload(upload, "../a.jpg", token));
+        Should.Throw<InvalidDatasetPathException>(() => mgr.Upload(upload, "/etc/a.jpg", token));
         File.Exists(upload.TempPath).ShouldBeTrue("a rejected upload does not move the file");
     }
 

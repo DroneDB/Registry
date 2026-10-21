@@ -37,6 +37,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
     private readonly ImportSettings _settings;
     private readonly long _maxImportSizeBytes;
     private readonly long _diskSafetyMarginBytes;
+    private readonly DatasetPathPolicy _paths;
     private readonly ILogger<ArchiveUrlImportSource> _logger;
 
     /// <summary>
@@ -47,12 +48,14 @@ public sealed class ArchiveUrlImportSource : IImportSource
     /// <param name="httpClientFactory">The HTTP client factory.</param>
     /// <param name="downloader">The SSRF-hardened, disk- and speed-guarded single-file downloader.</param>
     /// <param name="appSettings">The application settings (import cap + disk safety margin).</param>
+    /// <param name="paths">The dataset path rule (archive entry names, containment).</param>
     /// <param name="logger">The logger.</param>
     public ArchiveUrlImportSource(IArchiveExtractor extractor, SsrfGuard ssrfGuard,
         IHttpClientFactory httpClientFactory, GuardedHttpDownloader downloader,
-        IOptions<AppSettings> appSettings, ILogger<ArchiveUrlImportSource> logger)
+        IOptions<AppSettings> appSettings, DatasetPathPolicy paths, ILogger<ArchiveUrlImportSource> logger)
     {
         _extractor = extractor;
+        _paths = paths;
         _ssrfGuard = ssrfGuard;
         _httpClientFactory = httpClientFactory;
         _downloader = downloader;
@@ -179,9 +182,12 @@ public sealed class ArchiveUrlImportSource : IImportSource
             ct.ThrowIfCancellationRequested();
             if (entry.IsDirectory) continue;
 
-            // Anti zip-slip (throws on unsafe names); empty names and reserved paths (.ddb) are skipped.
-            var relative = DatasetPathRules.NormalizeArchiveEntry(entry.Key);
-            if (relative is null || DatasetPathRules.IsReserved(relative)) continue;
+            // libddb's path rule: an unsafe name fails the import (zip-slip); a folder entry or a
+            // reserved path (.ddb, the root .uploads) is skipped
+            var key = _paths.NormalizeArchiveKey(entry.Key);
+            var check = key.Path == null ? key : _paths.Check(key.Path);
+            if (check.Path == null) continue;
+            var relative = check.Path;
 
             // Extension policy (allow-list / block-list): skip disallowed types (e.g. executables
             // or scripts) with a warning; the rest of the archive still extracts.
@@ -192,7 +198,8 @@ public sealed class ArchiveUrlImportSource : IImportSource
                 continue;
             }
 
-            var localTarget = Path.Combine(destFolder, relative.Replace('/', Path.DirectorySeparatorChar));
+            // Containment checked again on the local path (defence in depth)
+            var localTarget = DatasetPathPolicy.ToLocalPath(destFolder, relative);
             var parent = Path.GetDirectoryName(localTarget);
             if (!string.IsNullOrEmpty(parent))
                 Directory.CreateDirectory(parent);

@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Common;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Ports.Import;
 using Registry.Web.Exceptions;
@@ -55,6 +56,8 @@ public sealed class ImportDatasetTool : IHeavyTool
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ImportSettings _settings;
     private readonly long _diskSafetyMarginBytes;
+    private readonly IFileSystem _fs;
+    private readonly DatasetPathPolicy _paths;
     private readonly ILogger<ImportDatasetTool> _logger;
 
     /// <summary>
@@ -70,9 +73,13 @@ public sealed class ImportDatasetTool : IHeavyTool
         IImportCredentialProtector protector,
         IServiceScopeFactory scopeFactory,
         IOptions<AppSettings> appSettings,
+        IFileSystem fs,
+        DatasetPathPolicy paths,
         ILogger<ImportDatasetTool> logger)
     {
         _factory = factory;
+        _fs = fs;
+        _paths = paths;
         _protector = protector;
         _scopeFactory = scopeFactory;
         _settings = appSettings.Value.Import ?? new ImportSettings();
@@ -153,7 +160,7 @@ public sealed class ImportDatasetTool : IHeavyTool
         var source = _factory.Resolve(sourceType);
 
         var root = ctx.Ddb.DatasetFolderPath;
-        Directory.CreateDirectory(root);
+        _fs.FolderCreate(root);
 
         // Resumability: files already present from a previous partial run are kept; only the files
         // written during THIS run are rolled back on a budget breach.
@@ -296,20 +303,10 @@ public sealed class ImportDatasetTool : IHeavyTool
         return null;
     }
 
-    // Walks the dataset folder, returning forward-slash relative paths and excluding reserved paths
-    // (DatasetPathRules.IsReserved): any ".ddb" folder, which libddb never indexes, and the root
-    // ".uploads" staging/quarantine folder, whose in-flight files must not be indexed or rolled back.
-    internal static IEnumerable<string> EnumerateRelativeFiles(string root)
-    {
-        if (!Directory.Exists(root)) yield break;
-
-        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
-        {
-            var rel = Path.GetRelativePath(root, file).Replace('\\', '/');
-            if (DatasetPathRules.IsReserved(rel)) continue;
-            yield return rel;
-        }
-    }
+    // The dataset walker (DatasetPathPolicy.EnumerateFiles): '/' separated relative paths, without
+    // any ".ddb" folder, which libddb never indexes, and the root ".uploads" staging/quarantine
+    // folder, whose in-flight files must not be indexed or rolled back.
+    private IEnumerable<string> EnumerateRelativeFiles(string root) => _paths.EnumerateFiles(_fs, root);
 
     private void CleanupFiles(string root, IEnumerable<string> relativePaths)
     {
@@ -317,9 +314,9 @@ public sealed class ImportDatasetTool : IHeavyTool
         {
             try
             {
-                var local = Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar));
-                if (File.Exists(local))
-                    File.Delete(local);
+                var local = DatasetPathPolicy.ToLocalPath(root, rel);
+                if (_fs.Exists(local))
+                    _fs.Delete(local);
             }
             catch (Exception ex)
             {

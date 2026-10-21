@@ -16,6 +16,7 @@ using Registry.Web.Models.DTO;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Import;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers;
 
@@ -34,6 +35,7 @@ public class FileUrlImportManager : IFileUrlImportManager
     private readonly GuardedHttpDownloader _downloader;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ImportSettings _settings;
+    private readonly DatasetPathPolicy _paths;
     private readonly ILogger<FileUrlImportManager> _logger;
 
     /// <summary>
@@ -48,9 +50,11 @@ public class FileUrlImportManager : IFileUrlImportManager
         GuardedHttpDownloader downloader,
         IHttpContextAccessor httpContextAccessor,
         IOptions<AppSettings> appSettings,
+        DatasetPathPolicy paths,
         ILogger<FileUrlImportManager> logger)
     {
         _utils = utils;
+        _paths = paths;
         _authManager = authManager;
         _access = access;
         _runner = runner;
@@ -107,7 +111,7 @@ public class FileUrlImportManager : IFileUrlImportManager
         if (!_settings.IsExtensionAllowed(fileName))
             throw new BadRequestException($"Files of this type are not allowed: '{fileName}'.");
 
-        var folder = NormalizeFolder(request.Folder);
+        var folder = _paths.NormalizeFolder(request.Folder);
 
         var toolParams = BuildToolParams(uri, fileName, folder, request);
         var user = await _authManager.GetCurrentUser();
@@ -142,17 +146,6 @@ public class FileUrlImportManager : IFileUrlImportManager
 
         using var doc = JsonDocument.Parse(root.ToJsonString());
         return doc.RootElement.Clone();
-    }
-
-    private static string NormalizeFolder(string? folder)
-    {
-        var f = (folder ?? string.Empty).Replace('\\', '/').Trim().Trim('/');
-        if (string.IsNullOrEmpty(f)) return string.Empty;
-
-        if (f.Split('/').Any(s => s is "." or ".."))
-            throw new BadRequestException("Invalid destination folder.");
-
-        return f;
     }
 
     private static string? BuildNote(UrlProbeResult probe, bool blocked, bool sizeExceeds, long cap)
