@@ -22,7 +22,9 @@
     </ItemGroup>
 
     <ItemGroup>
-        <InternalsVisibleTo Include="Registry.Web.Test" />
+        <InternalsVisibleTo Include="Registry.Web.UnitTest" />
+        <InternalsVisibleTo Include="Registry.Web.IntegrationTest" />
+        <InternalsVisibleTo Include="Registry.Web.TestSupport" />
     </ItemGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'DebugEf' ">

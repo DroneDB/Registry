@@ -35,12 +35,6 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 24
-    - name: Download and install latest DroneDB release
-      run: |
-        LATEST_RELEASE_URL=$(curl -s https://api.github.com/repos/DroneDB/DroneDB/releases/latest | grep "browser_download_url.*deb" | head -n 1 | cut -d '"' -f 4)
-        echo "Downloading DroneDB from $LATEST_RELEASE_URL"
-        curl -L -o dronedb.deb $LATEST_RELEASE_URL
-        sudo apt-get update && sudo apt-get install -y ./dronedb.deb
     - name: Hub checks (tests + coverage, types, bundle budget, listener audit, ESLint)
       run: |
         cd registry/Registry.Web/ClientApp
@@ -65,16 +59,32 @@ jobs:
         cd registry
         bash scripts/check-warnings.sh
     # Coverage comes from the Microsoft.CodeCoverage collector that Microsoft.NET.Test.Sdk ships:
-    # one Cobertura file per test project, reported, not gated. The MySQL tests start the
-    # production MariaDB image through Testcontainers (Docker is on the runner; CI=true makes a
-    # missing Docker fail them instead of skipping). --blame-hang-timeout names a test stuck on a
-    # signal wait and dumps it instead of letting the job time out.
-    - name: Run tests (with code coverage)
+    # one Cobertura file per test project and run, reported, not gated. --blame-hang-timeout names
+    # a test stuck on a signal wait and dumps it instead of letting the job time out.
+    # Test categories (Registry.Test.Common/TestCategories.cs): Unit, Integration, Native, Network, Baseline.
+    # The unit tests run before DroneDB is installed: Registry.Web.UnitTest never loads libddb (D5),
+    # and its UnitTestSetup fails the run if a test tries to.
+    - name: Unit tests, without libddb (with code coverage)
+      run: |
+        cd registry
+        if ldconfig -p | grep -q 'libddb\.so'; then echo "libddb is installed: the unit tests must run without it" >&2; exit 1; fi
+        dotnet test Registry.Web.UnitTest/Registry.Web.UnitTest.csproj -c Release --verbosity minimal --blame-hang-timeout 10m --collect "Code Coverage;Format=cobertura" --results-directory TestResults
+    - name: Download and install latest DroneDB release
+      run: |
+        LATEST_RELEASE_URL=$(curl -s https://api.github.com/repos/DroneDB/DroneDB/releases/latest | grep "browser_download_url.*deb" | head -n 1 | cut -d '"' -f 4)
+        echo "Downloading DroneDB from $LATEST_RELEASE_URL"
+        curl -L -o dronedb.deb $LATEST_RELEASE_URL
+        sudo apt-get update && sudo apt-get install -y ./dronedb.deb
+    # Everything but the unit tests: Registry.Web.IntegrationTest (native libddb, test data
+    # downloads; the MySQL tests start the production MariaDB image through Testcontainers: Docker
+    # is on the runner, CI=true makes a missing Docker fail them instead of skipping) and the
+    # adapter test projects.
+    - name: Integration and adapter tests (with code coverage)
       run: |
         cd registry
         whereis ddb
         ddb --version --debug
-        dotnet test -c Release --verbosity minimal --blame-hang-timeout 10m --collect "Code Coverage;Format=cobertura" --results-directory TestResults
+        dotnet test -c Release --verbosity minimal --filter "TestCategory!=Unit" --blame-hang-timeout 10m --collect "Code Coverage;Format=cobertura" --results-directory TestResults
     - name: Upload code coverage
       if: ${{ !cancelled() }}
       uses: actions/upload-artifact@v4

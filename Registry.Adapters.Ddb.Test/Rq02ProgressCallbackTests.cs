@@ -19,7 +19,7 @@ namespace Registry.Adapters.Ddb.Test;
 /// Run: dotnet test Registry.Adapters.Ddb.Test --filter "FullyQualifiedName~Rq02ProgressCallbackTests"
 /// </summary>
 [TestFixture]
-[Category("ImprovementBaseline")]
+[Category(TestCategories.Baseline)]
 public class Rq02ProgressCallbackTests : TestBase
 {
     private const string BaseTestFolder = nameof(Rq02ProgressCallbackTests);

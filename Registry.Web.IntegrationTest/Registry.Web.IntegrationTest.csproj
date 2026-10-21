@@ -1,0 +1,64 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+        Registry.Web integration tests (RQ-04, D5). Category "Integration" (assembly level), plus
+        "Native" on fixtures that call libddb and "Network" on fixtures that need the network or
+        Docker. GlobalSetup loads native libddb once for the run.
+        A test belongs here when it needs native libddb, test data downloads (TestFS), Docker or
+        Testcontainers (MariaDB, LDAP), an external process or the network. Everything else goes
+        to Registry.Web.UnitTest (the rule is in its csproj). Shared helpers: Registry.Web.TestSupport.
+        RootNamespace keeps the namespaces the files had in Registry.Web.Test.
+    -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>Registry.Web.Test</RootNamespace>
+        <IsPackable>false</IsPackable>
+        <Platforms>AnyCPU;x64</Platforms>
+        <Configurations>Debug;Release;DebugEf</Configurations>
+        <!-- Nullable allow-list (build/nullable-allowlist.txt): it may only shrink. -->
+        <Nullable>disable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Remove="Data\Chunks\**" />
+        <Compile Remove="Data\Storage\**" />
+        <EmbeddedResource Remove="Data\Chunks\**" />
+        <EmbeddedResource Remove="Data\Storage\**" />
+        <None Remove="Data\Chunks\**" />
+        <None Remove="Data\Storage\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Hangfire.Core" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+        <PackageReference Include="Microsoft.Extensions.Options" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" />
+        <PackageReference Include="Moq" />
+        <PackageReference Include="NetTopologySuite.Core" />
+        <PackageReference Include="NUnit" />
+        <PackageReference Include="NUnit3TestAdapter" />
+        <PackageReference Include="Serilog.Extensions.Logging" />
+        <PackageReference Include="Serilog.Sinks.NUnit" />
+        <PackageReference Include="Shouldly" />
+        <PackageReference Include="Testcontainers" />
+        <PackageReference Include="Testcontainers.MariaDb" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
+        <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
+        <ProjectReference Include="..\Registry.Test.Common\Registry.Test.Common.csproj" />
+        <ProjectReference Include="..\Registry.Web.Data\Registry.Web.Data.csproj" />
+        <ProjectReference Include="..\Registry.Web.TestSupport\Registry.Web.TestSupport.csproj" />
+        <ProjectReference Include="..\Registry.Web\Registry.Web.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="Data\Ddb\public\0a223495-84a0-4c15-b425-c7ef88110e75\.ddb\dbase.sqlite">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+</Project>

@@ -18,4 +18,5 @@ Registry.Adapters.Test
 Registry.Common
 Registry.Web
 Registry.Web.Data
-Registry.Web.Test
+Registry.Web.IntegrationTest
+Registry.Web.UnitTest

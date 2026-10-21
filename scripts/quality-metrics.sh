@@ -33,11 +33,14 @@ case "$mode" in
         ;;
 esac
 
-# Production C#: no Hub, no generated migrations, no tests.
+# Production C#: no Hub, no generated migrations, no tests and no test support projects.
 EXCLUDE_NON_PROD=(':(exclude,glob)**/ClientApp/**' ':(exclude,glob)**/Migrations/**'
-    ':(exclude,glob)*.Test/**' ':(exclude,glob)Registry.Test.Common/**')
-TEST_CODE=(':(glob)Registry.Web.Test/**/*.cs' ':(glob)Registry.Adapters.Test/**/*.cs'
-    ':(glob)Registry.Adapters.Ddb.Test/**/*.cs' ':(glob)Registry.Test.Common/**/*.cs')
+    ':(exclude,glob)*Test/**' ':(exclude,glob)Registry.Test.Common/**'
+    ':(exclude,glob)Registry.Web.TestSupport/**' ':(exclude,glob)Registry.Adapters.Testing/**')
+TEST_CODE=(':(glob)Registry.Web.UnitTest/**/*.cs' ':(glob)Registry.Web.IntegrationTest/**/*.cs'
+    ':(glob)Registry.Web.TestSupport/**/*.cs' ':(glob)Registry.Adapters.Testing/**/*.cs'
+    ':(glob)Registry.Adapters.Test/**/*.cs' ':(glob)Registry.Adapters.Ddb.Test/**/*.cs'
+    ':(glob)Registry.Test.Common/**/*.cs')
 
 # Pathspecs of the production C# files under each directory given ("" = whole repository).
 prod() {
@@ -108,6 +111,7 @@ metrics() {
     m "Thread.Sleep / Task.Delay in tests"           "$(tests | lines 'Thread\.Sleep|Task\.Delay')"
     m "Mock<IOptions<AppSettings>> in tests"         "$(tests | lines 'Mock<IOptions<AppSettings>>')"
     m "Test helpers in Registry.Common/Test"         "$(paths ':(glob)Registry.Common/**/Test*.cs' | files)"
+    m "Category string literals (use TestCategories)" "$(tests | lines '\[(assembly: )?Category\("')"
 
     # Error model (RQ-05)
     m "Controller log+rethrow catch blocks"          "$(paths ':(glob)Registry.Web/Controllers/**/*.cs' |

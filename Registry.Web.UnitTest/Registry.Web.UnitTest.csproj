@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+        Registry.Web unit tests (RQ-04, D5). Category "Unit" (assembly level).
+        A test belongs here when it needs none of:
+          - native libddb: no NativeDdbWrapper or other real IDdbWrapper, no DDB deserialized by
+            Hangfire (it creates a native wrapper), no Program path that initialises libddb;
+          - test data downloads (TestFS/TestArea/TempFile archives from DroneDB/test_data);
+          - Docker or Testcontainers (MariaDB, LDAP), an external process or the network
+            (only the in-process TestServer of RegistryWebFactory);
+          - shared file system state: a test may use its own temp folder and checked-in data files.
+        Use FakeDdbWrapper (Registry.Adapters.Testing) or a Mock<IDdbWrapper> instead of libddb.
+        UnitTestSetup blocks libddb for the whole run and fails it if libddb was loaded anyway.
+        Everything else goes to Registry.Web.IntegrationTest. Shared helpers: Registry.Web.TestSupport.
+        RootNamespace keeps the namespaces the files had in Registry.Web.Test.
+    -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>Registry.Web.Test</RootNamespace>
+        <IsPackable>false</IsPackable>
+        <Platforms>AnyCPU;x64</Platforms>
+        <Configurations>Debug;Release;DebugEf</Configurations>
+        <!-- Nullable allow-list (build/nullable-allowlist.txt): it may only shrink. -->
+        <Nullable>disable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Hangfire.Core" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+        <PackageReference Include="Microsoft.Extensions.Options" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" />
+        <PackageReference Include="Moq" />
+        <PackageReference Include="NetTopologySuite.Core" />
+        <PackageReference Include="NUnit" />
+        <PackageReference Include="NUnit3TestAdapter" />
+        <PackageReference Include="Serilog.Extensions.Logging" />
+        <PackageReference Include="Serilog.Sinks.NUnit" />
+        <PackageReference Include="Shouldly" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
+        <ProjectReference Include="..\Registry.Adapters.Testing\Registry.Adapters.Testing.csproj" />
+        <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
+        <ProjectReference Include="..\Registry.Test.Common\Registry.Test.Common.csproj" />
+        <ProjectReference Include="..\Registry.Web.Data\Registry.Web.Data.csproj" />
+        <ProjectReference Include="..\Registry.Web.TestSupport\Registry.Web.TestSupport.csproj" />
+        <ProjectReference Include="..\Registry.Web\Registry.Web.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="Data\Wfs\**">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Include="ImprovementBaselines\Snapshots\**">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+</Project>

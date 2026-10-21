@@ -14,6 +14,7 @@ new ObjectsManager( in tests	1
 Thread.Sleep / Task.Delay in tests	1
 Mock<IOptions<AppSettings>> in tests	0
 Test helpers in Registry.Common/Test	0
+Category string literals (use TestCategories)	0
 Controller log+rethrow catch blocks	130
 catch (Exception ...) total	402
 new ErrorResponse( in controllers	66

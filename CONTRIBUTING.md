@@ -249,8 +249,13 @@ public void SomeOperation_ShouldWork()
 # Run all tests
 dotnet test Registry.sln
 
-# Run tests for a specific project
-dotnet test Registry.Web.Test/Registry.Web.Test.csproj
+# Run tests for a specific project: the Registry.Web unit tests never load native libddb,
+# the integration tests need it (and Docker or the network for some fixtures)
+dotnet test Registry.Web.UnitTest/Registry.Web.UnitTest.csproj
+dotnet test Registry.Web.IntegrationTest/Registry.Web.IntegrationTest.csproj
+
+# Select by category (Registry.Test.Common/TestCategories.cs): Unit, Integration, Native, Network, Baseline
+dotnet test Registry.sln --filter "TestCategory=Integration&TestCategory!=Network"
 
 # Run with coverage
 dotnet test Registry.sln /p:CollectCoverage=true
