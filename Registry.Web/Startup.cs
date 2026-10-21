@@ -568,11 +568,6 @@ public class Startup
         app.UseMiddleware<UserEnrichmentMiddleware>();
         app.UseMiddleware<DownloadLimitMiddleware>();
 
-        app.UseHangfireDashboard(MagicStrings.HangFireUrl, new DashboardOptions
-        {
-            AsyncAuthorization = [new HangfireAuthorizationFilter()]
-        });
-
         app.UseEndpoints(endpoints =>
         {
             endpoints.MapScalarApiReference(options =>
@@ -600,7 +595,13 @@ public class Startup
                         Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "undefined");
                 });
 
-            endpoints.MapHangfireDashboard().RequireAuthorization();
+            // Registered once, as an endpoint: signed-in callers only, then the admin check of the
+            // dashboard itself; an unknown dashboard page is Hangfire's 404 (it was a 500 while the
+            // middleware form was registered too, RQ-04 finding)
+            endpoints.MapHangfireDashboard(MagicStrings.HangFireUrl, new DashboardOptions
+            {
+                AsyncAuthorization = [new HangfireAuthorizationFilter()]
+            }).RequireAuthorization();
 
             // TODO: Enable when needed
             // endpoints.MapODataRoute("odata", "odata", GetEdmModel());

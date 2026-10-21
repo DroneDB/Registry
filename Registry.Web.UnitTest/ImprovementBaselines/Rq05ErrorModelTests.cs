@@ -32,7 +32,9 @@ namespace Registry.Web.Test.ImprovementBaselines;
 /// actions, from model validation and from middleware (the <c>IExceptionHandler</c> path).</item>
 /// <item>D2: a missing permission answers 403 to an authenticated caller and 401 to an anonymous one.</item>
 /// <item>One 413 rule: <c>[EnforceContentLength]</c> rejects a declared <c>Content-Length</c> above the limit.</item>
-/// <item>RQ-04 endpoint finding: member management disabled is a 403 after the access check.</item>
+/// <item>The four RQ-04 endpoint findings: <c>import/sources</c> checks access, member management disabled
+/// is a 403 after the access check, a STAC path that is not Base64 is a 400, an unknown Hangfire page is
+/// not a 500.</item>
 /// </list>
 /// Every test here fails on the code before RQ-05 (Registry <c>a5e8b932</c>).
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~Rq05ErrorModelTests"
@@ -282,8 +284,22 @@ public sealed class Rq05ErrorModelTests : IDisposable
         problem["noRetry"]!.GetValue<bool>().ShouldBeFalse();
     }
 
-    // ---- RQ-04 endpoint findings ----
+    // ---- the four RQ-04 endpoint findings ----
 
+    [Test]
+    public async Task ImportSources_RequiresWriteAccessToTheOrganization()
+    {
+        var url = $"/orgs/{PrivateOrg}/import/sources";
+
+        var (anonymous, anonymousProblem) = await SendAsync(HttpMethod.Get, url);
+        ShouldBeProblem(anonymous, anonymousProblem, StatusCodes.Status401Unauthorized);
+
+        var (user, userProblem) = await SendAsync(HttpMethod.Get, url, RegularUser);
+        ShouldBeProblem(user, userProblem, StatusCodes.Status403Forbidden);
+
+        var (owner, _) = await SendAsync(HttpMethod.Get, url, OwnerUser);
+        ((int)owner.StatusCode).ShouldBe(StatusCodes.Status200OK);
+    }
 
     [Test]
     public async Task RemoveMember_WithMemberManagementDisabled_ChecksAccessFirstThenAnswers403()
@@ -302,8 +318,36 @@ public sealed class Rq05ErrorModelTests : IDisposable
         ownerProblem["noRetry"]!.GetValue<bool>().ShouldBeTrue();
     }
 
+    [Test]
+    public async Task StacChild_PathNotBase64_Is400()
+    {
+        var (response, problem) = await SendAsync(HttpMethod.Get,
+            $"/orgs/{PrivateOrg}/ds/{PrivateDs}/stac/not*base64", OwnerUser);
 
+        ShouldBeProblem(response, problem, StatusCodes.Status400BadRequest);
+    }
 
+    [Test]
+    public async Task HangfireDashboard_UnknownPage_IsNotAServerError()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/hangfire/rq05-no-such-page").AsUser(RegularUser);
+        using var response = await _client.SendAsync(request);
+
+        ((int)response.StatusCode).ShouldBeLessThan(500);
+    }
+
+    [TestCase(null, StatusCodes.Status401Unauthorized)]
+    [TestCase(RegularUser, StatusCodes.Status403Forbidden)]
+    [TestCase(RegistryWebFactory.AdminUserName, StatusCodes.Status200OK)]
+    public async Task HangfireDashboard_RegisteredOnce_StillAdminOnly(string? user, int status)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/hangfire");
+        if (user != null)
+            request.AsUser(user, isAdmin: user == RegistryWebFactory.AdminUserName);
+        using var response = await _client.SendAsync(request);
+
+        ((int)response.StatusCode).ShouldBe(status);
+    }
 
     // ---- helpers ----
 

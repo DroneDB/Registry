@@ -66,8 +66,11 @@ public class ImportManager : IImportManager
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<string> GetAvailableSourceTypes()
-        => [.. _factory.AvailableTypes.Where(IsSourceAllowed)];
+    public async Task<IReadOnlyList<string>> GetAvailableSourceTypes(string orgSlug)
+    {
+        await RequireImportAccess(orgSlug, CannotImportMessage);
+        return [.. _factory.AvailableTypes.Where(IsSourceAllowed)];
+    }
 
     // Every import operation needs write access to the destination organization
     private async Task RequireImportAccess(string orgSlug, string deniedMessage)

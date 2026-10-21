@@ -5,7 +5,7 @@
 #   gate: who passes the HTTP gate: open (manager checks), anonymous, authenticated, admin
 # Regenerate on purpose: REGISTRY_UPDATE_SNAPSHOTS=1 dotnet test Registry.Web.UnitTest --filter
 #   "FullyQualifiedName~Rq04ControllerSmokeTests.EndpointAuthorization_MatchesSnapshot"
-ANY /hangfire/{**path} -> Authorize [authenticated] @ /hangfire/{**path}  // FINDING (User -> 500): an unknown dashboard page falls through the UseHangfireDashboard branch with the MapHangfireDashboard endpoint selected and never executed: InvalidOperationException (Startup registers both)
+ANY /hangfire/{**path} -> Authorize [authenticated] @ /hangfire/{**path}
 ANY /health -> Authorize + Policy(inline: AssertionRequirement) [admin] @ Health checks
 GET /health/live -> AllowAnonymous [anonymous] @ HTTP: GET /health/live
 GET /orgs -> none [open] @ OrganizationsController.GetAll
@@ -90,7 +90,7 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/raster-value-info -> none [open] @ ObjectsContro
 POST /orgs/{orgSlug}/ds/{dsSlug}/rename -> none [open] @ DatasetsController.Rename
 POST /orgs/{orgSlug}/ds/{dsSlug}/rescan -> none [open] @ DatasetsController.RescanIndex
 POST /orgs/{orgSlug}/ds/{dsSlug}/search -> none [open] @ ObjectsController.Search
-GET /orgs/{orgSlug}/ds/{dsSlug}/stac/{pathBase64?} -> none [open] @ StacController.GetStacChild  // FINDING (Anonymous, User -> 500): a path that is not Base64 throws FormatException in the controller, before the access check
+GET /orgs/{orgSlug}/ds/{dsSlug}/stac/{pathBase64?} -> none [open] @ StacController.GetStacChild
 GET /orgs/{orgSlug}/ds/{dsSlug}/stamp -> none [open] @ DatasetsController.GetStamp
 POST /orgs/{orgSlug}/ds/{dsSlug}/stockpile/calculate -> none [open] @ ObjectsController.CalculateStockpileVolume
 POST /orgs/{orgSlug}/ds/{dsSlug}/stockpile/detect -> none [open] @ ObjectsController.DetectStockpile
@@ -123,7 +123,7 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/wmts/1.0.0/{layer}/{style}/{tms}/{z:int}/{y:int}
 GET /orgs/{orgSlug}/ds/{dsSlug}/wmts/p/{*folder} -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ WmtsController.KvpFolder
 POST /orgs/{orgSlug}/import -> none [open] @ ImportController.CreateImport
 POST /orgs/{orgSlug}/import/browse -> none [open] @ ImportController.BrowseImport
-GET /orgs/{orgSlug}/import/sources -> none [open] @ ImportController.GetImportSources  // FINDING (Anonymous, User -> 200): no access check: anyone gets the enabled import source types for any org slug (orgSlug unused); the sibling import endpoints require org Write access in ImportManager
+GET /orgs/{orgSlug}/import/sources -> none [open] @ ImportController.GetImportSources
 POST /orgs/{orgSlug}/import/verify -> none [open] @ ImportController.VerifyImport
 GET /orgs/{orgSlug}/members -> none [open] @ OrganizationsController.GetMembers
 POST /orgs/{orgSlug}/members -> none [open] @ OrganizationsController.AddMember

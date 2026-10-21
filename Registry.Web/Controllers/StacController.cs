@@ -396,8 +396,22 @@ public class StacController : ControllerBaseEx
         [FromRoute, Required] string dsSlug,
         [FromRoute] string pathBase64 = null)
     {
-        var path = pathBase64 != null ? Encoding.UTF8.GetString(Convert.FromBase64String(pathBase64)) : null;
+        return Ok(await _stacManager.GetStacChild(orgSlug, dsSlug, DecodePath(pathBase64)));
+    }
 
-        return Ok(await _stacManager.GetStacChild(orgSlug, dsSlug, path));
+    /// <summary>The item path of a STAC child URL; a segment that is not Base64 is the client's error.</summary>
+    private static string DecodePath(string pathBase64)
+    {
+        if (pathBase64 == null)
+            return null;
+
+        try
+        {
+            return Encoding.UTF8.GetString(Convert.FromBase64String(pathBase64));
+        }
+        catch (FormatException)
+        {
+            throw new BadRequestException("The item path is not valid Base64");
+        }
     }
 }

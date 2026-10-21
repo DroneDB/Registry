@@ -38,15 +38,18 @@ public class ImportController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Lists the import source types enabled on this server.
+    /// Lists the import source types enabled on this server, to a caller who may import into the
+    /// organization (write access).
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
     /// <returns>The available source type identifiers.</returns>
     [HttpGet("sources", Name = nameof(GetImportSources))]
     [ProducesResponseType(typeof(IEnumerable<string>), StatusCodes.Status200OK)]
-    public IActionResult GetImportSources([FromRoute, Required] string orgSlug)
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetImportSources([FromRoute, Required] string orgSlug)
     {
-        return Ok(_importManager.GetAvailableSourceTypes());
+        return Ok(await _importManager.GetAvailableSourceTypes(orgSlug));
     }
 
     /// <summary>

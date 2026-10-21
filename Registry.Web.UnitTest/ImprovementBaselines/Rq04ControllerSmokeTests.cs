@@ -78,18 +78,9 @@ public sealed class Rq04ControllerSmokeTests : IDisposable
     /// </summary>
     private static readonly KnownFinding[] Findings =
     [
-        // RQ-05: member management disabled is a 403 after the access check (it was a 500)
-        new("GET /orgs/{orgSlug}/import/sources", 200,
-            "no access check: anyone gets the enabled import source types for any org slug (orgSlug unused); " +
-            "the sibling import endpoints require org Write access in ImportManager",
-            Caller.Anonymous, Caller.User),
-        new("GET /orgs/{orgSlug}/ds/{dsSlug}/stac/{pathBase64?}", 500,
-            "a path that is not Base64 throws FormatException in the controller, before the access check",
-            Caller.Anonymous, Caller.User),
-        new("ANY /hangfire/{**path}", 500,
-            "an unknown dashboard page falls through the UseHangfireDashboard branch with the MapHangfireDashboard " +
-            "endpoint selected and never executed: InvalidOperationException (Startup registers both)",
-            Caller.User)
+        // RQ-05 fixed the four findings recorded here by RQ-04: GET import/sources checks write access,
+        // member management disabled is a 403 after the access check, a STAC path that is not Base64 is
+        // a 400, and the Hangfire dashboard is registered once (an unknown page is Hangfire's 404)
     ];
 
     private RegistryWebFactory _factory = null!;

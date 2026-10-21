@@ -13,10 +13,12 @@ namespace Registry.Web.Services.Ports;
 public interface IImportManager
 {
     /// <summary>
-    /// Returns the import source types enabled on this deployment (registered AND allow-listed).
+    /// Returns the import source types enabled on this deployment (registered AND allow-listed) to a
+    /// caller who may import into the organization (write access), like the other import operations.
     /// </summary>
+    /// <param name="orgSlug">The destination organization slug.</param>
     /// <returns>The available source type identifiers.</returns>
-    IReadOnlyList<string> GetAvailableSourceTypes();
+    Task<IReadOnlyList<string>> GetAvailableSourceTypes(string orgSlug);
 
     /// <summary>
     /// Verifies (probes) an import source: checks reachability/credentials and returns cheap metadata
