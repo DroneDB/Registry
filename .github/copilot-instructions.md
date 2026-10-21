@@ -1,6 +1,6 @@
 # copilot-instructions.md
 
-> **Doc rule**: Do not hardcode release or dependency version numbers in this file — they drift with every release. Read them from `Registry.Web/Registry.Web.csproj` (`<Version>`, `<DdbVersion>`, package references) and `Registry.Web/ClientApp/package.json` when you need current values. Framework identities (net10 TFM, Vue 3, PrimeVue 4, NUnit 4) are stable enough to write down.
+> **Doc rule**: Do not hardcode release or dependency version numbers in this file — they drift with every release. Read them from `Registry.Web/Registry.Web.csproj` (`<Version>`), `Directory.Build.props` (`<DdbVersion>` and the libddb checksums), `Directory.Packages.props` (package versions) and `Registry.Web/ClientApp/package.json` when you need current values. Framework identities (net10 TFM, Vue 3, PrimeVue 4, NUnit 4) are stable enough to write down.
 
 ## .NET Core Backend (`Registry.*`)
 
@@ -18,7 +18,7 @@
 
 ### Testing
 - Backend tests use **NUnit 4.x** + **Shouldly** + Moq. Integration tests use `NativeDdbWrapper` for direct C++ library calls (no Docker/subprocess). Test helpers: `TestArea.cs` in `Registry.Common/Test/` for isolated temp directories, `TestFS.cs` for extracting test archives.
-- Native interop: `Registry.Adapters/DroneDB/NativeDdbWrapper.cs` binds `libddb` via ~35 `[DllImport("ddb", EntryPoint="DDB…")]` P/Invokes (no CLI subprocess, no binding generator — the ABI is a flat C API defined in DroneDB's `src/include/ddb.h`). The required native version is pinned as `<DdbVersion>` in `Registry.Web/Registry.Web.csproj`; bump it when the native ABI changes.
+- Native interop: `Registry.Adapters/DroneDB/NativeDdbWrapper.cs` binds `libddb` via ~35 `[DllImport("ddb", EntryPoint="DDB…")]` P/Invokes (no CLI subprocess, no binding generator — the ABI is a flat C API defined in DroneDB's `src/include/ddb.h`). The required native version is pinned as `<DdbVersion>` in `Directory.Build.props`; bump it when the native ABI changes.
 - Config: Use Options pattern (`AppSettings.cs`). Key settings: `AppSettings:Secret` (JWT signing key), `AppSettings:StoragePath` (or CLI arg `StorageFolder`). The DroneDB library path is resolved automatically from system PATH - no dedicated environment variable exists.
 
 ### Best Practices

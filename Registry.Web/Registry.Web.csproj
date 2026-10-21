@@ -14,7 +14,6 @@
         <Configurations>Debug;Release;DebugEf</Configurations>
         <!-- Nullable allow-list (build/nullable-allowlist.txt): it may only shrink. -->
         <Nullable>disable</Nullable>
-        <DdbVersion>1.12.2</DdbVersion>
     </PropertyGroup>
 
     <ItemGroup>
@@ -111,7 +110,8 @@
     </ProjectExtensions>
 
     <PropertyGroup>
-        <DdbReleaseUrl>https://github.com/DroneDB/DroneDB/releases/download/v$(DdbVersion)/ddb-$(DdbVersion)-windows.zip</DdbReleaseUrl>
+        <!-- DdbVersion and DdbWindowsZipSha256: Directory.Build.props -->
+        <DdbReleaseUrl>https://github.com/DroneDB/DroneDB/releases/download/v$(DdbVersion)/ddb-$(DdbVersion)-Windows.zip</DdbReleaseUrl>
     </PropertyGroup>
 
     <Target Name="HandleNPMErrors">
@@ -126,15 +126,34 @@
     </Target>
 
 
+    <!--
+      Embeds the pinned ddb Windows release. The zip is verified against DdbWindowsZipSha256 on every
+      build: a cached zip that does not match (another DdbVersion, a broken download) is downloaded
+      again, and a download that does not match fails the build and is deleted.
+    -->
     <Target Name="EmbedDdbRelease">
         <PropertyGroup>
             <DdbReleasePath>$(OutputPath)ddb.zip</DdbReleasePath>
         </PropertyGroup>
 
-        <Message Condition="Exists('$(DdbReleasePath)')" Text="Ddb release already exists at $(DdbReleasePath), skipping download" Importance="high" />
+        <Error Condition="'$(DdbWindowsZipSha256)' == ''" Text="DdbWindowsZipSha256 is not set (Directory.Build.props): the embedded ddb release cannot be verified." />
+
+        <GetFileHash Condition="Exists('$(DdbReleasePath)')" Files="$(DdbReleasePath)" Algorithm="SHA256">
+            <Output TaskParameter="Hash" PropertyName="DdbCachedReleaseHash" />
+        </GetFileHash>
+        <Message Condition="Exists('$(DdbReleasePath)') And '$(DdbCachedReleaseHash)' != '$(DdbWindowsZipSha256)'" Text="Ddb release at $(DdbReleasePath) is not ddb $(DdbVersion) (SHA256 $(DdbCachedReleaseHash)), downloading it again" Importance="high" />
+        <Delete Condition="Exists('$(DdbReleasePath)') And '$(DdbCachedReleaseHash)' != '$(DdbWindowsZipSha256)'" Files="$(DdbReleasePath)" />
+
+        <Message Condition="Exists('$(DdbReleasePath)')" Text="Ddb release $(DdbVersion) already exists at $(DdbReleasePath), skipping download" Importance="high" />
         <Message Condition="!Exists('$(DdbReleasePath)')" Text="Embedding ddb version $(DdbVersion), downloading from $(DdbReleaseUrl)" Importance="high" />
 
         <DownloadFile Condition="!Exists('$(DdbReleasePath)')" SourceUrl="$(DdbReleaseUrl)" DestinationFolder="$(OutputPath)" DestinationFileName="ddb.zip" />
+
+        <GetFileHash Files="$(DdbReleasePath)" Algorithm="SHA256">
+            <Output TaskParameter="Hash" PropertyName="DdbReleaseHash" />
+        </GetFileHash>
+        <Delete Condition="'$(DdbReleaseHash)' != '$(DdbWindowsZipSha256)'" Files="$(DdbReleasePath)" />
+        <Error Condition="'$(DdbReleaseHash)' != '$(DdbWindowsZipSha256)'" Text="Checksum mismatch for $(DdbReleaseUrl): SHA256 $(DdbReleaseHash), expected $(DdbWindowsZipSha256) (DdbWindowsZipSha256, Directory.Build.props). The download was deleted." />
 
         <ItemGroup>
             <EmbeddedResource Include="$(DdbReleasePath)">

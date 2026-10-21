@@ -27,6 +27,12 @@ jobs:
       run: |
         cd registry
         bash scripts/quality-metrics.sh --check
+    # One DroneDB release (Directory.Build.props): the Dockerfile ARG defaults must match it and no
+    # build may download releases/latest
+    - name: DroneDB release pin (Directory.Build.props, Dockerfile)
+      run: |
+        cd registry
+        bash scripts/ddb-release.sh check
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v4
       with:
@@ -69,12 +75,12 @@ jobs:
         cd registry
         if ldconfig -p | grep -q 'libddb\.so'; then echo "libddb is installed: the unit tests must run without it" >&2; exit 1; fi
         dotnet test Registry.Web.UnitTest/Registry.Web.UnitTest.csproj -c Release --verbosity minimal --blame-hang-timeout 10m --collect "Code Coverage;Format=cobertura" --results-directory TestResults
-    - name: Download and install latest DroneDB release
+    # The release pinned in Directory.Build.props (DdbVersion), verified with sha256sum -c (DdbDebSha256)
+    - name: Download and install the pinned DroneDB release
       run: |
-        LATEST_RELEASE_URL=$(curl -s https://api.github.com/repos/DroneDB/DroneDB/releases/latest | grep "browser_download_url.*deb" | head -n 1 | cut -d '"' -f 4)
-        echo "Downloading DroneDB from $LATEST_RELEASE_URL"
-        curl -L -o dronedb.deb $LATEST_RELEASE_URL
-        sudo apt-get update && sudo apt-get install -y ./dronedb.deb
+        cd registry
+        deb="$(bash scripts/ddb-release.sh fetch-deb "$RUNNER_TEMP/ddb")"
+        sudo apt-get update && sudo apt-get install -y "$deb"
     # Everything but the unit tests: Registry.Web.IntegrationTest (native libddb, test data
     # downloads; the MySQL tests start the production MariaDB image through Testcontainers: Docker
     # is on the runner, CI=true makes a missing Docker fail them instead of skipping) and the

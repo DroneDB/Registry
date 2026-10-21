@@ -56,6 +56,12 @@ FROM ubuntu:noble AS runner
 ARG DEBIAN_FRONTEND=noninteractive
 ENV DOTNET_GENERATE_ASPNET_CERTIFICATE=false
 
+# DroneDB: the release pinned in Directory.Build.props (DdbVersion, DdbDebSha256), never the latest
+# one. The download is verified with sha256sum -c. scripts/ddb-release.sh check (CI) fails when these
+# defaults differ from Directory.Build.props.
+ARG DDB_VERSION=1.12.2
+ARG DDB_DEB_SHA256=b1c2c86c368d2915ebf14112b835f475d4c47f4cafb46224c31e02b7566473c4
+
 # Install runtime dependencies in single layer including SkiaSharp dependencies.
 # No .NET runtime: the app is published self-contained (docker/FolderProfile.xml).
 # tzdata: the image runs in UTC; set TZ (e.g. TZ=Europe/Rome, see docker/production) to change it.
@@ -79,11 +85,11 @@ RUN apt-get update \
         libldap2 \
         libldap-common \
         libsasl2-2 \
-    && LATEST_RELEASE_URL=$(curl -s https://api.github.com/repos/DroneDB/DroneDB/releases/latest | grep "browser_download_url.*deb" | head -n 1 | cut -d '"' -f 4) \
-    && echo "Downloading DroneDB from $LATEST_RELEASE_URL" \
-    && curl -L -o dronedb.deb "$LATEST_RELEASE_URL" \
-    && apt-get install -y ./dronedb.deb \
-    && rm dronedb.deb \
+    && curl -fsSL --retry 3 -o /tmp/dronedb.deb \
+        "https://github.com/DroneDB/DroneDB/releases/download/v${DDB_VERSION}/ddb_${DDB_VERSION}_amd64.deb" \
+    && echo "${DDB_DEB_SHA256}  /tmp/dronedb.deb" | sha256sum -c - \
+    && apt-get install -y /tmp/dronedb.deb \
+    && rm /tmp/dronedb.deb \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Ensure SkiaSharp can find native libraries

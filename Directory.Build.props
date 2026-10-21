@@ -29,4 +29,25 @@
         <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     </PropertyGroup>
 
+    <!--
+        The DroneDB (libddb) release Registry is built and tested against (RQ-02 item 10, XI-01).
+
+        This is the only place the version and the checksums are written:
+          - Registry.Web.csproj embeds ddb-<DdbVersion>-Windows.zip in Windows builds and fails the
+            build when its SHA256 is not DdbWindowsZipSha256;
+          - CI installs ddb_<DdbVersion>_amd64.deb through scripts/ddb-release.sh, which reads these
+            values and runs sha256sum -c;
+          - the Dockerfile has the same values as ARG defaults. scripts/ddb-release.sh check (CI)
+            fails when they differ from these, or when anything downloads releases/latest.
+
+        To move to a new DroneDB release, change the three values here and the two Dockerfile ARGs.
+        The checksums are the "digest" field of each asset (sha256 of the uploaded file) in:
+            gh api repos/DroneDB/DroneDB/releases/tags/v<version>
+    -->
+    <PropertyGroup>
+        <DdbVersion>1.12.2</DdbVersion>
+        <DdbDebSha256>b1c2c86c368d2915ebf14112b835f475d4c47f4cafb46224c31e02b7566473c4</DdbDebSha256>
+        <DdbWindowsZipSha256>2aa183060ffe279b4652ef22ab57ccd795ee6bd2d1d87ec79fa2b44e04604afd</DdbWindowsZipSha256>
+    </PropertyGroup>
+
 </Project>
