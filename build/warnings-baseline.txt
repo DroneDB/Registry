@@ -94,7 +94,6 @@ Registry.Web.UnitTest/ImprovementBaselines/Rq02AdminRecoveryTests.cs CA1001 1
 Registry.Web.UnitTest/ImprovementBaselines/Rq02CleanupExpiredJobsTests.cs CA1001 1
 Registry.Web.UnitTest/ImprovementBaselines/Rq02LivenessTests.cs CA1001 1
 Registry.Web.UnitTest/ImprovementBaselines/Rq02LoggingConfigTests.cs CS8604 1
-Registry.Web.UnitTest/ImprovementBaselines/Rq02StartupOrderTests.cs CA1001 1
 Registry.Web.UnitTest/ImprovementBaselines/Rq02TaskToolsDtoTests.cs CA1001 1
 Registry.Web.UnitTest/ImprovementBaselines/UploadPerFileOverheadBaselineTests.cs CA1001 1
 Registry.Web.UnitTest/ImprovementBaselines/ZipDownloadMemoryBaselineTests.cs CA1310 1
@@ -148,7 +147,7 @@ Registry.Web/Controllers/Ogc/WmsController.cs CS8632 1
 Registry.Web/Controllers/StacController.cs CA1822 1
 Registry.Web/Controllers/SystemController.cs CS8632 1
 Registry.Web/Exceptions/OgcException.cs CS8632 2
-Registry.Web/Models/Configuration/AppSettings.cs CA1805 2
+Registry.Web/Hosting/RegistryJobsServiceCollectionExtensions.cs CS0618 1
 Registry.Web/Models/Configuration/HeavyToolConfig.cs CA1805 2
 Registry.Web/Models/Configuration/ImportSettings.cs CA1805 3
 Registry.Web/Models/Configuration/LdapSettings.cs CA1805 1
@@ -160,7 +159,7 @@ Registry.Web/Models/DTO/MaskBordersDto.cs CA1805 1
 Registry.Web/Models/DTO/Ogc/OgcApiDtos.cs CS8632 7
 Registry.Web/Models/DTO/Ogc/OgcLayerDto.cs CS8632 4
 Registry.Web/Models/RescanFilter.cs CA1870 1
-Registry.Web/Program.cs CA1309 2
+Registry.Web/Program.cs CA1309 1
 Registry.Web/Services/Adapters/ArtifactCompletenessCheckerService.cs CA2254 1
 Registry.Web/Services/Adapters/BuildArtifactResolver.cs CA1305 2
 Registry.Web/Services/Adapters/BuildPendingService.cs CA2254 2
@@ -189,7 +188,6 @@ Registry.Web/Services/HeavyTasks/NodeOdm/NodeOdxClient.cs CA1305 1
 Registry.Web/Services/HeavyTasks/NodeOdm/NodeOdxClient.cs CA1859 1
 Registry.Web/Services/HeavyTasks/Tools/BulkDownloadTool.cs CA1822 1
 Registry.Web/Services/Import/ArchiveUrlImportSource.cs CA1822 1
-Registry.Web/Services/Initialization/AppInitializer.cs CA1816 1
 Registry.Web/Services/Initialization/HangfireJobsInitializer.cs CS8632 3
 Registry.Web/Services/Managers/AdminTasksManager.cs CA1859 1
 Registry.Web/Services/Managers/DatasetsManager.cs CS8632 1
@@ -252,5 +250,4 @@ Registry.Web/Utilities/Ogc/WcsSubsetParser.cs CS8632 1
 Registry.Web/Utilities/Ogc/WcsVersionNegotiator.cs CS8632 3
 Registry.Web/Utilities/Ogc/WmsValidator.cs CS8632 7
 Registry.Web/Utilities/Ogc/WmtsConformance.cs CS8632 5
-Registry.Web/Utilities/StartupExtenders.cs CS0618 1
 Registry.Web/Utilities/SyncWriteBufferingStream.cs CA1725 3

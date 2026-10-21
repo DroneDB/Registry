@@ -16,7 +16,7 @@ Mock<IOptions<AppSettings>> in tests	0
 Test helpers in Registry.Common/Test	0
 Category string literals (use TestCategories)	0
 Controller log+rethrow catch blocks	0
-catch (Exception ...) total	200
+catch (Exception ...) total	198
 new ErrorResponse( in controllers	0
 ErrorResponse references (D1)	0
 Controller entry debug traces	0
@@ -34,22 +34,22 @@ IsUserAdmin() + throw (any form)	3
 Sync IUtils lookups (any receiver)	0
 Raster prologue copies (EnsurePathValidity)	0
 new OrganizationUser in managers	1
-GetService/GetRequiredService calls	78
-Console.Write* in Program+Startup	37
-.Wait() calls	2
-Node registrations re-declared by the web host	21
-AddIdentityCore builder copies	3
-Hangfire storage configuration copies	2
-UseSerilog call sites	3
-HttpContextAccessor registrations	2
+GetService/GetRequiredService calls	54
+Console.Write* in Program+Startup	0
+.Wait() calls	1
+Node registrations re-declared by the web host	0
+AddIdentityCore builder copies	1
+Hangfire storage configuration copies	1
+UseSerilog call sites	1
+HttpContextAccessor registrations	1
 Hangfire dashboard registrations	1
-IOptions<AppSettings> uses	68
-Files consuming IOptions<AppSettings>	64
-Inline ?? new XSettings() defaults	38
-Service-locator calls in Services/Initialization	18
-.Wait() / Task.Delay in startup code	2
-Console helper calls in Program+Startup	20
-HostFacts.Current() call sites (XI-06)	3
+IOptions<AppSettings> uses	22
+Files consuming IOptions<AppSettings>	21
+Inline ?? new XSettings() defaults	27
+Service-locator calls in Services/Initialization	0
+.Wait() / Task.Delay in startup code	0
+Console helper calls in Program+Startup	0
+HostFacts.Current() call sites (XI-06)	1
 [DllImport] in production code	6
 EntryPointNotFoundException catches	0
 Copied DDB AutomaticRetry attribute	6
@@ -59,7 +59,7 @@ Zip-slip normalizer copies	0
 Direct Path.GetTempPath()	8
 Ad-hoc backslash->slash normalizations	11
 Static File./Directory. calls	196
-DateTime.Now (local)	6
+DateTime.Now (local)	5
 Unpinned test_data URLs	0
 Task.Run in managers	10
 Hand-built Content-Disposition	2
