@@ -94,6 +94,17 @@ list_files_matching() {
     { git grep --untracked -I -P -l -e "$pattern" -- "${specs[@]}" || true; } | wc -l | tr -d ' '
 }
 
+# Registration statements (services.AddX<...>( ) of the shared node module
+# (AddProcessingNodeServices) that the web host's composition files (Startup, Hosting/) write again.
+redeclared_node_registrations() {
+    regs() {
+        { git grep --untracked -I -h -o -P 'services\.(Add|TryAdd)[A-Za-z]+(<[^;(]*>)?\(' -- "$@" || true; } |
+            tr -d ' ' | sort -u
+    }
+    comm -12 <(regs Registry.Web/Startup.cs ':(glob)Registry.Web/Hosting/**/*.cs') \
+        <(regs Registry.Web/Utilities/ProcessingNodeServiceCollectionExtensions.cs) | wc -l | tr -d ' '
+}
+
 tests() { printf '%s\0' "${TEST_CODE[@]}"; }
 paths() { printf '%s\0' "$@"; }
 
@@ -153,6 +164,21 @@ metrics() {
     m "GetService/GetRequiredService calls"          "$(prod '' | lines 'Get(Required)?Service<')"
     m "Console.Write* in Program+Startup"            "$(paths Registry.Web/Program.cs Registry.Web/Startup.cs | lines 'Console\.Write')"
     m ".Wait() calls"                                "$(prod '' | lines '\.Wait\(\)')"
+    m "Node registrations re-declared by the web host" "$(redeclared_node_registrations)"
+    m "AddIdentityCore builder copies"               "$(prod Registry.Web | lines 'AddIdentityCore<')"
+    m "Hangfire storage configuration copies"        "$(prod Registry.Web | lines 'SetDataCompatibilityLevel\(')"
+    m "UseSerilog call sites"                        "$(prod Registry.Web | lines '\.UseSerilog\(')"
+    m "HttpContextAccessor registrations"            "$(prod Registry.Web | lines 'AddHttpContextAccessor\(|<IHttpContextAccessor, HttpContextAccessor>')"
+    m "Hangfire dashboard registrations"             "$(prod Registry.Web | lines 'MapHangfireDashboard|UseHangfireDashboard')"
+    m "IOptions<AppSettings> uses"                   "$(prod '' | lines 'IOptions<AppSettings>')"
+    m "Files consuming IOptions<AppSettings>"        "$(prod Registry.Web | list_files_matching 'IOptions<AppSettings>')"
+    m "Inline ?? new XSettings() defaults"           "$(prod Registry.Web | lines '\?\? new \w+(Settings|Options|Policy)\(\)')"
+    m "Service-locator calls in Services/Initialization" "$(prod Registry.Web/Services/Initialization | lines 'Get(Required)?Service<')"
+    m ".Wait() / Task.Delay in startup code"         "$(paths Registry.Web/Program.cs Registry.Web/Startup.cs \
+        ':(glob)Registry.Web/Services/Initialization/**/*.cs' ':(glob)Registry.Web/Hosting/**/*.cs' |
+        lines '\.Wait\(\)|Task\.Delay\(')"
+    m "Console helper calls in Program+Startup"      "$(paths Registry.Web/Program.cs Registry.Web/Startup.cs | lines 'WriteLineColor\(|WriteColor\(')"
+    m "HostFacts.Current() call sites (XI-06)"       "$(prod Registry.Web | lines 'HostFacts\.Current\(\)')"
 
     # Native interop (RQ-08)
     m "[DllImport] in production code"               "$(prod '' | lines '\[DllImport')"

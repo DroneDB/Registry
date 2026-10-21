@@ -37,6 +37,19 @@ new OrganizationUser in managers	1
 GetService/GetRequiredService calls	78
 Console.Write* in Program+Startup	37
 .Wait() calls	2
+Node registrations re-declared by the web host	21
+AddIdentityCore builder copies	3
+Hangfire storage configuration copies	2
+UseSerilog call sites	3
+HttpContextAccessor registrations	2
+Hangfire dashboard registrations	1
+IOptions<AppSettings> uses	68
+Files consuming IOptions<AppSettings>	64
+Inline ?? new XSettings() defaults	38
+Service-locator calls in Services/Initialization	18
+.Wait() / Task.Delay in startup code	2
+Console helper calls in Program+Startup	20
+HostFacts.Current() call sites (XI-06)	3
 [DllImport] in production code	6
 EntryPointNotFoundException catches	0
 Copied DDB AutomaticRetry attribute	6
