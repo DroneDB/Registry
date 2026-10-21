@@ -41,7 +41,7 @@ public sealed class DatasetChangeCoalescer : IDatasetChangeCoalescer, IHostedSer
 
     public DatasetChangeCoalescer(IOgcCacheKeys ogcKeys, ICacheManager cacheManager, IOptions<AppSettings> settings,
         ILogger<DatasetChangeCoalescer> logger)
-        : this(ogcKeys, cacheManager, settings.Value.DatasetThumbnailCandidates,
+        : this(ogcKeys, cacheManager, settings.Value.EffectiveDatasetThumbnailCandidates(),
             TimeSpan.FromMilliseconds((settings.Value.Uploads ?? new UploadSettings()).InvalidationWindowMs), logger)
     {
     }

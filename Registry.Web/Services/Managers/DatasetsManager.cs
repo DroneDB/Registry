@@ -159,7 +159,7 @@ public class DatasetsManager : IDatasetsManager
         var rootNames = new HashSet<string>(
             rootEntries.Select(e => Path.GetFileName(e.Path)),
             StringComparer.OrdinalIgnoreCase);
-        return _settings.DatasetThumbnailCandidates.Any(c => rootNames.Contains(c));
+        return _settings.EffectiveDatasetThumbnailCandidates().Any(c => rootNames.Contains(c));
     }
 
     public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)

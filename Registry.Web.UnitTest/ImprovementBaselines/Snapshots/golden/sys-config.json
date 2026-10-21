@@ -971,7 +971,7 @@
         "name": "Thumbnails",
         "title": "Thumbnails",
         "description": "Remote thumbnail generator URL, default size, and candidate file names.",
-        "isActive": true,
+        "isActive": false,
         "fields": [
           {
             "key": "RemoteThumbnailGeneratorUrl",
@@ -1018,7 +1018,7 @@
           {
             "key": "DatasetThumbnailCandidates",
             "displayName": "Dataset Thumbnail Candidates",
-            "currentValue": "thumbnail.webp,thumbnail.jpg,thumbnail.png,cover.webp,cover.jpg,cover.png,thumbnail.webp,thumbnail.jpg,thumbnail.png,cover.webp,cover.jpg,cover.png",
+            "currentValue": "thumbnail.webp,thumbnail.jpg,thumbnail.png,cover.webp,cover.jpg,cover.png",
             "defaultValue": "thumbnail.webp,thumbnail.jpg,thumbnail.png,cover.webp,cover.jpg,cover.png",
             "isSet": false,
             "description": "File names (in dataset root) considered as dataset thumbnail candidates, in priority order.",
@@ -1892,7 +1892,7 @@
           {
             "key": "BlockedFileExtensions",
             "displayName": "Blocked File Extensions",
-            "currentValue": ".exe,.dll,.so,.dylib,.bat,.cmd,.com,.msi,.msix,.appx,.ps1,.psm1,.psd1,.vbs,.vbe,.js,.jse,.wsf,.wsh,.hta,.sh,.bash,.zsh,.ksh,.csh,.run,.elf,.scr,.pif,.cpl,.gadget,.jar,.apk,.app,.deb,.rpm,.py,.pyc,.pyo,.rb,.pl,.php,.lnk,.reg,.command,.workflow,.exe,.dll,.so,.dylib,.bat,.cmd,.com,.msi,.msix,.appx,.ps1,.psm1,.psd1,.vbs,.vbe,.js,.jse,.wsf,.wsh,.hta,.sh,.bash,.zsh,.ksh,.csh,.run,.elf,.scr,.pif,.cpl,.gadget,.jar,.apk,.app,.deb,.rpm,.py,.pyc,.pyo,.rb,.pl,.php,.lnk,.reg,.command,.workflow",
+            "currentValue": ".exe,.dll,.so,.dylib,.bat,.cmd,.com,.msi,.msix,.appx,.ps1,.psm1,.psd1,.vbs,.vbe,.js,.jse,.wsf,.wsh,.hta,.sh,.bash,.zsh,.ksh,.csh,.run,.elf,.scr,.pif,.cpl,.gadget,.jar,.apk,.app,.deb,.rpm,.py,.pyc,.pyo,.rb,.pl,.php,.lnk,.reg,.command,.workflow",
             "defaultValue": ".exe,.dll,.so,.dylib,.bat,.cmd,.com,.msi,.msix,.appx,.ps1,.psm1,.psd1,.vbs,.vbe,.js,.jse,.wsf,.wsh,.hta,.sh,.bash,.zsh,.ksh,.csh,.run,.elf,.scr,.pif,.cpl,.gadget,.jar,.apk,.app,.deb,.rpm,.py,.pyc,.pyo,.rb,.pl,.php,.lnk,.reg,.command,.workflow",
             "isSet": false,
             "description": "File extensions rejected by all ingestion paths (block-list). Ignored when AllowedFileExtensions is non-empty.",

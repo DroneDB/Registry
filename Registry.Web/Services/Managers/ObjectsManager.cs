@@ -112,7 +112,7 @@ public class ObjectsManager : IObjectsManager
         _uploads = uploadManager ?? new UploadManager(NullLogger<UploadManager>.Instance, utils, authManager,
             ddbManager, fs, settings, backgroundJob, buildPendingService,
             new UploadQuotaGuard(new UploadQuotaLedger(settings), utils),
-            new DatasetChangeCoalescer(FallbackOgcKeys(), cacheManager, settings.Value.DatasetThumbnailCandidates,
+            new DatasetChangeCoalescer(FallbackOgcKeys(), cacheManager, settings.Value.EffectiveDatasetThumbnailCandidates(),
                 TimeSpan.Zero, NullLogger<DatasetChangeCoalescer>.Instance),
             indexQueue: indexQueue);
         return;
@@ -1418,7 +1418,7 @@ public class ObjectsManager : IObjectsManager
     {
         // Find first existing thumbnail candidate
         string thumbnailPath = null;
-        foreach (var candidate in _settings.DatasetThumbnailCandidates)
+        foreach (var candidate in _settings.EffectiveDatasetThumbnailCandidates())
         {
             if (ddb.EntryExists(candidate))
             {
@@ -1466,7 +1466,7 @@ public class ObjectsManager : IObjectsManager
     }
 
     private bool IsDatasetThumbnailFile(string path) =>
-        DatasetThumbnails.IsCandidateFile(path, _settings.DatasetThumbnailCandidates);
+        DatasetThumbnails.IsCandidateFile(path, _settings.EffectiveDatasetThumbnailCandidates());
 
     /// <summary>
     /// Invalidates the dataset-level thumbnail cache unconditionally.

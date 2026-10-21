@@ -107,19 +107,7 @@ public class OrganizationsManager : IOrganizationsManager
             };
         }).ToList();
 
-        // Resolve owner names in a separate, more efficient query
-        var ownerIds = organizations.Where(o => o.Owner != null)
-                                   .Select(o => o.Owner)
-                                   .Distinct()
-                                   .ToArray();
-
-        var usersMapper = await ResolveUserNamesAsync(ownerIds);
-
-        // Update owner names
-        foreach (var org in organizations.Where(org => org.Owner != null))
-        {
-            org.Owner = usersMapper.SafeGetValue(org.Owner);
-        }
+        await ResolveOwnerNamesAsync(organizations);
 
         return organizations;
     }
@@ -143,7 +131,27 @@ public class OrganizationsManager : IOrganizationsManager
 
         var organizations = await organizationsQuery.ToListAsync();
 
-        // Resolve owner names
+        await ResolveOwnerNamesAsync(organizations);
+
+        return organizations;
+    }
+
+    /// <summary>
+    /// <paramref name="org"/> as every organization answer shows it: the owner is the user name.
+    /// </summary>
+    private async Task<OrganizationDto> ToDtoWithOwnerNameAsync(Organization org)
+    {
+        var dto = org.ToDto();
+        await ResolveOwnerNamesAsync([dto]);
+        return dto;
+    }
+
+    /// <summary>
+    /// Replaces the owner user id of each organization with the user name (null when the user no longer
+    /// exists): the single place the organization answers (list, get, create) map the owner.
+    /// </summary>
+    private async Task ResolveOwnerNamesAsync(IReadOnlyCollection<OrganizationDto> organizations)
+    {
         var ownerIds = organizations.Where(o => o.Owner != null)
                                    .Select(o => o.Owner)
                                    .Distinct()
@@ -155,8 +163,6 @@ public class OrganizationsManager : IOrganizationsManager
         {
             org.Owner = usersMapper.SafeGetValue(org.Owner);
         }
-
-        return organizations;
     }
 
     /// <summary>
@@ -214,18 +220,7 @@ public class OrganizationsManager : IOrganizationsManager
         if (!await _authManager.RequestAccess(org, AccessType.Read))
             throw new UnauthorizedException("Invalid user");
 
-        var dto = org.ToDto();
-
-        // Resolve owner ID to username
-        if (dto.Owner != null)
-        {
-            var owner = await _appContext.Users
-                .AsNoTracking()
-                .Where(u => u.Id == dto.Owner)
-                .Select(u => u.UserName)
-                .FirstOrDefaultAsync();
-            dto.Owner = owner;
-        }
+        var dto = await ToDtoWithOwnerNameAsync(org);
 
         // Populate current user's permissions in this organization
         var currentUser = await _authManager.GetCurrentUser();
@@ -316,7 +311,7 @@ public class OrganizationsManager : IOrganizationsManager
         await _context.Organizations.AddAsync(org);
         await _context.SaveChangesAsync();
 
-        return org.ToDto();
+        return await ToDtoWithOwnerNameAsync(org);
     }
 
     public async Task Edit(string orgSlug, OrganizationDto organization)

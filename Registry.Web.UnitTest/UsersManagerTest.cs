@@ -468,6 +468,52 @@ public class UsersManagerTest : TestBase
 
     #endregion
 
+    #region User listing Tests
+
+    // RQ-04 golden finding (users-list): a user without a role was listed with "roles": [null]
+    // (the LEFT JOIN on the roles yields one row with a null role name).
+
+    [Test]
+    public async Task GetAll_UserWithoutRole_HasNoRoles()
+    {
+        SetupAdminUser();
+        await CreateAdminRoleUser("role-user");
+        await CreateTestUser("no-role-user");
+
+        var users = (await _usersManager.GetAll()).ToDictionary(u => u.UserName);
+
+        users["no-role-user"].Roles.ShouldBeEmpty();
+        users["role-user"].Roles.ShouldBe(["admin"]);
+    }
+
+    [Test]
+    public async Task GetAllDetailed_UserWithoutRole_HasNoRoles()
+    {
+        SetupAdminUser();
+        await CreateAdminRoleUser("role-user");
+        await CreateTestUser("no-role-user");
+        _userManagerMock.Setup(x => x.FindByNameAsync(It.IsAny<string>()))
+            .ReturnsAsync((string name) => _appContext.Users.Single(u => u.UserName == name));
+
+        var users = (await _usersManager.GetAllDetailed()).ToDictionary(u => u.UserName);
+
+        users["no-role-user"].Roles.ShouldBeEmpty();
+        users["role-user"].Roles.ShouldBe(["admin"]);
+    }
+
+    private async Task CreateAdminRoleUser(string userName)
+    {
+        var user = await CreateTestUser(userName);
+        await _appContext.UserRoles.AddAsync(new IdentityUserRole<string>
+        {
+            UserId = user.Id,
+            RoleId = "admin-role-id"
+        });
+        await _appContext.SaveChangesAsync();
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private void SetupAdminUser()

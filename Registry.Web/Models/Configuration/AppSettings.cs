@@ -177,14 +177,25 @@ public class AppSettings
     public int DefaultThumbnailSize { get; set; } = 512;
 
     /// <summary>
-    /// File names (in dataset root) considered as dataset thumbnail candidates.
-    /// The first matching file found is used as the dataset thumbnail.
+    /// File names (in dataset root) considered as dataset thumbnail candidates, in priority order.
+    /// The first matching file found is used as the dataset thumbnail. When null or empty,
+    /// <see cref="DefaultDatasetThumbnailCandidates"/> applies: read it through
+    /// <see cref="EffectiveDatasetThumbnailCandidates"/>.
     /// </summary>
-    public string[] DatasetThumbnailCandidates { get; set; } =
+#nullable enable
+    public string[]? DatasetThumbnailCandidates { get; set; }
+#nullable restore
+
+    /// <summary>The dataset thumbnail candidates used when <see cref="DatasetThumbnailCandidates"/> is not set.</summary>
+    public static readonly string[] DefaultDatasetThumbnailCandidates =
     [
         "thumbnail.webp", "thumbnail.jpg", "thumbnail.png",
         "cover.webp", "cover.jpg", "cover.png"
     ];
+
+    /// <summary><see cref="DatasetThumbnailCandidates"/>, or <see cref="DefaultDatasetThumbnailCandidates"/> when not set.</summary>
+    public string[] EffectiveDatasetThumbnailCandidates() =>
+        ConfiguredOrDefault(DatasetThumbnailCandidates, DefaultDatasetThumbnailCandidates);
 
     /// <summary>
     /// Thumbnails cache expiration
@@ -362,6 +373,21 @@ public class AppSettings
 
     /// <summary>The reverse proxies trusted when <see cref="KnownProxies"/> is not set.</summary>
     public static readonly string[] DefaultKnownProxies = ["127.0.0.1", "::1"];
+
+    /// <summary><see cref="KnownProxies"/>, or <see cref="DefaultKnownProxies"/> when not set.</summary>
+    public string[] EffectiveKnownProxies() => ConfiguredOrDefault(KnownProxies, DefaultKnownProxies);
+
+    /// <summary>
+    /// The one rule for the defaults of a configuration-bound list: the configured list, or
+    /// <paramref name="defaults"/> when it is not set (null or empty, as an empty JSON array binds to no
+    /// item). Such a list must have no initializer: the configuration binder does not replace a list
+    /// that already has items, it appends the configured ones to them (every default would be listed
+    /// twice, and a configured list could never drop a default).
+    /// </summary>
+#nullable enable
+    internal static T[] ConfiguredOrDefault<T>(T[]? configured, T[] defaults) =>
+        configured is { Length: > 0 } ? configured : defaults;
+#nullable restore
 
     /// <summary>
     /// Networks (CIDR, e.g. <c>172.16.0.0/12</c>) whose addresses are trusted as reverse proxies, in

@@ -9,7 +9,7 @@
     "name": "Golden new organization",
     "description": "Created by the golden tests",
     "creationDate": "<datetime:Z>",
-    "owner": "<guid>",
+    "owner": "golden-owner",
     "isPublic": false,
     "permissions": null
   }

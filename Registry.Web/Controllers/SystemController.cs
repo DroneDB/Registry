@@ -514,7 +514,7 @@ public class SystemController : ControllerBaseEx
                     RequireNonAlphanumeric = _appSettings.PasswordPolicy.RequireNonAlphanumeric
                 }
                 : null,
-            DatasetThumbnailCandidates = _appSettings.DatasetThumbnailCandidates,
+            DatasetThumbnailCandidates = _appSettings.EffectiveDatasetThumbnailCandidates(),
             MaxExportSizeBytes = _appSettings.MaxExportSizeBytes,
             BulkDownloadAsyncThresholdBytes =
                 (_appSettings.ProcessingPlatform ?? new ProcessingPlatformSettings()).BulkDownloadAsyncThresholdBytes,

@@ -115,6 +115,45 @@ public class OrganizationManagerTest : TestBase
         result.Description.ShouldBe(newOrg.Description);
     }
 
+    // RQ-04 golden finding (orgs-create): POST /orgs answered the owner's user id, GET /orgs and
+    // GET /orgs/{org} the owner's user name. The user id and name differ on purpose here.
+
+    [Test]
+    public async Task AddNew_AnswersTheOwnerLikeGetAndList()
+    {
+        var owner = await AddUser("owner-user-id", "owner-name");
+        _authManagerMock.Setup(x => x.GetCurrentUser()).ReturnsAsync(owner);
+        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
+
+        var created = await _organizationsManager.AddNew(CreateTestOrganizationDto("owned-org"));
+
+        created.Owner.ShouldBe("owner-name");
+        (await _organizationsManager.Get("owned-org")).Owner.ShouldBe(created.Owner);
+        (await _organizationsManager.List()).Single(o => o.Slug == "owned-org").Owner.ShouldBe(created.Owner);
+    }
+
+    [Test]
+    public async Task AddNew_AsAdminForAnotherUser_AnswersTheOwnerName()
+    {
+        SetupAdminUser();
+        await AddUser("other-user-id", "other-name");
+        var newOrg = CreateTestOrganizationDto("other-org");
+        newOrg.Owner = "other-user-id";
+
+        var created = await _organizationsManager.AddNew(newOrg);
+
+        created.Owner.ShouldBe("other-name");
+        _context.Organizations.Single(o => o.Slug == "other-org").OwnerId.ShouldBe("other-user-id");
+    }
+
+    private async Task<User> AddUser(string id, string userName)
+    {
+        var user = new User { Id = id, UserName = userName, Email = $"{userName}@example.com" };
+        await _appContext.Users.AddAsync(user);
+        await _appContext.SaveChangesAsync();
+        return user;
+    }
+
     [Test]
     public async Task Get_ExistingOrganization_ReturnsCorrectOrganization()
     {

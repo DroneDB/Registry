@@ -897,8 +897,26 @@ public class UsersManager : IUsersManager
 
         var userOrg = merge.ToDictionary(item => item.UserId, item => item.OrgIds);
 
+        return GetUsersWithRoles().Select(user => new UserDto
+        {
+            UserName = user.UserName,
+            Email = user.Email,
+            Roles = user.Roles,
+            Organizations = userOrg.SafeGetValue(user.Id)
+        });
+    }
 
-        var query = (from user in _applicationDbContext.Users
+    /// <summary>A user and the names of their roles (empty when they have none).</summary>
+    private sealed record UserWithRoles(string Id, string UserName, string Email, string[] Roles);
+
+    /// <summary>
+    /// Every user with the names of their roles, for the user listings. The LEFT JOIN gives a user
+    /// without a role one row with a null role name: that row is the user, not a role, so their
+    /// list is empty.
+    /// </summary>
+    private UserWithRoles[] GetUsersWithRoles()
+    {
+        var rows = (from user in _applicationDbContext.Users
             join userRole in _applicationDbContext.UserRoles on user.Id equals userRole.UserId into userRoles
             from userRole in userRoles.DefaultIfEmpty()
             join role in _applicationDbContext.Roles on userRole.RoleId equals role.Id into roles
@@ -911,19 +929,12 @@ public class UsersManager : IUsersManager
                 RoleName = role.Name
             }).ToArray();
 
-        var users = from item in query
-            group item by item.UserId
-            into grp
-            let first = grp.First()
-            select new UserDto
-            {
-                UserName = first.UserName,
-                Email = first.Email,
-                Roles = [.. grp.Select(item => item.RoleName)],
-                Organizations = userOrg.SafeGetValue(first.UserId)
-            };
-
-        return users;
+        return
+        [
+            .. rows.GroupBy(row => row.UserId).Select(user => new UserWithRoles(
+                user.Key, user.First().UserName, user.First().Email,
+                [.. user.Select(row => row.RoleName).Where(name => !string.IsNullOrEmpty(name))]))
+        ];
     }
 
     public async Task<IEnumerable<UserDetailDto>> GetAllDetailed()
@@ -979,26 +990,12 @@ public class UsersManager : IUsersManager
 
         var datasetCounts = datasetQuery.ToDictionary(item => item.OrgSlug, item => item.DatasetCount);
 
-        var query = (from user in _applicationDbContext.Users
-            join userRole in _applicationDbContext.UserRoles on user.Id equals userRole.UserId into userRoles
-            from userRole in userRoles.DefaultIfEmpty()
-            join role in _applicationDbContext.Roles on userRole.RoleId equals role.Id into roles
-            from role in roles.DefaultIfEmpty()
-            select new
-            {
-                UserId = user.Id,
-                user.UserName,
-                user.Email,
-                RoleName = role.Name
-            }).ToArray();
-
         var users = new List<UserDetailDto>();
 
-        foreach (var userGroup in query.GroupBy(item => item.UserId))
+        foreach (var user in GetUsersWithRoles())
         {
-            var first = userGroup.First();
-            var orgInfo = userOrg.SafeGetValue(first.UserId);
-            var storageInfo = await GetUserStorageInfo(first.UserName);
+            var orgInfo = userOrg.SafeGetValue(user.Id);
+            var storageInfo = await GetUserStorageInfo(user.UserName);
 
             // Calculate total datasets for this user across all their organizations
             var totalDatasets = 0;
@@ -1009,10 +1006,10 @@ public class UsersManager : IUsersManager
 
             users.Add(new UserDetailDto
             {
-                Id = first.UserId,
-                UserName = first.UserName,
-                Email = first.Email,
-                Roles = [.. userGroup.Select(item => item.RoleName).Where(r => !string.IsNullOrEmpty(r))],
+                Id = user.Id,
+                UserName = user.UserName,
+                Email = user.Email,
+                Roles = user.Roles,
                 Organizations = orgInfo?.OrgIds ?? [],
                 StorageQuota = storageInfo.Total,
                 StorageUsed = storageInfo.Used,

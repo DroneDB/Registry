@@ -161,11 +161,18 @@ scheme also answers with an empty body (plus `WWW-Authenticate: Bearer`, not rec
 
 ## Observed today (recorded as is, not fixed here)
 
-* `sys-features` / `sys-config`: `datasetThumbnailCandidates` lists every name twice: the
-  configuration binder appends the `appsettings-default.json` array to the `AppSettings`
-  initializer array.
-* `users-list`: users without a role have `"roles": [null]`; `users-detailed` gives `[]`.
-* `orgs-create` returns `owner` as the user id, `orgs-get`/`orgs-list` as the user name.
 * `orgs-datasets-create` returns `permissions: null` and `hasThumbnail: null`.
 * `ds-get` answers an array with one entry.
 * `error-401-non-member`: an authenticated user without access gets 401 (D2, RQ-05).
+
+## Fixed since recorded (goldens updated on purpose)
+
+* `sys-features` / `sys-config`: `datasetThumbnailCandidates` (and `sys-config`'s
+  `BlockedFileExtensions`) listed every item twice: the configuration binder appended the
+  configured array to the settings' initializer array. Config-bound lists have no initializer now;
+  their defaults apply when not set (`Rq04SettingsListBindingTests`). `sys-config`'s Thumbnails
+  section is no longer active (its current values equal the defaults).
+* `users-list`: users without a role had `"roles": [null]`, now `[]` like `users-detailed`
+  (`UsersManagerTest.GetAll_UserWithoutRole_HasNoRoles`).
+* `orgs-create` returned `owner` as the user id, now the user name like `orgs-get`/`orgs-list`
+  (`OrganizationManagerTest.AddNew_AnswersTheOwnerLikeGetAndList`).

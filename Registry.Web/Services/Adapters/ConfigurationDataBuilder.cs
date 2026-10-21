@@ -700,7 +700,7 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
 
                 ArrayField("DatasetThumbnailCandidates", "Dataset Thumbnail Candidates",
                     "File names (in dataset root) considered as dataset thumbnail candidates, in priority order.",
-                    _settings.DatasetThumbnailCandidates, _defaults.DatasetThumbnailCandidates),
+                    _settings.EffectiveDatasetThumbnailCandidates(), _defaults.EffectiveDatasetThumbnailCandidates()),
 
                 NumberField("NativeConcurrency.Tiles", "Concurrent Tile Renders",
                     "Map tiles and map images rendered at once by this instance. 0 = half the CPU cores (at least 2).",
@@ -1044,7 +1044,7 @@ public class ConfigurationDataBuilder : IConfigurationDataBuilder
 
                 ArrayField("BlockedFileExtensions", "Blocked File Extensions",
                     "File extensions rejected by all ingestion paths (block-list). Ignored when AllowedFileExtensions is non-empty.",
-                    imp?.BlockedFileExtensions, dImp?.BlockedFileExtensions),
+                    imp?.EffectiveBlockedFileExtensions(), dImp?.EffectiveBlockedFileExtensions()),
 
                 ArrayField("AllowedFileExtensions", "Allowed File Extensions",
                     "File extensions accepted by all ingestion paths (allow-list). When non-empty, switches to allow-list mode and ignores BlockedFileExtensions.",

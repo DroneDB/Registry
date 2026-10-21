@@ -433,7 +433,7 @@ public class Startup
         services.AddRegistryRateLimiting();
 
         // Behind a reverse proxy the client address and scheme come from its forwarded headers
-        var knownProxies = ParseKnownProxies(appSettings.KnownProxies);
+        var knownProxies = ParseKnownProxies(appSettings.EffectiveKnownProxies());
         var knownNetworks = ParseKnownNetworks(appSettings.KnownNetworks);
         services.Configure<ForwardedHeadersOptions>(options =>
             ConfigureForwardedHeaders(options, knownProxies, knownNetworks));
@@ -662,12 +662,10 @@ public class Startup
     }
 
     /// <summary>
-    /// <see cref="AppSettings.KnownProxies"/> as addresses (<see cref="AppSettings.DefaultKnownProxies"/>
-    /// when not set).
+    /// <see cref="AppSettings.EffectiveKnownProxies"/> (the default applies when not set) as addresses.
     /// </summary>
-    private static IPAddress[] ParseKnownProxies(string[] configured) =>
-        ParseTrustedEntries<IPAddress>(
-            configured is { Length: > 0 } ? configured : AppSettings.DefaultKnownProxies,
+    private static IPAddress[] ParseKnownProxies(string[] effective) =>
+        ParseTrustedEntries<IPAddress>(effective,
             nameof(AppSettings.KnownProxies), "IP address", IPAddress.TryParse);
 
     /// <summary>
