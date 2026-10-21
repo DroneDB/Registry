@@ -40,10 +40,10 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
     public sealed record Parameters(string? SourcePath, string? DestPath, bool? DeleteArchive, bool? Overwrite);
 
     protected override Parameters ReadParams(ToolParameters p) => new(
-        p.String("sourcePath"),
-        p.String("destPath"),
-        p.Bool("deleteArchive"),
-        p.Bool("overwrite"));
+        p.Text("sourcePath"),
+        p.Text("destPath"),
+        p.Flag("deleteArchive"),
+        p.Flag("overwrite"));
 
 
     private static readonly JsonDocument Schema = JsonDocument.Parse(

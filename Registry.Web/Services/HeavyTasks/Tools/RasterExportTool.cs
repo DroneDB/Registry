@@ -24,8 +24,8 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
     public sealed record Parameters(string? Preset, string? Bands, string? Formula, string? BandFilter,
         string? Colormap, string? Rescale, string? FileName);
 
-    protected override Parameters ReadParams(ToolParameters p) => new(p.String("preset"), p.String("bands"),
-        p.String("formula"), p.String("bandFilter"), p.String("colormap"), p.String("rescale"), p.String("fileName"));
+    protected override Parameters ReadParams(ToolParameters p) => new(p.Text("preset"), p.Text("bands"),
+        p.Text("formula"), p.Text("bandFilter"), p.Text("colormap"), p.Text("rescale"), p.Text("fileName"));
 
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """

@@ -18,7 +18,7 @@ public sealed class BuildTool : HeavyToolBase<BuildTool.Parameters>
     /// <summary>Rebuild an entry that is already built.</summary>
     public sealed record Parameters(bool? Force);
 
-    protected override Parameters ReadParams(ToolParameters p) => new(p.Bool("force"));
+    protected override Parameters ReadParams(ToolParameters p) => new(p.Flag("force"));
 
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """

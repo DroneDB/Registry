@@ -26,7 +26,7 @@ public sealed class BulkDownloadTool : HeavyToolBase<BulkDownloadTool.Parameters
 
     protected override Parameters ReadParams(ToolParameters p) => new(
         p.NonBlankStrings("paths"),
-        p.String("archiveName"));
+        p.Text("archiveName"));
 
 
     private static readonly JsonDocument Schema = JsonDocument.Parse(

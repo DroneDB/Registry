@@ -43,15 +43,15 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
     public sealed record Parameters(string? NodeId, string? Folder, List<string>? Images, bool? CreateNewDataset, string? DestPath, string? NewDatasetName, string? NewDatasetOrgSlug, string? NewDatasetVisibility, string? Name, string? Options);
 
     protected override Parameters ReadParams(ToolParameters p) => new(
-        p.String("nodeId"),
-        p.String("folder"),
+        p.Text("nodeId"),
+        p.Text("folder"),
         p.Strings("images"),
-        p.Bool("createNewDataset"),
-        p.String("destPath"),
-        p.String("newDatasetName"),
-        p.String("newDatasetOrgSlug"),
-        p.String("newDatasetVisibility"),
-        p.String("name"),
+        p.Flag("createNewDataset"),
+        p.Text("destPath"),
+        p.Text("newDatasetName"),
+        p.Text("newDatasetOrgSlug"),
+        p.Text("newDatasetVisibility"),
+        p.Text("name"),
         p.RawArray("options"));
 
 

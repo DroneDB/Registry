@@ -25,7 +25,7 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
 
     protected override Parameters ReadParams(ToolParameters p) => new(
         p.NonBlankStrings("paths"),
-        p.String("outputPath"));
+        p.Text("outputPath"));
 
 
     private static readonly JsonDocument Schema = JsonDocument.Parse(

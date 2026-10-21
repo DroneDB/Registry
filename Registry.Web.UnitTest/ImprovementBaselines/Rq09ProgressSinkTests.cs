@@ -29,7 +29,7 @@ public class Rq09ProgressSinkTests
     [ThreadStatic] private static bool _reporting;
 
     /// <summary>A JobIndex writer that records how many writes run at once and can hold the first one.</summary>
-    private sealed class RecordingWriter
+    private sealed class RecordingWriter : IDisposable
     {
         private int _inside;
         private int _entries;
@@ -38,18 +38,20 @@ public class Rq09ProgressSinkTests
         public readonly ConcurrentQueue<(int? Percent, string? Phase, string? Tail)> Writes = new();
         public Action? OnEntry;
 
+        public void Dispose() => FirstWriteGate.Dispose();
+
         public Mock<IJobIndexWriter> Mock()
         {
             var writer = new Mock<IJobIndexWriter>();
             writer.Setup(w => w.UpdateProgressAsync(It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<string?>(),
                     It.IsAny<string?>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
-                .Returns<string, int?, string?, string?, DateTime, CancellationToken>((_, percent, phase, tail, _, _) =>
+                .Returns<string, int?, string?, string?, DateTime, CancellationToken>((_, percent, phase, tail, _, ct) =>
                 {
                     var now = Interlocked.Increment(ref _inside);
                     InterlockedMax(ref MaxConcurrent, now);
                     OnEntry?.Invoke();
                     if (Interlocked.Increment(ref _entries) == 1)
-                        FirstWriteGate.Wait(TimeSpan.FromSeconds(30));
+                        FirstWriteGate.Wait(TimeSpan.FromSeconds(30), ct);
                     Writes.Enqueue((percent, phase, tail));
                     Interlocked.Decrement(ref _inside);
                     return Task.CompletedTask;
@@ -79,7 +81,7 @@ public class Rq09ProgressSinkTests
     public async Task ReportsFromManyThreads_NeverWriteConcurrently_AndNeverWaitForTheDatabase()
     {
         const int reporters = 8;
-        var recorder = new RecordingWriter();
+        using var recorder = new RecordingWriter();
         recorder.FirstWriteGate.Reset();
         var writer = recorder.Mock();
         var sink = Sink(writer.Object);
@@ -126,7 +128,7 @@ public class Rq09ProgressSinkTests
     [Test]
     public async Task Complete_WritesTheFinalTail_AfterThePendingWrites()
     {
-        var recorder = new RecordingWriter();
+        using var recorder = new RecordingWriter();
         var tail = new LogRingBuffer();
         var sink = Sink(recorder.Mock().Object, tail, throttle: 3600);
 

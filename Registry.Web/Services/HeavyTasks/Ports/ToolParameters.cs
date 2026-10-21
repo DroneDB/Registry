@@ -14,11 +14,11 @@ namespace Registry.Web.Services.HeavyTasks.Ports;
 public readonly struct ToolParameters(JsonElement json)
 {
     /// <summary>The string <paramref name="name"/>, or null.</summary>
-    public string? String(string name) =>
+    public string? Text(string name) =>
         Get(name, out var el) && el.ValueKind == JsonValueKind.String ? el.GetString() : null;
 
     /// <summary>The boolean <paramref name="name"/> (JSON true/false only), or null.</summary>
-    public bool? Bool(string name) =>
+    public bool? Flag(string name) =>
         Get(name, out var el)
             ? el.ValueKind switch
             {
@@ -29,7 +29,7 @@ public readonly struct ToolParameters(JsonElement json)
             : null;
 
     /// <summary>The integer <paramref name="name"/> (a JSON number that fits a long), or null.</summary>
-    public long? Long(string name) =>
+    public long? WholeNumber(string name) =>
         Get(name, out var el) && el.ValueKind == JsonValueKind.Number && el.TryGetInt64(out var v) ? v : null;
 
     /// <summary>
@@ -63,7 +63,7 @@ public readonly struct ToolParameters(JsonElement json)
         Get(name, out var el) && el.ValueKind == JsonValueKind.Array ? el.GetRawText() : null;
 
     /// <summary>The object <paramref name="name"/>, or null when it is not an object.</summary>
-    public JsonElement? Object(string name) =>
+    public JsonElement? JsonObject(string name) =>
         Get(name, out var el) && el.ValueKind == JsonValueKind.Object ? el : null;
 
     private bool Get(string name, out JsonElement value)

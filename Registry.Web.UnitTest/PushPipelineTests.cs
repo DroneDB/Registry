@@ -253,7 +253,7 @@ public class PushPipelineTests : TestBase
         _delta.Adds = [.. _delta.Adds.Select(a => a.Hash.Length == 0 ? a : new AddAction(a.Path, Sha256("photo " + a.Path)))];
     }
 
-    private async Task<PushUpload> Stream(PushManager mgr, string text) =>
+    private static async Task<PushUpload> Stream(PushManager mgr, string text) =>
         await mgr.StreamUploadAsync("org", "ds", new MemoryStream(Encoding.UTF8.GetBytes(text)), Encoding.UTF8.GetByteCount(text));
 
     [Test]

@@ -37,13 +37,13 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
     public sealed record Parameters(string? Url, string? FileName, string? Folder, bool? Overwrite, long? SizeBytes, string? Username, string? Password);
 
     protected override Parameters ReadParams(ToolParameters p) => new(
-        p.String("url"),
-        p.String("fileName"),
-        p.String("folder"),
-        p.Bool("overwrite"),
-        p.Long("sizeBytes"),
-        p.String("username"),
-        p.String("password"));
+        p.Text("url"),
+        p.Text("fileName"),
+        p.Text("folder"),
+        p.Flag("overwrite"),
+        p.WholeNumber("sizeBytes"),
+        p.Text("username"),
+        p.Text("password"));
 
 
     private static readonly JsonDocument Schema = JsonDocument.Parse(

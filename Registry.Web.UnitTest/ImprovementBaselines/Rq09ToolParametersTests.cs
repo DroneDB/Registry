@@ -35,22 +35,22 @@ public class Rq09ToolParametersTests
         var p = new ToolParameters(JsonDocument.Parse(
             """{"s":"x","n":12,"big":1e30,"t":true,"f":false,"q":"true","a":["a",1,"  ","b",null],"o":{"k":1},"S":"y"}""").RootElement);
 
-        p.String("s").ShouldBe("x");
-        p.String("n").ShouldBeNull("a number is not a string");
-        p.String("S").ShouldBe("y");
-        p.String("missing").ShouldBeNull();
-        p.Bool("t").ShouldBe(true);
-        p.Bool("f").ShouldBe(false);
-        p.Bool("q").ShouldBeNull("\"true\" is a string, not a boolean");
-        p.Long("n").ShouldBe(12);
-        p.Long("big").ShouldBeNull("does not fit a long");
-        p.Long("s").ShouldBeNull();
+        p.Text("s").ShouldBe("x");
+        p.Text("n").ShouldBeNull("a number is not a string");
+        p.Text("S").ShouldBe("y");
+        p.Text("missing").ShouldBeNull();
+        p.Flag("t").ShouldBe(true);
+        p.Flag("f").ShouldBe(false);
+        p.Flag("q").ShouldBeNull("\"true\" is a string, not a boolean");
+        p.WholeNumber("n").ShouldBe(12);
+        p.WholeNumber("big").ShouldBeNull("does not fit a long");
+        p.WholeNumber("s").ShouldBeNull();
         p.Strings("a").ShouldBe(["a", "  ", "b"]);
         p.NonBlankStrings("a").ShouldBe(["a", "b"]);
         p.NonBlankStrings("s").ShouldBeNull();
         p.RawArray("a").ShouldBe("""["a",1,"  ","b",null]""");
-        p.Object("o").ShouldNotBeNull().GetProperty("k").GetInt32().ShouldBe(1);
-        p.Object("s").ShouldBeNull();
+        p.JsonObject("o").ShouldNotBeNull().GetProperty("k").GetInt32().ShouldBe(1);
+        p.JsonObject("s").ShouldBeNull();
     }
 
     [TestCase("null")]
@@ -59,8 +59,8 @@ public class Rq09ToolParametersTests
     public void ParametersThatAreNotAnObject_ReadAsAbsent(string paramsJson)
     {
         var p = new ToolParameters(JsonDocument.Parse(paramsJson).RootElement);
-        p.String("s").ShouldBeNull();
-        p.Bool("b").ShouldBeNull();
+        p.Text("s").ShouldBeNull();
+        p.Flag("b").ShouldBeNull();
         p.Strings("a").ShouldBeNull();
 
         Read<BuildTool, BuildTool.Parameters>("build", paramsJson).Force.ShouldBeNull();

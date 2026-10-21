@@ -41,9 +41,9 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
     public sealed record Parameters(string? SourceType, long? BudgetBytes, JsonElement? SourceParams);
 
     protected override Parameters ReadParams(ToolParameters p) => new(
-        p.String("sourceType"),
-        p.Long("budgetBytes"),
-        p.Object("params"));
+        p.Text("sourceType"),
+        p.WholeNumber("budgetBytes"),
+        p.JsonObject("params"));
 
 
     private static readonly JsonDocument Schema = JsonDocument.Parse(

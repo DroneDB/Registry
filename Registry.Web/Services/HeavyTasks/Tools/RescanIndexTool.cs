@@ -30,9 +30,9 @@ public sealed class RescanIndexTool : HeavyToolBase<RescanIndexTool.Parameters>
     public sealed record Parameters(string? Types, string? Extensions, bool? StopOnError);
 
     protected override Parameters ReadParams(ToolParameters p) => new(
-        p.String("types"),
-        p.String("extensions"),
-        p.Bool("stopOnError"));
+        p.Text("types"),
+        p.Text("extensions"),
+        p.Flag("stopOnError"));
 
 
     private static readonly JsonDocument Schema = JsonDocument.Parse(

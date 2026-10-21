@@ -25,10 +25,10 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
     public sealed record Parameters(string? SourcePath, string? ReferencePath, string? OutputPath, string? Mode);
 
     protected override Parameters ReadParams(ToolParameters p) => new(
-        p.String("sourcePath"),
-        p.String("referencePath"),
-        p.String("outputPath"),
-        p.String("mode"));
+        p.Text("sourcePath"),
+        p.Text("referencePath"),
+        p.Text("outputPath"),
+        p.Text("mode"));
 
 
     private static readonly JsonDocument Schema = JsonDocument.Parse(
