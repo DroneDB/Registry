@@ -25,16 +25,16 @@ InvalidOperationException thrown by managers	6
 ArgumentException thrown by managers	3
 UnauthorizedException thrown by managers	5
 Web files importing Registry.Adapters	6
-RequestAccess + throw blocks	79
-IsUserAdmin() guard + throw blocks	30
-Sync _utils.GetDataset/GetOrganization calls	100
-RequestAccess + throw blocks (any form)	83
-RequestAccess calls in controllers	2
-IsUserAdmin() + throw (any form)	32
-Sync IUtils lookups (any receiver)	102
-Raster prologue copies (EnsurePathValidity)	15
-new OrganizationUser in managers	4
-GetService/GetRequiredService calls	79
+RequestAccess + throw blocks	0
+IsUserAdmin() guard + throw blocks	2
+Sync _utils.GetDataset/GetOrganization calls	0
+RequestAccess + throw blocks (any form)	2
+RequestAccess calls in controllers	0
+IsUserAdmin() + throw (any form)	3
+Sync IUtils lookups (any receiver)	0
+Raster prologue copies (EnsurePathValidity)	0
+new OrganizationUser in managers	1
+GetService/GetRequiredService calls	78
 Console.Write* in Program+Startup	37
 .Wait() calls	2
 [DllImport] in production code	6

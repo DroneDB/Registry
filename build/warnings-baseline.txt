@@ -200,7 +200,7 @@ Registry.Web/Services/Managers/ObjectsManager.cs CA1725 3
 Registry.Web/Services/Managers/ObjectsManager.cs CS8632 32
 Registry.Web/Services/Managers/OgcApiFeaturesManager.cs CS8632 2
 Registry.Web/Services/Managers/OgcApiTilesManager.cs CS8632 1
-Registry.Web/Services/Managers/OgcManagerBase.cs CA1051 8
+Registry.Web/Services/Managers/OgcManagerBase.cs CA1051 6
 Registry.Web/Services/Managers/OgcManagerBase.cs CS8632 2
 Registry.Web/Services/Managers/OrganizationsManager.cs CA1725 1
 Registry.Web/Services/Managers/OrganizationsManager.cs CA1859 1
