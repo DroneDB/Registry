@@ -13,7 +13,7 @@ using Registry.Web.Data;
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
-using Registry.Adapters.DroneDB;
+using Registry.Ports.DroneDB;
 using Registry.Ports;
 using Registry.Web.Filters;
 using Registry.Web.Services;

@@ -1,6 +1,6 @@
 using System;
 
-namespace Registry.Adapters.DroneDB;
+namespace Registry.Ports.DroneDB;
 
 /// <summary>
 /// Thrown when a build operation cannot proceed because another process is

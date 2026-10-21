@@ -1,4 +1,4 @@
-namespace Registry.Adapters.DroneDB;
+namespace Registry.Ports.DroneDB;
 
 /// <summary>
 /// Transient DroneDB write contention (native SQLITE_BUSY/SQLITE_LOCKED, DDBERR_BUSY).

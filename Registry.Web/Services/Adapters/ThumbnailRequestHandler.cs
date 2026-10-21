@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using Registry.Adapters.Thumbnail;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Web.Utilities.Auth;
@@ -14,7 +13,7 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Handles <c>POST /generate-thumbnail</c> on the ThumbnailGenerator host. The caller must present the
-/// shared token in <see cref="RemoteThumbnailGeneratorSettings.TokenHeaderName"/> (401 otherwise) and the
+/// shared token in <see cref="ThumbnailHostContract.TokenHeaderName"/> (401 otherwise) and the
 /// file must lie under one of the allowed roots, the datasets and temp folders (403 otherwise).
 /// </summary>
 internal sealed class ThumbnailRequestHandler
@@ -47,7 +46,7 @@ internal sealed class ThumbnailRequestHandler
     {
         // Authenticate before reading the body
         if (!AuthorizationExtensions.TokensMatch(
-                context.Request.Headers[RemoteThumbnailGeneratorSettings.TokenHeaderName], _token))
+                context.Request.Headers[ThumbnailHostContract.TokenHeaderName], _token))
         {
             _logger.LogWarning("Thumbnail request from {RemoteIp} rejected: missing or invalid token",
                 context.Connection.RemoteIpAddress);

@@ -1,7 +1,7 @@
 using System;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using Registry.Adapters.DroneDB;
+using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks.Ports;
 

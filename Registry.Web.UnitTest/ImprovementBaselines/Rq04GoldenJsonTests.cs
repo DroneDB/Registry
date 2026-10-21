@@ -19,7 +19,6 @@ using Moq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
-using Registry.Adapters.DroneDB;
 using Registry.Adapters.Testing;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;

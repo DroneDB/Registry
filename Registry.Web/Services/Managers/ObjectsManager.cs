@@ -10,7 +10,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MimeMapping;
-using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;

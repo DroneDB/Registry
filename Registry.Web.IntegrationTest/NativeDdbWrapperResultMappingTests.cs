@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
+using Registry.Ports.DroneDB;
 using Shouldly;
 using Registry.Test.Common;
 

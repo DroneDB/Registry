@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
-using Registry.Adapters.DroneDB;
 using Registry.Test.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;

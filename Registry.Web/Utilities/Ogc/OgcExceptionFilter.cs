@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
-using Registry.Adapters.DroneDB;
+using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 
 namespace Registry.Web.Utilities.Ogc;

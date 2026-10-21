@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Web.Data;

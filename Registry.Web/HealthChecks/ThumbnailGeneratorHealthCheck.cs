@@ -4,7 +4,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
-using Registry.Adapters;
 using Registry.Ports;
 using Registry.Web.Models.Configuration;
 

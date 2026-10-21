@@ -13,7 +13,6 @@ using Serilog.Core;
 using Serilog.Events;
 using Moq;
 using NUnit.Framework;
-using Registry.Adapters.DroneDB;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
 using Registry.Web.Filters;

@@ -1,3 +1,5 @@
+using Registry.Ports;
+
 namespace Registry.Adapters.Thumbnail;
 
 /// <summary>
@@ -8,7 +10,7 @@ public class RemoteThumbnailGeneratorSettings
     /// <summary>
     /// Request header carrying <see cref="Token"/>; the ThumbnailGenerator host rejects requests without it.
     /// </summary>
-    public const string TokenHeaderName = "X-Thumbnail-Token";
+    public const string TokenHeaderName = ThumbnailHostContract.TokenHeaderName;
 
     /// <summary>
     /// URL of the host's <c>generate-thumbnail</c> endpoint.

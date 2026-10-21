@@ -1,6 +1,6 @@
 using System;
 
-namespace Registry.Adapters.DroneDB;
+namespace Registry.Ports.DroneDB;
 
 /// <summary>
 /// Thrown when a long-running DroneDB operation was cooperatively canceled by

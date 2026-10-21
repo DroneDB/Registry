@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Moq;
 using NUnit.Framework;
-using Registry.Adapters.DroneDB;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;

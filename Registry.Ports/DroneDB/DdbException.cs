@@ -1,6 +1,6 @@
 using System;
 
-namespace Registry.Adapters.DroneDB;
+namespace Registry.Ports.DroneDB;
 
 /// <summary>
 /// Base exception for DroneDB native errors.

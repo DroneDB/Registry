@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
+using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Filters;
 

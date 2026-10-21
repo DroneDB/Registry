@@ -11,7 +11,6 @@ using Hangfire.Storage;
 using Hangfire.MySql;
 using Microsoft.Extensions.Configuration;
 using Registry.Adapters;
-using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Attributes;

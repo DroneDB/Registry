@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using Registry.Ports.DroneDB;
 
 namespace Registry.Adapters.DroneDB;
 

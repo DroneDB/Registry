@@ -261,7 +261,7 @@ public class WfsFeatureQueryTests
     public async Task GetFeature_FilterDroneDbRejects_IsEvaluatedHere()
     {
         _wrapper.Setup(w => w.QueryVector(Gpkg, It.Is<VectorQuery>(q => q.Where != null)))
-            .Throws(new Registry.Adapters.DroneDB.DdbException("no such column"));
+            .Throws(new Registry.Ports.DroneDB.DdbException("no such column"));
 
         var fc = await CreateWfs().GetFeatureAsync(Org, Ds, Layer.Name, null, null, 10, 0, Gml,
             filterXml: Filter(EqualTo("FEATURE_ID", "000000000001")));
