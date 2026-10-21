@@ -141,13 +141,12 @@ Registry.Web/Controllers/DatasetsController.cs CS8632 2
 Registry.Web/Controllers/ObjectUploadsController.cs CA1859 1
 Registry.Web/Controllers/ObjectsController.cs CA1310 2
 Registry.Web/Controllers/ObjectsController.cs CA1711 3
-Registry.Web/Controllers/ObjectsController.cs CA1859 3
-Registry.Web/Controllers/ObjectsController.cs CS8632 24
+Registry.Web/Controllers/ObjectsController.cs CA1859 1
+Registry.Web/Controllers/ObjectsController.cs CS8632 22
 Registry.Web/Controllers/Ogc/OgcApiController.cs CS8632 2
 Registry.Web/Controllers/Ogc/WcsController.cs CS8632 2
 Registry.Web/Controllers/Ogc/WfsController.cs CS8632 6
 Registry.Web/Controllers/Ogc/WmsController.cs CS8632 1
-Registry.Web/Controllers/OrganizationsController.cs CA1727 4
 Registry.Web/Controllers/StacController.cs CA1822 1
 Registry.Web/Controllers/SystemController.cs CS8632 1
 Registry.Web/Exceptions/OgcException.cs CS8632 2
@@ -162,8 +161,6 @@ Registry.Web/Models/DTO/FileStreamDescriptor.cs CA1720 1
 Registry.Web/Models/DTO/MaskBordersDto.cs CA1805 1
 Registry.Web/Models/DTO/Ogc/OgcApiDtos.cs CS8632 7
 Registry.Web/Models/DTO/Ogc/OgcLayerDto.cs CS8632 4
-Registry.Web/Models/ErrorResponse.cs CA1310 1
-Registry.Web/Models/ErrorResponse.cs CA1866 1
 Registry.Web/Models/RescanFilter.cs CA1870 1
 Registry.Web/Program.cs CA1309 2
 Registry.Web/Services/Adapters/ArtifactCompletenessCheckerService.cs CA2254 1
@@ -242,7 +239,6 @@ Registry.Web/Services/Ports/IOgcServiceManagers.cs CS8632 15
 Registry.Web/Services/Ports/IOrganizationsManager.cs CA1716 1
 Registry.Web/Services/Ports/IThumbnailPrecomputeQueue.cs CA1711 1
 Registry.Web/Services/Ports/IUploadManager.cs CA1716 1
-Registry.Web/Utilities/ApiExceptionFilter.cs CA1305 1
 Registry.Web/Utilities/Auth/AccessControlBase.cs CA1051 3
 Registry.Web/Utilities/Auth/AuthorizationExtensions.cs CA1310 1
 Registry.Web/Utilities/HangfireUtils.cs CA1845 1

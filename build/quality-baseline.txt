@@ -15,12 +15,19 @@ Thread.Sleep / Task.Delay in tests	1
 Mock<IOptions<AppSettings>> in tests	0
 Test helpers in Registry.Common/Test	0
 Category string literals (use TestCategories)	0
-Controller log+rethrow catch blocks	130
-catch (Exception ...) total	402
-new ErrorResponse( in controllers	66
-RequestAccess + throw blocks	81
+Controller log+rethrow catch blocks	0
+catch (Exception ...) total	268
+new ErrorResponse( in controllers	0
+ErrorResponse references (D1)	0
+Controller entry debug traces	0
+Controller Content-Length pre-checks	0
+InvalidOperationException thrown by managers	6
+ArgumentException thrown by managers	3
+UnauthorizedException thrown by managers	5
+Web files importing Registry.Adapters	6
+RequestAccess + throw blocks	79
 IsUserAdmin() guard + throw blocks	30
-Sync _utils.GetDataset/GetOrganization calls	102
+Sync _utils.GetDataset/GetOrganization calls	100
 GetService/GetRequiredService calls	79
 Console.Write* in Program+Startup	41
 .Wait() calls	2
