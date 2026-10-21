@@ -39,6 +39,7 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
     private readonly IFileSystem _fs;
     private readonly FileJobs _files;
     private readonly ILogger<HeavyTaskJobWrapper> _log;
+    private readonly ILogger<HangfireProgressSink> _sinkLog;
 
     public HeavyTaskJobWrapper(
         IServiceScopeFactory scopeFactory,
@@ -47,7 +48,8 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         IScratchFileProvider scratch,
         IFileSystem fs,
         FileJobs files,
-        ILogger<HeavyTaskJobWrapper> log)
+        ILogger<HeavyTaskJobWrapper> log,
+        ILogger<HangfireProgressSink>? sinkLog = null)
     {
         _scopeFactory = scopeFactory;
         _registry = registry;
@@ -56,6 +58,7 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         _fs = fs;
         _files = files;
         _log = log;
+        _sinkLog = sinkLog ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<HangfireProgressSink>.Instance;
     }
 
     // The retry policy is the class's (DdbRetriedJob): transient DroneDB contention gets a backoff
@@ -72,13 +75,10 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         var request = JsonSerializer.Deserialize<HeavyToolRequest>(requestJson)
                       ?? throw new InvalidOperationException("Invalid heavy task request payload.");
 
-        string? workDir = null;
-        if (tool.ProducesArtifact)
-        {
-            workDir = TaskJobHelpers.ArtifactDirectory(taskId, _tempPath)
-                      ?? throw new InvalidOperationException($"Invalid task id '{taskId}'.");
-            _fs.FolderCreate(workDir);
-        }
+        var workDir = tool.ProducesArtifact
+            ? TaskJobHelpers.ArtifactDirectory(taskId, _tempPath)
+              ?? throw new InvalidOperationException($"Invalid task id '{taskId}'.")
+            : null;
 
         using var scope = _scopeFactory.CreateScope();
         var sp = scope.ServiceProvider;
@@ -88,6 +88,8 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         var processor = sp.GetRequiredService<IBackgroundJobsProcessor>();
         var builds = sp.GetRequiredService<DdbJobs>();
 
+        // Everything the task needs is resolved before its work folder exists: a dataset deleted
+        // while the task waited leaves nothing behind
         var ds = await db.Datasets.AsNoTracking().Include(d => d.Organization)
                      .FirstOrDefaultAsync(d => d.Slug == request.DsSlug && d.Organization.Slug == request.OrgSlug,
                          cancellationToken)
@@ -98,14 +100,20 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         var execCtx = new HeavyToolExecutionContext(ddb, new DatasetKey(request.OrgSlug, ds.InternalRef), null, _log,
             taskId, workDir, ctx, processor, builds);
         var logBuffer = new LogRingBuffer(_settings.LogTailMaxLines, _settings.LogTailMaxBytes);
-        var progress = new HangfireProgressSink(ctx, indexWriter, logBuffer, taskId,
-            _settings.ProgressUpdateThrottleSeconds);
+        await using var progress = new HangfireProgressSink(ctx, _scopeFactory, logBuffer, taskId,
+            _settings.ProgressUpdateThrottleSeconds, _sinkLog);
 
+        // The work folder has one owner from here: kept with its TTL delete when the tool produced an
+        // artifact, deleted on every other outcome
+        var keepWorkDir = false;
         try
         {
+            if (workDir is not null)
+                _fs.FolderCreate(workDir);
+
             await tool.ValidateAsync(request, execCtx, cancellationToken);
             var artifact = await tool.ExecuteAsync(request, execCtx, progress, cancellationToken);
-            progress.FlushFinal();
+            await progress.CompleteAsync();
 
             if (artifact is not null)
             {
@@ -116,24 +124,45 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
                     processor.Schedule<FileJobs>(
                         j => j.Delete(workDir, null),
                         TimeSpan.FromHours(Math.Max(1, _settings.ArtifactTtlHours)));
+                    keepWorkDir = true;
                 }
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            progress.FlushFinal();
-            DeleteWorkDir(workDir);
+            await progress.CompleteAsync();
             throw;
         }
         catch (Exception ex)
         {
-            progress.FlushFinal();
-            try { await indexWriter.UpdateErrorAsync(taskId, ex.GetType().Name, cancellationToken); }
-            catch { /* best effort */ }
-            DeleteWorkDir(workDir);
+            await progress.CompleteAsync();
+            await RecordErrorAsync(indexWriter, taskId, ex);
             throw;
         }
+        finally
+        {
+            if (!keepWorkDir)
+                DeleteWorkDir(workDir);
+        }
     }
+
+    // Recorded with its own short token, not the job's: the failure must be recorded even when the
+    // job's token is already cancelled (shutdown), and a failure to record it is logged
+    private async Task RecordErrorAsync(IJobIndexWriter indexWriter, string taskId, Exception error)
+    {
+        using var timeout = new CancellationTokenSource(ErrorRecordTimeout);
+        try
+        {
+            await indexWriter.UpdateErrorAsync(taskId, error.GetType().Name, timeout.Token);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Cannot record the failure ({ErrorType}) of task {TaskId}", error.GetType().Name, taskId);
+        }
+    }
+
+    /// <summary>How long recording a task's failure may take.</summary>
+    private static readonly TimeSpan ErrorRecordTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Hangfire-scheduled TTL cleanup of a finished task's work directory, kept for the jobs
