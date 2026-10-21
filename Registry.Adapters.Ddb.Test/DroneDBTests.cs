@@ -1197,16 +1197,8 @@ public class NativeDdbWrapperTests : TestBase
             Path.Join(area.TestFolder, "readme.md")
         ]);
 
-        List<RescanResult> res;
-        try
-        {
-            res = DdbWrapper.RescanIndex(area.TestFolder, new RescanOptions(Extensions: ".txt"));
-        }
-        catch (DdbException ex) when (ex.InnerException is EntryPointNotFoundException)
-        {
-            Assert.Ignore("The DroneDB library has no DDBRescanEx yet");
-            return;
-        }
+        // A missing export must fail (XI-09: this suite is the contract DroneDB CI runs), not be ignored
+        var res = DdbWrapper.RescanIndex(area.TestFolder, new RescanOptions(Extensions: ".txt"));
 
         res.Select(r => r.Path).OrderBy(p => p, StringComparer.Ordinal).ShouldBe(["OTHER.TXT", "notes.txt"]);
         res.ShouldAllBe(r => r.Success);
