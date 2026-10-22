@@ -5,7 +5,7 @@ using Registry.Ports.DroneDB;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Centralized meta manager to prevent magic strings proliferation
+/// The well-known meta of a dataset (name, visibility, entries, ...) by name: null when a value is not set.
 /// </summary>
 public class SafeMetaManager
 {
@@ -22,19 +22,26 @@ public class SafeMetaManager
         _manager = manager;
     }
 
+    /// <summary>
+    /// The value <paramref name="read"/> returns, or null when libddb has none. A transient error (busy index,
+    /// build in progress, full disk, shutdown: <see cref="DdbErrors.IsTransient"/>) says nothing about the value
+    /// and propagates (RQ-12).
+    /// </summary>
+    private static T Read<T>(Func<T> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch (DdbException ex) when (!DdbErrors.IsTransient(ex))
+        {
+            return default;
+        }
+    }
+
     public string Name
     {
-        get
-        {
-            try
-            {
-                return  _manager.Get<string>(NameField);
-            }
-            catch (DdbException)
-            {
-                return null;
-            }
-        }
+        get => Read(() => _manager.Get<string>(NameField));
         set
         {
             if (value == null)
@@ -44,35 +51,11 @@ public class SafeMetaManager
         }
     }
 
-    public int? Entries
-    {
-        get
-        {
-            try
-            {
-                return _manager.Get<int>(ObjectsCountField);
-            }
-            catch (DdbException)
-            {
-                return null;
-            }
-        }
-    }
+    public int? Entries => Read(() => (int?)_manager.Get<int>(ObjectsCountField));
 
     public Visibility? Visibility
     {
-        get
-        {
-
-            try
-            {
-                return (Visibility)_manager.Get<int>(VisibilityField);
-            }
-            catch (DdbException)
-            {
-                return null;
-            }
-        }
+        get => Read(() => (Visibility?)_manager.Get<int>(VisibilityField));
         set
         {
             if (value == null)
@@ -83,17 +66,7 @@ public class SafeMetaManager
 
     public bool? IsPublic
     {
-        get
-        {
-            try
-            {
-                return _manager.Get<bool>(PublicField);
-            }
-            catch (DdbException)
-            {
-                return null;
-            }
-        }
+        get => Read(() => (bool?)_manager.Get<bool>(PublicField));
         set
         {
             if (value == null) throw new InvalidOperationException("Cannot set null value");
@@ -103,21 +76,7 @@ public class SafeMetaManager
 
     public DateTime? LastUpdate
     {
-        get
-        {
-            try
-            {
-                var unixTime = _manager.Get<int>(LastUpdateField);
-
-                var dateTimeOffset = DateTimeOffset.FromUnixTimeSeconds(unixTime);
-
-                return dateTimeOffset.LocalDateTime;
-            }
-            catch (DdbException)
-            {
-                return null;
-            }
-        }
+        get => Read(() => (DateTime?)DateTimeOffset.FromUnixTimeSeconds(_manager.Get<int>(LastUpdateField)).LocalDateTime);
         // Maybe this is not needed
         set
         {
@@ -134,17 +93,7 @@ public class SafeMetaManager
 
     public string Tagline
     {
-        get
-        {
-            try
-            {
-                return _manager.Get<string>(TaglineField);
-            }
-            catch (DdbException)
-            {
-                return null;
-            }
-        }
+        get => Read(() => _manager.Get<string>(TaglineField));
         set
         {
             if (value == null)
