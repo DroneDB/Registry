@@ -16,7 +16,7 @@ Mock<IOptions<AppSettings>> in tests	0
 Test helpers in Registry.Common/Test	0
 Category string literals (use TestCategories)	0
 Controller log+rethrow catch blocks	0
-catch (Exception ...) total	168
+catch (Exception ...) total	167
 new ErrorResponse( in controllers	0
 ErrorResponse references (D1)	0
 Controller entry debug traces	0
@@ -70,7 +70,7 @@ Pending-build backoff copies (XI-04)	0
 Zip-slip normalizer copies	0
 Direct Path.GetTempPath()	0
 Ad-hoc backslash->slash normalizations	1
-Static File./Directory. calls	137
+Static File./Directory. calls	136
 DateTime.Now (local)	0
 Archive key normalization call sites (zip-slip)	1
 Archive extraction loops	1
@@ -112,7 +112,7 @@ IOgcBuildArtifactPaths uses	0
 Build-layout literals in Registry.Web	0
 Task.Run in managers	1
 Hand-built Content-Disposition	1
-Async actions without a CancellationToken	151
-Cancellable libddb export calls outside the call envelope	2
-Hand-built ETag code in controllers	4
-Cancellation answered 408	2
+Async actions without a CancellationToken	0
+Cancellable libddb export calls outside the call envelope	0
+Hand-built ETag code in controllers	0
+Cancellation answered 408	0
