@@ -30,6 +30,7 @@ using Registry.Web.Test.Support;
 using Registry.Web.Utilities;
 using Registry.Web.Exceptions;
 using Shouldly;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test;
 
@@ -202,7 +203,7 @@ public class ReservedPathCallSitesTests
         var manager = new SystemManager(auth.Object, context, ddbManager.Object,
             NullLogger<SystemManager>.Instance, Mock.Of<IObjectsManager>(), settings,
             new BuildPendingService(context, new DatasetSweep(context), ddbManager.Object, backgroundJob.Object, cache.Object, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>()),
-            factory.Object, backgroundJob.Object, cache.Object, new FileSystem(), Mock.Of<IJobIndexWriter>(),
+            factory.Object, backgroundJob.Object, Mock.Of<IDatasetListingInvalidator>(), new FileSystem(), Mock.Of<IJobIndexWriter>(),
             new SsrfGuard(new ImportSettings { SsrfAllowPrivateNetworks = true }), TestPaths.Policy, TimeProvider.System);
 
         return await manager.ImportDataset(new ImportDatasetRequestDto

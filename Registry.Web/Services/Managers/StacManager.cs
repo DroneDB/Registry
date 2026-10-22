@@ -31,6 +31,7 @@ public class StacManager : IStacManager
     private readonly IUtils _utils;
     private readonly IDdbManager _ddbManager;
     private readonly IRecordCache _records;
+    private readonly ICacheGenerations _generations;
     private readonly ICacheManager _cacheManager;
     private readonly ILogger<StacManager> _logger;
 
@@ -67,6 +68,7 @@ public class StacManager : IStacManager
         IUtils utils,
         IDdbManager ddbManager,
         IRecordCache records,
+        ICacheGenerations generations,
         ILogger<StacManager> logger,
         ICacheManager cacheManager)
     {
@@ -76,6 +78,7 @@ public class StacManager : IStacManager
         _utils = utils;
         _ddbManager = ddbManager;
         _records = records;
+        _generations = generations;
         _logger = logger;
         _cacheManager = cacheManager;
     }
@@ -138,14 +141,6 @@ public class StacManager : IStacManager
 
     }
 
-    public async Task ClearCache(Dataset ds)
-    {
-        _logger.LogInformation("In ClearCache('{DsSlug}')", ds.Slug);
-
-        await _records.RemoveAsync(CacheCategories.StacCatalogLink(ds.InternalRef.ToString()));
-        await _records.RemoveAsync(CacheCategories.StacDatasetName(ds.InternalRef.ToString()));
-    }
-
     public async Task<JToken> GetStacChild(string orgSlug, string dsSlug, string path = null)
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
@@ -167,7 +162,7 @@ public class StacManager : IStacManager
 
     public async Task<StacCatalogDto> GetLandingPage()
     {
-        var cacheKey = CacheCategories.StacLanding(await _authManager.SafeGetCurrentUserName());
+        var cacheKey = CacheCategories.StacLanding(await StacGenerationAsync(), await _authManager.SafeGetCurrentUserName());
         return await _records.GetOrCreateRecordAsync(cacheKey, _ => BuildLandingPage(), ListingCache);
     }
 
@@ -223,7 +218,8 @@ public class StacManager : IStacManager
         var lim = Math.Clamp(limit ?? DefaultCollectionsLimit, 1, MaxCollectionsLimit);
         var off = Math.Max(offset ?? 0, 0);
 
-        var cacheKey = CacheCategories.StacCollections(await _authManager.SafeGetCurrentUserName(), lim, off);
+        var cacheKey = CacheCategories.StacCollections(await StacGenerationAsync(),
+            await _authManager.SafeGetCurrentUserName(), lim, off);
         return await _records.GetOrCreateRecordAsync(cacheKey, _ => BuildCollections(limit, offset, lim, off),
             ListingCache);
     }
@@ -572,6 +568,9 @@ public class StacManager : IStacManager
             NameCache);
         return string.IsNullOrEmpty(name) ? null : name;
     }
+
+    // The listings are cached per caller in the STAC generation, which IDatasetListingInvalidator renews
+    private Task<string> StacGenerationAsync() => _generations.CurrentAsync(CacheCategories.StacGeneration);
 
     private static JObject Link(string rel, string href, string type)
     {

@@ -24,6 +24,7 @@ using Registry.Web.Services.Ports;
 using System.Net.Http;
 using Hangfire;
 using Registry.Web.Test.Support;
+using Registry.Web.Services.Caching;
 
 // ──────────────────────────────────────────────────────────────────────
 // Add a unit test that asserts GetVersion() always returns major.minor.patch
@@ -77,7 +78,7 @@ public class SystemManagerGetVersionTests : TestBase
             buildPendingService,
             httpClientFactoryMock.Object,
             backgroundJobMock.Object,
-            cacheManagerMock.Object,
+            Mock.Of<IDatasetListingInvalidator>(),
             _fileSystem,
             Mock.Of<IJobIndexWriter>(),
             new SsrfGuard(new ImportSettings())

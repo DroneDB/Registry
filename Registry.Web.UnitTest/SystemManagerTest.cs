@@ -25,6 +25,7 @@ using Registry.Web.Services.Ports;
 using System.Net.Http;
 using Hangfire;
 using Registry.Web.Test.Support;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test;
 
@@ -422,7 +423,7 @@ public class SystemManagerTest : TestBase
             buildPendingService,
             _httpClientFactoryMock.Object,
             _backgroundJobMock.Object,
-            _cacheManagerMock.Object,
+            Mock.Of<IDatasetListingInvalidator>(),
             _fileSystem,
             Mock.Of<IJobIndexWriter>(),
             new SsrfGuard(new ImportSettings())

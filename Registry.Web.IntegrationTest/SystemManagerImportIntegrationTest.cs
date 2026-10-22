@@ -24,6 +24,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Shouldly;
 using Registry.Web.Test.Support;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test;
 
@@ -115,7 +116,7 @@ public class SystemManagerImportIntegrationTest : TestBase
             buildPendingService,
             httpClientFactory,
             backgroundJobMock.Object,
-            cacheManagerMock.Object,
+            Mock.Of<IDatasetListingInvalidator>(),
             _fileSystem,
             Mock.Of<IJobIndexWriter>(),
             new SsrfGuard(new ImportSettings())

@@ -139,7 +139,7 @@ public class DatasetSummaryTests : TestBase
             Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
         var auth = Mock.Of<IAuthManager>();
         var stac = new StacManager(auth, new DatasetAccessResolver(utils.Object, auth, ddbManager.Object, TestPaths.Policy), _ctx, utils.Object,
-            ddbManager.Object, TestCaches.Records(cache),
+            ddbManager.Object, TestCaches.Records(cache), TestCaches.Generations(cache),
             CreateTestLogger<StacManager>(), TestCaches.WithDatasetVisibility(cache));
 
         (await stac.GetCatalog()).Links.ShouldNotContain(l => l.Relationship == "child");

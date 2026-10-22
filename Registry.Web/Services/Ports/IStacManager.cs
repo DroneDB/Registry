@@ -13,7 +13,6 @@ public interface IStacManager
 {
     Task<StacCatalogDto> GetCatalog();
     Task<JToken> GetStacChild(string orgSlug, string dsSlug, string path = null);
-    Task ClearCache(Dataset ds);
 
     // STAC API 1.0.0 endpoints
     Task<StacCatalogDto> GetLandingPage();

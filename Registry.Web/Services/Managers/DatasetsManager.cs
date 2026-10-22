@@ -15,6 +15,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Caching;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -29,11 +30,10 @@ public class DatasetsManager : IDatasetsManager
     private readonly IUtils _utils;
     private readonly ILogger<DatasetsManager> _logger;
     private readonly IObjectsManager _objectsManager;
-    private readonly IStacManager _stacManager;
     private readonly IDdbManager _ddbManager;
     private readonly IAuthManager _authManager;
     private readonly IDatasetAccessResolver _access;
-    private readonly ICacheManager _cacheManager;
+    private readonly IDatasetListingInvalidator _listings;
     private readonly IFileSystem _fileSystem;
     private readonly IBackgroundJobsProcessor _backgroundJob;
     private readonly AppSettings _settings;
@@ -44,11 +44,10 @@ public class DatasetsManager : IDatasetsManager
         IUtils utils,
         ILogger<DatasetsManager> logger,
         IObjectsManager objectsManager,
-        IStacManager stacManager,
         IDdbManager ddbManager,
         IAuthManager authManager,
         IDatasetAccessResolver access,
-        ICacheManager cacheManager,
+        IDatasetListingInvalidator listings,
         IFileSystem fileSystem,
         IBackgroundJobsProcessor backgroundJob,
         IOptions<AppSettings> settings,
@@ -58,11 +57,10 @@ public class DatasetsManager : IDatasetsManager
         _utils = utils;
         _logger = logger;
         _objectsManager = objectsManager;
-        _stacManager = stacManager;
         _ddbManager = ddbManager;
         _authManager = authManager;
         _access = access;
-        _cacheManager = cacheManager;
+        _listings = listings;
         _fileSystem = fileSystem;
         _backgroundJob = backgroundJob;
         _settings = settings.Value;
@@ -244,25 +242,18 @@ public class DatasetsManager : IDatasetsManager
         var meta = ddb.Meta.GetSafe();
 
         if (dataset.Visibility.HasValue)
-        {
             meta.Visibility = dataset.Visibility.Value;
-
-            // Invalidate visibility cache
-            await _cacheManager.RemoveAsync(
-                MagicStrings.DatasetVisibilityCacheSeed,
-                orgSlug,
-                orgSlug,
-                ds.InternalRef,
-                _ddbManager
-            );
-
-            await _stacManager.ClearCache(ds);
-        }
 
         if (!string.IsNullOrWhiteSpace(dataset.Name))
             meta.Name = dataset.Name;
 
         await _context.SaveChangesAsync();
+
+        // Who may list it (visibility) and how it is listed (name)
+        if (dataset.Visibility.HasValue)
+            await _listings.VisibilityChangedAsync(orgSlug, ds.InternalRef);
+        else if (!string.IsNullOrWhiteSpace(dataset.Name))
+            await _listings.ListingChangedAsync(ds.InternalRef);
     }
 
 
@@ -278,8 +269,8 @@ public class DatasetsManager : IDatasetsManager
         _context.Datasets.Remove(ds);
         await _context.SaveChangesAsync();
 
-        // Clear STAC cache
-        await _stacManager.ClearCache(ds);
+        // It leaves every listing
+        await _listings.ListingChangedAsync(internalRef);
 
         // Schedule background cleanup job for: cancelling active jobs, removing JobIndex entries, deleting filesystem
         string? jobId = null;
@@ -333,6 +324,9 @@ public class DatasetsManager : IDatasetsManager
         ds.Slug = newSlug;
 
         await _context.SaveChangesAsync();
+
+        // The listings link to the old slug
+        await _listings.ListingChangedAsync(ds.InternalRef);
     }
 
     [Obsolete("Use meta")]
@@ -349,16 +343,8 @@ public class DatasetsManager : IDatasetsManager
         var meta = ddb.Meta.GetSafe();
         meta.IsPublic = attributes.IsPublic;
 
-        // Invalidate visibility cache (changing IsPublic may indirectly modify visibility)
-        await _cacheManager.RemoveAsync(
-            MagicStrings.DatasetVisibilityCacheSeed,
-            orgSlug,
-            orgSlug,
-            ds.InternalRef,
-            _ddbManager
-        );
-
-        await _stacManager.ClearCache(ds);
+        // Changing IsPublic may indirectly modify visibility
+        await _listings.VisibilityChangedAsync(orgSlug, ds.InternalRef);
 
         return new Dictionary<string, object> { { "public", attributes.IsPublic } };
     }
@@ -489,7 +475,7 @@ public class DatasetsManager : IDatasetsManager
                 }
 
                 // Invalidate caches
-                await _stacManager.ClearCache(dataset);
+                await _listings.ListingChangedAsync(dataset.InternalRef);
 
                 result.Success = true;
                 _logger.LogInformation("Successfully moved dataset '{DsSlug}' from '{SourceOrgSlug}' to '{DestOrgSlug}'",

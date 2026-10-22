@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -26,6 +27,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Models.DTO;
 using Entry = Registry.Ports.DroneDB.Entry;
 using Registry.Web.Test.Support;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test;
 
@@ -40,10 +42,16 @@ public class DatasetManagerTest : TestBase
     private Mock<IDdbManager> _ddbFactoryMock;
     private Mock<IObjectsManager> _objectsManagerMock;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
-    private Mock<IStacManager> _stacManagerMock;
+    private Mock<IDatasetListingInvalidator> _listingsMock;
     private Mock<IBackgroundJobsProcessor> _backgroundJobMock;
-    private ICacheManager _cacheManager;
     private IFileSystem _fileSystem;
+
+    /// <summary>The manager over the test's collaborators; the listing invalidator is the mock.</summary>
+    private DatasetsManager CreateManager(RegistryContext context, IUtils utils, IFileSystem fileSystem = null) =>
+        new(context, utils, _datasetsManagerLogger, _objectsManagerMock.Object, _ddbFactoryMock.Object,
+            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
+            _listingsMock.Object, fileSystem ?? _fileSystem, _backgroundJobMock.Object, _settingsOptions,
+            TestCaches.Summaries(_ddbFactoryMock.Object));
 
     [SetUp]
     public void Setup()
@@ -53,10 +61,9 @@ public class DatasetManagerTest : TestBase
         _datasetManagerMock = new Mock<IDatasetsManager>();
         _ddbFactoryMock = new Mock<IDdbManager>();
         _objectsManagerMock = new Mock<IObjectsManager>();
-        _stacManagerMock = new Mock<IStacManager>();
+        _listingsMock = new Mock<IDatasetListingInvalidator>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
         _backgroundJobMock = new Mock<IBackgroundJobsProcessor>();
-        _cacheManager = TestCaches.InMemoryWithDatasetVisibility();
         _datasetsManagerLogger = CreateTestLogger<DatasetsManager>();
         _fileSystem = new FileSystem();
     }
@@ -99,8 +106,7 @@ public class DatasetManagerTest : TestBase
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils);
 
         var list = (await datasetsManager.List(MagicStrings.PublicOrganizationSlug)).ToArray();
 
@@ -132,11 +138,7 @@ public class DatasetManagerTest : TestBase
         ddbMock.Setup(x => x.Meta).Returns(new Mock<Registry.Ports.DroneDB.IMetaManager>().Object);
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry { Properties = new Dictionary<string, object>() });
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object, _authManagerMock.Object,
-            new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
-            _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions,
-            TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils);
 
         var before = DateTime.UtcNow;
         await datasetsManager.AddNew(MagicStrings.PublicOrganizationSlug, new DatasetNewDto { Slug = "utc-check" });
@@ -185,9 +187,7 @@ public class DatasetManagerTest : TestBase
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils);
 
         // Act
         var result = await datasetsManager.Get(orgSlug, dsSlug);
@@ -243,9 +243,7 @@ public class DatasetManagerTest : TestBase
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils);
 
         // Act
         var result = await datasetsManager.Get(orgSlug, dsSlug);
@@ -298,9 +296,7 @@ public class DatasetManagerTest : TestBase
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils);
 
         // Act
         var result = await datasetsManager.GetEntry(orgSlug, dsSlug);
@@ -371,9 +367,7 @@ public class DatasetManagerTest : TestBase
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils);
 
         // Act
         var result = await datasetsManager.GetEntry(orgSlug, dsSlug);
@@ -430,9 +424,7 @@ public class DatasetManagerTest : TestBase
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils);
 
         // Act
         var result = await datasetsManager.List(orgSlug);
@@ -491,9 +483,7 @@ public class DatasetManagerTest : TestBase
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils);
 
         // Act
         var result = await datasetsManager.List(orgSlug);
@@ -554,9 +544,7 @@ public class DatasetManagerTest : TestBase
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils);
 
         // Act
         var result = await datasetsManager.List(orgSlug);
@@ -592,9 +580,7 @@ public class DatasetManagerTest : TestBase
         var utils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, _fileSystem, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils);
 
         // Act
         var result = await datasetsManager.List(orgSlug);
@@ -617,9 +603,7 @@ public class DatasetManagerTest : TestBase
         var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
         SetupAdminUser();
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act & Assert
         Task<IEnumerable<MoveDatasetResultDto>> Action() => datasetsManager.MoveToOrganization("", ["dataset-1"], "dest-org");
@@ -634,9 +618,7 @@ public class DatasetManagerTest : TestBase
         var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
         SetupAdminUser();
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization(null, ["dataset-1"], "dest-org");
@@ -651,9 +633,7 @@ public class DatasetManagerTest : TestBase
         var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
         SetupAdminUser();
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "");
@@ -668,9 +648,7 @@ public class DatasetManagerTest : TestBase
         var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
         SetupAdminUser();
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", null, "dest-org");
@@ -685,9 +663,7 @@ public class DatasetManagerTest : TestBase
         var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
         SetupAdminUser();
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", [], "dest-org");
@@ -702,9 +678,7 @@ public class DatasetManagerTest : TestBase
         var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
         SetupAdminUser();
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "source-org");
@@ -722,11 +696,9 @@ public class DatasetManagerTest : TestBase
         fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
         fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
         fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
-        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+        
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "dest-org")).ToArray();
@@ -760,11 +732,9 @@ public class DatasetManagerTest : TestBase
         fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
         fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
         fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
-        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+        
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org", ["dataset-1", "dataset-2"], "dest-org")).ToArray();
@@ -790,9 +760,7 @@ public class DatasetManagerTest : TestBase
         var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
         SetupAdminUser();
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org", ["non-existent-dataset"], "dest-org")).ToArray();
@@ -815,11 +783,9 @@ public class DatasetManagerTest : TestBase
         fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
         fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
         fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
-        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+        
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act - Mix of existing and non-existing datasets
         var results = (await datasetsManager.MoveToOrganization("source-org",
@@ -840,9 +806,7 @@ public class DatasetManagerTest : TestBase
         var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
         SetupAdminUser();
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org",
@@ -865,11 +829,9 @@ public class DatasetManagerTest : TestBase
         fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
         fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
         fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
-        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+        
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org",
@@ -900,11 +862,9 @@ public class DatasetManagerTest : TestBase
         fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
         fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
         fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
-        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+        
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org",
@@ -928,11 +888,9 @@ public class DatasetManagerTest : TestBase
         fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
         fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
         fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
-        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+        
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org",
@@ -963,11 +921,9 @@ public class DatasetManagerTest : TestBase
         SetupAdminUser();
 
         fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(false);
-        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+        
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act
         var results = (await datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "dest-org")).ToArray();
@@ -989,9 +945,7 @@ public class DatasetManagerTest : TestBase
         var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
         SetupAdminUser();
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("non-existent-org", ["dataset-1"], "dest-org");
@@ -1006,9 +960,7 @@ public class DatasetManagerTest : TestBase
         var (utils, fileSystemMock) = SetupMoveTestDependencies(context);
         SetupAdminUser();
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act & Assert
         var action = () => datasetsManager.MoveToOrganization("source-org", ["dataset-1"], "non-existent-org");
@@ -1026,17 +978,15 @@ public class DatasetManagerTest : TestBase
         fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
         fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
         fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
-        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+        
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act
         await datasetsManager.MoveToOrganization("source-org", ["dataset-1", "dataset-2"], "dest-org");
 
         // Assert - Verify ClearCache was called for each moved dataset
-        _stacManagerMock.Verify(x => x.ClearCache(It.IsAny<Dataset>()), Times.Exactly(2));
+        _listingsMock.Verify(x => x.ListingChangedAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     [Test]
@@ -1050,11 +1000,9 @@ public class DatasetManagerTest : TestBase
         fileSystemMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
         fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
         fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
-        _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
+        
 
-        var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
-            _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), _cacheManager, fileSystemMock.Object, _backgroundJobMock.Object, _settingsOptions, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act - Move datasets, some will conflict, some won't
         var results = (await datasetsManager.MoveToOrganization("source-org",

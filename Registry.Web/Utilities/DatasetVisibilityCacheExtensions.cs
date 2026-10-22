@@ -25,4 +25,12 @@ public static class DatasetVisibilityCacheExtensions
 
         return visibilityBytes.Length < sizeof(int) ? null : (Visibility)BitConverter.ToInt32(visibilityBytes, 0);
     }
+
+    /// <summary>
+    /// Drops the cached visibility of a dataset (the next read asks the index). Through
+    /// <see cref="Services.Caching.IDatasetListingInvalidator"/>, which also drops the listings that depend on it.
+    /// </summary>
+    public static Task RemoveDatasetVisibilityAsync(this ICacheManager cacheManager, string orgSlug, Guid internalRef,
+        IDdbManager ddbManager) =>
+        cacheManager.RemoveAsync(MagicStrings.DatasetVisibilityCacheSeed, orgSlug, orgSlug, internalRef, ddbManager);
 }

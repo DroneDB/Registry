@@ -37,6 +37,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IOrganizationsManager, OrganizationsManager>();
         services.AddScoped<IDatasetsManager, DatasetsManager>();
         services.AddScoped<IStacManager, StacManager>();
+        services.AddScoped<Services.Caching.IDatasetListingInvalidator, Services.Caching.DatasetListingInvalidator>();
         services.AddObjectsSlice();
         services.AddScoped<ICadCrsManager, CadCrsManager>();
         services.AddScoped<IShareManager, ShareManager>();

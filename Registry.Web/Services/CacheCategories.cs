@@ -39,12 +39,15 @@ public static class CacheCategories
     /// </summary>
     public static string OgcRasterProbe(string entryHash, string source) => $"ogc-wcs-probe-{entryHash}-{source}";
 
-    /// <summary>The STAC landing page of a caller.</summary>
-    public static string StacLanding(string userName) => $"stac-landing-{userName}";
+    /// <summary>The generation of every STAC listing (landing page, collections): one for the whole catalog.</summary>
+    public const string StacGeneration = "stac-gen";
 
-    /// <summary>A page of the STAC collections listing of a caller.</summary>
-    public static string StacCollections(string userName, int limit, int offset) =>
-        $"stac-collections-{userName}-{limit}-{offset}";
+    /// <summary>The STAC landing page of a caller in a STAC generation.</summary>
+    public static string StacLanding(string generation, string userName) => $"stac-landing-g{generation}-{userName}";
+
+    /// <summary>A page of the STAC collections listing of a caller in a STAC generation.</summary>
+    public static string StacCollections(string generation, string userName, int limit, int offset) =>
+        $"stac-collections-g{generation}-{userName}-{limit}-{offset}";
 
     /// <summary>The link of a public dataset in the legacy STAC catalog.</summary>
     public static string StacCatalogLink(string internalRef) => $"stac-catalog-{internalRef}";

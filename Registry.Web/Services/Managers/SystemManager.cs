@@ -24,6 +24,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Caching;
 using Registry.Web.Services.Import;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
@@ -45,7 +46,7 @@ public class SystemManager : ISystemManager
     private readonly BuildPendingService _buildPendingService;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IBackgroundJobsProcessor _backgroundJob;
-    private readonly ICacheManager _cacheManager;
+    private readonly IDatasetListingInvalidator _listings;
     private readonly IFileSystem _fileSystem;
     private readonly IJobIndexWriter _jobIndexWriter;
     private readonly SsrfGuard _ssrfGuard;
@@ -55,7 +56,7 @@ public class SystemManager : ISystemManager
     public SystemManager(IAuthManager authManager,
         RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger,
         IObjectsManager objectManager, IOptions<AppSettings> settings, BuildPendingService buildPendingService,
-        IHttpClientFactory httpClientFactory, IBackgroundJobsProcessor backgroundJob, ICacheManager cacheManager,
+        IHttpClientFactory httpClientFactory, IBackgroundJobsProcessor backgroundJob, IDatasetListingInvalidator listings,
         IFileSystem fileSystem, IJobIndexWriter jobIndexWriter, SsrfGuard ssrfGuard, DatasetPathPolicy paths,
         TimeProvider time)
     {
@@ -68,7 +69,7 @@ public class SystemManager : ISystemManager
         _buildPendingService = buildPendingService;
         _httpClientFactory = httpClientFactory;
         _backgroundJob = backgroundJob;
-        _cacheManager = cacheManager;
+        _listings = listings;
         _fileSystem = fileSystem;
         _jobIndexWriter = jobIndexWriter;
         _ssrfGuard = ssrfGuard;
@@ -430,14 +431,8 @@ public class SystemManager : ISystemManager
                 false => Visibility.Private
             };
 
-            // Invalidate cache after migration
-            await _cacheManager.RemoveAsync(
-                MagicStrings.DatasetVisibilityCacheSeed,
-                pair.Org,
-                pair.Org,
-                pair.InternalRef,
-                _ddbManager
-            );
+            // Its cached visibility, and the listings that depend on it
+            await _listings.VisibilityChangedAsync(pair.Org, pair.InternalRef);
 
             res.Add(new MigrateVisibilityEntryDTO
             {

@@ -24,6 +24,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using MetaManager = Registry.Web.Services.Managers.MetaManager;
 using Registry.Web.Test.Support;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test;
 
@@ -87,8 +88,9 @@ internal class MetaManagerTest : TestBase
         var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(ddbManager));
 
-        var metaManager = new MetaManager(_metaManagerLogger, ddbManager,
-            new DatasetAccessResolver(webUtils, _authManagerMock.Object, ddbManager, TestPaths.Policy), _cacheManager);
+        var metaManager = new MetaManager(_metaManagerLogger,
+            new DatasetAccessResolver(webUtils, _authManagerMock.Object, ddbManager, TestPaths.Policy),
+            new DatasetListingInvalidator(_cacheManager, ddbManager, TestCaches.Generations(), TestCaches.Records()));
 
         var res = await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
@@ -118,8 +120,9 @@ internal class MetaManagerTest : TestBase
         var webUtils = new WebUtils(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
             _httpContextAccessorMock.Object, TestCaches.Summaries(ddbManager));
 
-        var metaManager = new MetaManager(_metaManagerLogger, ddbManager,
-            new DatasetAccessResolver(webUtils, _authManagerMock.Object, ddbManager, TestPaths.Policy), _cacheManager);
+        var metaManager = new MetaManager(_metaManagerLogger,
+            new DatasetAccessResolver(webUtils, _authManagerMock.Object, ddbManager, TestPaths.Policy),
+            new DatasetListingInvalidator(_cacheManager, ddbManager, TestCaches.Generations(), TestCaches.Records()));
 
         var a = await metaManager.Add(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "annotations", "{\"test\":123}");

@@ -86,7 +86,7 @@ public class StacManagerTest : TestBase
 
         var stacManager = new StacManager(_authManagerMock.Object,
             new DatasetAccessResolver(utilsMock.Object, _authManagerMock.Object, _ddbManagerMock.Object, TestPaths.Policy), context,
-            utilsMock.Object, _ddbManagerMock.Object, TestCaches.Records(cache), _stacManagerLogger, TestCaches.WithDatasetVisibility(cache));
+            utilsMock.Object, _ddbManagerMock.Object, TestCaches.Records(cache), TestCaches.Generations(cache), _stacManagerLogger, TestCaches.WithDatasetVisibility(cache));
 
         var catalog = await stacManager.GetCatalog();
 
@@ -216,7 +216,7 @@ public class StacManagerTest : TestBase
         return (new StacManager(_authManagerMock.Object,
             new DatasetAccessResolver(utilsMock.Object, _authManagerMock.Object, _ddbManagerMock.Object, TestPaths.Policy), context,
             utilsMock.Object, _ddbManagerMock.Object,
-            TestCaches.Records(cache), _stacManagerLogger, TestCaches.WithDatasetVisibility(cache)), utilsMock, cache);
+            TestCaches.Records(cache), TestCaches.Generations(cache), _stacManagerLogger, TestCaches.WithDatasetVisibility(cache)), utilsMock, cache);
     }
 
     private static RegistryContext GetContextWithDatasets(params string[] slugs)
