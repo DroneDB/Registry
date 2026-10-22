@@ -116,6 +116,37 @@ files_with_injected_fs() {
 tests() { printf '%s\0' "${TEST_CODE[@]}"; }
 paths() { printf '%s\0' "$@"; }
 
+# The objects slice (RQ-11): the objects manager and its services, the object controllers and their ports.
+OBJECTS_SLICE=(Registry.Web/Services/Managers/ObjectsManager.cs Registry.Web/Services/Ports/IObjectsManager.cs
+    ':(glob)Registry.Web/Services/Objects/**/*.cs' ':(glob)Registry.Web/Controllers/Object*Controller.cs'
+    Registry.Web/Controllers/RasterAnalysisController.cs Registry.Web/Controllers/StockpileController.cs)
+slice() { printf '%s\0' "${OBJECTS_SLICE[@]}"; }
+
+# Build-layout literals (XI-04, D8): libddb's build folder and file names, its marker suffixes, the build folder members.
+BUILD_LAYOUT='"(cog|copc|ept|vec|mvt|nxs|gsplat|3dtiles)"|(cog\.tif|cloud\.copc\.laz|source\.gpkg|model\.nxz|model\.rad|model\.spz|ept\.json|tileset\.json|georef\.json|local\.json|bounds\.json)|\.pending\b|\.building\b|BuildFolderName|BuildFolderPath'
+
+# The native raster calls of the objects slice (XI-06): all of them, and those made through INativeWorkGate.
+NATIVE_RASTER='(?:GetRaster\w+|CalculateVolume|DetectStockpile|DetectAllStockpiles|GenerateContours|ExportRaster|MergeMultispectral|ValidateMergeMultispectral|PreviewMergeMultispectral|ValidateAlignRaster|GenerateThumbnailEx|GenerateTileEx|GenerateTile)'
+ungated_native_calls() {
+    local all gated
+    all="$(slice | multiline "\\b(?:\\w+\\.)*[Dd]db\\.$NATIVE_RASTER\\(")"
+    gated="$(slice | multiline "RunAsync\\(NativeLane\\.\\w+,\\s*\\(\\)\\s*=>\\s*(?:\\w+\\.)*[Dd]db\\.$NATIVE_RASTER\\(")"
+    echo $((all - gated))
+}
+
+# "<class> <parameters> <optional parameters>" for every constructor of the classes of the slice.
+slice_constructors() {
+    slice | list_files | xargs -0 -r perl -0777 -ne 'my %cls; while (/\bclass (\w+)/g) { $cls{$1} = 1 } pos($_) = 0;
+        while (/public (\w+)\(([^{;]*?)\)\s*(?::\s*(?:base|this)\([^)]*\)\s*)?\{/gs) {
+            my ($name, $p) = ($1, $2); next unless $cls{$name};
+            my $opt = () = $p =~ /=\s*null!?\s*(?:,|$)/g;
+            $p =~ s/<[^<>]*>//g while $p =~ /<[^<>]*>/; $p =~ s/\s+//g;
+            printf "%s %d %d\n", $name, ($p eq "" ? 0 : (() = $p =~ /,/g) + 1), $opt }'
+}
+
+# Files of the slice longer than 800 lines.
+slice_long_files() { slice | list_files | xargs -0 -r wc -l | awk '$2 != "total" && $1 > 800' | wc -l | tr -d ' '; }
+
 metrics() {
     m() { printf '%s\t%s\n' "$1" "$2"; }
 
@@ -247,6 +278,20 @@ metrics() {
     m "Unpinned test_data URLs"                      "$(paths ':(exclude,glob)**/ClientApp/**' \
         ':(exclude)Registry.Test.Common/TestData.cs' |
         lines '(github\.com/DroneDB/test_data/(raw|blob)/|githubusercontent\.com/(media/)?DroneDB/test_data/)(?![0-9a-f]{40}/)')"
+
+    # Objects slice (RQ-11, 2026-10-22): no god class, one path rule by type, one download writer, every
+    # native raster call through the gate, libddb's build manifest instead of its layout (XI-04, D8)
+    m "Objects-slice files over 800 lines"           "$(slice_long_files)"
+    m "Objects-slice constructors over 7 parameters" "$(slice_constructors | awk '$2 > 7' | wc -l | tr -d ' ')"
+    m "Objects-slice optional constructor parameters" "$(slice_constructors | awk '{ s += $3 } END { print s + 0 }')"
+    m "Objects-slice ?? new fallbacks"               "$(slice | lines '\?\?=?\s*new\s+\w+')"
+    m "Hand-written path checks in object controllers" "$(slice | lines '^(?!.*\bprivate\b).*(?<![.\w])(ValidatePath|EnsureValidPaths?)\(')"
+    m "SendDownload call sites"                      "$(slice | lines '(?<!Task<IActionResult> )SendDownload\(')"
+    m "Task.Run native calls in the objects slice"   "$(slice | lines 'Task\.Run\(\(\)\s*=>\s*(?:\w+\.)*[Dd]db\.')"
+    m "Native raster calls outside INativeWorkGate (objects slice)" "$(ungated_native_calls)"
+    m "Build-layout literals in the objects slice"   "$(slice | matches "$BUILD_LAYOUT")"
+    m "Build-layout literals in production C#"       "$(prod '' | matches "$BUILD_LAYOUT")"
+    m "Per-entry build probe calls"                  "$(prod Registry.Web | lines '\.(IsBuildable|IsBuildActive|IsBuildComplete|GetBuildStatus)\(')"
 
     # Managers and API contracts (RQ-12, RQ-14)
     m "Task.Run in managers"                         "$(prod Registry.Web/Services/Managers | lines 'Task\.Run\(')"

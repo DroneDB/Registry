@@ -83,5 +83,16 @@ OS-detection idioms other than OperatingSystem.Is*	0
 Static File./Directory. calls in files with an injected IFileSystem	0
 Disk-space call sites	1
 Unpinned test_data URLs	0
+Objects-slice files over 800 lines	2
+Objects-slice constructors over 7 parameters	2
+Objects-slice optional constructor parameters	8
+Objects-slice ?? new fallbacks	6
+Hand-written path checks in object controllers	20
+SendDownload call sites	2
+Task.Run native calls in the objects slice	5
+Native raster calls outside INativeWorkGate (objects slice)	16
+Build-layout literals in the objects slice	20
+Build-layout literals in production C#	63
+Per-entry build probe calls	18
 Task.Run in managers	10
 Hand-built Content-Disposition	2
