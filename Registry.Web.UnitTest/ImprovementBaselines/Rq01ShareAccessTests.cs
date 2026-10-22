@@ -20,6 +20,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
+using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Shouldly;
 using Registry.Web.Test.Support;
@@ -127,10 +128,10 @@ public class Rq01ShareAccessTests
         var names = new Mock<INameGenerator>();
         names.Setup(n => n.GenerateName()).Returns(() => "gen-" + Guid.NewGuid().ToString("N")[..8]);
 
-        _manager = new ShareManager(NullLogger<ShareManager>.Instance, _objects.Object,
+        _manager = TestShares.Manager(_objects.Object,
             _datasets.Object, Mock.Of<IOrganizationsManager>(), utils.Datasets, utils.Quota, _auth.Object,
             new DatasetAccessResolver(utils.Datasets, _auth.Object, Mock.Of<IDdbManager>(), TestPaths.Policy), tokens.Object,
-            names.Object, _context, new FileSystem(), TestScratch.Provider, _time);
+            names.Object, _context, new FileSystem(), TestScratch.Provider, _time, Mock.Of<IEntryCommandService>());
     }
 
     [TearDown]
