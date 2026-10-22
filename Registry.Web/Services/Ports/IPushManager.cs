@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.DTO;
@@ -19,13 +20,13 @@ public sealed record PushUpload(IDDB Ddb, string TempPath, long Bytes, FileHashH
 
 public interface IPushManager
 {
-    Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp);
+    Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp, CancellationToken ct = default);
 
     /// <summary>
     /// Streams an uploaded file to a temp file on the dataset volume, after checking write access and
     /// the storage quota (before writing when <paramref name="expectedBytes"/> is known).
     /// </summary>
-    Task<PushUpload> StreamUploadAsync(string orgSlug, string dsSlug, Stream source, long? expectedBytes);
+    Task<PushUpload> StreamUploadAsync(string orgSlug, string dsSlug, Stream source, long? expectedBytes, CancellationToken ct = default);
 
     /// <summary>
     /// Moves a file streamed by <see cref="StreamUploadAsync"/> (dataset and access already checked)
@@ -34,8 +35,8 @@ public interface IPushManager
     /// </summary>
     /// <exception cref="Exceptions.BadRequestException">The delta adds no file at that path, or the
     /// bytes received are not the delta's (the file is not moved).</exception>
-    Task UploadAsync(PushUpload upload, string filePath, string token);
+    Task UploadAsync(PushUpload upload, string filePath, string token, CancellationToken ct = default);
 
-    Task SaveMeta(string orgSlug, string dsSlug, string token, string meta);
-    Task Commit(string orgSlug, string dsSlug, string token);
+    Task SaveMeta(string orgSlug, string dsSlug, string token, string meta, CancellationToken ct = default);
+    Task Commit(string orgSlug, string dsSlug, string token, CancellationToken ct = default);
 }

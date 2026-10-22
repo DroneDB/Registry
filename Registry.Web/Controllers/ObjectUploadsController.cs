@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -83,14 +84,14 @@ public class ObjectUploadsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status507InsufficientStorage)]
     public async Task<IActionResult> Post(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string dsSlug)
+        [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
         if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType ?? string.Empty))
             throw new BadRequestException("Expected a multipart/form-data request");
 
         var uploadId = Request.Headers[UploadIdHeader].FirstOrDefault();
 
-        using var ctx = await _uploads.BeginAsync(orgSlug, dsSlug, Request.ContentLength, uploadId);
+        using var ctx = await _uploads.BeginAsync(orgSlug, dsSlug, Request.ContentLength, uploadId, ct: ct);
 
         // The same upload already went through (its response was lost): answer from its receipt
         if (ctx.Receipt?.Results is { Count: > 0 } done)
@@ -105,7 +106,7 @@ public class ObjectUploadsController : ControllerBaseEx
                 {
                     // Refuse a destination before its first byte is written
                     if (part.Path != null) _uploads.ValidatePath(ctx, part.Path);
-                    return await _uploads.StreamAsync(ctx, part.Body, HttpContext.RequestAborted);
+                    return await _uploads.StreamAsync(ctx, part.Body, ct);
                 }, _uploads.Discard);
         }
         catch (Exception ex)
@@ -119,7 +120,7 @@ public class ObjectUploadsController : ControllerBaseEx
         if (form.Files.Count == 0)
         {
             // No file part: folder creation (path provided as a form field)
-            var folder = await _commands.CreateFolderAsync(orgSlug, dsSlug, form.GetField("path"));
+            var folder = await _commands.CreateFolderAsync(orgSlug, dsSlug, form.GetField("path"), ct: ct);
             return Created(orgSlug, dsSlug, folder);
         }
 
@@ -146,9 +147,9 @@ public class ObjectUploadsController : ControllerBaseEx
     [ProducesResponseType(typeof(UploadReceipt), StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUpload([FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string dsSlug, [FromRoute, Required] string uploadId)
+        [FromRoute, Required] string dsSlug, [FromRoute, Required] string uploadId, CancellationToken ct)
     {
-        var receipt = await _uploads.GetReceiptAsync(orgSlug, dsSlug, uploadId);
+        var receipt = await _uploads.GetReceiptAsync(orgSlug, dsSlug, uploadId, ct: ct);
         Response.Headers.CacheControl = "no-store";
 
         return receipt switch
@@ -175,7 +176,7 @@ public class ObjectUploadsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status507InsufficientStorage)]
-    public async Task<IActionResult> PostChunk([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug)
+    public async Task<IActionResult> PostChunk([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
         if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType ?? string.Empty))
             throw new BadRequestException("Expected a multipart/form-data request");
@@ -185,7 +186,7 @@ public class ObjectUploadsController : ControllerBaseEx
             async part =>
             {
                 status = await _chunks.WriteChunkAsync(orgSlug, dsSlug, ChunkFields.ToDatasetChunk(part.Fields), part.Body,
-                    HttpContext.RequestAborted);
+                    ct);
                 return status;
             }, _ => { /* a chunk is stored by the chunk store, which owns it */ });
 
@@ -197,10 +198,10 @@ public class ObjectUploadsController : ControllerBaseEx
     [ProducesResponseType(typeof(ChunkStatusDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetChunks([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
-        [FromRoute, Required] string fileId)
+        [FromRoute, Required] string fileId, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        return Ok(await _chunks.GetStatusAsync(orgSlug, dsSlug, fileId));
+        return Ok(await _chunks.GetStatusAsync(orgSlug, dsSlug, fileId, ct: ct));
     }
 
     /// <summary>
@@ -211,8 +212,8 @@ public class ObjectUploadsController : ControllerBaseEx
     [ProducesResponseType(typeof(EntryDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CommitChunks([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
-        [FromRoute, Required] string fileId) =>
-        Created(orgSlug, dsSlug, await _chunks.CommitAsync(orgSlug, dsSlug, fileId));
+        [FromRoute, Required] string fileId, CancellationToken ct) =>
+        Created(orgSlug, dsSlug, await _chunks.CommitAsync(orgSlug, dsSlug, fileId, ct: ct));
 
     private IActionResult Respond(string orgSlug, string dsSlug, IReadOnlyList<UploadPartResultDto> results, bool bundle)
     {

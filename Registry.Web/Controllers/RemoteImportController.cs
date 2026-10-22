@@ -1,5 +1,6 @@
 #nullable enable
 using System.ComponentModel.DataAnnotations;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -37,9 +38,9 @@ public class RemoteImportController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> ImportDataset([FromBody] ImportDatasetRequestDto request)
+    public async Task<IActionResult> ImportDataset([FromBody] ImportDatasetRequestDto request, CancellationToken ct)
     {
-        var job = await _imports.StartAsync(request, HttpContext.RequestAborted);
+        var job = await _imports.StartAsync(request, ct);
         return Accepted(job.StatusUrl, job);
     }
 
@@ -54,9 +55,9 @@ public class RemoteImportController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> ImportOrganization([FromBody] ImportOrganizationRequestDto request)
+    public async Task<IActionResult> ImportOrganization([FromBody] ImportOrganizationRequestDto request, CancellationToken ct)
     {
-        var job = await _imports.StartAsync(request, HttpContext.RequestAborted);
+        var job = await _imports.StartAsync(request, ct);
         return Accepted(job.StatusUrl, job);
     }
 

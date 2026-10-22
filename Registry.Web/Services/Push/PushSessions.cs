@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -25,7 +26,7 @@ namespace Registry.Web.Services.Push;
 /// <summary>The start of a push: the dataset (created on a first push), the delta against the client stamp, the session the next steps continue.</summary>
 public interface IPushSessions
 {
-    Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp);
+    Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp, CancellationToken ct = default);
 }
 
 /// <summary>Default <see cref="IPushSessions"/> (RQ-12, out of <c>PushManager</c>).</summary>
@@ -50,9 +51,11 @@ public sealed class PushSessions : IPushSessions
         _logger = logger;
     }
 
-    public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp)
+    public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp,
+        CancellationToken ct = default)
     {
-        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, safe: true);
+        // Honoured while the target is looked up; a new dataset and the session are then written (RQ-13)
+        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, safe: true, ct: ct);
 
         var validateChecksum = false;
 

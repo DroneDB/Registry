@@ -1,5 +1,6 @@
 using System.IO;
 using System.Security.Claims;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -30,7 +31,7 @@ public class UploadProbeTests
             }
         };
 
-        var result = (await controller.Probe()).ShouldBeOfType<OkObjectResult>();
+        var result = (await controller.Probe(CancellationToken.None)).ShouldBeOfType<OkObjectResult>();
 
         var dto = result.Value.ShouldBeOfType<UploadProbeResultDto>();
         dto.Bytes.ShouldBe(size);

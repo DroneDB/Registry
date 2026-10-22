@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -25,9 +26,9 @@ namespace Registry.Web.Services.Push;
 /// <summary>The files and metadata of a push: streamed against the storage quota, checked against the hash of the delta, staged in the push folder.</summary>
 public interface IPushUploads
 {
-    Task<PushUpload> StreamUploadAsync(string orgSlug, string dsSlug, Stream source, long? expectedBytes);
-    Task UploadAsync(PushUpload upload, string path, string token);
-    Task SaveMeta(string orgSlug, string dsSlug, string token, string meta);
+    Task<PushUpload> StreamUploadAsync(string orgSlug, string dsSlug, Stream source, long? expectedBytes, CancellationToken ct = default);
+    Task UploadAsync(PushUpload upload, string path, string token, CancellationToken ct = default);
+    Task SaveMeta(string orgSlug, string dsSlug, string token, string meta, CancellationToken ct = default);
 }
 
 /// <summary>Default <see cref="IPushUploads"/> (RQ-12, out of <c>PushManager</c>).</summary>
@@ -53,9 +54,9 @@ public sealed class PushUploads : IPushUploads
     }
 
     public async Task<PushUpload> StreamUploadAsync(string orgSlug, string dsSlug, Stream source,
-        long? expectedBytes)
+        long? expectedBytes, CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
 
         // Reserved against one storage evaluation per window, as uploads are (the files of a push
         // add up): before writing when the size is known
@@ -90,9 +91,11 @@ public sealed class PushUploads : IPushUploads
         }
     }
 
-    public async Task UploadAsync(PushUpload upload, string path, string token)
+    public async Task UploadAsync(PushUpload upload, string path, string token, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(upload);
+        // Honoured until the file is staged (RQ-13)
+        ct.ThrowIfCancellationRequested();
 
         if (string.IsNullOrWhiteSpace(path))
             throw new BadRequestException("Path cannot be empty");
@@ -124,9 +127,9 @@ public sealed class PushUploads : IPushUploads
         await _sessionStore.MarkVerifiedAsync(baseTempFolder, path, expected, filePath);
     }
 
-    public async Task SaveMeta(string orgSlug, string dsSlug, string token, string meta)
+    public async Task SaveMeta(string orgSlug, string dsSlug, string token, string meta, CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
 
         var ddb = access.Ddb;
 

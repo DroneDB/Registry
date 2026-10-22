@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
@@ -45,7 +46,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(AuthenticateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Authenticate([FromForm] AuthenticateRequest model)
+    public async Task<IActionResult> Authenticate([FromForm] AuthenticateRequest model, CancellationToken ct)
     {
         if (model == null)
             throw new BadRequestException("No auth data provided");
@@ -83,7 +84,7 @@ public class UsersController : ControllerBaseEx
     [HttpPost("authenticate/refresh", Name = nameof(Refresh))]
     [ProducesResponseType(typeof(AuthenticateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Refresh()
+    public async Task<IActionResult> Refresh(CancellationToken ct)
     {
         var res = await _usersManager.Refresh();
 
@@ -103,7 +104,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest model)
+    public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest model, CancellationToken ct)
     {
         if (model == null)
             throw new BadRequestException("No user data provided");
@@ -125,7 +126,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> ChangePasswordPost(
         [FromForm, Required] string oldPassword,
-        [FromForm, Required] string newPassword)
+        [FromForm, Required] string newPassword, CancellationToken ct)
     {
         var res = await _usersManager.ChangePassword(oldPassword, newPassword);
         var auth = await _usersManager.Authenticate(res.UserName, res.Password);
@@ -145,7 +146,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> ChangePassword(
         [FromRoute, Required] string userName,
-        [FromBody, Required] ChangeUserPasswordRequestDto model)
+        [FromBody, Required] ChangeUserPasswordRequestDto model, CancellationToken ct)
     {
         if (model == null)
             throw new BadRequestException("No user data provided");
@@ -171,7 +172,7 @@ public class UsersController : ControllerBaseEx
     public async Task<IActionResult> DeleteUserRoute(
         [FromRoute, Required] string userName,
         [FromQuery] string successor = null,
-        [FromQuery] ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.Rename)
+        [FromQuery] ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.Rename, CancellationToken ct = default)
     {
         var result = await _usersManager.DeleteUser(userName, successor, conflictResolution);
 
@@ -186,9 +187,9 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(string[]), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetRoles()
+    public async Task<IActionResult> GetRoles(CancellationToken ct)
     {
-        var roles = await _usersManager.GetRoles();
+        var roles = await _usersManager.GetRoles(ct: ct);
 
         return Ok(roles);
     }
@@ -204,7 +205,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(DeleteUserResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> DeleteUser([FromForm, Required] DeleteUserDto model)
+    public async Task<IActionResult> DeleteUser([FromForm, Required] DeleteUserDto model, CancellationToken ct)
     {
         if (model == null)
             throw new BadRequestException("No user data provided");
@@ -223,9 +224,9 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(IEnumerable<UserDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(CancellationToken ct)
     {
-        var res = await _usersManager.GetAll();
+        var res = await _usersManager.GetAll(ct: ct);
 
         return Ok(res);
     }
@@ -239,9 +240,9 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(IEnumerable<UserDetailDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetAllDetailed()
+    public async Task<IActionResult> GetAllDetailed(CancellationToken ct)
     {
-        var res = await _usersManager.GetAllDetailed();
+        var res = await _usersManager.GetAllDetailed(ct: ct);
 
         return Ok(res);
     }
@@ -254,7 +255,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(UserStorageInfo), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetCurrentUserStorageInfo()
+    public async Task<IActionResult> GetCurrentUserStorageInfo(CancellationToken ct)
     {
         var res = await _usersManager.GetUserStorageInfo();
 
@@ -271,7 +272,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(UserStorageInfo), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetUserStorageInfo([FromRoute, Required] string userName)
+    public async Task<IActionResult> GetUserStorageInfo([FromRoute, Required] string userName, CancellationToken ct)
     {
         var res = await _usersManager.GetUserStorageInfo(userName);
 
@@ -286,7 +287,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(Dictionary<string, object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetCurrentUserMeta()
+    public async Task<IActionResult> GetCurrentUserMeta(CancellationToken ct)
     {
         var meta = await _usersManager.GetUserMeta();
 
@@ -303,7 +304,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(Dictionary<string, object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetUserMeta([FromRoute, Required] string userName)
+    public async Task<IActionResult> GetUserMeta([FromRoute, Required] string userName, CancellationToken ct)
     {
         var meta = await _usersManager.GetUserMeta(userName);
 
@@ -323,7 +324,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> SetUserMeta(
         [FromRoute, Required] string userName,
-        [FromBody, Required] Dictionary<string, object> meta)
+        [FromBody, Required] Dictionary<string, object> meta, CancellationToken ct)
     {
         await _usersManager.SetUserMeta(userName, meta);
 
@@ -342,9 +343,9 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(UserOrganizationMembershipDto[]), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetOrganizations([FromRoute, Required] string userName)
+    public async Task<IActionResult> GetOrganizations([FromRoute, Required] string userName, CancellationToken ct)
     {
-        var organizations = await _usersManager.GetUserOrganizations(userName);
+        var organizations = await _usersManager.GetUserOrganizations(userName, ct: ct);
 
         return Ok(organizations);
     }
@@ -362,7 +363,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> AddUserToOrganization(
         [FromRoute, Required] string userName,
-        [FromBody, Required] AddUserToOrganizationDto request)
+        [FromBody, Required] AddUserToOrganizationDto request, CancellationToken ct)
     {
         await _usersManager.AddUserToOrganization(userName, request.OrgSlug, request.Permissions);
 
@@ -384,7 +385,7 @@ public class UsersController : ControllerBaseEx
     public async Task<IActionResult> UpdateUserOrganizationPermissions(
         [FromRoute, Required] string userName,
         [FromRoute, Required] string orgSlug,
-        [FromBody, Required] UpdateMemberPermissionsDto request)
+        [FromBody, Required] UpdateMemberPermissionsDto request, CancellationToken ct)
     {
         await _usersManager.UpdateUserOrganizationPermissions(userName, orgSlug, request.Permissions);
 
@@ -404,7 +405,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> RemoveUserFromOrganization(
         [FromRoute, Required] string userName,
-        [FromRoute, Required] string orgSlug)
+        [FromRoute, Required] string orgSlug, CancellationToken ct)
     {
         await _usersManager.RemoveUserFromOrganization(userName, orgSlug);
 
@@ -425,7 +426,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> CreateRole([FromBody, Required] CreateRoleRequestDto request)
+    public async Task<IActionResult> CreateRole([FromBody, Required] CreateRoleRequestDto request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.RoleName))
             throw new BadRequestException("Role name is required");
@@ -445,7 +446,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> DeleteRole([FromRoute, Required] string roleName)
+    public async Task<IActionResult> DeleteRole([FromRoute, Required] string roleName, CancellationToken ct)
     {
         await _usersManager.DeleteRole(roleName);
 
@@ -465,7 +466,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> UpdateUser(
         [FromRoute, Required] string userName,
-        [FromBody, Required] EditUserRequestDto request)
+        [FromBody, Required] EditUserRequestDto request, CancellationToken ct)
     {
         await _usersManager.UpdateUser(userName, request.Email);
         await _usersManager.UpdateUserRoles(userName, request.Roles);

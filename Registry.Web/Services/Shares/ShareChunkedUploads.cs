@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -24,8 +25,8 @@ namespace Registry.Web.Services.Shares;
 /// <summary>The large files of a share batch, in chunks: written at their offsets next to the dataset, taken by a rename when complete.</summary>
 public interface IShareChunkedUploads
 {
-    Task<ChunkUploadResultDto> UploadChunk(string token, ChunkUploadDto chunkInfo, Stream chunkStream);
-    Task<UploadResultDto> FinalizeChunkedUpload(string token, string fileId, string path);
+    Task<ChunkUploadResultDto> UploadChunk(string token, ChunkUploadDto chunkInfo, Stream chunkStream, CancellationToken ct = default);
+    Task<UploadResultDto> FinalizeChunkedUpload(string token, string fileId, string path, CancellationToken ct = default);
 }
 
 /// <summary>Default <see cref="IShareChunkedUploads"/> (RQ-12, out of <c>ShareManager</c>).</summary>
@@ -50,7 +51,8 @@ public sealed class ShareChunkedUploads : IShareChunkedUploads
         _logger = logger;
     }
 
-    public async Task<ChunkUploadResultDto> UploadChunk(string token, ChunkUploadDto chunkInfo, Stream chunkStream)
+    public async Task<ChunkUploadResultDto> UploadChunk(string token, ChunkUploadDto chunkInfo, Stream chunkStream,
+        CancellationToken ct = default)
     {
         // Validate input parameters
         if (string.IsNullOrWhiteSpace(token))
@@ -66,10 +68,10 @@ public sealed class ShareChunkedUploads : IShareChunkedUploads
             throw new BadRequestException("Missing path");
 
         // Verify the batch is valid and running
-        var batch = await _batches.GetRunningAsync(token);
+        var batch = await _batches.GetRunningAsync(token, ct);
 
         // Check if path is allowed for this batch
-        if (!await _batches.IsPathAllowedAsync(token, chunkInfo.Path))
+        if (!await _batches.IsPathAllowedAsync(token, chunkInfo.Path, ct))
             throw new BadRequestException($"Path '{chunkInfo.Path}' is not allowed in this batch");
 
         var root = ChunksRoot(batch);
@@ -100,7 +102,8 @@ public sealed class ShareChunkedUploads : IShareChunkedUploads
         };
     }
 
-    public async Task<UploadResultDto> FinalizeChunkedUpload(string token, string fileId, string path)
+    public async Task<UploadResultDto> FinalizeChunkedUpload(string token, string fileId, string path,
+        CancellationToken ct = default)
     {
         // Validate parameters
         if (string.IsNullOrWhiteSpace(token))
@@ -113,7 +116,7 @@ public sealed class ShareChunkedUploads : IShareChunkedUploads
             throw new BadRequestException("Missing path");
 
         // Verify the batch is valid and running
-        var batch = await _batches.GetRunningAsync(token);
+        var batch = await _batches.GetRunningAsync(token, ct);
 
         // Verify the path is not already used
         if (batch.Entries.Any(item => item.Path == path))

@@ -15,6 +15,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.WebUtilities;
@@ -62,9 +63,9 @@ public class ShareController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Init([FromForm, Required] ShareInitDto parameters)
+    public async Task<IActionResult> Init([FromForm, Required] ShareInitDto parameters, CancellationToken ct)
     {
-        var initRes = await _shareManager.Initialize(parameters);
+        var initRes = await _shareManager.Initialize(parameters, ct: ct);
 
         return Ok(initRes);
     }
@@ -79,9 +80,9 @@ public class ShareController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Info([FromRoute, Required] string token)
+    public async Task<IActionResult> Info([FromRoute, Required] string token, CancellationToken ct)
     {
-        var res = await _shareManager.GetBatchInfo(token);
+        var res = await _shareManager.GetBatchInfo(token, ct: ct);
 
         return Ok(res);
     }
@@ -101,13 +102,13 @@ public class ShareController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Upload([FromRoute, Required] string token)
+    public async Task<IActionResult> Upload([FromRoute, Required] string token, CancellationToken ct)
     {
         if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType))
             throw new BadRequestException("Expected a multipart/form-data request");
 
         // Resolve the dataset target so the file can be streamed straight onto its storage volume
-        var (orgSlug, dsSlug) = await _shareManager.GetUploadTarget(token);
+        var (orgSlug, dsSlug) = await _shareManager.GetUploadTarget(token, ct: ct);
 
         StreamedFile file = null;
         var form = await MultipartRequestHelper.ReadSingleFileFormAsync(Request,
@@ -123,7 +124,7 @@ public class ShareController : ControllerBaseEx
             throw new BadRequestException("No file uploaded");
 
 
-        var res = await _shareManager.UploadStreamed(token, path, file);
+        var res = await _shareManager.UploadStreamed(token, path, file, ct: ct);
         return Ok(res);
     }
 
@@ -137,9 +138,9 @@ public class ShareController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Commit([FromRoute, Required] string token)
+    public async Task<IActionResult> Commit([FromRoute, Required] string token, CancellationToken ct)
     {
-        var res = await _shareManager.Commit(token);
+        var res = await _shareManager.Commit(token, ct: ct);
 
         return Ok(res);
     }
@@ -154,9 +155,9 @@ public class ShareController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Rollback([FromRoute, Required] string token)
+    public async Task<IActionResult> Rollback([FromRoute, Required] string token, CancellationToken ct)
     {
-        await _shareManager.Rollback(token);
+        await _shareManager.Rollback(token, ct: ct);
 
         return Ok();
     }
@@ -179,7 +180,7 @@ public class ShareController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UploadChunked([FromRoute, Required] string token)
+    public async Task<IActionResult> UploadChunked([FromRoute, Required] string token, CancellationToken ct)
     {
         if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType))
             throw new BadRequestException("Expected a multipart/form-data request");
@@ -190,7 +191,7 @@ public class ShareController : ControllerBaseEx
             async part =>
             {
                 chunkInfo = ChunkFields.ToShareChunk(part.Fields);
-                result = await _shareManager.UploadChunk(token, chunkInfo, part.Body);
+                result = await _shareManager.UploadChunk(token, chunkInfo, part.Body, ct: ct);
                 return result;
             }, _ => { /* a chunk is stored by the chunk store, which owns it */ });
 
@@ -200,7 +201,7 @@ public class ShareController : ControllerBaseEx
         if (result.IsComplete)
         {
             _logger.LogInformation("All chunks received for file {FileName}, finalizing upload", chunkInfo.FileName);
-            return Ok(await _shareManager.FinalizeChunkedUpload(token, chunkInfo.FileId, chunkInfo.Path));
+            return Ok(await _shareManager.FinalizeChunkedUpload(token, chunkInfo.FileId, chunkInfo.Path, ct: ct));
         }
 
         return Ok(result);

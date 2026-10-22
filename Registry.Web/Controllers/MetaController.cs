@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -51,9 +52,9 @@ public class MetaController : ControllerBaseEx
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string key,
         [FromBody] string data,
-        [FromQuery] string path = null)
+        [FromQuery] string path = null, CancellationToken ct = default)
     {
-        var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path);
+        var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path, ct: ct);
 
         return Ok(res);
     }
@@ -82,13 +83,13 @@ public class MetaController : ControllerBaseEx
         [FromForm] string data,
         [FromForm(Name = "path")] string pathFromForm = null,
         [FromQuery(Name = "path")] string pathFromQuery = null,
-        [FromQuery(Name = "key")] string keyFromQuery = null)
+        [FromQuery(Name = "key")] string keyFromQuery = null, CancellationToken ct = default)
     {
         // C# magics, precedence to form parameter
         var path = pathFromForm ?? pathFromQuery;
         var key = keyFromForm ?? keyFromQuery;
 
-        var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path);
+        var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path, ct: ct);
 
         return Ok(res);
     }
@@ -112,9 +113,9 @@ public class MetaController : ControllerBaseEx
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string key,
         [FromBody] string data,
-        [FromQuery] string path = null)
+        [FromQuery] string path = null, CancellationToken ct = default)
     {
-        var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path);
+        var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path, ct: ct);
 
         return Ok(res);
     }
@@ -143,13 +144,13 @@ public class MetaController : ControllerBaseEx
         [FromForm] string data,
         [FromForm(Name = "path")] string pathFromForm = null,
         [FromQuery(Name = "path")] string pathFromQuery = null,
-        [FromQuery(Name = "key")] string keyFromQuery = null)
+        [FromQuery(Name = "key")] string keyFromQuery = null, CancellationToken ct = default)
     {
         // C# magics, precedence to form parameter
         var path = pathFromForm ?? pathFromQuery;
         var key = keyFromForm ?? keyFromQuery;
 
-        var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path);
+        var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path, ct: ct);
 
         return Ok(res);
     }
@@ -169,9 +170,9 @@ public class MetaController : ControllerBaseEx
     public async Task<IActionResult> Remove(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromRoute, Required] string id)
+        [FromRoute, Required] string id, CancellationToken ct)
     {
-        var res = await _metaManager.Remove(orgSlug, dsSlug, id);
+        var res = await _metaManager.Remove(orgSlug, dsSlug, id, ct: ct);
 
         return Ok(new RemoveResponse(res));
     }
@@ -192,9 +193,9 @@ public class MetaController : ControllerBaseEx
     public async Task<IActionResult> RemoveAlt(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromForm, Required] string id)
+        [FromForm, Required] string id, CancellationToken ct)
     {
-        var res = await _metaManager.Remove(orgSlug, dsSlug, id);
+        var res = await _metaManager.Remove(orgSlug, dsSlug, id, ct: ct);
 
         return Ok(new RemoveResponse(res));
     }
@@ -216,9 +217,9 @@ public class MetaController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string key,
-        [FromQuery] string path = null)
+        [FromQuery] string path = null, CancellationToken ct = default)
     {
-        var res = await _metaManager.Unset(orgSlug, dsSlug, key, path);
+        var res = await _metaManager.Unset(orgSlug, dsSlug, key, path, ct: ct);
 
         return Ok(new RemoveResponse(res));
     }
@@ -245,13 +246,13 @@ public class MetaController : ControllerBaseEx
         [FromForm(Name = "key")] string keyFromForm,
         [FromForm(Name = "path")] string pathFromForm = null,
         [FromQuery(Name = "path")] string pathFromQuery = null,
-        [FromQuery(Name = "key")] string keyFromQuery = null)
+        [FromQuery(Name = "key")] string keyFromQuery = null, CancellationToken ct = default)
     {
         // C# magics, precedence to form parameter
         var path = pathFromForm ?? pathFromQuery;
         var key = keyFromForm ?? keyFromQuery;
 
-        var res = await _metaManager.Unset(orgSlug, dsSlug, key, path);
+        var res = await _metaManager.Unset(orgSlug, dsSlug, key, path, ct: ct);
 
         return Ok(new RemoveResponse(res));
     }
@@ -271,9 +272,9 @@ public class MetaController : ControllerBaseEx
     public async Task<IActionResult> List(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromQuery] string path = null)
+        [FromQuery] string path = null, CancellationToken ct = default)
     {
-        var res = await _metaManager.List(orgSlug, dsSlug, path);
+        var res = await _metaManager.List(orgSlug, dsSlug, path, ct: ct);
 
         return Ok(res);
     }
@@ -295,9 +296,9 @@ public class MetaController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string key,
-        [FromQuery] string path = null)
+        [FromQuery] string path = null, CancellationToken ct = default)
     {
-        var res = await _metaManager.Get(orgSlug, dsSlug, key, path);
+        var res = await _metaManager.Get(orgSlug, dsSlug, key, path, ct: ct);
 
         return Ok(res);
     }
@@ -318,9 +319,9 @@ public class MetaController : ControllerBaseEx
     public async Task<IActionResult> Dump(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromForm] string ids = null)
+        [FromForm] string ids = null, CancellationToken ct = default)
     {
-        var res = await _metaManager.Dump(orgSlug, dsSlug, ids);
+        var res = await _metaManager.Dump(orgSlug, dsSlug, ids, ct: ct);
 
         return Ok(res);
     }

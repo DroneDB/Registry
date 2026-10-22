@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -24,10 +25,10 @@ namespace Registry.Web.Services.Shares;
 /// <summary>The files of a share batch, in one request: added through the upload pipeline, recorded on the batch.</summary>
 public interface IShareUploads
 {
-    Task<UploadResultDto> Upload(string token, string path, byte[] data);
-    Task<UploadResultDto> Upload(string token, string path, Stream stream);
-    Task<(string OrgSlug, string DsSlug)> GetUploadTarget(string token);
-    Task<UploadResultDto> UploadStreamed(string token, string path, StreamedFile file);
+    Task<UploadResultDto> Upload(string token, string path, byte[] data, CancellationToken ct = default);
+    Task<UploadResultDto> Upload(string token, string path, Stream stream, CancellationToken ct = default);
+    Task<(string OrgSlug, string DsSlug)> GetUploadTarget(string token, CancellationToken ct = default);
+    Task<UploadResultDto> UploadStreamed(string token, string path, StreamedFile file, CancellationToken ct = default);
 }
 
 /// <summary>Default <see cref="IShareUploads"/> (RQ-12, out of <c>ShareManager</c>).</summary>
@@ -48,13 +49,13 @@ public sealed class ShareUploads : IShareUploads
         _logger = logger;
     }
 
-    public async Task<UploadResultDto> Upload(string token, string path, byte[] data)
+    public async Task<UploadResultDto> Upload(string token, string path, byte[] data, CancellationToken ct = default)
     {
         await using var stream = new MemoryStream(data);
-        return await Upload(token, path, stream);
+        return await Upload(token, path, stream, ct);
     }
 
-    public async Task<UploadResultDto> Upload(string token, string path, Stream stream)
+    public async Task<UploadResultDto> Upload(string token, string path, Stream stream, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(path))
             throw new BadRequestException("Missing path");
@@ -65,7 +66,7 @@ public sealed class ShareUploads : IShareUploads
         if (!stream.CanRead)
             throw new BadRequestException("Cannot read from data stream");
 
-        var batch = await _batches.GetRunningAsync(token);
+        var batch = await _batches.GetRunningAsync(token, ct);
 
         // Check if user has enough space to upload this
         await _quota.CheckCurrentUserStorage(stream.Length);
@@ -89,9 +90,9 @@ public sealed class ShareUploads : IShareUploads
     /// </summary>
     /// <param name="token">The share batch token.</param>
     /// <returns>The organization and dataset slugs of the running batch.</returns>
-    public async Task<(string OrgSlug, string DsSlug)> GetUploadTarget(string token)
+    public async Task<(string OrgSlug, string DsSlug)> GetUploadTarget(string token, CancellationToken ct = default)
     {
-        var batch = await _batches.GetRunningAsync(token);
+        var batch = await _batches.GetRunningAsync(token, ct);
         return (batch.Dataset.Organization.Slug, batch.Dataset.Slug);
     }
 
@@ -103,7 +104,8 @@ public sealed class ShareUploads : IShareUploads
     /// <param name="path">The destination path within the dataset.</param>
     /// <param name="file">The temp file produced by <c>IObjectsManager.StreamToTempAsync</c>.</param>
     /// <returns>The upload result.</returns>
-    public async Task<UploadResultDto> UploadStreamed(string token, string path, StreamedFile file)
+    public async Task<UploadResultDto> UploadStreamed(string token, string path, StreamedFile file,
+        CancellationToken ct = default)
     {
         var tempFilePath = file.TempPath;
         try
@@ -111,7 +113,7 @@ public sealed class ShareUploads : IShareUploads
             if (string.IsNullOrWhiteSpace(path))
                 throw new BadRequestException("Missing path");
 
-            var batch = await _batches.GetRunningAsync(token);
+            var batch = await _batches.GetRunningAsync(token, ct);
 
             if (batch.Entries.Any(item => item.Path == path))
                 throw new BadRequestException("Entry already uploaded");

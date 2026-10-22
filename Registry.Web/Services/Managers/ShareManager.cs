@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -28,32 +29,32 @@ public class ShareManager : IShareManager
         _chunked = chunked;
     }
 
-    public Task<BatchDto> GetBatchInfo(string token) => _store.GetBatchInfo(token);
+    public Task<BatchDto> GetBatchInfo(string token, CancellationToken ct = default) => _store.GetBatchInfo(token, ct: ct);
 
-    public Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug) => _store.ListBatches(orgSlug, dsSlug);
+    public Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug, CancellationToken ct = default) => _store.ListBatches(orgSlug, dsSlug, ct: ct);
 
-    public Task<bool> IsPathAllowed(string token, string path) => _store.IsPathAllowedAsync(token, path);
+    public Task<bool> IsPathAllowed(string token, string path, CancellationToken ct = default) => _store.IsPathAllowedAsync(token, path, ct: ct);
 
-    public Task<IsBatchReadyResult> IsBatchReady(string token) => _store.IsReadyAsync(token);
+    public Task<IsBatchReadyResult> IsBatchReady(string token, CancellationToken ct = default) => _store.IsReadyAsync(token, ct: ct);
 
-    public Task<ShareInitResultDto> Initialize(ShareInitDto parameters) => _batches.Initialize(parameters);
+    public Task<ShareInitResultDto> Initialize(ShareInitDto parameters, CancellationToken ct = default) => _batches.Initialize(parameters, ct: ct);
 
-    public Task<CommitResultDto> Commit(string token) => _batches.Commit(token);
+    public Task<CommitResultDto> Commit(string token, CancellationToken ct = default) => _batches.Commit(token, ct: ct);
 
-    public Task Rollback(string token) => _batches.Rollback(token);
+    public Task Rollback(string token, CancellationToken ct = default) => _batches.Rollback(token, ct: ct);
 
-    public Task<UploadResultDto> Upload(string token, string path, byte[] data) => _uploads.Upload(token, path, data);
+    public Task<UploadResultDto> Upload(string token, string path, byte[] data, CancellationToken ct = default) => _uploads.Upload(token, path, data, ct: ct);
 
-    public Task<UploadResultDto> Upload(string token, string path, Stream stream) => _uploads.Upload(token, path, stream);
+    public Task<UploadResultDto> Upload(string token, string path, Stream stream, CancellationToken ct = default) => _uploads.Upload(token, path, stream, ct: ct);
 
-    public Task<(string OrgSlug, string DsSlug)> GetUploadTarget(string token) => _uploads.GetUploadTarget(token);
+    public Task<(string OrgSlug, string DsSlug)> GetUploadTarget(string token, CancellationToken ct = default) => _uploads.GetUploadTarget(token, ct: ct);
 
-    public Task<UploadResultDto> UploadStreamed(string token, string path, StreamedFile file) =>
-        _uploads.UploadStreamed(token, path, file);
+    public Task<UploadResultDto> UploadStreamed(string token, string path, StreamedFile file, CancellationToken ct = default) =>
+        _uploads.UploadStreamed(token, path, file, ct: ct);
 
-    public Task<ChunkUploadResultDto> UploadChunk(string token, ChunkUploadDto chunkInfo, Stream chunkStream) =>
-        _chunked.UploadChunk(token, chunkInfo, chunkStream);
+    public Task<ChunkUploadResultDto> UploadChunk(string token, ChunkUploadDto chunkInfo, Stream chunkStream, CancellationToken ct = default) =>
+        _chunked.UploadChunk(token, chunkInfo, chunkStream, ct: ct);
 
-    public Task<UploadResultDto> FinalizeChunkedUpload(string token, string fileId, string path) =>
-        _chunked.FinalizeChunkedUpload(token, fileId, path);
+    public Task<UploadResultDto> FinalizeChunkedUpload(string token, string fileId, string path, CancellationToken ct = default) =>
+        _chunked.FinalizeChunkedUpload(token, fileId, path, ct: ct);
 }

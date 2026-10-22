@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
@@ -19,7 +20,8 @@ public sealed class CadCrsManager(
     IObjectsManager objectsManager,
     ILogger<CadCrsManager> logger) : ICadCrsManager
 {
-    public async Task<EntryDto> SetAsync(string orgSlug, string dsSlug, string path, string crs)
+    public async Task<EntryDto> SetAsync(string orgSlug, string dsSlug, string path, string crs,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(path))
             throw new BadRequestException("Missing path");
@@ -28,7 +30,8 @@ public sealed class CadCrsManager(
         if (Path.GetExtension(path).ToLowerInvariant() is not (".dxf" or ".dwg"))
             throw new BadRequestException("Only CAD drawings (.dxf, .dwg) take a coordinate system");
 
-        var ddb = (await access.ResolveAsync(orgSlug, dsSlug, AccessType.Write)).Ddb;
+        // The token is honoured until the change starts: the access check (RQ-13)
+        var ddb = (await access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct)).Ddb;
 
         var entry = ddb.GetEntry(path)
                     ?? throw new NotFoundException($"Cannot find '{path}'");

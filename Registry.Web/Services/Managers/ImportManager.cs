@@ -74,9 +74,9 @@ public class ImportManager : IImportManager
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<string>> GetAvailableSourceTypes(string orgSlug)
+    public async Task<IReadOnlyList<string>> GetAvailableSourceTypes(string orgSlug, CancellationToken ct = default)
     {
-        await RequireImportAccess(orgSlug, CancellationToken.None);
+        await RequireImportAccess(orgSlug, ct);
         return [.. _factory.AvailableTypes.Where(IsSourceAllowed)];
     }
 

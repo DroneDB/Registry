@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -24,9 +25,9 @@ namespace Registry.Web.Services.Shares;
 /// <summary>The life of a share batch: its start (on the dataset <see cref="IShareTargets"/> resolves), its commit, its rollback.</summary>
 public interface IShareBatches
 {
-    Task<ShareInitResultDto> Initialize(ShareInitDto parameters);
-    Task<CommitResultDto> Commit(string token);
-    Task Rollback(string token);
+    Task<ShareInitResultDto> Initialize(ShareInitDto parameters, CancellationToken ct = default);
+    Task<CommitResultDto> Commit(string token, CancellationToken ct = default);
+    Task Rollback(string token, CancellationToken ct = default);
 }
 
 /// <summary>Default <see cref="IShareBatches"/> (RQ-12, out of <c>ShareManager</c>).</summary>
@@ -49,7 +50,7 @@ public sealed class ShareBatches : IShareBatches
         _logger = logger;
     }
 
-    public async Task<ShareInitResultDto> Initialize(ShareInitDto parameters)
+    public async Task<ShareInitResultDto> Initialize(ShareInitDto parameters, CancellationToken ct = default)
     {
         if (parameters == null)
             throw new BadRequestException("Invalid parameters");
@@ -61,6 +62,8 @@ public sealed class ShareBatches : IShareBatches
         // Check if user has enough space to upload any file
         await _quota.CheckCurrentUserStorage();
 
+        // Honoured until the target (which may be a new dataset) and the batch are written (RQ-13)
+        ct.ThrowIfCancellationRequested();
         var dataset = await _targets.ResolveAsync(parameters, currentUser);
         var batch = await _batches.StartAsync(dataset);
 
@@ -70,9 +73,9 @@ public sealed class ShareBatches : IShareBatches
         };
     }
 
-    public async Task<CommitResultDto> Commit(string token)
+    public async Task<CommitResultDto> Commit(string token, CancellationToken ct = default)
     {
-        var batch = await _batches.GetRunningAsync(token);
+        var batch = await _batches.GetRunningAsync(token, ct);
 
         _logger.LogInformation("Committing batch '{Token}' @ {BatchEndDate} {BatchEndTime}", token,
             batch.End?.ToLongDateString(), batch.End?.ToLongTimeString());
@@ -89,9 +92,9 @@ public sealed class ShareBatches : IShareBatches
         };
     }
 
-    public async Task Rollback(string token)
+    public async Task Rollback(string token, CancellationToken ct = default)
     {
-        var batch = await _batches.GetRunningAsync(token);
+        var batch = await _batches.GetRunningAsync(token, ct);
 
         _logger.LogInformation("Rolling back  batch '{Token}'", token);
 

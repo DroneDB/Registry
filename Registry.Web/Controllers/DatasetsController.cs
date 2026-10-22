@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -53,9 +54,9 @@ public class DatasetsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBatches(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string dsSlug)
+        [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
-        var lst = await _shareManager.ListBatches(orgSlug, dsSlug);
+        var lst = await _shareManager.ListBatches(orgSlug, dsSlug, ct: ct);
 
         return Ok(lst);
 
@@ -73,15 +74,15 @@ public class DatasetsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetAll([FromRoute, Required] string orgSlug, [FromQuery] bool includeThumbnailCheck = false,
         [FromQuery] int? skip = null, [FromQuery] int? take = null, [FromQuery] string q = null,
-        [FromQuery] string sort = null, [FromQuery] bool desc = false, [FromQuery] string slugs = null)
+        [FromQuery] string sort = null, [FromQuery] bool desc = false, [FromQuery] string slugs = null, CancellationToken ct = default)
     {
         // Without paging parameters: the whole list, as before
         if (skip == null && take == null && q == null && sort == null && slugs == null)
-            return Ok(await _datasetsManager.List(orgSlug, includeThumbnailCheck));
+            return Ok(await _datasetsManager.List(orgSlug, includeThumbnailCheck, ct: ct));
 
         var slugList = slugs?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var (items, total) = await _datasetsManager.ListPage(orgSlug,
-            new DatasetListQuery(skip ?? 0, take, q, sort, desc, slugList), includeThumbnailCheck);
+            new DatasetListQuery(skip ?? 0, take, q, sort, desc, slugList), includeThumbnailCheck, ct: ct);
         Response.Headers["X-Total-Count"] = total.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return Ok(items);
     }
@@ -99,9 +100,9 @@ public class DatasetsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string dsSlug)
+        [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
-        return Ok(await _datasetsManager.GetEntry(orgSlug, dsSlug));
+        return Ok(await _datasetsManager.GetEntry(orgSlug, dsSlug, ct: ct));
     }
 
     /// <summary>
@@ -117,9 +118,9 @@ public class DatasetsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetEx(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string dsSlug)
+        [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
-        return Ok(await _datasetsManager.Get(orgSlug, dsSlug));
+        return Ok(await _datasetsManager.Get(orgSlug, dsSlug, ct: ct));
     }
 
     /// <summary>
@@ -135,9 +136,9 @@ public class DatasetsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetStamp(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string dsSlug)
+        [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
-        return Ok(await _datasetsManager.GetStamp(orgSlug, dsSlug));
+        return Ok(await _datasetsManager.GetStamp(orgSlug, dsSlug, ct: ct));
     }
 
     /// <summary>
@@ -154,9 +155,9 @@ public class DatasetsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create(
         [FromRoute, Required] string orgSlug,
-        [FromForm, Required] DatasetNewDto dataset)
+        [FromForm, Required] DatasetNewDto dataset, CancellationToken ct)
     {
-        var newDs = await _datasetsManager.AddNew(orgSlug, dataset);
+        var newDs = await _datasetsManager.AddNew(orgSlug, dataset, ct: ct);
         return CreatedAtRoute(
             nameof(DatasetsController) + "." + nameof(Get),
             new { orgSlug = orgSlug, dsSlug = newDs.Slug }, newDs);
@@ -178,11 +179,11 @@ public class DatasetsController : ControllerBaseEx
     public async Task<IActionResult> Rename(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromForm(Name = "slug"), Required] string newSlug)
+        [FromForm(Name = "slug"), Required] string newSlug, CancellationToken ct)
     {
-        await _datasetsManager.Rename(orgSlug, dsSlug, newSlug);
+        await _datasetsManager.Rename(orgSlug, dsSlug, newSlug, ct: ct);
 
-        return Ok(await _datasetsManager.Get(orgSlug, newSlug));
+        return Ok(await _datasetsManager.Get(orgSlug, newSlug, ct: ct));
     }
 
     /// <summary>
@@ -200,7 +201,7 @@ public class DatasetsController : ControllerBaseEx
     public async Task<IActionResult> ChangeAttributes(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromForm(Name = "attrs")] string rawAttributes)
+        [FromForm(Name = "attrs")] string rawAttributes, CancellationToken ct)
     {
 
         var attributes = string.IsNullOrWhiteSpace(rawAttributes) ?
@@ -208,7 +209,7 @@ public class DatasetsController : ControllerBaseEx
             JsonConvert.DeserializeObject<AttributesDto>(rawAttributes);
 
 
-        var res = await _datasetsManager.ChangeAttributes(orgSlug, dsSlug, attributes);
+        var res = await _datasetsManager.ChangeAttributes(orgSlug, dsSlug, attributes, ct: ct);
 
         return Ok(res);
     }
@@ -228,9 +229,9 @@ public class DatasetsController : ControllerBaseEx
     public async Task<IActionResult> Update(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromForm] DatasetEditDto dataset)
+        [FromForm] DatasetEditDto dataset, CancellationToken ct)
     {
-        await _datasetsManager.Edit(orgSlug, dsSlug, dataset);
+        await _datasetsManager.Edit(orgSlug, dsSlug, dataset, ct: ct);
         return NoContent();
     }
 
@@ -247,9 +248,9 @@ public class DatasetsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string dsSlug)
+        [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
-        await _datasetsManager.Delete(orgSlug, dsSlug);
+        await _datasetsManager.Delete(orgSlug, dsSlug, ct: ct);
         return NoContent();
     }
 
@@ -273,10 +274,10 @@ public class DatasetsController : ControllerBaseEx
         [FromRoute, Required] string dsSlug,
         [FromQuery] string? types = null,
         [FromQuery] bool stopOnError = true,
-        [FromQuery] string? extensions = null)
+        [FromQuery] string? extensions = null, CancellationToken ct = default)
     {
         return Ok(await _rescanManager.RescanDatasetIndex(orgSlug, dsSlug,
-            new RescanOptions(types, extensions, stopOnError)));
+            new RescanOptions(types, extensions, stopOnError), ct: ct));
     }
 
 }

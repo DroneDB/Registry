@@ -29,7 +29,7 @@ public sealed class ChunkedUploadManager(IUploadManager uploads, IChunkStore sto
     public async Task<ChunkStatusDto> WriteChunkAsync(string orgSlug, string dsSlug, ChunkRequest chunk, Stream body,
         CancellationToken ct = default)
     {
-        using var ctx = await uploads.BeginAsync(orgSlug, dsSlug);
+        using var ctx = await uploads.BeginAsync(orgSlug, dsSlug, ct: ct);
         var root = ChunksRoot(ctx.Ddb);
         var manifest = new ChunkManifest(chunk.Path, chunk.TotalFileSize, chunk.TotalChunks, chunk.ChunkSize, ctx.User?.Id);
 
@@ -49,19 +49,22 @@ public sealed class ChunkedUploadManager(IUploadManager uploads, IChunkStore sto
         return ToDto(chunk.FileId, await store.WriteAsync(root, chunk.FileId, chunk.ChunkIndex, body, ct));
     }
 
-    public async Task<ChunkStatusDto> GetStatusAsync(string orgSlug, string dsSlug, string fileId)
+    public async Task<ChunkStatusDto> GetStatusAsync(string orgSlug, string dsSlug, string fileId,
+        CancellationToken ct = default)
     {
-        using var ctx = await uploads.BeginAsync(orgSlug, dsSlug);
+        using var ctx = await uploads.BeginAsync(orgSlug, dsSlug, ct: ct);
         var status = store.GetStatus(ChunksRoot(ctx.Ddb), fileId)
                      ?? throw new NotFoundException($"Unknown upload '{fileId}'");
         EnsureOwner(ctx, status.Manifest, fileId);
         return ToDto(fileId, status);
     }
 
-    public async Task<EntryDto> CommitAsync(string orgSlug, string dsSlug, string fileId)
+    public async Task<EntryDto> CommitAsync(string orgSlug, string dsSlug, string fileId,
+        CancellationToken ct = default)
     {
-        // Keyed by the file id: committing again (the response was lost) answers from the receipt
-        using var ctx = await uploads.BeginAsync(orgSlug, dsSlug, uploadId: fileId);
+        // Keyed by the file id: committing again (the response was lost) answers from the receipt. Honoured
+        // while the upload is resolved; the commit then runs to completion (RQ-13)
+        using var ctx = await uploads.BeginAsync(orgSlug, dsSlug, uploadId: fileId, ct: ct);
         if (ctx.Receipt?.Results is { Count: > 0 } done && done[0].Entry is { } entry)
             return entry;
 

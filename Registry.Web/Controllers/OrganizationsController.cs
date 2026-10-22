@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -43,9 +44,9 @@ public class OrganizationsController : ControllerBaseEx
     [ProducesResponseType(typeof(IEnumerable<OrganizationDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetAll([FromQuery] bool ownedOnly = false)
+    public async Task<IActionResult> GetAll([FromQuery] bool ownedOnly = false, CancellationToken ct = default)
     {
-        return Ok(await _organizationsManager.List(ownedOnly));
+        return Ok(await _organizationsManager.List(ownedOnly, ct: ct));
     }
 
     /// <summary>
@@ -56,9 +57,9 @@ public class OrganizationsController : ControllerBaseEx
     [AllowAnonymous]
     [ProducesResponseType(typeof(IEnumerable<OrganizationDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> GetAllPublic()
+    public async Task<IActionResult> GetAllPublic(CancellationToken ct)
     {
-        return Ok(await _organizationsManager.ListPublic());
+        return Ok(await _organizationsManager.ListPublic(ct: ct));
     }
 
     /// <summary>
@@ -71,9 +72,9 @@ public class OrganizationsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Get([FromRoute, Required] string orgSlug)
+    public async Task<IActionResult> Get([FromRoute, Required] string orgSlug, CancellationToken ct)
     {
-        return Ok(await _organizationsManager.Get(orgSlug));
+        return Ok(await _organizationsManager.Get(orgSlug, ct: ct));
 
     }
 
@@ -87,10 +88,10 @@ public class OrganizationsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Create([FromForm, Required] OrganizationDto organization)
+    public async Task<IActionResult> Create([FromForm, Required] OrganizationDto organization, CancellationToken ct)
     {
 
-        var newOrg = await _organizationsManager.AddNew(organization);
+        var newOrg = await _organizationsManager.AddNew(organization, ct: ct);
         return CreatedAtRoute(nameof(Get), new { orgSlug = newOrg.Slug },
             newOrg);
 
@@ -109,10 +110,10 @@ public class OrganizationsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(
         [FromRoute, Required] string orgSlug,
-        [FromForm, Required] OrganizationDto organization)
+        [FromForm, Required] OrganizationDto organization, CancellationToken ct)
     {
 
-        await _organizationsManager.Edit(orgSlug, organization);
+        await _organizationsManager.Edit(orgSlug, organization, ct: ct);
         return NoContent();
 
     }
@@ -127,10 +128,10 @@ public class OrganizationsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Delete([FromRoute, Required] string orgSlug)
+    public async Task<IActionResult> Delete([FromRoute, Required] string orgSlug, CancellationToken ct)
     {
 
-        await _organizationsManager.Delete(orgSlug);
+        await _organizationsManager.Delete(orgSlug, ct: ct);
         return NoContent();
 
     }
@@ -146,9 +147,9 @@ public class OrganizationsController : ControllerBaseEx
     [ProducesResponseType(typeof(IEnumerable<OrganizationMemberDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetMembers([FromRoute, Required] string orgSlug)
+    public async Task<IActionResult> GetMembers([FromRoute, Required] string orgSlug, CancellationToken ct)
     {
-        return Ok(await _organizationsManager.GetMembers(orgSlug));
+        return Ok(await _organizationsManager.GetMembers(orgSlug, ct: ct));
     }
 
     /// <summary>
@@ -166,9 +167,9 @@ public class OrganizationsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AddMember(
         [FromRoute, Required] string orgSlug,
-        [FromBody, Required] AddOrganizationMemberDto request)
+        [FromBody, Required] AddOrganizationMemberDto request, CancellationToken ct)
     {
-        await _organizationsManager.AddMember(orgSlug, request.UserName, request.Permissions);
+        await _organizationsManager.AddMember(orgSlug, request.UserName, request.Permissions, ct: ct);
         return NoContent();
     }
 
@@ -188,9 +189,9 @@ public class OrganizationsController : ControllerBaseEx
     public async Task<IActionResult> UpdateMemberPermission(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string userName,
-        [FromBody, Required] UpdateMemberPermissionsDto request)
+        [FromBody, Required] UpdateMemberPermissionsDto request, CancellationToken ct)
     {
-        await _organizationsManager.UpdateMemberPermission(orgSlug, userName, request.Permissions);
+        await _organizationsManager.UpdateMemberPermission(orgSlug, userName, request.Permissions, ct: ct);
         return NoContent();
     }
 
@@ -207,9 +208,9 @@ public class OrganizationsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveMember(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string userName)
+        [FromRoute, Required] string userName, CancellationToken ct)
     {
-        await _organizationsManager.RemoveMember(orgSlug, userName);
+        await _organizationsManager.RemoveMember(orgSlug, userName, ct: ct);
         return NoContent();
     }
 

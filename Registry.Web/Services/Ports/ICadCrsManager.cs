@@ -1,4 +1,5 @@
 #nullable enable
+using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Models.DTO;
 
@@ -15,5 +16,5 @@ public interface ICadCrsManager
     /// authority code ("EPSG:32632"), WKT or PROJ string, or "local" to keep it in drawing
     /// coordinates. Returns the .prj entry.
     /// </summary>
-    Task<EntryDto> SetAsync(string orgSlug, string dsSlug, string path, string crs);
+    Task<EntryDto> SetAsync(string orgSlug, string dsSlug, string path, string crs, CancellationToken ct = default);
 }

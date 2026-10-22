@@ -37,8 +37,8 @@ public class TasksController : ControllerBaseEx
 
     [HttpGet("tools", Name = nameof(TasksController) + "." + nameof(GetTools))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetTools([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug)
-        => Ok(await _tasksManager.GetToolsAsync(orgSlug, dsSlug));
+    public async Task<IActionResult> GetTools([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug, CancellationToken ct)
+        => Ok(await _tasksManager.GetToolsAsync(orgSlug, dsSlug, ct: ct));
 
     // ---- POST /tasks ------------------------------------------------------
 

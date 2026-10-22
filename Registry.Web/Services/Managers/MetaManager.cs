@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
@@ -48,9 +49,9 @@ public class MetaManager : IMetaManager
         }
     }
 
-    public async Task<MetaDto> Add(string orgSlug, string dsSlug, string key, string data, string path = null)
+    public async Task<MetaDto> Add(string orgSlug, string dsSlug, string key, string data, string path = null, CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
 
         _logger.LogInformation("In Add('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
@@ -68,9 +69,9 @@ public class MetaManager : IMetaManager
         return ddb.Meta.Add(key, data, path).ToDto();
     }
 
-    public async Task<MetaDto> Set(string orgSlug, string dsSlug, string key, string data, string path = null)
+    public async Task<MetaDto> Set(string orgSlug, string dsSlug, string key, string data, string path = null, CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
         var ds = access.Dataset;
 
         _logger.LogInformation("In Set('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
@@ -91,9 +92,9 @@ public class MetaManager : IMetaManager
         return result;
     }
 
-    public async Task<int> Remove(string orgSlug, string dsSlug, string id)
+    public async Task<int> Remove(string orgSlug, string dsSlug, string id, CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
 
         _logger.LogInformation("In Remove('{OrgSlug}/{DsSlug}', {Id})", orgSlug, dsSlug, id);
 
@@ -105,9 +106,9 @@ public class MetaManager : IMetaManager
         return ddb.Meta.Remove(id);
     }
 
-    public async Task<JToken> Get(string orgSlug, string dsSlug, string key, string path = null)
+    public async Task<JToken> Get(string orgSlug, string dsSlug, string key, string path = null, CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
 
         _logger.LogInformation("In Get('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
@@ -123,9 +124,9 @@ public class MetaManager : IMetaManager
 
     }
 
-    public async Task<int> Unset(string orgSlug, string dsSlug, string key, string path = null)
+    public async Task<int> Unset(string orgSlug, string dsSlug, string key, string path = null, CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
         var ds = access.Dataset;
 
         _logger.LogInformation("In Unset('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
@@ -144,9 +145,9 @@ public class MetaManager : IMetaManager
 
     }
 
-    public async Task<IEnumerable<MetaListItemDto>> List(string orgSlug, string dsSlug, string path = null)
+    public async Task<IEnumerable<MetaListItemDto>> List(string orgSlug, string dsSlug, string path = null, CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
 
         _logger.LogInformation("In List('{OrgSlug}/{DsSlug}', {Path})", orgSlug, dsSlug, path);
 
@@ -158,9 +159,9 @@ public class MetaManager : IMetaManager
         return ddb.Meta.List(path).Select(item => item.ToDto());
     }
 
-    public async Task<IEnumerable<MetaDumpDto>> Dump(string orgSlug, string dsSlug, string ids = null)
+    public async Task<IEnumerable<MetaDumpDto>> Dump(string orgSlug, string dsSlug, string ids = null, CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
 
         _logger.LogInformation("In Dump('{OrgSlug}/{DsSlug}', {Ids})", orgSlug, dsSlug, ids);
 

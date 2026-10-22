@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Registry.Common;
 using Registry.Web.Identity.Models;
@@ -55,7 +56,7 @@ public class UsersManager : IUsersManager
     public Task<ChangePasswordResult> ChangePassword(string currentPassword, string newPassword) =>
         _passwords.ChangePassword(currentPassword, newPassword);
 
-    public Task<string[]> GetRoles() => _roles.GetRoles();
+    public Task<string[]> GetRoles(CancellationToken ct = default) => _roles.GetRoles(ct: ct);
 
     public Task CreateRole(string roleName) => _roles.CreateRole(roleName);
 
@@ -63,14 +64,14 @@ public class UsersManager : IUsersManager
 
     public Task UpdateUserRoles(string userName, string[] roles) => _roles.UpdateUserRoles(userName, roles);
 
-    public Task<IEnumerable<UserDto>> GetAll() => _directory.GetAll();
+    public Task<IEnumerable<UserDto>> GetAll(CancellationToken ct = default) => _directory.GetAll(ct: ct);
 
-    public Task<IEnumerable<UserDetailDto>> GetAllDetailed() => _directory.GetAllDetailed();
+    public Task<IEnumerable<UserDetailDto>> GetAllDetailed(CancellationToken ct = default) => _directory.GetAllDetailed(ct: ct);
 
     public Task<UserStorageInfo> GetUserStorageInfo(string userName = null) => _directory.GetUserStorageInfo(userName);
 
-    public Task<UserOrganizationMembershipDto[]> GetUserOrganizations(string userName) =>
-        _directory.GetUserOrganizations(userName);
+    public Task<UserOrganizationMembershipDto[]> GetUserOrganizations(string userName, CancellationToken ct = default) =>
+        _directory.GetUserOrganizations(userName, ct: ct);
 
     public Task AddUserToOrganization(string userName, string orgSlug, OrganizationPermissions permissions) =>
         _directory.AddUserToOrganization(userName, orgSlug, permissions);

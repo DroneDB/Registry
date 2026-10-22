@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -47,7 +48,8 @@ public class RescanManager : IRescanManager
         _logger = logger;
     }
 
-    public async Task<RescanResultDto> RescanDatasetIndex(string orgSlug, string dsSlug, RescanOptions? options = null)
+    public async Task<RescanResultDto> RescanDatasetIndex(string orgSlug, string dsSlug, RescanOptions? options = null,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(orgSlug))
             throw new BadRequestException("Organization slug is required");
@@ -60,7 +62,7 @@ public class RescanManager : IRescanManager
 
         var dataset = await _context.Datasets
             .Include(d => d.Organization)
-            .FirstOrDefaultAsync(d => d.Organization.Slug == orgSlug && d.Slug == dsSlug);
+            .FirstOrDefaultAsync(d => d.Organization.Slug == orgSlug && d.Slug == dsSlug, ct);
 
         if (dataset == null)
             throw new BadRequestException($"Dataset '{orgSlug}/{dsSlug}' not found");

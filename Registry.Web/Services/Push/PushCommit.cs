@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -25,7 +26,7 @@ namespace Registry.Web.Services.Push;
 /// <summary>The end of a push: the delta applied if the dataset has not changed since its start, then the builds of the pushed files.</summary>
 public interface IPushCommit
 {
-    Task Commit(string orgSlug, string dsSlug, string token);
+    Task Commit(string orgSlug, string dsSlug, string token, CancellationToken ct = default);
 }
 
 /// <summary>Default <see cref="IPushCommit"/> (RQ-12, out of <c>PushManager</c>).</summary>
@@ -48,9 +49,10 @@ public sealed class PushCommit : IPushCommit
         _builds = builds;
     }
 
-    public async Task Commit(string orgSlug, string dsSlug, string token)
+    public async Task Commit(string orgSlug, string dsSlug, string token, CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        // Honoured while the dataset is resolved; the commit then runs to completion (RQ-13)
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
 
         var ddb = access.Ddb;
 

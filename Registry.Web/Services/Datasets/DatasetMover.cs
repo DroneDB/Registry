@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -26,7 +27,7 @@ namespace Registry.Web.Services.Datasets;
 public interface IDatasetMover
 {
     Task<IEnumerable<MoveDatasetResultDto>> MoveToOrganization(string sourceOrgSlug, string[] datasetSlugs,
-        string destOrgSlug, ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict);
+        string destOrgSlug, ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict, CancellationToken ct = default);
 }
 
 /// <summary>Default <see cref="IDatasetMover"/> (RQ-12, out of <c>DatasetsManager</c>).</summary>
@@ -55,7 +56,8 @@ public sealed class DatasetMover : IDatasetMover
         string sourceOrgSlug,
         string[] datasetSlugs,
         string destOrgSlug,
-        ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict)
+        ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(sourceOrgSlug))
             throw new BadRequestException("Source organization slug is required");
@@ -69,8 +71,9 @@ public sealed class DatasetMover : IDatasetMover
         if (sourceOrgSlug == destOrgSlug)
             throw new BadRequestException("Source and destination organizations cannot be the same");
 
-        var sourceOrg = await _datasets.GetOrganizationAsync(sourceOrgSlug, withTracking: true);
-        var destOrg = await _datasets.GetOrganizationAsync(destOrgSlug, withTracking: true);
+        // The token is honoured while the move is prepared; the per-dataset moves then run to completion (RQ-13)
+        var sourceOrg = await _datasets.GetOrganizationAsync(sourceOrgSlug, withTracking: true, ct: ct);
+        var destOrg = await _datasets.GetOrganizationAsync(destOrgSlug, withTracking: true, ct: ct);
 
         var results = new List<MoveDatasetResultDto>();
 
@@ -79,7 +82,7 @@ public sealed class DatasetMover : IDatasetMover
             .AsNoTracking()
             .Where(d => d.Organization.Slug == destOrgSlug)
             .Select(d => d.Slug)
-            .ToListAsync();
+            .ToListAsync(ct);
 
         foreach (var dsSlug in datasetSlugs)
         {

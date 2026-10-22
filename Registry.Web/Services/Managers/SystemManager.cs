@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -45,9 +46,11 @@ public class SystemManager : ISystemManager
         _logger = logger;
     }
 
-    public async Task<CleanupDatasetResultDto> CleanupEmptyDatasets()
+    // The maintenance commands honour the token while they select their targets; the per-dataset work then
+    // runs to completion (RQ-13): a disconnect never leaves one dataset half done
+    public async Task<CleanupDatasetResultDto> CleanupEmptyDatasets(CancellationToken ct = default)
     {
-        var datasets = _context.Datasets.Include(ds => ds.Organization).ToArray();
+        var datasets = await _context.Datasets.Include(ds => ds.Organization).ToArrayAsync(ct);
 
         _logger.LogInformation("Found {DatasetsCount} with objects count zero", datasets.Length);
 
@@ -92,11 +95,11 @@ public class SystemManager : ISystemManager
 
     }
 
-    public async Task<IEnumerable<MigrateVisibilityEntryDTO>> MigrateVisibility()
+    public async Task<IEnumerable<MigrateVisibilityEntryDTO>> MigrateVisibility(CancellationToken ct = default)
     {
 
-        var query = (from ds in _context.Datasets.Include(ds => ds.Organization)
-            select new { ds = ds.Slug, ds.InternalRef, Org = ds.Organization.Slug }).ToArray();
+        var query = await (from ds in _context.Datasets.Include(ds => ds.Organization)
+            select new { ds = ds.Slug, ds.InternalRef, Org = ds.Organization.Slug }).ToArrayAsync(ct);
 
         _logger.LogInformation("Migrating to visibility {DatasetsCount} datasets", query.Length);
 
@@ -133,19 +136,19 @@ public class SystemManager : ISystemManager
         return res;
     }
 
-    public async Task<CleanupBatchesResultDto> CleanupBatches()
+    public async Task<CleanupBatchesResultDto> CleanupBatches(CancellationToken ct = default)
     {
         // Batch entry times are UTC since RQ-10 (rows written before hold the server's local time)
         var expiration = _time.GetUtcNow().UtcDateTime - _share.UploadBatchTimeout;
 
         // I'm scared
-        var toRemove = (from batch in _context.Batches
+        var toRemove = await (from batch in _context.Batches
                 .Include(b => b.Dataset.Organization)
                 .Include(b => b.Entries)
             where batch.Status == BatchStatus.Committed ||
                   ((batch.Status == BatchStatus.Rolledback || batch.Status == BatchStatus.Running) &&
                    batch.Entries.Max(entry => entry.AddedOn) < expiration)
-            select batch).ToArray();
+            select batch).ToArrayAsync(ct);
 
         var removed = new List<RemovedBatchDto>();
         var errors = new List<RemoveBatchErrorDto>();

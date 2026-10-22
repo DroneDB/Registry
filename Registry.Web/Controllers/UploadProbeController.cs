@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -36,7 +37,7 @@ public class UploadProbeController : ControllerBaseEx
     [ProducesResponseType(typeof(UploadProbeResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
-    public async Task<IActionResult> Probe()
+    public async Task<IActionResult> Probe(CancellationToken ct)
     {
         var watch = Stopwatch.StartNew();
         var buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
@@ -44,7 +45,7 @@ public class UploadProbeController : ControllerBaseEx
         try
         {
             int read;
-            while ((read = await Request.Body.ReadAsync(buffer, HttpContext.RequestAborted)) > 0)
+            while ((read = await Request.Body.ReadAsync(buffer, ct)) > 0)
                 total += read;
         }
         finally

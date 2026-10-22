@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -25,13 +26,13 @@ namespace Registry.Web.Services.Datasets;
 /// <summary>The changes to a dataset by its writers: creation, edit, deletion, rename, the legacy public flag. Each renews the listings it changes.</summary>
 public interface IDatasetCommands
 {
-    Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset);
-    Task Edit(string orgSlug, string dsSlug, DatasetEditDto dataset);
-    Task Delete(string orgSlug, string dsSlug);
-    Task Rename(string orgSlug, string dsSlug, string newSlug);
+    Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset, CancellationToken ct = default);
+    Task Edit(string orgSlug, string dsSlug, DatasetEditDto dataset, CancellationToken ct = default);
+    Task Delete(string orgSlug, string dsSlug, CancellationToken ct = default);
+    Task Rename(string orgSlug, string dsSlug, string newSlug, CancellationToken ct = default);
 
     /// <summary>Sets the legacy public flag (use the dataset metadata).</summary>
-    Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, AttributesDto attributes);
+    Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, AttributesDto attributes, CancellationToken ct = default);
 }
 
 /// <summary>Default <see cref="IDatasetCommands"/> (RQ-12, out of <c>DatasetsManager</c>).</summary>
@@ -56,10 +57,10 @@ public sealed class DatasetCommands : IDatasetCommands
         _logger = logger;
     }
 
-    public async Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset)
+    public async Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset, CancellationToken ct = default)
     {
         var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Write, withTracking: true,
-            withDatasets: true);
+            withDatasets: true, ct: ct);
 
         if (dataset == null)
             throw new BadRequestException("Dataset is null");
@@ -100,12 +101,12 @@ public sealed class DatasetCommands : IDatasetCommands
         return ds.ToDto(ddb.GetInfo());
     }
 
-    public async Task Edit(string orgSlug, string dsSlug, DatasetEditDto dataset)
+    public async Task Edit(string orgSlug, string dsSlug, DatasetEditDto dataset, CancellationToken ct = default)
     {
         if (dataset == null)
             throw new BadRequestException("Dataset is null");
 
-        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
+        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true, ct: ct);
         await _access.EnsureAccessAsync(ds, AccessType.Write);
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
@@ -126,9 +127,9 @@ public sealed class DatasetCommands : IDatasetCommands
             await _listings.ListingChangedAsync(orgSlug, ds.InternalRef);
     }
 
-    public async Task Delete(string orgSlug, string dsSlug)
+    public async Task Delete(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
-        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
+        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true, ct: ct);
         await _access.EnsureAccessAsync(ds, AccessType.Delete);
 
         // Save references before removing from DB
@@ -170,7 +171,7 @@ public sealed class DatasetCommands : IDatasetCommands
         }
     }
 
-    public async Task Rename(string orgSlug, string dsSlug, string newSlug)
+    public async Task Rename(string orgSlug, string dsSlug, string newSlug, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(newSlug))
             throw new BadRequestException("New slug is empty");
@@ -184,10 +185,10 @@ public sealed class DatasetCommands : IDatasetCommands
         if (dsSlug == newSlug) return; // Nothing to do
 
         // Access first: a caller who may not rename learns nothing about the other slugs
-        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
+        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true, ct: ct);
         await _access.EnsureAccessAsync(ds, AccessType.Write);
 
-        if (await _datasets.GetDatasetAsync(orgSlug, newSlug, safe: true) != null)
+        if (await _datasets.GetDatasetAsync(orgSlug, newSlug, safe: true, ct: ct) != null)
             throw new BadRequestException($"Dataset '{newSlug}' already exists");
 
         ds.Slug = newSlug;
@@ -200,12 +201,12 @@ public sealed class DatasetCommands : IDatasetCommands
 
     [Obsolete("Use meta")]
     public async Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug,
-        AttributesDto attributes)
+        AttributesDto attributes, CancellationToken ct = default)
     {
         if (attributes == null)
             throw new BadRequestException("Attributes are null");
 
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
         var ds = access.Dataset;
 
         var ddb = access.Ddb;

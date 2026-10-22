@@ -52,8 +52,8 @@ public class ProcessingNodesController : ControllerBaseEx
     [ProducesResponseType(typeof(IEnumerable<NodeOdxOptionDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetProcessingNodeOptions([Required] string nodeId) =>
-        Ok(await _nodes.GetOptionsAsync(nodeId, HttpContext.RequestAborted));
+    public async Task<IActionResult> GetProcessingNodeOptions([Required] string nodeId, CancellationToken ct) =>
+        Ok(await _nodes.GetOptionsAsync(nodeId, ct));
 
     /// <summary>
     /// Checks whether a specific NodeODX processing node is reachable and reports its
@@ -67,6 +67,6 @@ public class ProcessingNodesController : ControllerBaseEx
     [ProducesResponseType(typeof(ProcessingNodeStatusDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetProcessingNodeStatus([Required] string nodeId) =>
-        Ok(await _nodes.GetStatusAsync(nodeId, HttpContext.RequestAborted));
+    public async Task<IActionResult> GetProcessingNodeStatus([Required] string nodeId, CancellationToken ct) =>
+        Ok(await _nodes.GetStatusAsync(nodeId, ct));
 }

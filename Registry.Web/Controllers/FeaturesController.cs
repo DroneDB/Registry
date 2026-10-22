@@ -37,5 +37,5 @@ public class FeaturesController : ControllerBaseEx
     [AllowAnonymous]
     [HttpGet("features", Name = SystemRoutes.Prefix + nameof(GetFeatures))]
     [ProducesResponseType(typeof(FeaturesDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetFeatures() => Ok(await _features.BuildAsync());
+    public async Task<IActionResult> GetFeatures(CancellationToken ct) => Ok(await _features.BuildAsync(ct: ct));
 }

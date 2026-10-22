@@ -29,7 +29,7 @@ public interface IUploadManager
     /// </summary>
     /// <exception cref="Registry.Web.Exceptions.ConflictException">An upload with that id is still running.</exception>
     Task<UploadRequestContext> BeginAsync(string orgSlug, string dsSlug, long? expectedBytes = null,
-        string? uploadId = null);
+        string? uploadId = null, CancellationToken ct = default);
 
     /// <summary>
     /// The normalized dataset path a file uploaded to <paramref name="path"/> is stored at; throws when
@@ -58,5 +58,5 @@ public interface IUploadManager
     Task FailAsync(UploadRequestContext ctx, System.Exception error);
 
     /// <summary>The outcome of an upload by its id, or null when unknown (write access required).</summary>
-    Task<UploadReceipt?> GetReceiptAsync(string orgSlug, string dsSlug, string uploadId);
+    Task<UploadReceipt?> GetReceiptAsync(string orgSlug, string dsSlug, string uploadId, CancellationToken ct = default);
 }

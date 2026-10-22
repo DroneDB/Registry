@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -23,10 +24,10 @@ namespace Registry.Web.Services.Users;
 /// <summary>The users as administrators list them: with their roles, organizations and storage, and their memberships.</summary>
 public interface IUserDirectory
 {
-    Task<IEnumerable<UserDto>> GetAll();
-    Task<IEnumerable<UserDetailDto>> GetAllDetailed();
+    Task<IEnumerable<UserDto>> GetAll(CancellationToken ct = default);
+    Task<IEnumerable<UserDetailDto>> GetAllDetailed(CancellationToken ct = default);
     Task<UserStorageInfo> GetUserStorageInfo(string userName = null);
-    Task<UserOrganizationMembershipDto[]> GetUserOrganizations(string userName);
+    Task<UserOrganizationMembershipDto[]> GetUserOrganizations(string userName, CancellationToken ct = default);
     Task AddUserToOrganization(string userName, string orgSlug, OrganizationPermissions permissions);
     Task RemoveUserFromOrganization(string userName, string orgSlug);
     Task UpdateUserOrganizationPermissions(string userName, string orgSlug, OrganizationPermissions permissions);
@@ -70,7 +71,8 @@ public sealed class UserDirectory : IUserDirectory
         return _quota.GetUserStorage(user);
     }
 
-    public async Task<UserOrganizationMembershipDto[]> GetUserOrganizations(string userName)
+    public async Task<UserOrganizationMembershipDto[]> GetUserOrganizations(string userName,
+        CancellationToken ct = default)
     {
         var currentUser = await _authManager.GetCurrentUser();
 
@@ -87,7 +89,7 @@ public sealed class UserDirectory : IUserDirectory
             .Include(o => o.Users)
             .AsNoTracking()
             .Where(org => org.OwnerId == user.Id || org.Users.Any(item => item.UserId == user.Id))
-            .ToListAsync();
+            .ToListAsync(ct);
 
         var results = new List<UserOrganizationMembershipDto>();
 
@@ -139,7 +141,7 @@ public sealed class UserDirectory : IUserDirectory
         await _memberships.UpdateAsync(org, userName, permissions, await _authManager.GetCurrentUser());
     }
 
-    public async Task<IEnumerable<UserDto>> GetAll()
+    public async Task<IEnumerable<UserDto>> GetAll(CancellationToken ct = default)
     {
         var userOrgQuery = from orgusr in _registryContext.OrganizationsUsers
             group orgusr by orgusr.UserId
@@ -160,7 +162,7 @@ public sealed class UserDirectory : IUserDirectory
                 OrgIds = g.Select(item => item.Slug).ToArray()
             };
 
-        var union = userOrgQuery.ToArray().Union([.. userOrgQuery2]);
+        var union = (await userOrgQuery.ToArrayAsync(ct)).Union(await userOrgQuery2.ToArrayAsync(ct));
 
         var merge = from m in union
             group m by m.UserId
@@ -173,7 +175,7 @@ public sealed class UserDirectory : IUserDirectory
 
         var userOrg = merge.ToDictionary(item => item.UserId, item => item.OrgIds);
 
-        return GetUsersWithRoles().Select(user => new UserDto
+        return (await GetUsersWithRolesAsync(ct)).Select(user => new UserDto
         {
             UserName = user.UserName,
             Email = user.Email,
@@ -190,9 +192,9 @@ public sealed class UserDirectory : IUserDirectory
     /// without a role one row with a null role name: that row is the user, not a role, so their
     /// list is empty.
     /// </summary>
-    private UserWithRoles[] GetUsersWithRoles()
+    private async Task<UserWithRoles[]> GetUsersWithRolesAsync(CancellationToken ct)
     {
-        var rows = (from user in _applicationDbContext.Users
+        var rows = await (from user in _applicationDbContext.Users
             join userRole in _applicationDbContext.UserRoles on user.Id equals userRole.UserId into userRoles
             from userRole in userRoles.DefaultIfEmpty()
             join role in _applicationDbContext.Roles on userRole.RoleId equals role.Id into roles
@@ -203,7 +205,7 @@ public sealed class UserDirectory : IUserDirectory
                 user.UserName,
                 user.Email,
                 RoleName = role.Name
-            }).ToArray();
+            }).ToArrayAsync(ct);
 
         return
         [
@@ -213,7 +215,7 @@ public sealed class UserDirectory : IUserDirectory
         ];
     }
 
-    public async Task<IEnumerable<UserDetailDto>> GetAllDetailed()
+    public async Task<IEnumerable<UserDetailDto>> GetAllDetailed(CancellationToken ct = default)
     {
         var userOrgQuery = from orgusr in _registryContext.OrganizationsUsers
             group orgusr by orgusr.UserId
@@ -236,7 +238,7 @@ public sealed class UserDirectory : IUserDirectory
                 OrgCount = g.Count()
             };
 
-        var union = userOrgQuery.ToArray().Union([.. userOrgQuery2]);
+        var union = (await userOrgQuery.ToArrayAsync(ct)).Union(await userOrgQuery2.ToArrayAsync(ct));
 
         var merge = from m in union
             group m by m.UserId
@@ -261,11 +263,11 @@ public sealed class UserDirectory : IUserDirectory
                 DatasetCount = g.Count()
             };
 
-        var datasetCounts = datasetQuery.ToDictionary(item => item.OrgSlug, item => item.DatasetCount);
+        var datasetCounts = await datasetQuery.ToDictionaryAsync(item => item.OrgSlug, item => item.DatasetCount, ct);
 
         var users = new List<UserDetailDto>();
 
-        foreach (var user in GetUsersWithRoles())
+        foreach (var user in await GetUsersWithRolesAsync(ct))
         {
             var orgInfo = userOrg.SafeGetValue(user.Id);
             var storageInfo = await GetUserStorageInfo(user.UserName);

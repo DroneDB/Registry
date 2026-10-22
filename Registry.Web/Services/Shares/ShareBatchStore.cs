@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -24,11 +25,11 @@ namespace Registry.Web.Services.Shares;
 /// <summary>The share batches: the running batch of a token (its owner or an administrator only), its readiness for a path, the batches of a dataset, a new batch, its end, its entries.</summary>
 public interface IShareBatchStore
 {
-    Task<Batch> GetRunningAsync(string token);
-    Task<IsBatchReadyResult> IsReadyAsync(string token);
-    Task<bool> IsPathAllowedAsync(string token, string path);
-    Task<BatchDto> GetBatchInfo(string token);
-    Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug);
+    Task<Batch> GetRunningAsync(string token, CancellationToken ct = default);
+    Task<IsBatchReadyResult> IsReadyAsync(string token, CancellationToken ct = default);
+    Task<bool> IsPathAllowedAsync(string token, string path, CancellationToken ct = default);
+    Task<BatchDto> GetBatchInfo(string token, CancellationToken ct = default);
+    Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug, CancellationToken ct = default);
     Task<Batch> StartAsync(Dataset dataset);
     Task CloseAsync(Batch batch, BatchStatus status);
     Task<UploadResultDto> AddEntryAsync(Batch batch, string path, EntryDto info);
@@ -54,15 +55,15 @@ public sealed class ShareBatchStore : IShareBatchStore
         _logger = logger;
     }
 
-    public async Task<Batch> GetRunningAsync(string token)
+    public async Task<Batch> GetRunningAsync(string token, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(token))
             throw new BadRequestException("Missing token");
 
-        var batch = _context.Batches
+        var batch = await _context.Batches
             .Include(x => x.Dataset.Organization)
             .Include(x => x.Entries)
-            .FirstOrDefault(item => item.Token == token);
+            .FirstOrDefaultAsync(item => item.Token == token, ct);
 
         if (batch == null)
             throw new NotFoundException("Cannot find batch");
@@ -80,15 +81,15 @@ public sealed class ShareBatchStore : IShareBatchStore
         return batch;
     }
 
-    public async Task<IsBatchReadyResult> IsReadyAsync(string token)
+    public async Task<IsBatchReadyResult> IsReadyAsync(string token, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(token))
             throw new BadRequestException("Missing token");
 
-        var batch = _context.Batches
+        var batch = await _context.Batches
             .Include(x => x.Dataset.Organization)
             .Include(x => x.Entries)
-            .FirstOrDefault(item => item.Token == token);
+            .FirstOrDefaultAsync(item => item.Token == token, ct);
 
         if (batch == null)
         {
@@ -113,9 +114,9 @@ public sealed class ShareBatchStore : IShareBatchStore
         return new IsBatchReadyResult(true, batch);
     }
 
-    public async Task<bool> IsPathAllowedAsync(string token, string path)
+    public async Task<bool> IsPathAllowedAsync(string token, string path, CancellationToken ct = default)
     {
-        var res = await IsReadyAsync(token);
+        var res = await IsReadyAsync(token, ct);
 
         if (!res.IsReady)
         {
@@ -134,9 +135,9 @@ public sealed class ShareBatchStore : IShareBatchStore
         return true;
     }
 
-    public async Task<BatchDto> GetBatchInfo(string token)
+    public async Task<BatchDto> GetBatchInfo(string token, CancellationToken ct = default)
     {
-        var batch = await GetRunningAsync(token);
+        var batch = await GetRunningAsync(token, ct);
 
         return new BatchDto
         {
@@ -157,15 +158,16 @@ public sealed class ShareBatchStore : IShareBatchStore
         };
     }
 
-    public async Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug)
+    public async Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
 
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
         var ds = access.Dataset;
 
         _logger.LogInformation("Listing batches of '{OrgSlug}/{DsSlug}'", orgSlug, dsSlug);
 
-        var batches = from batch in _context.Batches
+        // Read here, with the token, not while the response is serialized
+        var batches = await (from batch in _context.Batches
                 .Include(x => x.Entries)
                 .Include(x => x.Dataset)
             where batch.Dataset.Id == ds.Id
@@ -185,8 +187,7 @@ public sealed class ShareBatchStore : IShareBatchStore
                         AddedOn = entry.AddedOn,
                         Path = entry.Path
                     }
-            };
-
+            }).ToListAsync(ct);
 
         return batches;
     }

@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -99,8 +100,8 @@ public class Rq01ShareAccessTests
         // The datasets manager adds the dataset where asked, and deletes it only with delete access, as the
         // real one does
         _datasets = new Mock<IDatasetsManager>();
-        _datasets.Setup(d => d.AddNew(It.IsAny<string>(), It.IsAny<DatasetNewDto>()))
-            .ReturnsAsync((string orgSlug, DatasetNewDto dto) =>
+        _datasets.Setup(d => d.AddNew(It.IsAny<string>(), It.IsAny<DatasetNewDto>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string orgSlug, DatasetNewDto dto, CancellationToken _) =>
             {
                 _context.Datasets.Add(new Dataset
                 {
@@ -110,8 +111,8 @@ public class Rq01ShareAccessTests
                 _context.SaveChanges();
                 return new DatasetDto { Slug = dto.Slug };
             });
-        _datasets.Setup(d => d.Delete(It.IsAny<string>(), It.IsAny<string>()))
-            .Returns(async (string orgSlug, string dsSlug) =>
+        _datasets.Setup(d => d.Delete(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(async (string orgSlug, string dsSlug, CancellationToken _) =>
             {
                 var ds = _context.Datasets.Include(x => x.Organization)
                     .Single(x => x.Slug == dsSlug && x.Organization.Slug == orgSlug);

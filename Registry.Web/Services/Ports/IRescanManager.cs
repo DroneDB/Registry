@@ -1,4 +1,5 @@
 #nullable enable
+using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.DTO;
@@ -17,5 +18,5 @@ public interface IRescanManager
     /// Admins and users with write access to the dataset only.
     /// </summary>
     /// <param name="options">Types and extensions to rescan (null for all) and whether to stop at the first error.</param>
-    Task<RescanResultDto> RescanDatasetIndex(string orgSlug, string dsSlug, RescanOptions? options = null);
+    Task<RescanResultDto> RescanDatasetIndex(string orgSlug, string dsSlug, RescanOptions? options = null, CancellationToken ct = default);
 }

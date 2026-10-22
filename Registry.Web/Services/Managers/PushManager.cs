@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
@@ -24,17 +25,17 @@ public class PushManager : IPushManager
         _commit = commit;
     }
 
-    public Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp) =>
-        _sessions.Init(orgSlug, dsSlug, checksum, stamp);
+    public Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp, CancellationToken ct = default) =>
+        _sessions.Init(orgSlug, dsSlug, checksum, stamp, ct: ct);
 
-    public Task<PushUpload> StreamUploadAsync(string orgSlug, string dsSlug, Stream source, long? expectedBytes) =>
-        _uploads.StreamUploadAsync(orgSlug, dsSlug, source, expectedBytes);
+    public Task<PushUpload> StreamUploadAsync(string orgSlug, string dsSlug, Stream source, long? expectedBytes, CancellationToken ct = default) =>
+        _uploads.StreamUploadAsync(orgSlug, dsSlug, source, expectedBytes, ct: ct);
 
-    public Task UploadAsync(PushUpload upload, string filePath, string token) =>
-        _uploads.UploadAsync(upload, filePath, token);
+    public Task UploadAsync(PushUpload upload, string filePath, string token, CancellationToken ct = default) =>
+        _uploads.UploadAsync(upload, filePath, token, ct: ct);
 
-    public Task SaveMeta(string orgSlug, string dsSlug, string token, string meta) =>
-        _uploads.SaveMeta(orgSlug, dsSlug, token, meta);
+    public Task SaveMeta(string orgSlug, string dsSlug, string token, string meta, CancellationToken ct = default) =>
+        _uploads.SaveMeta(orgSlug, dsSlug, token, meta, ct: ct);
 
-    public Task Commit(string orgSlug, string dsSlug, string token) => _commit.Commit(orgSlug, dsSlug, token);
+    public Task Commit(string orgSlug, string dsSlug, string token, CancellationToken ct = default) => _commit.Commit(orgSlug, dsSlug, token, ct: ct);
 }

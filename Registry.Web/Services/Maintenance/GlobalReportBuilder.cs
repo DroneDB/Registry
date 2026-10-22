@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -18,7 +19,7 @@ namespace Registry.Web.Services.Maintenance;
 public interface IGlobalReportBuilder
 {
     /// <summary>The report of all organizations and datasets (a dataset that cannot be read carries its error).</summary>
-    Task<GlobalReportDto> BuildAsync();
+    Task<GlobalReportDto> BuildAsync(CancellationToken ct = default);
 }
 
 /// <summary>Default <see cref="IGlobalReportBuilder"/> (RQ-12, out of <c>SystemManager</c>).</summary>
@@ -38,13 +39,13 @@ public sealed class GlobalReportBuilder : IGlobalReportBuilder
         _logger = logger;
     }
 
-    public async Task<GlobalReportDto> BuildAsync()
+    public async Task<GlobalReportDto> BuildAsync(CancellationToken ct = default)
     {
         var userName = await _authManager.SafeGetCurrentUserName();
 
         var organizations = await _context.Organizations
             .Include(o => o.Datasets)
-            .ToListAsync();
+            .ToListAsync(ct);
 
         var report = new GlobalReportDto
         {

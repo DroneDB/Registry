@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -56,7 +57,7 @@ public class OrganizationsManager : IOrganizationsManager
         _memberships = memberships;
     }
 
-    public async Task<IEnumerable<OrganizationDto>> List(bool ownedOnly = false)
+    public async Task<IEnumerable<OrganizationDto>> List(bool ownedOnly = false, CancellationToken ct = default)
     {
         var currentUser = await _authManager.GetCurrentUser();
 
@@ -89,7 +90,7 @@ public class OrganizationsManager : IOrganizationsManager
                     .FirstOrDefault()
             });
 
-        var rawOrganizations = await organizationsQuery.ToListAsync();
+        var rawOrganizations = await organizationsQuery.ToListAsync(ct);
 
         var organizations = rawOrganizations.Select(org =>
         {
@@ -118,7 +119,7 @@ public class OrganizationsManager : IOrganizationsManager
         return organizations;
     }
 
-    public async Task<IEnumerable<OrganizationDto>> ListPublic()
+    public async Task<IEnumerable<OrganizationDto>> ListPublic(CancellationToken ct = default)
     {
         // List all public organizations for data discovery
         // This endpoint is available to all users (including anonymous)
@@ -135,7 +136,7 @@ public class OrganizationsManager : IOrganizationsManager
                 Owner = org.OwnerId
             });
 
-        var organizations = await organizationsQuery.ToListAsync();
+        var organizations = await organizationsQuery.ToListAsync(ct);
 
         await ResolveOwnerNamesAsync(organizations);
 
@@ -219,9 +220,9 @@ public class OrganizationsManager : IOrganizationsManager
         return result;
     }
 
-    public async Task<OrganizationDto> Get(string orgSlug)
+    public async Task<OrganizationDto> Get(string orgSlug, CancellationToken ct = default)
     {
-        var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Read);
+        var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Read, ct: ct);
 
         var dto = await ToDtoWithOwnerNameAsync(org);
 
@@ -243,7 +244,7 @@ public class OrganizationsManager : IOrganizationsManager
             {
                 // Load organization users if not already loaded
                 if (!_context.Entry(org).Collection(o => o.Users).IsLoaded)
-                    await _context.Entry(org).Collection(o => o.Users).LoadAsync();
+                    await _context.Entry(org).Collection(o => o.Users).LoadAsync(ct);
 
                 var orgUser = org.Users?.FirstOrDefault(u => u.UserId == currentUser.Id);
                 effectivePermission = orgUser?.Permissions;
@@ -272,7 +273,8 @@ public class OrganizationsManager : IOrganizationsManager
             Slug = _datasets.GetFreeOrganizationSlug(userName)
         }, skipAuthCheck: true);
 
-    public async Task<OrganizationDto> AddNew(OrganizationDto organization, bool skipAuthCheck = false)
+    public async Task<OrganizationDto> AddNew(OrganizationDto organization, bool skipAuthCheck = false,
+        CancellationToken ct = default)
     {
         if (!skipAuthCheck)
         {
@@ -321,15 +323,17 @@ public class OrganizationsManager : IOrganizationsManager
         var org = organization.ToEntity();
         org.CreationDate = DateTime.UtcNow;
 
+        // Honoured until the organization is written (RQ-13)
+        ct.ThrowIfCancellationRequested();
         await _context.Organizations.AddAsync(org);
         await _context.SaveChangesAsync();
 
         return await ToDtoWithOwnerNameAsync(org);
     }
 
-    public async Task Edit(string orgSlug, OrganizationDto organization)
+    public async Task Edit(string orgSlug, OrganizationDto organization, CancellationToken ct = default)
     {
-        var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Write, withTracking: true);
+        var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Write, withTracking: true, ct: ct);
 
         // The owner stays unless the request names another one, which only an administrator may do (the Hub
         // sends no owner: a member who edited the organization, or an administrator, used to become its owner)
@@ -351,10 +355,11 @@ public class OrganizationsManager : IOrganizationsManager
         await _context.SaveChangesAsync();
     }
 
-    public async Task Delete(string orgSlug)
+    public async Task Delete(string orgSlug, CancellationToken ct = default)
     {
+        // Honoured while the organization is looked up; its datasets are then deleted to the end (RQ-13)
         var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Delete, withTracking: true,
-            withDatasets: true);
+            withDatasets: true, ct: ct);
 
         foreach (var ds in org.Datasets.ToArray())
         {
@@ -370,7 +375,7 @@ public class OrganizationsManager : IOrganizationsManager
         string sourceOrgSlug,
         string destOrgSlug,
         ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict,
-        bool deleteSourceOrganization = true)
+        bool deleteSourceOrganization = true, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(sourceOrgSlug))
             throw new BadRequestException("Source organization slug is required");
@@ -385,8 +390,10 @@ public class OrganizationsManager : IOrganizationsManager
         if (sourceOrgSlug == MagicStrings.PublicOrganizationSlug)
             throw new BadRequestException("Cannot merge the public organization");
 
-        var sourceOrg = await _datasets.GetOrganizationAsync(sourceOrgSlug, withTracking: true, withDatasets: true);
-        var destOrg = await _datasets.GetOrganizationAsync(destOrgSlug, withTracking: true);
+        // Honoured while the merge is prepared; the moves then run to completion (RQ-13)
+        var sourceOrg = await _datasets.GetOrganizationAsync(sourceOrgSlug, withTracking: true, withDatasets: true,
+            ct: ct);
+        var destOrg = await _datasets.GetOrganizationAsync(destOrgSlug, withTracking: true, ct: ct);
 
         _logger.LogInformation("Starting merge of organization '{SourceOrgSlug}' into '{DestOrgSlug}'",
             sourceOrgSlug, destOrgSlug);
@@ -460,11 +467,11 @@ public class OrganizationsManager : IOrganizationsManager
 
     public bool IsMemberManagementEnabled => _accounts.Value.EnableOrganizationMemberManagement;
 
-    public async Task<IEnumerable<OrganizationMemberDto>> GetMembers(string orgSlug)
+    public async Task<IEnumerable<OrganizationMemberDto>> GetMembers(string orgSlug, CancellationToken ct = default)
     {
         var org = await _context.Organizations
             .Include(o => o.Users)
-            .FirstOrDefaultAsync(o => o.Slug == orgSlug);
+            .FirstOrDefaultAsync(o => o.Slug == orgSlug, ct);
 
         if (org == null)
             throw new NotFoundException($"Organization '{orgSlug}' not found");
@@ -507,9 +514,10 @@ public class OrganizationsManager : IOrganizationsManager
     // The organization (with its members) whose members the current user is about to change: it must
     // exist, the user must be allowed to manage its members, and the feature must be on. The access
     // check comes before the feature check, so an anonymous caller gets 401 and a stranger 403 (D2)
-    private async Task<(Organization Org, User CurrentUser)> GetOrganizationToManageMembers(string orgSlug)
+    private async Task<(Organization Org, User CurrentUser)> GetOrganizationToManageMembers(string orgSlug,
+        CancellationToken ct)
     {
-        var org = await _memberships.GetWithMembersAsync(orgSlug);
+        var org = await _memberships.GetWithMembersAsync(orgSlug, ct);
 
         var currentUser = await _authManager.GetCurrentUser();
         if (!await CanManageMembers(org, currentUser))
@@ -521,21 +529,23 @@ public class OrganizationsManager : IOrganizationsManager
         return (org, currentUser);
     }
 
-    public async Task AddMember(string orgSlug, string userName, OrganizationPermissions permissions = OrganizationPermissions.ReadWrite)
+    public async Task AddMember(string orgSlug, string userName, OrganizationPermissions permissions = OrganizationPermissions.ReadWrite,
+        CancellationToken ct = default)
     {
-        var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug);
+        var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug, ct);
         await _memberships.AddAsync(org, userName, permissions, currentUser);
     }
 
-    public async Task UpdateMemberPermission(string orgSlug, string userName, OrganizationPermissions permission)
+    public async Task UpdateMemberPermission(string orgSlug, string userName, OrganizationPermissions permission,
+        CancellationToken ct = default)
     {
-        var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug);
+        var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug, ct);
         await _memberships.UpdateAsync(org, userName, permission, currentUser);
     }
 
-    public async Task RemoveMember(string orgSlug, string userName)
+    public async Task RemoveMember(string orgSlug, string userName, CancellationToken ct = default)
     {
-        var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug);
+        var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug, ct);
         await _memberships.RemoveAsync(org, userName, currentUser);
     }
 

@@ -18,7 +18,7 @@ public interface IImportManager
     /// </summary>
     /// <param name="orgSlug">The destination organization slug.</param>
     /// <returns>The available source type identifiers.</returns>
-    Task<IReadOnlyList<string>> GetAvailableSourceTypes(string orgSlug);
+    Task<IReadOnlyList<string>> GetAvailableSourceTypes(string orgSlug, CancellationToken ct = default);
 
     /// <summary>
     /// Verifies (probes) an import source: checks reachability/credentials and returns cheap metadata

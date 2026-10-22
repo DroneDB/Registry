@@ -47,9 +47,9 @@ public class ImportController : ControllerBaseEx
     [ProducesResponseType(typeof(IEnumerable<string>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetImportSources([FromRoute, Required] string orgSlug)
+    public async Task<IActionResult> GetImportSources([FromRoute, Required] string orgSlug, CancellationToken ct)
     {
-        return Ok(await _importManager.GetAvailableSourceTypes(orgSlug));
+        return Ok(await _importManager.GetAvailableSourceTypes(orgSlug, ct: ct));
     }
 
     /// <summary>

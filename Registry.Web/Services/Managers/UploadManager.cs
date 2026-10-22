@@ -80,12 +80,12 @@ public sealed partial class UploadManager : IUploadManager
     public static bool IsValidUploadId(string? uploadId) => uploadId != null && UploadIdPattern().IsMatch(uploadId);
 
     public async Task<UploadRequestContext> BeginAsync(string orgSlug, string dsSlug, long? expectedBytes = null,
-        string? uploadId = null)
+        string? uploadId = null, CancellationToken ct = default)
     {
         if (uploadId != null && !IsValidUploadId(uploadId))
             throw new BadRequestException("Invalid upload id: use 8 to 64 letters, digits, '-' or '_'");
 
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
         var ds = access.Dataset;
         var ddb = access.Ddb;
 
@@ -187,12 +187,13 @@ public sealed partial class UploadManager : IUploadManager
         }
     }
 
-    public async Task<UploadReceipt?> GetReceiptAsync(string orgSlug, string dsSlug, string uploadId)
+    public async Task<UploadReceipt?> GetReceiptAsync(string orgSlug, string dsSlug, string uploadId,
+        CancellationToken ct = default)
     {
         if (!IsValidUploadId(uploadId))
             throw new BadRequestException("Invalid upload id");
 
-        await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
 
         return _receipts == null ? null : await _receipts.GetAsync(orgSlug, dsSlug, uploadId);
     }

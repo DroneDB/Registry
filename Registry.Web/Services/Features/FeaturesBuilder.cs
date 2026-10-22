@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -19,7 +20,7 @@ namespace Registry.Web.Services.Features;
 /// <summary>The platform features the Hub adapts to (<c>GET /sys/features</c>, anonymous).</summary>
 public interface IFeaturesBuilder
 {
-    Task<FeaturesDto> BuildAsync();
+    Task<FeaturesDto> BuildAsync(CancellationToken ct = default);
 }
 
 /// <summary>
@@ -38,11 +39,15 @@ public sealed class FeaturesBuilder : IFeaturesBuilder
 
     public FeaturesBuilder(IEnumerable<IFeatureSection> sections) => _sections = [.. sections];
 
-    public async Task<FeaturesDto> BuildAsync()
+    public async Task<FeaturesDto> BuildAsync(CancellationToken ct = default)
     {
         var features = new FeaturesDto();
         foreach (var section in _sections)
+        {
+            ct.ThrowIfCancellationRequested();
             await section.FillAsync(features);
+        }
+
         return features;
     }
 }

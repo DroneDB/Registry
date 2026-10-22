@@ -51,9 +51,9 @@ public class BuildMaintenanceController : ControllerBaseEx
     [ProducesResponseType(typeof(CleanupBuildResultDto), StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Cleanup([FromBody] CleanupBuildRequestDto? request)
+    public async Task<IActionResult> Cleanup([FromBody] CleanupBuildRequestDto? request, CancellationToken ct)
     {
-        var result = await _maintenance.CleanupBuildAsync(request);
+        var result = await _maintenance.CleanupBuildAsync(request, ct: ct);
         return result.Async ? Accepted(result) : Ok(result);
     }
 
@@ -74,9 +74,9 @@ public class BuildMaintenanceController : ControllerBaseEx
     [ProducesResponseType(typeof(RescanJobDto), StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Rescan([FromBody] RescanRequestDto request)
+    public async Task<IActionResult> Rescan([FromBody] RescanRequestDto request, CancellationToken ct)
     {
-        return Accepted(await _maintenance.RescanAsync(request ?? new RescanRequestDto()));
+        return Accepted(await _maintenance.RescanAsync(request ?? new RescanRequestDto(), ct: ct));
     }
 
     /// <summary>
@@ -104,9 +104,9 @@ public class BuildMaintenanceController : ControllerBaseEx
     [ProducesResponseType(typeof(CleanupJobIndicesResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> CleanupJobIndices([FromQuery] int? retentionDays = null)
+    public async Task<IActionResult> CleanupJobIndices([FromQuery] int? retentionDays = null, CancellationToken ct = default)
     {
-        return Ok(await _maintenance.CleanupJobIndicesAsync(retentionDays));
+        return Ok(await _maintenance.CleanupJobIndicesAsync(retentionDays, ct: ct));
     }
 
     /// <summary>

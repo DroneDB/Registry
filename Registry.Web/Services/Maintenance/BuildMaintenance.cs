@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -28,7 +29,7 @@ public interface IBuildMaintenance
     /// Cleans up build artifacts and stale entries on one dataset (synchronously), all datasets in an
     /// organization or every dataset (one background job per dataset).
     /// </summary>
-    Task<CleanupBuildResultDto> CleanupBuildAsync(CleanupBuildRequestDto? request);
+    Task<CleanupBuildResultDto> CleanupBuildAsync(CleanupBuildRequestDto? request, CancellationToken ct = default);
 
     /// <summary>
     /// Rescans the entries that match a type and/or extension filter in every dataset of a scope (all
@@ -36,13 +37,13 @@ public interface IBuildMaintenance
     /// with matching entries.
     /// </summary>
     /// <returns>The id of the background job that submits the dataset tasks.</returns>
-    Task<RescanJobDto> RescanAsync(RescanRequestDto request);
+    Task<RescanJobDto> RescanAsync(RescanRequestDto request, CancellationToken ct = default);
 
     /// <summary>
     /// Removes terminal (Succeeded/Failed/Deleted) job index records older than <paramref name="retentionDays"/>
     /// (the configured retention when null).
     /// </summary>
-    Task<CleanupJobIndicesResultDto> CleanupJobIndicesAsync(int? retentionDays = null);
+    Task<CleanupJobIndicesResultDto> CleanupJobIndicesAsync(int? retentionDays = null, CancellationToken ct = default);
 }
 
 /// <summary>Default <see cref="IBuildMaintenance"/> (RQ-12, out of <c>SystemManager</c> and <c>RescanManager</c>).</summary>
@@ -69,13 +70,13 @@ public sealed class BuildMaintenance : IBuildMaintenance
         _logger = logger;
     }
 
-    public async Task<CleanupBuildResultDto> CleanupBuildAsync(CleanupBuildRequestDto? request)
+    public async Task<CleanupBuildResultDto> CleanupBuildAsync(CleanupBuildRequestDto? request, CancellationToken ct = default)
     {
         request ??= new CleanupBuildRequestDto();
         var scope = DatasetScope.Parse(request.OrganizationSlug, request.DatasetSlug);
 
         var targets = await scope.Apply(_context.Datasets.AsNoTracking().Include(d => d.Organization))
-            .ToArrayAsync();
+            .ToArrayAsync(ct);
         scope.EnsureFound(targets.Length);
 
         // Async (background jobs) when the request scope targets more than one dataset
@@ -141,7 +142,7 @@ public sealed class BuildMaintenance : IBuildMaintenance
         return result;
     }
 
-    public async Task<CleanupJobIndicesResultDto> CleanupJobIndicesAsync(int? retentionDays = null)
+    public async Task<CleanupJobIndicesResultDto> CleanupJobIndicesAsync(int? retentionDays = null, CancellationToken ct = default)
     {
         var days = retentionDays ?? _jobs.JobIndexRetentionDays;
         if (days <= 0)
@@ -152,7 +153,8 @@ public sealed class BuildMaintenance : IBuildMaintenance
         _logger.LogInformation("Manual JobIndex cleanup: removing terminal records older than {Days} days (before {Cutoff:u})",
             days, cutoff);
 
-        var deleted = await _jobIndexWriter.DeleteTerminalBeforeAsync(cutoff);
+        // One statement: canceled, it deletes all or nothing
+        var deleted = await _jobIndexWriter.DeleteTerminalBeforeAsync(cutoff, ct);
 
         _logger.LogInformation("Manual JobIndex cleanup completed: {Deleted} records removed", deleted);
 
@@ -163,12 +165,12 @@ public sealed class BuildMaintenance : IBuildMaintenance
         };
     }
 
-    public async Task<RescanJobDto> RescanAsync(RescanRequestDto request)
+    public async Task<RescanJobDto> RescanAsync(RescanRequestDto request, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         var scope = DatasetScope.Parse(request.OrganizationSlug, request.DatasetSlug);
         var filter = RescanFilter.Parse(request.Types, request.Extensions).RequireNotEmpty();
-        scope.EnsureFound(await scope.Apply(_context.Datasets).CountAsync());
+        scope.EnsureFound(await scope.Apply(_context.Datasets).CountAsync(ct));
 
         var orgSlug = scope.OrganizationSlug;
         var dsSlug = scope.DatasetSlug;

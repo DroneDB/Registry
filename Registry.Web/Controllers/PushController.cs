@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -63,11 +64,11 @@ public class PushController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm, Required] string checksum,
-        [FromForm(Name="stamp"), Required] string stampJson)
+        [FromForm(Name="stamp"), Required] string stampJson, CancellationToken ct)
     {
         var stamp = JsonConvert.DeserializeObject<StampDto>(stampJson);
 
-        var res = await _pushManager.Init(orgSlug, dsSlug, checksum, stamp);
+        var res = await _pushManager.Init(orgSlug, dsSlug, checksum, stamp, ct: ct);
 
         return Ok(res);
 
@@ -92,7 +93,7 @@ public class PushController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Upload(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string dsSlug)
+        [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
         PushUpload upload = null;
         try
@@ -104,7 +105,7 @@ public class PushController : ControllerBaseEx
                 _formOptions.MultipartBoundaryLengthLimit,
                 async body =>
                 {
-                    upload = await _pushManager.StreamUploadAsync(orgSlug, dsSlug, body, Request.ContentLength);
+                    upload = await _pushManager.StreamUploadAsync(orgSlug, dsSlug, body, Request.ContentLength, ct: ct);
                     return (upload.TempPath, upload.Bytes);
                 }, _ => { /* the finally block deletes it */ });
 
@@ -115,7 +116,7 @@ public class PushController : ControllerBaseEx
             if (upload == null)
                 throw new BadRequestException("No file uploaded");
 
-            await _pushManager.UploadAsync(upload, path, token);
+            await _pushManager.UploadAsync(upload, path, token, ct: ct);
 
             return Ok();
         }
@@ -146,12 +147,12 @@ public class PushController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm, Required] string token,
-        [FromForm, Required] string meta)
+        [FromForm, Required] string meta, CancellationToken ct)
     {
         if (meta == null)
             throw new BadRequestException("No meta JSON in form");
 
-        await _pushManager.SaveMeta(orgSlug, dsSlug, token, meta);
+        await _pushManager.SaveMeta(orgSlug, dsSlug, token, meta, ct: ct);
 
         return Ok();
     }
@@ -171,9 +172,9 @@ public class PushController : ControllerBaseEx
     public async Task<IActionResult> Commit(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromForm, Required] string token)
+        [FromForm, Required] string token, CancellationToken ct)
     {
-        await _pushManager.Commit(orgSlug, dsSlug, token);
+        await _pushManager.Commit(orgSlug, dsSlug, token, ct: ct);
 
         return Ok();
     }

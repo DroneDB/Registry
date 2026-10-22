@@ -29,9 +29,9 @@ public interface IChunkedUploadManager
 
     /// <summary>The state of an upload.</summary>
     /// <exception cref="Registry.Web.Exceptions.NotFoundException">Unknown upload.</exception>
-    Task<ChunkStatusDto> GetStatusAsync(string orgSlug, string dsSlug, string fileId);
+    Task<ChunkStatusDto> GetStatusAsync(string orgSlug, string dsSlug, string fileId, CancellationToken ct = default);
 
     /// <summary>Adds the finished file to the dataset; again for a committed upload, returns its entry.</summary>
     /// <exception cref="Registry.Web.Exceptions.ConflictException">Chunks are missing.</exception>
-    Task<EntryDto> CommitAsync(string orgSlug, string dsSlug, string fileId);
+    Task<EntryDto> CommitAsync(string orgSlug, string dsSlug, string fileId, CancellationToken ct = default);
 }

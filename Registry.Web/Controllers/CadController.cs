@@ -1,5 +1,6 @@
 #nullable enable
 using System.ComponentModel.DataAnnotations;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -36,6 +37,6 @@ public class CadController(ICadCrsManager crsManager) : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm, Required] string path,
-        [FromForm, Required] string crs) =>
-        Ok(await crsManager.SetAsync(orgSlug, dsSlug, path, crs));
+        [FromForm, Required] string crs, CancellationToken ct) =>
+        Ok(await crsManager.SetAsync(orgSlug, dsSlug, path, crs, ct: ct));
 }

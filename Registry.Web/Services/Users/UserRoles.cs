@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -23,7 +24,7 @@ namespace Registry.Web.Services.Users;
 /// <summary>The roles and the role assignments an administrator manages.</summary>
 public interface IUserRoles
 {
-    Task<string[]> GetRoles();
+    Task<string[]> GetRoles(CancellationToken ct = default);
     Task CreateRole(string roleName);
     Task DeleteRole(string roleName);
     Task UpdateUserRoles(string userName, string[] roles);
@@ -46,11 +47,11 @@ public sealed class UserRoles : IUserRoles
     /// <summary>Shorthand accessor for the active provider's capability descriptor.</summary>
     private AuthProviderCapabilities Caps => _loginManager.Capabilities;
 
-    public async Task<string[]> GetRoles()
+    public async Task<string[]> GetRoles(CancellationToken ct = default)
     {
         var roles = _roleManager.Roles.Select(role => role.Name);
 
-        return await roles.ToArrayAsync();
+        return await roles.ToArrayAsync(ct);
     }
 
     public async Task CreateRole(string roleName)

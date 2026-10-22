@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -25,12 +26,12 @@ namespace Registry.Web.Services.Datasets;
 /// <summary>The datasets as their readers see them: the readable datasets of an organization, one dataset, its root entry, its stamp.</summary>
 public interface IDatasetQueries
 {
-    Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false);
+    Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false, CancellationToken ct = default);
     Task<(IReadOnlyList<DatasetDto> Items, int Total)> ListPage(string orgSlug, DatasetListQuery query,
-        bool includeThumbnailCheck = false);
-    Task<DatasetDto> GetDataset(string orgSlug, string dsSlug);
-    Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug);
-    Task<StampDto> GetStamp(string orgSlug, string dsSlug);
+        bool includeThumbnailCheck = false, CancellationToken ct = default);
+    Task<DatasetDto> GetDataset(string orgSlug, string dsSlug, CancellationToken ct = default);
+    Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug, CancellationToken ct = default);
+    Task<StampDto> GetStamp(string orgSlug, string dsSlug, CancellationToken ct = default);
 }
 
 /// <summary>Default <see cref="IDatasetQueries"/> (RQ-12, out of <c>DatasetsManager</c>).</summary>
@@ -55,13 +56,13 @@ public sealed class DatasetQueries : IDatasetQueries
         _thumbnails = thumbnails.Value;
     }
 
-    public async Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false) =>
-        (await ListPage(orgSlug, new DatasetListQuery(), includeThumbnailCheck)).Items;
+    public async Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false, CancellationToken ct = default) =>
+        (await ListPage(orgSlug, new DatasetListQuery(), includeThumbnailCheck, ct: ct)).Items;
 
     public async Task<(IReadOnlyList<DatasetDto> Items, int Total)> ListPage(string orgSlug, DatasetListQuery query,
-        bool includeThumbnailCheck = false)
+        bool includeThumbnailCheck = false, CancellationToken ct = default)
     {
-        var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Read, withDatasets: true);
+        var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Read, withDatasets: true, ct: ct);
 
         var datasets = org.Datasets.ToArray();
 
@@ -70,7 +71,7 @@ public sealed class DatasetQueries : IDatasetQueries
 
         // Optimization D: Prefetch Organization.Users once to avoid N lazy loads
         if (!isOwnerOrAdmin && org.Users == null)
-            await _context.Entry(org).Collection(o => o.Users).LoadAsync();
+            await _context.Entry(org).Collection(o => o.Users).LoadAsync(ct);
 
         var readable = new List<(DatasetDto Dto, Dataset Dataset)>();
 
@@ -123,9 +124,9 @@ public sealed class DatasetQueries : IDatasetQueries
         return (matching, total);
     }
 
-    public async Task<DatasetDto> GetDataset(string orgSlug, string dsSlug)
+    public async Task<DatasetDto> GetDataset(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
         var dataset = access.Dataset;
 
         var ddb = access.Ddb;
@@ -146,9 +147,9 @@ public sealed class DatasetQueries : IDatasetQueries
         return _thumbnails.Candidates.Any(c => rootNames.Contains(c));
     }
 
-    public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)
+    public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
         var dataset = access.Dataset;
 
         var ddb = access.Ddb;
@@ -174,9 +175,9 @@ public sealed class DatasetQueries : IDatasetQueries
         return [dto];
     }
 
-    public async Task<StampDto> GetStamp(string orgSlug, string dsSlug)
+    public async Task<StampDto> GetStamp(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
 
         return access.Ddb.GetStamp().ToDto();
     }

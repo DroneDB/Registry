@@ -26,7 +26,7 @@ public interface IDatasetSlugRepair
     /// pre-collapsing slug generator) to their ToSlug form, moving organization folders.
     /// With dryRun only the plan is returned. Entries with active jobs are skipped.
     /// </summary>
-    Task<FixInvalidSlugsResultDto> FixInvalidSlugsAsync(bool dryRun = true);
+    Task<FixInvalidSlugsResultDto> FixInvalidSlugsAsync(bool dryRun = true, CancellationToken ct = default);
 }
 
 /// <summary>Default <see cref="IDatasetSlugRepair"/> (RQ-12, out of <c>SystemManager</c>).</summary>
@@ -54,17 +54,18 @@ public sealed class DatasetSlugRepair : IDatasetSlugRepair
     private static readonly string[] SlugFixBlockingJobStates =
         ["Created", "Indexing", "Enqueued", "Scheduled", "Processing", "Awaiting"];
 
-    public async Task<FixInvalidSlugsResultDto> FixInvalidSlugsAsync(bool dryRun = true)
+    public async Task<FixInvalidSlugsResultDto> FixInvalidSlugsAsync(bool dryRun = true, CancellationToken ct = default)
     {
         var result = new FixInvalidSlugsResultDto { DryRun = dryRun };
 
-        var orgs = _context.Organizations.AsNoTracking().Include(o => o.Datasets).ToArray();
+        // The token is honoured while the targets are read; the renames then run to completion (RQ-13)
+        var orgs = await _context.Organizations.AsNoTracking().Include(o => o.Datasets).ToArrayAsync(ct);
         var takenOrgSlugs = orgs.Select(o => o.Slug).ToHashSet();
 
-        var busy = _context.JobIndices.AsNoTracking()
-            .Where(j => SlugFixBlockingJobStates.Contains(j.CurrentState))
-            .Select(j => new { j.OrgSlug, j.DsSlug })
-            .ToArray()
+        var busy = (await _context.JobIndices.AsNoTracking()
+                .Where(j => SlugFixBlockingJobStates.Contains(j.CurrentState))
+                .Select(j => new { j.OrgSlug, j.DsSlug })
+                .ToArrayAsync(ct))
             .Select(j => (j.OrgSlug, j.DsSlug))
             .ToHashSet();
 

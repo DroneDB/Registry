@@ -69,9 +69,9 @@ public class SystemController : ControllerBaseEx
     [ProducesResponseType(typeof(CleanupBatchesResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> CleanupBatches()
+    public async Task<IActionResult> CleanupBatches(CancellationToken ct)
     {
-        return Ok(await _systemManager.CleanupBatches());
+        return Ok(await _systemManager.CleanupBatches(ct: ct));
     }
 
     /// <summary>
@@ -83,9 +83,9 @@ public class SystemController : ControllerBaseEx
     [ProducesResponseType(typeof(CleanupDatasetResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> CleanupDatasets()
+    public async Task<IActionResult> CleanupDatasets(CancellationToken ct)
     {
-        return Ok(await _systemManager.CleanupEmptyDatasets());
+        return Ok(await _systemManager.CleanupEmptyDatasets(ct: ct));
     }
 
     /// <summary>
@@ -97,9 +97,9 @@ public class SystemController : ControllerBaseEx
     [ProducesResponseType(typeof(IEnumerable<MigrateVisibilityEntryDTO>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> MigrateVisibility()
+    public async Task<IActionResult> MigrateVisibility(CancellationToken ct)
     {
-        return Ok(await _systemManager.MigrateVisibility());
+        return Ok(await _systemManager.MigrateVisibility(ct: ct));
     }
 
     /// <summary>
@@ -112,9 +112,9 @@ public class SystemController : ControllerBaseEx
     [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(typeof(FixInvalidSlugsResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> FixInvalidSlugs([FromQuery] bool dryRun = true)
+    public async Task<IActionResult> FixInvalidSlugs([FromQuery] bool dryRun = true, CancellationToken ct = default)
     {
-        return Ok(await _slugs.FixInvalidSlugsAsync(dryRun));
+        return Ok(await _slugs.FixInvalidSlugsAsync(dryRun, ct: ct));
     }
 
     /// <summary>
@@ -131,13 +131,13 @@ public class SystemController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> MoveDatasets(
-        [FromBody, Required] MoveDatasetDto request)
+        [FromBody, Required] MoveDatasetDto request, CancellationToken ct)
     {
         var results = await _datasets.MoveToOrganization(
             request?.SourceOrgSlug,
             request?.DatasetSlugs,
             request?.DestinationOrgSlug,
-            request!.ConflictResolution);
+            request!.ConflictResolution, ct: ct);
 
         return Ok(results);
     }
@@ -157,13 +157,13 @@ public class SystemController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> MergeOrganizations(
-        [FromBody, Required] MergeOrganizationDto request)
+        [FromBody, Required] MergeOrganizationDto request, CancellationToken ct)
     {
         var result = await _organizations.Merge(
             request?.SourceOrgSlug,
             request?.DestinationOrgSlug,
             request!.ConflictResolution,
-            request!.DeleteSourceOrganization);
+            request!.DeleteSourceOrganization, ct: ct);
 
         return Ok(result);
     }
@@ -177,9 +177,9 @@ public class SystemController : ControllerBaseEx
     [ProducesResponseType(typeof(GlobalReportDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetGlobalReport()
+    public async Task<IActionResult> GetGlobalReport(CancellationToken ct)
     {
-        return Ok(await _report.BuildAsync());
+        return Ok(await _report.BuildAsync(ct: ct));
     }
 
     /// <summary>
