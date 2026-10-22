@@ -29,7 +29,7 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
     private readonly ILogger<WcsCoverageService> _logger;
     private readonly INativeWorkGate _gate;
 
-    public WcsCoverageService(IDatasetAccessResolver access, IBuildArtifactResolver ar,
+    public WcsCoverageService(IDatasetAccessResolver access, IOgcBuildArtifactPaths ar,
         IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx,
         ILogger<WcsCoverageService> logger, INativeWorkGate? gate = null) : base(access, ar, w, c, cache, ctx)
     {

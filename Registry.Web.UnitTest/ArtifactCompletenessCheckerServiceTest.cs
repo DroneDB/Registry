@@ -60,7 +60,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>()))
             .Returns([new DdbEntry { Path = "readme.txt", Hash = "h1" }]);
-        ddbMock.Setup(x => x.IsBuildable("readme.txt")).Returns(false);
+        ddbMock.SetupBuilds(TestBuilds.NotBuildable("readme.txt"));
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
@@ -72,7 +72,6 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _backgroundJobMock.Verify(
             x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()),
             Times.Never);
-        ddbMock.Verify(x => x.IsBuildComplete(It.IsAny<string>()), Times.Never);
     }
 
     [Test]
@@ -83,8 +82,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>()))
             .Returns([new DdbEntry { Path = "ortho.tif", Hash = "h2" }]);
-        ddbMock.Setup(x => x.IsBuildable("ortho.tif")).Returns(true);
-        ddbMock.Setup(x => x.IsBuildActive("ortho.tif")).Returns(true);
+        ddbMock.SetupBuilds(Build("ortho.tif", BuildState.Building));
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
@@ -96,11 +94,10 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _backgroundJobMock.Verify(
             x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()),
             Times.Never);
-        ddbMock.Verify(x => x.IsBuildActive("ortho.tif"), Times.Once);
     }
 
     [Test]
-    public async Task CheckAndQueueAsync_BatchStatus_AsksActivityOnlyForIncompleteBuildableEntries()
+    public async Task CheckAndQueueAsync_OneManifestCallAnswersEveryEntry()
     {
         await using var context = GetTest1Context();
 
@@ -111,12 +108,8 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
             new DdbEntry { Path = "layer.fgb", Hash = "h3" },
             new DdbEntry { Path = "pc.laz", Hash = "h4" }
         ]);
-        ddbMock.Setup(x => x.GetBuildStatus(It.IsAny<string[]>())).Returns((string[] paths) => paths
-            .Select(p => new EntryBuildStatus
-            {
-                Path = p, Exists = true, Buildable = p != "readme.txt", Complete = p == "ortho.tif"
-            }).ToArray());
-        ddbMock.Setup(x => x.IsBuildActive("pc.laz")).Returns(true);
+        ddbMock.SetupBuilds(TestBuilds.NotBuildable("readme.txt"), Build("ortho.tif", BuildState.Complete),
+            Build("layer.fgb", BuildState.None), Build("pc.laz", BuildState.Building));
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
@@ -128,10 +121,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
             It.Is<IndexPayload>(p => p.Path == "layer.fgb" && p.Hash == "h3")), Times.Once);
         _backgroundJobMock.Verify(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(),
             It.IsAny<IndexPayload>()), Times.Once);
-        ddbMock.Verify(x => x.GetBuildStatus(It.IsAny<string[]>()), Times.Once);
-        ddbMock.Verify(x => x.IsBuildable(It.IsAny<string>()), Times.Never);
-        ddbMock.Verify(x => x.IsBuildComplete(It.IsAny<string>()), Times.Never);
-        ddbMock.Verify(x => x.IsBuildActive(It.Is<string>(p => p != "layer.fgb" && p != "pc.laz")), Times.Never);
+        ddbMock.Verify(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()), Times.Once);
     }
 
     [Test]
@@ -142,9 +132,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>()))
             .Returns([new DdbEntry { Path = "ortho.tif", Hash = "h2" }]);
-        ddbMock.Setup(x => x.IsBuildable("ortho.tif")).Returns(true);
-        ddbMock.Setup(x => x.IsBuildActive("ortho.tif")).Returns(false);
-        ddbMock.Setup(x => x.IsBuildComplete("ortho.tif")).Returns(true);
+        ddbMock.SetupBuilds(Build("ortho.tif", BuildState.Complete));
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
@@ -166,9 +154,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>()))
             .Returns([new DdbEntry { Path = "layer.geojson", Hash = "h3" }]);
-        ddbMock.Setup(x => x.IsBuildable("layer.geojson")).Returns(true);
-        ddbMock.Setup(x => x.IsBuildActive("layer.geojson")).Returns(false);
-        ddbMock.Setup(x => x.IsBuildComplete("layer.geojson")).Returns(false);
+        ddbMock.SetupBuilds(Build("layer.geojson", BuildState.None));
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
@@ -201,15 +187,8 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         };
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns(entries);
-        ddbMock.Setup(x => x.IsBuildable("readme.txt")).Returns(false);
-        ddbMock.Setup(x => x.IsBuildable("ortho.tif")).Returns(true);
-        ddbMock.Setup(x => x.IsBuildable("pc.laz")).Returns(true);
-        ddbMock.Setup(x => x.IsBuildable("layer.fgb")).Returns(true);
-        ddbMock.Setup(x => x.IsBuildActive("ortho.tif")).Returns(false);
-        ddbMock.Setup(x => x.IsBuildActive("pc.laz")).Returns(true);
-        ddbMock.Setup(x => x.IsBuildActive("layer.fgb")).Returns(false);
-        ddbMock.Setup(x => x.IsBuildComplete("ortho.tif")).Returns(true);
-        ddbMock.Setup(x => x.IsBuildComplete("layer.fgb")).Returns(false);
+        ddbMock.SetupBuilds(TestBuilds.NotBuildable("readme.txt"), Build("ortho.tif", BuildState.Complete),
+            Build("pc.laz", BuildState.Building), Build("layer.fgb", BuildState.None));
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
@@ -258,11 +237,11 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         };
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns(entries);
-        ddbMock.Setup(x => x.IsBuildable("broken.tif"))
-            .Throws(new InvalidOperationException("boom"));
-        ddbMock.Setup(x => x.IsBuildable("good.tif")).Returns(true);
-        ddbMock.Setup(x => x.IsBuildActive("good.tif")).Returns(false);
-        ddbMock.Setup(x => x.IsBuildComplete("good.tif")).Returns(false);
+        // The batch fails on the broken entry, then the entry-by-entry fallback isolates it
+        ddbMock.Setup(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()))
+            .Returns((IReadOnlyList<string> paths) => paths.Contains("broken.tif")
+                ? throw new InvalidOperationException("boom")
+                : paths.Select(p => Build(p, BuildState.None)).ToArray());
 
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
@@ -287,11 +266,9 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
             new DdbEntry { Path = "interrupted.obj", Hash = "swap-hash" },
             new DdbEntry { Path = "nexus-only.obj", Hash = "ordinary-hash" }
         ]);
-        ddb.Setup(x => x.IsBuildable(It.IsAny<string>())).Returns(true);
-        // Native DDBIsBuildComplete is read-only and reports only the identifiable
-        // interrupted tiles swap as incomplete, while ordinary Nexus output is complete.
-        ddb.Setup(x => x.IsBuildComplete("interrupted.obj")).Returns(false);
-        ddb.Setup(x => x.IsBuildComplete("nexus-only.obj")).Returns(true);
+        // libddb's manifest is read-only and reports only the identifiable interrupted tiles swap
+        // as incomplete, while ordinary Nexus output is complete
+        ddb.SetupBuilds(Build("interrupted.obj", BuildState.None), Build("nexus-only.obj", BuildState.Complete));
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
         await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _logger)
             .CheckAndQueueAsync(null, CancellationToken.None);
@@ -303,14 +280,18 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
 
     // ---- DDB-12: pending entries and repeated failures are not re-enqueued every night ----
 
-    private Mock<IDDB> SingleIncompleteEntry(string path, string hash, PendingBuildInfo[] pending = null)
+    private const string Folder = "/datasets/ds";
+
+    private static EntryBuildArtifacts Build(string path, BuildState state) =>
+        TestBuilds.Build(Folder, path, EntryType.GeoRaster, "h-" + path, state);
+
+    private Mock<IDDB> SingleIncompleteEntry(string path, string hash, string[] missingDependencies = null)
     {
         var ddb = new Mock<IDDB>();
         ddb.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([new DdbEntry { Path = path, Hash = hash }]);
-        ddb.Setup(x => x.IsBuildable(path)).Returns(true);
-        ddb.Setup(x => x.IsBuildActive(path)).Returns(false);
-        ddb.Setup(x => x.IsBuildComplete(path)).Returns(false);
-        ddb.Setup(x => x.GetPendingBuildInfo()).Returns(pending ?? []);
+        ddb.SetupBuilds(missingDependencies == null
+            ? Build(path, BuildState.None)
+            : TestBuilds.Pending(Folder, path, EntryType.Vector, hash, missingDependencies));
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
         return ddb;
     }
@@ -342,8 +323,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
     public async Task CheckAndQueueAsync_PendingBuild_NotReenqueued()
     {
         await using var context = GetTest1Context();
-        SingleIncompleteEntry("site.dwg", "h1",
-            [new PendingBuildInfo { Path = "site.dwg", Hash = "h1", MissingDependencies = ["site.prj"] }]);
+        SingleIncompleteEntry("site.dwg", "h1", ["site.prj"]);
 
         await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _logger)
             .CheckAndQueueAsync(null, CancellationToken.None);

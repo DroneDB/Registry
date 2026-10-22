@@ -1,6 +1,7 @@
 #nullable enable
 using Microsoft.Extensions.DependencyInjection;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.NodeOdx;
 using Registry.Web.Services.HeavyTasks.Ports;
@@ -40,6 +41,9 @@ public static class ProcessingPlatformServiceCollectionExtensions
         // Focused dataset cache invalidation (extracted from IObjectsManager) so heavy tools
         // can clear dataset caches on hosts without the full object-management stack.
         services.AddSingleton<IDatasetCacheInvalidator, DatasetCacheInvalidator>();
+
+        // What a task does with the files it wrote: index, queue their builds, invalidate the caches
+        services.AddSingleton<TaskFileIndexer>();
 
         // What a rescan rebuilds, shared by the rescan-index tool and the rescan endpoint.
         services.AddScoped<RescanRebuild>();

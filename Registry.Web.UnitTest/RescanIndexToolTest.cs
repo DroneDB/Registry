@@ -1,6 +1,7 @@
 #nullable enable
 using Registry.Web.Test.Support;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -51,8 +52,10 @@ public class RescanIndexToolTest
                 new RescanResult { Path = "plain.dwg", Success = true, Hash = "h3" },
                 new RescanResult { Path = "broken.dwg", Success = false, Error = "bad file" }
             ]);
-        _ddb.Setup(x => x.GetBuildStatus(It.IsAny<string[]>())).Returns((string[] paths) => paths
-            .Select(p => new EntryBuildStatus { Path = p, Exists = true, Buildable = p != "plain.dwg" }).ToArray());
+        _ddb.Setup(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>())).Returns((IReadOnlyList<string> paths) => paths
+            .Select(p => p != "plain.dwg"
+                ? TestBuilds.Build("/datasets/ds", p, EntryType.Vector, "h-" + p, BuildState.None)
+                : TestBuilds.NotBuildable(p)).ToArray());
         _ddb.Setup(x => x.Build("fails.dwg", null, true)).Throws(new InvalidOperationException("cannot build"));
 
         await Execute(new { extensions = ".DWG" });

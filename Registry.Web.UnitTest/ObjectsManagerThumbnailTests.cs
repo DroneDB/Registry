@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.IO;
 using System.Linq;
@@ -27,11 +28,11 @@ using Registry.Web.Test.Support;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// The image/tile/raster-info pipeline must answer 404
-/// "not processed yet" — not 500 — when the build artifact of a buildable entry
-/// does not exist on disk. The guard (ObjectsManager.EnsureBuildArtifactAvailable)
-/// runs BEFORE the response cache, and non-buildable entries must skip it on the
-/// string-equality test without touching the file system.
+/// The image/tile/raster-info pipeline must answer 404 "not processed yet" — not 500 — when the
+/// build artifact a renderer reads does not exist yet. The render source comes from libddb's build
+/// manifest (XI-04: the artifact of the entry's own build with a rendered role), is checked BEFORE
+/// the response cache, and entries of a type that is never rendered from a build skip the manifest
+/// call.
 /// </summary>
 [TestFixture]
 public class ObjectsManagerThumbnailTests : TestBase
@@ -133,14 +134,17 @@ public class ObjectsManagerThumbnailTests : TestBase
     private static bool IsCopcArtifact(string localPath) =>
         localPath.Replace('\\', '/').EndsWith(".ddb/build/abc123/copc/cloud.copc.laz");
 
-    private static bool IsCogArtifact(string localPath) =>
-        localPath.Replace('\\', '/').EndsWith(".ddb/build/raster1/cog/cog.tif");
+    // libddb's build manifest of the entry: its state and the artifacts that exist
+    private void SetupBuild(string path, EntryType type, string hash, BuildState state, params BuildArtifact[] artifacts) =>
+        _ddbMock.SetupBuilds(TestBuilds.Build(DatasetFolder, path, type, hash, state, artifacts));
+
+    private static BuildArtifact Copc => TestBuilds.File(ArtifactRoles.PointCloudCopc, "copc/cloud.copc.laz");
 
     [Test]
     public async Task GenerateThumbnailData_PointCloud_MissingCopcArtifact_ThrowsNotFound()
     {
         SetupEntry("data/cloud.laz", EntryType.PointCloud, "abc123");
-        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(false);
+        SetupBuild("data/cloud.laz", EntryType.PointCloud, "abc123", BuildState.None);
 
         var mgr = CreateManager();
 
@@ -148,10 +152,8 @@ public class ObjectsManagerThumbnailTests : TestBase
             () => mgr.GenerateThumbnailData(OrgSlug, DsSlug, "data/cloud.laz", null));
 
         ex.Message.ShouldContain("not available yet");
-        // Pre-cache guard: nothing was generated or cached. The COPC path is probed
-        // twice: once by GetBuildSource (legacy EPT fallback detection) and once by
-        // the availability guard -> exactly 2 Exists calls.
-        _fsMock.Verify(x => x.Exists(It.Is<string>(p => IsCopcArtifact(p))), Times.Exactly(2));
+        // Pre-cache guard: one manifest call, nothing was generated or cached
+        _ddbMock.Verify(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()), Times.Once);
         _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()), Times.Never);
         _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>()), Times.Never);
     }
@@ -160,29 +162,29 @@ public class ObjectsManagerThumbnailTests : TestBase
     public async Task GenerateThumbnailData_PointCloud_ArtifactPresent_GeneratesThumbnail()
     {
         SetupEntry("data/cloud.laz", EntryType.PointCloud, "abc123");
-        _fsMock.Setup(x => x.Exists(It.Is<string>(p => IsCopcArtifact(p)))).Returns(true);
+        SetupBuild("data/cloud.laz", EntryType.PointCloud, "abc123", BuildState.Complete, Copc);
 
         var mgr = CreateManager();
         var result = await mgr.GenerateThumbnailData(OrgSlug, DsSlug, "data/cloud.laz", null);
 
         result.Data.ShouldBe(ThumbBytes);
         result.ContentType.ShouldBe("image/webp");
-        _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>()), Times.Once);
+        _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.Is<string>(p => IsCopcArtifact(p)), It.IsAny<int>(),
+            It.IsAny<Stream>()), Times.Once);
     }
 
     [Test]
-    public async Task GenerateThumbnailData_NonBuildable_SkipsArtifactProbe()
+    public async Task GenerateThumbnailData_TypeNeverRenderedFromABuild_SkipsTheManifest()
     {
         SetupEntry("photo.jpg", EntryType.GeoImage, "img1");
-        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(false);
 
         var mgr = CreateManager();
         var result = await mgr.GenerateThumbnailData(OrgSlug, DsSlug, "photo.jpg", null);
 
-        // GeoImage is non-buildable: sourcePath == entry.Path -> zero _fs.Exists probes,
-        // thumbnail generated from the source file itself.
+        // GeoImage has no rendered build role (libddb's entry types): no manifest call, the
+        // thumbnail is generated from the file itself
         result.Data.ShouldBe(ThumbBytes);
-        _fsMock.Verify(x => x.Exists(It.IsAny<string>()), Times.Never);
+        _ddbMock.Verify(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()), Times.Never);
         _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>()), Times.Once);
     }
 
@@ -239,14 +241,13 @@ public class ObjectsManagerThumbnailTests : TestBase
     public async Task GenerateTileData_GeoRaster_MissingCogArtifact_ThrowsNotFound_BeforeCache()
     {
         SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");
-        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(false);
+        SetupBuild("ortho.tif", EntryType.GeoRaster, "raster1", BuildState.Pending);
 
         var mgr = CreateManager();
 
         await Should.ThrowAsync<NotFoundException>(
             () => mgr.GenerateTileData(OrgSlug, DsSlug, "ortho.tif", 1, 0, 0, false));
 
-        _fsMock.Verify(x => x.Exists(It.Is<string>(p => IsCogArtifact(p))), Times.Once);
         _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()), Times.Never);
         _ddbMock.Verify(x => x.GenerateTile(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(),
             It.IsAny<bool>(), It.IsAny<string>()), Times.Never);
@@ -256,7 +257,7 @@ public class ObjectsManagerThumbnailTests : TestBase
     public async Task GenerateThumbnailDataEx_PointCloud_MissingArtifact_ThrowsNotFound()
     {
         SetupEntry("data/cloud.laz", EntryType.PointCloud, "abc123");
-        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(false);
+        SetupBuild("data/cloud.laz", EntryType.PointCloud, "abc123", BuildState.None);
 
         var mgr = CreateManager();
 
@@ -270,7 +271,7 @@ public class ObjectsManagerThumbnailTests : TestBase
     public async Task GenerateTileDataEx_PointCloud_MissingArtifact_ThrowsNotFound()
     {
         SetupEntry("data/cloud.laz", EntryType.PointCloud, "abc123");
-        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(false);
+        SetupBuild("data/cloud.laz", EntryType.PointCloud, "abc123", BuildState.None);
 
         var mgr = CreateManager();
 
@@ -284,7 +285,7 @@ public class ObjectsManagerThumbnailTests : TestBase
     public async Task GetRasterInfo_GeoRaster_MissingCogArtifact_ThrowsNotFound()
     {
         SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");
-        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(false);
+        SetupBuild("ortho.tif", EntryType.GeoRaster, "raster1", BuildState.None);
 
         var mgr = CreateManager();
 
@@ -298,26 +299,23 @@ public class ObjectsManagerThumbnailTests : TestBase
     {
         SetupEntry("data/cloud.laz", EntryType.PointCloud, "abc123");
         _ddbMock.Setup(x => x.GetRasterInfo(It.IsAny<string>())).Returns("{}");
-        // COPC missing -> GetBuildSource falls back to EPT; the guard must then probe
-        // (and accept) the EPT artifact, not 404 a healthy legacy build.
-        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(false);
-        _fsMock.Setup(x => x.Exists(It.Is<string>(p =>
-                p.Replace('\\', '/').EndsWith(".ddb/build/abc123/ept/ept.json"))))
-            .Returns(true);
+        // libddb lists the legacy EPT output only when there is no COPC: it is read through its
+        // descriptor, not 404'd as a missing build
+        SetupBuild("data/cloud.laz", EntryType.PointCloud, "abc123", BuildState.None,
+            TestBuilds.Directory(ArtifactRoles.PointCloudEpt, "ept", "ept.json", legacy: true));
 
         var mgr = CreateManager();
         var json = await mgr.GetRasterInfo(OrgSlug, DsSlug, "data/cloud.laz");
 
         json.ShouldBe("{}");
-        _ddbMock.Verify(x => x.GetRasterInfo(It.Is<string>(p =>
-            p.Replace('\\', '/').Contains("ept/ept.json"))), Times.Once);
+        _ddbMock.Verify(x => x.GetRasterInfo(".ddb/build/abc123/ept/ept.json"), Times.Once);
     }
 
     [Test]
     public async Task ExportRaster_GeoRaster_MissingCogArtifact_ThrowsNotFound()
     {
         SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");
-        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(false);
+        SetupBuild("ortho.tif", EntryType.GeoRaster, "raster1", BuildState.None);
 
         var mgr = CreateManager();
 
@@ -333,7 +331,7 @@ public class ObjectsManagerThumbnailTests : TestBase
     public async Task EstimateExportSize_GeoRaster_MissingCogArtifact_ThrowsNotFound()
     {
         SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");
-        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(false);
+        SetupBuild("ortho.tif", EntryType.GeoRaster, "raster1", BuildState.None);
 
         var mgr = CreateManager();
 
@@ -349,15 +347,14 @@ public class ObjectsManagerThumbnailTests : TestBase
         Func<ObjectsManager, Task> invoke, Expression<Action<IDDB>> nativeCall)
     {
         SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");
-        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(false);
+        SetupBuild("ortho.tif", EntryType.GeoRaster, "raster1", BuildState.None);
 
         var mgr = CreateManager();
 
         await Should.ThrowAsync<NotFoundException>(() => invoke(mgr));
 
-        // GeoRaster has no EPT fallback: the guard probes the cog artifact exactly once
-        // and the native call is never reached.
-        _fsMock.Verify(x => x.Exists(It.Is<string>(p => IsCogArtifact(p))), Times.Once);
+        // One manifest call, and the native call is never reached
+        _ddbMock.Verify(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()), Times.Once);
         _ddbMock.Verify(nativeCall, Times.Never);
         _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()), Times.Never);
     }

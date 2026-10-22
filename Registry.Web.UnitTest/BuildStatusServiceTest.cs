@@ -26,8 +26,8 @@ namespace Registry.Web.Test;
 
 /// <summary>
 /// Status rules of <see cref="BuildStatusService"/> ("building" &gt; "pending" &gt; ready &gt;
-/// "failed" &gt; "queued") and their data access: one native batch status call
-/// (<see cref="IDdbBuild.GetBuildStatus"/>) and job index queries scoped to the listed
+/// "failed" &gt; "queued") and their data access: one build manifest call
+/// (<see cref="IDdbBuild.GetBuildArtifacts"/>, XI-04) and job index queries scoped to the listed
 /// paths, run against the real <see cref="JobIndexQuery"/> on an in-memory context.
 /// </summary>
 [TestFixture]
@@ -37,7 +37,7 @@ public class BuildStatusServiceTest : TestBase
     private JobIndexQuery _jobIndexQuery;
     private Mock<IDDB> _ddbMock;
     private ILogger<BuildStatusService> _logger;
-    private Dictionary<string, EntryBuildStatus> _native;
+    private Dictionary<string, EntryBuildArtifacts> _native;
     private List<string[]> _statusCalls;
     private int _jobSeq;
 
@@ -51,18 +51,16 @@ public class BuildStatusServiceTest : TestBase
         _jobIndexQuery = new JobIndexQuery(_context);
         _ddbMock = new Mock<IDDB>();
         _logger = CreateTestLogger<BuildStatusService>();
-        _native = new Dictionary<string, EntryBuildStatus>();
+        _native = new Dictionary<string, EntryBuildArtifacts>();
         _statusCalls = [];
         _jobSeq = 0;
 
         _ddbMock.Setup(x => x.GetPendingBuildInfo()).Returns([]);
-        _ddbMock.Setup(x => x.GetBuildStatus(It.IsAny<string[]>()))
-            .Returns((string[] paths) =>
+        _ddbMock.Setup(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()))
+            .Returns((IReadOnlyList<string> paths) =>
             {
-                _statusCalls.Add(paths);
-                return paths.Select(p => _native.TryGetValue(p, out var s)
-                    ? s
-                    : new EntryBuildStatus { Path = p }).ToArray();
+                _statusCalls.Add([.. paths]);
+                return paths.Select(p => _native.TryGetValue(p, out var s) ? s : TestBuilds.Missing(p)).ToArray();
             });
     }
 
@@ -74,8 +72,17 @@ public class BuildStatusServiceTest : TestBase
     private static EntryDto Entry(string path, EntryType type = EntryType.GeoRaster) =>
         new() { Path = path, Type = type };
 
+    private const string Folder = "/datasets/ds";
+
     private void Native(string path, bool buildable = true, bool complete = false) =>
-        _native[path] = new EntryBuildStatus { Path = path, Exists = true, Buildable = buildable, Complete = complete };
+        _native[path] = buildable
+            ? TestBuilds.Build(Folder, path, EntryType.GeoRaster, "h-" + path,
+                complete ? BuildState.Complete : BuildState.None)
+            : TestBuilds.NotBuildable(path);
+
+    // libddb's pending marker: the build waits for the missing dependencies
+    private void NativePending(string path, params string[] missing) =>
+        _native[path] = TestBuilds.Pending(Folder, path, EntryType.Vector, "h-" + path, missing);
 
     private JobIndex AddJob(string path, string state, DateTime? createdAt = null, string toolId = "build",
         string dsSlug = DsSlug)
@@ -132,13 +139,7 @@ public class BuildStatusServiceTest : TestBase
     public async Task AnnotateAsync_PendingWithMissingDeps_MarksPendingAndSurfacesDeps()
     {
         var entry = Entry("layer.shp", EntryType.Vector);
-        Native("layer.shp", complete: false);
-        _ddbMock.Setup(x => x.GetPendingBuildInfo()).Returns([
-            new PendingBuildInfo
-            {
-                Hash = "h1", Path = "layer.shp", MissingDependencies = ["layer.dbf"], LastAttempt = 123
-            }
-        ]);
+        NativePending("layer.shp", "layer.dbf");
         AddJob("layer.shp", "Failed");
 
         await CreateService().AnnotateAsync(OrgSlug, DsSlug, _ddbMock.Object, [entry]);
@@ -210,10 +211,24 @@ public class BuildStatusServiceTest : TestBase
     }
 
     [Test]
+    public async Task AnnotateAsync_PendingMarkerOfABuildRunningOutsideAJob_MarksPending()
+    {
+        // libddb reports "building" (the lock wins) with the marker's missing dependencies
+        var entry = Entry("layer.shp", EntryType.Vector);
+        NativePending("layer.shp", "layer.dbf");
+        _native["layer.shp"].Build!.State = BuildState.Building;
+
+        await CreateService().AnnotateAsync(OrgSlug, DsSlug, _ddbMock.Object, [entry]);
+
+        entry.BuildStatus.ShouldBe("pending");
+        entry.BuildMissingDependencies.ShouldBe(["layer.dbf"]);
+    }
+
+    [Test]
     public async Task AnnotateAsync_NativeStatusFails_LeavesStatusesNull()
     {
         var entry = Entry("ortho.tif");
-        _ddbMock.Setup(x => x.GetBuildStatus(It.IsAny<string[]>())).Throws(new InvalidOperationException("boom"));
+        _ddbMock.Setup(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>())).Throws(new InvalidOperationException("boom"));
 
         await CreateService().AnnotateAsync(OrgSlug, DsSlug, _ddbMock.Object, [entry]);
 
@@ -232,11 +247,10 @@ public class BuildStatusServiceTest : TestBase
 
         await CreateService().AnnotateAsync(OrgSlug, DsSlug, _ddbMock.Object, entries);
 
+        // One manifest call answers buildability, the pending marker and completeness
         _statusCalls.Count.ShouldBe(1);
         _statusCalls[0].Length.ShouldBe(200);
-        _ddbMock.Verify(x => x.GetPendingBuildInfo(), Times.Once);
-        _ddbMock.Verify(x => x.IsBuildable(It.IsAny<string>()), Times.Never);
-        _ddbMock.Verify(x => x.IsBuildComplete(It.IsAny<string>()), Times.Never);
+        _ddbMock.Verify(x => x.GetPendingBuildInfo(), Times.Never);
         entries.ShouldAllBe(e => e.BuildStatus == null);
     }
 
@@ -250,15 +264,12 @@ public class BuildStatusServiceTest : TestBase
         var queued = Entry("e.tif");
         var image = Entry("f.jpg", EntryType.GeoImage);
         Native("a.tif");
-        Native("b.obj");
+        NativePending("b.obj", "b.mtl");
         Native("c.laz", complete: true);
         Native("d.tif");
         Native("e.tif");
         AddJob("a.tif", "Enqueued");
         AddJob("d.tif", "Failed");
-        _ddbMock.Setup(x => x.GetPendingBuildInfo()).Returns([
-            new PendingBuildInfo { Hash = "h", Path = "b.obj", MissingDependencies = ["b.mtl"] }
-        ]);
 
         await CreateService().AnnotateAsync(OrgSlug, DsSlug, _ddbMock.Object,
             [building, pending, ready, failed, queued, image]);
@@ -280,7 +291,8 @@ public class BuildStatusServiceTest : TestBase
         // row from that exact payload so the Path BuildStatusService matches on is the real one.
         const string path = "sub/model.obj";
         var entry = Entry(path, EntryType.Model);
-        Native(path, complete: false);
+        // The pending-build enqueuer reads the dataset's markers; the listing reads the manifest
+        NativePending(path, "sub/model.mtl");
         _ddbMock.Setup(x => x.GetPendingBuildInfo()).Returns([
             new PendingBuildInfo { Hash = "h1", Path = path, MissingDependencies = ["sub/model.mtl"], LastAttempt = 0 }
         ]);
@@ -317,6 +329,7 @@ public class BuildStatusServiceTest : TestBase
 
         // The attempt consumed ".pending" and failed for a non-dependency reason: "failed".
         _ddbMock.Setup(x => x.GetPendingBuildInfo()).Returns([]);
+        Native(path, complete: false);
         retry.CurrentState = "Failed";
         _context.SaveChanges();
         entry.BuildStatus = null;

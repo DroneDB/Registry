@@ -87,7 +87,7 @@ public class UploadPerFileOverheadBaselineTests : TestBase
         _ddb.SetupGet(d => d.DatasetFolderPath).Returns(_root);
         _ddb.SetupGet(d => d.BuildFolderPath).Returns(Path.Combine(_root, ".ddb", "build"));
         _ddb.Setup(d => d.GetLocalPath(It.IsAny<string>())).Returns<string>(p => Path.Combine(_root, p));
-        _ddb.Setup(d => d.IsBuildable(It.IsAny<string>())).Returns(false);
+        _ddb.SetupBuilds();
         _ddb.Setup(d => d.AddRaw(It.IsAny<string>()));
         _ddb.Setup(d => d.GetEntry(It.IsAny<string>())).Returns<string>(p => new Entry
         {

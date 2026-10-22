@@ -1876,7 +1876,7 @@ public class ObjectManagerTest : TestBase
     #region Build Force Tests
 
     /// <summary>
-    /// Verifies that Build() without force=true throws when IsBuildActive returns true.
+    /// Verifies that Build() without force=true throws while a build of the entry runs.
     /// This is the expected guard behavior.
     /// </summary>
     [Test]
@@ -1892,8 +1892,9 @@ public class ObjectManagerTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetEntry(It.IsAny<string>()))
             .Returns(new Registry.Ports.DroneDB.Entry { Path = "test.las", Type = EntryType.PointCloud });
-        ddbMock.Setup(x => x.IsBuildable(It.IsAny<string>())).Returns(true);
-        ddbMock.Setup(x => x.IsBuildActive(It.IsAny<string>())).Returns(true);
+        // A live build holds the lock (libddb's "building" state)
+        ddbMock.SetupBuilds(TestBuilds.Build("/datasets/ds", "test.las", EntryType.PointCloud, "abc123",
+            BuildState.Building));
         ddbMock.Setup(x => x.Meta).Returns(new MockMeta());
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
@@ -1910,7 +1911,7 @@ public class ObjectManagerTest : TestBase
     }
 
     /// <summary>
-    /// Verifies that Build() with force=true bypasses the IsBuildActive guard.
+    /// Verifies that Build() with force=true bypasses the running-build guard.
     /// This pins the fix: previously force builds were blocked by stale locks.
     /// </summary>
     [Test]
@@ -1932,8 +1933,9 @@ public class ObjectManagerTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetEntry(It.IsAny<string>()))
             .Returns(new Registry.Ports.DroneDB.Entry { Path = "test.las", Type = EntryType.PointCloud, Hash = "abc123" });
-        ddbMock.Setup(x => x.IsBuildable(It.IsAny<string>())).Returns(true);
-        ddbMock.Setup(x => x.IsBuildActive(It.IsAny<string>())).Returns(true);
+        // A live build holds the lock (libddb's "building" state)
+        ddbMock.SetupBuilds(TestBuilds.Build("/datasets/ds", "test.las", EntryType.PointCloud, "abc123",
+            BuildState.Building));
         ddbMock.Setup(x => x.Meta).Returns(new MockMeta());
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
@@ -1943,7 +1945,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils, _ddbFactoryMock.Object).Build();
 
-        // force=true should NOT throw even though IsBuildActive returns true
+        // force=true should NOT throw even though a build is running
         await Should.NotThrowAsync(
             async () => await objectManager.Build(
                 MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "test.las", force: true));

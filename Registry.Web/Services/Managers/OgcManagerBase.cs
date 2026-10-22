@@ -34,7 +34,7 @@ public abstract class OgcManagerBase
     protected const string NsDdb   = OgcNamespaces.Ddb;
 
     protected readonly IDatasetAccessResolver Access;
-    protected readonly IBuildArtifactResolver Artifacts;
+    protected readonly IOgcBuildArtifactPaths Artifacts;
     protected readonly IDdbWrapper DdbWrapper;
     protected readonly IOgcLayerCatalog LayerCatalog;
     protected readonly IDistributedCache Cache;
@@ -51,7 +51,7 @@ public abstract class OgcManagerBase
         XmlWriter.Create(sb, new XmlWriterSettings { Indent = true, Async = true, OmitXmlDeclaration = true });
 
     protected OgcManagerBase(IDatasetAccessResolver access,
-        IBuildArtifactResolver artifacts, IDdbWrapper ddbWrapper, IOgcLayerCatalog catalog,
+        IOgcBuildArtifactPaths artifacts, IDdbWrapper ddbWrapper, IOgcLayerCatalog catalog,
         IDistributedCache cache, IHttpContextAccessor httpContext)
     {
         Access = access;

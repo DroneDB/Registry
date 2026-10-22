@@ -63,7 +63,7 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
 
     private readonly IImportSourceFactory _factory;
     private readonly IImportCredentialProtector _protector;
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly TaskFileIndexer _indexer;
     private readonly ImportSettings _settings;
     private readonly long _diskSafetyMarginBytes;
     private readonly IFileSystem _fs;
@@ -76,14 +76,14 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
     /// </summary>
     /// <param name="factory">The import source factory.</param>
     /// <param name="protector">The credential protector used to decrypt stored secrets.</param>
-    /// <param name="scopeFactory">Scope factory for per-execution scoped services.</param>
+    /// <param name="indexer">Indexes the imported files and queues their builds.</param>
     /// <param name="importSettings">The import settings.</param>
     /// <param name="platformSettings">The processing platform settings (size cap, disk safety margin).</param>
     /// <param name="logger">The logger.</param>
     public ImportDatasetTool(
         IImportSourceFactory factory,
         IImportCredentialProtector protector,
-        IServiceScopeFactory scopeFactory,
+        TaskFileIndexer indexer,
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
         IFileSystem fs,
         DatasetPathPolicy paths,
@@ -95,7 +95,7 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
         _fs = fs;
         _paths = paths;
         _protector = protector;
-        _scopeFactory = scopeFactory;
+        _indexer = indexer;
         _settings = importSettings.Value;
         _diskSafetyMarginBytes =
             platformSettings.Value.DiskSafetyMarginBytes;
@@ -119,9 +119,6 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
 
     /// <inheritdoc />
     public override JsonDocument InputSchema => Schema;
-
-    // One DDB transaction (and one native connection open) per chunk instead of one-per-file.
-    private const int IndexChunkSize = 250;
 
     /// <inheritdoc />
     protected override Task ValidateAsync(HeavyToolRequest request, Parameters args,
@@ -257,58 +254,11 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
         // A genuine user cancellation (not a breach/timeout) leaves partial files in place for resume.
         ct.ThrowIfCancellationRequested();
 
-        // Index everything currently in the dataset folder, in batches. The returned entries carry
-        // Type + Hash, so buildable files can be scheduled without extra per-file native calls.
+        // Index everything now in the dataset folder, queue the builds of the buildable files (children
+        // of this task), invalidate the caches
         var allFiles = EnumerateRelativeFiles(root).ToList();
-        var indexed = new List<Entry>(allFiles.Count);
-        for (var i = 0; i < allFiles.Count; i += IndexChunkSize)
-        {
-            ct.ThrowIfCancellationRequested();
-            var slice = allFiles.GetRange(i, Math.Min(IndexChunkSize, allFiles.Count - i));
-            indexed.AddRange(ctx.Ddb.AddRawBatch(slice));
-            progress.Report(new HeavyToolProgress(
-                allFiles.Count > 0 ? (double)(i + slice.Count) / allFiles.Count : -1,
-                "indexing", LogChunk: $"Indexed {i + slice.Count}/{allFiles.Count} file(s)"));
-        }
-
-        // Enqueue a per-file build job for every buildable entry (mirrors ObjectsManager.AddNew).
-        {
-            var buildableCount = 0;
-
-            foreach (var entry in indexed)
-            {
-                if (!ctx.Ddb.IsBuildable(entry.Path))
-                    continue;
-
-                var path = entry.Path;
-                var meta = new IndexPayload(
-                    request.OrgSlug,
-                    request.DsSlug,
-                    entry.Hash,
-                    null,
-                    Path: path,
-                    ParentJobId: ctx.TaskId);
-
-                ctx.Jobs.EnqueueBuild(ctx.Dataset, path, false, meta);
-                buildableCount++;
-            }
-
-            _logger.LogInformation("Enqueued {Count} build job(s) for imported files in {Org}/{Ds}",
-                buildableCount, request.OrgSlug, request.DsSlug);
-        }
-
-        // Invalidate cached tiles/thumbnails/OGC (no auth needed; keyed by org/ds).
-        try
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var cacheInvalidator = scope.ServiceProvider.GetRequiredService<IDatasetCacheInvalidator>();
-            await cacheInvalidator.InvalidateAllDatasetCachesAsync(request.OrgSlug, request.DsSlug);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cache invalidation after import failed for {Org}/{Ds}",
-                request.OrgSlug, request.DsSlug);
-        }
+        await _indexer.IndexAsync(new TaskFiles(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug, allFiles,
+            ctx.Jobs, ctx.TaskId, "imported files"), progress, ct);
 
         progress.Report(new HeavyToolProgress(1, "done",
             LogChunk: $"Import complete: {allFiles.Count} file(s) indexed"));

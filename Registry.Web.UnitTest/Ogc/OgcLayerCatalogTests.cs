@@ -24,7 +24,7 @@ public class OgcLayerCatalogTests
     private Mock<IDdbManager> _ddbManager = null!;
     private Mock<IUtils> _utils = null!;
     private Mock<IDDB> _ddb = null!;
-    private Mock<IBuildArtifactResolver> _artifacts = null!;
+    private Mock<IOgcBuildArtifactPaths> _artifacts = null!;
     private Mock<IDdbWrapper> _wrapper = null!;
     private Mock<IOgcCacheKeys> _keys = null!;
     private IDistributedCache _cache = null!;
@@ -39,7 +39,7 @@ public class OgcLayerCatalogTests
         _ddbManager = new Mock<IDdbManager>();
         _utils = new Mock<IUtils>();
         _ddb = new Mock<IDDB>();
-        _artifacts = new Mock<IBuildArtifactResolver>();
+        _artifacts = new Mock<IOgcBuildArtifactPaths>();
         _wrapper = new Mock<IDdbWrapper>();
         _keys = new Mock<IOgcCacheKeys>();
 

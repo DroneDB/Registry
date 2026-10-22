@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Registry.Adapters;
+using Registry.Adapters.Testing;
 using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Models.Configuration;
@@ -111,7 +112,7 @@ public sealed class ObjectsManagerBuilder
             _zipArchiveBuilder,
             _ogcLayerCatalog,
             _datasetCacheInvalidator ?? TestJobs.CacheInvalidator(cacheManager),
-            _buildArtifactResolver!,
+            _buildArtifactResolver ?? new BuildArtifactResolver(new FakeDdbWrapper()),
             _buildStatusService,
             _indexQueue,
             _uploadManager,

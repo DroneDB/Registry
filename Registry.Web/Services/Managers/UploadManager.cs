@@ -448,7 +448,9 @@ public sealed partial class UploadManager : IUploadManager
         if (parts.Count == 0)
             return;
 
-        var buildable = parts.Where(p => ctx.Ddb.IsBuildable(p.Entry!.Path)).ToArray();
+        // One native call for every part (the build manifest, XI-04), one build object per path
+        var builds = ctx.Ddb.GetBuildArtifacts(parts.Select(p => p.Entry!.Path).ToArray());
+        var buildable = parts.Where((_, i) => builds[i].CanBeBuilt()).ToArray();
         if (buildable.Length > 0)
         {
             // CRITICAL: Set pending flag BEFORE build starts

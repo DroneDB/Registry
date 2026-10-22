@@ -69,7 +69,7 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
     private readonly ImportSettings _importSettings;
     private readonly DatasetPathPolicy _paths;
     private readonly VolumeHeadroom _headroom;
-    private readonly ILogger<ArchiveExtractTool> _logger;
+    private readonly TaskFileIndexer _indexer;
 
     public ArchiveExtractTool(
         IArchiveExtractor extractor,
@@ -78,16 +78,16 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
         DatasetPathPolicy paths,
         VolumeHeadroom headroom,
-        ILogger<ArchiveExtractTool> logger)
+        TaskFileIndexer indexer)
     {
         _headroom = headroom;
+        _indexer = indexer;
         _extractor = extractor;
         _archives = archives;
         _paths = paths;
         _scopeFactory = scopeFactory;
         _settings = platformSettings.Value;
         _importSettings = importSettings.Value;
-        _logger = logger;
     }
 
     public override string Id => "archive-extract";
@@ -96,11 +96,6 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
     public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
     public override bool ProducesArtifact => false;
     public override JsonDocument InputSchema => Schema;
-
-    // Files are indexed in batches of this size: bounds the per-transaction lock time and
-    // lets progress be reported between chunks while still collapsing the per-file native
-    // database opens into one-per-chunk.
-    private const int IndexChunkSize = 250;
 
     protected override async Task ValidateAsync(HeavyToolRequest request, Parameters args,
         IHeavyToolValidationContext ctx, CancellationToken ct)
@@ -223,48 +218,9 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
 
         ct.ThrowIfCancellationRequested();
 
-        // Index everything in batches: one DDB transaction (and one native connection
-        // open) per chunk instead of one-per-file. The returned entries carry Type + Hash,
-        // so the buildable files can be scheduled without any extra per-file
-        // IsBuildable/GetEntry calls (each of which would re-open the native database).
-        var indexed = new List<Entry>(extractedPaths.Count);
-        for (var i = 0; i < extractedPaths.Count; i += IndexChunkSize)
-        {
-            ct.ThrowIfCancellationRequested();
-            var slice = extractedPaths.GetRange(i, Math.Min(IndexChunkSize, extractedPaths.Count - i));
-            indexed.AddRange(ctx.Ddb.AddRawBatch(slice));
-            progress.Report(new HeavyToolProgress(
-                extractedPaths.Count > 0 ? (double)(i + slice.Count) / extractedPaths.Count : -1,
-                "indexing", LogChunk: $"Indexed {i + slice.Count}/{extractedPaths.Count} file(s)"));
-        }
-
-        // Enqueue a per-file build job for every buildable extracted entry (mirrors
-        // ObjectsManager.AddNew). Buildability is derived from the indexed entry type, so
-        // no additional native calls are needed.
-        {
-            var buildableCount = 0;
-
-            foreach (var entry in indexed)
-            {
-                if (!ctx.Ddb.IsBuildable(entry.Path))
-                    continue;
-
-                var path = entry.Path;
-                var meta = new IndexPayload(
-                    request.OrgSlug,
-                    request.DsSlug,
-                    entry.Hash,
-                    null,
-                    Path: path,
-                    ParentJobId: ctx.TaskId);
-
-                ctx.Jobs.EnqueueBuild(ctx.Dataset, path, false, meta);
-                buildableCount++;
-            }
-
-            _logger.LogInformation("Enqueued {Count} build job(s) for extracted files in {Org}/{Ds}",
-                buildableCount, request.OrgSlug, request.DsSlug);
-        }
+        // Index, queue the builds of the buildable files (children of this task), invalidate the caches
+        await _indexer.IndexAsync(new TaskFiles(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug,
+            extractedPaths, ctx.Jobs, ctx.TaskId, "extracted files"), progress, ct);
 
         // Optionally remove the source archive (index entry + physical file).
         if (deleteArchive)
@@ -282,20 +238,6 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
                 progress.Report(new HeavyToolProgress(1, "cleanup",
                     LogChunk: $"Could not delete source archive '{sourcePath}': {ex.Message}"));
             }
-        }
-
-        // Invalidate cached tiles/thumbnails/OGC (no auth needed; keyed by org/ds). Uses the
-        // focused IDatasetCacheInvalidator, registered on every host including processing nodes.
-        try
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var cacheInvalidator = scope.ServiceProvider.GetRequiredService<IDatasetCacheInvalidator>();
-            await cacheInvalidator.InvalidateAllDatasetCachesAsync(request.OrgSlug, request.DsSlug);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cache invalidation after extract failed for {Org}/{Ds}",
-                request.OrgSlug, request.DsSlug);
         }
 
         progress.Report(new HeavyToolProgress(1, "done",

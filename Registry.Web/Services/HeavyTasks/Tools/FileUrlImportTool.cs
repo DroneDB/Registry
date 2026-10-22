@@ -13,6 +13,7 @@ using Registry.Common;
 using Registry.Ports.Import;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Import;
@@ -230,11 +231,12 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
         // Enqueue a build job when the imported file is buildable (mirrors ObjectsManager.AddNew).
         try
         {
-            if (ctx.Ddb.IsBuildable(target))
+            // The build manifest of the file (XI-04): buildable, and the hash that names its build
+            var build = ctx.Ddb.GetBuildArtifacts([target])[0];
+            if (build.CanBeBuilt())
             {
-                var entry = ctx.Ddb.GetEntry(target);
                 var meta = new IndexPayload(
-                    request.OrgSlug, request.DsSlug, entry?.Hash, null,
+                    request.OrgSlug, request.DsSlug, build.Hash, null,
                     Path: target, ParentJobId: ctx.TaskId);
 
                 ctx.Jobs.EnqueueBuild(ctx.Dataset, target, false, meta);

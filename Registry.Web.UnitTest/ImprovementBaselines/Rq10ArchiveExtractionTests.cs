@@ -193,6 +193,7 @@ public sealed class Rq10ArchiveExtractionTests
     {
         var ddb = new Mock<IDDB>();
         ddb.SetupGet(d => d.DatasetFolderPath).Returns(_dataset);
+        Support.TestBuilds.SetupBuilds(ddb);
         ddb.Setup(d => d.GetLocalPath(It.IsAny<string>()))
             .Returns((string p) => Path.Combine(_dataset, p.Replace('/', Path.DirectorySeparatorChar)));
         ddb.Setup(d => d.GetEntry("archive.zip")).Returns(new Entry { Path = "archive.zip", Type = EntryType.Generic });
@@ -237,6 +238,6 @@ internal static class Rq10ExtractionHarness
         });
         var extractor = new SharpCompressArchiveExtractor();
         return new ArchiveExtractTool(extractor, Support.TestArchives.Extractor(extractor), scopes, Support.TestSettings.Options<ImportSettings>(settings), Support.TestSettings.Options<ProcessingPlatformSettings>(settings),
-            Support.TestPaths.Policy, Support.TestHeadroom.Default, NullLogger<ArchiveExtractTool>.Instance);
+            Support.TestPaths.Policy, Support.TestHeadroom.Default, Support.TestJobs.FileIndexer());
     }
 }

@@ -37,6 +37,8 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IDatasetsManager, DatasetsManager>();
         services.AddScoped<IStacManager, StacManager>();
         services.AddScoped<IObjectsManager, ObjectsManager>();
+        // libddb's build manifest by role (XI-04): render sources, build downloads, build files, build copies
+        services.AddSingleton<IBuildArtifactResolver, BuildArtifactResolver>();
         services.AddScoped<ICadCrsManager, CadCrsManager>();
         services.AddScoped<IShareManager, ShareManager>();
         services.AddScoped<IPushManager, PushManager>();
@@ -75,7 +77,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
     /// <summary>OGC services (WMS/WMTS/WFS/WCS/OGC API + MVT endpoint) and their filters.</summary>
     public static IServiceCollection AddRegistryOgc(this IServiceCollection services)
     {
-        services.AddScoped<IBuildArtifactResolver, BuildArtifactResolver>();
+        services.AddScoped<IOgcBuildArtifactPaths, OgcBuildArtifactPaths>();
         services.AddScoped<IOgcLayerCatalog, OgcLayerCatalog>();
         services.AddScoped<IOgcRasterTileSource, OgcRasterTileSource>();
         services.AddScoped<IWmtsManager, WmtsManager>();

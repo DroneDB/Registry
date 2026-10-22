@@ -104,8 +104,10 @@ public class PushPipelineTests : TestBase
             return folder;
         });
         // Every 10th photo is buildable
-        _ddb.Setup(d => d.GetBuildStatus(It.IsAny<string[]>())).Returns((string[] paths) =>
-            paths.Select((p, i) => new EntryBuildStatus { Path = p, Exists = true, Buildable = i % 10 == 0 }).ToArray());
+        _ddb.Setup(d => d.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>())).Returns((IReadOnlyList<string> paths) =>
+            paths.Select((p, i) => i % 10 == 0
+                ? TestBuilds.Build(_root, p, EntryType.GeoRaster, "h-" + p, BuildState.None)
+                : TestBuilds.NotBuildable(p)).ToArray());
         _ddb.Setup(d => d.IsBuildPending()).Returns(false);
 
         _utils = new Mock<IUtils>();
@@ -196,8 +198,7 @@ public class PushPipelineTests : TestBase
 
         await mgr.Commit("org", "ds", token);
 
-        _ddb.Verify(d => d.IsBuildable(It.IsAny<string>()), Times.Never);
-        _ddb.Verify(d => d.GetBuildStatus(It.Is<string[]>(p => p.Length == Adds && p[0] == "photos/IMG_0.JPG")), Times.Once);
+        _ddb.Verify(d => d.GetBuildArtifacts(It.Is<IReadOnlyList<string>>(p => p.Count == Adds && p[0] == "photos/IMG_0.JPG")), Times.Once);
         _jobs.Verify(j => j.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
             It.Is<IndexPayload>(m => m.Hash != null && m.Path!.StartsWith("photos/IMG_"))), Times.Exactly(Adds / 10));
     }

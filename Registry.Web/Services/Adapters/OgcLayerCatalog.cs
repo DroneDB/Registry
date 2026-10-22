@@ -25,14 +25,14 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     private readonly IDdbManager _ddbManager;
     private readonly IUtils _utils;
     private readonly IDistributedCache _cache;
-    private readonly IBuildArtifactResolver _artifacts;
+    private readonly IOgcBuildArtifactPaths _artifacts;
     private readonly IDdbWrapper _ddbWrapper;
     private readonly IOgcCacheKeys _keys;
     private readonly ILogger<OgcLayerCatalog> _logger;
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);
 
     public OgcLayerCatalog(IDdbManager ddbManager, IUtils utils, IDistributedCache cache,
-        IBuildArtifactResolver artifacts, IDdbWrapper ddbWrapper,
+        IOgcBuildArtifactPaths artifacts, IDdbWrapper ddbWrapper,
         IOgcCacheKeys keys,
         ILogger<OgcLayerCatalog> logger)
     {

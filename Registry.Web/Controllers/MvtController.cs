@@ -33,9 +33,9 @@ namespace Registry.Web.Controllers;
 public class MvtController : ControllerBaseEx
 {
     private readonly IDatasetAccessResolver _access;
-    private readonly IBuildArtifactResolver _artifacts;
+    private readonly IOgcBuildArtifactPaths _artifacts;
 
-    public MvtController(IDatasetAccessResolver access, IBuildArtifactResolver artifacts)
+    public MvtController(IDatasetAccessResolver access, IOgcBuildArtifactPaths artifacts)
     {
         _access = access;
         _artifacts = artifacts;

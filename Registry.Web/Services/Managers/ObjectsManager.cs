@@ -334,37 +334,27 @@ public class ObjectsManager : IObjectsManager
     }
 
     /// <summary>
-    /// Validates that the specified entry (file or directory) does not have any active builds.
-    /// Throws an exception if any active build is found.
+    /// Refuses to copy or transfer an entry while one of its files is being built: one manifest call
+    /// for the entry, or for every file of a folder (XI-04).
     /// </summary>
-    /// <param name="ddb">The DDB instance to check</param>
-    /// <param name="entry">The entry to validate</param>
-    /// <param name="path">The path of the entry</param>
-    /// <exception cref="InvalidOperationException">Thrown when an active build is detected</exception>
-    private static void ValidateNoBuildActive(IDDB ddb, Entry entry, string path)
+    /// <exception cref="ConflictException">A live build holds the lock of one of the files.</exception>
+    private void ValidateNoBuildActive(IDDB ddb, Entry entry, string path)
     {
-        if (entry.Type == EntryType.Directory)
-        {
-            // For directories, check all files inside
-            var allEntries = ddb.FindSummaries(EntryQuery.Under(path));
-            var filesWithActiveBuild = allEntries
-                .Where(item => item.Type != EntryType.Directory && ddb.IsBuildActive(item.Path))
-                .ToArray();
+        var files = entry.Type == EntryType.Directory
+            ? ddb.FindSummaries(EntryQuery.Under(path)).Where(item => item.Type != EntryType.Directory)
+                .Select(item => item.Path).ToArray()
+            : [path];
+        if (files.Length == 0)
+            return;
 
-            if (filesWithActiveBuild.Length != 0)
-            {
-                var filesList = string.Join(", ", filesWithActiveBuild.Select(f => f.Path));
-                throw new ConflictException(
-                    $"Cannot transfer directory '{path}' because the following files have an active build in progress: {filesList}");
-            }
-        }
-        else
-        {
-            // For single files, check if build is active
-            if (ddb.IsBuildActive(path))
-                throw new ConflictException(
-                    $"Cannot transfer file '{path}' because it has an active build in progress");
-        }
+        var building = _buildArtifactResolver.GetBuilds(ddb, files).Where(b => b.HasLiveBuild())
+            .Select(b => b.Path).ToArray();
+        if (building.Length == 0)
+            return;
+
+        throw new ConflictException(entry.Type == EntryType.Directory
+            ? $"Cannot transfer directory '{path}' because the following files have an active build in progress: {string.Join(", ", building)}"
+            : $"Cannot transfer file '{path}' because it has an active build in progress");
     }
 
     public async Task Transfer(string sourceOrgSlug, string sourceDsSlug, string sourcePath, string destOrgSlug,
@@ -429,12 +419,7 @@ public class ObjectsManager : IObjectsManager
         // Track progress for rollback
         var fileSystemCopied = false;
         var addedToDdb = false;
-        var buildFolderCopied = false;
         string destLocalFilePath = null;
-        string destBuildPath = null;
-        // Tracks every per-entry destination build folder created during a directory transfer
-        // so rollback can clean all of them up (not just a single path).
-        var createdDestBuildPaths = new List<string>();
 
         try
         {
@@ -496,61 +481,16 @@ public class ObjectsManager : IObjectsManager
 
             _logger.LogInformation("DDB add OK");
 
-            // If it's not a folder, we may need to transfer the build folder (if exists)
-            if (sourceEntry.Type != EntryType.Directory)
-            {
-                // We need to transfer the build folder (if exists), this is an optimization to avoid re-building everything
-                var sourceBuildPath = Path.Combine(sourceDdb.BuildFolderPath, sourceEntry.Hash);
-
-                if (_fs.FolderExists(sourceBuildPath))
-                {
-                    destBuildPath = Path.Combine(destDdb.BuildFolderPath, sourceEntry.Hash);
-                    _logger.LogInformation(
-                        "Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}' (keepSource={KeepSource})",
-                        sourceBuildPath, destBuildPath, keepSource);
-                    _fs.EnsureParentFolderExists(destBuildPath);
-                    // Always copy (never move): build folders are hash-addressed and may be
-                    // referenced by multiple entries. Moving would orphan other entries that
-                    // share the same hash. Orphaned build artifacts in the source dataset are
-                    // reclaimed by the recurring dataset cleanup job.
-                    _fs.FolderCopy(sourceBuildPath, destBuildPath);
-                    buildFolderCopied = true;
-                }
-                else
-                {
-                    _logger.LogInformation("No build folder found at '{SourceBuildPath}'", sourceBuildPath);
-                }
-            }
-            else
-            {
-                // If this is a folder we need to copy all build folders for each file in the folder
-                var allEntries = sourceDdb.FindSummaries(EntryQuery.Under(sourcePath));
-                var files = allEntries.Where(item => item.Type != EntryType.Directory).ToArray();
-                _logger.LogInformation("This is a folder transfer, checking build folders for {FilesCount} files",
-                    files.Length);
-
-                foreach (var entry in files)
-                {
-                    var sourceBuildPath = Path.Combine(sourceDdb.BuildFolderPath, entry.Hash);
-
-                    if (_fs.FolderExists(sourceBuildPath))
-                    {
-                        var destBuildPathForEntry = Path.Combine(destDdb.BuildFolderPath, entry.Hash);
-                        _logger.LogInformation(
-                            "Transferring build folder '{SourceBuildPath}' to '{DestBuildPath}' (keepSource={KeepSource})",
-                            sourceBuildPath, destBuildPathForEntry, keepSource);
-                        _fs.EnsureParentFolderExists(destBuildPathForEntry);
-                        // Always copy (never move): see comment above for the single-entry case.
-                        _fs.FolderCopy(sourceBuildPath, destBuildPathForEntry);
-                        createdDestBuildPaths.Add(destBuildPathForEntry);
-                        buildFolderCopied = true;
-                    }
-                    else
-                    {
-                        _logger.LogInformation("No build folder found at '{SourceBuildPath}'", sourceBuildPath);
-                    }
-                }
-            }
+            // The builds of the transferred files (artifacts and pending markers), so the destination
+            // does not build them again; copied, never moved: a build may serve other entries with the
+            // same content. A failure below leaves them as orphans for the recurring cleanup.
+            var files = sourceEntry.Type == EntryType.Directory
+                ? sourceDdb.FindSummaries(EntryQuery.Under(sourcePath)).Where(item => item.Type != EntryType.Directory)
+                    .Select(item => item.Path).ToArray()
+                : [sourcePath];
+            var copiedBuilds = _buildArtifactResolver.CopyBuilds(sourceDdb, files, destDdb);
+            _logger.LogInformation("Copied {Count} build(s) of {Files} file(s) to the destination", copiedBuilds,
+                files.Length);
 
             _logger.LogInformation("Removing source file");
 
@@ -590,28 +530,6 @@ public class ObjectsManager : IObjectsManager
             _logger.LogError(ex, "Transfer failed, attempting rollback");
 
             // Rollback in reverse order
-            if (buildFolderCopied)
-            {
-                // Single-file transfer recorded its destination only in destBuildPath; directory
-                // transfers populate createdDestBuildPaths. Roll back every path that was created.
-                if (destBuildPath != null && !createdDestBuildPaths.Contains(destBuildPath))
-                    createdDestBuildPaths.Add(destBuildPath);
-
-                foreach (var path in createdDestBuildPaths)
-                {
-                    try
-                    {
-                        _logger.LogWarning("Rolling back build folder copy at '{Path}'", path);
-                        if (_fs.FolderExists(path))
-                            _fs.FolderDelete(path);
-                    }
-                    catch (Exception rbEx)
-                    {
-                        _logger.LogError(rbEx, "Failed to rollback build folder copy at '{Path}'", path);
-                    }
-                }
-            }
-
             if (addedToDdb)
             {
                 try
@@ -740,7 +658,7 @@ public class ObjectsManager : IObjectsManager
         var sourceExt = Path.GetExtension(source);
         var destExt = Path.GetExtension(dest);
         if (!string.Equals(sourceExt, destExt, StringComparison.OrdinalIgnoreCase) &&
-            ddb.IsBuildable(updatedEntry.Path) && !ddb.IsBuildActive(updatedEntry.Path))
+            _buildArtifactResolver.GetBuild(ddb, updatedEntry.Path) is var moved && moved.CanBeBuilt() && !moved.HasLiveBuild())
         {
             _logger.LogInformation("Extension changed and file is buildable, triggering build for '{Path}'", dest);
             await _buildPendingService.SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
@@ -1130,11 +1048,11 @@ public class ObjectsManager : IObjectsManager
         foreach (var prj in prjs)
         {
             EntrySummary[] mains;
-            EntryBuildStatus[] statuses;
+            IReadOnlyList<EntryBuildArtifacts> builds;
             try
             {
                 // Every casing of the main file's extension: one listing of the .prj's folder
-                // (the native pattern ignores ASCII case), then one batch buildability check
+                // (the native pattern ignores ASCII case), then one build manifest call
                 var slash = prj.LastIndexOf('/');
                 var folder = slash < 0 ? string.Empty : prj[..slash];
                 var stem = Path.GetFileNameWithoutExtension(prj[(slash + 1)..]);
@@ -1142,7 +1060,7 @@ public class ObjectsManager : IObjectsManager
                     .Where(e => Path.GetFileNameWithoutExtension(e.Path) == stem &&
                                 SidecarMainExtensions.Contains(Path.GetExtension(e.Path)))
                     .ToArray();
-                statuses = mains.Length == 0 ? [] : ddb.GetBuildStatus(mains.Select(e => e.Path).ToArray());
+                builds = mains.Length == 0 ? [] : _buildArtifactResolver.GetBuilds(ddb, mains.Select(e => e.Path).ToArray());
             }
             catch (Exception ex)
             {
@@ -1156,7 +1074,7 @@ public class ObjectsManager : IObjectsManager
                 var mainPath = main.Path;
                 try
                 {
-                    if (i >= statuses.Length || !statuses[i].Buildable) continue;
+                    if (!builds[i].CanBeBuilt()) continue;
 
                     await _buildPendingService.SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
                     var meta = new IndexPayload(orgSlug, dsSlug, main.Hash, user?.Id, null, mainPath);
@@ -1567,7 +1485,7 @@ public class ObjectsManager : IObjectsManager
             throw new BadRequestException($"'{access.Path}' is a folder");
 
         return new RasterSource(entry, access.Ddb, access.Path,
-            GetAvailableBuildSource(entry, access.Ddb, access.Path));
+            GetAvailableRenderSource(entry, access.Ddb, access.Path));
     }
 
     private static void EnsureNoWildcardOrEmptyPaths(string path)
@@ -1633,16 +1551,18 @@ public class ObjectsManager : IObjectsManager
         if (entry == null)
             throw new NotFoundException($"Cannot find source entry: '{path}'");
 
+        var build = _buildArtifactResolver.GetBuild(ddb, entry.Path);
+
         // Nothing to do here
-        if (!ddb.IsBuildable(entry.Path))
+        if (!build.CanBeBuilt())
         {
             _logger.LogInformation("'{EntryPath}' is not buildable, nothing to do here", entry.Path);
             return;
         }
 
-        // Let's check if a build is already active (skip check when force=true to allow
-        // recovery from stale locks left behind by crashed/failed builds)
-        if (!force && ddb.IsBuildActive(entry.Path))
+        // A live build holds the lock (force skips the check: a stale lock of a crashed build is
+        // not a live build, and force recovers from it)
+        if (!force && build.HasLiveBuild())
             throw new ConflictException($"A build is already in progress for '{entry.Path}'");
 
         // Always build asynchronously using background job
@@ -1665,23 +1585,12 @@ public class ObjectsManager : IObjectsManager
 
         EnsureNoWildcardOrEmptyPaths(path);
 
-        // A file of a build, relative to its folder: libddb's path rule (RQ-11 moves this to DDBResolveBuildFile)
+        // libddb's path rule (the same 400 as every request path), then libddb resolves the file of the
+        // build and checks that it stays inside it (DDBResolveBuildFile)
         path = _paths.Normalize(path, "build file path");
-
-        var ddb = access.Ddb;
-
-        var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
-
-        _logger.LogInformation("Getting object '{DestPath}'", destPath);
-
-        var localPath = ddb.GetLocalPath(destPath);
-
-        return Path.GetFullPath(localPath);
+        return _buildArtifactResolver.ResolveFile(access.Ddb, hash, path)
+               ?? throw new NotFoundException($"'{path}' is not a file of the build '{hash}'");
     }
-
-    // Base build folder path (example: .ddb/build)
-    private static string BuildBasePath =>
-        CommonUtils.SafeCombine(IDDB.DatabaseFolderName, IDDB.BuildFolderName);
 
     public async Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path)
     {
@@ -1692,14 +1601,16 @@ public class ObjectsManager : IObjectsManager
 
         EnsureNoWildcardOrEmptyPaths(path);
 
-        // A file of a build, relative to its folder: libddb's path rule (RQ-11 moves this to DDBResolveBuildFile)
         path = _paths.Normalize(path, "build file path");
-
-        var ddb = access.Ddb;
-
-        var destPath = CommonUtils.SafeCombine(BuildBasePath, hash, path);
-
-        return _fs.Exists(ddb.GetLocalPath(destPath));
+        try
+        {
+            return _buildArtifactResolver.ResolveFile(access.Ddb, hash, path) != null;
+        }
+        catch (DdbInvalidArgumentsException)
+        {
+            // A malformed hash names no build: the file does not exist (HEAD answers 404, as it always did)
+            return false;
+        }
     }
 
     public async Task<(string FullPath, string ContentType, string FileName)> GetBuildArtifactPath(
@@ -1716,32 +1627,18 @@ public class ObjectsManager : IObjectsManager
         if (entry is null)
             throw new NotFoundException($"Entry '{entryPath}' does not exist in the dataset.");
 
-        // Resolve artifact path based on entry type
-        var (artifactPath, fileName, contentType) = entry.Type switch
-        {
-            EntryType.GeoRaster => (
-                _buildArtifactResolver.GetCogPath(ddb, entry.Hash),
-                "cog.tif",
-                "image/tiff"),
-            EntryType.PointCloud => (
-                _buildArtifactResolver.GetCopcPath(ddb, entry.Hash),
-                "cloud.copc.laz",
-                "application/octet-stream"),
-            EntryType.Vector => (
-                _buildArtifactResolver.GetVectorQueryPath(ddb, entry.Hash),
-                "source.gpkg",
-                "application/geopackage+sqlite"),
-            _ => throw new BadRequestException(
-                $"Entry type '{entry.Type}' does not have a downloadable build artifact.")
-        };
+        // The artifact libddb offers as a download (manifest: downloadName), served with Registry's media type
+        var build = _buildArtifactResolver.GetBuild(ddb, entry.Path);
+        if (_buildArtifactResolver.GetDownload(build) is { } download)
+            return (download.LocalPath, download.MediaType, download.FileName);
 
-        var fullPath = artifactPath;
+        // A build that is complete without a downloadable artifact, or no build of its own: nothing to download
+        if (!build.IsOwnBuild() || build.Build!.State == BuildState.Complete)
+            throw new BadRequestException(
+                $"Entry type '{entry.Type}' does not have a downloadable build artifact.");
 
-        if (!_fs.Exists(fullPath))
-            throw new NotFoundException(
-                $"Build artifact not found for '{entryPath}'. The entry may not have been built yet.");
-
-        return (fullPath, contentType, fileName);
+        throw new NotFoundException(
+            $"Build artifact not found for '{entryPath}'. The entry may not have been built yet.");
     }
 
     public async Task<EntryType?> GetEntryType(string orgSlug, string dsSlug, string path)
@@ -1757,77 +1654,21 @@ public class ObjectsManager : IObjectsManager
         return entry?.Type;
     }
 
-    public string GetBuildSource(Entry entry, IDDB ddb)
-    {
-        // NOTE: path-resolver only; data endpoints go through GetAvailableBuildSource.
-        var path = entry.Type switch
-        {
-            EntryType.PointCloud => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "copc", "cloud.copc.laz"),
-            EntryType.GeoRaster => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "cog", "cog.tif"),
-            EntryType.Vector => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "vec", "source.gpkg"),
-            EntryType.Model => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "nxs", "model.nxz"),
-            EntryType.GaussianSplat => CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "gsplat", "model.rad"),
-            _ => entry.Path
-        };
-
-        // Backwards-compat fallback: legacy datasets store point cloud builds as EPT.
-        // Prefer COPC; if not present but EPT exists, fall back to EPT (with a warning).
-        // New point cloud builds always produce COPC.
-        if (entry.Type == EntryType.PointCloud && ddb != null)
-        {
-            var copcLocal = ddb.GetLocalPath(path);
-            if (!_fs.Exists(copcLocal))
-            {
-                var eptRelative = CommonUtils.SafeCombine(BuildBasePath, entry.Hash, "ept", "ept.json");
-                var eptLocal = ddb.GetLocalPath(eptRelative);
-                if (_fs.Exists(eptLocal))
-                {
-                    _logger.LogWarning(
-                        "Point cloud build for entry '{Path}' (hash {Hash}) uses legacy EPT format at '{Ept}'. " +
-                        "Rebuild the dataset to produce COPC.",
-                        entry.Path, entry.Hash, eptRelative);
-                    return eptRelative;
-                }
-            }
-        }
-
-        return path;
-    }
-
-    // Data endpoints must resolve through here so a missing artifact is a 404, not a native 500.
-    private string GetAvailableBuildSource(Entry entry, IDDB ddb, string requestPath)
-    {
-        var sourcePath = GetBuildSource(entry, ddb);
-        EnsureBuildArtifactAvailable(ddb, entry, sourcePath, requestPath);
-        return sourcePath;
-    }
-
     /// <summary>
-    /// Guards the image/tile/raster-info pipeline endpoints: when
-    /// <see cref="GetBuildSource"/> rewrote an entry to its build artifact
-    /// (.ddb/build/&lt;hash&gt;/...), the artifact must exist on disk, otherwise
-    /// callers get a 404 "not processed yet" instead of a generator-level 500
-    /// (FileNotFoundException from the thumbnail/tile generators).
-    /// Runs BEFORE the response cache: artifact absence intentionally trumps any
-    /// cached thumbnail/tile (deleting an artifact invalidates served content).
+    /// The file a render reads for <paramref name="entry"/> (its build artifact, or the entry itself).
+    /// Runs before the response cache, so a missing artifact is a 404 "not available yet" (not a
+    /// generator-level 500), and deleting an artifact invalidates what was served from it.
     /// </summary>
-    private void EnsureBuildArtifactAvailable(IDDB ddb, Entry entry, string sourcePath, string originalPath)
+    private string GetAvailableRenderSource(Entry entry, IDDB ddb, string requestPath)
     {
-        // GetBuildSource rewrites buildable types to .ddb/build/<hash>/... ; for non-buildable
-        // types it returns entry.Path itself -> string equality is the skip test.
-        // NEVER ReferenceEquals(sourcePath, originalPath): entry.Path is a different string
-        // instance than the caller's request-path variable, so the skip branch would be dead
-        // code and the file-exists check would run on every non-buildable entry too (review A2).
-        if (sourcePath == entry.Path) return; // non-buildable: source itself
+        var sourcePath = _buildArtifactResolver.GetRenderSource(ddb, entry);
+        if (sourcePath != null)
+            return sourcePath;
 
-        if (!_fs.Exists(ddb.GetLocalPath(sourcePath)))
-        {
-            _logger.LogInformation(
-                "Build artifact for '{OriginalPath}' (hash {Hash}) not available yet at '{SourcePath}'",
-                originalPath, entry.Hash, sourcePath);
-            throw new NotFoundException(
-                $"Processed data for '{originalPath}' is not available yet (build pending or failed)");
-        }
+        _logger.LogInformation("Build artifact for '{OriginalPath}' (hash {Hash}) not available yet",
+            requestPath, entry.Hash);
+        throw new NotFoundException(
+            $"Processed data for '{requestPath}' is not available yet (build pending or failed)");
     }
 
     public async Task<IEnumerable<PendingBuildInfoDto>> GetPendingBuilds(string orgSlug, string dsSlug)

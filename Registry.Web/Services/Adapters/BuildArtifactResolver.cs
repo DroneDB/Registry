@@ -1,4 +1,9 @@
+#nullable enable
+using System;
+using System.Collections.Frozen;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
@@ -7,69 +12,156 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Resolves on-disk paths to deterministic build artifacts living under
-/// {dataset}/.ddb/build/{hash}/...
-/// Single source of truth used by OGC service managers; no duplicate path logic.
+/// Default <see cref="IBuildArtifactResolver"/>, over libddb's build manifest (XI-04): the one place where
+/// Registry chooses which artifact role a renderer reads and which media type a download is served
+/// with. Stateless; the entry types come from libddb once per process.
 /// </summary>
-public class BuildArtifactResolver : IBuildArtifactResolver
+public sealed class BuildArtifactResolver : IBuildArtifactResolver
 {
-    private readonly IFileSystem _fs;
+    /// <summary>
+    /// The roles the renderers read (thumbnails, tiles, raster analysis), in order of preference: the
+    /// first existing one of an entry's own build is its render source. libddb lists the legacy EPT
+    /// output only when there is no COPC, so the order never picks EPT over COPC.
+    /// </summary>
+    private static readonly string[] RenderRoles =
+    [
+        ArtifactRoles.RasterCog, ArtifactRoles.PointCloudCopc, ArtifactRoles.PointCloudEpt,
+        ArtifactRoles.VectorGpkg, ArtifactRoles.ModelNexus, ArtifactRoles.GsplatLod
+    ];
 
-    public BuildArtifactResolver(IFileSystem fs)
+    /// <summary>
+    /// The media types Registry has always served the downloadable artifacts with, by role. The manifest
+    /// gives the registered types (<c>image/tiff; application=geotiff; profile=cloud-optimized</c>,
+    /// <c>application/vnd.laszip+copc</c>, <c>application/geopackage+sqlite3</c>); switching to them is
+    /// a decision the user has not taken yet (RQ-11 RESULTS, "Media types"). When it is taken, delete
+    /// this table: <see cref="GetDownload"/> then serves <see cref="BuildArtifact.MediaType"/>.
+    /// A role without an entry is served with the manifest's type.
+    /// </summary>
+    private static readonly FrozenDictionary<string, string> ServedMediaTypes = new Dictionary<string, string>
     {
-        _fs = fs;
+        [ArtifactRoles.RasterCog] = "image/tiff",
+        [ArtifactRoles.PointCloudCopc] = "application/octet-stream",
+        [ArtifactRoles.VectorGpkg] = "application/geopackage+sqlite"
+    }.ToFrozenDictionary(StringComparer.Ordinal);
+
+    private readonly Lazy<FrozenSet<EntryType>> _renderedTypes;
+
+    public BuildArtifactResolver(IDdbWrapper ddbWrapper)
+    {
+        ArgumentNullException.ThrowIfNull(ddbWrapper);
+
+        // The entry types whose builds can produce a role a renderer reads (libddb's type rules)
+        _renderedTypes = new Lazy<FrozenSet<EntryType>>(() => ddbWrapper.GetEntryTypes()
+            .Where(t => t.Roles.Any(r => RenderRoles.Contains(r, StringComparer.Ordinal)))
+            .Select(t => t.Id)
+            .ToFrozenSet());
     }
 
-    private static string BuildBasePath =>
-        CommonUtils.SafeCombine(IDDB.DatabaseFolderName, IDDB.BuildFolderName);
+    public EntryBuildArtifacts GetBuild(IDDB ddb, string entryPath) => GetBuilds(ddb, [entryPath])[0];
 
-    private static string Relative(string entryHash, params string[] sub)
+    public IReadOnlyList<EntryBuildArtifacts> GetBuilds(IDDB ddb, IReadOnlyList<string> entryPaths)
     {
-        var combined = new string[sub.Length + 2];
-        combined[0] = BuildBasePath;
-        combined[1] = entryHash;
-        for (var i = 0; i < sub.Length; i++) combined[i + 2] = sub[i];
-        return CommonUtils.SafeCombine(combined);
+        ArgumentNullException.ThrowIfNull(ddb);
+        ArgumentNullException.ThrowIfNull(entryPaths);
+
+        var builds = ddb.GetBuildArtifacts(entryPaths);
+        if (builds.Count != entryPaths.Count)
+            throw new DdbException(
+                $"The build manifest has {builds.Count} element(s) for {entryPaths.Count} path(s)");
+        return builds;
     }
 
-    // ddb.GetLocalPath() may return a path relative to the current working directory
-    // (e.g. "./datasets/..."). Callers such as MVC PhysicalFileResult require an
-    // absolute (rooted) path, so we normalize here as the single source of truth.
-    private static string Absolute(string path) => Path.GetFullPath(path);
+    public string? GetRenderSource(IDDB ddb, Entry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
 
-    public string GetMvtDir(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "mvt")));
+        // A type that never renders from a build costs no native call (images: the hot thumbnail path)
+        if (!_renderedTypes.Value.Contains(entry.Type))
+            return entry.Path;
 
-    public string GetMvtMetadataPath(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "mvt", "metadata.json")));
+        var build = GetBuild(ddb, entry.Path);
+        if (!build.IsOwnBuild())
+            return entry.Path;
 
-    public string GetMvtTilePath(IDDB ddb, string entryHash, int z, int x, int y) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "mvt", z.ToString(), x.ToString(), $"{y}.pbf")));
+        var artifact = RenderRoles
+            .Select(role => build.Build!.Find(role))
+            .FirstOrDefault(a => a != null);
+        if (artifact == null)
+            return null;
 
-    public string GetCogPath(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "cog", "cog.tif")));
+        // A directory artifact (legacy EPT) is read through its descriptor
+        var local = build.Build!.LocalPathOf(artifact);
+        if (artifact.Index is { Length: > 0 } index)
+            local = Path.Combine(local, index.ToLocalSeparators());
 
-    public string GetVectorQueryPath(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "vec", "source.gpkg")));
+        return Path.GetRelativePath(Path.GetFullPath(ddb.DatasetFolderPath), local).ToDdbPath();
+    }
 
-    public string GetCopcPath(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "copc", "cloud.copc.laz")));
+    public BuildDownload? GetDownload(EntryBuildArtifacts build)
+    {
+        ArgumentNullException.ThrowIfNull(build);
 
-    public string GetGsplatPath(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "gsplat", "model.spz")));
+        if (!build.IsOwnBuild())
+            return null;
 
-    public string GetGsplatLodPath(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "gsplat", "model.rad")));
+        var artifact = build.Build!.Artifacts.FirstOrDefault(a => !string.IsNullOrEmpty(a.DownloadName));
+        if (artifact == null)
+            return null;
 
-    public string GetGsplatGeorefPath(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "gsplat", "georef.json")));
+        return new BuildDownload(build.Build.LocalPathOf(artifact), artifact.DownloadName!,
+            ServedMediaTypes.GetValueOrDefault(artifact.Role, artifact.MediaType));
+    }
 
-    public string Get3DTilesDir(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "3dtiles")));
+    public string? ResolveFile(IDDB ddb, string hash, string path)
+    {
+        ArgumentNullException.ThrowIfNull(ddb);
+        return ddb.ResolveBuildFile(hash, path);
+    }
 
-    public string Get3DTilesTilesetPath(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "3dtiles", "tileset.json")));
+    public int CopyBuilds(IDDB source, IReadOnlyList<string> entryPaths, IDDB destination)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        if (entryPaths.Count == 0)
+            return 0;
 
-    public bool ArtifactExists(string fullPath) =>
-        !string.IsNullOrEmpty(fullPath) && _fs.Exists(fullPath);
+        var hashes = GetBuilds(source, entryPaths)
+            .Where(b => b.IsOwnBuild() && (b.Build!.Artifacts.Count > 0 || b.Build.State == BuildState.Pending))
+            .Select(b => b.Build!.Hash!)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        foreach (var hash in hashes)
+            source.CopyBuildArtifactsTo(destination.DatasetFolderPath, hash);
+
+        return hashes.Length;
+    }
+}
+
+/// <summary>Reading libddb's build manifest (XI-04).</summary>
+public static class BuildManifestExtensions
+{
+    /// <summary>The entry is buildable (by itself, or as a sidecar of its main file).</summary>
+    public static bool CanBeBuilt(this EntryBuildArtifacts build) => build.Build?.Buildable == true;
+
+    /// <summary>
+    /// The build is the entry's own: it is buildable and not a sidecar (whose build, and artifacts, are its
+    /// main file's).
+    /// </summary>
+    public static bool IsOwnBuild(this EntryBuildArtifacts build) =>
+        build.Build is { Buildable: true, Hash: not null, Root: not null } own &&
+        string.Equals(own.Source, build.Path, StringComparison.Ordinal);
+
+    /// <summary>A live build holds the entry's build lock.</summary>
+    public static bool HasLiveBuild(this EntryBuildArtifacts build) => build.Build?.State == BuildState.Building;
+
+    /// <summary>The existing artifact with <paramref name="role"/>, or null.</summary>
+    public static BuildArtifact? Find(this EntryBuild build, string role) =>
+        build.Artifacts.FirstOrDefault(a => string.Equals(a.Role, role, StringComparison.Ordinal));
+
+    /// <summary>The absolute local path of <paramref name="artifact"/> (relative to the build root).</summary>
+    public static string LocalPathOf(this EntryBuild build, BuildArtifact artifact)
+    {
+        ArgumentNullException.ThrowIfNull(build.Root);
+        return Path.GetFullPath(Path.Combine(build.Root, artifact.Path.ToLocalSeparators()));
+    }
 }

@@ -90,9 +90,9 @@ public sealed class RescanRebuild
 
         try
         {
-            // One native call for every entry; statuses come back in input order
-            var statuses = ddb.GetBuildStatus(candidates.Select(r => r.Path).ToArray());
-            return candidates.Where((_, i) => i < statuses.Length && statuses[i].Buildable).ToList();
+            // One native call for every entry (the build manifest); builds come back in input order
+            var builds = ddb.GetBuildArtifacts(candidates.Select(r => r.Path).ToArray());
+            return candidates.Where((_, i) => i < builds.Count && builds[i].CanBeBuilt()).ToList();
         }
         catch (Exception ex)
         {

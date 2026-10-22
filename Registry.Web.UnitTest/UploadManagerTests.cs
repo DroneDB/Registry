@@ -83,6 +83,7 @@ public class UploadManagerTests
 
         _ddb = new Mock<IDDB>();
         _ddb.SetupGet(d => d.DatasetFolderPath).Returns(_root);
+        _ddb.SetupBuilds();
         _ddb.Setup(d => d.GetLocalPath(It.IsAny<string>())).Returns<string>(p => Path.Combine(_root, p));
 
         _queue = new Mock<IDatasetIndexQueue>();

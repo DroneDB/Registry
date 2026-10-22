@@ -24,9 +24,9 @@ namespace Registry.Web.Services.Adapters;
 /// rebuild for any buildable entry whose build output is missing or empty
 /// (e.g. after a build-format migration like FGB→MVT or EPT→COPC).
 ///
-/// Authoritative completeness logic lives in the DroneDB C++ library
-/// (<c>DDBIsBuildComplete</c>): the service is intentionally thin so that
-/// .NET cannot drift from the native layout rules.
+/// Authoritative buildability, state and completeness come from the DroneDB C++
+/// library's build manifest (<c>DDBGetBuildArtifacts</c>, one call per dataset): the
+/// service is intentionally thin so that .NET cannot drift from the native layout rules.
 /// </summary>
 /// <remarks>
 /// One run at a time across the hosts (the nightly run and the admin trigger of
@@ -93,10 +93,10 @@ public class ArtifactCompletenessCheckerService
     }
 
     /// <summary>
-    /// Buildability and completeness of every entry with one native call, or null when DroneDB
-    /// cannot answer in one go (the scan then asks entry by entry, isolating failures).
+    /// The build manifest of every entry with one native call (XI-04), or null when DroneDB cannot
+    /// answer in one go (the scan then asks entry by entry, isolating failures).
     /// </summary>
-    private Dictionary<string, EntryBuildStatus>? GetBuildStatuses(IDDB ddb, IReadOnlyList<EntrySummary> entries,
+    private Dictionary<string, EntryBuildArtifacts>? GetBuilds(IDDB ddb, IReadOnlyList<EntrySummary> entries,
         string key)
     {
         var paths = entries.Select(e => e.Path).Where(p => !string.IsNullOrEmpty(p))
@@ -106,18 +106,18 @@ public class ArtifactCompletenessCheckerService
 
         try
         {
-            var statuses = ddb.GetBuildStatus(paths);
-            if (statuses == null || statuses.Length != paths.Length)
+            var builds = ddb.GetBuildArtifacts(paths);
+            if (builds == null || builds.Count != paths.Length)
                 return null;
 
-            var byPath = new Dictionary<string, EntryBuildStatus>(paths.Length, StringComparer.Ordinal);
+            var byPath = new Dictionary<string, EntryBuildArtifacts>(paths.Length, StringComparer.Ordinal);
             for (var i = 0; i < paths.Length; i++)
-                byPath[paths[i]] = statuses[i];
+                byPath[paths[i]] = builds[i];
             return byPath;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Batch build status failed for {Key}, checking entries one by one", key);
+            _logger.LogWarning(ex, "Batch build manifest failed for {Key}, checking entries one by one", key);
             return null;
         }
     }
@@ -129,7 +129,7 @@ public class ArtifactCompletenessCheckerService
         var stats = new DatasetStats();
         var entries = ddb.FindSummaries(EntryQuery.All);
         var candidates = new List<EntrySummary>();
-        var statuses = GetBuildStatuses(ddb, entries, key);
+        var builds = GetBuilds(ddb, entries, key);
 
         foreach (var entry in entries)
         {
@@ -141,24 +141,26 @@ public class ArtifactCompletenessCheckerService
 
             try
             {
-                var status = statuses?.GetValueOrDefault(entry.Path);
-                if (!(status?.Buildable ?? ddb.IsBuildable(entry.Path)))
+                var build = (builds?.GetValueOrDefault(entry.Path) ?? ddb.GetBuildArtifacts([entry.Path])[0]).Build;
+                if (build is not { Buildable: true })
                 {
                     stats.SkippedNotBuildable++;
                     continue;
                 }
 
-                // Completeness first: the batch answers it, so only incomplete entries need a native call
-                if (status?.Complete ?? ddb.IsBuildComplete(entry.Path))
+                // libddb's precedence: a live build, then a pending marker (it waits for a
+                // dependency; adding it retries the build), then complete artifacts
+                switch (build.State)
                 {
-                    stats.SkippedComplete++;
-                    continue;
-                }
-
-                if (ddb.IsBuildActive(entry.Path))
-                {
-                    stats.SkippedActive++;
-                    continue;
+                    case BuildState.Building:
+                        stats.SkippedActive++;
+                        continue;
+                    case BuildState.Pending:
+                        stats.SkippedPending++;
+                        continue;
+                    case BuildState.Complete:
+                        stats.SkippedComplete++;
+                        continue;
                 }
 
                 candidates.Add(entry);
@@ -174,20 +176,12 @@ public class ArtifactCompletenessCheckerService
         if (candidates.Count == 0)
             return stats;
 
-        // Pending builds wait for a dependency; adding it retries them (BuildPendingWrapper).
-        var pending = GetPendingPaths(ddb, key);
         var history = await GetBuildHistoryAsync(orgSlug, dsSlug, candidates.Select(e => e.Path).ToArray(), ct);
         var now = DateTime.UtcNow;
 
         foreach (var entry in candidates)
         {
             ct.ThrowIfCancellationRequested();
-            if (pending.Contains(entry.Path))
-            {
-                stats.SkippedPending++;
-                continue;
-            }
-
             if (history.TryGetValue(entry.Path, out var jobs) &&
                 ShouldBackOff(jobs, entry.Hash, now, out var failures, out var retryAt))
             {
@@ -300,19 +294,6 @@ public class ArtifactCompletenessCheckerService
         }
 
         return result;
-    }
-
-    private HashSet<string> GetPendingPaths(IDDB ddb, string key)
-    {
-        try
-        {
-            return ddb.GetPendingBuildInfo().Select(p => p.Path).ToHashSet(StringComparer.Ordinal);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cannot read pending builds for {Key}", key);
-            return [];
-        }
     }
 
     private sealed class DatasetStats

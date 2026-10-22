@@ -108,14 +108,14 @@ public class ObjectsManagerCopyTransferTest : TestBase
         _ddbMock.SetupGet(x => x.BuildFolderPath).Returns(Path.Combine(DatasetFolder, ".ddb", "build"));
         _ddbMock.Setup(x => x.GetLocalPath(It.IsAny<string>()))
             .Returns<string>(p => Path.Combine(DatasetFolder, p));
-        _ddbMock.Setup(x => x.IsBuildActive(It.IsAny<string>())).Returns(false);
+        _ddbMock.SetupBuilds();
 
         _otherDdbMock = new Mock<IDDB>();
         _otherDdbMock.SetupGet(x => x.DatasetFolderPath).Returns(OtherDatasetFolder);
         _otherDdbMock.SetupGet(x => x.BuildFolderPath).Returns(Path.Combine(OtherDatasetFolder, ".ddb", "build"));
         _otherDdbMock.Setup(x => x.GetLocalPath(It.IsAny<string>()))
             .Returns<string>(p => Path.Combine(OtherDatasetFolder, p));
-        _otherDdbMock.Setup(x => x.IsBuildActive(It.IsAny<string>())).Returns(false);
+        _otherDdbMock.SetupBuilds();
 
         _ddbManagerMock.Setup(x => x.Get(OrgSlug, _ds.InternalRef)).Returns(_ddbMock.Object);
         _ddbManagerMock.Setup(x => x.Get(OrgSlug, _otherDs.InternalRef)).Returns(_otherDdbMock.Object);
@@ -315,7 +315,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
     }
 
     [Test]
-    public async Task Transfer_BuildFolder_AlwaysCopiedNeverMoved()
+    public async Task Transfer_CopiesTheBuildThroughLibddb_NeverByHand()
     {
         const string sourcePath = "cloud.laz";
         const string destPath = "cloud.laz";
@@ -323,6 +323,8 @@ public class ObjectsManagerCopyTransferTest : TestBase
 
         _ddbMock.Setup(x => x.GetEntry(sourcePath))
             .Returns(new Entry { Path = sourcePath, Type = EntryType.PointCloud, Size = 10, Hash = hash });
+        _ddbMock.SetupBuilds(TestBuilds.Build(DatasetFolder, sourcePath, EntryType.PointCloud, hash,
+            BuildState.Complete, TestBuilds.File(ArtifactRoles.PointCloudCopc, "copc/cloud.copc.laz")));
         _otherDdbMock.Setup(x => x.GetEntry(destPath)).Returns((Entry?)null);
         _otherDdbMock.Setup(x => x.EntryExists(destPath)).Returns(true);
 
@@ -333,12 +335,11 @@ public class ObjectsManagerCopyTransferTest : TestBase
         await mgr.Transfer(OrgSlug, DsSlug, sourcePath, OrgSlug, OtherDsSlug,
             destPath: destPath, overwrite: false, keepSource: false);
 
-        _fsMock.Verify(
-            x => x.FolderCopy(It.Is<string>(s => s.Contains(hash)), It.Is<string>(s => s.Contains(hash)),
-                It.IsAny<bool>(), It.IsAny<bool>()),
-            Times.AtLeastOnce);
-        _fsMock.Verify(
-            x => x.FolderMove(It.Is<string>(s => s.Contains(hash)), It.Is<string>(s => s.Contains(hash))),
-            Times.Never);
+        // DDBCopyBuildArtifacts: the artifacts and the pending marker, copied (a build may serve other
+        // entries with the same content), never a build folder named by Registry
+        _ddbMock.Verify(x => x.CopyBuildArtifactsTo(OtherDatasetFolder, hash), Times.Once);
+        _fsMock.Verify(x => x.FolderCopy(It.Is<string>(s => s.Contains(hash)), It.IsAny<string>(),
+            It.IsAny<bool>(), It.IsAny<bool>()), Times.Never);
+        _fsMock.Verify(x => x.FolderMove(It.Is<string>(s => s.Contains(hash)), It.IsAny<string>()), Times.Never);
     }
 }

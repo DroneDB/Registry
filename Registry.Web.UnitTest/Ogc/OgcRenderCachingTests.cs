@@ -49,7 +49,7 @@ public class OgcRenderCachingTests
     private Mock<IDdbWrapper> _wrapper = null!;
     private Mock<IDDB> _ddb = null!;
     private Mock<IOgcLayerCatalog> _catalog = null!;
-    private Mock<IBuildArtifactResolver> _artifacts = null!;
+    private Mock<IOgcBuildArtifactPaths> _artifacts = null!;
     private CacheManager _cacheManager = null!;
     private MemoryDistributedCache _cache = null!;
     private DefaultHttpContext _http = null!;
@@ -68,7 +68,7 @@ public class OgcRenderCachingTests
         var ddbManager = new Mock<IDdbManager>();
         ddbManager.Setup(m => m.Get(Org, _dataset.InternalRef)).Returns(_ddb.Object);
 
-        _artifacts = new Mock<IBuildArtifactResolver>();
+        _artifacts = new Mock<IOgcBuildArtifactPaths>();
         _artifacts.Setup(a => a.GetCogPath(It.IsAny<IDDB>(), It.IsAny<string>())).Returns("/data/cog.tif");
         _artifacts.Setup(a => a.ArtifactExists(It.IsAny<string>())).Returns(true);
 

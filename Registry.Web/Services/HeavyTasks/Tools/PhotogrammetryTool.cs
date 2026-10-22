@@ -76,9 +76,6 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         }
         """);
 
-    // Files are indexed in batches of this size: bounds the per-transaction lock time.
-    private const int IndexChunkSize = 250;
-
     private readonly INodeOdxClient _client;
     private readonly INodeOdxNodeRegistry _nodes;
     private readonly DatasetArchiveExtractor _archives;
@@ -87,7 +84,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
     private readonly ImportSettings _importSettings;
     private readonly DatasetPathPolicy _paths;
     private readonly IScratchFileProvider _scratch;
-    private readonly ILogger<PhotogrammetryTool> _logger;
+    private readonly TaskFileIndexer _indexer;
     private readonly TimeSpan _pollInterval;
 
     public PhotogrammetryTool(
@@ -98,7 +95,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
         DatasetPathPolicy paths,
         IScratchFileProvider scratch,
-        ILogger<PhotogrammetryTool> logger)
+        TaskFileIndexer indexer)
     {
         _scratch = scratch;
         _client = client;
@@ -108,7 +105,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         _scopeFactory = scopeFactory;
         _settings = platformSettings.Value;
         _importSettings = importSettings.Value;
-        _logger = logger;
+        _indexer = indexer;
         var seconds = platformSettings.Value.RemoteNodePollIntervalSeconds;
         _pollInterval = TimeSpan.FromSeconds(Math.Max(1, seconds));
     }
@@ -341,56 +338,9 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
 
         ct.ThrowIfCancellationRequested();
 
-        // Index everything in batches.
-        var indexed = new List<Entry>(extractedPaths.Count);
-        for (var i = 0; i < extractedPaths.Count; i += IndexChunkSize)
-        {
-            ct.ThrowIfCancellationRequested();
-            var slice = extractedPaths.GetRange(i, Math.Min(IndexChunkSize, extractedPaths.Count - i));
-            indexed.AddRange(ddb.AddRawBatch(slice));
-            progress.Report(new HeavyToolProgress(
-                extractedPaths.Count > 0 ? 0.97 + 0.02 * (double)(i + slice.Count) / extractedPaths.Count : -1,
-                "indexing", LogChunk: $"Indexed {i + slice.Count}/{extractedPaths.Count} file(s)"));
-        }
-
-        // Enqueue per-file build jobs for buildable entries.
-        {
-            var buildableCount = 0;
-
-            foreach (var entry in indexed)
-            {
-                if (!ddb.IsBuildable(entry.Path))
-                    continue;
-
-                var path = entry.Path;
-                var meta = new IndexPayload(
-                    orgSlug,
-                    dsSlug,
-                    entry.Hash,
-                    null,
-                    Path: path,
-                    ParentJobId: ctx.TaskId);
-
-                ctx.Jobs.EnqueueBuild(dataset, path, false, meta);
-                buildableCount++;
-            }
-
-            _logger.LogInformation("Enqueued {Count} build job(s) for photogrammetry results in {Org}/{Ds}",
-                buildableCount, orgSlug, dsSlug);
-        }
-
-        // Invalidate cached tiles/thumbnails/OGC.
-        try
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var cacheInvalidator = scope.ServiceProvider.GetRequiredService<IDatasetCacheInvalidator>();
-            await cacheInvalidator.InvalidateAllDatasetCachesAsync(orgSlug, dsSlug);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cache invalidation after photogrammetry extract failed for {Org}/{Ds}",
-                orgSlug, dsSlug);
-        }
+        // Index, queue the builds of the buildable results (children of this task), invalidate the caches
+        await _indexer.IndexAsync(new TaskFiles(ddb, dataset, orgSlug, dsSlug, extractedPaths, ctx.Jobs, ctx.TaskId,
+            "photogrammetry results", ProgressFrom: 0.97, ProgressTo: 0.99), progress, ct);
 
         progress.Report(new HeavyToolProgress(0.99, "extracting",
             LogChunk: $"Extraction complete: {extraction.Extracted.Count} extracted, {extraction.Skipped} skipped"));

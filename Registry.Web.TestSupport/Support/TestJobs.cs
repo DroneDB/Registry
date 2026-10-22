@@ -4,6 +4,7 @@ using Hangfire.InMemory;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Registry.Ports;
 using Registry.Web.Data;
@@ -48,6 +49,17 @@ public static class TestJobs
         new(ddb, new DatasetKey(orgSlug, internalRef == default ? System.Guid.NewGuid() : internalRef), null,
             NullLogger.Instance, taskId, workDir, null!, jobs ?? Mock.Of<IBackgroundJobsProcessor>(),
             builds ?? DdbJobs(jobs: jobs));
+
+    /// <summary>
+    /// What a task does with the files it wrote (index, queue builds, invalidate the caches), over a loose
+    /// cache invalidator unless given.
+    /// </summary>
+    public static Services.HeavyTasks.TaskFileIndexer FileIndexer(IDatasetCacheInvalidator? caches = null) =>
+        new(new Microsoft.Extensions.DependencyInjection.ServiceCollection()
+                .AddSingleton(caches ?? Mock.Of<IDatasetCacheInvalidator>())
+                .BuildServiceProvider()
+                .GetRequiredService<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>(),
+            NullLogger<Services.HeavyTasks.TaskFileIndexer>.Instance);
 
     /// <summary>The dataset cache invalidator over <paramref name="cache"/> (OGC keys on a memory cache).</summary>
     public static DatasetCacheInvalidator CacheInvalidator(ICacheManager cache, JobStorage? storage = null) =>

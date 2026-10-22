@@ -14,13 +14,11 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Default <see cref="IBuildStatusService"/> implementation. Combines the
-/// Hangfire job index (for "building"/"failed") with the DroneDB C++
-/// library's pending-build view (for "pending", including the missing
-/// dependency names) and build-completeness check (for the default "ready"
-/// state) into a single per-entry status.
-/// A listing costs at most two native calls (batch build status, pending
-/// builds) and two job index queries scoped to the listed paths, whatever
-/// the number of entries.
+/// Hangfire job index (for "building"/"failed") with libddb's build manifest
+/// (XI-04: buildability, the pending marker with the missing dependency names,
+/// and completeness for the default "ready" state) into a single per-entry status.
+/// A listing costs one native call (the manifest of the listed entries) and two
+/// job index queries scoped to the listed paths, whatever the number of entries.
 /// </summary>
 public class BuildStatusService : IBuildStatusService
 {
@@ -50,12 +48,12 @@ public class BuildStatusService : IBuildStatusService
         if (candidates.Count == 0)
             return;
 
-        var statusByPath = GetBuildStatusSafe(ddb, candidates);
-        if (statusByPath == null)
+        var buildByPath = GetBuildsSafe(ddb, candidates);
+        if (buildByPath == null)
             return;
 
         var buildable = candidates
-            .Where(e => statusByPath.TryGetValue(e.Path, out var status) && status.Buildable)
+            .Where(e => buildByPath.TryGetValue(e.Path, out var build) && build.CanBeBuilt())
             .ToList();
         if (buildable.Count == 0)
             return;
@@ -70,21 +68,18 @@ public class BuildStatusService : IBuildStatusService
         if (notBuilding.Count == 0)
             return;
 
-        var pendingByPath = ddb.GetPendingBuildInfo()
-            .GroupBy(p => p.Path)
-            .ToDictionary(g => g.Key, g => g.First());
-
         // "failed" or "queued": decided by the latest build job, read only for these entries
         var unfinished = new List<EntryDto>();
 
         foreach (var entry in notBuilding)
         {
-            if (pendingByPath.TryGetValue(entry.Path, out var pending))
+            var build = buildByPath[entry.Path].Build!;
+            if (HasPendingMarker(build))
             {
                 entry.BuildStatus = "pending";
-                entry.BuildMissingDependencies = pending.MissingDependencies;
+                entry.BuildMissingDependencies = [.. build.MissingDependencies];
             }
-            else if (!statusByPath[entry.Path].Complete)
+            else if (build.State != BuildState.Complete)
                 unfinished.Add(entry);
             // else ready: the default state, nothing to transmit
         }
@@ -101,11 +96,17 @@ public class BuildStatusService : IBuildStatusService
                 : "queued";
     }
 
-    private Dictionary<string, EntryBuildStatus>? GetBuildStatusSafe(IDDB ddb, IReadOnlyList<EntryDto> candidates)
+    // A pending marker: libddb reports "pending", or "building" (the lock wins) with the marker's
+    // missing dependencies while a build that was deferred runs again outside a build job
+    private static bool HasPendingMarker(EntryBuild build) =>
+        build.State == BuildState.Pending ||
+        (build.State == BuildState.Building && build.MissingDependencies.Count > 0);
+
+    private Dictionary<string, EntryBuildArtifacts>? GetBuildsSafe(IDDB ddb, IReadOnlyList<EntryDto> candidates)
     {
         try
         {
-            return ddb.GetBuildStatus(candidates.Select(e => e.Path).Distinct().ToArray())
+            return ddb.GetBuildArtifacts(candidates.Select(e => e.Path).Distinct().ToArray())
                 .GroupBy(s => s.Path)
                 .ToDictionary(g => g.Key, g => g.First());
         }

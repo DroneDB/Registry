@@ -248,48 +248,34 @@ public class DDB : IDDB
         return fullPath;
     }
 
-    // RQ-11 shims: the per-entry build probes of IDdbBuild answered from libddb's build manifest
-    // (DDBGetBuildArtifacts, XI-04), the only build query of the IDdbWrapper port. RQ-11 moves their
-    // callers to the role-based resolver and removes them from IDdbBuild.
-
-    public bool IsBuildable(string path) => BuildOf(path, nameof(IsBuildable))?.Buildable ?? false;
-
-    /// <summary>A live build holds the entry's build lock (a stale lock is not a build, and stays in place).</summary>
-    public bool IsBuildActive(string path) => BuildOf(path, nameof(IsBuildActive))?.State == BuildState.Building;
-
-    /// <summary>The artifacts are complete (libddb's "complete" state: not building, not pending).</summary>
-    public bool IsBuildComplete(string path) => BuildOf(path, nameof(IsBuildComplete))?.State == BuildState.Complete;
-
     public bool IsBuildPending()
     {
         return Wrap(() => Wrapper.IsBuildPending(DatasetFolderPath),
             ex => $"Cannot call IsBuildPending from ddb '{DatasetFolderPath}'");
     }
 
-    public EntryBuildStatus[] GetBuildStatus(string[] paths)
+    public IReadOnlyList<EntryBuildArtifacts> GetBuildArtifacts(IReadOnlyList<string> paths)
     {
-        if (paths.Length == 0)
+        ArgumentNullException.ThrowIfNull(paths);
+        if (paths.Count == 0)
             return [];
 
-        return GetBuildArtifacts(paths, nameof(GetBuildStatus))
-            .Select(a => new EntryBuildStatus
-            {
-                Path = a.Path,
-                Exists = a.Exists,
-                Buildable = a.Build?.Buildable ?? false,
-                Complete = a.Build?.State == BuildState.Complete
-            })
-            .ToArray();
-    }
-
-    private EntryBuild? BuildOf(string path, string operation) =>
-        GetBuildArtifacts([path], operation)[0].Build;
-
-    private EntryBuildArtifacts[] GetBuildArtifacts(string[] paths, string operation)
-    {
         var normalized = paths.Select(p => p.ToDdbPath()).ToArray();
         return Wrap(() => Wrapper.GetBuildArtifacts(DatasetFolderPath, normalized),
-            ex => $"Cannot call {operation} from ddb '{DatasetFolderPath}'");
+            ex => $"Cannot read the build manifest from ddb '{DatasetFolderPath}'");
+    }
+
+    public string? ResolveBuildFile(string hash, string path)
+    {
+        return Wrap(() => Wrapper.ResolveBuildFile(DatasetFolderPath, hash, path.ToDdbPath()),
+            ex => $"Cannot resolve the build file '{path}' of '{hash}' in ddb '{DatasetFolderPath}'");
+    }
+
+    public CopiedBuildArtifacts CopyBuildArtifactsTo(string destinationDatasetFolder, string hash)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationDatasetFolder);
+        return Wrap(() => Wrapper.CopyBuildArtifacts(DatasetFolderPath, destinationDatasetFolder, hash),
+            ex => $"Cannot copy the build '{hash}' from ddb '{DatasetFolderPath}' to '{destinationDatasetFolder}'");
     }
 
     public PendingBuildInfo[] GetPendingBuildInfo()

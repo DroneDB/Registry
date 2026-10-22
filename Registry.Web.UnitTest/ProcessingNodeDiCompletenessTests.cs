@@ -83,6 +83,20 @@ public class ProcessingNodeDiCompletenessTests
     }
 
     [Test]
+    public void ProcessingNode_HeavyToolsActivateWithoutTheJobStorage()
+    {
+        // The Hangfire filters are installed from inside Hangfire's configuration (InstallJobFilters),
+        // and the queue routing filter takes the tool registry: a tool whose construction needs the job
+        // storage re-enters that configuration ("Console is already initialized" at the host start)
+        using var provider = BuildNodeProvider(s => s.AddSingleton<JobStorage>(_ =>
+            throw new InvalidOperationException("A heavy tool needs the job storage to be constructed")));
+        using var scope = provider.CreateScope();
+
+        Should.NotThrow(() => scope.ServiceProvider.GetRequiredService<IHeavyToolRegistry>());
+        scope.ServiceProvider.GetServices<IHeavyTool>().ShouldNotBeEmpty();
+    }
+
+    [Test]
     public void ProcessingNode_RegistersDatasetIndexQueue()
     {
         using var provider = BuildNodeProvider();

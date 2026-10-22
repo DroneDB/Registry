@@ -8,11 +8,11 @@ using Shouldly;
 namespace Registry.Web.Test.Ogc;
 
 [TestFixture]
-public class BuildArtifactResolverTests
+public class OgcBuildArtifactPathsTests
 {
     private Mock<IFileSystem> _fs = null!;
     private Mock<IDDB> _ddb = null!;
-    private BuildArtifactResolver _resolver = null!;
+    private OgcBuildArtifactPaths _resolver = null!;
     private const string Hash = "abc123";
 
     [SetUp]
@@ -21,9 +21,9 @@ public class BuildArtifactResolverTests
         _fs = new Mock<IFileSystem>();
         _ddb = new Mock<IDDB>();
         // Pass-through GetLocalPath so the relative path under .ddb/build/{hash}/ is preserved
-        // up until BuildArtifactResolver applies Path.GetFullPath().
+        // up until OgcBuildArtifactPaths applies Path.GetFullPath().
         _ddb.Setup(d => d.GetLocalPath(It.IsAny<string>())).Returns<string>(p => p);
-        _resolver = new BuildArtifactResolver(_fs.Object);
+        _resolver = new OgcBuildArtifactPaths(_fs.Object);
     }
 
     private static string Norm(string p) => p.Replace('\\', '/');

@@ -317,13 +317,13 @@ public class PushManager : IPushManager
         // Build items
         var user = await _authManager.GetCurrentUser();
         var files = delta.Adds.Where(item => item.Hash.Length > 0).ToArray();
-        var statuses = ddb.GetBuildStatus([.. files.Select(item => item.Path)]);
+        var builds = ddb.GetBuildArtifacts([.. files.Select(item => item.Path)]);
         var hasBuildableFiles = false;
 
-        // One status per path, in input order
-        foreach (var (item, status) in files.Zip(statuses))
+        // One build object per path, in input order (the build manifest, XI-04)
+        foreach (var (item, build) in files.Zip(builds))
         {
-            if (!status.Buildable) continue;
+            if (!build.CanBeBuilt()) continue;
 
             hasBuildableFiles = true;
             var meta = new IndexPayload(orgSlug, dsSlug, item.Hash, user.Id, null, item.Path);
