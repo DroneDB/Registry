@@ -58,7 +58,7 @@ public class Rq11BuildManifestTests
     {
         _root = Path.Combine(Path.GetTempPath(), "rq11-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        _resolver = new BuildArtifactResolver(_wrapper);
+        _resolver = TestPorts.Artifacts(_wrapper);
     }
 
     [TearDown]

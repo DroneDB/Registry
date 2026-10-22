@@ -31,7 +31,7 @@ public class BuildArtifactResolverTests
     {
         _ddb = new Mock<IDDB>();
         _ddb.SetupGet(d => d.DatasetFolderPath).Returns(Folder);
-        _resolver = new BuildArtifactResolver(new FakeDdbWrapper());
+        _resolver = TestPorts.Artifacts();
     }
 
     private static Entry Entry(string path, EntryType type) => new() { Path = path, Type = type, Hash = Hash };

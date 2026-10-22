@@ -70,7 +70,7 @@ public class BuildStatusServiceTest : TestBase
     public void TearDown() => _context.Dispose();
 
     private BuildStatusService CreateService() =>
-        new(_jobIndexQuery, new BuildArtifactResolver(new Registry.Adapters.Testing.FakeDdbWrapper()), TestPorts.Urls(), _logger);
+        new(_jobIndexQuery, TestPorts.Artifacts(), TestPorts.Urls(), _logger);
 
     private static EntryDto Entry(string path, EntryType type = EntryType.GeoRaster) =>
         new() { Path = path, Type = type };

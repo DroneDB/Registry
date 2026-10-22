@@ -6,8 +6,8 @@ using Registry.Web.Models.DTO;
 namespace Registry.Web.Services.Ports;
 
 /// <summary>
-/// The absolute URLs Registry gives its resources (RQ-12, from <c>IUtils</c>): the public host (the external URL
-/// override, else the request's), the dataset URLs.
+/// The absolute URLs Registry gives its resources (RQ-12, split from the former utilities service): the public
+/// host (the external URL override, else the request's), the dataset URLs.
 /// </summary>
 public interface IUrlBuilder
 {

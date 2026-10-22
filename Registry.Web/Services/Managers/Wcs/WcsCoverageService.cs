@@ -29,7 +29,7 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
     private readonly ILogger<WcsCoverageService> _logger;
     private readonly INativeWorkGate _gate;
 
-    public WcsCoverageService(IDatasetAccessResolver access, IOgcBuildArtifactPaths ar,
+    public WcsCoverageService(IDatasetAccessResolver access, IBuildArtifactResolver ar,
         IDdbWrapper w, IOgcLayerCatalog c, IRecordCache cache, IHttpContextAccessor ctx,
         ILogger<WcsCoverageService> logger, INativeWorkGate? gate = null) : base(access, ar, w, c, cache, ctx)
     {
@@ -101,13 +101,12 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
     {
         try
         {
-            var src = ResolveRasterArtifact(ddb, layer);
             // The build COG and the source it falls back to are probed separately
-            var key = CacheCategories.OgcRasterProbe(layer.EntryHash,
-                src == Artifacts.GetCogPath(ddb, layer.EntryHash) ? "cog" : "src");
+            var src = ResolveRasterSource(ddb, layer);
+            var key = CacheCategories.OgcRasterProbe(layer.EntryHash, src.Source);
 
             return await Records.GetOrCreateRecordAsync(key,
-                _ => Task.FromResult(ParseRasterInfo(DdbWrapper.GetRasterInfo(src))), ProbeCache);
+                _ => Task.FromResult(ParseRasterInfo(DdbWrapper.GetRasterInfo(src.Path))), ProbeCache);
         }
         catch (Exception ex)
         {

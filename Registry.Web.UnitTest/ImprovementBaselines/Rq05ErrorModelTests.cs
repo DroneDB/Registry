@@ -189,7 +189,9 @@ public sealed class Rq05ErrorModelTests : IDisposable
     public async Task BareNotFoundResult_IsProblemDetailsWithNoRetry()
     {
         // MvtController answers NotFound() without a body for a tile that was never built: the
-        // framework's ProblemDetails gets the noRetry member too (AddProblemDetails customization)
+        // framework's ProblemDetails gets the noRetry member too (AddProblemDetails customization).
+        // No vector of the dataset has the hash: the tiles are looked up by role among the vectors (RQ-12)
+        _factory.DdbWrapper.Setup(d => d.ListEntrySummaries(It.IsAny<string>(), It.IsAny<EntryQuery>())).Returns([]);
         var (response, problem) = await SendAsync(HttpMethod.Get,
             $"/orgs/{PrivateOrg}/ds/{PrivateDs}/mvt/abc/0/0/0.pbf", OwnerUser);
 

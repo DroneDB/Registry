@@ -108,14 +108,14 @@ public class ObjectsManagerCopyTransferTest : TestBase
 
         _ddbMock = new Mock<IDDB>();
         _ddbMock.SetupGet(x => x.DatasetFolderPath).Returns(DatasetFolder);
-        _ddbMock.SetupGet(x => x.BuildFolderPath).Returns(Path.Combine(DatasetFolder, ".ddb", "build"));
+        _ddbMock.SetupGet(x => x.DerivedFolderPaths).Returns([Path.Combine(DatasetFolder, ".ddb", "build")]);
         _ddbMock.Setup(x => x.GetLocalPath(It.IsAny<string>()))
             .Returns<string>(p => Path.Combine(DatasetFolder, p));
         _ddbMock.SetupBuilds();
 
         _otherDdbMock = new Mock<IDDB>();
         _otherDdbMock.SetupGet(x => x.DatasetFolderPath).Returns(OtherDatasetFolder);
-        _otherDdbMock.SetupGet(x => x.BuildFolderPath).Returns(Path.Combine(OtherDatasetFolder, ".ddb", "build"));
+        _otherDdbMock.SetupGet(x => x.DerivedFolderPaths).Returns([Path.Combine(OtherDatasetFolder, ".ddb", "build")]);
         _otherDdbMock.Setup(x => x.GetLocalPath(It.IsAny<string>()))
             .Returns<string>(p => Path.Combine(OtherDatasetFolder, p));
         _otherDdbMock.SetupBuilds();

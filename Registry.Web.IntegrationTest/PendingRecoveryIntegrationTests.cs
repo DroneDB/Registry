@@ -472,13 +472,13 @@ public class PendingRecoveryIntegrationTests
         ddb.Build("recover.obj");
         ddb.Build("ordinary.obj");
         var hash = ddb.GetEntry("recover.obj")!.Hash;
-        var root = Path.Combine(ddb.BuildFolderPath, hash);
+        var root = Path.Combine(ddb.DerivedFolderPaths.Single(), hash);
         var nexus = Path.Combine(root, "nxs", "model.nxz");
         var bytes = await File.ReadAllBytesAsync(nexus);
         var modified = File.GetLastWriteTimeUtc(nexus);
         foreach (var path in new[] { "recover.obj", "ordinary.obj" })
         {
-            var tiles = Path.Combine(ddb.BuildFolderPath, ddb.GetEntry(path)!.Hash, "3dtiles");
+            var tiles = Path.Combine(ddb.DerivedFolderPaths.Single(), ddb.GetEntry(path)!.Hash, "3dtiles");
             if (Directory.Exists(tiles)) Directory.Delete(tiles, recursive: true);
         }
         var old = Path.Combine(root, "3dtiles-old");
@@ -787,7 +787,7 @@ public class PendingRecoveryIntegrationTests
 
     private static void MakeDue(IDDB ddb, string path)
     {
-        var marker = Path.Combine(ddb.BuildFolderPath, ddb.GetEntry(path)!.Hash + ".pending");
+        var marker = Path.Combine(ddb.DerivedFolderPaths.Single(), ddb.GetEntry(path)!.Hash + ".pending");
         var lines = File.ReadAllLines(marker);
         lines[0] = (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - PendingMarkers.LibddbRetryBackoffSeconds - 1)
             .ToString(System.Globalization.CultureInfo.InvariantCulture);

@@ -25,14 +25,14 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     private readonly IDdbManager _ddbManager;
     private readonly IDatasetResolver _datasets;
     private readonly IRecordCache _records;
-    private readonly IOgcBuildArtifactPaths _artifacts;
+    private readonly IBuildArtifactResolver _artifacts;
     private readonly IDdbWrapper _ddbWrapper;
     private readonly IOgcCacheKeys _keys;
     private readonly ILogger<OgcLayerCatalog> _logger;
     private static readonly RecordCacheOptions LayersCache = RecordCacheOptions.For(TimeSpan.FromMinutes(5));
 
     public OgcLayerCatalog(IDdbManager ddbManager, IDatasetResolver datasets, IRecordCache records,
-        IOgcBuildArtifactPaths artifacts, IDdbWrapper ddbWrapper,
+        IBuildArtifactResolver artifacts, IDdbWrapper ddbWrapper,
         IOgcCacheKeys keys,
         ILogger<OgcLayerCatalog> logger)
     {
@@ -146,8 +146,8 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     private List<OgcLayerDto>? TryExpandVectorLayers(IDDB ddb, Entry e, double[]? entryBbox)
     {
         if (string.IsNullOrEmpty(e.Hash)) return null;
-        var gpkgPath = _artifacts.GetVectorQueryPath(ddb, e.Hash);
-        if (!_artifacts.ArtifactExists(gpkgPath)) return null;
+        var gpkgPath = _artifacts.FindArtifactFile(ddb, e.Hash, ArtifactRoles.VectorGpkg, entryPath: e.Path);
+        if (gpkgPath == null) return null;
 
         string json;
         try

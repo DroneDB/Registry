@@ -29,7 +29,7 @@ public class OgcApiTilesManager : OgcManagerBase, IOgcApiTilesManager
 {
     private readonly IOgcRasterTileSource _rasterTiles;
 
-    public OgcApiTilesManager(IDatasetAccessResolver access, IOgcBuildArtifactPaths ar,
+    public OgcApiTilesManager(IDatasetAccessResolver access, IBuildArtifactResolver ar,
         IDdbWrapper w, IOgcLayerCatalog c, IRecordCache cache, IHttpContextAccessor ctx,
         IOgcRasterTileSource rasterTiles)
         : base(access, ar, w, c, cache, ctx)
@@ -77,8 +77,8 @@ public class OgcApiTilesManager : OgcManagerBase, IOgcApiTilesManager
 
         if (layer.EntryType == EntryType.Vector)
         {
-            var path = Artifacts.GetMvtTilePath(ddb, layer.EntryHash, z, x, y);
-            return Artifacts.ArtifactExists(path) ? await File.ReadAllBytesAsync(path) : null;
+            var path = MvtTile(ddb, layer, z, x, y);
+            return path != null ? await File.ReadAllBytesAsync(path) : null;
         }
         return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer, z, x, y, "png");
     }

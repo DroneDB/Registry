@@ -141,8 +141,8 @@ public sealed class ZipArchiveBuilder : IZipArchiveBuilder
                 archive.CreateEntry(folder + "/");
         }
 
-        // Include the .ddb database folder when archiving the whole dataset (excludes
-        // the build folder), reproducing the legacy whole-dataset archive.
+        // Include the .ddb database folder when archiving the whole dataset (without the folders of
+        // derived data, the builds), reproducing the legacy whole-dataset archive.
         if (includeDdb)
         {
             // Index writes leave their changes in the WAL: they go into the database file first.
@@ -152,7 +152,7 @@ public sealed class ZipArchiveBuilder : IZipArchiveBuilder
             ddb.Checkpoint();
             var database = Path.Combine(ddb.DatasetFolderPath, IDDB.DatabaseFolderName);
             await archive.CreateEntryFromAnyAsync(database, string.Empty,
-                [ddb.BuildFolderPath, Path.Combine(database, IDDB.DatabaseFileName + "-shm")], ct);
+                [.. ddb.DerivedFolderPaths, Path.Combine(database, IDDB.DatabaseFileName + "-shm")], ct);
         }
     }
 }

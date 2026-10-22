@@ -76,7 +76,7 @@ public class ZipDownloadMemoryBaselineTests : TestBase
     public void Setup()
     {
         _root = Path.Combine(Path.GetTempPath(), "reg04-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(Path.Combine(_root, IDDB.DatabaseFolderName, IDDB.BuildFolderName));
+        Directory.CreateDirectory(Path.Combine(_root, IDDB.DatabaseFolderName, Registry.Adapters.DroneDB.DDB.BuildFolderName));
         var rnd = new Random(42);
         for (var i = 0; i < Files; i++)
         {
@@ -89,7 +89,7 @@ public class ZipDownloadMemoryBaselineTests : TestBase
         _filesOpened = 0;
         var ddb = new Mock<IDDB>();
         ddb.SetupGet(d => d.DatasetFolderPath).Returns(_root);
-        ddb.SetupGet(d => d.BuildFolderPath).Returns(Path.Combine(_root, IDDB.DatabaseFolderName, IDDB.BuildFolderName));
+        ddb.SetupGet(d => d.DerivedFolderPaths).Returns([Path.Combine(_root, IDDB.DatabaseFolderName, Registry.Adapters.DroneDB.DDB.BuildFolderName)]);
         ddb.Setup(d => d.Checkpoint()).Returns(true);
         ddb.Setup(d => d.GetLocalPath(It.IsAny<string>())).Returns((string p) =>
         {

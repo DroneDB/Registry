@@ -52,7 +52,7 @@ public class WfsFeatureQueryTests
     private Mock<IDatasetResolver> _utils = null!;
     private Mock<IAuthManager> _auth = null!;
     private Mock<IDdbManager> _ddbManager = null!;
-    private Mock<IOgcBuildArtifactPaths> _artifacts = null!;
+    private Mock<IBuildArtifactResolver> _artifacts = null!;
     private string _polygons = null!;
 
     [SetUp]
@@ -68,9 +68,9 @@ public class WfsFeatureQueryTests
         _auth.Setup(a => a.RequestAccess(dataset, AccessType.Read)).ReturnsAsync(true);
         _ddbManager = new Mock<IDdbManager>();
         _ddbManager.Setup(m => m.Get(Org, dataset.InternalRef)).Returns(Mock.Of<IDDB>());
-        _artifacts = new Mock<IOgcBuildArtifactPaths>();
-        _artifacts.Setup(a => a.GetVectorQueryPath(It.IsAny<IDDB>(), "h1")).Returns(Gpkg);
-        _artifacts.Setup(a => a.ArtifactExists(Gpkg)).Returns(true);
+        _artifacts = new Mock<IBuildArtifactResolver>();
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), "h1", ArtifactRoles.VectorGpkg, null, It.IsAny<string?>()))
+            .Returns(Gpkg);
 
         _catalog = new Mock<IOgcLayerCatalog>();
         _catalog.Setup(c => c.GetLayersAsync(Org, Ds, It.IsAny<string?>(), It.IsAny<bool>())).ReturnsAsync([Layer]);

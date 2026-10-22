@@ -25,7 +25,7 @@ public class OgcLayerCatalogTests
     private Mock<IDdbManager> _ddbManager = null!;
     private Mock<IDatasetResolver> _utils = null!;
     private Mock<IDDB> _ddb = null!;
-    private Mock<IOgcBuildArtifactPaths> _artifacts = null!;
+    private Mock<IBuildArtifactResolver> _artifacts = null!;
     private Mock<IDdbWrapper> _wrapper = null!;
     private Mock<IOgcCacheKeys> _keys = null!;
     private IDistributedCache _cache = null!;
@@ -40,7 +40,7 @@ public class OgcLayerCatalogTests
         _ddbManager = new Mock<IDdbManager>();
         _utils = new Mock<IDatasetResolver>();
         _ddb = new Mock<IDDB>();
-        _artifacts = new Mock<IOgcBuildArtifactPaths>();
+        _artifacts = new Mock<IBuildArtifactResolver>();
         _wrapper = new Mock<IDdbWrapper>();
         _keys = new Mock<IOgcCacheKeys>();
 
@@ -73,8 +73,8 @@ public class OgcLayerCatalogTests
         var entry = VectorEntry();
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
 
-        _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
-        _artifacts.Setup(a => a.ArtifactExists("/tmp/source.gpkg")).Returns(true);
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), entry.Hash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+            .Returns("/tmp/source.gpkg");
         _wrapper.Setup(w => w.DescribeVector("/tmp/source.gpkg", null)).Returns(
             "{\"layers\":[" +
             "{\"name\":\"roads\",\"geometryType\":\"LineString\",\"extent\":[1.0,2.0,3.0,4.0]}," +
@@ -100,8 +100,8 @@ public class OgcLayerCatalogTests
     {
         var entry = VectorEntry("site.dwg");
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
-        _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
-        _artifacts.Setup(a => a.ArtifactExists("/tmp/source.gpkg")).Returns(true);
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), entry.Hash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+            .Returns("/tmp/source.gpkg");
         _wrapper.Setup(w => w.DescribeVector("/tmp/source.gpkg", null)).Returns(
             "{\"layers\":[{\"name\":\"entities\",\"geometryType\":\"LineString\",\"srs\":\"\"," +
             "\"extent\":[514000.0,5034000.0,514500.0,5034500.0]}]}");
@@ -123,7 +123,6 @@ public class OgcLayerCatalogTests
         var entry = VectorEntry("site.dwg");
         entry.Properties = new Dictionary<string, object> { ["georeferenced"] = false };
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
-        _artifacts.Setup(a => a.ArtifactExists(It.IsAny<string>())).Returns(false);
 
         (await _catalog.GetLayersAsync(Org, Ds)).ShouldBeEmpty();
         (await _catalog.GetLayersAsync(Org, Ds, includeLocal: true)).Single().IsLocal.ShouldBeTrue();
@@ -134,8 +133,8 @@ public class OgcLayerCatalogTests
     {
         var entry = VectorEntry("site.dwg");
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
-        _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
-        _artifacts.Setup(a => a.ArtifactExists("/tmp/source.gpkg")).Returns(true);
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), entry.Hash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+            .Returns("/tmp/source.gpkg");
         _wrapper.Setup(w => w.DescribeVector("/tmp/source.gpkg", null)).Returns(
             "{\"layers\":[{\"name\":\"entities\",\"srs\":\"EPSG:4326\",\"extent\":[9.1,45.4,9.2,45.5]}]}");
 
@@ -149,8 +148,9 @@ public class OgcLayerCatalogTests
     {
         var entry = VectorEntry();
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
-        _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
-        _artifacts.Setup(a => a.ArtifactExists(It.IsAny<string>())).Returns(false);
+        // The build has no GeoPackage (yet): the resolver finds no file for the role
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), entry.Hash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+            .Returns((string)null);
 
         var result = await _catalog.GetLayersAsync(Org, Ds);
 
@@ -166,8 +166,8 @@ public class OgcLayerCatalogTests
     {
         var entry = VectorEntry();
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
-        _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
-        _artifacts.Setup(a => a.ArtifactExists(It.IsAny<string>())).Returns(true);
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), entry.Hash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+            .Returns("/tmp/source.gpkg");
         _wrapper.Setup(w => w.DescribeVector(It.IsAny<string>(), It.IsAny<string>()))
             .Throws(new InvalidOperationException("native failure"));
 
@@ -184,8 +184,8 @@ public class OgcLayerCatalogTests
     {
         var entry = VectorEntry();
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
-        _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
-        _artifacts.Setup(a => a.ArtifactExists(It.IsAny<string>())).Returns(true);
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), entry.Hash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+            .Returns("/tmp/source.gpkg");
         _wrapper.Setup(w => w.DescribeVector(It.IsAny<string>(), It.IsAny<string>()))
             .Returns("{\"layers\":[]}");
 
@@ -269,8 +269,8 @@ public class OgcLayerCatalogTests
     {
         var entry = VectorEntry();
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
-        _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
-        _artifacts.Setup(a => a.ArtifactExists(It.IsAny<string>())).Returns(true);
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), entry.Hash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+            .Returns("/tmp/source.gpkg");
         _wrapper.Setup(w => w.DescribeVector(It.IsAny<string>(), It.IsAny<string>()))
             .Returns("{\"layers\":[{\"name\":\"roads\"},{\"name\":\"poi\"}]}");
 
@@ -285,8 +285,8 @@ public class OgcLayerCatalogTests
     {
         var entry = VectorEntry();
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
-        _artifacts.Setup(a => a.GetVectorQueryPath(_ddb.Object, entry.Hash)).Returns("/tmp/source.gpkg");
-        _artifacts.Setup(a => a.ArtifactExists(It.IsAny<string>())).Returns(true);
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), entry.Hash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+            .Returns("/tmp/source.gpkg");
         _wrapper.Setup(w => w.DescribeVector(It.IsAny<string>(), It.IsAny<string>()))
             .Returns("{\"layers\":[{\"name\":\"roads\"},{\"name\":\"poi\"}]}");
 

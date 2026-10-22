@@ -29,7 +29,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
 {
     private readonly ILogger<WfsManager> _logger;
 
-    public WfsManager(IDatasetAccessResolver access, IOgcBuildArtifactPaths ar,
+    public WfsManager(IDatasetAccessResolver access, IBuildArtifactResolver ar,
         IDdbWrapper w, IOgcLayerCatalog c, IRecordCache cache, IHttpContextAccessor ctx, ILogger<WfsManager> logger)
         : base(access, ar, w, c, cache, ctx)
     {

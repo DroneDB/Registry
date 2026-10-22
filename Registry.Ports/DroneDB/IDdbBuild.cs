@@ -9,9 +9,10 @@ namespace Registry.Ports.DroneDB;
 public interface IDdbBuild
 {
     /// <summary>
-    /// The build folder path
+    /// The folders of the database that hold what libddb derives from the files (the builds): left out of a copy
+    /// of the database, which they would only make larger (XI-04: Registry never names them).
     /// </summary>
-    string BuildFolderPath { get; }
+    IReadOnlyList<string> DerivedFolderPaths { get; }
 
     void Build(string path, string dest = null, bool force = false);
     void BuildAll(string dest = null, bool force = false);

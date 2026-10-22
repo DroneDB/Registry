@@ -171,7 +171,7 @@ public sealed class Rq12RecordCacheTests
         ddbManager.Setup(m => m.Get("org", dataset.InternalRef)).Returns(ddb.Object);
 
         var catalog = new OgcLayerCatalog(ddbManager.Object, utils.Object,
-            new RecordCache(store, NullLogger<RecordCache>.Instance), Mock.Of<IOgcBuildArtifactPaths>(),
+            new RecordCache(store, NullLogger<RecordCache>.Instance), Mock.Of<IBuildArtifactResolver>(),
             Mock.Of<IDdbWrapper>(), Mock.Of<IOgcCacheKeys>(k => k.ForAsync(It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<string>(), It.IsAny<string?>()) == Task.FromResult("layers-key")),
             NullLogger<OgcLayerCatalog>.Instance);

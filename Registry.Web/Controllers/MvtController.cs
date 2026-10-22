@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Filters;
 using Registry.Web.Services.Managers;
@@ -19,9 +20,9 @@ using Registry.Web.Utilities.Ogc;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// Mapbox Vector Tile (MVT) endpoint. Serves precomputed tiles from
-/// {dataset}/.ddb/build/{hash}/mvt/{z}/{x}/{y}.pbf for the Vue/OpenLayers frontend
-/// and OGC API Tiles delegate. Authorized like the OGC endpoints: Basic credentials, then
+/// Mapbox Vector Tile (MVT) endpoint. Serves the precomputed tiles of a vector's build (the <c>vector.mvt</c>
+/// artifact of libddb's build manifest, XI-04: <see cref="MvtTiles"/>) for the Vue/OpenLayers frontend and the
+/// OGC API Tiles delegate. Authorized like the OGC endpoints: Basic credentials, then
 /// <see cref="OgcAuthorizationFilter"/> (read access, its denials in the OGC envelope).
 /// </summary>
 [ApiController]
@@ -33,9 +34,9 @@ namespace Registry.Web.Controllers;
 public class MvtController : ControllerBaseEx
 {
     private readonly IDatasetAccessResolver _access;
-    private readonly IOgcBuildArtifactPaths _artifacts;
+    private readonly IBuildArtifactResolver _artifacts;
 
-    public MvtController(IDatasetAccessResolver access, IOgcBuildArtifactPaths artifacts)
+    public MvtController(IDatasetAccessResolver access, IBuildArtifactResolver artifacts)
     {
         _access = access;
         _artifacts = artifacts;
@@ -57,9 +58,8 @@ public class MvtController : ControllerBaseEx
 
         // The filter granted read access: the resolver reuses the grant
         var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read)).Ddb;
-        var tilePath = _artifacts.GetMvtTilePath(ddb, hash, z, x, y);
-
-        if (!_artifacts.ArtifactExists(tilePath))
+        var tilePath = _artifacts.FindArtifactFile(ddb, hash, ArtifactRoles.VectorMvt, MvtTiles.Tile(z, x, y));
+        if (tilePath == null)
             return NotFound();
 
         // Tiles are already gzip-compressed (COMPRESS=YES in MVT driver).
@@ -80,8 +80,9 @@ public class MvtController : ControllerBaseEx
         [FromRoute, Required] string hash)
     {
         var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read)).Ddb;
-        var path = _artifacts.GetMvtMetadataPath(ddb, hash);
-        if (!_artifacts.ArtifactExists(path)) return NotFound();
+        // The pyramid's descriptor (metadata.json)
+        var path = _artifacts.FindArtifactFile(ddb, hash, ArtifactRoles.VectorMvt);
+        if (path == null) return NotFound();
         return PhysicalFile(path, "application/json");
     }
 }

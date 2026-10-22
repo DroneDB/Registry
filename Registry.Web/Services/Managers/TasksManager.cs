@@ -272,7 +272,7 @@ public sealed class TasksManager : ITasksManager
         var job = await LoadAuthorizedTaskAsync(orgSlug, dsSlug, id, AccessType.Write, ct);
 
         // Sweep-ownership rule: dependency-gated builds are re-run by the pending-build sweep;
-        // the Retry button must not start a competing run while a .pending marker exists.
+        // the Retry button must not start a competing run while libddb reports a deferred build.
         if (job.ToolId == HeavyToolIds.Build && await IsBuildPendingSafeAsync(orgSlug, dsSlug, ct))
             throw new ConflictException(
                 "A pending build retry is already scheduled for this dataset; the pending-build sweep owns that retry");
@@ -340,8 +340,8 @@ public sealed class TasksManager : ITasksManager
     }
 
     /// <summary>
-    /// Checks the dataset for on-disk pending-build markers (the <c>.pending</c> files the
-    /// DroneDB build rethrow leaves behind). Any failure returns false so that a ddb
+    /// Asks libddb whether the dataset has deferred builds (those the
+    /// DroneDB build rethrow left for a retry). Any failure returns false so that a ddb
     /// availability hiccup never blocks the user-initiated retry.
     /// </summary>
     private async Task<bool> IsBuildPendingSafeAsync(string orgSlug, string dsSlug, CancellationToken ct)

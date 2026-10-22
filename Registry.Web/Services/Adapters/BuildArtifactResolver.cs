@@ -4,6 +4,7 @@ using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Microsoft.Extensions.Caching.Memory;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
@@ -14,10 +15,16 @@ namespace Registry.Web.Services.Adapters;
 /// <summary>
 /// Default <see cref="IBuildArtifactResolver"/>, over libddb's build manifest (XI-04): the one place where
 /// Registry chooses which artifact role a renderer reads and which media type a download is served
-/// with. Stateless; the entry types come from libddb once per process.
+/// with. The entry types come from libddb once per process; the locations of existing artifacts are kept in a
+/// bounded process-memory cache (<see cref="FindArtifact"/>).
 /// </summary>
-public sealed class BuildArtifactResolver : IBuildArtifactResolver
+public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
 {
+    /// <summary>Locations of artifacts kept: enough for every built layer a host serves at once.</summary>
+    private const int LocationCacheSize = 20_000;
+
+    private static readonly TimeSpan LocationExpiry = TimeSpan.FromMinutes(30);
+
     /// <summary>
     /// The roles the renderers read (thumbnails, tiles, raster analysis), in order of preference: the
     /// first existing one of an entry's own build is its render source. libddb lists the legacy EPT
@@ -46,17 +53,22 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver
 
     private readonly Lazy<FrozenSet<EntryType>> _renderedTypes;
     private readonly Lazy<FrozenSet<EntryType>> _buildableTypes;
+    private readonly Lazy<IReadOnlyList<EntryTypeInfo>> _types;
+    private readonly IFileSystem _fs;
+    private readonly MemoryCache _locations = new(new MemoryCacheOptions { SizeLimit = LocationCacheSize });
 
-    public BuildArtifactResolver(IDdbWrapper ddbWrapper)
+    public BuildArtifactResolver(IDdbWrapper ddbWrapper, IFileSystem fs)
     {
         ArgumentNullException.ThrowIfNull(ddbWrapper);
+        _fs = fs ?? throw new ArgumentNullException(nameof(fs));
+        _types = new Lazy<IReadOnlyList<EntryTypeInfo>>(ddbWrapper.GetEntryTypes);
 
         // libddb's type rules: the types it builds, and those whose builds can produce a role a renderer reads
-        _buildableTypes = new Lazy<FrozenSet<EntryType>>(() => ddbWrapper.GetEntryTypes()
+        _buildableTypes = new Lazy<FrozenSet<EntryType>>(() => _types.Value
             .Where(t => t.Buildable)
             .Select(t => t.Id)
             .ToFrozenSet());
-        _renderedTypes = new Lazy<FrozenSet<EntryType>>(() => ddbWrapper.GetEntryTypes()
+        _renderedTypes = new Lazy<FrozenSet<EntryType>>(() => _types.Value
             .Where(t => t.Roles.Any(r => RenderRoles.Contains(r, StringComparer.Ordinal)))
             .Select(t => t.Id)
             .ToFrozenSet());
@@ -122,6 +134,77 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver
     {
         ArgumentNullException.ThrowIfNull(artifact);
         return ServedMediaTypes.GetValueOrDefault(artifact.Role, artifact.MediaType);
+    }
+
+    public string? FindArtifactFile(IDDB ddb, string hash, string role, string? relativePath = null,
+        string? entryPath = null)
+    {
+        if (FindArtifact(ddb, hash, role, entryPath) is not { } located)
+            return null;
+
+        var file = relativePath != null ? located.Under(relativePath)
+            : located.Artifact.Index is { Length: > 0 } index ? located.Under(index)
+            : located.LocalPath;
+        return _fs.Exists(file) ? file : null;
+    }
+
+    private LocatedArtifact? FindArtifact(IDDB ddb, string hash, string role, string? entryPath)
+    {
+        ArgumentNullException.ThrowIfNull(ddb);
+        ArgumentException.ThrowIfNullOrWhiteSpace(hash);
+        ArgumentException.ThrowIfNullOrWhiteSpace(role);
+
+        var key = (Path.GetFullPath(ddb.DatasetFolderPath), hash, role);
+        if (_locations.TryGetValue(key, out LocatedArtifact? known) && known != null)
+        {
+            if (Exists(known))
+                return known;
+            _locations.Remove(key);
+        }
+
+        var located = Locate(ddb, hash, role, entryPath);
+        if (located != null)
+            _locations.Set(key, located, new MemoryCacheEntryOptions { Size = 1, SlidingExpiration = LocationExpiry });
+        return located;
+    }
+
+    // The entry of the build (given, or found by hash among the types whose builds produce the role), then the
+    // manifest of its build
+    private LocatedArtifact? Locate(IDDB ddb, string hash, string role, string? entryPath)
+    {
+        string[] paths;
+        if (entryPath != null)
+            paths = [entryPath];
+        else
+        {
+            var types = _types.Value.Where(t => t.Roles.Contains(role, StringComparer.Ordinal)).Select(t => t.Id).ToArray();
+            if (types.Length == 0)
+                return null;
+            paths = [.. ddb.FindSummaries(EntryQuery.OfTypes(null, types))
+                .Where(e => string.Equals(e.Hash, hash, StringComparison.Ordinal))
+                .Select(e => e.Path)];
+        }
+
+        if (paths.Length == 0)
+            return null;
+
+        return GetBuilds(ddb, paths)
+            .Where(b => b.IsOwnBuild() && string.Equals(b.Build!.Hash, hash, StringComparison.Ordinal))
+            .Select(b => (Build: b.Build!, Artifact: b.Build!.Find(role)))
+            .Where(f => f.Artifact != null)
+            .Select(f => new LocatedArtifact(f.Build.LocalPathOf(f.Artifact!), f.Artifact!))
+            .FirstOrDefault();
+    }
+
+    private bool Exists(LocatedArtifact located) =>
+        located.Artifact.Kind == "dir" ? _fs.FolderExists(located.LocalPath) : _fs.Exists(located.LocalPath);
+
+    public void Dispose() => _locations.Dispose();
+
+    // An existing artifact of a build and its local path (a file, or a directory artifact's directory)
+    private sealed record LocatedArtifact(string LocalPath, BuildArtifact Artifact)
+    {
+        public string Under(string relativePath) => Path.Combine(LocalPath, relativePath.ToLocalSeparators());
     }
 
     public string? ResolveFile(IDDB ddb, string hash, string path)

@@ -81,7 +81,7 @@ public sealed class Rq12ArtifactLinksTests
                     It.IsAny<IReadOnlyCollection<string>>(), default) == Task.FromResult(new HashSet<string>()) &&
                 q.GetLatestStatesByPathAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
                     It.IsAny<IReadOnlyCollection<string>>(), default) == Task.FromResult(new Dictionary<string, string>())),
-            new BuildArtifactResolver(new Registry.Adapters.Testing.FakeDdbWrapper()), Urls,
+            TestPorts.Artifacts(), Urls,
             NullLogger<BuildStatusService>.Instance);
 
         await service.AnnotateAsync("org", "ds", ddb.Object, entries);

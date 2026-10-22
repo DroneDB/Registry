@@ -91,7 +91,7 @@ public class ObjectsManagerThumbnailTests : TestBase
 
         _ddbMock = new Mock<IDDB>();
         _ddbMock.SetupGet(x => x.DatasetFolderPath).Returns(DatasetFolder);
-        _ddbMock.SetupGet(x => x.BuildFolderPath).Returns(Path.Combine(DatasetFolder, ".ddb", "build"));
+        _ddbMock.SetupGet(x => x.DerivedFolderPaths).Returns([Path.Combine(DatasetFolder, ".ddb", "build")]);
         _ddbMock.Setup(x => x.GetLocalPath(It.IsAny<string>()))
             .Returns<string>(p => Path.Combine(DatasetFolder, p.Replace('/', Path.DirectorySeparatorChar)));
         _ddbManagerMock.Setup(x => x.Get(OrgSlug, _ds.InternalRef)).Returns(_ddbMock.Object);

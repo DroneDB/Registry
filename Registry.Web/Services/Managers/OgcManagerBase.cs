@@ -34,7 +34,7 @@ public abstract class OgcManagerBase
     protected const string NsDdb   = OgcNamespaces.Ddb;
 
     protected readonly IDatasetAccessResolver Access;
-    protected readonly IOgcBuildArtifactPaths Artifacts;
+    protected readonly IBuildArtifactResolver Builds;
     protected readonly IDdbWrapper DdbWrapper;
     protected readonly IOgcLayerCatalog LayerCatalog;
     protected readonly IRecordCache Records;
@@ -53,11 +53,11 @@ public abstract class OgcManagerBase
         XmlWriter.Create(sb, new XmlWriterSettings { Indent = true, Async = true, OmitXmlDeclaration = true });
 
     protected OgcManagerBase(IDatasetAccessResolver access,
-        IOgcBuildArtifactPaths artifacts, IDdbWrapper ddbWrapper, IOgcLayerCatalog catalog,
+        IBuildArtifactResolver builds, IDdbWrapper ddbWrapper, IOgcLayerCatalog catalog,
         IRecordCache records, IHttpContextAccessor httpContext)
     {
         Access = access;
-        Artifacts = artifacts; DdbWrapper = ddbWrapper; LayerCatalog = catalog; Records = records;
+        Builds = builds; DdbWrapper = ddbWrapper; LayerCatalog = catalog; Records = records;
         HttpContext = httpContext;
     }
 
@@ -112,26 +112,28 @@ public abstract class OgcManagerBase
         return any ? [minLon, minLat, maxLon, maxLat] : null;
     }
 
-    protected string ResolveRasterArtifact(IDDB ddb, OgcLayerDto layer)
-    {
-        var cog = Artifacts.GetCogPath(ddb, layer.EntryHash);
-        return Artifacts.ArtifactExists(cog) ? cog :
-            // Fallback to source file via ddb local path.
-            ddb.GetLocalPath(layer.EntryPath);
-    }
+    /// <summary>The file a raster layer reads: its build's COG (<c>raster.cog</c>), else the entry's own file.</summary>
+    protected string ResolveRasterArtifact(IDDB ddb, OgcLayerDto layer) => ResolveRasterSource(ddb, layer).Path;
 
-    protected string ResolveVectorArtifact(IDDB ddb, OgcLayerDto layer)
-    {
-        var gpkg = Artifacts.GetVectorQueryPath(ddb, layer.EntryHash);
-        if (!Artifacts.ArtifactExists(gpkg))
-            // OWS Common 2.0: a referenced layer/typeName the server cannot serve is
-            // an invalid parameter value, not an unsupported operation. Returning 404
-            // here would violate the WFS 2.0 ATS (typeNames is a parameter, not a resource).
-            throw new OgcException("InvalidParameterValue",
-                $"Vector layer '{layer.Name}' has no built GPKG sidecar. Run dataset build first.",
-                400, "typeNames");
-        return gpkg;
-    }
+    /// <summary>The file a raster layer reads and which one it is (<see cref="ResolveRasterArtifact"/>).</summary>
+    protected RasterSource ResolveRasterSource(IDDB ddb, OgcLayerDto layer) =>
+        Builds.FindArtifactFile(ddb, layer.EntryHash, ArtifactRoles.RasterCog, entryPath: layer.EntryPath) is { } cog
+            ? new RasterSource(cog, ArtifactRoles.RasterCog)
+            : new RasterSource(ddb.GetLocalPath(layer.EntryPath), RasterSource.EntryFile);
+
+    /// <summary>The GeoPackage a vector layer is queried from (its build's <c>vector.gpkg</c>).</summary>
+    protected string ResolveVectorArtifact(IDDB ddb, OgcLayerDto layer) =>
+        Builds.FindArtifactFile(ddb, layer.EntryHash, ArtifactRoles.VectorGpkg, entryPath: layer.EntryPath)
+        // OWS Common 2.0: a referenced layer/typeName the server cannot serve is
+        // an invalid parameter value, not an unsupported operation. Returning 404
+        // here would violate the WFS 2.0 ATS (typeNames is a parameter, not a resource).
+        ?? throw new OgcException("InvalidParameterValue",
+            $"Vector layer '{layer.Name}' has no built GPKG sidecar. Run dataset build first.",
+            400, "typeNames");
+
+    /// <summary>The local file of an MVT tile of a vector layer, or null when it does not exist.</summary>
+    protected string MvtTile(IDDB ddb, OgcLayerDto layer, int z, int x, int y) =>
+        Builds.FindArtifactFile(ddb, layer.EntryHash, ArtifactRoles.VectorMvt, MvtTiles.Tile(z, x, y), layer.EntryPath);
 
     /// <summary>
     /// Emits a WMS <c>&lt;DCPType&gt;&lt;HTTP&gt;&lt;Get&gt;&lt;OnlineResource ... /&gt;&lt;/Get&gt;&lt;/HTTP&gt;&lt;/DCPType&gt;</c> block.
@@ -183,4 +185,11 @@ public abstract class OgcManagerBase
         await w.WriteEndElementAsync(); // DCP
         await w.WriteEndElementAsync(); // Operation
     }
+}
+
+/// <summary>The file a raster layer reads and what it is: a build artifact's role, or <see cref="EntryFile"/>.</summary>
+public sealed record RasterSource(string Path, string Source)
+{
+    /// <summary>The entry's own file (no build artifact).</summary>
+    public const string EntryFile = "file";
 }

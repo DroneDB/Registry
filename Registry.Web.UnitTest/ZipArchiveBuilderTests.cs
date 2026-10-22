@@ -21,16 +21,16 @@ public class ZipArchiveBuilderTests
     {
         var root = Path.Combine(Path.GetTempPath(), "zipbuilder-" + Guid.NewGuid().ToString("N"));
         var ddbFolder = Path.Combine(root, IDDB.DatabaseFolderName);
-        Directory.CreateDirectory(Path.Combine(ddbFolder, IDDB.BuildFolderName, "hash"));
+        Directory.CreateDirectory(Path.Combine(ddbFolder, Registry.Adapters.DroneDB.DDB.BuildFolderName, "hash"));
         Directory.CreateDirectory(Path.Combine(ddbFolder, "zz-after-build"));
         foreach (var name in new[] { IDDB.DatabaseFileName, IDDB.DatabaseFileName + "-wal", IDDB.DatabaseFileName + "-shm" })
             await File.WriteAllTextAsync(Path.Combine(ddbFolder, name), name);
-        await File.WriteAllTextAsync(Path.Combine(ddbFolder, IDDB.BuildFolderName, "hash", "cog.tif"), "built");
+        await File.WriteAllTextAsync(Path.Combine(ddbFolder, Registry.Adapters.DroneDB.DDB.BuildFolderName, "hash", "cog.tif"), "built");
         await File.WriteAllTextAsync(Path.Combine(ddbFolder, "zz-after-build", "meta.json"), "{}");
 
         var ddb = new Mock<IDDB>();
         ddb.SetupGet(d => d.DatasetFolderPath).Returns(root);
-        ddb.SetupGet(d => d.BuildFolderPath).Returns(Path.Combine(ddbFolder, IDDB.BuildFolderName));
+        ddb.SetupGet(d => d.DerivedFolderPaths).Returns([Path.Combine(ddbFolder, Registry.Adapters.DroneDB.DDB.BuildFolderName)]);
         ddb.Setup(d => d.Checkpoint()).Returns(true);
 
         try
@@ -47,7 +47,7 @@ public class ZipArchiveBuilderTests
             names.ShouldContain(".ddb/" + IDDB.DatabaseFileName + "-wal");
             names.ShouldContain(".ddb/zz-after-build/meta.json"); // an exclusion does not stop the walk
             names.ShouldNotContain(".ddb/" + IDDB.DatabaseFileName + "-shm");
-            names.ShouldNotContain(n => n.Contains("/" + IDDB.BuildFolderName + "/"));
+            names.ShouldNotContain(n => n.Contains("/" + Registry.Adapters.DroneDB.DDB.BuildFolderName + "/"));
         }
         finally
         {

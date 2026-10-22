@@ -56,7 +56,7 @@ public static class TestJobs
     /// </summary>
     public static BuildScheduler Scheduler(IBackgroundJobsProcessor? jobs = null, IPendingBuildFlag? pending = null,
         IBuildArtifactResolver? artifacts = null, string? userId = null) =>
-        new(artifacts ?? new BuildArtifactResolver(new Registry.Adapters.Testing.FakeDdbWrapper()),
+        new(artifacts ?? TestPorts.Artifacts(),
             jobs ?? Mock.Of<IBackgroundJobsProcessor>(), pending ?? Mock.Of<IPendingBuildFlag>(),
             Mock.Of<IBuildRequester>(r => r.UserIdAsync() == System.Threading.Tasks.Task.FromResult(userId)),
             NullLogger<BuildScheduler>.Instance);

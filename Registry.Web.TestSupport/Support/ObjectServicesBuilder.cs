@@ -127,7 +127,7 @@ public sealed class ObjectServicesBuilder
         services.AddSingleton(Mock.Of<IOgcLayerCatalog>());
         services.AddSingleton(Mock.Of<IBuildStatusService>());
         services.AddSingleton(_nativeGate ?? NativeWorkGate.Default);
-        var artifacts = _buildArtifactResolver ?? new BuildArtifactResolver(new FakeDdbWrapper());
+        var artifacts = _buildArtifactResolver ?? TestPorts.Artifacts();
         var scheduler = new BuildScheduler(artifacts, backgroundJobs, buildPendingService,
             new CurrentUserBuildRequester(authManager), NullLogger<BuildScheduler>.Instance);
         services.AddSingleton<IBuildScheduler>(scheduler);

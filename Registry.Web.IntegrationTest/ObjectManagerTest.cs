@@ -627,7 +627,7 @@ public class ObjectManagerTest : TestBase
         var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
         var ddb = ddbManager.Get(org, context.Datasets.First(d => d.Slug == ds).InternalRef);
         var hash = ddb.GetEntry("site.dxf")!.Hash;
-        var build = Path.Combine(ddb.BuildFolderPath, hash);
+        var build = Path.Combine(ddb.DerivedFolderPaths.Single(), hash);
         if (!File.Exists(Path.Combine(build, "mvt", "metadata.json")))
             Assert.Ignore("The loaded native libddb predates CAD coordinate systems (DDB-12)");
 

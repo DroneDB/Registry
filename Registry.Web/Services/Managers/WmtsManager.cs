@@ -33,7 +33,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
     private readonly ILogger<WmtsManager> _logger;
     private readonly IOgcRasterTileSource _rasterTiles;
 
-    public WmtsManager(IDatasetAccessResolver access, IOgcBuildArtifactPaths ar,
+    public WmtsManager(IDatasetAccessResolver access, IBuildArtifactResolver ar,
         IDdbWrapper w, IOgcLayerCatalog c, IRecordCache cache, IHttpContextAccessor ctx, ILogger<WmtsManager> logger,
         IOgcRasterTileSource rasterTiles)
         : base(access, ar, w, c, cache, ctx)
@@ -233,8 +233,8 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
 
         if (layer.EntryType == EntryType.Vector)
         {
-            var path = Artifacts.GetMvtTilePath(ddb, layer.EntryHash, z, x, y);
-            if (!Artifacts.ArtifactExists(path))
+            var path = MvtTile(ddb, layer, z, x, y);
+            if (path == null)
             {
                 // WMTS allows servers to respond to out-of-coverage tiles with an empty
                 // resource of the requested format rather than a TileOutOfRange exception

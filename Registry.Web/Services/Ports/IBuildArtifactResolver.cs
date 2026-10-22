@@ -48,6 +48,22 @@ public interface IBuildArtifactResolver
     BuildDownload? GetDownload(EntryBuildArtifacts build);
 
     /// <summary>
+    /// The artifact with <paramref name="role"/> of the build named by <paramref name="hash"/>, when it exists: what
+    /// the OGC services and the MVT tiles read. The entry is <paramref name="entryPath"/> when the caller knows it,
+    /// else the entry with that hash among the types whose builds produce the role (libddb's entry types). A request
+    /// pays the manifest once per build: the location is kept (process memory, bounded) while it exists, and a
+    /// role's location in a build does not change within a libddb version.
+    /// </summary>
+    /// <param name="ddb">The dataset.</param>
+    /// <param name="hash">The hash that names the build.</param>
+    /// <param name="role">The artifact's role (<see cref="ArtifactRoles"/>).</param>
+    /// <param name="relativePath">A file inside a directory artifact ('/'-separated, e.g. an MVT tile); null for the
+    /// artifact's own file: a file artifact itself, a directory artifact's descriptor.</param>
+    /// <param name="entryPath">The entry whose build it is, when the caller knows it.</param>
+    /// <returns>The local path of the file when it exists, else null.</returns>
+    string? FindArtifactFile(IDDB ddb, string hash, string role, string? relativePath = null, string? entryPath = null);
+
+    /// <summary>
     /// The absolute path of a file of a build (an artifact or a file below a directory artifact),
     /// containment-checked by libddb; null when the file is not one of the build's files.
     /// </summary>

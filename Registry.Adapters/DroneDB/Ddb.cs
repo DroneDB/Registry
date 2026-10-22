@@ -31,7 +31,13 @@ public class DDB : IDDB
 
     [JsonProperty] public string DatasetFolderPath { get; private set; }
 
+    /// <summary>libddb's build folder under the database folder (XI-04: the adapter's knowledge, not Registry's).</summary>
+    public const string BuildFolderName = "build";
+
+    /// <summary>The build folder (also the member job data stored before RQ-09 carries).</summary>
     [JsonProperty] public string BuildFolderPath { get; private set; }
+
+    [JsonIgnore] public IReadOnlyList<string> DerivedFolderPaths => [BuildFolderPath];
 
     [JsonIgnore] public IMetaManager Meta { get; private set; }
 
@@ -49,7 +55,7 @@ public class DDB : IDDB
     [OnDeserialized]
     internal void OnDeserializedMethod(StreamingContext context)
     {
-        BuildFolderPath = Path.Combine(DatasetFolderPath, IDDB.DatabaseFolderName, IDDB.BuildFolderName);
+        BuildFolderPath = Path.Combine(DatasetFolderPath, IDDB.DatabaseFolderName, BuildFolderName);
     }
 
     public DDB(string ddbPath, IDdbWrapper ddbWrapper)
@@ -63,7 +69,7 @@ public class DDB : IDDB
             throw new ArgumentException($"Path '{ddbPath}' does not exist");
 
         DatasetFolderPath = ddbPath;
-        BuildFolderPath = Path.Combine(ddbPath, IDDB.DatabaseFolderName, IDDB.BuildFolderName);
+        BuildFolderPath = Path.Combine(ddbPath, IDDB.DatabaseFolderName, BuildFolderName);
         Meta = new MetaManager(this, ddbWrapper);
     }
 

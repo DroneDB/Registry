@@ -961,7 +961,7 @@ public class NativeDdbWrapperTests : TestBase
         // The build takes "<build>/<hash>/<output>.building" and writes its PID into it once it
         // holds the kernel lock: that write is the moment the build is active. The hash folder is
         // created here (the build creates it too) so that it is watched before the build starts.
-        var hashFolder = Path.Combine(ddbPath, IDDB.DatabaseFolderName, IDDB.BuildFolderName, res[0].Hash);
+        var hashFolder = Path.Combine(ddbPath, IDDB.DatabaseFolderName, DDB.BuildFolderName, res[0].Hash);
         Directory.CreateDirectory(hashFolder);
         using var locked = new ManualResetEventSlim();
         using var watcher = new FileSystemWatcher(hashFolder, "*.building")

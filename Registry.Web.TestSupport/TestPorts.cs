@@ -24,7 +24,7 @@ public static class TestPorts
     /// </summary>
     public static UrlBuilder Urls(IOptions<HttpHostOptions>? http = null, IHttpContextAccessor? accessor = null) =>
         new(http ?? Microsoft.Extensions.Options.Options.Create(new HttpHostOptions()), accessor ?? new HttpContextAccessor(),
-            new BuildArtifactResolver(new Registry.Adapters.Testing.FakeDdbWrapper()));
+            Artifacts());
 
     /// <summary>The storage quota of the current user (<paramref name="auth"/>) over <paramref name="context"/>.</summary>
     public static StorageQuota Quota(IAuthManager auth, RegistryContext context, IOptions<AccountOptions> accounts,
@@ -37,6 +37,10 @@ public static class TestPorts
     public static WebPorts All(IAuthManager auth, RegistryContext context, IOptions<AccountOptions> accounts,
         IOptions<HttpHostOptions> http, IHttpContextAccessor accessor, IDatasetSummaryProvider summaries) =>
         new(Datasets(context), Urls(http, accessor), Quota(auth, context, accounts, summaries));
+
+    /// <summary>The build artifact resolver over the fake's entry types (or <paramref name="ddbWrapper"/>) and the real file system.</summary>
+    public static BuildArtifactResolver Artifacts(Registry.Ports.IDdbWrapper? ddbWrapper = null) =>
+        new(ddbWrapper ?? new Registry.Adapters.Testing.FakeDdbWrapper(), new Registry.Adapters.FileSystem());
 
     /// <summary>A lookup cache that caches nothing.</summary>
     private sealed class NoLookups : IDatasetLookupCache
