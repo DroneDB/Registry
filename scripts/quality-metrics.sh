@@ -148,6 +148,32 @@ slice_constructors() {
 # Files of the slice longer than 800 lines.
 slice_long_files() { slice | list_files | xargs -0 -r wc -l | awk '$2 != "total" && $1 > 800' | wc -l | tr -d ' '; }
 
+# The RQ-12 set: the classes the plan names (system, configuration, users, STAC, datasets, push, share,
+# local login, the former WebUtils) and the folders their pieces move to.
+RQ12_SET=(Registry.Web/Services/Managers/SystemManager.cs Registry.Web/Controllers/SystemController.cs
+    Registry.Web/Services/Adapters/WebUtils.cs Registry.Web/Services/Adapters/ConfigurationDataBuilder.cs
+    Registry.Web/Services/Managers/UsersManager.cs Registry.Web/Services/Managers/StacManager.cs
+    Registry.Web/Services/Managers/DatasetsManager.cs Registry.Web/Services/Managers/PushManager.cs
+    Registry.Web/Services/Managers/ShareManager.cs Registry.Web/Services/Managers/LocalLoginManager.cs
+    Registry.Web/Controllers/ProcessingNodesController.cs Registry.Web/Controllers/FeaturesController.cs
+    Registry.Web/Controllers/RemoteImportController.cs
+    ':(glob)Registry.Web/Services/RemoteImport/**/*.cs' ':(glob)Registry.Web/Services/Maintenance/**/*.cs'
+    ':(glob)Registry.Web/Services/Configuration/**/*.cs' ':(glob)Registry.Web/Services/Stac/**/*.cs'
+    ':(glob)Registry.Web/Services/Users/**/*.cs' ':(glob)Registry.Web/Services/Datasets/**/*.cs'
+    ':(glob)Registry.Web/Services/Shares/**/*.cs' ':(glob)Registry.Web/Services/Push/**/*.cs'
+    ':(glob)Registry.Web/Services/Builds/**/*.cs' ':(glob)Registry.Web/Services/Caching/**/*.cs'
+    ':(glob)Registry.Web/Services/Urls/**/*.cs')
+rq12() { printf '%s\0' "${RQ12_SET[@]}"; }
+
+# "<class> <parameters>" for every public constructor of the classes declared in the given files (NUL-separated on stdin).
+constructors() {
+    list_files | xargs -0 -r perl -0777 -ne 'my %cls; while (/\bclass (\w+)/g) { $cls{$1} = 1 } pos($_) = 0;
+        while (/public (\w+)\(([^{;]*?)\)\s*(?::\s*(?:base|this)\([^)]*\)\s*)?\{/gs) {
+            my ($name, $p) = ($1, $2); next unless $cls{$name};
+            $p =~ s/<[^<>]*>//g while $p =~ /<[^<>]*>/; $p =~ s/\s+//g;
+            printf "%s %d\n", $name, ($p eq "" ? 0 : (() = $p =~ /,/g) + 1) }'
+}
+
 metrics() {
     m() { printf '%s\t%s\n' "$1" "$2"; }
 
@@ -297,6 +323,29 @@ metrics() {
     m "Build-layout literals in the objects slice"   "$(slice | matches "$BUILD_LAYOUT")"
     m "Build-layout literals in production C#"       "$(prod '' | matches "$BUILD_LAYOUT")"
     m "Per-entry build probe calls"                  "$(prod Registry.Web | lines '\.(IsBuildable|IsBuildActive|IsBuildComplete|GetBuildStatus)\(')"
+
+    # Other large classes and shared services (RQ-12, 2026-10-22): no god class in the set, one owner for
+    # queueing builds, for caching records, for cache keys and for STAC URLs (XI-09), no build layout in
+    # Registry.Web (XI-04, D8)
+    m "RQ-12 files over 800 lines"                   "$(rq12 | list_files | xargs -0 -r wc -l | awk '$2 != "total" && $1 > 800' | wc -l | tr -d ' ')"
+    m "RQ-12 constructors over 7 parameters"         "$(rq12 | constructors | awk '$2 > 7' | wc -l | tr -d ' ')"
+    m "Files injecting IUtils"                       "$(prod Registry.Web | list_files_matching '\bIUtils\b')"
+    m "Build enqueue call sites outside the build scheduler" "$({ prod Registry.Web; paths ':(exclude,glob)**/QueueDdbJobs.cs' \
+        ':(exclude,glob)**/BuildScheduler.cs'; } | lines '\.(EnqueueBuild|EnqueueBuildPending|ScheduleBuildPending)\(')"
+    m "Pending-flag writes outside the build scheduler" "$({ prod Registry.Web; paths ':(exclude,glob)**/BuildPendingService.cs' \
+        ':(exclude,glob)**/BuildScheduler.cs'; } | lines '\.SetDatasetHasPendingBuilds\(')"
+    m "Build payloads with user.Id"                  "$(prod Registry.Web | lines 'new IndexPayload\([^;]*\b[Uu]ser\.Id')"
+    m "PotentiallyBuildableTypes copies"             "$(prod Registry.Web | lines 'PotentiallyBuildableTypes\b')"
+    m "Raw distributed-cache get-then-set sites"     "$({ prod Registry.Web/Services; paths ':(exclude,glob)**/DistributedUploadReceiptStore.cs' \
+        ':(exclude,glob)**/CacheManager.cs' ':(exclude,glob)**/RecordCache.cs'; } | lines '\b(SetRecordAsync|SetAsync)\((cacheKey|key)\b')"
+    m "STAC per-item rewrites"                       "$(prod Registry.Web | lines '\bRewrite(Item|Collection)\(')"
+    m "STAC native calls with Registry URLs"         "$(prod Registry.Web | lines '\.(GetStac|GetStacItemCollection)\(')"
+    m "Cache key formats outside CacheCategories"    "$({ prod Registry.Web; paths ':(exclude,glob)**/CacheCategories.cs'; } |
+        lines '^(?!.*const string \w+Seed\b).*("(stac-|ogc-|ds-lookup:|upload-receipt-|push-session:|tasks-list)|\{(TasksListCacheSeed|CacheKey)\})')"
+    m "SafeMetaManager unfiltered DdbException catches" "$(paths Registry.Web/Services/Adapters/SafeMetaManager.cs | lines 'catch \(DdbException\)')"
+    m "IObjectsManager facade injections"            "$(prod Registry.Web | lines '\bIObjectsManager \w+[,)=]')"
+    m "IOgcBuildArtifactPaths uses"                  "$(prod Registry.Web | lines '\bIOgcBuildArtifactPaths\b')"
+    m "Build-layout literals in Registry.Web"        "$(prod Registry.Web | matches "$BUILD_LAYOUT")"
 
     # Managers and API contracts (RQ-12, RQ-14)
     m "Task.Run in managers"                         "$(prod Registry.Web/Services/Managers Registry.Web/Services/Objects | lines 'Task\.Run\(')"

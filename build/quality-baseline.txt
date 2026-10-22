@@ -95,5 +95,20 @@ Native raster calls outside INativeWorkGate (objects slice)	0
 Build-layout literals in the objects slice	0
 Build-layout literals in production C#	43
 Per-entry build probe calls	0
+RQ-12 files over 800 lines	3
+RQ-12 constructors over 7 parameters	7
+Files injecting IUtils	21
+Build enqueue call sites outside the build scheduler	14
+Pending-flag writes outside the build scheduler	3
+Build payloads with user.Id	4
+PotentiallyBuildableTypes copies	2
+Raw distributed-cache get-then-set sites	13
+STAC per-item rewrites	7
+STAC native calls with Registry URLs	6
+Cache key formats outside CacheCategories	12
+SafeMetaManager unfiltered DdbException catches	6
+IObjectsManager facade injections	6
+IOgcBuildArtifactPaths uses	15
+Build-layout literals in Registry.Web	31
 Task.Run in managers	5
 Hand-built Content-Disposition	1
