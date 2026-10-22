@@ -30,7 +30,7 @@ public interface IDdbRuntime
 
     /// <summary>
     /// Sends libddb's log records of <paramref name="minLevel"/> and above to <paramref name="sink"/>
-    /// instead of stdout (<c>DDBSetLogCallback</c>); null sends them to stdout again. Set before
+    /// instead of stderr (<c>DDBSetLogCallback</c>); null sends them to stderr again. Set before
     /// <see cref="RegisterProcess"/> to receive DEBUG and TRACE records.
     /// </summary>
     void SetLogSink(IDdbLogSink? sink, DdbLogLevel minLevel);
