@@ -24,6 +24,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.Caching;
 using Registry.Web.Services.Import;
 using Registry.Web.Services.Jobs;
@@ -52,13 +53,14 @@ public class SystemManager : ISystemManager
     private readonly SsrfGuard _ssrfGuard;
     private readonly DatasetPathPolicy _paths;
     private readonly TimeProvider _time;
+    private readonly IBuildScheduler _builds;
 
     public SystemManager(IAuthManager authManager,
         RegistryContext context, IDdbManager ddbManager, ILogger<SystemManager> logger,
         IObjectsManager objectManager, IOptions<AppSettings> settings, BuildPendingService buildPendingService,
         IHttpClientFactory httpClientFactory, IBackgroundJobsProcessor backgroundJob, IDatasetListingInvalidator listings,
         IFileSystem fileSystem, IJobIndexWriter jobIndexWriter, SsrfGuard ssrfGuard, DatasetPathPolicy paths,
-        TimeProvider time)
+        TimeProvider time, IBuildScheduler builds)
     {
         _authManager = authManager;
         _context = context;
@@ -75,6 +77,7 @@ public class SystemManager : ISystemManager
         _ssrfGuard = ssrfGuard;
         _paths = paths;
         _time = time;
+        _builds = builds;
     }
 
     // Legacy import calls go through the SSRF-hardened client (connect-time IP validation + redirect
@@ -987,10 +990,9 @@ public class SystemManager : ISystemManager
             // Schedule build of the imported dataset to ensure consistency
             _logger.LogInformation("Scheduling build for imported dataset {Org}/{Ds}", destOrg, destDs);
             // Opens (and initializes when needed) the imported dataset before its build is queued
-            _ddbManager.Get(destOrg, dataset.InternalRef);
-            var user = await _authManager.GetCurrentUser();
-            var meta = new IndexPayload(destOrg, destDs, null, user.Id);
-            var jobId = _backgroundJob.EnqueueBuild(new DatasetKey(destOrg, dataset.InternalRef), null, true, meta);
+            var importedDdb = _ddbManager.Get(destOrg, dataset.InternalRef);
+            var jobId = await _builds.QueueDatasetAsync(
+                new BuildTarget(importedDdb, new DatasetKey(destOrg, dataset.InternalRef), destOrg, destDs), force: true);
             _logger.LogInformation("Build scheduled with job id {JobId} for {Org}/{Ds}", jobId, destOrg, destDs);
 
             importedItems.Add(new ImportedItemDto
@@ -1384,9 +1386,9 @@ public class SystemManager : ISystemManager
             if (downloadedCount > 0)
             {
                 _logger.LogInformation("Scheduling build for imported dataset {Org}/{Ds}", destOrg, destDs);
-                var user = await _authManager.GetCurrentUser();
-                var meta = new IndexPayload(destOrg, destDs, null, user.Id);
-                var jobId = _backgroundJob.EnqueueBuild(new DatasetKey(destOrg, dataset.InternalRef), null, true, meta);
+                var jobId = await _builds.QueueDatasetAsync(
+                    new BuildTarget(ddb, new DatasetKey(destOrg, dataset.InternalRef), destOrg, destDs), force: true,
+                    ct: cancellationToken);
                 _logger.LogInformation("Build scheduled with job id {JobId} for {Org}/{Ds}", jobId, destOrg, destDs);
             }
 

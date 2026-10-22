@@ -209,6 +209,7 @@ public sealed class Rq10ArchiveExtractionTests
         ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
         ctx.SetupGet(c => c.TaskId).Returns("task-1");
         ctx.SetupGet(c => c.Logger).Returns(NullLogger.Instance);
+        ctx.SetupGet(c => c.BuildQueue).Returns(Support.TestJobs.Scheduler());
         return ctx.Object;
     }
 

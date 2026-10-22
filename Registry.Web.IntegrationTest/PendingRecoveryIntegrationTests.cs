@@ -41,6 +41,7 @@ using Registry.Web.Utilities;
 using Shouldly;
 using Registry.Test.Common;
 using Registry.Web.Services.Caching;
+using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Test;
 
@@ -146,6 +147,7 @@ public class PendingRecoveryIntegrationTests
         services.AddScoped<DdbJobs>();
         services.AddScoped<BuildPendingService>();
         services.AddScoped<ArtifactCompletenessCheckerService>();
+        services.AddSingleton<IDdbWrapper, NativeDdbWrapper>().AddBuildScheduling();
 
         // Each invocation queries the real index after the production wrapper
         // has acquired its dataset lock. Only the barrier is test-controlled.

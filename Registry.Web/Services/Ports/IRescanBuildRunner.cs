@@ -1,4 +1,5 @@
 #nullable enable
+using System.Threading.Tasks;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Services.Ports;
@@ -10,11 +11,11 @@ namespace Registry.Web.Services.Ports;
 public interface IRescanBuildRunner
 {
     /// <summary>Rebuilds every entry of the dataset.</summary>
-    void BuildDataset();
+    Task BuildDataset();
 
     /// <summary>Rebuilds one rescanned entry.</summary>
-    void BuildEntry(RescanResult entry);
+    Task BuildEntry(RescanResult entry);
 
     /// <summary>Retries the builds that wait for a dependency.</summary>
-    void BuildPending();
+    Task BuildPending();
 }

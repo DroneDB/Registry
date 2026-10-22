@@ -84,9 +84,6 @@ public static class RegistryFeaturesServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddObjectsSlice(this IServiceCollection services)
     {
-        // libddb's build manifest by role (XI-04): render sources, build downloads, build files, build copies
-        services.AddSingleton<IBuildArtifactResolver, BuildArtifactResolver>();
-
         services.AddScoped<RenderSources>();
         services.AddScoped<EntryJobs>();
         services.AddScoped<EntryChangeNotifier>();

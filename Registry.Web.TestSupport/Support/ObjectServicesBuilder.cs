@@ -16,6 +16,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
+using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Test.Support;
 
@@ -123,19 +124,19 @@ public sealed class ObjectServicesBuilder
         services.AddSingleton(Mock.Of<IOgcLayerCatalog>());
         services.AddSingleton(Mock.Of<IBuildStatusService>());
         services.AddSingleton(_nativeGate ?? NativeWorkGate.Default);
+        var artifacts = _buildArtifactResolver ?? new BuildArtifactResolver(new FakeDdbWrapper());
+        var scheduler = new BuildScheduler(artifacts, backgroundJobs, buildPendingService,
+            new CurrentUserBuildRequester(authManager), NullLogger<BuildScheduler>.Instance);
+        services.AddSingleton<IBuildScheduler>(scheduler);
         services.AddSingleton<IUploadManager>(new UploadManager(NullLogger<UploadManager>.Instance, authManager, access,
-            ddbManager, fileSystem, thumbnails, TestSettings.Options<ImportSettings>(settings), backgroundJobs,
-            buildPendingService,
+            ddbManager, fileSystem, thumbnails, TestSettings.Options<ImportSettings>(settings), scheduler,
             new UploadQuotaGuard(new UploadQuotaLedger(TestSettings.Options<UploadSettings>(settings)), quota),
             new DatasetChangeCoalescer(TestJobs.OgcCacheKeys(), cacheManager, thumbnails.Value.Candidates,
                 TimeSpan.Zero, NullLogger<DatasetChangeCoalescer>.Instance),
             TestPaths.Policy, TestScratch.Provider, indexQueue: _indexQueue));
 
         services.AddObjectsSlice();
-        if (_buildArtifactResolver != null)
-            services.AddSingleton(_buildArtifactResolver);
-        else
-            services.AddSingleton<IBuildArtifactResolver>(new BuildArtifactResolver(new FakeDdbWrapper()));
+        services.AddSingleton(artifacts);
 
         var provider = services.BuildServiceProvider().CreateScope().ServiceProvider;
         return new ObjectServices(

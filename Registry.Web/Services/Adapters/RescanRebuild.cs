@@ -45,8 +45,8 @@ public sealed class RescanRebuild
             _logger.LogInformation("Clearing build cache and rebuilding {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
             ddb.ClearBuildCache();
             await _caches.InvalidateAllDatasetCachesAsync(orgSlug, dsSlug);
-            builds.BuildDataset();
-            builds.BuildPending();
+            await builds.BuildDataset();
+            await builds.BuildPending();
             return new RescanRebuildResult(true, 0, 0);
         }
 
@@ -63,7 +63,7 @@ public sealed class RescanRebuild
             ct.ThrowIfCancellationRequested();
             try
             {
-                builds.BuildEntry(entries[i]);
+                await builds.BuildEntry(entries[i]);
                 built++;
             }
             catch (Exception ex)
@@ -76,7 +76,7 @@ public sealed class RescanRebuild
             onProgress?.Invoke((double)(i + 1) / entries.Count);
         }
 
-        builds.BuildPending();
+        await builds.BuildPending();
         return new RescanRebuildResult(false, built, failed);
     }
 

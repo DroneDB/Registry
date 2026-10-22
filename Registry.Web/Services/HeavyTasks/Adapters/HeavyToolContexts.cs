@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Hangfire.Server;
 using Microsoft.Extensions.Logging;
 using Registry.Ports.DroneDB;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
@@ -29,7 +30,7 @@ public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
 {
     public HeavyToolExecutionContext(
         IDDB ddb, DatasetKey dataset, ClaimsPrincipal? caller, ILogger logger,
-        string taskId, string? workDir, PerformContext hangfire, IBackgroundJobsProcessor jobs, IDatasetBuilds builds)
+        string taskId, string? workDir, PerformContext hangfire, IBuildScheduler buildQueue, IDatasetBuilds builds)
     {
         Ddb = ddb;
         Dataset = dataset;
@@ -38,12 +39,12 @@ public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
         TaskId = taskId;
         WorkDir = workDir;
         Hangfire = hangfire;
-        Jobs = jobs;
+        BuildQueue = buildQueue;
         Builds = builds;
     }
 
     public DatasetKey Dataset { get; }
-    public IBackgroundJobsProcessor Jobs { get; }
+    public IBuildScheduler BuildQueue { get; }
     public IDatasetBuilds Builds { get; }
 
     public IDDB Ddb { get; }

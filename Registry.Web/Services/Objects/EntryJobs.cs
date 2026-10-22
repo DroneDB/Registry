@@ -10,16 +10,17 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Objects;
 
 /// <summary>
-/// The background jobs of a dataset entry started by an object request: its build (asked for, or
-/// needed after a move or after a sidecar was removed) and the mask-borders job. Buildability and the
-/// live-build check come from libddb's build manifest (XI-04); the job runs as the current user.
-/// RQ-12's build scheduler takes over the pending flag and the queueing for every site.
+/// The background jobs of a dataset entry started by an object request: the rebuilds an entry needs after a move
+/// or after a sidecar was removed (queued by <see cref="IBuildScheduler"/>), and the mask-borders job.
+/// Buildability and the live-build check come from libddb's build manifest (XI-04); the jobs run as the current
+/// user.
 /// </summary>
 public sealed class EntryJobs
 {
@@ -28,38 +29,21 @@ public sealed class EntryJobs
         new([".shp", ".dxf", ".dwg"], StringComparer.OrdinalIgnoreCase);
 
     private readonly IBuildArtifactResolver _artifacts;
+    private readonly IBuildScheduler _builds;
     private readonly IAuthManager _authManager;
     private readonly IBackgroundJobsProcessor _jobs;
-    private readonly BuildPendingService _buildPending;
     private readonly IJobIndexQuery _jobIndex;
     private readonly ILogger<EntryJobs> _logger;
 
-    public EntryJobs(IBuildArtifactResolver artifacts, IAuthManager authManager, IBackgroundJobsProcessor jobs,
-        BuildPendingService buildPending, IJobIndexQuery jobIndex, ILogger<EntryJobs> logger)
+    public EntryJobs(IBuildArtifactResolver artifacts, IBuildScheduler builds, IAuthManager authManager,
+        IBackgroundJobsProcessor jobs, IJobIndexQuery jobIndex, ILogger<EntryJobs> logger)
     {
         _artifacts = artifacts;
+        _builds = builds;
         _authManager = authManager;
         _jobs = jobs;
-        _buildPending = buildPending;
         _jobIndex = jobIndex;
         _logger = logger;
-    }
-
-    /// <summary>
-    /// Queues a build of <paramref name="path"/> as the current user. With <paramref name="markPending"/>
-    /// the dataset is flagged as having pending builds first, so a build that fails at once is retried by
-    /// the recurring pending-build job.
-    /// </summary>
-    /// <returns>The job id.</returns>
-    public async Task<string> EnqueueBuildAsync(DatasetAccess access, string orgSlug, string dsSlug, string path,
-        string? hash, bool force, bool markPending)
-    {
-        if (markPending)
-            await _buildPending.SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
-
-        var user = await _authManager.GetCurrentUser();
-        var meta = new IndexPayload(orgSlug, dsSlug, hash, user?.Id, null, path);
-        return _jobs.EnqueueBuild(access.Key, path, force, meta);
     }
 
     /// <summary>Queues a build of <paramref name="entry"/> when it is buildable and no build of it runs.</summary>
@@ -70,7 +54,7 @@ public sealed class EntryJobs
         if (!build.CanBeBuilt() || build.HasLiveBuild())
             return false;
 
-        await EnqueueBuildAsync(access, orgSlug, dsSlug, entry.Path, entry.Hash, force: false, markPending: true);
+        await _builds.QueueAsync(BuildTarget.Of(access, orgSlug, dsSlug), entry.Path, entry.Hash);
         return true;
     }
 
@@ -116,8 +100,8 @@ public sealed class EntryJobs
                 {
                     if (!builds[i].CanBeBuilt()) continue;
 
-                    var jobId = await EnqueueBuildAsync(access, orgSlug, dsSlug, mainPath, mains[i].Hash,
-                        force: false, markPending: true);
+                    var jobId = await _builds.QueueAsync(BuildTarget.Of(access, orgSlug, dsSlug), mainPath,
+                        mains[i].Hash);
                     _logger.LogInformation("Rebuilding {MainPath} after removing {Prj} (job {JobId})",
                         mainPath, prj, jobId);
                 }

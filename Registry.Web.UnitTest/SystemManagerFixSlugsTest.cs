@@ -381,7 +381,7 @@ public class SystemManagerFixSlugsTest : TestBase
         return new SystemManager(_authManagerMock.Object, context, ddbManager.Object,
             CreateTestLogger<SystemManager>(), Mock.Of<IObjectsManager>(), settings, buildPendingService,
             Mock.Of<IHttpClientFactory>(), backgroundJob.Object, Mock.Of<IDatasetListingInvalidator>(), new FileSystem(),
-            Mock.Of<IJobIndexWriter>(), new SsrfGuard(new ImportSettings()), TestPaths.Policy, TimeProvider.System);
+            Mock.Of<IJobIndexWriter>(), new SsrfGuard(new ImportSettings()), TestPaths.Policy, TimeProvider.System, TestJobs.Scheduler());
     }
 
     private sealed class TransientTestException() : Exception("Transient test failure");

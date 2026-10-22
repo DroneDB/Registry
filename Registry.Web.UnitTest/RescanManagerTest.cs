@@ -21,6 +21,7 @@ using Registry.Web.Utilities.Auth;
 using Registry.Web.Services.Ports;
 using Shouldly;
 using Registry.Web.Test.Support;
+using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Test;
 
@@ -188,6 +189,7 @@ public class RescanManagerTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.RescanIndex(new RescanOptions(null, null, true)))
             .Returns([new RescanResult { Path = "a.tif", Success = true, Hash = "h1" }]);
+        ddbMock.Setup(x => x.IsBuildPending()).Returns(true);
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
         var payloads = CaptureIndexedPayloads();
 
@@ -198,6 +200,27 @@ public class RescanManagerTest : TestBase
         // Whole-dataset build + pending build, no per-entry build
         payloads.Count.ShouldBe(2);
         payloads.ShouldAllBe(p => p.Path == null);
+    }
+
+    /// <summary>
+    /// RQ-12: the pending-build job is queued when libddb reports deferred builds (IBuildScheduler), not after every
+    /// rescan; a rebuild that is deferred later is retried by the pending-build coordinator, which the scheduler
+    /// flags before it queues the rebuild.
+    /// </summary>
+    [Test]
+    public async Task RescanDatasetIndex_NothingDeferred_QueuesNoPendingBuildJob()
+    {
+        await using var context = CreateInMemoryContext();
+        _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.RescanIndex(new RescanOptions(null, null, true)))
+            .Returns([new RescanResult { Path = "a.tif", Success = true, Hash = "h1" }]);
+        _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
+        var payloads = CaptureIndexedPayloads();
+
+        await CreateRescanManager(context).RescanDatasetIndex("test-org", "test-dataset");
+
+        payloads.Count.ShouldBe(1, "the whole-dataset build only");
     }
 
     [Test]
@@ -215,6 +238,7 @@ public class RescanManagerTest : TestBase
                 new RescanResult { Path = "notes.dwg", Success = true, Hash = "h2" },
                 new RescanResult { Path = "broken.dxf", Success = false, Error = "bad file" }
             ]);
+        ddbMock.Setup(x => x.IsBuildPending()).Returns(true);
         ddbMock.Setup(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>())).Returns((IReadOnlyList<string> paths) => paths
             .Select(p => p != "notes.dwg"
                 ? TestBuilds.Build("/datasets/ds", p, EntryType.Vector, "h-" + p, BuildState.None)
@@ -310,7 +334,7 @@ public class RescanManagerTest : TestBase
 
     private RescanManager CreateRescanManager(RegistryContext context) =>
         new(_authManagerMock.Object, new DatasetAccessResolver(Mock.Of<IDatasetResolver>(), _authManagerMock.Object, _ddbManagerMock.Object, TestPaths.Policy),
-            context, _ddbManagerMock.Object, _backgroundJobMock.Object,
+            context, _ddbManagerMock.Object, _backgroundJobMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object),
             new RescanRebuild(_cacheInvalidatorMock.Object, CreateTestLogger<RescanRebuild>()),
             CreateTestLogger<RescanManager>());
 

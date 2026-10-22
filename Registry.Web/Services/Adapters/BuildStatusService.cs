@@ -22,29 +22,25 @@ namespace Registry.Web.Services.Adapters;
 /// </summary>
 public class BuildStatusService : IBuildStatusService
 {
-    // Only entries of these types can ever be buildable (mirrors
-    // ddb::isBuildableInternal in DroneDB/src/library/build.cpp). Filtering on
-    // this first keeps images, videos, markdown, etc. out of the native call.
-    private static readonly EntryType[] PotentiallyBuildableTypes =
-    [
-        EntryType.PointCloud, EntryType.GeoRaster, EntryType.Model,
-        EntryType.Vector, EntryType.GaussianSplat, EntryType.Tiles3D
-    ];
-
     private const string BuildToolId = HeavyToolIds.Build;
 
     private readonly IJobIndexQuery _jobIndexQuery;
+    private readonly IBuildArtifactResolver _artifacts;
     private readonly ILogger<BuildStatusService> _logger;
 
-    public BuildStatusService(IJobIndexQuery jobIndexQuery, ILogger<BuildStatusService> logger)
+    public BuildStatusService(IJobIndexQuery jobIndexQuery, IBuildArtifactResolver artifacts,
+        ILogger<BuildStatusService> logger)
     {
         _jobIndexQuery = jobIndexQuery;
+        _artifacts = artifacts;
         _logger = logger;
     }
 
     public async Task AnnotateAsync(string orgSlug, string dsSlug, IDDB ddb, IReadOnlyList<EntryDto> entries)
     {
-        var candidates = entries.Where(e => PotentiallyBuildableTypes.Contains(e.Type)).ToList();
+        // Only the types libddb builds (DDBGetEntryTypes) can have a build: images, videos, markdown, ... make
+        // no native call
+        var candidates = entries.Where(e => _artifacts.IsBuildableType(e.Type)).ToList();
         if (candidates.Count == 0)
             return;
 
@@ -106,7 +102,7 @@ public class BuildStatusService : IBuildStatusService
     {
         try
         {
-            return ddb.GetBuildArtifacts(candidates.Select(e => e.Path).Distinct().ToArray())
+            return _artifacts.GetBuilds(ddb, candidates.Select(e => e.Path).Distinct().ToArray())
                 .GroupBy(s => s.Path)
                 .ToDictionary(g => g.Key, g => g.First());
         }

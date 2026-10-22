@@ -9,6 +9,7 @@ using Registry.Web.Data;
 using Registry.Web.Hosting;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.Initialization;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Managers;
@@ -71,6 +72,8 @@ public static class ProcessingNodeServiceCollectionExtensions
         services.AddSingleton<InitializedDatasetFolders>();
         services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
         services.AddScoped<BuildPendingService>();
+
+        services.AddBuildScheduling();
         services.AddScoped<JobIndexSyncService>();
         services.AddScoped<IndexedJobPublicationRecoveryService>();
         services.AddScoped<DatasetCleanupService>();

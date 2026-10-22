@@ -21,6 +21,7 @@ using Registry.Web.Services.Ports;
 using Shouldly;
 using DdbEntry = Registry.Ports.DroneDB.Entry;
 using Registry.Web.Test.Support;
+using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Test;
 
@@ -44,7 +45,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
     {
         await using var context = GetEmptyContext();
 
-        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _logger);
+        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger);
 
         await service.CheckAndQueueAsync(null, CancellationToken.None);
 
@@ -66,7 +67,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _logger);
+        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger);
 
         await service.CheckAndQueueAsync(null, CancellationToken.None);
 
@@ -88,7 +89,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _logger);
+        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger);
 
         await service.CheckAndQueueAsync(null, CancellationToken.None);
 
@@ -115,7 +116,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object,
+        await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object),
             _logger).CheckAndQueueAsync(null, CancellationToken.None);
 
         _backgroundJobMock.Verify(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(),
@@ -138,7 +139,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _logger);
+        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger);
 
         await service.CheckAndQueueAsync(null, CancellationToken.None);
 
@@ -160,7 +161,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _logger);
+        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger);
 
         await service.CheckAndQueueAsync(null, CancellationToken.None);
 
@@ -194,7 +195,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _logger);
+        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger);
 
         await service.CheckAndQueueAsync(null, CancellationToken.None);
 
@@ -216,7 +217,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Throws(new InvalidOperationException("boom"));
 
-        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _logger);
+        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger);
 
         // Should not throw, just log
         await service.CheckAndQueueAsync(null, CancellationToken.None);
@@ -247,7 +248,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _logger);
+        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger);
 
         await service.CheckAndQueueAsync(null, CancellationToken.None);
 
@@ -271,7 +272,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         // as incomplete, while ordinary Nexus output is complete
         ddb.SetupBuilds(Build("interrupted.obj", BuildState.None), Build("nexus-only.obj", BuildState.Complete));
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
-        await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _logger)
+        await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger)
             .CheckAndQueueAsync(null, CancellationToken.None);
         _backgroundJobMock.Verify(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(),
             It.Is<IndexPayload>(meta => meta.Path == "interrupted.obj" && meta.Hash == "swap-hash")), Times.Once);
@@ -326,7 +327,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         await using var context = GetTest1Context();
         SingleIncompleteEntry("site.dwg", "h1", ["site.prj"]);
 
-        await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _logger)
+        await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger)
             .CheckAndQueueAsync(null, CancellationToken.None);
 
         EnqueuedCount().ShouldBe(0);
@@ -339,7 +340,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         SingleIncompleteEntry("bad.dwg", "h1");
         AddBuildJob(context, "bad.dwg", "h1", "Failed", DateTime.UtcNow.AddHours(-2), "InvalidOperationException");
 
-        await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _logger)
+        await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger)
             .CheckAndQueueAsync(null, CancellationToken.None);
 
         EnqueuedCount().ShouldBe(0);
@@ -352,7 +353,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         SingleIncompleteEntry("bad.dwg", "h2"); // re-uploaded: new hash
         AddBuildJob(context, "bad.dwg", "h1", "Failed", DateTime.UtcNow.AddHours(-2), "InvalidOperationException");
 
-        await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _logger)
+        await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger)
             .CheckAndQueueAsync(null, CancellationToken.None);
 
         EnqueuedCount().ShouldBe(1);

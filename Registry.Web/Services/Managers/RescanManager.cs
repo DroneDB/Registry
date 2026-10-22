@@ -12,6 +12,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Jobs;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -25,6 +26,7 @@ public class RescanManager : IRescanManager
     private readonly RegistryContext _context;
     private readonly IDdbManager _ddbManager;
     private readonly IBackgroundJobsProcessor _backgroundJob;
+    private readonly IBuildScheduler _builds;
     private readonly RescanRebuild _rebuild;
     private readonly ILogger<RescanManager> _logger;
 
@@ -34,6 +36,7 @@ public class RescanManager : IRescanManager
         RegistryContext context,
         IDdbManager ddbManager,
         IBackgroundJobsProcessor backgroundJob,
+        IBuildScheduler builds,
         RescanRebuild rebuild,
         ILogger<RescanManager> logger)
     {
@@ -42,6 +45,7 @@ public class RescanManager : IRescanManager
         _context = context;
         _ddbManager = ddbManager;
         _backgroundJob = backgroundJob;
+        _builds = builds;
         _rebuild = rebuild;
         _logger = logger;
     }
@@ -74,8 +78,9 @@ public class RescanManager : IRescanManager
         var results = ddb.RescanIndex(filter.ToOptions(options.StopOnError));
 
         var user = await _authManager.GetCurrentUser();
-        var meta = new IndexPayload(orgSlug, dsSlug, null, user?.Id ?? MagicStrings.AutoBuildServiceUserId);
-        await _rebuild.RunAsync(orgSlug, dsSlug, ddb, filter, results, new QueuedBuilds(_backgroundJob, new DatasetKey(orgSlug, dataset.InternalRef), meta));
+        var origin = new BuildOrigin(user?.Id ?? MagicStrings.AutoBuildServiceUserId);
+        var target = new BuildTarget(ddb, new DatasetKey(orgSlug, dataset.InternalRef), orgSlug, dsSlug);
+        await _rebuild.RunAsync(orgSlug, dsSlug, ddb, filter, results, new QueuedBuilds(_builds, target, origin));
 
         var entries = results.Select(r => new RescanEntryResultDto
         {
@@ -123,14 +128,13 @@ public class RescanManager : IRescanManager
     }
 
     // Queued build jobs: a request must not run builds itself.
-    private sealed class QueuedBuilds(IBackgroundJobsProcessor jobs, DatasetKey dataset, IndexPayload meta)
+    private sealed class QueuedBuilds(IBuildScheduler builds, BuildTarget target, BuildOrigin origin)
         : IRescanBuildRunner
     {
-        public void BuildDataset() => jobs.EnqueueBuild(dataset, null, true, meta);
+        public Task BuildDataset() => builds.QueueDatasetAsync(target, force: true, origin);
 
-        public void BuildEntry(RescanResult entry) =>
-            jobs.EnqueueBuild(dataset, entry.Path, true, meta with { Hash = entry.Hash, Path = entry.Path });
+        public Task BuildEntry(RescanResult entry) => builds.QueueAsync(target, entry.Path, entry.Hash, force: true, origin);
 
-        public void BuildPending() => jobs.EnqueueBuildPending(dataset, meta);
+        public Task BuildPending() => builds.QueuePendingAsync(target, origin);
     }
 }

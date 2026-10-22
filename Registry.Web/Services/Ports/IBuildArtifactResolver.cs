@@ -13,6 +13,12 @@ namespace Registry.Web.Services.Ports;
 /// </summary>
 public interface IBuildArtifactResolver
 {
+    /// <summary>
+    /// Whether libddb builds entries of <paramref name="type"/> at all (<c>DDBGetEntryTypes</c>, read once per
+    /// process): a listing asks the manifest only about the entries that may have a build.
+    /// </summary>
+    bool IsBuildableType(EntryType type);
+
     /// <summary>The build of one entry (one native call).</summary>
     EntryBuildArtifacts GetBuild(IDDB ddb, string entryPath);
 

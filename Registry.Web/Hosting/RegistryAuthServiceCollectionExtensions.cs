@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Registry.Web.Filters;
@@ -92,6 +93,8 @@ public static class RegistryAuthServiceCollectionExtensions
         services.AddSingleton<UserAuthSnapshotCache>();
         services.AddScoped<IUserAuthSnapshotProvider, UserAuthSnapshotProvider>();
         services.AddScoped<IAuthManager, AuthManager>();
+        // A request queues builds as its signed-in user (the job hosts' requester is the service)
+        services.Replace(ServiceDescriptor.Scoped<Services.Builds.IBuildRequester, Services.Builds.CurrentUserBuildRequester>());
         services.AddScoped<IDatasetAccessResolver, DatasetAccessResolver>();
         services.AddScoped<IOrganizationMembershipService, OrganizationMembershipService>();
         services.AddSingleton<IPasswordPolicyValidator, PasswordPolicyValidator>();

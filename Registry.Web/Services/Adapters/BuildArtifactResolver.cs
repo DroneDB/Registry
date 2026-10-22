@@ -45,17 +45,24 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
     private readonly Lazy<FrozenSet<EntryType>> _renderedTypes;
+    private readonly Lazy<FrozenSet<EntryType>> _buildableTypes;
 
     public BuildArtifactResolver(IDdbWrapper ddbWrapper)
     {
         ArgumentNullException.ThrowIfNull(ddbWrapper);
 
-        // The entry types whose builds can produce a role a renderer reads (libddb's type rules)
+        // libddb's type rules: the types it builds, and those whose builds can produce a role a renderer reads
+        _buildableTypes = new Lazy<FrozenSet<EntryType>>(() => ddbWrapper.GetEntryTypes()
+            .Where(t => t.Buildable)
+            .Select(t => t.Id)
+            .ToFrozenSet());
         _renderedTypes = new Lazy<FrozenSet<EntryType>>(() => ddbWrapper.GetEntryTypes()
             .Where(t => t.Roles.Any(r => RenderRoles.Contains(r, StringComparer.Ordinal)))
             .Select(t => t.Id)
             .ToFrozenSet());
     }
+
+    public bool IsBuildableType(EntryType type) => _buildableTypes.Value.Contains(type);
 
     public EntryBuildArtifacts GetBuild(IDDB ddb, string entryPath) => GetBuilds(ddb, [entryPath])[0];
 

@@ -22,6 +22,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Shouldly;
 using Registry.Web.Test.Support;
+using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Test;
 
@@ -68,7 +69,8 @@ public class BuildStatusServiceTest : TestBase
     [TearDown]
     public void TearDown() => _context.Dispose();
 
-    private BuildStatusService CreateService() => new(_jobIndexQuery, _logger);
+    private BuildStatusService CreateService() =>
+        new(_jobIndexQuery, new BuildArtifactResolver(new Registry.Adapters.Testing.FakeDdbWrapper()), _logger);
 
     private static EntryDto Entry(string path, EntryType type = EntryType.GeoRaster) =>
         new() { Path = path, Type = type };

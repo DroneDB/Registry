@@ -21,6 +21,7 @@ using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Serilog;
+using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Services.HeavyTasks.Adapters;
 
@@ -98,7 +99,7 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         var ddb = ddbManager.Get(request.OrgSlug, ds.InternalRef);
 
         var execCtx = new HeavyToolExecutionContext(ddb, new DatasetKey(request.OrgSlug, ds.InternalRef), null, _log,
-            taskId, workDir, ctx, processor, builds);
+            taskId, workDir, ctx, sp.GetRequiredService<IBuildScheduler>(), builds);
         var logBuffer = new LogRingBuffer(_settings.LogTailMaxLines, _settings.LogTailMaxBytes);
         await using var progress = new HangfireProgressSink(ctx, _scopeFactory, logBuffer, taskId,
             _settings.ProgressUpdateThrottleSeconds, _sinkLog);

@@ -18,6 +18,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Jobs;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Uploads;
 using Registry.Web.Utilities;
@@ -38,8 +39,7 @@ public sealed partial class UploadManager : IUploadManager
     private readonly IFileSystem _fs;
     private readonly int _defaultThumbnailSize;
     private readonly ImportSettings _import;
-    private readonly IBackgroundJobsProcessor _backgroundJob;
-    private readonly BuildPendingService _buildPendingService;
+    private readonly IBuildScheduler _builds;
     private readonly IUploadQuotaGuard _quota;
     private readonly IUploadReceiptStore? _receipts;
     private readonly IDatasetIndexQueue? _indexQueue;
@@ -51,7 +51,7 @@ public sealed partial class UploadManager : IUploadManager
     public UploadManager(ILogger<UploadManager> logger, IAuthManager authManager,
         IDatasetAccessResolver access, IDdbManager ddbManager, IFileSystem fs, IOptions<ThumbnailOptions> thumbnailOptions,
         IOptions<ImportSettings> importSettings,
-        IBackgroundJobsProcessor backgroundJob, BuildPendingService buildPendingService, IUploadQuotaGuard quota,
+        IBuildScheduler builds, IUploadQuotaGuard quota,
         IDatasetChangeCoalescer changes, DatasetPathPolicy paths, IScratchFileProvider scratch,
         IUploadReceiptStore? receipts = null,
         IDatasetIndexQueue? indexQueue = null, IThumbnailPrecomputeQueue? thumbnails = null)
@@ -63,8 +63,7 @@ public sealed partial class UploadManager : IUploadManager
         _fs = fs;
         _defaultThumbnailSize = thumbnailOptions.Value.DefaultThumbnailSize;
         _import = importSettings.Value;
-        _backgroundJob = backgroundJob;
-        _buildPendingService = buildPendingService;
+        _builds = builds;
         _quota = quota;
         _receipts = receipts;
         _indexQueue = indexQueue;
@@ -451,26 +450,12 @@ public sealed partial class UploadManager : IUploadManager
         if (parts.Count == 0)
             return;
 
-        // One native call for every part (the build manifest, XI-04), one build object per path
-        var builds = ctx.Ddb.GetBuildArtifacts(parts.Select(p => p.Entry!.Path).ToArray());
-        var buildable = parts.Where((_, i) => builds[i].CanBeBuilt()).ToArray();
-        if (buildable.Length > 0)
-        {
-            // CRITICAL: Set pending flag BEFORE build starts
-            // This prevents race condition where build fails quickly and creates .pending
-            // but recurring job hasn't updated cache yet
-            await _buildPendingService.SetDatasetHasPendingBuilds(ctx.OrgSlug, ctx.DsSlug, true);
+        // The buildable parts are built (one manifest call, XI-04); the others get their thumbnail
+        var queued = await _builds.QueueBuildableAsync(new BuildTarget(ctx.Ddb, ctx.Key, ctx.OrgSlug, ctx.DsSlug),
+            [.. parts.Select(p => p.Entry!.Path)], new BuildOrigin(ctx.User?.Id));
+        var built = queued.Select(b => b.Path).ToHashSet(StringComparer.Ordinal);
 
-            foreach (var part in buildable)
-            {
-                var entry = part.Entry!;
-                var meta = new IndexPayload(ctx.OrgSlug, ctx.DsSlug, entry.Hash, ctx.User?.Id, null, entry.Path);
-                var jobId = _backgroundJob.EnqueueBuild(ctx.Key, part.Part.Path, false, meta);
-                _logger.LogInformation("Build of '{Path}' queued as job {JobId}", entry.Path, jobId);
-            }
-        }
-
-        foreach (var part in parts.Except(buildable))
+        foreach (var part in parts.Where(p => !built.Contains(p.Entry!.Path)))
         {
             if (part.Entry!.Type is not (EntryType.Image or EntryType.GeoImage) || _thumbnails == null)
                 continue;

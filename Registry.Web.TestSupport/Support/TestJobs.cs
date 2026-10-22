@@ -11,6 +11,7 @@ using Registry.Web.Data;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
+using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Test.Support;
 
@@ -47,8 +48,18 @@ public static class TestJobs
         string orgSlug = "org", System.Guid internalRef = default, string taskId = "task-1", string? workDir = null,
         IBackgroundJobsProcessor? jobs = null, IDatasetBuilds? builds = null) =>
         new(ddb, new DatasetKey(orgSlug, internalRef == default ? System.Guid.NewGuid() : internalRef), null,
-            NullLogger.Instance, taskId, workDir, null!, jobs ?? Mock.Of<IBackgroundJobsProcessor>(),
-            builds ?? DdbJobs(jobs: jobs));
+            NullLogger.Instance, taskId, workDir, null!, Scheduler(jobs), builds ?? DdbJobs(jobs: jobs));
+
+    /// <summary>
+    /// The build scheduler over <paramref name="jobs"/> (loose mocks unless given), libddb's manifest through the
+    /// fake's entry types; builds queued without an origin run as <paramref name="userId"/>.
+    /// </summary>
+    public static BuildScheduler Scheduler(IBackgroundJobsProcessor? jobs = null, IPendingBuildFlag? pending = null,
+        IBuildArtifactResolver? artifacts = null, string? userId = null) =>
+        new(artifacts ?? new BuildArtifactResolver(new Registry.Adapters.Testing.FakeDdbWrapper()),
+            jobs ?? Mock.Of<IBackgroundJobsProcessor>(), pending ?? Mock.Of<IPendingBuildFlag>(),
+            Mock.Of<IBuildRequester>(r => r.UserIdAsync() == System.Threading.Tasks.Task.FromResult(userId)),
+            NullLogger<BuildScheduler>.Instance);
 
     /// <summary>
     /// What a task does with the files it wrote (index, queue builds, invalidate the caches), over a loose

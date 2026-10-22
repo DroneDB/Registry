@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -67,7 +68,7 @@ public sealed class Rq10FileUrlImportVolumeTests
         partialFiles.Length.ShouldBe(1);
         File.ReadAllBytes(Path.Combine(_dataset, "photos", "cloud.laz")).ShouldBe(Payload);
         Directory.GetFiles(Uploads).ShouldBeEmpty("the download was moved, not copied");
-        ddb.Verify(d => d.AddRaw("photos/cloud.laz"), Times.Once);
+        ddb.Verify(d => d.AddRawBatch(It.Is<IReadOnlyList<string>>(p => p.Count == 1 && p[0] == "photos/cloud.laz")), Times.Once);
     }
 
     [Test]
@@ -96,7 +97,7 @@ public sealed class Rq10FileUrlImportVolumeTests
         });
 
         return new FileUrlImportTool(downloader, guard, Mock.Of<IImportCredentialProtector>(),
-            Mock.Of<IServiceScopeFactory>(), TestSettings.Options<ImportSettings>(options), TestSettings.Options<ProcessingPlatformSettings>(options), TestPaths.Policy, TestScratch.Provider,
+            Support.TestJobs.FileIndexer(), TestSettings.Options<ImportSettings>(options), TestSettings.Options<ProcessingPlatformSettings>(options), TestPaths.Policy, TestScratch.Provider,
             NullLogger<FileUrlImportTool>.Instance);
     }
 
@@ -106,11 +107,15 @@ public sealed class Rq10FileUrlImportVolumeTests
         ddb.SetupGet(d => d.DatasetFolderPath).Returns(_dataset);
         ddb.Setup(d => d.GetLocalPath(It.IsAny<string>()))
             .Returns((string p) => Path.Combine(_dataset, p.Replace('/', Path.DirectorySeparatorChar)));
+        ddb.Setup(d => d.AddRawBatch(It.IsAny<IReadOnlyList<string>>()))
+            .Returns((IReadOnlyList<string> paths) => [.. paths.Select(p => new Entry { Path = p, Type = EntryType.Generic })]);
+        Support.TestBuilds.SetupBuilds(ddb);
 
         var ctx = new Mock<IHeavyToolExecutionContext>();
         ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
         ctx.SetupGet(c => c.TaskId).Returns("task-1");
         ctx.SetupGet(c => c.Logger).Returns(NullLogger.Instance);
+        ctx.SetupGet(c => c.BuildQueue).Returns(Support.TestJobs.Scheduler());
         return ctx.Object;
     }
 

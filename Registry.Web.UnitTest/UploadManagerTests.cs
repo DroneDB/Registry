@@ -29,6 +29,7 @@ using Registry.Web.Utilities;
 using Shouldly;
 using Entry = Registry.Ports.DroneDB.Entry;
 using Registry.Web.Test.Support;
+using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Test;
 
@@ -129,7 +130,7 @@ public class UploadManagerTests
 
         return new UploadManager(NullLogger<UploadManager>.Instance, _auth.Object,
             new DatasetAccessResolver(_utils.Object, _auth.Object, ddbManager.Object, TestPaths.Policy), ddbManager.Object,
-            new Registry.Adapters.FileSystem(), TestSettings.Options<ThumbnailOptions>(options), TestSettings.Options<ImportSettings>(options), jobs, buildPending,
+            new Registry.Adapters.FileSystem(), TestSettings.Options<ThumbnailOptions>(options), TestSettings.Options<ImportSettings>(options), TestJobs.Scheduler(jobs, buildPending, userId: "u"),
             new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _quota.Object), _changes.Object,
             TestPaths.Policy,
             TestScratch.Provider,

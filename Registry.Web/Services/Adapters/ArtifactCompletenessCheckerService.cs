@@ -16,6 +16,7 @@ using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Services.Adapters;
 
@@ -44,20 +45,20 @@ public class ArtifactCompletenessCheckerService
     private readonly RegistryContext _context;
     private readonly DatasetSweep _sweep;
     private readonly IDdbManager _ddbManager;
-    private readonly IBackgroundJobsProcessor _backgroundJob;
+    private readonly IBuildScheduler _builds;
     private readonly ILogger<ArtifactCompletenessCheckerService> _logger;
 
     public ArtifactCompletenessCheckerService(
         RegistryContext context,
         DatasetSweep sweep,
         IDdbManager ddbManager,
-        IBackgroundJobsProcessor backgroundJob,
+        IBuildScheduler builds,
         ILogger<ArtifactCompletenessCheckerService> logger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _sweep = sweep ?? throw new ArgumentNullException(nameof(sweep));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
-        _backgroundJob = backgroundJob ?? throw new ArgumentNullException(nameof(backgroundJob));
+        _builds = builds ?? throw new ArgumentNullException(nameof(builds));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -194,15 +195,8 @@ public class ArtifactCompletenessCheckerService
 
             try
             {
-                var meta = new IndexPayload(
-                    orgSlug,
-                    dsSlug,
-                    entry.Hash,
-                    MagicStrings.AutoBuildServiceUserId,
-                    null,
-                    entry.Path);
-
-                _backgroundJob.EnqueueBuild(dataset, entry.Path, false, meta);
+                await _builds.QueueAsync(new BuildTarget(ddb, dataset, orgSlug, dsSlug), entry.Path, entry.Hash,
+                    origin: BuildOrigin.Service, ct: ct);
 
                 stats.Queued++;
                 _logger.LogInformation(

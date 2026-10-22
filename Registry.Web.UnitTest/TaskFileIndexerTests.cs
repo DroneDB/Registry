@@ -15,6 +15,7 @@ using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Shouldly;
+using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Test;
 
@@ -49,7 +50,7 @@ public class TaskFileIndexerTests
         var progress = new List<HeavyToolProgress>();
 
         var queued = await TestJobs.FileIndexer(caches.Object).IndexAsync(
-            new TaskFiles(ddb.Object, new DatasetKey("org", Guid.NewGuid()), "org", "ds", paths, jobs.Object,
+            new TaskFiles(ddb.Object, new DatasetKey("org", Guid.NewGuid()), "org", "ds", paths, TestJobs.Scheduler(jobs.Object),
                 "task-1", "extracted files", ProgressFrom: 0.5, ProgressTo: 0.7),
             new InlineProgress(progress.Add), CancellationToken.None);
 
@@ -69,7 +70,7 @@ public class TaskFileIndexerTests
         var jobs = new Mock<IBackgroundJobsProcessor>();
 
         var queued = await TestJobs.FileIndexer(caches.Object).IndexAsync(
-            new TaskFiles(Mock.Of<IDDB>(), new DatasetKey("org", Guid.NewGuid()), "org", "ds", [], jobs.Object,
+            new TaskFiles(Mock.Of<IDDB>(), new DatasetKey("org", Guid.NewGuid()), "org", "ds", [], TestJobs.Scheduler(jobs.Object),
                 "task-1", "imported files"), new InlineProgress(_ => { }), CancellationToken.None);
 
         queued.ShouldBe(0);

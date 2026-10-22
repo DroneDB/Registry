@@ -20,6 +20,7 @@ using Registry.Web.Services.Import;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Services.HeavyTasks.Tools;
 
@@ -69,7 +70,7 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
     private readonly GuardedHttpDownloader _downloader;
     private readonly SsrfGuard _ssrfGuard;
     private readonly IImportCredentialProtector _protector;
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly TaskFileIndexer _indexer;
     private readonly ImportSettings _importSettings;
     private readonly long _diskSafetyMarginBytes;
     private readonly DatasetPathPolicy _paths;
@@ -82,7 +83,7 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
     /// <param name="downloader">The SSRF-hardened, budget-guarded downloader.</param>
     /// <param name="ssrfGuard">The SSRF guard (fast pre-validation at submit time).</param>
     /// <param name="protector">The credential protector used to decrypt the basic-auth password.</param>
-    /// <param name="scopeFactory">Scope factory for per-execution scoped services.</param>
+    /// <param name="indexer">Indexes the imported file, queues its build and invalidates the dataset's caches.</param>
     /// <param name="importSettings">The import settings.</param>
     /// <param name="platformSettings">The processing platform settings (size cap, disk safety margin).</param>
     /// <param name="paths">The dataset path rule (destination folder and file).</param>
@@ -92,7 +93,7 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
         GuardedHttpDownloader downloader,
         SsrfGuard ssrfGuard,
         IImportCredentialProtector protector,
-        IServiceScopeFactory scopeFactory,
+        TaskFileIndexer indexer,
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
         DatasetPathPolicy paths,
         IScratchFileProvider scratch,
@@ -103,7 +104,7 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
         _paths = paths;
         _ssrfGuard = ssrfGuard;
         _protector = protector;
-        _scopeFactory = scopeFactory;
+        _indexer = indexer;
         _importSettings = importSettings.Value;
         _diskSafetyMarginBytes =
             platformSettings.Value.DiskSafetyMarginBytes;
@@ -226,41 +227,10 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
         File.Move(scratch.Path, localTarget, overwrite: true);
         scratch.Release();
 
-        ctx.Ddb.AddRaw(target);
-
-        // Enqueue a build job when the imported file is buildable (mirrors ObjectsManager.AddNew).
-        try
-        {
-            // The build manifest of the file (XI-04): buildable, and the hash that names its build
-            var build = ctx.Ddb.GetBuildArtifacts([target])[0];
-            if (build.CanBeBuilt())
-            {
-                var meta = new IndexPayload(
-                    request.OrgSlug, request.DsSlug, build.Hash, null,
-                    Path: target, ParentJobId: ctx.TaskId);
-
-                ctx.Jobs.EnqueueBuild(ctx.Dataset, target, false, meta);
-                _logger.LogInformation("Enqueued build job for imported file '{Path}' in {Org}/{Ds}",
-                    target, request.OrgSlug, request.DsSlug);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not enqueue build job for imported file '{Path}'", target);
-        }
-
-        // Invalidate cached tiles/thumbnails/OGC (no auth needed; keyed by org/ds).
-        try
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var cacheInvalidator = scope.ServiceProvider.GetRequiredService<IDatasetCacheInvalidator>();
-            await cacheInvalidator.InvalidateAllDatasetCachesAsync(request.OrgSlug, request.DsSlug);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cache invalidation after file import failed for {Org}/{Ds}",
-                request.OrgSlug, request.DsSlug);
-        }
+        // Index it, queue its build when libddb reports it buildable (a child of the task), invalidate the
+        // dataset's caches: what every task that wrote files does (TaskFileIndexer)
+        await _indexer.IndexAsync(new TaskFiles(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug, [target],
+            ctx.BuildQueue, ctx.TaskId, "imported file"), progress, ct);
 
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: $"Imported {target}"));
         return null;

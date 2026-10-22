@@ -427,6 +427,6 @@ public class SystemManagerTest : TestBase
             _fileSystem,
             Mock.Of<IJobIndexWriter>(),
             new SsrfGuard(new ImportSettings())
-        , TestPaths.Policy, time ?? TimeProvider.System);
+        , TestPaths.Policy, time ?? TimeProvider.System, TestJobs.Scheduler());
     }
 }

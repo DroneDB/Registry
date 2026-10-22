@@ -121,11 +121,23 @@ public sealed class RescanIndexTool : HeavyToolBase<RescanIndexTool.Parameters>
     // builds-queue worker, so a rescan across many datasets cannot flood the build queue.
     private sealed class InlineBuilds(IHeavyToolExecutionContext ctx) : IRescanBuildRunner
     {
-        public void BuildDataset() => ctx.Builds.BuildNow(ctx.Ddb, null, true, ctx.Hangfire);
+        public Task BuildDataset()
+        {
+            ctx.Builds.BuildNow(ctx.Ddb, null, true, ctx.Hangfire);
+            return Task.CompletedTask;
+        }
 
-        public void BuildEntry(RescanResult entry) => ctx.Builds.BuildNow(ctx.Ddb, entry.Path, true, ctx.Hangfire);
+        public Task BuildEntry(RescanResult entry)
+        {
+            ctx.Builds.BuildNow(ctx.Ddb, entry.Path, true, ctx.Hangfire);
+            return Task.CompletedTask;
+        }
 
-        public void BuildPending() => ctx.Builds.BuildPendingNow(ctx.Ddb, ctx.Hangfire);
+        public Task BuildPending()
+        {
+            ctx.Builds.BuildPendingNow(ctx.Ddb, ctx.Hangfire);
+            return Task.CompletedTask;
+        }
     }
 
     private static RescanFilter ReadFilter(Parameters args) => RescanFilter.Parse(args.Types, args.Extensions);

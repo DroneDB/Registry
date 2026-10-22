@@ -82,7 +82,7 @@ public class SystemManagerGetVersionTests : TestBase
             _fileSystem,
             Mock.Of<IJobIndexWriter>(),
             new SsrfGuard(new ImportSettings())
-        , TestPaths.Policy, TimeProvider.System);
+        , TestPaths.Policy, TimeProvider.System, TestJobs.Scheduler());
     }
 
     [Test]

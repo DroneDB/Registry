@@ -339,7 +339,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         ct.ThrowIfCancellationRequested();
 
         // Index, queue the builds of the buildable results (children of this task), invalidate the caches
-        await _indexer.IndexAsync(new TaskFiles(ddb, dataset, orgSlug, dsSlug, extractedPaths, ctx.Jobs, ctx.TaskId,
+        await _indexer.IndexAsync(new TaskFiles(ddb, dataset, orgSlug, dsSlug, extractedPaths, ctx.BuildQueue, ctx.TaskId,
             "photogrammetry results", ProgressFrom: 0.97, ProgressTo: 0.99), progress, ct);
 
         progress.Report(new HeavyToolProgress(0.99, "extracting",

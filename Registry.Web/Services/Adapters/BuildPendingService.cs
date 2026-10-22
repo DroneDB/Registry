@@ -35,7 +35,7 @@ namespace Registry.Web.Services.Adapters;
 [AutomaticRetry(Attempts = 0)]
 [JobExpiration(ExpirationTimeoutInMinutes = 60)]
 [DisableConcurrentExecution(timeoutInSeconds: 0)]
-public class BuildPendingService
+public class BuildPendingService : Builds.IPendingBuildFlag
 {
     private readonly RegistryContext _context;
     private readonly DatasetSweep _sweep;

@@ -26,6 +26,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Registry.Web.Utilities;
 using Shouldly;
+using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Test;
 
@@ -140,11 +141,11 @@ public class Xi05HashOnceTests
         var jobs = new Mock<IBackgroundJobsProcessor>();
         var cache = new Mock<ICacheManager>();
         var fileSystem = new FileSystem();
-        return new PushManager(utils.Object, ddbManager.Object, Mock.Of<IObjectsManager>(),
+        return new PushManager(utils.Object, ddbManager.Object,
             NullLogger<PushManager>.Instance, Mock.Of<IDatasetsManager>(), auth.Object,
             new DatasetAccessResolver(utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper,
-            jobs.Object, Microsoft.Extensions.Options.Options.Create(new ImportSettings()), cache.Object, fileSystem,
-            TestJobs.BuildPendingService(db, ddbManager.Object, jobs.Object, cache.Object), new PushSessionStore(fileSystem),
+            TestJobs.Scheduler(jobs.Object, TestJobs.BuildPendingService(db, ddbManager.Object, jobs.Object, cache.Object)),
+            Microsoft.Extensions.Options.Options.Create(new ImportSettings()), fileSystem, new PushSessionStore(fileSystem),
             new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), Mock.Of<IStorageQuota>()), TestPaths.Policy,
             TestScratch.Provider);
     }

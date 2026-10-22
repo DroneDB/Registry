@@ -34,6 +34,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Shouldly;
 using Registry.Web.Test.Support;
+using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Test;
 
@@ -55,6 +56,7 @@ public class PushPipelineTests : TestBase
     private Mock<IStorageQuota> _storageQuota = null!;
     private Mock<IObjectsManager> _objects = null!;
     private Mock<IBackgroundJobsProcessor> _jobs = null!;
+    private Mock<ICacheManager> _pendingCache = null!;
     private Dataset _ds = null!;
     private RegistryContext _ctx = null!;
     private Delta _delta = null!;
@@ -124,6 +126,7 @@ public class PushPipelineTests : TestBase
         _objects = new Mock<IObjectsManager>();
 
         _jobs = new Mock<IBackgroundJobsProcessor>();
+        _pendingCache = new Mock<ICacheManager>();
     }
 
     [TearDown]
@@ -141,13 +144,14 @@ public class PushPipelineTests : TestBase
         auth.Setup(a => a.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
         auth.Setup(a => a.GetCurrentUser()).ReturnsAsync(new User { Id = "u", UserName = "u" });
         auth.Setup(a => a.GetCurrentUserId()).ReturnsAsync("u");
-        var cache = new Mock<ICacheManager>();
+        var cache = _pendingCache;
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings { DatasetsPath = _root });
         var fileSystem = new FileSystem();
         var buildPending = new BuildPendingService(_ctx, new DatasetSweep(_ctx), ddbManager.Object, _jobs.Object, cache.Object, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
-        return new PushManager(_utils.Object, ddbManager.Object, _objects.Object,
+        return new PushManager(_utils.Object, ddbManager.Object,
             CreateTestLogger<PushManager>(Serilog.Events.LogEventLevel.Warning), Mock.Of<IDatasetsManager>(),
-            auth.Object, new DatasetAccessResolver(_utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper.Object, _jobs.Object, TestSettings.Options<ImportSettings>(settings), cache.Object, fileSystem, buildPending,
+            auth.Object, new DatasetAccessResolver(_utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper.Object,
+            TestJobs.Scheduler(_jobs.Object, buildPending, userId: "u"), TestSettings.Options<ImportSettings>(settings), fileSystem,
             new PushSessionStore(fileSystem), new UploadQuotaGuard(_ledger, _storageQuota.Object), TestPaths.Policy, TestScratch.Provider);
     }
 
@@ -173,6 +177,30 @@ public class PushPipelineTests : TestBase
         res.NeededFiles.Length.ShouldBe(Adds);
         StageUploads(res.Token);
         return res.Token;
+    }
+
+    /// <summary>
+    /// RQ-12 (IBuildScheduler): the dataset is flagged as having pending builds before the first build job is queued,
+    /// as uploads always did: a build that fails at once must find the flag, or the pending-build coordinator does not
+    /// look at the dataset. Push queued its builds first and flagged after (red before the change).
+    /// </summary>
+    [Test]
+    public async Task Commit_FlagsPendingBuildsBeforeQueueingThem()
+    {
+        var order = new List<string>();
+        _pendingCache.Setup(c => c.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed, It.IsAny<string>(),
+                It.IsAny<byte[]>(), It.IsAny<object[]>()))
+            .Callback(() => order.Add("flag")).Returns(Task.CompletedTask);
+        _jobs.Setup(j => j.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
+                It.IsAny<IndexPayload>()))
+            .Callback(() => order.Add("build")).Returns("job");
+        var mgr = CreateManager();
+        var token = await InitAndStage(mgr);
+
+        await mgr.Commit("org", "ds", token);
+
+        order.ShouldContain("build");
+        order[0].ShouldBe("flag");
     }
 
     [Test]

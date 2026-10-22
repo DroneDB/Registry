@@ -10,6 +10,7 @@ using Registry.Web.Data;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -22,18 +23,18 @@ public sealed class BuildQueryService : IBuildQueryService
     private readonly IDatasetAccessResolver _access;
     private readonly IBuildArtifactResolver _artifacts;
     private readonly DatasetPathPolicy _paths;
-    private readonly EntryJobs _jobs;
+    private readonly IBuildScheduler _builds;
     private readonly IJobIndexQuery _jobIndex;
     private readonly RegistryContext _context;
     private readonly ILogger<BuildQueryService> _logger;
 
     public BuildQueryService(IDatasetAccessResolver access, IBuildArtifactResolver artifacts, DatasetPathPolicy paths,
-        EntryJobs jobs, IJobIndexQuery jobIndex, RegistryContext context, ILogger<BuildQueryService> logger)
+        IBuildScheduler builds, IJobIndexQuery jobIndex, RegistryContext context, ILogger<BuildQueryService> logger)
     {
         _access = access;
         _artifacts = artifacts;
         _paths = paths;
-        _jobs = jobs;
+        _builds = builds;
         _jobIndex = jobIndex;
         _context = context;
         _logger = logger;
@@ -61,7 +62,7 @@ public sealed class BuildQueryService : IBuildQueryService
         if (!force && build.HasLiveBuild())
             throw new ConflictException($"A build is already in progress for '{entry.Path}'");
 
-        var jobId = await _jobs.EnqueueBuildAsync(access, orgSlug, dsSlug, path, entry.Hash, force, markPending: false);
+        var jobId = await _builds.QueueAsync(BuildTarget.Of(access, orgSlug, dsSlug), path, entry.Hash, force, ct: ct);
         _logger.LogInformation("Building '{Path}' asynchronously, background job id is {JobId}", path, jobId);
     }
 

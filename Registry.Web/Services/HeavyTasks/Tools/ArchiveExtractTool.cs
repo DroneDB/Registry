@@ -220,7 +220,7 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
 
         // Index, queue the builds of the buildable files (children of this task), invalidate the caches
         await _indexer.IndexAsync(new TaskFiles(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug,
-            extractedPaths, ctx.Jobs, ctx.TaskId, "extracted files"), progress, ct);
+            extractedPaths, ctx.BuildQueue, ctx.TaskId, "extracted files"), progress, ct);
 
         // Optionally remove the source archive (index entry + physical file).
         if (deleteArchive)

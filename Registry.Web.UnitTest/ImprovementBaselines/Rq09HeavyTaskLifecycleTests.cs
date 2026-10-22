@@ -93,6 +93,7 @@ public class Rq09HeavyTaskLifecycleTests
         services.AddSingleton(_writer.Object);
         services.AddSingleton(_jobs.Object);
         services.AddScoped(_ => TestJobs.DdbJobs(manager.Object));
+        services.AddScoped<Registry.Web.Services.Builds.IBuildScheduler>(_ => TestJobs.Scheduler(_jobs.Object));
         _provider = services.BuildServiceProvider();
     }
 

@@ -258,7 +258,7 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
         // of this task), invalidate the caches
         var allFiles = EnumerateRelativeFiles(root).ToList();
         await _indexer.IndexAsync(new TaskFiles(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug, allFiles,
-            ctx.Jobs, ctx.TaskId, "imported files"), progress, ct);
+            ctx.BuildQueue, ctx.TaskId, "imported files"), progress, ct);
 
         progress.Report(new HeavyToolProgress(1, "done",
             LogChunk: $"Import complete: {allFiles.Count} file(s) indexed"));

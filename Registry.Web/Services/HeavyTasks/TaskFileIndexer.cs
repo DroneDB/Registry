@@ -10,6 +10,7 @@ using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
@@ -24,7 +25,7 @@ namespace Registry.Web.Services.HeavyTasks;
 /// <remarks>
 /// Chunks bound the lock time of one index transaction and let progress be reported between them;
 /// each chunk is one native index call, and buildability is one manifest call per chunk
-/// (<see cref="IDdbBuild.GetBuildArtifacts"/>), not one call per file. Builds are queued once every
+/// (<see cref="IBuildScheduler.QueueBuildableAsync"/>), not one call per file. Builds are queued once every
 /// file is indexed, so they never run against a half-indexed dataset.
 /// </remarks>
 public sealed class TaskFileIndexer
@@ -70,21 +71,12 @@ public sealed class TaskFileIndexer
         }
 
         var queued = 0;
+        var target = new BuildTarget(files.Ddb, files.Dataset, files.OrgSlug, files.DsSlug);
+        var origin = new BuildOrigin(null, files.ParentJobId);
         foreach (var chunk in indexed.Chunk(ChunkSize))
         {
             ct.ThrowIfCancellationRequested();
-            var builds = files.Ddb.GetBuildArtifacts(chunk.Select(e => e.Path).ToArray());
-            for (var i = 0; i < chunk.Length; i++)
-            {
-                if (!builds[i].CanBeBuilt())
-                    continue;
-
-                var entry = chunk[i];
-                files.Jobs.EnqueueBuild(files.Dataset, entry.Path, false,
-                    new IndexPayload(files.OrgSlug, files.DsSlug, entry.Hash, null, Path: entry.Path,
-                        ParentJobId: files.ParentJobId));
-                queued++;
-            }
+            queued += (await files.Builds.QueueBuildableAsync(target, [.. chunk.Select(e => e.Path)], origin, ct)).Count;
         }
 
         _logger.LogInformation("Enqueued {Count} build job(s) for {What} in {Org}/{Ds}",
@@ -113,12 +105,12 @@ public sealed class TaskFileIndexer
 /// <param name="OrgSlug">Organization slug (cache keys, job payloads).</param>
 /// <param name="DsSlug">Dataset slug (cache keys, job payloads).</param>
 /// <param name="Paths">Dataset paths of the files, normalized.</param>
-/// <param name="Jobs">Queues the builds, in the task's scope.</param>
+/// <param name="Builds">Queues the builds, in the task's scope.</param>
 /// <param name="ParentJobId">The task's job: the builds are its children.</param>
 /// <param name="What">What the files are, for the log ("extracted files").</param>
 /// <param name="ProgressFrom">Task progress when indexing starts.</param>
 /// <param name="ProgressTo">Task progress when the last file is indexed.</param>
 public sealed record TaskFiles(
     IDDB Ddb, DatasetKey Dataset, string OrgSlug, string DsSlug, IReadOnlyList<string> Paths,
-    IBackgroundJobsProcessor Jobs, string ParentJobId, string What,
+    IBuildScheduler Builds, string ParentJobId, string What,
     double ProgressFrom = 0, double ProgressTo = 1);
