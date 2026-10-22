@@ -69,11 +69,7 @@ public class TasksController : ControllerBaseEx
         var page = await _tasksManager.ListPageAsync(orgSlug, dsSlug, toolId, state, skip, take, ct);
 
         // Polling clients send the tag they have: an unchanged list costs a 304, not the list (HUB-05)
-        Response.Headers.ETag = page.ETag;
-        Response.Headers.CacheControl = "private, no-cache";
-        return Request.Headers.IfNoneMatch.ToString().Split(',').Any(t => t.Trim() == page.ETag)
-            ? StatusCode(StatusCodes.Status304NotModified)
-            : Ok(page.Items);
+        return OkUnlessNotModified(page.Items, page.ETag, "private, no-cache");
     }
 
     // ---- GET /tasks/events ------------------------------------------------
@@ -176,12 +172,7 @@ public class TasksController : ControllerBaseEx
         [FromRoute, Required] string id, CancellationToken ct)
     {
         var artifact = await _tasksManager.GetResultAsync(orgSlug, dsSlug, id, ct);
-
-        if (artifact.ETag is not null)
-            Response.Headers.ETag = artifact.ETag;
-
-        var stream = System.IO.File.OpenRead(artifact.FilePath);
-        return File(stream, artifact.ContentType, artifact.FileName, enableRangeProcessing: true);
+        return ValidatedPhysicalFile(artifact.FilePath, artifact.ContentType, artifact.ETag, artifact.FileName);
     }
 
     // ---- DELETE /tasks/{id} -----------------------------------------------

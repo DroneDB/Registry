@@ -64,17 +64,7 @@ public sealed class HashedContentCachePolicy
     /// True when the request's <c>If-None-Match</c> lists this ETag (weak comparison, as
     /// RFC 9110 §13.1.2 requires for If-None-Match) or is <c>*</c>.
     /// </summary>
-    public bool IsNotModified(HttpRequest request)
-    {
-        var header = request.Headers.IfNoneMatch;
-        if (StringValues.IsNullOrEmpty(header))
-            return false;
-
-        if (!EntityTagHeaderValue.TryParseList(header, out var tags))
-            return false;
-
-        return tags.Any(t => t.Equals(EntityTagHeaderValue.Any) || t.Compare(_etag, useStrongComparison: false));
-    }
+    public bool IsNotModified(HttpRequest request) => EntityTags.IfNoneMatch(request, _etag);
 
     /// <summary>Sets the validator and freshness headers (on 200 and 304 responses alike).</summary>
     public void Apply(HttpResponse response)

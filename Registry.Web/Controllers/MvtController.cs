@@ -63,11 +63,11 @@ public class MvtController : ControllerBaseEx
         if (tilePath == null)
             return NotFound();
 
-        // Tiles are already gzip-compressed (COMPRESS=YES in MVT driver).
+        // Tiles are already gzip-compressed (COMPRESS=YES in MVT driver). The tag names the tile of a build: it never
+        // changes, so a client that has it gets a 304 (RQ-13)
         Response.Headers.ContentEncoding = "gzip";
         Response.Headers.CacheControl = "public, max-age=31536000, immutable";
-        Response.Headers.ETag = $"\"{hash}-{z}-{x}-{y}\"";
-        return PhysicalFile(tilePath, "application/vnd.mapbox-vector-tile");
+        return ValidatedPhysicalFile(tilePath, "application/vnd.mapbox-vector-tile", $"\"{hash}-{z}-{x}-{y}\"");
     }
 
     [HttpGet("{hash}/metadata.json")]
