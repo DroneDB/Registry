@@ -125,12 +125,13 @@ slice() { printf '%s\0' "${OBJECTS_SLICE[@]}"; }
 # Build-layout literals (XI-04, D8): libddb's build folder and file names, its marker suffixes, the build folder members.
 BUILD_LAYOUT='"(cog|copc|ept|vec|mvt|nxs|gsplat|3dtiles)"|(cog\.tif|cloud\.copc\.laz|source\.gpkg|model\.nxz|model\.rad|model\.spz|ept\.json|tileset\.json|georef\.json|local\.json|bounds\.json)|\.pending\b|\.building\b|BuildFolderName|BuildFolderPath'
 
-# The native raster calls of the objects slice (XI-06): all of them, and those made through INativeWorkGate.
+# The native raster calls of the objects slice (XI-06): all of them, and those made through INativeWorkGate
+# (RunAsync(NativeLane.X, () => ...), or a service's own RunAsync(() => ...) over the gate).
 NATIVE_RASTER='(?:GetRaster\w+|CalculateVolume|DetectStockpile|DetectAllStockpiles|GenerateContours|ExportRaster|MergeMultispectral|ValidateMergeMultispectral|PreviewMergeMultispectral|ValidateAlignRaster|GenerateThumbnailEx|GenerateTileEx|GenerateTile)'
 ungated_native_calls() {
     local all gated
     all="$(slice | multiline "\\b(?:\\w+\\.)*[Dd]db\\.$NATIVE_RASTER\\(")"
-    gated="$(slice | multiline "RunAsync\\(NativeLane\\.\\w+,\\s*\\(\\)\\s*=>\\s*(?:\\w+\\.)*[Dd]db\\.$NATIVE_RASTER\\(")"
+    gated="$(slice | multiline "RunAsync\\((?:NativeLane\\.\\w+,\\s*)?\\(\\)\\s*=>\\s*(?:\\w+\\.)*[Dd]db\\.$NATIVE_RASTER\\(")"
     echo $((all - gated))
 }
 

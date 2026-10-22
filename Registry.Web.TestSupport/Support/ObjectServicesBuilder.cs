@@ -32,7 +32,8 @@ namespace Registry.Web.Test.Support;
 /// <item>build-pending service: a real <see cref="BuildPendingService"/> on the SUT context and the DDB manager,
 /// background jobs and cache above;</item>
 /// <item>upload pipeline: a real <see cref="UploadManager"/> over the same collaborators (indexing with AddRaw
-/// unless an index queue is given); OGC catalog and build status: no-op mocks; native gate: default widths.</item>
+/// unless an index queue is given); OGC catalog and build status: no-op mocks; native gate: the process-wide one
+/// with the default widths.</item>
 /// </list>
 /// </summary>
 public sealed class ObjectServicesBuilder
@@ -53,6 +54,7 @@ public sealed class ObjectServicesBuilder
     private BuildPendingService? _buildPendingService;
     private IBuildArtifactResolver? _buildArtifactResolver;
     private IDatasetIndexQueue? _indexQueue;
+    private INativeWorkGate? _nativeGate;
 
     /// <param name="context">The registry context of the SUT (the caller owns and disposes it).</param>
     public ObjectServicesBuilder(RegistryContext context)
@@ -74,6 +76,7 @@ public sealed class ObjectServicesBuilder
     public ObjectServicesBuilder WithBuildPendingService(BuildPendingService service) => Set(() => _buildPendingService = service);
     public ObjectServicesBuilder WithBuildArtifactResolver(IBuildArtifactResolver resolver) => Set(() => _buildArtifactResolver = resolver);
     public ObjectServicesBuilder WithIndexQueue(IDatasetIndexQueue indexQueue) => Set(() => _indexQueue = indexQueue);
+    public ObjectServicesBuilder WithNativeGate(INativeWorkGate nativeGate) => Set(() => _nativeGate = nativeGate);
 
     /// <summary>The facade and the services, sharing the collaborators.</summary>
     public ObjectServices Build()
@@ -114,7 +117,7 @@ public sealed class ObjectServicesBuilder
         services.AddSingleton<IZipArchiveBuilder>(new ZipArchiveBuilder());
         services.AddSingleton(Mock.Of<IOgcLayerCatalog>());
         services.AddSingleton(Mock.Of<IBuildStatusService>());
-        services.AddSingleton(NativeWorkGate.Default);
+        services.AddSingleton(_nativeGate ?? NativeWorkGate.Default);
         services.AddSingleton<IUploadManager>(new UploadManager(NullLogger<UploadManager>.Instance, authManager, access,
             ddbManager, fileSystem, thumbnails, TestSettings.Options<ImportSettings>(settings), backgroundJobs,
             buildPendingService,

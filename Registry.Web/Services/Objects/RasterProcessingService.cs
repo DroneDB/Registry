@@ -16,7 +16,7 @@ namespace Registry.Web.Services.Objects;
 
 /// <summary>
 /// Default <see cref="IRasterProcessingService"/>. The required arguments are checked before the access check,
-/// every path through libddb's rule.
+/// every path through libddb's rule; the native work runs on the heavy lane of <see cref="INativeWorkGate"/>.
 /// </summary>
 public sealed class RasterProcessingService : IRasterProcessingService
 {
@@ -47,7 +47,7 @@ public sealed class RasterProcessingService : IRasterProcessingService
         var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct)).Ddb;
         paths = NormalizeAll(paths);
 
-        return await Task.Run(() => ddb.ValidateMergeMultispectral(paths), ct);
+        return await _gate.RunAsync(NativeLane.Heavy, () => ddb.ValidateMergeMultispectral(paths), ct);
     }
 
     public async Task<byte[]> PreviewMergeMultispectralAsync(string orgSlug, string dsSlug, string[] paths,
@@ -57,7 +57,8 @@ public sealed class RasterProcessingService : IRasterProcessingService
         var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct)).Ddb;
         paths = NormalizeAll(paths);
 
-        return await Task.Run(() => ddb.PreviewMergeMultispectral(paths, previewBands, thumbSize), ct);
+        return await _gate.RunAsync(NativeLane.Heavy, () => ddb.PreviewMergeMultispectral(paths, previewBands, thumbSize),
+            ct);
     }
 
     public async Task MergeMultispectralAsync(string orgSlug, string dsSlug, string[] paths, string? outputPath,
@@ -77,7 +78,7 @@ public sealed class RasterProcessingService : IRasterProcessingService
             _logger.LogInformation("Output file already existed, deleted: '{OutputPath}'", outputFullPath);
 
         _logger.LogInformation("Merging multispectral for '{OutputPath}'", outputFullPath);
-        await Task.Run(() => ddb.MergeMultispectral(paths, outputPath), ct);
+        await _gate.RunAsync(NativeLane.Heavy, () => ddb.MergeMultispectral(paths, outputPath), ct);
 
         ddb.AddRaw(outputPath);
         _logger.LogInformation("Merge complete and file added to the dataset");
@@ -96,7 +97,7 @@ public sealed class RasterProcessingService : IRasterProcessingService
         sourcePath = _paths.Normalize(sourcePath, "source path");
         referencePath = _paths.Normalize(referencePath, "reference path");
 
-        return await Task.Run(() => ddb.ValidateAlignRaster(sourcePath, referencePath), ct);
+        return await _gate.RunAsync(NativeLane.Heavy, () => ddb.ValidateAlignRaster(sourcePath, referencePath), ct);
     }
 
     public async Task<MaskBordersCheckResponseDto> CheckMaskedFileExistsAsync(string orgSlug, string dsSlug,

@@ -34,3 +34,22 @@ public interface INativeWorkGate
     /// <summary>Calls running on <paramref name="lane"/> right now.</summary>
     int InFlight(NativeLane lane);
 }
+
+/// <summary>Native work without a result through <see cref="INativeWorkGate"/>.</summary>
+public static class NativeWorkGateExtensions
+{
+    /// <summary>
+    /// Runs <paramref name="work"/> on a thread-pool thread once the lane has a free slot (see
+    /// <see cref="INativeWorkGate.RunAsync{T}(NativeLane, Func{T}, CancellationToken)"/>).
+    /// </summary>
+    public static Task RunAsync(this INativeWorkGate gate, NativeLane lane, Action work, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(gate);
+        ArgumentNullException.ThrowIfNull(work);
+        return gate.RunAsync(lane, () =>
+        {
+            work();
+            return true;
+        }, ct);
+    }
+}

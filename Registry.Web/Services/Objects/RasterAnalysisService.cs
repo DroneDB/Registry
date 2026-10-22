@@ -19,7 +19,7 @@ namespace Registry.Web.Services.Objects;
 /// <summary>
 /// Default <see cref="IRasterAnalysisService"/>. The arguments are checked once, here, before the access
 /// check; the source is resolved by <see cref="RenderSources"/> (404 before any native call when the
-/// artifact does not exist yet).
+/// artifact does not exist yet); every native call runs on the heavy lane of <see cref="INativeWorkGate"/>.
 /// </summary>
 public sealed class RasterAnalysisService : IRasterAnalysisService
 {
@@ -48,35 +48,35 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
         CancellationToken ct = default)
     {
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
-        return source.Ddb.GetRasterInfo(source.SourcePath);
+        return await RunAsync(() => source.Ddb.GetRasterInfo(source.SourcePath), ct);
     }
 
     public async Task<string> GetRasterMetadataAsync(string orgSlug, string dsSlug, string path, string? formula = null,
         string? bandFilter = null, CancellationToken ct = default)
     {
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
-        return source.Ddb.GetRasterMetadata(source.SourcePath, formula, bandFilter);
+        return await RunAsync(() => source.Ddb.GetRasterMetadata(source.SourcePath, formula, bandFilter), ct);
     }
 
     public async Task<string> GetRasterValueInfoAsync(string orgSlug, string dsSlug, string path,
         CancellationToken ct = default)
     {
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
-        return source.Ddb.GetRasterValueInfo(source.SourcePath);
+        return await RunAsync(() => source.Ddb.GetRasterValueInfo(source.SourcePath), ct);
     }
 
     public async Task<string> GetRasterPointValueAsync(string orgSlug, string dsSlug, string path, int x, int y,
         CancellationToken ct = default)
     {
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
-        return source.Ddb.GetRasterPointValue(source.SourcePath, x, y);
+        return await RunAsync(() => source.Ddb.GetRasterPointValue(source.SourcePath, x, y), ct);
     }
 
     public async Task<string> GetRasterAreaStatsAsync(string orgSlug, string dsSlug, string path, int x0, int y0,
         int x1, int y1, CancellationToken ct = default)
     {
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
-        return source.Ddb.GetRasterAreaStats(source.SourcePath, x0, y0, x1, y1);
+        return await RunAsync(() => source.Ddb.GetRasterAreaStats(source.SourcePath, x0, y0, x1, y1), ct);
     }
 
     public async Task<string> GetRasterProfileAsync(string orgSlug, string dsSlug, string path,
@@ -86,7 +86,7 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
             throw new BadRequestException("lineString (GeoJSON LineString) is required");
 
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
-        return source.Ddb.GetRasterProfile(source.SourcePath, geoJsonLineString, samples);
+        return await RunAsync(() => source.Ddb.GetRasterProfile(source.SourcePath, geoJsonLineString, samples), ct);
     }
 
     public async Task<string> CalculateVolumeAsync(string orgSlug, string dsSlug, string path, string polygonGeoJson,
@@ -96,7 +96,8 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
             throw new BadRequestException("polygon (GeoJSON Polygon) is required");
 
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
-        return source.Ddb.CalculateVolume(source.SourcePath, polygonGeoJson, baseMethod ?? string.Empty, flatElevation);
+        return await RunAsync(() => source.Ddb.CalculateVolume(source.SourcePath, polygonGeoJson, baseMethod ?? string.Empty,
+            flatElevation), ct);
     }
 
     public async Task<string> DetectStockpileAsync(string orgSlug, string dsSlug, string path, double lat, double lon,
@@ -106,7 +107,8 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
             throw new BadRequestException("radius must be positive");
 
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
-        return source.Ddb.DetectStockpile(source.SourcePath, lat, lon, radiusMeters, Math.Clamp(sensitivity, 0f, 1f));
+        return await RunAsync(() => source.Ddb.DetectStockpile(source.SourcePath, lat, lon, radiusMeters,
+            Math.Clamp(sensitivity, 0f, 1f)), ct);
     }
 
     public async Task<string> DetectAllStockpilesAsync(string orgSlug, string dsSlug, string path, float sensitivity,
@@ -116,8 +118,8 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
         if (maxResults <= 0) throw new BadRequestException("maxResults must be > 0");
 
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
-        return source.Ddb.DetectAllStockpiles(source.SourcePath, Math.Clamp(sensitivity, 0f, 1f), minAreaM2,
-            Math.Min(maxResults, MaxStockpileResults));
+        return await RunAsync(() => source.Ddb.DetectAllStockpiles(source.SourcePath, Math.Clamp(sensitivity, 0f, 1f),
+            minAreaM2, Math.Min(maxResults, MaxStockpileResults)), ct);
     }
 
     public async Task<string> GenerateContoursAsync(string orgSlug, string dsSlug, string path, ContourOptions options,
@@ -136,8 +138,8 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
             throw new BadRequestException("'simplifyTolerance' must be >= 0");
 
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
-        return source.Ddb.GenerateContours(source.SourcePath, o.Interval, o.Count, o.BaseOffset, o.MinElev, o.MaxElev,
-            o.SimplifyTolerance, o.BandIndex > 0 ? o.BandIndex : 1);
+        return await RunAsync(() => source.Ddb.GenerateContours(source.SourcePath, o.Interval, o.Count, o.BaseOffset,
+            o.MinElev, o.MaxElev, o.SimplifyTolerance, o.BandIndex > 0 ? o.BandIndex : 1), ct);
     }
 
     public async Task<StorageDataDto> ExportRasterAsync(string orgSlug, string dsSlug, string path,
@@ -146,15 +148,15 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
 
         // Enforce the export size limit (a conservative upper bound from the raw input size)
-        EnsureExportSizeWithinLimit(source);
+        await EnsureExportSizeWithinLimitAsync(source, ct);
 
         var stem = Path.GetFileNameWithoutExtension(source.Path);
         // The configured temp folder; deleted when the bytes are read
         using var output = _scratch.Create(stem + "_export_", ".tif");
 
         var v = visualization;
-        await Task.Run(() => source.Ddb.ExportRaster(source.SourcePath, output.Path, v.Preset, v.Bands, v.Formula,
-            v.BandFilter, v.Colormap, v.Rescale), ct);
+        await _gate.RunAsync(NativeLane.Heavy, () => source.Ddb.ExportRaster(source.SourcePath, output.Path, v.Preset,
+            v.Bands, v.Formula, v.BandFilter, v.Colormap, v.Rescale), ct);
 
         return new StorageDataDto
         {
@@ -167,21 +169,24 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
     public async Task<long> EstimateExportSizeAsync(string orgSlug, string dsSlug, string path,
         CancellationToken ct = default)
     {
-        return EstimateExportBytes(await _sources.ResolveAsync(orgSlug, dsSlug, path, ct));
+        return await EstimateExportBytesAsync(await _sources.ResolveAsync(orgSlug, dsSlug, path, ct), ct);
     }
+
+    // Native raster work runs on the heavy lane of the gate (XI-06), as thumbnails do
+    private Task<T> RunAsync<T>(Func<T> work, CancellationToken ct) => _gate.RunAsync(NativeLane.Heavy, work, ct);
 
     /// <summary>
     /// Throws <see cref="BadRequestException"/> when the estimated export exceeds
     /// <see cref="DownloadOptions.MaxExportSizeBytes"/>; nothing when there is no limit or no estimate.
     /// </summary>
-    private void EnsureExportSizeWithinLimit(RenderSource source)
+    private async Task EnsureExportSizeWithinLimitAsync(RenderSource source, CancellationToken ct)
     {
         if (_downloads.MaxExportSizeBytes is not { } limit) return;
 
         long estimated;
         try
         {
-            estimated = EstimateExportBytes(source);
+            estimated = await EstimateExportBytesAsync(source, ct);
         }
         catch (Exception ex)
         {
@@ -199,9 +204,9 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
     /// The raw uncompressed size (in bytes) of a raster: a conservative upper bound for its GeoTIFF export
     /// (width × height × bytes per pixel × bands).
     /// </summary>
-    private static long EstimateExportBytes(RenderSource source)
+    private async Task<long> EstimateExportBytesAsync(RenderSource source, CancellationToken ct)
     {
-        using var doc = JsonDocument.Parse(source.Ddb.GetRasterInfo(source.SourcePath));
+        using var doc = JsonDocument.Parse(await RunAsync(() => source.Ddb.GetRasterInfo(source.SourcePath), ct));
         var root = doc.RootElement;
 
         var width = root.TryGetProperty("width", out var wEl) ? wEl.GetInt64() : 0;
