@@ -53,6 +53,7 @@ public static class TestBuilds
         var build = Build(datasetFolder, path, type, hash, BuildState.Pending);
         build.Build!.MissingDependencies = missing;
         build.Build.LastAttempt = 1700000000;
+        build.Build.RetryAfter = build.Build.LastAttempt + Registry.Adapters.Testing.PendingMarkers.LibddbRetryBackoffSeconds;
         return build;
     }
 

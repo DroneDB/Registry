@@ -1,4 +1,5 @@
 using System;
+using Registry.Adapters.Testing;
 using Registry.Ports;
 using Registry.Web.Services.Jobs;
 using System.Collections.Generic;
@@ -294,7 +295,7 @@ public class BuildStatusServiceTest : TestBase
         // The pending-build enqueuer reads the dataset's markers; the listing reads the manifest
         NativePending(path, "sub/model.mtl");
         _ddbMock.Setup(x => x.GetPendingBuildInfo()).Returns([
-            new PendingBuildInfo { Hash = "h1", Path = path, MissingDependencies = ["sub/model.mtl"], LastAttempt = 0 }
+            PendingMarkers.Of(path, "h1", 0, "sub/model.mtl")
         ]);
 
         IndexPayload retryMeta = null;

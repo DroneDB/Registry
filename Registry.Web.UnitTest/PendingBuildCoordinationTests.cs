@@ -19,6 +19,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
+using Registry.Adapters.Testing;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
@@ -264,7 +265,7 @@ public class PendingBuildCoordinationTests
     public void FailedEntryBothFilterOrdersPreserveNewlyScheduledRetryAndError(bool failureFirst)
     {
         Seed(3);
-        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([new PendingBuildInfo { Path = "model.obj", Hash = "model-hash" }]);
+        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingMarkers.Of("model.obj", "model-hash")]);
         var writer = new Mock<IJobIndexWriter>();
         using var provider = new ServiceCollection().AddSingleton(_service).AddSingleton(writer.Object).BuildServiceProvider();
         var failed = new BuildJobFailureFilter(provider.GetRequiredService<IServiceScopeFactory>(), Mock.Of<ILogger<BuildJobFailureFilter>>());
@@ -292,7 +293,7 @@ public class PendingBuildCoordinationTests
     public void FailedEntryRequiresItsOwnMatchingNativePendingMarker(string pendingPath, string pendingHash)
     {
         Seed();
-        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([new PendingBuildInfo { Path = pendingPath, Hash = pendingHash }]);
+        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingMarkers.Of(pendingPath, pendingHash)]);
         using var provider = new ServiceCollection().AddSingleton(_service).BuildServiceProvider();
         new BuildRetrySchedulerFilter(provider.GetRequiredService<IServiceScopeFactory>(), Mock.Of<ILogger<BuildRetrySchedulerFilter>>())
             .OnStateApplied(FilterContext("model.obj", "model-hash", new FailedState(new DdbException("invalid input"))),
@@ -339,7 +340,7 @@ public class PendingBuildCoordinationTests
                 firstReading.Set();
                 if (!releaseFirst.Wait(TimeSpan.FromSeconds(5))) throw new TimeoutException("test barrier not released");
             }
-            return [new PendingBuildInfo { Path = "model.obj", Hash = "hash", LastAttempt = 0 }];
+            return [PendingMarkers.Of("model.obj", "hash")];
         });
         var index = new Mock<IJobIndexQuery>();
         index.Setup(x => x.GetByOrgDsAsync(Org, Ds, 0, int.MaxValue, It.IsAny<CancellationToken>()))
@@ -431,7 +432,7 @@ public class PendingBuildCoordinationTests
     [Test]
     public void EntryEnqueueFailureRemainsVisibleAndDoesNotRunNativeFallback()
     {
-        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([new PendingBuildInfo { Path = "model.obj", Hash = "h", LastAttempt = 0 }]);
+        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingMarkers.Of("model.obj", "h")]);
         var index = new Mock<IJobIndexQuery>();
         index.Setup(x => x.GetByOrgDsAsync(Org, Ds, 0, int.MaxValue, It.IsAny<CancellationToken>())).ReturnsAsync([]);
         _jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()))
@@ -551,7 +552,7 @@ public class PendingBuildCoordinationTests
         connection.Setup(x => x.GetStateData("stale-job")).Returns(actualState == "Missing" ? null :
             new StateData { Name = actualState, Data = new Dictionary<string, string>() });
         storage.Setup(x => x.GetConnection()).Returns(connection.Object);
-        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([new PendingBuildInfo { Path = "model.obj", Hash = "h", LastAttempt = 0 }]);
+        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingMarkers.Of("model.obj", "h")]);
         var index = new Mock<IJobIndexQuery>();
         index.Setup(x => x.GetByOrgDsAsync(Org, Ds, 0, int.MaxValue, It.IsAny<CancellationToken>())).ReturnsAsync([
             new JobIndex { JobId = "stale-job", OrgSlug = Org, DsSlug = Ds, Path = "model.obj", ToolId = "build", CurrentState = rowState }

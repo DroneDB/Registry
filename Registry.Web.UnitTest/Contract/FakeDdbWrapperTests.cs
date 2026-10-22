@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Moq;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
@@ -253,6 +254,7 @@ public sealed class FakeDdbWrapperTests
         (cog.Role, cog.Path, cog.Kind, cog.DownloadName).ShouldBe((ArtifactRoles.RasterCog, "cog/cog.tif", "file", "cog.tif"));
         cog.MediaType.ShouldBe("image/tiff; application=geotiff; profile=cloud-optimized");
         artifacts[1].Build!.Root.ShouldBe($"{GenericRoot}/.ddb/build/{BuiltHash}");
+        (artifacts[1].Build!.LastAttempt, artifacts[1].Build!.RetryAfter).ShouldBe((null, null));
         _ddb.IsBuildPending(Root).ShouldBeFalse();
         Should.Throw<NotSupportedException>(() => _ddb.GetBuildArtifacts(Root, ["roads.shp"]));
     }
@@ -266,6 +268,7 @@ public sealed class FakeDdbWrapperTests
         pending.State.ShouldBe(BuildState.Pending);
         pending.MissingDependencies.ShouldBe(["roads.shx"]);
         pending.LastAttempt.ShouldBe(0);
+        pending.RetryAfter.ShouldBe(0); // normalised, as lastAttempt
     }
 
     [Test]
@@ -328,7 +331,27 @@ public sealed class FakeDdbWrapperTests
     {
         var pending = ContractFixture.Load("pending-build-info").Output.ToObject<PendingBuildInfo[]>()!;
 
-        pending.ShouldHaveSingleItem().MissingDependencies.ShouldBe(["roads.shx"]);
+        var marker = pending.ShouldHaveSingleItem();
+        marker.MissingDependencies.ShouldBe(["roads.shx"]);
+        marker.RetryAfter.ShouldBe(0); // normalised, as lastAttempt
+    }
+
+    /// <summary>
+    /// XI-04: Registry follows libddb's retryAfter and keeps no copy of the backoff, so an output
+    /// without it must not read as 0 ("due now"): the field is required, as in the schemas.
+    /// </summary>
+    [Test]
+    public void RetryAfter_IsRequired_AnOutputWithoutItFailsToDeserialize()
+    {
+        var pending = (JArray)ContractFixture.Load("pending-build-info").Output;
+        ((JObject)pending[0]).Remove("retryAfter").ShouldBeTrue();
+        Should.Throw<JsonSerializationException>(() => pending.ToObject<PendingBuildInfo[]>())
+            .Message.ShouldContain("retryAfter");
+
+        var artifacts = (JArray)ContractFixture.Load("build-artifacts").Output;
+        ((JObject)artifacts[0]["build"]!).Remove("retryAfter").ShouldBeTrue();
+        Should.Throw<JsonSerializationException>(() => artifacts.ToObject<EntryBuildArtifacts[]>())
+            .Message.ShouldContain("retryAfter");
     }
 
     [Test]

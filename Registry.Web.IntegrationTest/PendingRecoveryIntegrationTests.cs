@@ -25,6 +25,7 @@ using Moq;
 using MySqlConnector;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
+using Registry.Adapters.Testing;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
@@ -281,16 +282,18 @@ public class PendingRecoveryIntegrationTests
     }
 
     [Test]
-    public async Task PendingDueBoundary_59SecondsSkipsAnd60SecondsQueuesRealEntry()
+    public async Task PendingDueBoundary_BeforeRetryAfterSkipsAndAtRetryAfterQueuesRealEntry()
     {
         var ddb = await PendingModel("boundary");
         Add(ddb, "late.mtl", "newmtl plain\nKd 1 1 1\n");
-        var timestamp = ddb.GetPendingBuildInfo().Single().LastAttempt;
+        var marker = ddb.GetPendingBuildInfo().Single();
+        // XI-04: libddb reports when it retries the build; the enqueue path follows it
+        marker.RetryAfter.ShouldBe(marker.LastAttempt + PendingMarkers.LibddbRetryBackoffSeconds);
         using var scope = _provider.CreateScope();
         var index = scope.ServiceProvider.GetRequiredService<IJobIndexQuery>();
-        Enqueuer(Jobs, index, timestamp + 59).Run(ddb, Org, "boundary", NoConsole);
+        Enqueuer(Jobs, index, marker.RetryAfter - 1).Run(ddb, Org, "boundary", NoConsole);
         (await Rows("boundary")).ShouldBeEmpty();
-        Enqueuer(Jobs, index, timestamp + 60).Run(ddb, Org, "boundary", NoConsole);
+        Enqueuer(Jobs, index, marker.RetryAfter).Run(ddb, Org, "boundary", NoConsole);
         var entry = (await Rows("boundary")).Single();
         entry.Path.ShouldBe("model.obj");
         StartWorkers();
@@ -783,7 +786,8 @@ public class PendingRecoveryIntegrationTests
     {
         var marker = Path.Combine(ddb.BuildFolderPath, ddb.GetEntry(path)!.Hash + ".pending");
         var lines = File.ReadAllLines(marker);
-        lines[0] = (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 61).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        lines[0] = (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - PendingMarkers.LibddbRetryBackoffSeconds - 1)
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
         File.WriteAllLines(marker, lines);
     }
 

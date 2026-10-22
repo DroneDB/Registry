@@ -13,6 +13,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
+using Registry.Adapters.Testing;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
@@ -79,6 +80,7 @@ public unsafe class Abi11ContractTests : TestBase
           "hash": null,
           "lastAttempt": null,
           "missingDependencies": [],
+          "retryAfter": null,
           "root": null,
           "source": null,
           "state": "none"
@@ -343,6 +345,7 @@ public unsafe class Abi11ContractTests : TestBase
                 "hash": "{{hash}}",
                 "lastAttempt": null,
                 "missingDependencies": [],
+                "retryAfter": null,
                 "root": "<root>/.ddb/build/{{hash}}",
                 "source": "{{GeoRasterName}}",
                 "state": "complete"
@@ -381,8 +384,17 @@ public unsafe class Abi11ContractTests : TestBase
         DdbWrapper.Build(root, ShapefileName); // DDBERR_BUILDDEPMISSING: deferred
 
         var artifacts = GetBuildArtifacts(root, ShapefileName);
-        artifacts[0]["build"]!["lastAttempt"]!.Type.ShouldBe(JTokenType.Integer);
-        artifacts[0]["build"]!["lastAttempt"] = 0;
+        var build = artifacts[0]["build"]!;
+        build["lastAttempt"]!.Type.ShouldBe(JTokenType.Integer);
+        build["retryAfter"]!.Type.ShouldBe(JTokenType.Integer);
+        var lastAttempt = build["lastAttempt"]!.Value<long>();
+        var retryAfter = build["retryAfter"]!.Value<long>();
+        retryAfter.ShouldBe(lastAttempt + PendingMarkers.LibddbRetryBackoffSeconds);
+        // DDBGetPendingBuildInfo reports the same marker, through the adapter's port type
+        var marker = DdbWrapper.GetPendingBuildInfo(root).ShouldHaveSingleItem();
+        (marker.Path, marker.LastAttempt, marker.RetryAfter).ShouldBe((ShapefileName, lastAttempt, retryAfter));
+        build["lastAttempt"] = 0;
+        build["retryAfter"] = 0;
 
         ShouldEqualJson(Normalize(artifacts, root), ParseJson($$"""
             [{
@@ -392,6 +404,7 @@ public unsafe class Abi11ContractTests : TestBase
                 "hash": "{{ShapefileHash}}",
                 "lastAttempt": 0,
                 "missingDependencies": ["roads.shx"],
+                "retryAfter": 0,
                 "root": "<root>/.ddb/build/{{ShapefileHash}}",
                 "source": "roads.shp",
                 "state": "pending"

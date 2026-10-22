@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
 using Registry.Adapters;
+using Registry.Adapters.Testing;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
@@ -294,7 +295,7 @@ public class DdbJobsTests
     }
 
     private static PendingBuildInfo PendingEntry(string path, long secondsAgo, string hash = "h") =>
-        new() { Path = path, Hash = hash, MissingDependencies = ["x.mtl"], LastAttempt = Now - secondsAgo };
+        PendingMarkers.Of(path, hash, Now - secondsAgo, "x.mtl");
 
     private static JobIndex Row(string path, string state, string toolId = "build") =>
         new() { JobId = Guid.NewGuid().ToString(), OrgSlug = Org, DsSlug = Ds, Path = path, ToolId = toolId, CurrentState = state };
@@ -311,7 +312,7 @@ public class DdbJobsTests
             PendingEntry("", 600, "h-empty"),
             PendingEntry("   ", 600, "h-blank"),
             PendingEntry("busy.obj", 600, "h-busy"),        // has an active build job
-            new PendingBuildInfo { Path = "never.obj", Hash = "h-never", LastAttempt = 0 }
+            PendingMarkers.Of("never.obj", "h-never")
         ]);
         var enqueued = new List<EnqueuedBuild>();
         var index = MockJobIndex(
@@ -334,17 +335,27 @@ public class DdbJobsTests
         _ddb.Verify(x => x.BuildPending(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
         _ddb.Verify(x => x.Build(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
         Logged.ShouldContain(m => m.Contains(
-            "Pending builds: 7; enqueued 3; skipped 4 (1 attempted less than 60s ago, 1 with an active build job, 2 without a path)"));
+            "Pending builds: 7; enqueued 3; skipped 4 (1 not yet due, 1 with an active build job, 2 without a path)"));
         Logged.ShouldContain(m => m.Contains("Enqueued build of 'sub/model.obj' (job job-2)"));
         Logged.ShouldContain(m => m.Contains("Done build pending"));
     }
 
     [Test]
-    public void Pending_BackoffIsLibddbs60Seconds()
+    public void Pending_DueIsLibddbsRetryAfter_NotARegistryBackoff()
     {
-        // XI-04: libddb's buildPending skips an entry attempted less than 60 s ago; the enqueue path
-        // must agree, or a coordinator run enqueues builds libddb would not have attempted yet
-        PendingBuildEnqueuer.RetryBackoffSeconds.ShouldBe(60);
+        // XI-04: libddb owns the retry rule and reports it as retryAfter; the enqueue path must follow
+        // it whatever the time since lastAttempt, or a coordinator run and libddb's buildPending disagree
+        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([
+            new PendingBuildInfo { Path = "short.obj", Hash = "h1", LastAttempt = Now - 5, RetryAfter = Now - 1 },
+            new PendingBuildInfo { Path = "long.obj", Hash = "h2", LastAttempt = Now - 600, RetryAfter = Now + 1 },
+            new PendingBuildInfo { Path = "now.obj", Hash = "h3", LastAttempt = Now - 600, RetryAfter = Now }
+        ]);
+        var enqueued = new List<EnqueuedBuild>();
+
+        Pending(MockJobs(enqueued).Object).Run(_ddb.Object, Org, Ds, Console());
+
+        enqueued.Select(e => e.Path).ShouldBe(["short.obj", "now.obj"]);
+        Logged.ShouldContain(m => m.Contains("Pending builds: 3; enqueued 2; skipped 1 (1 not yet due"));
     }
 
     [Test]
@@ -395,7 +406,7 @@ public class DdbJobsTests
     public void BuildPending_FromJobContext_EnqueuesInsteadOfNativeBuildPending()
     {
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([
-            new PendingBuildInfo { Path = "sub/model.obj", Hash = "h1", LastAttempt = 0 }
+            PendingMarkers.Of("sub/model.obj", "h1")
         ]);
         var enqueued = new List<EnqueuedBuild>();
         var (context, tail) = Context();
