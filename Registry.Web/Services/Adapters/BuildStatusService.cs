@@ -16,7 +16,8 @@ namespace Registry.Web.Services.Adapters;
 /// Default <see cref="IBuildStatusService"/> implementation. Combines the
 /// Hangfire job index (for "building"/"failed") with libddb's build manifest
 /// (XI-04: buildability, the pending marker with the missing dependency names,
-/// and completeness for the default "ready" state) into a single per-entry status.
+/// and completeness for the default "ready" state) into a single per-entry status,
+/// and lists the artifacts that exist (<see cref="EntryDto.Artifacts"/>).
 /// A listing costs one native call (the manifest of the listed entries) and two
 /// job index queries scoped to the listed paths, whatever the number of entries.
 /// </summary>
@@ -26,13 +27,15 @@ public class BuildStatusService : IBuildStatusService
 
     private readonly IJobIndexQuery _jobIndexQuery;
     private readonly IBuildArtifactResolver _artifacts;
+    private readonly IUrlBuilder _urls;
     private readonly ILogger<BuildStatusService> _logger;
 
-    public BuildStatusService(IJobIndexQuery jobIndexQuery, IBuildArtifactResolver artifacts,
+    public BuildStatusService(IJobIndexQuery jobIndexQuery, IBuildArtifactResolver artifacts, IUrlBuilder urls,
         ILogger<BuildStatusService> logger)
     {
         _jobIndexQuery = jobIndexQuery;
         _artifacts = artifacts;
+        _urls = urls;
         _logger = logger;
     }
 
@@ -47,6 +50,14 @@ public class BuildStatusService : IBuildStatusService
         var buildByPath = GetBuildsSafe(ddb, candidates);
         if (buildByPath == null)
             return;
+
+        // The artifacts that exist, from the same manifest call (XI-04)
+        foreach (var entry in candidates)
+        {
+            if (buildByPath.TryGetValue(entry.Path, out var build) &&
+                _urls.ArtifactLinks(orgSlug, dsSlug, build) is { Count: > 0 } links)
+                entry.Artifacts = [.. links];
+        }
 
         var buildable = candidates
             .Where(e => buildByPath.TryGetValue(e.Path, out var build) && build.CanBeBuilt())

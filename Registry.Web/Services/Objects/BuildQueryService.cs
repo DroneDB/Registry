@@ -6,7 +6,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Ports.DroneDB;
-using Registry.Web.Data;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
@@ -24,19 +23,19 @@ public sealed class BuildQueryService : IBuildQueryService
     private readonly IBuildArtifactResolver _artifacts;
     private readonly DatasetPathPolicy _paths;
     private readonly IBuildScheduler _builds;
-    private readonly IJobIndexQuery _jobIndex;
-    private readonly RegistryContext _context;
+    private readonly IJobIndexWriter _jobIndex;
+    private readonly IUrlBuilder _urls;
     private readonly ILogger<BuildQueryService> _logger;
 
     public BuildQueryService(IDatasetAccessResolver access, IBuildArtifactResolver artifacts, DatasetPathPolicy paths,
-        IBuildScheduler builds, IJobIndexQuery jobIndex, RegistryContext context, ILogger<BuildQueryService> logger)
+        IBuildScheduler builds, IJobIndexWriter jobIndex, IUrlBuilder urls, ILogger<BuildQueryService> logger)
     {
         _access = access;
         _artifacts = artifacts;
         _paths = paths;
         _builds = builds;
         _jobIndex = jobIndex;
-        _context = context;
+        _urls = urls;
         _logger = logger;
     }
 
@@ -119,31 +118,28 @@ public sealed class BuildQueryService : IBuildQueryService
     {
         var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct)).Ddb;
 
-        return ddb.GetPendingBuildInfo().Select(p => new PendingBuildInfoDto
+        var pending = ddb.GetPendingBuildInfo();
+        // The artifacts that exist (an earlier build's), one manifest call for every pending entry (XI-04)
+        var builds = pending.Length == 0 ? [] : _artifacts.GetBuilds(ddb, [.. pending.Select(p => p.Path)]);
+        return pending.Select((p, i) => new PendingBuildInfoDto
         {
             Path = p.Path,
             Hash = p.Hash,
             MissingDependencies = p.MissingDependencies,
-            LastAttempt = DateTimeOffset.FromUnixTimeSeconds(p.LastAttempt).UtcDateTime
-        });
+            LastAttempt = DateTimeOffset.FromUnixTimeSeconds(p.LastAttempt).UtcDateTime,
+            Artifacts = _urls.ArtifactLinks(orgSlug, dsSlug, builds[i]) is { Count: > 0 } links ? [.. links] : null
+        }).ToArray();
     }
 
     public async Task<int> ClearCompletedBuildsAsync(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
         await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
 
-        var completed = (await _jobIndex.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue, ct))
-            .Where(b => b.CurrentState is "Succeeded" or "Failed").ToList();
+        // The job index's own rule for concluded jobs, which also refreshes the dataset's task list
+        var removed = await _jobIndex.DeleteTerminalForDatasetAsync(orgSlug, dsSlug, ct: ct);
 
-        _logger.LogInformation("Found {Count} completed/failed builds to delete", completed.Count);
-        if (completed.Count == 0)
-            return 0;
-
-        _context.JobIndices.RemoveRange(completed);
-        await _context.SaveChangesAsync(ct);
-
-        _logger.LogInformation("Successfully deleted {Count} completed/failed builds", completed.Count);
-        return completed.Count;
+        _logger.LogInformation("Deleted {Count} concluded jobs of {Org}/{Ds}", removed.Count, orgSlug, dsSlug);
+        return removed.Count;
     }
 
     /// <summary>

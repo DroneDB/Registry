@@ -34,7 +34,7 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver
     /// gives the registered types (<c>image/tiff; application=geotiff; profile=cloud-optimized</c>,
     /// <c>application/vnd.laszip+copc</c>, <c>application/geopackage+sqlite3</c>); switching to them is
     /// a decision the user has not taken yet (RQ-11 RESULTS, "Media types"). When it is taken, delete
-    /// this table: <see cref="GetDownload"/> then serves <see cref="BuildArtifact.MediaType"/>.
+    /// this table: <see cref="GetDownload"/> and the entries' artifact links then serve <see cref="BuildArtifact.MediaType"/>.
     /// A role without an entry is served with the manifest's type.
     /// </summary>
     private static readonly FrozenDictionary<string, string> ServedMediaTypes = new Dictionary<string, string>
@@ -115,8 +115,13 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver
         if (artifact == null)
             return null;
 
-        return new BuildDownload(build.Build.LocalPathOf(artifact), artifact.DownloadName!,
-            ServedMediaTypes.GetValueOrDefault(artifact.Role, artifact.MediaType));
+        return new BuildDownload(build.Build.LocalPathOf(artifact), artifact.DownloadName!, ServedMediaType(artifact));
+    }
+
+    public string ServedMediaType(BuildArtifact artifact)
+    {
+        ArgumentNullException.ThrowIfNull(artifact);
+        return ServedMediaTypes.GetValueOrDefault(artifact.Role, artifact.MediaType);
     }
 
     public string? ResolveFile(IDDB ddb, string hash, string path)

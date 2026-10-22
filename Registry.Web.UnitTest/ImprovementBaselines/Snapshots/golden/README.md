@@ -6,8 +6,9 @@ endpoint the Hub calls (`Registry.Web/ClientApp/webapp/js/libs/ddb/*.js`), reque
 fixtures, `TestAuthHandler` identities).
 
 These goldens are the safety net of the wire-format changes D1 (ProblemDetails, RQ-05) and
-D3 (System.Text.Json, RQ-14). **Any difference must be on purpose and listed in the RQ-05 or
-RQ-14 README.** Update on purpose, then review the diff:
+D3 (System.Text.Json, RQ-14). **Any difference must be on purpose and listed in the RQ-05,
+RQ-12 or RQ-14 README.** RQ-12 added `artifacts` (XI-04) to the entries of `ds-list-root` and
+`ds-search` (the built `ortho.tif`: its `raster.cog` link), on purpose and additive. Update on purpose, then review the diff:
 
 ```
 REGISTRY_UPDATE_SNAPSHOTS=1 dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~Rq04GoldenJsonTests"

@@ -35,6 +35,12 @@ public interface IBuildArtifactResolver
     string? GetRenderSource(IDDB ddb, Entry entry);
 
     /// <summary>
+    /// The media type <paramref name="artifact"/> is served with: Registry's single table of served media types
+    /// (<c>BuildArtifactResolver.ServedMediaTypes</c>), else the manifest's.
+    /// </summary>
+    string ServedMediaType(BuildArtifact artifact);
+
+    /// <summary>
     /// The artifact of <paramref name="build"/> offered as a download (the first one with a download
     /// name), with the local file, the name and the media type it is served with.
     /// </summary>

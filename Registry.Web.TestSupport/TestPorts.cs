@@ -18,9 +18,13 @@ public static class TestPorts
     /// <summary>The dataset resolver over <paramref name="context"/>, without the lookup cache (every lookup queries).</summary>
     public static DatasetResolver Datasets(RegistryContext context) => new(context, NoLookups.Instance);
 
-    /// <summary>The URL builder over the host options (none: the request's host) and the request.</summary>
+    /// <summary>
+    /// The URL builder over the host options (none: the request's host) and the request; served media types from
+    /// the resolver over the fake's entry types.
+    /// </summary>
     public static UrlBuilder Urls(IOptions<HttpHostOptions>? http = null, IHttpContextAccessor? accessor = null) =>
-        new(http ?? Microsoft.Extensions.Options.Options.Create(new HttpHostOptions()), accessor ?? new HttpContextAccessor());
+        new(http ?? Microsoft.Extensions.Options.Options.Create(new HttpHostOptions()), accessor ?? new HttpContextAccessor(),
+            new BuildArtifactResolver(new Registry.Adapters.Testing.FakeDdbWrapper()));
 
     /// <summary>The storage quota of the current user (<paramref name="auth"/>) over <paramref name="context"/>.</summary>
     public static StorageQuota Quota(IAuthManager auth, RegistryContext context, IOptions<AccountOptions> accounts,

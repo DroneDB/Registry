@@ -53,6 +53,7 @@ public sealed class ObjectServicesBuilder
     private IDdbWrapper? _ddbWrapper;
     private IThumbnailGenerator? _thumbnailGenerator;
     private IJobIndexQuery? _jobIndexQuery;
+    private IJobIndexWriter? _jobIndexWriter;
     private BuildPendingService? _buildPendingService;
     private IBuildArtifactResolver? _buildArtifactResolver;
     private IDatasetIndexQueue? _indexQueue;
@@ -77,6 +78,8 @@ public sealed class ObjectServicesBuilder
     public ObjectServicesBuilder WithDdbWrapper(IDdbWrapper ddbWrapper) => Set(() => _ddbWrapper = ddbWrapper);
     public ObjectServicesBuilder WithThumbnailGenerator(IThumbnailGenerator generator) => Set(() => _thumbnailGenerator = generator);
     public ObjectServicesBuilder WithJobIndexQuery(IJobIndexQuery query) => Set(() => _jobIndexQuery = query);
+
+    public ObjectServicesBuilder WithJobIndexWriter(IJobIndexWriter writer) => Set(() => _jobIndexWriter = writer);
     public ObjectServicesBuilder WithBuildPendingService(BuildPendingService service) => Set(() => _buildPendingService = service);
     public ObjectServicesBuilder WithBuildArtifactResolver(IBuildArtifactResolver resolver) => Set(() => _buildArtifactResolver = resolver);
     public ObjectServicesBuilder WithIndexQueue(IDatasetIndexQueue indexQueue) => Set(() => _indexQueue = indexQueue);
@@ -128,6 +131,9 @@ public sealed class ObjectServicesBuilder
         var scheduler = new BuildScheduler(artifacts, backgroundJobs, buildPendingService,
             new CurrentUserBuildRequester(authManager), NullLogger<BuildScheduler>.Instance);
         services.AddSingleton<IBuildScheduler>(scheduler);
+        services.AddSingleton<IUrlBuilder>(new UrlBuilder(TestSettings.Options<HttpHostOptions>(settings),
+            new Microsoft.AspNetCore.Http.HttpContextAccessor(), artifacts));
+        services.AddSingleton(_jobIndexWriter ?? Mock.Of<IJobIndexWriter>());
         services.AddSingleton<IUploadManager>(new UploadManager(NullLogger<UploadManager>.Instance, authManager, access,
             ddbManager, fileSystem, thumbnails, TestSettings.Options<ImportSettings>(settings), scheduler,
             new UploadQuotaGuard(new UploadQuotaLedger(TestSettings.Options<UploadSettings>(settings)), quota),

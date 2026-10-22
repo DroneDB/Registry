@@ -21,4 +21,8 @@ public class PendingBuildInfoDto
 
     /// <summary>Timestamp of the last build attempt (UTC).</summary>
     public DateTime LastAttempt { get; set; }
+
+    /// <summary>The artifacts of the entry's build that exist (XI-04), absent when there are none.</summary>
+    [Newtonsoft.Json.JsonProperty("artifacts", NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+    public ArtifactLinkDto[]? Artifacts { get; set; }
 }
