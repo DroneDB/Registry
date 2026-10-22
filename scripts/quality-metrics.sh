@@ -113,6 +113,23 @@ files_with_injected_fs() {
     git grep --untracked -I -P -l -z -e 'IFileSystem \w+[,)]|IFileSystem _\w+' -- "${specs[@]}" || true
 }
 
+# Asynchronous controller actions (the method after an [Http*] attribute returns a Task) whose parameters
+# have no CancellationToken, in the given pathspecs (read NUL-separated from stdin). Whole signatures are
+# parsed, so a parameter on a later line counts.
+async_actions_without_token() {
+    list_files | xargs -0 -r perl -0777 -ne '
+        BEGIN { $c = 0 }
+        while (/\[Http(?:Get|Post|Put|Delete|Patch)\b.*?\n\s*public\s+([^(]*?)\s\w+\s*(\((?:[^()]++|(?2))*\))/sg) {
+            my ($returns, $params) = ($1, $2);
+            $c++ if $returns =~ /\b(?:async|Task|ValueTask)\b/ && $params !~ /CancellationToken\s+\w+/;
+        }
+        END { print $c + 0, "\n" }' |
+        awk '{ s += $1 } END { print s + 0 }'
+}
+
+# The libddb exports that honour a cancel token (DDBGetCapabilities().cancellable) and Registry calls (RQ-13).
+CANCELLABLE_EXPORTS='NativeDdb\.(DDBBuild|DDBExportRaster2?|DDBGenerateMemoryThumbnail(Ex)?|DDBGenerateThumbnail|DDBMemoryTile(Ex|Fmt)?|DDBRenderRasterIndex|DDBRenderRasterRegion(Ex)?|DDBTile)\('
+
 tests() { printf '%s\0' "${TEST_CODE[@]}"; }
 paths() { printf '%s\0' "$@"; }
 
@@ -351,6 +368,12 @@ metrics() {
     # Managers and API contracts (RQ-12, RQ-14)
     m "Task.Run in managers"                         "$(prod Registry.Web/Services/Managers Registry.Web/Services/Objects | lines 'Task\.Run\(')"
     m "Hand-built Content-Disposition"               "$(prod Registry.Web | lines 'attachment; filename=')"
+
+    # Cancellation (RQ-13)
+    m "Async actions without a CancellationToken"    "$(prod Registry.Web/Controllers | async_actions_without_token)"
+    m "Cancellable libddb export calls outside the call envelope" "$(prod Registry.Adapters | lines "= $CANCELLABLE_EXPORTS")"
+    m "Hand-built ETag code in controllers"          "$(prod Registry.Web/Controllers | lines 'Headers\.ETag\s*=|Headers\.IfNoneMatch')"
+    m "Cancellation answered 408"                    "$(prod Registry.Web | lines 'Status408RequestTimeout')"
 }
 
 current="$(metrics)"
