@@ -120,7 +120,10 @@ The fixtures are stateless: `meta-set`/`meta-unset` do not change a later read, 
 | meta-get, meta-get-list | GET …/meta/get/annotation?path=sub/img.jpg, …/meta/get/tags | owner | 200 |
 | meta-set, meta-unset | POST …/meta/set, …/meta/unset (form) | owner | 200 |
 | tasks-tools, tasks-list | GET …/tasks/tools, …/tasks | owner | 200 |
-| stac-collection, stac-item | GET …/stac, …/stac/{base64("ortho.tif")} | owner | 200 |
+| stac-collection, stac-item, stac-item-image | GET …/stac, …/stac/{base64("ortho.tif")}, …/stac/{base64("sub/img.jpg")} | owner | 200 |
+| stac-api-landing, stac-api-collections | GET /stac, /stac/collections | owner | 200 |
+| stac-api-collection, stac-api-items, stac-api-item | GET /stac/collections/{org}/{ds}[/items[/{base64url("ortho.tif")}]] | owner | 200 |
+| stac-api-search | GET /stac/search?collections={org}/{ds} | owner | 200 |
 | ogcapi-landing, ogcapi-conformance, ogcapi-collections | GET …/ogcapi[/conformance\|/collections]?f=json | owner | 200 |
 
 Error bodies: RFC 9457 `ProblemDetails` since RQ-05 (plan decision D1), `application/problem+json`

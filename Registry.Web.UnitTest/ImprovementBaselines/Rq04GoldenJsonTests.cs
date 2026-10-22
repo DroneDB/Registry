@@ -223,6 +223,17 @@ public sealed class Rq04GoldenJsonTests : IDisposable
         // ---- STAC (StacController; the Hub links the dataset collection)
         yield return new("stac-collection", Caller.Owner, get, DsApi + "/stac", 200);
         yield return new("stac-item", Caller.Owner, get, DsApi + "/stac/" + Base64("ortho.tif"), 200);
+        yield return new("stac-item-image", Caller.Owner, get, DsApi + "/stac/" + Base64("sub/img.jpg"), 200);
+
+        // ---- STAC API 1.0.0 (StacController): recorded on 46c0370d+, before RQ-12 built every STAC id, link
+        // and href in Registry from libddb's data-only documents (XI-09), so a change of them shows here
+        yield return new("stac-api-landing", Caller.Owner, get, "/stac", 200);
+        yield return new("stac-api-collections", Caller.Owner, get, "/stac/collections", 200);
+        yield return new("stac-api-collection", Caller.Owner, get, $"/stac/collections/{Org}/{Ds}", 200);
+        yield return new("stac-api-items", Caller.Owner, get, $"/stac/collections/{Org}/{Ds}/items", 200);
+        yield return new("stac-api-item", Caller.Owner, get,
+            $"/stac/collections/{Org}/{Ds}/items/{Base64Url("ortho.tif")}", 200);
+        yield return new("stac-api-search", Caller.Owner, get, $"/stac/search?collections={Org}/{Ds}", 200);
 
         // ---- OGC API features (dataset.js ogcapi/collections/{id}/items)
         yield return new("ogcapi-landing", Caller.Owner, get, DsApi + "/ogcapi?f=json", 200);
@@ -312,6 +323,9 @@ public sealed class Rq04GoldenJsonTests : IDisposable
     }
 
     private static string Base64(string text) => Convert.ToBase64String(Encoding.UTF8.GetBytes(text));
+
+    // The STAC API feature id of a path
+    private static string Base64Url(string text) => Base64(text).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     /// <summary>
     /// A seeded Registry host (<see cref="RegistryWebFactory"/>) with its client and the scrubber of
