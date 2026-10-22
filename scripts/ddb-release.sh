@@ -142,7 +142,7 @@ verify() {
 }
 
 # The version in the .deb file name: DdbVersion, except for a CI build whose .deb is named after
-# the last DroneDB tag (DdbDebFileVersion; DroneDB names a non-tag .deb after `git describe`)
+# DdbDebFileVersion when set (DroneDB names an untagged .deb package.json version~git<commit>)
 deb_file_version() {
     local version
     version="$(optional_prop DdbDebFileVersion)"
@@ -255,7 +255,9 @@ cmd_check() {
     esac
 
     [[ "$(prop DdbVersion)" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "DdbVersion must be major.minor.patch"
-    [[ "$(deb_file_version)" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "DdbDebFileVersion must be major.minor.patch"
+    # major.minor.patch, or DroneDB's untagged-build form major.minor.patch~git<commit>
+    [[ "$(deb_file_version)" =~ ^[0-9]+\.[0-9]+\.[0-9]+(~git[0-9a-f]+)?$ ]] ||
+        fail "DdbDebFileVersion must be major.minor.patch or major.minor.patch~git<commit>"
 
     for name in DdbDebSha256 DdbWindowsZipSha256; do
         [[ "$(prop "$name")" =~ ^[0-9a-f]{64}$ ]] || fail "$name in Directory.Build.props is not a lowercase SHA256"

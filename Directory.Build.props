@@ -55,27 +55,28 @@
                    artifacts expire 90 days after their run.
 
                    DdbDebFileVersion (optional, ci only): the version in the .deb file name when it is
-                   not DdbVersion. DroneDB names the .deb of an untagged build after its last tag
-                   (scripts/build-debian-package.sh, git describe), so before the v2.0.0 tag the
-                   2.0.0 build ships ddb_1.12.2_amd64.deb next to ddb-2.0.0-Windows.zip. The library
-                   inside is 2.0.0; remove the property with the move to the release.
+                   not DdbVersion. DroneDB names the .deb of an untagged build <package.json
+                   version>~git<commit> (scripts/build-debian-package.sh; the commit is the pull
+                   request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
+                   ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-10-21): DroneDB 2.0.0 (libddb ABI 1.1) is not tagged until Registry is proven
-        on it, so Registry pins the CI build of the 2.0.0 commit of DroneDB fixes-and-optimizations:
-        commit 19ab8e1, run 39633711809 (a pull request run of DroneDB#472, built from the merge with
-        master), every job green (Linux and Windows builds and tests, ASan + UBSan, the Registry
-        contract job, the Docker image). Next: the v2.0.0 release (DdbSource release) once it is tagged.
+        Pinned now (2026-10-22): DroneDB 2.0.0 (libddb ABI 1.1) is not tagged until Registry is proven
+        on it, so Registry pins the CI build of DroneDB fixes-and-optimizations commit 4e8c9ee, run
+        39706761293 (a pull request run of DroneDB#472, built from the merge with master), every job
+        green (Linux and Windows builds and tests, ASan + UBSan, the Registry contract job, the Docker
+        image). It has retryAfter in the build manifest and the Windows exit-hang fix. Next: the
+        v2.0.0 release (DdbSource release) once it is tagged.
     -->
     <PropertyGroup>
         <DdbSource>ci</DdbSource>
         <DdbVersion>2.0.0</DdbVersion>
-        <DdbDebFileVersion>1.12.2</DdbDebFileVersion>
-        <DdbCiCommit>19ab8e1d54c50d1d5a80114d8ed6fe918288f405</DdbCiCommit>
-        <DdbCiRunId>39633711809</DdbCiRunId>
-        <DdbDebArtifactId>12365146825</DdbDebArtifactId>
-        <DdbWindowsArtifactId>12364746508</DdbWindowsArtifactId>
-        <DdbDebSha256>5f2f6b72f8904b55680ecf4ca38e43293f222dcc7fefd732b44cfdf047a5b736</DdbDebSha256>
-        <DdbWindowsZipSha256>824e0397cb591a3f3c502d8cf17dac7deacede679bbedfb2aa515407af745535</DdbWindowsZipSha256>
+        <DdbDebFileVersion>2.0.0~git1813815</DdbDebFileVersion>
+        <DdbCiCommit>4e8c9ee51b6f8125dbf7849bf542af280d232bad</DdbCiCommit>
+        <DdbCiRunId>39706761293</DdbCiRunId>
+        <DdbDebArtifactId>12395544303</DdbDebArtifactId>
+        <DdbWindowsArtifactId>12398428032</DdbWindowsArtifactId>
+        <DdbDebSha256>ff2762e347fb81511e293a3708901ef2178bfac14af64254810b8407ea9dceef</DdbDebSha256>
+        <DdbWindowsZipSha256>f8c8f47257a99cbff44d00403e6399fc0d84052c72703ddb0ecab0875bd2bad4</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
