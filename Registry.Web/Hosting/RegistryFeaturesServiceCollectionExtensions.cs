@@ -21,6 +21,7 @@ using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Processing;
 using Registry.Web.Services.RemoteImport;
+using Registry.Web.Services.Users;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 using IMetaManager = Registry.Web.Services.Ports.IMetaManager;
@@ -41,6 +42,14 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IDatasetSummaryProvider, DatasetSummaryProvider>();
 
         services.AddScoped<IUsersManager, UsersManager>();
+        services.AddScoped<IJwtTokenIssuer, JwtTokenIssuer>();
+        services.AddScoped<IUserProvisioning, UserProvisioning>();
+        services.AddScoped<IUserSessions, UserSessions>();
+        services.AddScoped<IUserAccounts, UserAccounts>();
+        services.AddScoped<IUserPasswords, UserPasswords>();
+        services.AddScoped<IUserRoles, UserRoles>();
+        services.AddScoped<IUserDirectory, UserDirectory>();
+        services.AddScoped<IUserDeletion, UserDeletion>();
         services.AddScoped<IOrganizationsManager, OrganizationsManager>();
         services.AddScoped<IDatasetsManager, DatasetsManager>();
         services.AddScoped<IStacManager, StacManager>();

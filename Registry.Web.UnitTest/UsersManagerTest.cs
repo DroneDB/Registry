@@ -19,6 +19,7 @@ using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Registry.Web.Services.Users;
 using Registry.Web.Utilities;
 using System;
 using System.Collections.Generic;
@@ -39,7 +40,7 @@ public class UsersManagerTest : TestBase
     private Mock<ILoginManager> _loginManagerMock;
     private Mock<RoleManager<IdentityRole>> _roleManagerMock;
     private Mock<IPasswordPolicyValidator> _passwordPolicyValidatorMock;
-    private ILogger<UsersManager> _logger;
+    private ILogger<UserDeletion> _logger;
     private UsersManager _usersManager;
     private RegistryContext _context;
     private ApplicationDbContext _appContext;
@@ -60,7 +61,7 @@ public class UsersManagerTest : TestBase
         // local user management, so default the mock to the local-provider capability set.
         _loginManagerMock.Setup(x => x.Capabilities).Returns(AuthProviderCapabilities.Local);
         _passwordPolicyValidatorMock = new Mock<IPasswordPolicyValidator>();
-        _logger = CreateTestLogger<UsersManager>();
+        _logger = CreateTestLogger<UserDeletion>();
 
         // Setup UserManager mock
         var userStore = new Mock<IUserStore<User>>();
@@ -93,23 +94,25 @@ public class UsersManagerTest : TestBase
         // Initialize utils
         _webUtils = TestPorts.All(_authManagerMock.Object, _context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
+        var tokens = TestSettings.Options<AuthTokenOptions>(_settingsOptions);
+        var identity = TestSettings.Options<IdentityProviderOptions>(_settingsOptions);
+        var provisioning = new UserProvisioning(_userManagerMock.Object, _roleManagerMock.Object, _appContext,
+            _passwordPolicyValidatorMock.Object, TestSettings.Options<AccountOptions>(_settingsOptions),
+            _organizationsManagerMock.Object, NullLogger<UserProvisioning>.Instance);
         _usersManager = new UsersManager(
-            TestSettings.Options<AuthTokenOptions>(_settingsOptions),
-            TestSettings.Options<IdentityProviderOptions>(_settingsOptions),
-            TestSettings.Options<AccountOptions>(_settingsOptions),
-            _loginManagerMock.Object,
-            _userManagerMock.Object,
-            _roleManagerMock.Object,
-            _appContext,
-            _authManagerMock.Object,
-            _organizationsManagerMock.Object,
-            _webUtils.Datasets,
-            _webUtils.Quota,
-            _logger,
-            _context,
-            _passwordPolicyValidatorMock.Object,
-            new OrganizationMembershipService(_context, _appContext, new UpperInvariantLookupNormalizer(),
-                NullLogger<OrganizationMembershipService>.Instance));
+            new UserSessions(_loginManagerMock.Object, _userManagerMock.Object, provisioning,
+                new JwtTokenIssuer(tokens, _userManagerMock.Object, TimeProvider.System), _authManagerMock.Object,
+                identity, NullLogger<UserSessions>.Instance),
+            new UserAccounts(_loginManagerMock.Object, _userManagerMock.Object, provisioning, _authManagerMock.Object,
+                _appContext, _context, NullLogger<UserAccounts>.Instance),
+            new UserPasswords(_loginManagerMock.Object, _userManagerMock.Object, _authManagerMock.Object,
+                _passwordPolicyValidatorMock.Object, NullLogger<UserPasswords>.Instance),
+            new UserRoles(_loginManagerMock.Object, _userManagerMock.Object, _roleManagerMock.Object),
+            new UserDirectory(_userManagerMock.Object, _authManagerMock.Object, _webUtils.Quota,
+                new OrganizationMembershipService(_context, _appContext, new UpperInvariantLookupNormalizer(),
+                    NullLogger<OrganizationMembershipService>.Instance), _appContext, _context),
+            new UserDeletion(_loginManagerMock.Object, _userManagerMock.Object, _organizationsManagerMock.Object,
+                _context, identity, _logger));
     }
 
     [TearDown]

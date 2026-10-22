@@ -262,6 +262,16 @@ public class OrganizationsManager : IOrganizationsManager
         return dto;
     }
 
+    public Task<OrganizationDto> AddUserDefaultAsync(string userId, string userName) =>
+        AddNew(new OrganizationDto
+        {
+            Name = userName,
+            IsPublic = false,
+            CreationDate = DateTime.UtcNow,
+            Owner = userId,
+            Slug = _datasets.GetFreeOrganizationSlug(userName)
+        }, skipAuthCheck: true);
+
     public async Task<OrganizationDto> AddNew(OrganizationDto organization, bool skipAuthCheck = false)
     {
         if (!skipAuthCheck)

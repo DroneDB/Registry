@@ -7,6 +7,7 @@ using Microsoft.Net.Http.Headers;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
+using Registry.Web.Services.Users;
 using System;
 using System.Linq;
 using System.Security.Claims;
@@ -30,13 +31,13 @@ namespace Registry.Web.Filters;
 /// </summary>
 public class BasicAuthFilter : IAsyncAuthorizationFilter, IAlwaysRunResultFilter
 {
-    private readonly IUsersManager _usersManager;
+    private readonly IUserSessions _sessions;
     private readonly UserManager<User> _userManager;
     private readonly AuthTokenOptions _settings;
 
-    public BasicAuthFilter(IUsersManager usersManager, UserManager<User> userManager, IOptions<AuthTokenOptions> settings)
+    public BasicAuthFilter(IUserSessions sessions, UserManager<User> userManager, IOptions<AuthTokenOptions> settings)
     {
-        _usersManager = usersManager;
+        _sessions = sessions;
         _userManager = userManager;
         _settings = settings.Value;
     }
@@ -74,7 +75,7 @@ public class BasicAuthFilter : IAsyncAuthorizationFilter, IAlwaysRunResultFilter
         if (!TryReadCredentials(httpContext.Request.Headers.Authorization, out var username, out var password))
             return;
 
-        var res = await _usersManager.Authenticate(username, password);
+        var res = await _sessions.Authenticate(username, password);
         if (res == null)
             return;
 

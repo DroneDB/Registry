@@ -17,6 +17,12 @@ public interface IOrganizationsManager
     public Task<IEnumerable<OrganizationDto>> ListPublic();
     public Task<OrganizationDto> Get(string orgSlug);
     public Task<OrganizationDto> AddNew(OrganizationDto organization, bool skipAuthCheck = false);
+
+    /// <summary>
+    /// The personal organization of a new user (AccountOptions.EnableDefaultUserOrganization): private, named
+    /// after the user, under the first free slug from the user name.
+    /// </summary>
+    public Task<OrganizationDto> AddUserDefaultAsync(string userId, string userName);
     public Task Edit(string orgSlug, OrganizationDto organization);
     public Task Delete(string orgSlug);
 
