@@ -211,6 +211,9 @@ metrics() {
     m "Hangfire static facade calls"                 "$(prod Registry.Web | lines '\b(BackgroundJob|RecurringJob)\.(Enqueue|Schedule|AddOrUpdate|Delete|Requeue|ContinueJobWith)')"
     m "Read-after-write artifact hash copies"        "$(prod Registry.Web | lines 'static async Task<string> ComputeSha256Async')"
     m "ApplyDelta calls without verified hashes"     "$(prod Registry.Web | lines '\.ApplyDelta\((?![^;]*verified)')"
+    # Added for XI-04 (2026-10-22): libddb owns the pending-build retry rule (retryAfter); no backoff
+    # constant and no arithmetic on lastAttempt in Registry (it was 3 lines in PendingBuildEnqueuer)
+    m "Pending-build backoff copies (XI-04)"         "$(prod '' | lines 'RetryBackoffSeconds|\.LastAttempt\s*[-+<>]|[-+<>]=?\s*\w+\.LastAttempt\b')"
 
     # File system, paths, clock (RQ-10)
     m "Zip-slip normalizer copies"                   "$(prod Registry.Web | lines 'private static string\?? (SafeJoin|SafeRelative)\(')"

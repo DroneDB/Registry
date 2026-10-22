@@ -1,4 +1,5 @@
 using System;
+using Registry.Adapters.Testing;
 using Registry.Ports;
 using Registry.Web.Services.Jobs;
 using System.Collections.Generic;
@@ -134,10 +135,7 @@ public class BuildStatusServiceTest : TestBase
         var entry = Entry("layer.shp", EntryType.Vector);
         Native("layer.shp", complete: false);
         _ddbMock.Setup(x => x.GetPendingBuildInfo()).Returns([
-            new PendingBuildInfo
-            {
-                Hash = "h1", Path = "layer.shp", MissingDependencies = ["layer.dbf"], LastAttempt = 123
-            }
+            PendingMarkers.Of("layer.shp", "h1", 123, "layer.dbf")
         ]);
         AddJob("layer.shp", "Failed");
 
@@ -257,7 +255,7 @@ public class BuildStatusServiceTest : TestBase
         AddJob("a.tif", "Enqueued");
         AddJob("d.tif", "Failed");
         _ddbMock.Setup(x => x.GetPendingBuildInfo()).Returns([
-            new PendingBuildInfo { Hash = "h", Path = "b.obj", MissingDependencies = ["b.mtl"] }
+            PendingMarkers.Of("b.obj", "h", 0, "b.mtl")
         ]);
 
         await CreateService().AnnotateAsync(OrgSlug, DsSlug, _ddbMock.Object,
@@ -282,7 +280,7 @@ public class BuildStatusServiceTest : TestBase
         var entry = Entry(path, EntryType.Model);
         Native(path, complete: false);
         _ddbMock.Setup(x => x.GetPendingBuildInfo()).Returns([
-            new PendingBuildInfo { Hash = "h1", Path = path, MissingDependencies = ["sub/model.mtl"], LastAttempt = 0 }
+            PendingMarkers.Of(path, "h1", 0, "sub/model.mtl")
         ]);
 
         IndexPayload retryMeta = null;

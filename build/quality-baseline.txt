@@ -66,6 +66,7 @@ UseFilter(new ...) in the Hangfire configuration	0
 Hangfire static facade calls	0
 Read-after-write artifact hash copies	0
 ApplyDelta calls without verified hashes	0
+Pending-build backoff copies (XI-04)	0
 Zip-slip normalizer copies	0
 Direct Path.GetTempPath()	0
 Ad-hoc backslash->slash normalizations	1

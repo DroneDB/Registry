@@ -41,6 +41,13 @@ host makes them in; every call but `Shutdown` after `Shutdown` throws, as libddb
 `Registry.Web.UnitTest/Contract/FakeDdbWrapperTests.cs` checks that every vendored fixture is
 served (or listed as not served).
 
+## PendingMarkers
+
+`PendingMarkers.Of(path, hash, lastAttempt, missingDependencies...)` builds a `PendingBuildInfo` as
+libddb reports it: `RetryAfter` = `lastAttempt` + `LibddbRetryBackoffSeconds` (60, ddb.h "Build
+manifest"). The constant is test data only: Registry reads `retryAfter` and keeps no copy of the
+rule (XI-04); `Abi11ContractTests` checks that libddb still applies it.
+
 ## Vendored contract files
 
 `Contract/` holds `README.md`, `schemas/`, `fixtures/` and `vectors/` of DroneDB `tests/contract/`, byte for
@@ -72,3 +79,7 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   (`entry-paths.json`, the `DDBNormalizePath` golden vectors) is vendored too; 14 new fixtures and 11 new
   schemas (build artifacts, entry types, resolve/copy build files, capabilities, effective config, list
   entries with build, normalize path, data-only STAC); the STAC collection and item schemas changed.
+* 2026-10-22: DroneDB `6b9daee968412f7c1485ea0d3f6c0c3bf14af568` (XI-04): the build object
+  (`build-artifacts`, `build-artifacts-pending`, `list-entries-ex`) and `pending-build-info` gain
+  `retryAfter` (required in both schemas; volatile next to `lastAttempt` in the two pending fixtures).
+  `PendingBuildInfo.RetryAfter` and `EntryBuild.RetryAfter` read it, required.

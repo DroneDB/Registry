@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
+using Registry.Adapters.Testing;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
@@ -343,7 +344,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
     {
         await using var context = GetTest1Context();
         SingleIncompleteEntry("site.dwg", "h1",
-            [new PendingBuildInfo { Path = "site.dwg", Hash = "h1", MissingDependencies = ["site.prj"] }]);
+            [PendingMarkers.Of("site.dwg", "h1", 0, "site.prj")]);
 
         await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _logger)
             .CheckAndQueueAsync(null, CancellationToken.None);

@@ -25,17 +25,11 @@ namespace Registry.Web.Services.Jobs;
 /// coordination lock (<see cref="DatasetBuildCoordinator"/>). Without the organization and
 /// dataset of the job (job parameters set by <see cref="IndexedJobEnqueuer"/>), or a dataset
 /// folder Registry cannot map, libddb runs the due builds inline (the native fallback).
+/// An entry is due when the current time is at or past its <see cref="PendingBuildInfo.RetryAfter"/>:
+/// libddb owns the retry rule (XI-04), so the enqueue path and <c>buildPending</c> agree.
 /// </summary>
 public sealed class PendingBuildEnqueuer
 {
-    /// <summary>
-    /// Minimum time since a pending entry's last build attempt before it is retried: the same 60 s
-    /// libddb's <c>buildPending</c> applies (<c>pending_markers.cpp</c>). XI-04: libddb reports
-    /// <c>lastAttempt</c> but not this rule (no due flag in <c>DDBGetBuildArtifacts</c>), so this is
-    /// the one Registry copy until it does.
-    /// </summary>
-    internal const long RetryBackoffSeconds = 60;
-
     private readonly IBackgroundJobsProcessor _jobs;
     private readonly IJobIndexQuery _jobIndex;
     private readonly IDdbManager _ddbManager;
@@ -125,8 +119,8 @@ public sealed class PendingBuildEnqueuer
 
             var emptyPath = pending.Count(p => string.IsNullOrWhiteSpace(p.Path));
             var withPath = pending.Where(p => !string.IsNullOrWhiteSpace(p.Path)).ToArray();
-            var due = withPath.Where(p => now - p.LastAttempt >= RetryBackoffSeconds).ToArray();
-            var inBackoff = withPath.Length - due.Length;
+            var due = withPath.Where(p => now >= p.RetryAfter).ToArray();
+            var notDue = withPath.Length - due.Length;
 
             var activePaths = due.Length == 0
                 ? new HashSet<string>()
@@ -154,10 +148,9 @@ public sealed class PendingBuildEnqueuer
                 console.Debug("Enqueued build of '{Path}' (job {JobId})", path, jobId);
             }
 
-            console.Debug("Pending builds: {Pending}; enqueued {Enqueued}; skipped {Skipped} ({InBackoff} attempted less " +
-                          "than {Backoff}s ago, {Active} with an active build job, {EmptyPath} without a path)",
-                pending.Length, enqueued, inBackoff + active + emptyPath, inBackoff, RetryBackoffSeconds, active,
-                emptyPath);
+            console.Debug("Pending builds: {Pending}; enqueued {Enqueued}; skipped {Skipped} ({NotDue} not yet due, " +
+                          "{Active} with an active build job, {EmptyPath} without a path)",
+                pending.Length, enqueued, notDue + active + emptyPath, notDue, active, emptyPath);
         }
         catch (Exception ex)
         {

@@ -39,6 +39,14 @@ public sealed class EntryBuild
     [JsonProperty("lastAttempt")]
     public long? LastAttempt { get; set; }
 
+    /// <summary>
+    /// Unix seconds from which libddb retries the pending build (<see cref="LastAttempt"/> + its retry
+    /// backoff; due when the current time is at or past it); null exactly when <see cref="LastAttempt"/>
+    /// is. Required (it may be null): a libddb without the field fails deserialization.
+    /// </summary>
+    [JsonProperty("retryAfter", Required = Required.AllowNull)]
+    public long? RetryAfter { get; set; }
+
     /// <summary>The artifacts that exist, the primary output first.</summary>
     [JsonProperty("artifacts")]
     public IReadOnlyList<BuildArtifact> Artifacts { get; set; } = [];

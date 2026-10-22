@@ -38,7 +38,7 @@ public sealed class ContractFixture
     /// <summary>The schema file name, in <c>Contract/schemas/</c>.</summary>
     public string Schema { get; }
 
-    /// <summary>The keys whose values were normalised (<c>depth</c>, <c>id</c>, <c>mtime</c>, <c>lastAttempt</c>).</summary>
+    /// <summary>The keys whose values were normalised (<c>depth</c>, <c>id</c>, <c>mtime</c>, <c>lastAttempt</c>, <c>retryAfter</c>).</summary>
     public IReadOnlyList<string> VolatileKeys { get; }
 
     /// <summary>A copy of the normalised output (callers may modify it).</summary>
