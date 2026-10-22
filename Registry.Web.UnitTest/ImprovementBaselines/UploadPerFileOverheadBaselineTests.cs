@@ -44,7 +44,8 @@ public class UploadPerFileOverheadBaselineTests : TestBase
     private const int Burst = 40;
 
     private string _root = null!;
-    private Mock<IUtils> _utils = null!;
+    private Mock<IDatasetResolver> _utils = null!;
+    private Mock<IStorageQuota> _quota = null!;
     private Mock<IAuthManager> _auth = null!;
     private Mock<IDdbManager> _ddbManager = null!;
     private Mock<IDDB> _ddb = null!;
@@ -67,10 +68,11 @@ public class UploadPerFileOverheadBaselineTests : TestBase
         var org = new Organization { Slug = OrgSlug, Name = "Org", CreationDate = DateTime.UtcNow, OwnerId = "u1" };
         _ds = new Dataset { Slug = DsSlug, InternalRef = Guid.NewGuid(), CreationDate = DateTime.UtcNow, Organization = org };
 
-        _utils = new Mock<IUtils>();
+        _utils = new Mock<IDatasetResolver>();
+        _quota = new Mock<IStorageQuota>();
         _utils.Setup(u => u.GetDatasetAsync(OrgSlug, DsSlug, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => { Interlocked.Increment(ref _getDatasetCalls); return _ds; });
-        _utils.Setup(u => u.GetCurrentUserStorageLimit())
+        _quota.Setup(u => u.GetCurrentUserStorageLimit())
             .Returns(() =>
             {
                 Interlocked.Increment(ref _quotaEvaluations);
@@ -145,7 +147,7 @@ public class UploadPerFileOverheadBaselineTests : TestBase
 
         var uploads = new UploadManager(NullLogger<UploadManager>.Instance, _auth.Object,
             new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object, TestPaths.Policy), _ddbManager.Object, new Registry.Adapters.FileSystem(), TestSettings.Options<ThumbnailOptions>(settings), TestSettings.Options<ImportSettings>(settings), jobs.Object, buildPending,
-            new UploadQuotaGuard(new UploadQuotaLedger(TestSettings.Options<UploadSettings>(settings)), _utils.Object), changes, TestPaths.Policy, TestScratch.Provider, thumbnails: thumbnails);
+            new UploadQuotaGuard(new UploadQuotaLedger(TestSettings.Options<UploadSettings>(settings)), _quota.Object), changes, TestPaths.Policy, TestScratch.Provider, thumbnails: thumbnails);
         return (uploads, changes, thumbnails);
     }
 

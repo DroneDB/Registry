@@ -168,7 +168,7 @@ public class Rq11BuildManifestTests
     private IEntryTransferService Transfers(RegistryContext context, params Dataset[] datasets)
     {
         var settings = TestSettings.Options(new AppSettings { DatasetsPath = _root, EnableStorageLimiter = false });
-        var utils = new Mock<IUtils>();
+        var utils = new Mock<IDatasetResolver>();
         foreach (var dataset in datasets)
             utils.Setup(u => u.GetDatasetAsync(Org, dataset.Slug, It.IsAny<bool>(), It.IsAny<bool>(),
                 It.IsAny<CancellationToken>())).ReturnsAsync(dataset);
@@ -179,7 +179,7 @@ public class Rq11BuildManifestTests
             .WithSettings(settings)
             .WithDdbManager(new DdbManager(TestSettings.Options<StorageOptions>(settings),
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<DdbManager>.Instance, _wrapper))
-            .WithUtils(utils.Object)
+            .WithDatasets(utils.Object)
             .WithAuthManager(auth.Object)
             .WithDdbWrapper(_wrapper)
             .WithBuildArtifactResolver(_resolver)

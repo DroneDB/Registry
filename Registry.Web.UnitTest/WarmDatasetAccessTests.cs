@@ -128,9 +128,7 @@ public class WarmDatasetAccessTests
 
     private async Task<bool> CanRead(RegistryContext context, string userId)
     {
-        var utils = new WebUtils(Mock.Of<IAuthManager>(), context, Microsoft.Extensions.Options.Options.Create(new AccountOptions()),
-            Microsoft.Extensions.Options.Options.Create(new HttpHostOptions()),
-            Mock.Of<IHttpContextAccessor>(), Mock.Of<IDatasetSummaryProvider>(), _lookups);
+        var utils = new DatasetResolver(context, _lookups);
         var access = new DatasetAccessControl(new Snapshots(), context, NullLogger.Instance, _ddb, _cache);
         return await access.CanAccessDataset(await utils.GetDatasetAsync(Org, Ds), AccessType.Read, userId);
     }

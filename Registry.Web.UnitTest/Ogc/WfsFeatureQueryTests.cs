@@ -49,7 +49,7 @@ public class WfsFeatureQueryTests
 
     private Mock<IDdbWrapper> _wrapper = null!;
     private Mock<IOgcLayerCatalog> _catalog = null!;
-    private Mock<IUtils> _utils = null!;
+    private Mock<IDatasetResolver> _utils = null!;
     private Mock<IAuthManager> _auth = null!;
     private Mock<IDdbManager> _ddbManager = null!;
     private Mock<IOgcBuildArtifactPaths> _artifacts = null!;
@@ -62,7 +62,7 @@ public class WfsFeatureQueryTests
             "polygons.input.gml"));
 
         var dataset = new Dataset { Slug = Ds, InternalRef = Guid.NewGuid() };
-        _utils = new Mock<IUtils>();
+        _utils = new Mock<IDatasetResolver>();
         _utils.Setup(u => u.GetDatasetAsync(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(dataset);
         _auth = new Mock<IAuthManager>();
         _auth.Setup(a => a.RequestAccess(dataset, AccessType.Read)).ReturnsAsync(true);

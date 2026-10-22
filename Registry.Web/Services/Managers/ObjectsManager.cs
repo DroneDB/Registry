@@ -20,18 +20,18 @@ public class ObjectsManager : IObjectsManager
 {
     private readonly IEntryCommandService _commands;
     private readonly IUploadManager _uploads;
-    private readonly IUtils _utils;
+    private readonly IDatasetResolver _datasets;
     private readonly IDdbManager _ddbManager;
     private readonly IScratchFileProvider _scratch;
     private readonly IFileSystem _fs;
     private readonly ILogger<ObjectsManager> _logger;
 
-    public ObjectsManager(IEntryCommandService commands, IUploadManager uploads, IUtils utils, IDdbManager ddbManager,
+    public ObjectsManager(IEntryCommandService commands, IUploadManager uploads, IDatasetResolver datasets, IDdbManager ddbManager,
         IScratchFileProvider scratch, IFileSystem fs, ILogger<ObjectsManager> logger)
     {
         _commands = commands;
         _uploads = uploads;
-        _utils = utils;
+        _datasets = datasets;
         _ddbManager = ddbManager;
         _scratch = scratch;
         _fs = fs;
@@ -65,7 +65,7 @@ public class ObjectsManager : IObjectsManager
     public async Task<StreamedFile> StreamToTempAsync(string orgSlug, string dsSlug, Stream source)
     {
         // No access check here: the commit checks write access and deletes this file when refused
-        var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug);
+        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug);
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         return await DatasetUploads.StreamToTempAsync(_scratch, _fs, ddb.DatasetFolderPath, source);
@@ -99,7 +99,7 @@ public class ObjectsManager : IObjectsManager
     {
         try
         {
-            var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug, safe: true);
+            var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, safe: true);
             if (ds == null || string.IsNullOrWhiteSpace(tempFilePath)) return;
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             if (UploadManager.IsInUploadsFolder(ddb, tempFilePath))

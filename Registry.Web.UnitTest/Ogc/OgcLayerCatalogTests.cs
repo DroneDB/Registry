@@ -23,7 +23,7 @@ namespace Registry.Web.Test.Ogc;
 public class OgcLayerCatalogTests
 {
     private Mock<IDdbManager> _ddbManager = null!;
-    private Mock<IUtils> _utils = null!;
+    private Mock<IDatasetResolver> _utils = null!;
     private Mock<IDDB> _ddb = null!;
     private Mock<IOgcBuildArtifactPaths> _artifacts = null!;
     private Mock<IDdbWrapper> _wrapper = null!;
@@ -38,7 +38,7 @@ public class OgcLayerCatalogTests
     public void Setup()
     {
         _ddbManager = new Mock<IDdbManager>();
-        _utils = new Mock<IUtils>();
+        _utils = new Mock<IDatasetResolver>();
         _ddb = new Mock<IDDB>();
         _artifacts = new Mock<IOgcBuildArtifactPaths>();
         _wrapper = new Mock<IDdbWrapper>();

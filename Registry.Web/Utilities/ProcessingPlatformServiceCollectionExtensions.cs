@@ -72,7 +72,7 @@ public static class ProcessingPlatformServiceCollectionExtensions
 
     /// <summary>
     /// Registers the caller-facing task submission services. Web host only: they depend on the
-    /// request user (<see cref="IAuthManager"/>, <see cref="IUtils"/>), which the processing node
+    /// request user (<see cref="IAuthManager"/>, <see cref="IStorageQuota"/>), which the processing node
     /// does not register, so the node container must not hold them (RQ-03 DI validation).
     /// </summary>
     public static IServiceCollection AddProcessingPlatformSubmission(this IServiceCollection services)

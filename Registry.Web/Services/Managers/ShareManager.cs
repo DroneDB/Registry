@@ -28,7 +28,8 @@ public class ShareManager : IShareManager
     private readonly IDatasetsManager _datasetsManager;
     private readonly IObjectsManager _objectsManager;
     private readonly ILogger<ShareManager> _logger;
-    private readonly IUtils _utils;
+    private readonly IDatasetResolver _datasets;
+    private readonly IStorageQuota _quota;
     private readonly IAuthManager _authManager;
     private readonly IDatasetAccessResolver _access;
     private readonly IBatchTokenGenerator _batchTokenGenerator;
@@ -45,7 +46,8 @@ public class ShareManager : IShareManager
         IObjectsManager objectsManager,
         IDatasetsManager datasetsManager,
         IOrganizationsManager organizationsManager,
-        IUtils utils,
+        IDatasetResolver datasets,
+        IStorageQuota quota,
         IAuthManager authManager,
         IDatasetAccessResolver access,
         IBatchTokenGenerator batchTokenGenerator,
@@ -61,7 +63,8 @@ public class ShareManager : IShareManager
         _objectsManager = objectsManager;
         _datasetsManager = datasetsManager;
         _organizationsManager = organizationsManager;
-        _utils = utils;
+        _datasets = datasets;
+        _quota = quota;
         _authManager = authManager;
         _access = access;
         _batchTokenGenerator = batchTokenGenerator;
@@ -222,7 +225,7 @@ public class ShareManager : IShareManager
             throw new UnauthorizedException("Invalid user");
 
         // Check if user has enough space to upload any file
-        await _utils.CheckCurrentUserStorage();
+        await _quota.CheckCurrentUserStorage();
 
         Dataset dataset;
         var tag = parameters.Tag.ToTag();
@@ -259,7 +262,7 @@ public class ShareManager : IShareManager
             if (userOrganization == null)
             {
                 // This section of code can be extracted and put in a separated utils method
-                orgSlug = _utils.GetFreeOrganizationSlug(currentUser.UserName);
+                orgSlug = _datasets.GetFreeOrganizationSlug(currentUser.UserName);
 
                 _logger.LogInformation("No default user organization found, adding a new one: '{OrgSlug}'",
                     orgSlug);
@@ -298,7 +301,7 @@ public class ShareManager : IShareManager
         else
         {
             // Check if the requested organization exists
-            var organization = await _utils.GetOrganizationAsync(tag.OrganizationSlug, safe: true, withTracking: true);
+            var organization = await _datasets.GetOrganizationAsync(tag.OrganizationSlug, safe: true, withTracking: true);
 
             if (organization == null)
                 throw new BadRequestException($"Cannot find organization '{tag.OrganizationSlug}'");
@@ -394,7 +397,7 @@ public class ShareManager : IShareManager
 
     // Datasets are identified by organization and slug: the slug alone may match another organization's
     private Task<Dataset> GetTrackedDatasetAsync(string orgSlug, string dsSlug, bool safe = false) =>
-        _utils.GetDatasetAsync(orgSlug, dsSlug, safe, withTracking: true);
+        _datasets.GetDatasetAsync(orgSlug, dsSlug, safe, withTracking: true);
 
     private string GetUniqueDatasetSlug()
     {
@@ -473,7 +476,7 @@ public class ShareManager : IShareManager
         var batch = await GetRunningBatchFromToken(token);
 
         // Check if user has enough space to upload this
-        await _utils.CheckCurrentUserStorage(stream.Length);
+        await _quota.CheckCurrentUserStorage(stream.Length);
 
         if (batch.Entries.Any(item => item.Path == path))
             throw new BadRequestException("Entry already uploaded");
@@ -623,7 +626,7 @@ public class ShareManager : IShareManager
         if (_chunks.GetStatus(root, chunkInfo.FileId) == null)
         {
             // A new upload: check the user has room for the whole file before its first byte
-            await _utils.CheckCurrentUserStorage(chunkInfo.TotalFileSize);
+            await _quota.CheckCurrentUserStorage(chunkInfo.TotalFileSize);
         }
 
         _logger.LogDebug("Processing chunk {ChunkIndex}/{TotalChunks} for file {FileName} (FileId: {FileId})",

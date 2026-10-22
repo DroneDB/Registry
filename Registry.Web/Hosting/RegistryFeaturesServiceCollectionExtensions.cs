@@ -28,7 +28,9 @@ public static class RegistryFeaturesServiceCollectionExtensions
     /// <summary>The web managers and their adapters (datasets, objects, users, organizations, shares, tasks, imports, system).</summary>
     public static IServiceCollection AddRegistryDomain(this IServiceCollection services)
     {
-        services.AddScoped<IUtils, WebUtils>();
+        services.AddScoped<IDatasetResolver, DatasetResolver>();
+        services.AddScoped<IUrlBuilder, UrlBuilder>();
+        services.AddScoped<IStorageQuota, StorageQuota>();
         services.AddSingleton<IDatasetLookupCache, DatasetLookupCache>();
         services.AddSingleton<Microsoft.EntityFrameworkCore.Diagnostics.ISaveChangesInterceptor, DatasetChangeInterceptor>();
         services.AddScoped<IDatasetSummaryProvider, DatasetSummaryProvider>();

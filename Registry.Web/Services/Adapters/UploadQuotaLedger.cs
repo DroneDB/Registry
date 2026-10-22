@@ -163,9 +163,9 @@ public sealed class UploadQuotaLedger
     }
 }
 
-/// <summary>Default <see cref="IUploadQuotaGuard"/>: the current user's limit from <see cref="IUtils"/>.</summary>
-public sealed class UploadQuotaGuard(UploadQuotaLedger ledger, IUtils utils) : IUploadQuotaGuard
+/// <summary>Default <see cref="IUploadQuotaGuard"/>: the current user's limit from <see cref="IStorageQuota"/>.</summary>
+public sealed class UploadQuotaGuard(UploadQuotaLedger ledger, IStorageQuota quota) : IUploadQuotaGuard
 {
     public Task<IQuotaReservation> ReserveAsync(string userId, long bytes) =>
-        ledger.ReserveAsync(userId, bytes, async () => await utils.GetCurrentUserStorageLimit());
+        ledger.ReserveAsync(userId, bytes, async () => await quota.GetCurrentUserStorageLimit());
 }

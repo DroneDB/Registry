@@ -45,7 +45,8 @@ public class ObjectsManagerCopyTransferTest : TestBase
         public TestStopException(string message) : base(message) { }
     }
 
-    private Mock<IUtils> _utilsMock = null!;
+    private Mock<IDatasetResolver> _utilsMock = null!;
+    private Mock<IStorageQuota> _quotaMock = null!;
     private Mock<IAuthManager> _authManagerMock = null!;
     private Mock<IDdbManager> _ddbManagerMock = null!;
     private Mock<ICacheManager> _cacheManagerMock = null!;
@@ -71,7 +72,8 @@ public class ObjectsManagerCopyTransferTest : TestBase
     [SetUp]
     public void Setup()
     {
-        _utilsMock = new Mock<IUtils>();
+        _utilsMock = new Mock<IDatasetResolver>();
+        _quotaMock = new Mock<IStorageQuota>();
         _authManagerMock = new Mock<IAuthManager>();
         _ddbManagerMock = new Mock<IDdbManager>();
         _cacheManagerMock = new Mock<ICacheManager>();
@@ -128,7 +130,8 @@ public class ObjectsManagerCopyTransferTest : TestBase
             .WithLogger(_logger)
             .WithSettings(TestSettings.Options(_settings))
             .WithDdbManager(_ddbManagerMock.Object)
-            .WithUtils(_utilsMock.Object)
+            .WithDatasets(_utilsMock.Object)
+            .WithQuota(_quotaMock.Object)
             .WithAuthManager(_authManagerMock.Object)
             .WithCacheManager(_cacheManagerMock.Object)
             .WithFileSystem(_fsMock.Object)
@@ -182,7 +185,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
             .Returns(new Entry { Path = "dst.jpg", Type = EntryType.Generic, Size = 30, Hash = "hd" });
 
         long? observedDelta = null;
-        _utilsMock.Setup(x => x.CheckCurrentUserStorage(It.IsAny<long>()))
+        _quotaMock.Setup(x => x.CheckCurrentUserStorage(It.IsAny<long>()))
             .Callback<long>(d => observedDelta = d)
             .ThrowsAsync(new TestStopException("stop"));
 
@@ -202,7 +205,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
             .Returns(new Entry { Path = "dst.jpg", Type = EntryType.Generic, Size = 50, Hash = "hd" });
 
         long? observedDelta = null;
-        _utilsMock.Setup(x => x.CheckCurrentUserStorage(It.IsAny<long>()))
+        _quotaMock.Setup(x => x.CheckCurrentUserStorage(It.IsAny<long>()))
             .Callback<long>(d => observedDelta = d)
             .ThrowsAsync(new TestStopException("stop"));
 
@@ -221,7 +224,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
         _ddbMock.Setup(x => x.GetEntry("dst.jpg")).Returns((Entry?)null);
 
         long? observedDelta = null;
-        _utilsMock.Setup(x => x.CheckCurrentUserStorage(It.IsAny<long>()))
+        _quotaMock.Setup(x => x.CheckCurrentUserStorage(It.IsAny<long>()))
             .Callback<long>(d => observedDelta = d)
             .ThrowsAsync(new TestStopException("stop"));
 

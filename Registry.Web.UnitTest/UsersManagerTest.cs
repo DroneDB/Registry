@@ -43,7 +43,7 @@ public class UsersManagerTest : TestBase
     private UsersManager _usersManager;
     private RegistryContext _context;
     private ApplicationDbContext _appContext;
-    private IUtils _webUtils;
+    private WebPorts _webUtils;
     private Mock<UserManager<User>> _userManagerMock;
 
     [SetUp]
@@ -91,8 +91,7 @@ public class UsersManagerTest : TestBase
             .Returns(PasswordValidationResult.Success());
 
         // Initialize utils
-        _webUtils = new WebUtils(_authManagerMock.Object, _context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
-            _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
+        _webUtils = TestPorts.All(_authManagerMock.Object, _context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
         _usersManager = new UsersManager(
             TestSettings.Options<AuthTokenOptions>(_settingsOptions),
@@ -104,7 +103,8 @@ public class UsersManagerTest : TestBase
             _appContext,
             _authManagerMock.Object,
             _organizationsManagerMock.Object,
-            _webUtils,
+            _webUtils.Datasets,
+            _webUtils.Quota,
             _logger,
             _context,
             _passwordPolicyValidatorMock.Object,

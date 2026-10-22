@@ -34,7 +34,8 @@ public class UsersManager : IUsersManager
     private readonly IAuthManager _authManager;
     private readonly IOrganizationMembershipService _memberships;
     private readonly IOrganizationsManager _organizationsManager;
-    private readonly IUtils _utils;
+    private readonly IDatasetResolver _datasets;
+    private readonly IStorageQuota _quota;
     private readonly ILogger<UsersManager> _logger;
     private readonly ILoginManager _loginManager;
     private readonly UserManager<User> _userManager;
@@ -55,7 +56,8 @@ public class UsersManager : IUsersManager
         ApplicationDbContext applicationDbContext,
         IAuthManager authManager,
         IOrganizationsManager organizationsManager,
-        IUtils utils,
+        IDatasetResolver datasets,
+        IStorageQuota quota,
         ILogger<UsersManager> logger,
         RegistryContext registryContext,
         IPasswordPolicyValidator passwordPolicyValidator,
@@ -65,7 +67,8 @@ public class UsersManager : IUsersManager
         _authManager = authManager;
         _memberships = memberships;
         _organizationsManager = organizationsManager;
-        _utils = utils;
+        _datasets = datasets;
+        _quota = quota;
         _logger = logger;
         _registryContext = registryContext;
         _passwordPolicyValidator = passwordPolicyValidator;
@@ -311,7 +314,7 @@ public class UsersManager : IUsersManager
 
     private async Task CreateUserDefaultOrganization(User user)
     {
-        var orgSlug = _utils.GetFreeOrganizationSlug(user.UserName);
+        var orgSlug = _datasets.GetFreeOrganizationSlug(user.UserName);
 
         await _organizationsManager.AddNew(new OrganizationDto
         {
@@ -420,14 +423,14 @@ public class UsersManager : IUsersManager
             throw new BadRequestException("User does not exist");
 
         if (string.IsNullOrWhiteSpace(userName))
-            return _utils.GetUserStorage(user);
+            return _quota.GetUserStorage(user);
 
         user = await _userManager.FindByNameAsync(userName);
 
         if (user == null)
             throw new BadRequestException("Cannot find user " + userName);
 
-        return _utils.GetUserStorage(user);
+        return _quota.GetUserStorage(user);
     }
 
     public async Task<Dictionary<string, object>> GetUserMeta(string userName = null)

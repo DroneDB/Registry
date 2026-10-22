@@ -163,7 +163,7 @@ public sealed class Rq12RecordCacheTests
     private static (OgcLayerCatalog Catalog, Mock<IDDB> Ddb) Catalog(IDistributedCache store)
     {
         var dataset = new Dataset { InternalRef = Guid.NewGuid() };
-        var utils = new Mock<IUtils>();
+        var utils = new Mock<IDatasetResolver>();
         utils.Setup(u => u.GetDatasetAsync("org", "ds", It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(dataset);
         var ddb = new Mock<IDDB>();

@@ -45,7 +45,7 @@ public class OgcRenderCachingTests
     private static readonly double[] View = [1000.0, 2000.0, 1512.0, 2384.0];
 
     private Dataset _dataset = null!;
-    private Mock<IUtils> _utils = null!;
+    private Mock<IDatasetResolver> _utils = null!;
     private Mock<IAuthManager> _auth = null!;
     private Mock<IDdbWrapper> _wrapper = null!;
     private Mock<IDDB> _ddb = null!;
@@ -60,7 +60,7 @@ public class OgcRenderCachingTests
     {
         _resolver = null;
         _dataset = new Dataset { Slug = Ds, InternalRef = Guid.NewGuid() };
-        _utils = new Mock<IUtils>();
+        _utils = new Mock<IDatasetResolver>();
         _utils.Setup(u => u.GetDatasetAsync(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(_dataset);
         _auth = new Mock<IAuthManager>();
         _auth.Setup(a => a.RequestAccess(_dataset, AccessType.Read)).ReturnsAsync(true);

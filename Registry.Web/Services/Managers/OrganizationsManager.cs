@@ -28,7 +28,7 @@ public class OrganizationsManager : IOrganizationsManager
     private readonly IDatasetAccessResolver _access;
     private readonly IOrganizationMembershipService _memberships;
     private readonly RegistryContext _context;
-    private readonly IUtils _utils;
+    private readonly IDatasetResolver _datasets;
     private readonly IDatasetsManager _datasetManager;
     private readonly ApplicationDbContext _appContext;
     private readonly IOptions<AccountOptions> _accounts;
@@ -38,7 +38,7 @@ public class OrganizationsManager : IOrganizationsManager
         IAuthManager authManager,
         IDatasetAccessResolver access,
         RegistryContext context,
-        IUtils utils,
+        IDatasetResolver datasets,
         IDatasetsManager datasetManager,
         ApplicationDbContext appContext,
         IOptions<AccountOptions> accounts,
@@ -48,7 +48,7 @@ public class OrganizationsManager : IOrganizationsManager
         _authManager = authManager;
         _access = access;
         _context = context;
-        _utils = utils;
+        _datasets = datasets;
         _datasetManager = datasetManager;
         _appContext = appContext;
         _accounts = accounts;
@@ -375,8 +375,8 @@ public class OrganizationsManager : IOrganizationsManager
         if (sourceOrgSlug == MagicStrings.PublicOrganizationSlug)
             throw new BadRequestException("Cannot merge the public organization");
 
-        var sourceOrg = await _utils.GetOrganizationAsync(sourceOrgSlug, withTracking: true, withDatasets: true);
-        var destOrg = await _utils.GetOrganizationAsync(destOrgSlug, withTracking: true);
+        var sourceOrg = await _datasets.GetOrganizationAsync(sourceOrgSlug, withTracking: true, withDatasets: true);
+        var destOrg = await _datasets.GetOrganizationAsync(destOrgSlug, withTracking: true);
 
         _logger.LogInformation("Starting merge of organization '{SourceOrgSlug}' into '{DestOrgSlug}'",
             sourceOrgSlug, destOrgSlug);
@@ -423,7 +423,7 @@ public class OrganizationsManager : IOrganizationsManager
                 _logger.LogInformation("Deleting source organization '{SourceOrgSlug}' after successful merge", sourceOrgSlug);
 
                 // Reload the organization to ensure we have the latest state
-                sourceOrg = await _utils.GetOrganizationAsync(sourceOrgSlug, withTracking: true);
+                sourceOrg = await _datasets.GetOrganizationAsync(sourceOrgSlug, withTracking: true);
 
                 // Clear remaining users
                 sourceOrg.Users?.Clear();

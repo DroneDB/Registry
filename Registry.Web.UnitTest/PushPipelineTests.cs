@@ -51,7 +51,8 @@ public class PushPipelineTests : TestBase
     private string _root = null!;
     private Mock<IDdbWrapper> _wrapper = null!;
     private Mock<IDDB> _ddb = null!;
-    private Mock<IUtils> _utils = null!;
+    private Mock<IDatasetResolver> _utils = null!;
+    private Mock<IStorageQuota> _storageQuota = null!;
     private Mock<IObjectsManager> _objects = null!;
     private Mock<IBackgroundJobsProcessor> _jobs = null!;
     private Dataset _ds = null!;
@@ -110,10 +111,11 @@ public class PushPipelineTests : TestBase
                 : TestBuilds.NotBuildable(p)).ToArray());
         _ddb.Setup(d => d.IsBuildPending()).Returns(false);
 
-        _utils = new Mock<IUtils>();
+        _utils = new Mock<IDatasetResolver>();
+        _storageQuota = new Mock<IStorageQuota>();
         _utils.Setup(u => u.GetDatasetAsync("org", "ds", It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(_ds);
         // The storage evaluation behind the quota guard
-        _utils.Setup(u => u.GetCurrentUserStorageLimit()).ReturnsAsync(() =>
+        _storageQuota.Setup(u => u.GetCurrentUserStorageLimit()).ReturnsAsync(() =>
         {
             _quotaChecks++;
             return _quotaExceeded ? new UserStorageInfo { Used = 10, Total = 10 } : _quota;
@@ -146,7 +148,7 @@ public class PushPipelineTests : TestBase
         return new PushManager(_utils.Object, ddbManager.Object, _objects.Object,
             CreateTestLogger<PushManager>(Serilog.Events.LogEventLevel.Warning), Mock.Of<IDatasetsManager>(),
             auth.Object, new DatasetAccessResolver(_utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper.Object, _jobs.Object, TestSettings.Options<ImportSettings>(settings), cache.Object, fileSystem, buildPending,
-            new PushSessionStore(fileSystem), new UploadQuotaGuard(_ledger, _utils.Object), TestPaths.Policy, TestScratch.Provider);
+            new PushSessionStore(fileSystem), new UploadQuotaGuard(_ledger, _storageQuota.Object), TestPaths.Policy, TestScratch.Provider);
     }
 
     private static StampDto ClientStamp() => new() { Checksum = "client", Entries = [], Meta = [] };

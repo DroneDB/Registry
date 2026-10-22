@@ -22,7 +22,7 @@ namespace Registry.Web.Services.HeavyTasks.Adapters;
 public sealed class HeavyTaskRunner : IHeavyTaskRunner
 {
     private readonly IHeavyToolRegistry _registry;
-    private readonly IUtils _utils;
+    private readonly IDatasetResolver _datasets;
     private readonly IDdbManager _ddbManager;
     private readonly IHeavyTaskQuota _quota;
     private readonly IJobIndexQuery _query;
@@ -32,7 +32,7 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
 
     public HeavyTaskRunner(
         IHeavyToolRegistry registry,
-        IUtils utils,
+        IDatasetResolver datasets,
         IDdbManager ddbManager,
         IHeavyTaskQuota quota,
         IJobIndexQuery query,
@@ -41,7 +41,7 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         ILogger<HeavyTaskRunner> log)
     {
         _registry = registry;
-        _utils = utils;
+        _datasets = datasets;
         _ddbManager = ddbManager;
         _quota = quota;
         _query = query;
@@ -57,7 +57,7 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
                    ?? throw new HeavyToolNotFoundException($"Tool '{request.ToolId}' is not available.");
 
         // The callers authorized the request (dataset or organization write access) before submitting
-        var ds = await _utils.GetDatasetAsync(request.OrgSlug, request.DsSlug, ct: ct);
+        var ds = await _datasets.GetDatasetAsync(request.OrgSlug, request.DsSlug, ct: ct);
 
         var ddb = _ddbManager.Get(request.OrgSlug, ds.InternalRef);
 

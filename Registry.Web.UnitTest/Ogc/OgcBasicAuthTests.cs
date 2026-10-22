@@ -66,7 +66,7 @@ public class OgcBasicAuthTests
         userManager.Setup(m => m.FindByNameAsync("admin")).ReturnsAsync(user);
         userManager.Setup(m => m.IsInRoleAsync(user, It.IsAny<string>())).ReturnsAsync(false);
 
-        var utils = new Mock<IUtils>();
+        var utils = new Mock<IDatasetResolver>();
         utils.Setup(u => u.GetDatasetAsync(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(_dataset);
 
         // A private dataset: readable by the authenticated user only, as AuthManager decides

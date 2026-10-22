@@ -57,7 +57,7 @@ public class CadCrsManagerTests
     private CadCrsManager Create()
     {
         var dataset = new Dataset { Slug = Ds, InternalRef = Guid.NewGuid() };
-        var utils = new Mock<IUtils>();
+        var utils = new Mock<IDatasetResolver>();
         utils.Setup(u => u.GetDatasetAsync(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(dataset);
         var ddbManager = new Mock<IDdbManager>();
         ddbManager.Setup(m => m.Get(Org, dataset.InternalRef)).Returns(_ddb.Object);

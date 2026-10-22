@@ -37,7 +37,7 @@ namespace Registry.Web.Test.ImprovementBaselines;
 /// <item>Datasets are looked up by organization and slug: a same-slug dataset in another organization is
 /// never picked.</item>
 /// </list>
-/// Real <see cref="WebUtils"/> on an in-memory context; access answered by a mocked <see cref="IAuthManager"/>
+/// Real <see cref="DatasetResolver"/> and <see cref="StorageQuota"/> on an in-memory context; access answered by a mocked <see cref="IAuthManager"/>
 /// with the rules of <c>DatasetAccessControl</c> for the configured roles.
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~Rq01ShareAccessTests"
 /// </summary>
@@ -120,8 +120,7 @@ public class Rq01ShareAccessTests
         _objects = new Mock<IObjectsManager>();
 
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings());
-        var utils = new WebUtils(_auth.Object, _context, TestSettings.Options<AccountOptions>(settings), TestSettings.Options<HttpHostOptions>(settings), Mock.Of<IHttpContextAccessor>(),
-            Mock.Of<IDatasetSummaryProvider>());
+        var utils = TestPorts.All(_auth.Object, _context, TestSettings.Options<AccountOptions>(settings), TestSettings.Options<HttpHostOptions>(settings), Mock.Of<IHttpContextAccessor>(), Mock.Of<IDatasetSummaryProvider>());
 
         var tokens = new Mock<IBatchTokenGenerator>();
         tokens.Setup(t => t.GenerateToken()).Returns(() => Guid.NewGuid().ToString("N"));
@@ -129,8 +128,8 @@ public class Rq01ShareAccessTests
         names.Setup(n => n.GenerateName()).Returns(() => "gen-" + Guid.NewGuid().ToString("N")[..8]);
 
         _manager = new ShareManager(NullLogger<ShareManager>.Instance, _objects.Object,
-            _datasets.Object, Mock.Of<IOrganizationsManager>(), utils, _auth.Object,
-            new DatasetAccessResolver(utils, _auth.Object, Mock.Of<IDdbManager>(), TestPaths.Policy), tokens.Object,
+            _datasets.Object, Mock.Of<IOrganizationsManager>(), utils.Datasets, utils.Quota, _auth.Object,
+            new DatasetAccessResolver(utils.Datasets, _auth.Object, Mock.Of<IDdbManager>(), TestPaths.Policy), tokens.Object,
             names.Object, _context, new FileSystem(), TestScratch.Provider, _time);
     }
 

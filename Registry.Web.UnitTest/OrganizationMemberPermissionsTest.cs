@@ -34,7 +34,7 @@ public class OrganizationMemberPermissionsTest : TestBase
     private Mock<IAuthManager> _authManagerMock;
     private MutableOptions<AppSettings> _settingsOptions;
     private Mock<IDatasetsManager> _datasetManagerMock;
-    private Mock<IUtils> _utilsMock;
+    private Mock<IDatasetResolver> _utilsMock;
     private ILogger<OrganizationsManager> _logger;
     private RegistryContext _context;
     private ApplicationDbContext _appContext;
@@ -54,7 +54,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         _settingsOptions = TestSettings.Mutable();
         _settingsOptions.Value = _appSettings;
         _datasetManagerMock = new Mock<IDatasetsManager>();
-        _utilsMock = new Mock<IUtils>();
+        _utilsMock = new Mock<IDatasetResolver>();
         _logger = CreateTestLogger<OrganizationsManager>();
 
         _context = await CreateTestRegistryContext();

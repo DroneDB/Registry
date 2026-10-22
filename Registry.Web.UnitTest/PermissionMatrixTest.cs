@@ -1167,7 +1167,7 @@ public class PermissionMatrixTest : TestBase
     private Mock<IAuthManager> _authManagerMock;
     private MutableOptions<AppSettings> _settingsOptions;
     private Mock<IDatasetsManager> _datasetManagerMock;
-    private Mock<IUtils> _utilsMock;
+    private Mock<IDatasetResolver> _utilsMock;
     private AppSettings _appSettings;
 
     private OrganizationsManager CreateOrganizationsManager()
@@ -1177,7 +1177,7 @@ public class PermissionMatrixTest : TestBase
         _settingsOptions = TestSettings.Mutable();
         _settingsOptions.Value = _appSettings;
         _datasetManagerMock = new Mock<IDatasetsManager>();
-        _utilsMock = new Mock<IUtils>();
+        _utilsMock = new Mock<IDatasetResolver>();
         var logger = CreateTestLogger<OrganizationsManager>();
 
         _authManagerMock.Setup(x => x.CanListOrganizations(It.IsAny<User>())).ReturnsAsync(true);

@@ -49,18 +49,18 @@ public class ArchiveExtractToolTests
         }
     }
 
-    private (ArchiveExtractTool tool, Mock<IUtils> utils) CreateTool(
-        long maxArchiveBytes = 5L * 1024 * 1024 * 1024, bool registerUtils = true)
+    private (ArchiveExtractTool tool, Mock<IStorageQuota> utils) CreateTool(
+        long maxArchiveBytes = 5L * 1024 * 1024 * 1024, bool registerQuota = true)
     {
         var extractor = new SharpCompressArchiveExtractor();
 
-        var utils = new Mock<IUtils>();
+        var utils = new Mock<IStorageQuota>();
         utils.Setup(u => u.CheckCurrentUserStorage(It.IsAny<long>())).Returns(Task.CompletedTask);
 
         var services = new ServiceCollection();
-        // When registerUtils is false the scope has no IUtils, reproducing the
+        // When registerQuota is false the scope has no IStorageQuota, reproducing the
         // processing-node container where the service is not registered.
-        if (registerUtils)
+        if (registerQuota)
             services.AddSingleton(utils.Object);
         var provider = services.BuildServiceProvider();
         var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
@@ -125,13 +125,13 @@ public class ArchiveExtractToolTests
     public async Task ValidateAsync_NoCaller_SkipsQuotaCheck()
     {
         // Reproduces the Hangfire worker (processing node) scenario: ctx.Caller is null
-        // and IUtils is NOT registered in the scope. ValidateAsync must neither resolve
-        // IUtils nor throw - the quota was already enforced at submit time.
+        // and IStorageQuota is NOT registered in the scope. ValidateAsync must neither resolve
+        // IStorageQuota nor throw - the quota was already enforced at submit time.
         var local = Path.Combine(_dir, "flight.zip");
         CreateZip(local, "a.txt", "hello");
         var ddb = MockDdb("flight.zip", local);
 
-        var (tool, utils) = CreateTool(registerUtils: false);
+        var (tool, utils) = CreateTool(registerQuota: false);
 
         await Should.NotThrowAsync(async () =>
             await tool.ValidateAsync(

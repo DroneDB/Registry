@@ -29,7 +29,9 @@ namespace Registry.Web.Services.Managers;
 public class ImportManager : IImportManager
 {
 
-    private readonly IUtils _utils;
+    private readonly IDatasetResolver _datasets;
+    private readonly IUrlBuilder _urls;
+    private readonly IStorageQuota _quota;
     private readonly IAuthManager _authManager;
     private readonly IDatasetAccessResolver _access;
     private readonly IDatasetsManager _datasetsManager;
@@ -44,7 +46,9 @@ public class ImportManager : IImportManager
     /// Initializes a new instance of the <see cref="ImportManager"/> class.
     /// </summary>
     public ImportManager(
-        IUtils utils,
+        IDatasetResolver datasets,
+        IUrlBuilder urls,
+        IStorageQuota quota,
         IAuthManager authManager,
         IDatasetAccessResolver access,
         IDatasetsManager datasetsManager,
@@ -55,7 +59,9 @@ public class ImportManager : IImportManager
         IOptions<ImportSettings> settings,
         ILogger<ImportManager> logger)
     {
-        _utils = utils;
+        _datasets = datasets;
+        _urls = urls;
+        _quota = quota;
         _authManager = authManager;
         _access = access;
         _datasetsManager = datasetsManager;
@@ -123,7 +129,7 @@ public class ImportManager : IImportManager
         // Soft quota gate when a size is known (archive-url reports the compressed size, a lower bound;
         // the worker enforces the hard cap incrementally).
         if (probe.EstimatedBytes is > 0)
-            await _utils.CheckCurrentUserStorage(probe.EstimatedBytes.Value);
+            await _quota.CheckCurrentUserStorage(probe.EstimatedBytes.Value);
 
         var budgetBytes = await ComputeRemainingBudgetAsync();
 
@@ -158,7 +164,7 @@ public class ImportManager : IImportManager
             string? url = null;
             try
             {
-                url = _utils.GenerateDatasetUrl(await _utils.GetDatasetAsync(orgSlug, ds.Slug, ct: ct));
+                url = _urls.GenerateDatasetUrl(await _datasets.GetDatasetAsync(orgSlug, ds.Slug, ct: ct));
             }
             catch (Exception ex)
             {
@@ -228,7 +234,7 @@ public class ImportManager : IImportManager
         var user = await _authManager.GetCurrentUser();
         if (user is null) return null;
 
-        var info = _utils.GetUserStorage(user);
+        var info = _quota.GetUserStorage(user);
         if (info.Total is null) return null; // unlimited
 
         var remaining = info.Total.Value - info.Used;

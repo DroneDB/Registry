@@ -29,7 +29,7 @@ public class PushManager : IPushManager
     private const string AddsTempFolder = "add";
     private const string MetaFile = "meta.json";
 
-    private readonly IUtils _utils;
+    private readonly IDatasetResolver _datasets;
     private readonly IDdbManager _ddbManager;
     private readonly IObjectsManager _objectsManager;
     private readonly IDatasetsManager _datasetsManager;
@@ -47,14 +47,14 @@ public class PushManager : IPushManager
     private readonly DatasetPathPolicy _paths;
     private readonly IScratchFileProvider _scratch;
 
-    public PushManager(IUtils utils, IDdbManager ddbManager,
+    public PushManager(IDatasetResolver datasets, IDdbManager ddbManager,
         IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager,
         IAuthManager authManager, IDatasetAccessResolver access, IDdbWrapper ddbWrapper,
         IBackgroundJobsProcessor backgroundJob, IOptions<ImportSettings> importSettings, ICacheManager cacheManager,
         IFileSystem fileSystem, BuildPendingService buildPendingService, IPushSessionStore sessionStore,
         IUploadQuotaGuard quota, DatasetPathPolicy paths, IScratchFileProvider scratch)
     {
-        _utils = utils;
+        _datasets = datasets;
         _ddbManager = ddbManager;
         _objectsManager = objectsManager;
         _logger = logger;
@@ -75,7 +75,7 @@ public class PushManager : IPushManager
 
     public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp)
     {
-        var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug, safe: true);
+        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, safe: true);
 
         var validateChecksum = false;
 
@@ -89,7 +89,7 @@ public class PushManager : IPushManager
             });
 
             _logger.LogInformation("New dataset {OrgSlug}/{DsSlug} created", orgSlug, dsSlug);
-            ds = await _utils.GetDatasetAsync(orgSlug, dsSlug);
+            ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug);
 
         }
         else

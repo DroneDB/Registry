@@ -38,7 +38,7 @@ namespace Registry.Web.Test;
 [TestFixture]
 public class ObjectsManagerThumbnailTests : TestBase
 {
-    private Mock<IUtils> _utilsMock = null!;
+    private Mock<IDatasetResolver> _utilsMock = null!;
     private Mock<IAuthManager> _authManagerMock = null!;
     private Mock<IDdbManager> _ddbManagerMock = null!;
     private Mock<ICacheManager> _cacheManagerMock = null!;
@@ -62,7 +62,7 @@ public class ObjectsManagerThumbnailTests : TestBase
     [SetUp]
     public void Setup()
     {
-        _utilsMock = new Mock<IUtils>();
+        _utilsMock = new Mock<IDatasetResolver>();
         _authManagerMock = new Mock<IAuthManager>();
         _ddbManagerMock = new Mock<IDdbManager>();
         _cacheManagerMock = new Mock<ICacheManager>();
@@ -115,7 +115,7 @@ public class ObjectsManagerThumbnailTests : TestBase
             .WithLogger(_logger)
             .WithSettings(_settingsOptions)
             .WithDdbManager(_ddbManagerMock.Object)
-            .WithUtils(_utilsMock.Object)
+            .WithDatasets(_utilsMock.Object)
             .WithAuthManager(_authManagerMock.Object)
             .WithCacheManager(_cacheManagerMock.Object)
             .WithFileSystem(_fsMock.Object)

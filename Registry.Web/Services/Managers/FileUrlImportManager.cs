@@ -27,7 +27,6 @@ namespace Registry.Web.Services.Managers;
 /// </summary>
 public class FileUrlImportManager : IFileUrlImportManager
 {
-    private readonly IUtils _utils;
     private readonly IAuthManager _authManager;
     private readonly IDatasetAccessResolver _access;
     private readonly IHeavyTaskRunner _runner;
@@ -42,7 +41,6 @@ public class FileUrlImportManager : IFileUrlImportManager
     /// Initializes a new instance of the <see cref="FileUrlImportManager"/> class.
     /// </summary>
     public FileUrlImportManager(
-        IUtils utils,
         IAuthManager authManager,
         IDatasetAccessResolver access,
         IHeavyTaskRunner runner,
@@ -53,7 +51,6 @@ public class FileUrlImportManager : IFileUrlImportManager
         DatasetPathPolicy paths,
         ILogger<FileUrlImportManager> logger)
     {
-        _utils = utils;
         _paths = paths;
         _authManager = authManager;
         _access = access;

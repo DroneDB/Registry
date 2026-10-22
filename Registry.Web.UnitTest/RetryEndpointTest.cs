@@ -54,7 +54,7 @@ public class RetryEndpointTest : IDisposable
     private Mock<IBackgroundJobClient> _client = null!;
     private TasksManager _manager = null!;
     private Mock<IDDB> _ddb = null!;
-    private Mock<IUtils> _utils = null!;
+    private Mock<IDatasetResolver> _utils = null!;
     private Mock<IStorageConnection> _connection = null!;
     private Mock<JobStorage> _storage = null!;
 
@@ -79,7 +79,7 @@ public class RetryEndpointTest : IDisposable
         authManager.Setup(x => x.GetCurrentUser()).ReturnsAsync((User)null!);
         authManager.Setup(x => x.IsOwnerOrAdmin(It.IsAny<Dataset>())).ReturnsAsync(true);
 
-        _utils = new Mock<IUtils>();
+        _utils = new Mock<IDatasetResolver>();
         _utils.Setup(x => x.GetDatasetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dataset { Slug = Ds, InternalRef = Guid.NewGuid() });
 

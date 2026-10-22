@@ -29,14 +29,14 @@ namespace Registry.Web.Test.Ogc;
 [TestFixture]
 public class OgcAuthorizationFilterTest
 {
-    private Mock<IUtils> _utils = null!;
+    private Mock<IDatasetResolver> _utils = null!;
     private Mock<IAuthManager> _auth = null!;
     private OgcAuthorizationFilter _filter = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _utils = new Mock<IUtils>();
+        _utils = new Mock<IDatasetResolver>();
         _auth = new Mock<IAuthManager>();
         _filter = new OgcAuthorizationFilter(new DatasetAccessResolver(_utils.Object, _auth.Object, Mock.Of<IDdbManager>(), TestPaths.Policy),
             NullLogger<OgcAuthorizationFilter>.Instance);

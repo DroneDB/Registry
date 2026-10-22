@@ -41,7 +41,7 @@ public class OrganizationManagerTest : TestBase
     private OrganizationsManager _organizationsManager;
     private RegistryContext _context;
     private ApplicationDbContext _appContext;
-    private IUtils _webUtils;
+    private WebPorts _webUtils;
 
     [SetUp]
     public async Task Setup()
@@ -62,14 +62,13 @@ public class OrganizationManagerTest : TestBase
         SetupDefaultAuthManagerBehavior();
 
         // Initialize utils and manager
-        _webUtils = new WebUtils(_authManagerMock.Object, _context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions),
-            _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
+        _webUtils = TestPorts.All(_authManagerMock.Object, _context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
         _organizationsManager = new OrganizationsManager(
             _authManagerMock.Object,
-            new DatasetAccessResolver(_webUtils, _authManagerMock.Object, Mock.Of<IDdbManager>(), TestPaths.Policy),
+            new DatasetAccessResolver(_webUtils.Datasets, _authManagerMock.Object, Mock.Of<IDdbManager>(), TestPaths.Policy),
             _context,
-            _webUtils,
+            _webUtils.Datasets,
             _datasetManagerMock.Object,
             _appContext,
             TestSettings.Options<AccountOptions>(_settingsOptions),

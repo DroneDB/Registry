@@ -11,13 +11,13 @@ namespace Registry.Web.Services.Stac;
 /// </summary>
 public sealed class StacUrls
 {
-    private readonly IUtils _utils;
+    private readonly IUrlBuilder _urls;
     private readonly Lazy<string> _host;
 
-    public StacUrls(IUtils utils)
+    public StacUrls(IUrlBuilder urls)
     {
-        _utils = utils;
-        _host = new Lazy<string>(() => utils.GetLocalHost());
+        _urls = urls;
+        _host = new Lazy<string>(() => urls.GetLocalHost());
     }
 
     /// <summary>The STAC API landing page (also the root of every document).</summary>
@@ -48,5 +48,5 @@ public sealed class StacUrls
     public string Thumbnail(Dataset ds, string path) =>
         DatasetApi(ds) + "/thumb?path=" + Uri.EscapeDataString(path) + "&size=512";
 
-    private string DatasetApi(Dataset ds) => _utils.GenerateDatasetUrl(ds);
+    private string DatasetApi(Dataset ds) => _urls.GenerateDatasetUrl(ds);
 }

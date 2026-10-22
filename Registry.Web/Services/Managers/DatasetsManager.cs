@@ -27,7 +27,8 @@ namespace Registry.Web.Services.Managers;
 public class DatasetsManager : IDatasetsManager
 {
     private readonly RegistryContext _context;
-    private readonly IUtils _utils;
+    private readonly IDatasetResolver _datasets;
+    private readonly IUrlBuilder _urls;
     private readonly ILogger<DatasetsManager> _logger;
     private readonly IObjectsManager _objectsManager;
     private readonly IDdbManager _ddbManager;
@@ -41,7 +42,8 @@ public class DatasetsManager : IDatasetsManager
 
     public DatasetsManager(
         RegistryContext context,
-        IUtils utils,
+        IDatasetResolver datasets,
+        IUrlBuilder urls,
         ILogger<DatasetsManager> logger,
         IObjectsManager objectsManager,
         IDdbManager ddbManager,
@@ -54,7 +56,8 @@ public class DatasetsManager : IDatasetsManager
         IDatasetSummaryProvider summaries)
     {
         _context = context;
-        _utils = utils;
+        _datasets = datasets;
+        _urls = urls;
         _logger = logger;
         _objectsManager = objectsManager;
         _ddbManager = ddbManager;
@@ -167,7 +170,7 @@ public class DatasetsManager : IDatasetsManager
 
         var info = ddb.GetInfo();
         info.Depth = 0;
-        info.Path = _utils.GenerateDatasetUrl(dataset, true);
+        info.Path = _urls.GenerateDatasetUrl(dataset, true);
 
         var dto = info.ToDto();
 
@@ -235,7 +238,7 @@ public class DatasetsManager : IDatasetsManager
         if (dataset == null)
             throw new BadRequestException("Dataset is null");
 
-        var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
+        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
         await _access.EnsureAccessAsync(ds, AccessType.Write);
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
@@ -259,7 +262,7 @@ public class DatasetsManager : IDatasetsManager
 
     public async Task Delete(string orgSlug, string dsSlug)
     {
-        var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
+        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
         await _access.EnsureAccessAsync(ds, AccessType.Delete);
 
         // Save references before removing from DB
@@ -315,10 +318,10 @@ public class DatasetsManager : IDatasetsManager
         if (dsSlug == newSlug) return; // Nothing to do
 
         // Access first: a caller who may not rename learns nothing about the other slugs
-        var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
+        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
         await _access.EnsureAccessAsync(ds, AccessType.Write);
 
-        if (await _utils.GetDatasetAsync(orgSlug, newSlug, safe: true) != null)
+        if (await _datasets.GetDatasetAsync(orgSlug, newSlug, safe: true) != null)
             throw new BadRequestException($"Dataset '{newSlug}' already exists");
 
         ds.Slug = newSlug;
@@ -374,8 +377,8 @@ public class DatasetsManager : IDatasetsManager
         if (sourceOrgSlug == destOrgSlug)
             throw new BadRequestException("Source and destination organizations cannot be the same");
 
-        var sourceOrg = await _utils.GetOrganizationAsync(sourceOrgSlug, withTracking: true);
-        var destOrg = await _utils.GetOrganizationAsync(destOrgSlug, withTracking: true);
+        var sourceOrg = await _datasets.GetOrganizationAsync(sourceOrgSlug, withTracking: true);
+        var destOrg = await _datasets.GetOrganizationAsync(destOrgSlug, withTracking: true);
 
         var results = new List<MoveDatasetResultDto>();
 
@@ -396,7 +399,7 @@ public class DatasetsManager : IDatasetsManager
 
             try
             {
-                var dataset = await _utils.GetDatasetAsync(sourceOrgSlug, dsSlug, safe: true, withTracking: true);
+                var dataset = await _datasets.GetDatasetAsync(sourceOrgSlug, dsSlug, safe: true, withTracking: true);
 
                 if (dataset == null)
                 {

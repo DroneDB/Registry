@@ -156,8 +156,8 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
             if (ctx.Caller is not null)
             {
                 using var scope = _scopeFactory.CreateScope();
-                var utils = scope.ServiceProvider.GetRequiredService<IUtils>();
-                await utils.CheckCurrentUserStorage(uncompressed.Value); // throws QuotaExceededException
+                var quota = scope.ServiceProvider.GetRequiredService<IStorageQuota>();
+                await quota.CheckCurrentUserStorage(uncompressed.Value); // throws QuotaExceededException
             }
 
             // Free disk space on the dataset volume, keeping the head-room (the safety margin plus

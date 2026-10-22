@@ -44,7 +44,8 @@ public class UploadManagerTests
 
     private string _root = null!;
     private Dataset _dataset = null!;
-    private Mock<IUtils> _utils = null!;
+    private Mock<IDatasetResolver> _utils = null!;
+    private Mock<IStorageQuota> _quota = null!;
     private Mock<IAuthManager> _auth = null!;
     private Mock<IDDB> _ddb = null!;
     private Mock<IDatasetIndexQueue> _queue = null!;
@@ -69,9 +70,10 @@ public class UploadManagerTests
             Import = new ImportSettings { BlockedFileExtensions = [".exe"] }
         };
 
-        _utils = new Mock<IUtils>();
+        _utils = new Mock<IDatasetResolver>();
+        _quota = new Mock<IStorageQuota>();
         _utils.Setup(u => u.GetDatasetAsync(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(_dataset);
-        _utils.Setup(u => u.GetCurrentUserStorageLimit()).Returns(() =>
+        _quota.Setup(u => u.GetCurrentUserStorageLimit()).Returns(() =>
         {
             Interlocked.Increment(ref _evaluations);
             return Task.FromResult(new UserStorageInfo { Used = _used, Total = _limit });
@@ -128,7 +130,7 @@ public class UploadManagerTests
         return new UploadManager(NullLogger<UploadManager>.Instance, _auth.Object,
             new DatasetAccessResolver(_utils.Object, _auth.Object, ddbManager.Object, TestPaths.Policy), ddbManager.Object,
             new Registry.Adapters.FileSystem(), TestSettings.Options<ThumbnailOptions>(options), TestSettings.Options<ImportSettings>(options), jobs, buildPending,
-            new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _utils.Object), _changes.Object,
+            new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _quota.Object), _changes.Object,
             TestPaths.Policy,
             TestScratch.Provider,
             _receipts, _queue.Object);
@@ -325,7 +327,7 @@ public class UploadManagerTests
     // ---- resumable chunked uploads (E.5)
 
     private ChunkedUploadManager CreateChunks(UploadManager uploads) =>
-        new(uploads, new ChunkStore(), new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _utils.Object),
+        new(uploads, new ChunkStore(), new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _quota.Object),
             TestScratch.Provider);
 
     private static ChunkRequest Chunk(int index, string path = "big.bin") => new("big-file-0001", index, 3, 25, 10, path);
@@ -406,9 +408,7 @@ public class UploadManagerTests
         }
 
         var context = db.NewContext();
-        var utils = new WebUtils(Mock.Of<IAuthManager>(), context, Microsoft.Extensions.Options.Options.Create(new AccountOptions()),
-            Microsoft.Extensions.Options.Options.Create(new HttpHostOptions()),
-            Mock.Of<IHttpContextAccessor>(), Mock.Of<IDatasetSummaryProvider>(), lookups);
+        var utils = new DatasetResolver(context, lookups);
 
         counter.Reset();
         (await utils.GetDatasetAsync("acme", "survey")).Slug.ShouldBe("survey");

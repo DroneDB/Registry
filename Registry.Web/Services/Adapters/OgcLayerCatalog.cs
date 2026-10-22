@@ -23,7 +23,7 @@ namespace Registry.Web.Services.Adapters;
 public class OgcLayerCatalog : IOgcLayerCatalog
 {
     private readonly IDdbManager _ddbManager;
-    private readonly IUtils _utils;
+    private readonly IDatasetResolver _datasets;
     private readonly IRecordCache _records;
     private readonly IOgcBuildArtifactPaths _artifacts;
     private readonly IDdbWrapper _ddbWrapper;
@@ -31,13 +31,13 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     private readonly ILogger<OgcLayerCatalog> _logger;
     private static readonly RecordCacheOptions LayersCache = RecordCacheOptions.For(TimeSpan.FromMinutes(5));
 
-    public OgcLayerCatalog(IDdbManager ddbManager, IUtils utils, IRecordCache records,
+    public OgcLayerCatalog(IDdbManager ddbManager, IDatasetResolver datasets, IRecordCache records,
         IOgcBuildArtifactPaths artifacts, IDdbWrapper ddbWrapper,
         IOgcCacheKeys keys,
         ILogger<OgcLayerCatalog> logger)
     {
         _ddbManager = ddbManager;
-        _utils = utils;
+        _datasets = datasets;
         _records = records;
         _artifacts = artifacts;
         _ddbWrapper = ddbWrapper;
@@ -78,7 +78,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     private async Task<List<OgcLayerDto>> ListLayersAsync(string orgSlug, string dsSlug, string folderPath)
     {
         // Callers are the OGC managers, after the request was authorized (OgcAuthorizationFilter)
-        var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug);
+        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug);
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         var entries = ddb.Find(EntryQuery.OfTypes(folderPath, EntryType.GeoRaster, EntryType.Vector));

@@ -53,7 +53,7 @@ public sealed class Rq11NativeGateTests : IDisposable
 
         var org = new Organization { Slug = OrgSlug, Name = "Org", CreationDate = DateTime.UtcNow, OwnerId = "u" };
         var dataset = new Dataset { Slug = DsSlug, InternalRef = Guid.NewGuid(), CreationDate = DateTime.UtcNow, Organization = org };
-        var utils = new Mock<IUtils>();
+        var utils = new Mock<IDatasetResolver>();
         utils.Setup(u => u.GetDatasetAsync(OrgSlug, DsSlug, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(dataset);
         var auth = new Mock<IAuthManager>();
@@ -70,7 +70,7 @@ public sealed class Rq11NativeGateTests : IDisposable
         ddbManager.Setup(m => m.Get(OrgSlug, dataset.InternalRef)).Returns(_ddb.Object);
 
         _services = new ObjectServicesBuilder(TestDb.CreateContext<RegistryContext>())
-            .WithUtils(utils.Object)
+            .WithDatasets(utils.Object)
             .WithAuthManager(auth.Object)
             .WithDdbManager(ddbManager.Object)
             .WithFileSystem(Mock.Of<IFileSystem>())

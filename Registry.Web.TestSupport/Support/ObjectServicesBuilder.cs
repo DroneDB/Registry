@@ -43,7 +43,8 @@ public sealed class ObjectServicesBuilder
     private ILogger<ObjectsManager> _logger = NullLogger<ObjectsManager>.Instance;
     private IOptions<AppSettings>? _settings;
     private IDdbManager? _ddbManager;
-    private IUtils? _utils;
+    private IDatasetResolver? _datasets;
+    private IStorageQuota? _quota;
     private IAuthManager? _authManager;
     private ICacheManager? _cacheManager;
     private IFileSystem? _fileSystem;
@@ -65,7 +66,9 @@ public sealed class ObjectServicesBuilder
     public ObjectServicesBuilder WithLogger(ILogger<ObjectsManager> logger) => Set(() => _logger = logger);
     public ObjectServicesBuilder WithSettings(IOptions<AppSettings> settings) => Set(() => _settings = settings);
     public ObjectServicesBuilder WithDdbManager(IDdbManager ddbManager) => Set(() => _ddbManager = ddbManager);
-    public ObjectServicesBuilder WithUtils(IUtils utils) => Set(() => _utils = utils);
+    public ObjectServicesBuilder WithDatasets(IDatasetResolver datasets) => Set(() => _datasets = datasets);
+
+    public ObjectServicesBuilder WithQuota(IStorageQuota quota) => Set(() => _quota = quota);
     public ObjectServicesBuilder WithAuthManager(IAuthManager authManager) => Set(() => _authManager = authManager);
     public ObjectServicesBuilder WithCacheManager(ICacheManager cacheManager) => Set(() => _cacheManager = cacheManager);
     public ObjectServicesBuilder WithFileSystem(IFileSystem fileSystem) => Set(() => _fileSystem = fileSystem);
@@ -85,12 +88,13 @@ public sealed class ObjectServicesBuilder
         var ddbManager = _ddbManager ?? Mock.Of<IDdbManager>();
         var backgroundJobs = _backgroundJobs ?? new SimpleBackgroundJobsProcessor();
         var cacheManager = _cacheManager ?? Mock.Of<ICacheManager>();
-        var utils = _utils ?? Mock.Of<IUtils>();
+        var datasets = _datasets ?? Mock.Of<IDatasetResolver>();
+        var quota = _quota ?? Mock.Of<IStorageQuota>();
         var authManager = _authManager ?? Mock.Of<IAuthManager>();
         var fileSystem = _fileSystem ?? new FileSystem();
         var buildPendingService = _buildPendingService ??
                                   TestJobs.BuildPendingService(_context, ddbManager, backgroundJobs, cacheManager);
-        var access = new DatasetAccessResolver(utils, authManager, ddbManager, TestPaths.Policy);
+        var access = new DatasetAccessResolver(datasets, authManager, ddbManager, TestPaths.Policy);
         var thumbnails = TestSettings.Options<ThumbnailOptions>(settings);
 
         var services = new ServiceCollection();
@@ -102,7 +106,8 @@ public sealed class ObjectServicesBuilder
         services.AddSingleton(TestSettings.Options<DownloadOptions>(settings));
         services.AddSingleton(TestSettings.Options<ImportSettings>(settings));
         services.AddSingleton(ddbManager);
-        services.AddSingleton(utils);
+        services.AddSingleton(datasets);
+        services.AddSingleton(quota);
         services.AddSingleton(authManager);
         services.AddSingleton<IDatasetAccessResolver>(access);
         services.AddSingleton(cacheManager);
@@ -121,7 +126,7 @@ public sealed class ObjectServicesBuilder
         services.AddSingleton<IUploadManager>(new UploadManager(NullLogger<UploadManager>.Instance, authManager, access,
             ddbManager, fileSystem, thumbnails, TestSettings.Options<ImportSettings>(settings), backgroundJobs,
             buildPendingService,
-            new UploadQuotaGuard(new UploadQuotaLedger(TestSettings.Options<UploadSettings>(settings)), utils),
+            new UploadQuotaGuard(new UploadQuotaLedger(TestSettings.Options<UploadSettings>(settings)), quota),
             new DatasetChangeCoalescer(TestJobs.OgcCacheKeys(), cacheManager, thumbnails.Value.Candidates,
                 TimeSpan.Zero, NullLogger<DatasetChangeCoalescer>.Instance),
             TestPaths.Policy, TestScratch.Provider, indexQueue: _indexQueue));

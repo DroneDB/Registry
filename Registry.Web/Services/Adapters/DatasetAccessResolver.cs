@@ -13,13 +13,13 @@ using Registry.Web.Utilities.Auth;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Scoped <see cref="IDatasetAccessResolver"/>: lookups through <see cref="IUtils"/>, decisions through
+/// Scoped <see cref="IDatasetAccessResolver"/>: lookups through <see cref="IDatasetResolver"/>, decisions through
 /// <see cref="IAuthManager"/>, indexes through <see cref="IDdbManager"/>. The only place that turns a
 /// refused access check into an exception.
 /// </summary>
 public sealed class DatasetAccessResolver : IDatasetAccessResolver
 {
-    private readonly IUtils _utils;
+    private readonly IDatasetResolver _datasets;
     private readonly IAuthManager _authManager;
     private readonly IDdbManager _ddbManager;
     private readonly DatasetPathPolicy _paths;
@@ -27,10 +27,10 @@ public sealed class DatasetAccessResolver : IDatasetAccessResolver
     // Datasets granted in this scope, by (organization, dataset, access): authorize once per request
     private readonly ConcurrentDictionary<(string OrgSlug, string DsSlug, AccessType Access), Dataset> _grants = new();
 
-    public DatasetAccessResolver(IUtils utils, IAuthManager authManager, IDdbManager ddbManager,
+    public DatasetAccessResolver(IDatasetResolver datasets, IAuthManager authManager, IDdbManager ddbManager,
         DatasetPathPolicy paths)
     {
-        _utils = utils;
+        _datasets = datasets;
         _authManager = authManager;
         _ddbManager = ddbManager;
         _paths = paths;
@@ -58,7 +58,7 @@ public sealed class DatasetAccessResolver : IDatasetAccessResolver
     public async Task<Organization> ResolveOrganizationAsync(string orgSlug, AccessType access,
         bool withTracking = false, bool withDatasets = false, CancellationToken ct = default)
     {
-        var organization = await _utils.GetOrganizationAsync(orgSlug, withTracking: withTracking,
+        var organization = await _datasets.GetOrganizationAsync(orgSlug, withTracking: withTracking,
             withDatasets: withDatasets, ct: ct);
         await EnsureAccessAsync(organization, access);
         return organization;
@@ -77,7 +77,7 @@ public sealed class DatasetAccessResolver : IDatasetAccessResolver
         if (_grants.TryGetValue(key, out var granted))
             return granted;
 
-        var dataset = await _utils.GetDatasetAsync(orgSlug, dsSlug, ct: ct);
+        var dataset = await _datasets.GetDatasetAsync(orgSlug, dsSlug, ct: ct);
         await EnsureAccessAsync(dataset, access);
         _grants[key] = dataset;
         return dataset;

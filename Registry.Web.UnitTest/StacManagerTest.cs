@@ -144,16 +144,17 @@ public class StacManagerTest : TestBase
             .ShouldBe(["Name ds-a", "Name ds-b", "Name ds-c"]);
     }
 
-    private (StacManager manager, Mock<IUtils> utils, MemoryDistributedCache cache) CreateCollectionsManager(
+    private (StacManager manager, Mock<IDatasetResolver> utils, MemoryDistributedCache cache) CreateCollectionsManager(
         RegistryContext context, string brokenSlug = null, Func<string, string> names = null)
     {
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), AccessType.Read)).ReturnsAsync(true);
         _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).ReturnsAsync("user");
         names ??= slug => "Name " + slug;
 
-        var utilsMock = new Mock<IUtils>();
-        utilsMock.Setup(o => o.GetLocalHost(It.IsAny<bool>())).Returns("http://localhost");
-        utilsMock.Setup(o => o.GenerateDatasetUrl(It.IsAny<Dataset>(), It.IsAny<bool>()))
+        var utilsMock = new Mock<IDatasetResolver>();
+        var urlsMock = new Mock<IUrlBuilder>();
+        urlsMock.Setup(o => o.GetLocalHost(It.IsAny<bool>())).Returns("http://localhost");
+        urlsMock.Setup(o => o.GenerateDatasetUrl(It.IsAny<Dataset>(), It.IsAny<bool>()))
             .Returns((Dataset d, bool _) => $"http://localhost/orgs/public/ds/{d.Slug}");
         utilsMock.Setup(o => o.GetDatasetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .Throws(new InvalidOperationException("GetDataset must not be called"));
@@ -182,7 +183,7 @@ public class StacManagerTest : TestBase
 
         return (new StacManager(
             new DatasetAccessResolver(utilsMock.Object, _authManagerMock.Object, _ddbManagerMock.Object, TestPaths.Policy),
-            _ddbManagerMock.Object, catalog, new StacUrls(utilsMock.Object), _stacManagerLogger), utilsMock, cache);
+            _ddbManagerMock.Object, catalog, new StacUrls(urlsMock.Object), _stacManagerLogger), utilsMock, cache);
     }
 
     private static RegistryContext GetContextWithDatasets(params string[] slugs)

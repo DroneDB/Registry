@@ -81,14 +81,14 @@ public class DatasetSummaryTests : TestBase
     [TearDown]
     public void TearDown() => _ctx.Dispose();
 
-    private WebUtils CreateUtils(IDatasetSummaryProvider summaries)
+    private StorageQuota CreateUtils(IDatasetSummaryProvider summaries)
     {
         var auth = new Mock<IAuthManager>();
         auth.Setup(a => a.IsUserAdmin()).ReturnsAsync(false);
         _user.Metadata[MagicStrings.MaxStorageKey] = 1_000_000_000L;
         auth.Setup(a => a.GetCurrentUser()).ReturnsAsync(_user);
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings { EnableStorageLimiter = true, DatasetsPath = "/tmp" });
-        return new WebUtils(auth.Object, _ctx, TestSettings.Options<AccountOptions>(settings), TestSettings.Options<HttpHostOptions>(settings), Mock.Of<IHttpContextAccessor>(), summaries);
+        return TestPorts.Quota(auth.Object, _ctx, TestSettings.Options<AccountOptions>(settings), summaries);
     }
 
     [Test]

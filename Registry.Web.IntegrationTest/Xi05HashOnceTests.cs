@@ -130,7 +130,7 @@ public class Xi05HashOnceTests
     {
         var ddbManager = new Mock<IDdbManager>();
         ddbManager.Setup(m => m.Get("org", ds.InternalRef)).Returns(target);
-        var utils = new Mock<IUtils>();
+        var utils = new Mock<IDatasetResolver>();
         utils.Setup(u => u.GetDatasetAsync("org", "ds", It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(ds);
         var auth = new Mock<IAuthManager>();
@@ -145,7 +145,7 @@ public class Xi05HashOnceTests
             new DatasetAccessResolver(utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper,
             jobs.Object, Microsoft.Extensions.Options.Options.Create(new ImportSettings()), cache.Object, fileSystem,
             TestJobs.BuildPendingService(db, ddbManager.Object, jobs.Object, cache.Object), new PushSessionStore(fileSystem),
-            new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), utils.Object), TestPaths.Policy,
+            new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), Mock.Of<IStorageQuota>()), TestPaths.Policy,
             TestScratch.Provider);
     }
 

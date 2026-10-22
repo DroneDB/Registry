@@ -44,7 +44,7 @@ public interface IDatasetAccessResolver
     /// <summary>
     /// The organization <paramref name="orgSlug"/>, after checking that the current user has
     /// <paramref name="access"/> to it. <paramref name="withTracking"/> and <paramref name="withDatasets"/>
-    /// are those of <see cref="IUtils.GetOrganizationAsync"/>.
+    /// are those of <see cref="IDatasetResolver.GetOrganizationAsync"/>.
     /// </summary>
     /// <exception cref="Exceptions.BadRequestException">The slug is missing or invalid.</exception>
     /// <exception cref="Exceptions.NotFoundException">There is no such organization.</exception>

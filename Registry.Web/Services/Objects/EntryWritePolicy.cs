@@ -14,12 +14,12 @@ namespace Registry.Web.Services.Objects;
 /// </summary>
 public sealed class EntryWritePolicy
 {
-    private readonly IUtils _utils;
+    private readonly IStorageQuota _quota;
     private readonly ImportSettings _import;
 
-    public EntryWritePolicy(IUtils utils, IOptions<ImportSettings> import)
+    public EntryWritePolicy(IStorageQuota quota, IOptions<ImportSettings> import)
     {
-        _utils = utils;
+        _quota = quota;
         _import = import.Value;
     }
 
@@ -27,7 +27,7 @@ public sealed class EntryWritePolicy
     /// <exception cref="ExtensionBlockedException">The destination file's extension is not allowed.</exception>
     public async Task EnsureAllowedAsync(string destinationPath, bool isFolder, long bytes)
     {
-        await _utils.CheckCurrentUserStorage(bytes);
+        await _quota.CheckCurrentUserStorage(bytes);
 
         if (!isFolder && !_import.IsExtensionAllowed(destinationPath))
             throw new ExtensionBlockedException(destinationPath, _import, _import.AllowedFileExtensions.Length > 0);

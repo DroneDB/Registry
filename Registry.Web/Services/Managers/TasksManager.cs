@@ -42,7 +42,7 @@ public sealed class TasksManager : ITasksManager
     private readonly IJobIndexWriter _writer;
     private readonly IAuthManager _authManager;
     private readonly IDatasetAccessResolver _access;
-    private readonly IUtils _utils;
+    private readonly IDatasetResolver _datasets;
     private readonly IBackgroundJobsProcessor _processor;
     private readonly IDdbManager _ddbManager;
     private readonly IRecordCache _cache;
@@ -61,7 +61,7 @@ public sealed class TasksManager : ITasksManager
         IJobIndexWriter writer,
         IAuthManager authManager,
         IDatasetAccessResolver access,
-        IUtils utils,
+        IDatasetResolver datasets,
         IBackgroundJobsProcessor processor,
         IDdbManager ddbManager,
         IRecordCache cache,
@@ -80,7 +80,7 @@ public sealed class TasksManager : ITasksManager
         _writer = writer;
         _authManager = authManager;
         _access = access;
-        _utils = utils;
+        _datasets = datasets;
         _processor = processor;
         _ddbManager = ddbManager;
         _cache = cache;
@@ -348,7 +348,7 @@ public sealed class TasksManager : ITasksManager
     {
         try
         {
-            var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug, ct: ct);
+            var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, ct: ct);
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             return ddb.IsBuildPending();
         }
