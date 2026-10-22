@@ -11,7 +11,6 @@ namespace Registry.Web.Services.Ports;
 /// </summary>
 public interface IStacManager
 {
-    Task<StacCatalogDto> GetCatalog();
     Task<JToken> GetStacChild(string orgSlug, string dsSlug, string path = null);
 
     // STAC API 1.0.0 endpoints

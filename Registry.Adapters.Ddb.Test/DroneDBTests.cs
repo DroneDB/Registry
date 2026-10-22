@@ -1119,15 +1119,14 @@ public class NativeDdbWrapperTests : TestBase
     }
 
     [Test]
-    public void Stac_Ok()
+    public void StacData_Ok()
     {
 
         using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
 
         var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
-        var res = DdbWrapper.Stac(ddbPath, "DJI_0025.JPG",
-            "http://localhost:5000/orgs/public/ds/default", "public/default", "http://localhost:5000");
+        var res = DdbWrapper.StacData(ddbPath, "DJI_0025.JPG");
 
         res.ShouldNotBeNull();
 
@@ -1135,15 +1134,14 @@ public class NativeDdbWrapperTests : TestBase
     }
 
     [Test]
-    public void Stac_NullPath_Ok()
+    public void StacData_NullPath_Ok()
     {
 
         using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
 
         var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
-        var res = DdbWrapper.Stac(ddbPath, null,
-            "http://localhost:5000/orgs/public/ds/default", "public/default", "http://localhost:5000");
+        var res = DdbWrapper.StacData(ddbPath, null);
 
         res.ShouldNotBeNull();
 

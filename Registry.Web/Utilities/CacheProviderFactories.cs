@@ -85,4 +85,21 @@ public static class CacheProviderFactories
             return Task.FromResult(BitConverter.GetBytes(visibility));
         };
     }
+
+    /// <summary>
+    /// A cache provider function for a dataset's display name (its root "name" meta): parameters (orgSlug,
+    /// internalRef, ddbManager), the name as UTF-8, empty when the dataset has none.
+    /// </summary>
+    public static Func<object[], Task<byte[]>> CreateDatasetNameProvider()
+    {
+        return parameters =>
+        {
+            var orgSlug = (string)parameters[0];
+            var internalRef = (Guid)parameters[1];
+            var ddbManager = (IDdbManager)parameters[2];
+
+            var name = ddbManager.Get(orgSlug, internalRef).Meta.GetSafe().Name;
+            return Task.FromResult(name == null ? [] : System.Text.Encoding.UTF8.GetBytes(name));
+        };
+    }
 }

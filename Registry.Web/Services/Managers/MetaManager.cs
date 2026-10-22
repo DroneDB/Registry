@@ -44,7 +44,7 @@ public class MetaManager : IMetaManager
         }
         else if (key == SafeMetaManager.NameField && path == null)
         {
-            await _listings.ListingChangedAsync(ds.InternalRef);
+            await _listings.ListingChangedAsync(ds.Organization.Slug, ds.InternalRef);
         }
     }
 

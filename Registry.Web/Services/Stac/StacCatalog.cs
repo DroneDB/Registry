@@ -1,0 +1,83 @@
+#nullable enable
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Registry.Ports;
+using Registry.Web.Data;
+using Registry.Web.Data.Models;
+using Registry.Web.Services.Caching;
+using Registry.Web.Services.Managers;
+using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
+
+namespace Registry.Web.Services.Stac;
+
+/// <summary>
+/// The datasets a caller may list in STAC, their names, and the cache of the per-caller listings (RQ-12).
+/// A listing costs one database query (untracked, with the organizations and their members, so the access check
+/// of a member loads nothing) and no cache round trip per dataset once warm: the visibility and the name of a
+/// dataset come from caches kept in process memory. The listings are keyed by the STAC generation, which
+/// <see cref="IDatasetListingInvalidator"/> renews whenever a dataset changes in a way that can change them.
+/// </summary>
+public sealed class StacCatalog
+{
+    private static readonly RecordCacheOptions ListingCache = RecordCacheOptions.For(TimeSpan.FromMinutes(5));
+
+    private readonly RegistryContext _context;
+    private readonly IAuthManager _authManager;
+    private readonly ICacheManager _cacheManager;
+    private readonly IDdbManager _ddbManager;
+    private readonly IRecordCache _records;
+    private readonly ICacheGenerations _generations;
+
+    public StacCatalog(RegistryContext context, IAuthManager authManager, ICacheManager cacheManager,
+        IDdbManager ddbManager, IRecordCache records, ICacheGenerations generations)
+    {
+        _context = context;
+        _authManager = authManager;
+        _cacheManager = cacheManager;
+        _ddbManager = ddbManager;
+        _records = records;
+        _generations = generations;
+    }
+
+    /// <summary>
+    /// The datasets the current caller can read, ordered by id so that collection offsets and search tokens stay
+    /// stable across requests. No native index is opened (the visibility comes from its cache).
+    /// </summary>
+    public async Task<List<Dataset>> ReadableDatasetsAsync(CancellationToken ct = default)
+    {
+        var datasets = await _context.Datasets
+            .AsNoTrackingWithIdentityResolution()
+            .Include(ds => ds.Organization).ThenInclude(org => org.Users)
+            .OrderBy(ds => ds.Id)
+            .ToListAsync(ct);
+
+        var readable = new List<Dataset>(datasets.Count);
+        foreach (var ds in datasets)
+        {
+            if (await _authManager.RequestAccess(ds, AccessType.Read))
+                readable.Add(ds);
+        }
+
+        return readable;
+    }
+
+    /// <summary>The display name of a dataset, or null when it has none.</summary>
+    public Task<string?> NameAsync(Dataset ds) =>
+        _cacheManager.GetDatasetNameAsync(ds.Organization.Slug, ds.InternalRef, _ddbManager);
+
+    /// <summary>
+    /// A listing of the current caller, cached in the current STAC generation under the key
+    /// <paramref name="keyOf"/> makes of the generation and the caller's name.
+    /// </summary>
+    public async Task<T> ListingAsync<T>(Func<string, string, string> keyOf, Func<Task<T>> create)
+    {
+        var generation = await _generations.CurrentAsync(CacheCategories.StacGeneration);
+        var key = keyOf(generation, await _authManager.SafeGetCurrentUserName());
+        return await _records.GetOrCreateRecordAsync(key, _ => create(), ListingCache);
+    }
+}

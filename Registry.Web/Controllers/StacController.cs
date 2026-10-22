@@ -11,6 +11,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Services.Stac;
 
 namespace Registry.Web.Controllers;
 
@@ -399,19 +400,17 @@ public class StacController : ControllerBaseEx
         return Ok(await _stacManager.GetStacChild(orgSlug, dsSlug, DecodePath(pathBase64)));
     }
 
-    /// <summary>The item path of a STAC child URL; a segment that is not Base64 is the client's error.</summary>
+    /// <summary>
+    /// The item path of a STAC child URL, Base64 in either alphabet (the links of paths whose standard Base64 holds
+    /// '/' or '+' are URL-safe); a segment that is not Base64 is the client's error.
+    /// </summary>
     private static string DecodePath(string pathBase64)
     {
         if (pathBase64 == null)
             return null;
 
-        try
-        {
-            return Encoding.UTF8.GetString(Convert.FromBase64String(pathBase64));
-        }
-        catch (FormatException)
-        {
-            throw new BadRequestException("The item path is not valid Base64");
-        }
+        return StacIds.TryDecodePath(pathBase64, out var path)
+            ? path
+            : throw new BadRequestException("The item path is not valid Base64");
     }
 }

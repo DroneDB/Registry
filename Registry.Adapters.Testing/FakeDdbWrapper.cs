@@ -33,11 +33,11 @@ public class FakeDdbWrapper : IDdbWrapper
     /// <summary>The libddb version the fixtures were recorded with (<c>Contract/README.md</c>).</summary>
     public const string Version = "1.12.2";
 
-    /// <summary>The STAC arguments of the recorded <c>DDBStac</c>/<c>DDBStacItemCollection</c> calls.</summary>
-    public const string RecordedCollectionRoot = "https://hub.example/orgs/contract/ds/fixtures";
-
-    public const string RecordedCatalogRoot = "https://hub.example";
-    public const string RecordedStacId = "contract";
+    /// <summary>
+    /// The folder name of the contract dataset: libddb's data-only Collection takes its title (and, without a
+    /// readme, its description) from it when the dataset has no name.
+    /// </summary>
+    public const string RecordedDatasetFolder = "dataset";
 
     private const string DroneImage = "DJI_0018.JPG";
     private const string FilePrefix = "file://";
@@ -64,9 +64,8 @@ public class FakeDdbWrapper : IDdbWrapper
 
     private static readonly Dictionary<string, string> StacItemFixtures = new(StringComparer.Ordinal)
     {
-        ["ortho.tif"] = "stac-item-georaster",
-        ["sub/img.jpg"] = "stac-item-image",
-        [DroneImage] = "stac-item-drone-image"
+        ["ortho.tif"] = "stac-data-item-georaster",
+        ["sub/img.jpg"] = "stac-data-item-image"
     };
 
     private const string RasterFile = "ortho.tif";
@@ -302,41 +301,32 @@ public class FakeDdbWrapper : IDdbWrapper
 
     // ---------------------------------------------------------------- STAC
 
-    public virtual JToken Stac(string ddbPath, string? entry, string stacCollectionRoot, string id,
-        string stacCatalogRoot)
+    public virtual JToken StacData(string ddbPath, string? entry)
     {
         var relative = Generic(entry);
-        var call = $"Stac({ddbPath}, {entry}, {stacCollectionRoot}, {id}, {stacCatalogRoot})";
-        string? fixture;
-        if (relative.Length == 0)
-            fixture = "stac-collection";
-        else
-            fixture = StacItemFixtures.GetValueOrDefault(relative);
-
+        var call = $"StacData({ddbPath}, {entry})";
+        var fixture = relative.Length == 0 ? "stac-data-collection" : StacItemFixtures.GetValueOrDefault(relative);
         if (fixture == null)
             throw NoFixture(call);
 
-        var output = WithStacRoots(ContractFixture.Load(fixture).Output, stacCollectionRoot, stacCatalogRoot);
+        var output = ContractFixture.Load(fixture).Output;
         if (relative.Length == 0)
-            WithCollectionId(output, id);
-        else
-            WithItemCollection(output, id);
+            WithDatasetFolder(output, ddbPath);
 
         return Deserialize<JToken>(output);
     }
 
-    public virtual JToken StacItemCollection(string ddbPath, string stacCollectionRoot, string id,
-        string stacCatalogRoot, string? bbox, string? datetime, int limit, int offset)
+    /// <summary>The recorded item collection (every entry with a geometry), paged as libddb pages it.</summary>
+    public virtual JToken StacItemCollectionData(string ddbPath, string? bbox, string? datetime, int limit, int offset)
     {
-        var call = $"StacItemCollection({ddbPath}, {stacCollectionRoot}, {id}, {stacCatalogRoot}, {bbox}, {datetime}, {limit}, {offset})";
-        if (!string.IsNullOrEmpty(bbox) || !string.IsNullOrEmpty(datetime) || limit != 10 || offset != 0)
+        var call = $"StacItemCollectionData({ddbPath}, {bbox}, {datetime}, {limit}, {offset})";
+        if (!string.IsNullOrEmpty(bbox) || !string.IsNullOrEmpty(datetime))
             throw NoFixture(call);
 
-        var output = WithStacRoots(ContractFixture.Load("stac-item-collection").Output, stacCollectionRoot,
-            stacCatalogRoot);
-        foreach (var feature in output["features"]?.Children<JObject>() ?? [])
-            WithItemCollection(feature, id);
-
+        var output = (JObject)ContractFixture.Load("stac-data-item-collection").Output;
+        var page = new JArray(output["features"]!.Skip(Math.Max(offset, 0)).Take(limit <= 0 ? 10 : limit));
+        output["features"] = page;
+        output["numberReturned"] = page.Count;
         return Deserialize<JToken>(output);
     }
 
@@ -579,26 +569,13 @@ public class FakeDdbWrapper : IDdbWrapper
     private static JToken WithRoot(JToken output, string root) =>
         MapStrings(output, s => s.Replace(ContractFixture.RootPlaceholder, root, StringComparison.Ordinal));
 
-    private static JToken WithStacRoots(JToken output, string collectionRoot, string catalogRoot) =>
-        MapStrings(output, s =>
-            s.StartsWith(RecordedCollectionRoot, StringComparison.Ordinal)
-                ? collectionRoot + s[RecordedCollectionRoot.Length..]
-                : s.StartsWith(RecordedCatalogRoot, StringComparison.Ordinal)
-                    ? catalogRoot + s[RecordedCatalogRoot.Length..]
-                    : s);
-
-    /// <summary>libddb writes the id as the collection id, and as its title and description when the dataset has no name or readme.</summary>
-    private static void WithCollectionId(JToken collection, string id)
+    /// <summary>libddb names an unnamed Collection after its dataset folder: the folder of the dataset asked about.</summary>
+    private static void WithDatasetFolder(JToken collection, string ddbPath)
     {
-        foreach (var key in new[] { "id", "title", "description" })
-            if ((string?)collection[key] == RecordedStacId)
-                collection[key] = id;
-    }
-
-    private static void WithItemCollection(JToken item, string id)
-    {
-        if ((string?)item["collection"] == RecordedStacId)
-            item["collection"] = id;
+        var folder = Path.GetFileName(Path.TrimEndingDirectorySeparator(ddbPath));
+        foreach (var key in new[] { "title", "description" })
+            if ((string?)collection[key] == RecordedDatasetFolder)
+                collection[key] = folder;
     }
 
     private static JToken MapStrings(JToken token, Func<string, string> map)

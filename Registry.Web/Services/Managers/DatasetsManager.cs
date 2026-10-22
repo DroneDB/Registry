@@ -253,7 +253,7 @@ public class DatasetsManager : IDatasetsManager
         if (dataset.Visibility.HasValue)
             await _listings.VisibilityChangedAsync(orgSlug, ds.InternalRef);
         else if (!string.IsNullOrWhiteSpace(dataset.Name))
-            await _listings.ListingChangedAsync(ds.InternalRef);
+            await _listings.ListingChangedAsync(orgSlug, ds.InternalRef);
     }
 
 
@@ -270,7 +270,7 @@ public class DatasetsManager : IDatasetsManager
         await _context.SaveChangesAsync();
 
         // It leaves every listing
-        await _listings.ListingChangedAsync(internalRef);
+        await _listings.ListingChangedAsync(orgSlug, internalRef);
 
         // Schedule background cleanup job for: cancelling active jobs, removing JobIndex entries, deleting filesystem
         string? jobId = null;
@@ -326,7 +326,7 @@ public class DatasetsManager : IDatasetsManager
         await _context.SaveChangesAsync();
 
         // The listings link to the old slug
-        await _listings.ListingChangedAsync(ds.InternalRef);
+        await _listings.ListingChangedAsync(orgSlug, ds.InternalRef);
     }
 
     [Obsolete("Use meta")]
@@ -475,7 +475,7 @@ public class DatasetsManager : IDatasetsManager
                 }
 
                 // Invalidate caches
-                await _listings.ListingChangedAsync(dataset.InternalRef);
+                await _listings.ListingChangedAsync(sourceOrgSlug, dataset.InternalRef);
 
                 result.Success = true;
                 _logger.LogInformation("Successfully moved dataset '{DsSlug}' from '{SourceOrgSlug}' to '{DestOrgSlug}'",

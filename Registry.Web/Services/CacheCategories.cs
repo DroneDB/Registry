@@ -49,12 +49,6 @@ public static class CacheCategories
     public static string StacCollections(string generation, string userName, int limit, int offset) =>
         $"stac-collections-g{generation}-{userName}-{limit}-{offset}";
 
-    /// <summary>The link of a public dataset in the legacy STAC catalog.</summary>
-    public static string StacCatalogLink(string internalRef) => $"stac-catalog-{internalRef}";
-
-    /// <summary>A dataset's display name, read from its meta.</summary>
-    public static string StacDatasetName(string internalRef) => $"stac-name-{internalRef}";
-
     /// <summary>The read-only lookup of a dataset by its slugs (with its organization's members).</summary>
     public static string DatasetLookup(string orgSlug, string dsSlug) => $"ds-lookup:{orgSlug}/{dsSlug}";
 

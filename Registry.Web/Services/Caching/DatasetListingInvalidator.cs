@@ -19,24 +19,23 @@ public interface IDatasetListingInvalidator
     Task VisibilityChangedAsync(string orgSlug, Guid internalRef, CancellationToken ct = default);
 
     /// <summary>The dataset's name, slugs or existence changed: every listing (and its cached name) goes.</summary>
-    Task ListingChangedAsync(Guid internalRef, CancellationToken ct = default);
+    Task ListingChangedAsync(string orgSlug, Guid internalRef, CancellationToken ct = default);
 }
 
 /// <summary>Default <see cref="IDatasetListingInvalidator"/>.</summary>
 public sealed class DatasetListingInvalidator(ICacheManager cacheManager, IDdbManager ddbManager,
-    ICacheGenerations generations, IRecordCache records) : IDatasetListingInvalidator
+    ICacheGenerations generations) : IDatasetListingInvalidator
 {
     public async Task VisibilityChangedAsync(string orgSlug, Guid internalRef, CancellationToken ct = default)
     {
         // The visibility first: a listing computed after the new generation reads the new visibility
         await cacheManager.RemoveDatasetVisibilityAsync(orgSlug, internalRef, ddbManager);
-        await ListingChangedAsync(internalRef, ct);
+        await ListingChangedAsync(orgSlug, internalRef, ct);
     }
 
-    public async Task ListingChangedAsync(Guid internalRef, CancellationToken ct = default)
+    public async Task ListingChangedAsync(string orgSlug, Guid internalRef, CancellationToken ct = default)
     {
-        await records.RemoveAsync(CacheCategories.StacDatasetName(internalRef.ToString()), ct);
-        await records.RemoveAsync(CacheCategories.StacCatalogLink(internalRef.ToString()), ct);
+        await cacheManager.RemoveDatasetNameAsync(orgSlug, internalRef, ddbManager);
         await generations.RenewAsync(CacheCategories.StacGeneration, ct);
     }
 }

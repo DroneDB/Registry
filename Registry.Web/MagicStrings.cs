@@ -18,6 +18,7 @@ public static class MagicStrings
     public const string BuildPendingTrackerCacheSeed = "build-pending-tracker";
     public const string TasksListCacheSeed = "tasks-list";
     public const string DatasetVisibilityCacheSeed = "dataset-visibility";
+    public const string DatasetNameCacheSeed = "dataset-name";
     public const string OrganizationsListCacheSeed = "organizations-list";
     public const string DatasetsListCacheSeed = "datasets-list";
     public const string OgcRenderCacheSeed = "ogc-render";

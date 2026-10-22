@@ -986,7 +986,7 @@ public class DatasetManagerTest : TestBase
         await datasetsManager.MoveToOrganization("source-org", ["dataset-1", "dataset-2"], "dest-org");
 
         // Assert - Verify ClearCache was called for each moved dataset
-        _listingsMock.Verify(x => x.ListingChangedAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+        _listingsMock.Verify(x => x.ListingChangedAsync("source-org", It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     [Test]

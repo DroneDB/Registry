@@ -33,4 +33,22 @@ public static class DatasetVisibilityCacheExtensions
     public static Task RemoveDatasetVisibilityAsync(this ICacheManager cacheManager, string orgSlug, Guid internalRef,
         IDdbManager ddbManager) =>
         cacheManager.RemoveAsync(MagicStrings.DatasetVisibilityCacheSeed, orgSlug, orgSlug, internalRef, ddbManager);
+
+    /// <summary>
+    /// The display name of a dataset from the <see cref="MagicStrings.DatasetNameCacheSeed"/> cache (read from the
+    /// index meta on a miss), null when it has none. Kept in process memory like the visibility, so a listing of
+    /// many datasets makes no cache round trip per dataset once warm.
+    /// </summary>
+    public static async Task<string?> GetDatasetNameAsync(this ICacheManager cacheManager, string orgSlug,
+        Guid internalRef, IDdbManager ddbManager)
+    {
+        var name = await cacheManager.GetAsync(MagicStrings.DatasetNameCacheSeed, orgSlug, orgSlug, internalRef,
+            ddbManager);
+        return name.Length == 0 ? null : System.Text.Encoding.UTF8.GetString(name);
+    }
+
+    /// <summary>Drops the cached display name of a dataset.</summary>
+    public static Task RemoveDatasetNameAsync(this ICacheManager cacheManager, string orgSlug, Guid internalRef,
+        IDdbManager ddbManager) =>
+        cacheManager.RemoveAsync(MagicStrings.DatasetNameCacheSeed, orgSlug, orgSlug, internalRef, ddbManager);
 }

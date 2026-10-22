@@ -444,16 +444,14 @@ public class NativeDdbWrapper : IDdbWrapper
 
     // ---------------------------------------------------------------- STAC
 
-    public JToken Stac(string ddbPath, string? entry, string stacCollectionRoot, string id, string stacCatalogRoot) =>
-        NativeCall.Invoke<JToken>(nameof(NativeDdb.DDBStac),
-            (out IntPtr output) => NativeDdb.DDBStac(ddbPath, entry ?? string.Empty, stacCollectionRoot, id,
-                stacCatalogRoot, out output));
+    public JToken StacData(string ddbPath, string? entry) =>
+        NativeCall.Invoke<JToken>(nameof(NativeDdb.DDBStacData),
+            (out IntPtr output) => NativeDdb.DDBStacData(ddbPath, entry ?? string.Empty, out output));
 
-    public JToken StacItemCollection(string ddbPath, string stacCollectionRoot, string id, string stacCatalogRoot,
-        string? bbox, string? datetime, int limit, int offset) =>
-        NativeCall.Invoke<JToken>(nameof(NativeDdb.DDBStacItemCollection),
-            (out IntPtr output) => NativeDdb.DDBStacItemCollection(ddbPath, stacCollectionRoot, id, stacCatalogRoot,
-                bbox ?? string.Empty, datetime ?? string.Empty, limit, offset, out output));
+    public JToken StacItemCollectionData(string ddbPath, string? bbox, string? datetime, int limit, int offset) =>
+        NativeCall.Invoke<JToken>(nameof(NativeDdb.DDBStacItemCollectionData),
+            (out IntPtr output) => NativeDdb.DDBStacItemCollectionData(ddbPath, bbox ?? string.Empty,
+                datetime ?? string.Empty, limit, offset, out output));
 
     // ---------------------------------------------------------------- thumbnails and tiles
 

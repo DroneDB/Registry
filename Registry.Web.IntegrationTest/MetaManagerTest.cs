@@ -90,7 +90,7 @@ internal class MetaManagerTest : TestBase
 
         var metaManager = new MetaManager(_metaManagerLogger,
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, ddbManager, TestPaths.Policy),
-            new DatasetListingInvalidator(_cacheManager, ddbManager, TestCaches.Generations(), TestCaches.Records()));
+            new DatasetListingInvalidator(_cacheManager, ddbManager, TestCaches.Generations()));
 
         var res = await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
@@ -122,7 +122,7 @@ internal class MetaManagerTest : TestBase
 
         var metaManager = new MetaManager(_metaManagerLogger,
             new DatasetAccessResolver(webUtils, _authManagerMock.Object, ddbManager, TestPaths.Policy),
-            new DatasetListingInvalidator(_cacheManager, ddbManager, TestCaches.Generations(), TestCaches.Records()));
+            new DatasetListingInvalidator(_cacheManager, ddbManager, TestCaches.Generations()));
 
         var a = await metaManager.Add(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "annotations", "{\"test\":123}");

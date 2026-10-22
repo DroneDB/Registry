@@ -28,6 +28,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Registry.Web.Services.Caching;
+using Registry.Web.Services.Stac;
 
 namespace Registry.Web.Test;
 
@@ -54,55 +55,20 @@ public class StacManagerTest : TestBase
     }
 
     [Test]
-    public async Task GetCatalog_Ok()
+    public async Task GetLandingPage_LinksEveryReadableDatasetWithItsName()
     {
         await using var context = GetTest1Context();
+        var (stacManager, _, _) = CreateCollectionsManager(context, names: _ => "Default");
 
-        const string stacUrl = "http://localhost/orgs/public/ds/default/stac";
-        const string datasetStacUrl = "http://localhost/orgs/public/ds/default/stac/catalog.json";
-        const string expectedName = "Default";
+        var landing = await stacManager.GetLandingPage();
 
-        _settingsOptions.Value = _settings;
-
-        var utilsMock = new Mock<IUtils>();
-        utilsMock.Setup(o => o.GenerateStacUrl()).Returns(stacUrl);
-        utilsMock.Setup(o => o.GenerateDatasetStacUrl(It.IsAny<string>(), It.IsAny<string>()))
-            .Returns(datasetStacUrl);
-
-        var metaMock = new Mock<Registry.Ports.DroneDB.IMetaManager>();
-        metaMock.Setup(o => o.Get<int>(SafeMetaManager.VisibilityField, null))
-            .Returns((int)Visibility.Public);
-        metaMock.Setup(o => o.Get<string>(SafeMetaManager.NameField, null))
-            .Returns(expectedName);
-
-        var ddbMock = new Mock<IDDB>();
-        ddbMock.Setup(o => o.Meta).Returns(metaMock.Object);
-
-        _ddbManagerMock.Setup(o => o.Get(It.IsAny<string>(), It.IsAny<Guid>()))
-            .Returns(ddbMock.Object);
-
-        var cache = new MemoryDistributedCache(
-            Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
-
-        var stacManager = new StacManager(_authManagerMock.Object,
-            new DatasetAccessResolver(utilsMock.Object, _authManagerMock.Object, _ddbManagerMock.Object, TestPaths.Policy), context,
-            utilsMock.Object, _ddbManagerMock.Object, TestCaches.Records(cache), TestCaches.Generations(cache), _stacManagerLogger, TestCaches.WithDatasetVisibility(cache));
-
-        var catalog = await stacManager.GetCatalog();
-
-        catalog.ShouldNotBeNull();
-        catalog.Type.ShouldBe("Catalog");
-        catalog.StacVersion.ShouldBe("1.1.0");
-
-        var selfLink = catalog.Links.Single(l => l.Relationship == "self");
-        selfLink.Href.ShouldBe(stacUrl);
-
-        var rootLink = catalog.Links.Single(l => l.Relationship == "root");
-        rootLink.Href.ShouldBe(stacUrl);
-
-        var childLink = catalog.Links.Single(l => l.Relationship == "child");
-        childLink.Href.ShouldBe(datasetStacUrl);
-        childLink.Title.ShouldBe(expectedName);
+        landing.Type.ShouldBe("Catalog");
+        landing.StacVersion.ShouldBe("1.1.0");
+        landing.Links.Single(l => l.Relationship == "self").Href.ShouldBe("http://localhost/stac");
+        landing.Links.Single(l => l.Relationship == "root").Href.ShouldBe("http://localhost/stac");
+        var child = landing.Links.Single(l => l.Relationship == "child");
+        child.Href.ShouldBe("http://localhost/stac/collections/public/default");
+        child.Title.ShouldBe("Default");
     }
 
     [Test]
@@ -179,10 +145,11 @@ public class StacManagerTest : TestBase
     }
 
     private (StacManager manager, Mock<IUtils> utils, MemoryDistributedCache cache) CreateCollectionsManager(
-        RegistryContext context, string brokenSlug = null)
+        RegistryContext context, string brokenSlug = null, Func<string, string> names = null)
     {
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), AccessType.Read)).ReturnsAsync(true);
         _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).ReturnsAsync("user");
+        names ??= slug => "Name " + slug;
 
         var utilsMock = new Mock<IUtils>();
         utilsMock.Setup(o => o.GetLocalHost(It.IsAny<bool>())).Returns("http://localhost");
@@ -194,29 +161,28 @@ public class StacManagerTest : TestBase
         foreach (var ds in context.Datasets.Include(d => d.Organization).ToArray())
         {
             var metaMock = new Mock<Registry.Ports.DroneDB.IMetaManager>();
-            metaMock.Setup(o => o.Get<string>(SafeMetaManager.NameField, null)).Returns("Name " + ds.Slug);
+            metaMock.Setup(o => o.Get<string>(SafeMetaManager.NameField, null)).Returns(names(ds.Slug));
 
             var ddbMock = new Mock<IDDB>();
             ddbMock.Setup(o => o.Meta).Returns(metaMock.Object);
+            ddbMock.Setup(o => o.DatasetFolderPath).Returns("/datasets/public/" + ds.InternalRef);
             var slug = ds.Slug;
             if (slug == brokenSlug)
-                ddbMock.Setup(o => o.GetStac(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), null))
-                    .Throws(new InvalidOperationException("corrupt index"));
+                ddbMock.Setup(o => o.GetStacData(null)).Throws(new InvalidOperationException("corrupt index"));
             else
-                ddbMock.Setup(o => o.GetStac(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), null))
-                    .Returns((string id, string _, string _, string _) =>
-                        new JObject { ["id"] = id, ["type"] = "Collection" });
+                ddbMock.Setup(o => o.GetStacData(null)).Returns(() => new JObject { ["type"] = "Collection" });
 
             _ddbManagerMock.Setup(o => o.Get(ds.Organization.Slug, ds.InternalRef)).Returns(ddbMock.Object);
         }
 
         var cache = new MemoryDistributedCache(
             Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
+        var catalog = new StacCatalog(context, _authManagerMock.Object, TestCaches.WithDatasetVisibility(cache),
+            _ddbManagerMock.Object, TestCaches.Records(cache), TestCaches.Generations(cache));
 
-        return (new StacManager(_authManagerMock.Object,
-            new DatasetAccessResolver(utilsMock.Object, _authManagerMock.Object, _ddbManagerMock.Object, TestPaths.Policy), context,
-            utilsMock.Object, _ddbManagerMock.Object,
-            TestCaches.Records(cache), TestCaches.Generations(cache), _stacManagerLogger, TestCaches.WithDatasetVisibility(cache)), utilsMock, cache);
+        return (new StacManager(
+            new DatasetAccessResolver(utilsMock.Object, _authManagerMock.Object, _ddbManagerMock.Object, TestPaths.Policy),
+            _ddbManagerMock.Object, catalog, new StacUrls(utilsMock.Object), _stacManagerLogger), utilsMock, cache);
     }
 
     private static RegistryContext GetContextWithDatasets(params string[] slugs)

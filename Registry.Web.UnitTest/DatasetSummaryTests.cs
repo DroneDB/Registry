@@ -120,32 +120,4 @@ public class DatasetSummaryTests : TestBase
 
         _infoCalls.ShouldBe(2);
     }
-
-    [Test]
-    public async Task StacCatalog_PrivateDatasets_NoNativeCallsOnceCached()
-    {
-        var visibilityReads = 0;
-        var meta = new Mock<Registry.Ports.DroneDB.IMetaManager>();
-        meta.Setup(m => m.Get<int>(SafeMetaManager.VisibilityField, null))
-            .Returns(() => { visibilityReads++; return (int)Visibility.Private; });
-        var ddb = new Mock<IDDB>();
-        ddb.Setup(d => d.Meta).Returns(meta.Object);
-        var ddbManager = new Mock<IDdbManager>();
-        ddbManager.Setup(m => m.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
-
-        var utils = new Mock<IUtils>();
-        utils.Setup(u => u.GenerateStacUrl()).Returns("http://localhost/stac");
-        var cache = new MemoryDistributedCache(
-            Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
-        var auth = Mock.Of<IAuthManager>();
-        var stac = new StacManager(auth, new DatasetAccessResolver(utils.Object, auth, ddbManager.Object, TestPaths.Policy), _ctx, utils.Object,
-            ddbManager.Object, TestCaches.Records(cache), TestCaches.Generations(cache),
-            CreateTestLogger<StacManager>(), TestCaches.WithDatasetVisibility(cache));
-
-        (await stac.GetCatalog()).Links.ShouldNotContain(l => l.Relationship == "child");
-        visibilityReads.ShouldBe(OwnedDatasets);
-
-        await stac.GetCatalog();
-        visibilityReads.ShouldBe(OwnedDatasets, "the second request reads no index");
-    }
 }

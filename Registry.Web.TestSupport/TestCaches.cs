@@ -39,12 +39,13 @@ public static class TestCaches
     public static ICacheManager InMemoryWithDatasetVisibility() =>
         WithDatasetVisibility(new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions())));
 
-    /// <summary>A <see cref="CacheManager"/> over <paramref name="store"/> with the dataset visibility seed.</summary>
+    /// <summary>A <see cref="CacheManager"/> over <paramref name="store"/> with the dataset visibility and name seeds.</summary>
     public static ICacheManager WithDatasetVisibility(IDistributedCache store)
     {
         var cacheManager = new CacheManager(store, NullLogger<CacheManager>.Instance, new NullCacheKeyScanner(NullLogger<NullCacheKeyScanner>.Instance));
         cacheManager.Register(MagicStrings.DatasetVisibilityCacheSeed,
             CacheProviderFactories.CreateDatasetVisibilityProvider());
+        cacheManager.Register(MagicStrings.DatasetNameCacheSeed, CacheProviderFactories.CreateDatasetNameProvider());
         return cacheManager;
     }
 }

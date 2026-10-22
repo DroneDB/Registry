@@ -214,11 +214,20 @@ public interface IDdbWrapper
 
     public List<MetaDump> MetaDump(string ddbPath, string? ids = null);
 
-    public JToken Stac(string ddbPath, string? entry, string stacCollectionRoot, string id,
-        string stacCatalogRoot);
+    /// <summary>
+    /// The data-only STAC document (<c>DDBStacData</c>, XI-09): the Item of <paramref name="entry"/>, or the
+    /// Collection of the dataset when it is null or empty, without any member made from a URL or an ID ("id",
+    /// "collection", "links", asset "href"s), which Registry owns. Keys in libddb's (sorted) order.
+    /// </summary>
+    /// <exception cref="DdbNotFoundException">No entry has this path.</exception>
+    public JToken StacData(string ddbPath, string? entry);
 
-    public JToken StacItemCollection(string ddbPath, string stacCollectionRoot, string id,
-        string stacCatalogRoot, string? bbox, string? datetime, int limit, int offset);
+    /// <summary>
+    /// The data-only STAC ItemCollection (<c>DDBStacItemCollectionData</c>, XI-09): the entries with a geometry,
+    /// in path order, filtered by <paramref name="bbox"/> ("minX,minY,maxX,maxY", EPSG:4326) and
+    /// <paramref name="datetime"/> (RFC 3339 instant or interval), paged; <c>numberMatched</c> counts every match.
+    /// </summary>
+    public JToken StacItemCollectionData(string ddbPath, string? bbox, string? datetime, int limit, int offset);
 
     /// <summary>
     /// Rescans all files in the index to update metadata

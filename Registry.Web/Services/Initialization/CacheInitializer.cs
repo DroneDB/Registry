@@ -57,6 +57,9 @@ internal sealed class CacheInitializer : IStartupTask
         }
     }
 
+    /// <summary>Dataset names: dropped on every change through the API, kept an hour after their last use otherwise.</summary>
+    private static readonly TimeSpan DatasetNameCacheExpiration = TimeSpan.FromHours(1);
+
     /// <summary>WMS GetMap renders are kept 10 minutes after their last use.</summary>
     private static readonly TimeSpan OgcRenderCacheExpiration = TimeSpan.FromMinutes(10);
 
@@ -103,6 +106,13 @@ internal sealed class CacheInitializer : IStartupTask
 
         _logger.LogDebug("Registered dataset visibility cache provider with expiration: {Expiration}",
             appSettings.DatasetVisibilityCacheExpiration?.ToString() ?? "default");
+
+        // Dataset display names (the STAC listings name every readable dataset): in memory like the visibility
+        cacheManager.Register(
+            MagicStrings.DatasetNameCacheSeed,
+            CacheProviderFactories.CreateDatasetNameProvider(),
+            DatasetNameCacheExpiration,
+            appSettings.DatasetLookupCacheExpiration ?? DatasetLookupCache.DefaultExpiration);
 
         // Register build pending tracker cache provider (used by BuildPendingService)
         cacheManager.Register(

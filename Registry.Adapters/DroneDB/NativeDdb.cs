@@ -254,14 +254,6 @@ internal static unsafe partial class NativeDdb
     // ------------------------------------------------------------------ STAC
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBStac(string ddbPath, string entry, string stacCollectionRoot, string id,
-        string stacCatalogRoot, out IntPtr output);
-
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBStacItemCollection(string ddbPath, string stacCollectionRoot, string id,
-        string stacCatalogRoot, string bbox, string datetime, int limit, int offset, out IntPtr output);
-
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBStacData(string? ddbPath, string? entry, out IntPtr output);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]

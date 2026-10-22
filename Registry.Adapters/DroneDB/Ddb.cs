@@ -437,17 +437,11 @@ public class DDB : IDDB
         return Wrapper.GetStamp(DatasetFolderPath);
     }
 
-    public JToken GetStac(string id, string stacCollectionRoot, string stacCatalogRoot, string path = null)
-    {
-        return Wrapper.Stac(DatasetFolderPath, path, stacCollectionRoot, id, stacCatalogRoot);
-    }
+    public JToken GetStacData(string path = null) => Wrapper.StacData(DatasetFolderPath, path);
 
-    public JToken GetStacItemCollection(string id, string stacCollectionRoot, string stacCatalogRoot,
-        string bbox = null, string datetime = null, int limit = 10, int offset = 0)
-    {
-        return Wrapper.StacItemCollection(DatasetFolderPath, stacCollectionRoot, id, stacCatalogRoot,
-            bbox, datetime, limit, offset);
-    }
+    public JToken GetStacItemCollectionData(string bbox = null, string datetime = null, int limit = 10,
+        int offset = 0) =>
+        Wrapper.StacItemCollectionData(DatasetFolderPath, bbox, datetime, limit, offset);
 
     public List<RescanResult> RescanIndex(RescanOptions? options = null)
     {

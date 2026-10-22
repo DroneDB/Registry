@@ -57,7 +57,6 @@ public class CacheCategoriesTest
         CacheCategories.DatasetLookup("o", "d").ShouldBe("ds-lookup:o/d");
         CacheCategories.UploadReceipt("o", "d", "u").ShouldBe("upload-receipt-o-d-u");
         CacheCategories.TasksList("o", "d").ShouldBe("tasks-list:o/d");
-        CacheCategories.StacDatasetName("r").ShouldBe("stac-name-r");
         CacheCategories.PushSession("/p/session.json").ShouldBe("push-session:/p/session.json");
     }
 }
