@@ -61,9 +61,11 @@ public static class TestJobs
                 .GetRequiredService<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>(),
             NullLogger<Services.HeavyTasks.TaskFileIndexer>.Instance);
 
+    /// <summary>The OGC cache generations on a memory cache of their own.</summary>
+    public static OgcCacheKeys OgcCacheKeys() =>
+        new(new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions())));
+
     /// <summary>The dataset cache invalidator over <paramref name="cache"/> (OGC keys on a memory cache).</summary>
     public static DatasetCacheInvalidator CacheInvalidator(ICacheManager cache, JobStorage? storage = null) =>
-        new(NullLogger<DatasetCacheInvalidator>.Instance, cache,
-            new OgcCacheKeys(new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()))),
-            storage ?? NewStorage());
+        new(NullLogger<DatasetCacheInvalidator>.Instance, cache, OgcCacheKeys(), storage ?? NewStorage());
 }

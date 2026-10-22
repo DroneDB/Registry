@@ -20,6 +20,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
+using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Shouldly;
 using Entry = Registry.Ports.DroneDB.Entry;
@@ -109,8 +110,8 @@ public class ObjectsManagerThumbnailTests : TestBase
     }
 
     // The build-pending service is the builder default: a real one on the SUT context and these mocks.
-    private ObjectsManager CreateManager() =>
-        new ObjectsManagerBuilder(TestDb.CreateContext<RegistryContext>())
+    private ObjectServices CreateManager() =>
+        new ObjectServicesBuilder(TestDb.CreateContext<RegistryContext>())
             .WithLogger(_logger)
             .WithSettings(_settingsOptions)
             .WithDdbManager(_ddbManagerMock.Object)
@@ -149,7 +150,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         var mgr = CreateManager();
 
         var ex = await Should.ThrowAsync<NotFoundException>(
-            () => mgr.GenerateThumbnailData(OrgSlug, DsSlug, "data/cloud.laz", null));
+            () => mgr.Renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "data/cloud.laz", null));
 
         ex.Message.ShouldContain("not available yet");
         // Pre-cache guard: one manifest call, nothing was generated or cached
@@ -165,8 +166,9 @@ public class ObjectsManagerThumbnailTests : TestBase
         SetupBuild("data/cloud.laz", EntryType.PointCloud, "abc123", BuildState.Complete, Copc);
 
         var mgr = CreateManager();
-        var result = await mgr.GenerateThumbnailData(OrgSlug, DsSlug, "data/cloud.laz", null);
+        var result = await mgr.Renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "data/cloud.laz", null);
 
+        result.ShouldNotBeNull();
         result.Data.ShouldBe(ThumbBytes);
         result.ContentType.ShouldBe("image/webp");
         _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.Is<string>(p => IsCopcArtifact(p)), It.IsAny<int>(),
@@ -179,7 +181,8 @@ public class ObjectsManagerThumbnailTests : TestBase
         SetupEntry("photo.jpg", EntryType.GeoImage, "img1");
 
         var mgr = CreateManager();
-        var result = await mgr.GenerateThumbnailData(OrgSlug, DsSlug, "photo.jpg", null);
+        var result = await mgr.Renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "photo.jpg", null);
+        result.ShouldNotBeNull();
 
         // GeoImage has no rendered build role (libddb's entry types): no manifest call, the
         // thumbnail is generated from the file itself
@@ -198,7 +201,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         _ddbMock.Setup(x => x.GetEntry("photos")).Returns(folder);
 
         var ex = await Should.ThrowAsync<BadRequestException>(
-            () => CreateManager().GenerateThumbnailData(OrgSlug, DsSlug, "photos", null));
+            () => CreateManager().Renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "photos", null));
 
         ex.Message.ShouldContain("folder");
         _ddbMock.Verify(x => x.Search(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
@@ -211,7 +214,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         _ddbMock.Setup(x => x.GetEntry("missing.jpg")).Returns((Entry?)null);
 
         await Should.ThrowAsync<BadRequestException>(
-            () => CreateManager().GenerateThumbnailData(OrgSlug, DsSlug, "missing.jpg", null));
+            () => CreateManager().Renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "missing.jpg", null));
 
         _ddbMock.Verify(x => x.GetEntry("missing.jpg"), Times.Once);
         _ddbMock.Verify(x => x.Search(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
@@ -229,7 +232,7 @@ public class ObjectsManagerThumbnailTests : TestBase
             .Callback<string, string, object[]>((_, _, p) => read = p)
             .ReturnsAsync(ThumbBytes);
 
-        await CreateManager().GenerateThumbnailData(OrgSlug, DsSlug, "photo.jpg", 256, recreate: true);
+        await CreateManager().Renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "photo.jpg", 256, recreate: true);
 
         removed.ShouldNotBeNull();
         read.ShouldNotBeNull();
@@ -246,7 +249,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         var mgr = CreateManager();
 
         await Should.ThrowAsync<NotFoundException>(
-            () => mgr.GenerateTileData(OrgSlug, DsSlug, "ortho.tif", 1, 0, 0, false));
+            () => mgr.Renders.GenerateTileDataAsync(OrgSlug, DsSlug, "ortho.tif", 1, 0, 0, false));
 
         _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()), Times.Never);
         _ddbMock.Verify(x => x.GenerateTile(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(),
@@ -262,7 +265,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         var mgr = CreateManager();
 
         await Should.ThrowAsync<NotFoundException>(
-            () => mgr.GenerateThumbnailDataEx(OrgSlug, DsSlug, "data/cloud.laz", null));
+            () => mgr.Renders.GenerateThumbnailDataExAsync(OrgSlug, DsSlug, "data/cloud.laz", null, new RasterVisualization()));
 
         _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()), Times.Never);
     }
@@ -276,7 +279,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         var mgr = CreateManager();
 
         await Should.ThrowAsync<NotFoundException>(
-            () => mgr.GenerateTileDataEx(OrgSlug, DsSlug, "data/cloud.laz", 1, 0, 0, false));
+            () => mgr.Renders.GenerateTileDataExAsync(OrgSlug, DsSlug, "data/cloud.laz", 1, 0, 0, false, new RasterVisualization()));
 
         _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()), Times.Never);
     }
@@ -289,7 +292,7 @@ public class ObjectsManagerThumbnailTests : TestBase
 
         var mgr = CreateManager();
 
-        await Should.ThrowAsync<NotFoundException>(() => mgr.GetRasterInfo(OrgSlug, DsSlug, "ortho.tif"));
+        await Should.ThrowAsync<NotFoundException>(() => mgr.Raster.GetRasterInfoAsync(OrgSlug, DsSlug, "ortho.tif"));
 
         _ddbMock.Verify(x => x.GetRasterInfo(It.IsAny<string>()), Times.Never);
     }
@@ -305,7 +308,7 @@ public class ObjectsManagerThumbnailTests : TestBase
             TestBuilds.Directory(ArtifactRoles.PointCloudEpt, "ept", "ept.json", legacy: true));
 
         var mgr = CreateManager();
-        var json = await mgr.GetRasterInfo(OrgSlug, DsSlug, "data/cloud.laz");
+        var json = await mgr.Raster.GetRasterInfoAsync(OrgSlug, DsSlug, "data/cloud.laz");
 
         json.ShouldBe("{}");
         _ddbMock.Verify(x => x.GetRasterInfo(".ddb/build/abc123/ept/ept.json"), Times.Once);
@@ -320,7 +323,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         var mgr = CreateManager();
 
         await Should.ThrowAsync<NotFoundException>(
-            () => mgr.ExportRaster(OrgSlug, DsSlug, "ortho.tif"));
+            () => mgr.Raster.ExportRasterAsync(OrgSlug, DsSlug, "ortho.tif", new RasterVisualization()));
 
         _ddbMock.Verify(x => x.ExportRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
@@ -336,7 +339,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         var mgr = CreateManager();
 
         await Should.ThrowAsync<NotFoundException>(
-            () => mgr.EstimateExportSize(OrgSlug, DsSlug, "ortho.tif"));
+            () => mgr.Raster.EstimateExportSizeAsync(OrgSlug, DsSlug, "ortho.tif"));
 
         _ddbMock.Verify(x => x.GetRasterInfo(It.IsAny<string>()), Times.Never);
     }
@@ -344,7 +347,7 @@ public class ObjectsManagerThumbnailTests : TestBase
     // ---- Raster analysis endpoint family: same pre-native 404 guard ----
 
     private async Task GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
-        Func<ObjectsManager, Task> invoke, Expression<Action<IDDB>> nativeCall)
+        Func<ObjectServices, Task> invoke, Expression<Action<IDDB>> nativeCall)
     {
         SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");
         SetupBuild("ortho.tif", EntryType.GeoRaster, "raster1", BuildState.None);
@@ -362,52 +365,52 @@ public class ObjectsManagerThumbnailTests : TestBase
     [Test]
     public Task GetRasterValueInfo_GeoRaster_MissingCogArtifact_ThrowsNotFound() =>
         GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
-            m => m.GetRasterValueInfo(OrgSlug, DsSlug, "ortho.tif"),
+            m => m.Raster.GetRasterValueInfoAsync(OrgSlug, DsSlug, "ortho.tif"),
             x => x.GetRasterValueInfo(It.IsAny<string>()));
 
     [Test]
     public Task GetRasterPointValue_GeoRaster_MissingCogArtifact_ThrowsNotFound() =>
         GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
-            m => m.GetRasterPointValue(OrgSlug, DsSlug, "ortho.tif", 1, 2),
+            m => m.Raster.GetRasterPointValueAsync(OrgSlug, DsSlug, "ortho.tif", 1, 2),
             x => x.GetRasterPointValue(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()));
 
     [Test]
     public Task GetRasterAreaStats_GeoRaster_MissingCogArtifact_ThrowsNotFound() =>
         GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
-            m => m.GetRasterAreaStats(OrgSlug, DsSlug, "ortho.tif", 0, 0, 10, 10),
+            m => m.Raster.GetRasterAreaStatsAsync(OrgSlug, DsSlug, "ortho.tif", 0, 0, 10, 10),
             x => x.GetRasterAreaStats(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(),
                 It.IsAny<int>(), It.IsAny<int>()));
 
     [Test]
     public Task GetRasterProfile_GeoRaster_MissingCogArtifact_ThrowsNotFound() =>
         GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
-            m => m.GetRasterProfile(OrgSlug, DsSlug, "ortho.tif", "LINESTRING(0 0, 1 1)", 10),
+            m => m.Raster.GetRasterProfileAsync(OrgSlug, DsSlug, "ortho.tif", "LINESTRING(0 0, 1 1)", 10),
             x => x.GetRasterProfile(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>()));
 
     [Test]
     public Task CalculateVolume_GeoRaster_MissingCogArtifact_ThrowsNotFound() =>
         GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
-            m => m.CalculateVolume(OrgSlug, DsSlug, "ortho.tif", "{}", null, 0.0),
+            m => m.Raster.CalculateVolumeAsync(OrgSlug, DsSlug, "ortho.tif", "{}", null, 0.0),
             x => x.CalculateVolume(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<double>()));
 
     [Test]
     public Task DetectStockpile_GeoRaster_MissingCogArtifact_ThrowsNotFound() =>
         GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
-            m => m.DetectStockpile(OrgSlug, DsSlug, "ortho.tif", 0.0, 0.0, 5.0, 0.5f),
+            m => m.Raster.DetectStockpileAsync(OrgSlug, DsSlug, "ortho.tif", 0.0, 0.0, 5.0, 0.5f),
             x => x.DetectStockpile(It.IsAny<string>(), It.IsAny<double>(), It.IsAny<double>(),
                 It.IsAny<double>(), It.IsAny<float>()));
 
     [Test]
     public Task DetectAllStockpiles_GeoRaster_MissingCogArtifact_ThrowsNotFound() =>
         GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
-            m => m.DetectAllStockpiles(OrgSlug, DsSlug, "ortho.tif", 0.5f, 10.0, 50),
+            m => m.Raster.DetectAllStockpilesAsync(OrgSlug, DsSlug, "ortho.tif", 0.5f, 10.0, 50),
             x => x.DetectAllStockpiles(It.IsAny<string>(), It.IsAny<float>(), It.IsAny<double>(),
                 It.IsAny<int>()));
 
     [Test]
     public Task GenerateContours_GeoRaster_MissingCogArtifact_ThrowsNotFound() =>
         GeoRasterAnalysisGuard_MissingCog_ThrowsNotFound(
-            m => m.GenerateContours(OrgSlug, DsSlug, "ortho.tif", 1.0, null, 0.0, null, null, 0.0, 0),
+            m => m.Raster.GenerateContoursAsync(OrgSlug, DsSlug, "ortho.tif", new ContourOptions(1.0, null, 0.0, null, null, 0.0, 0)),
             x => x.GenerateContours(It.IsAny<string>(), It.IsAny<double?>(), It.IsAny<int?>(),
                 It.IsAny<double>(), It.IsAny<double?>(), It.IsAny<double?>(), It.IsAny<double>(),
                 It.IsAny<int>()));

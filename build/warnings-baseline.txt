@@ -19,7 +19,6 @@ Registry.Common/HttpHelper.cs CA1068 1
 Registry.Ports/DroneDB/BatchAddResult.cs CS8618 5
 Registry.Ports/DroneDB/Delta.cs CS8618 4
 Registry.Ports/DroneDB/Entry.cs CS8618 3
-Registry.Ports/DroneDB/EntryBuildStatus.cs CS8618 1
 Registry.Ports/DroneDB/EntrySummary.cs CS8618 2
 Registry.Ports/DroneDB/IDdbBuild.cs CS8625 3
 Registry.Ports/DroneDB/IDdbIndex.cs CS8625 3
@@ -101,7 +100,7 @@ Registry.Web.UnitTest/JobIndexSyncIndexingTests.cs CA1001 1
 Registry.Web.UnitTest/JobIndexWriterPreparationTests.cs CA1806 1
 Registry.Web.UnitTest/ListingMarshallingTests.cs CS1734 1
 Registry.Web.UnitTest/ObjectsControllerDownloadTests.cs CA1861 8
-Registry.Web.UnitTest/ObjectsManagerThumbnailTests.cs CA1310 2
+Registry.Web.UnitTest/ObjectsManagerThumbnailTests.cs CA1310 1
 Registry.Web.UnitTest/Ogc/OgcAuthorizationFilterTest.cs CS8632 3
 Registry.Web.UnitTest/Ogc/OgcRenderCachingTests.cs CA1822 1
 Registry.Web.UnitTest/Ogc/OgcRequestParserTest.cs CA1859 1
@@ -131,14 +130,12 @@ Registry.Web.UnitTest/UsersManagerTest.cs CA1311 1
 Registry.Web/Controllers/DatasetsController.cs CA1711 1
 Registry.Web/Controllers/DatasetsController.cs CS8632 2
 Registry.Web/Controllers/ObjectUploadsController.cs CA1859 1
-Registry.Web/Controllers/ObjectsController.cs CA1310 2
-Registry.Web/Controllers/ObjectsController.cs CA1711 3
-Registry.Web/Controllers/ObjectsController.cs CA1859 1
-Registry.Web/Controllers/ObjectsController.cs CS8632 22
+Registry.Web/Controllers/ObjectsController.cs CA1711 1
 Registry.Web/Controllers/Ogc/OgcApiController.cs CS8632 2
 Registry.Web/Controllers/Ogc/WcsController.cs CS8632 2
 Registry.Web/Controllers/Ogc/WfsController.cs CS8632 6
 Registry.Web/Controllers/Ogc/WmsController.cs CS8632 1
+Registry.Web/Controllers/RasterAnalysisController.cs CA1711 2
 Registry.Web/Controllers/StacController.cs CA1822 1
 Registry.Web/Controllers/SystemController.cs CS8632 1
 Registry.Web/Exceptions/OgcException.cs CS8632 2
@@ -155,7 +152,6 @@ Registry.Web/Models/DTO/Ogc/OgcApiDtos.cs CS8632 7
 Registry.Web/Models/DTO/Ogc/OgcLayerDto.cs CS8632 4
 Registry.Web/Models/RescanFilter.cs CA1870 1
 Registry.Web/Program.cs CA1309 1
-Registry.Web/Services/Adapters/BuildArtifactResolver.cs CA1305 2
 Registry.Web/Services/Adapters/BuildPendingService.cs CS0419 1
 Registry.Web/Services/Adapters/BuildStatusService.cs CA1859 1
 Registry.Web/Services/Adapters/ChunkStore.cs CA1001 1
@@ -179,9 +175,6 @@ Registry.Web/Services/Managers/AdminTasksManager.cs CA1859 1
 Registry.Web/Services/Managers/DatasetsManager.cs CS8632 1
 Registry.Web/Services/Managers/DdbManager.cs CS8632 1
 Registry.Web/Services/Managers/LdapLoginManager.cs CA1305 2
-Registry.Web/Services/Managers/ObjectsManager.cs CA1310 2
-Registry.Web/Services/Managers/ObjectsManager.cs CA1725 3
-Registry.Web/Services/Managers/ObjectsManager.cs CS8632 32
 Registry.Web/Services/Managers/OgcApiFeaturesManager.cs CS8632 2
 Registry.Web/Services/Managers/OgcApiTilesManager.cs CS8632 1
 Registry.Web/Services/Managers/OgcManagerBase.cs CA1051 6
@@ -213,9 +206,6 @@ Registry.Web/Services/Ports/IDatasetIndexQueue.cs CS0419 1
 Registry.Web/Services/Ports/IDatasetSummaryProvider.cs CA1716 1
 Registry.Web/Services/Ports/IDatasetsManager.cs CA1716 1
 Registry.Web/Services/Ports/IMetaManager.cs CA1716 2
-Registry.Web/Services/Ports/IObjectsManager.cs CA1711 2
-Registry.Web/Services/Ports/IObjectsManager.cs CA1716 1
-Registry.Web/Services/Ports/IObjectsManager.cs CS8632 22
 Registry.Web/Services/Ports/IOgcLayerCatalog.cs CS8632 4
 Registry.Web/Services/Ports/IOgcServiceManagers.cs CS8632 15
 Registry.Web/Services/Ports/IOrganizationsManager.cs CA1716 1

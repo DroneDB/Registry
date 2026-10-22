@@ -15,6 +15,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
+using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Shouldly;
@@ -155,9 +156,7 @@ public class Rq11BuildManifestTests
         var destinationDs = Seed.Dataset(context, org, "dst", destinationRef);
         await context.SaveChangesAsync();
 
-        var manager = ObjectsManager(context, sourceDs, destinationDs);
-
-        await manager.Transfer(Org, "src", "roads.shp", Org, "dst", "roads.shp");
+        await Transfers(context, sourceDs, destinationDs).TransferAsync(Org, "src", "roads.shp", Org, "dst", "roads.shp");
 
         var destination = new DDB(Path.Combine(_root, Org, destinationRef.ToString()), _wrapper);
         var moved = _resolver.GetBuild(destination, "roads.shp");
@@ -166,7 +165,7 @@ public class Rq11BuildManifestTests
         moved.Build.MissingDependencies.ShouldNotBeEmpty();
     }
 
-    private ObjectsManager ObjectsManager(RegistryContext context, params Dataset[] datasets)
+    private IEntryTransferService Transfers(RegistryContext context, params Dataset[] datasets)
     {
         var settings = TestSettings.Options(new AppSettings { DatasetsPath = _root, EnableStorageLimiter = false });
         var utils = new Mock<IUtils>();
@@ -176,7 +175,7 @@ public class Rq11BuildManifestTests
         var auth = new Mock<IAuthManager>();
         auth.Setup(a => a.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
 
-        return new ObjectsManagerBuilder(context)
+        return new ObjectServicesBuilder(context)
             .WithSettings(settings)
             .WithDdbManager(new DdbManager(TestSettings.Options<StorageOptions>(settings),
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<DdbManager>.Instance, _wrapper))
@@ -184,6 +183,6 @@ public class Rq11BuildManifestTests
             .WithAuthManager(auth.Object)
             .WithDdbWrapper(_wrapper)
             .WithBuildArtifactResolver(_resolver)
-            .Build();
+            .Build().Transfers;
     }
 }

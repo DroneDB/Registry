@@ -14,6 +14,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Initialization;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Managers.Wcs;
+using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
@@ -36,9 +37,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IOrganizationsManager, OrganizationsManager>();
         services.AddScoped<IDatasetsManager, DatasetsManager>();
         services.AddScoped<IStacManager, StacManager>();
-        services.AddScoped<IObjectsManager, ObjectsManager>();
-        // libddb's build manifest by role (XI-04): render sources, build downloads, build files, build copies
-        services.AddSingleton<IBuildArtifactResolver, BuildArtifactResolver>();
+        services.AddObjectsSlice();
         services.AddScoped<ICadCrsManager, CadCrsManager>();
         services.AddScoped<IShareManager, ShareManager>();
         services.AddScoped<IPushManager, PushManager>();
@@ -71,6 +70,32 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddSingleton<IDownloadLimiter, DownloadLimiter>();
         services.AddSingleton<IClientIpResolver, ClientIpResolver>();
 
+        return services;
+    }
+
+    /// <summary>
+    /// The objects slice (RQ-11): the entry, transfer, render, build and raster services the object controllers
+    /// use, their shared collaborators, and the <see cref="IObjectsManager"/> facade for the other features.
+    /// </summary>
+    public static IServiceCollection AddObjectsSlice(this IServiceCollection services)
+    {
+        // libddb's build manifest by role (XI-04): render sources, build downloads, build files, build copies
+        services.AddSingleton<IBuildArtifactResolver, BuildArtifactResolver>();
+
+        services.AddScoped<RenderSources>();
+        services.AddScoped<EntryJobs>();
+        services.AddScoped<EntryChangeNotifier>();
+        services.AddScoped<EntryWritePolicy>();
+
+        services.AddScoped<IEntryQueryService, EntryQueryService>();
+        services.AddScoped<IEntryCommandService, EntryCommandService>();
+        services.AddScoped<IEntryTransferService, EntryTransferService>();
+        services.AddScoped<IObjectRenderService, ObjectRenderService>();
+        services.AddScoped<IBuildQueryService, BuildQueryService>();
+        services.AddScoped<IRasterAnalysisService, RasterAnalysisService>();
+        services.AddScoped<IRasterProcessingService, RasterProcessingService>();
+
+        services.AddScoped<IObjectsManager, ObjectsManager>();
         return services;
     }
 

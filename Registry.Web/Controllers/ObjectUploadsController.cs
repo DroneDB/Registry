@@ -1,5 +1,4 @@
 #nullable enable
-using Registry.Ports;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -15,6 +14,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Uploads;
 using Registry.Web.Utilities;
@@ -36,21 +36,19 @@ public class ObjectUploadsController : ControllerBaseEx
 
     private readonly IUploadManager _uploads;
     private readonly IChunkedUploadManager _chunks;
-    private readonly IObjectsManager _objectsManager;
+    private readonly IEntryCommandService _commands;
     private readonly ILogger<ObjectUploadsController> _logger;
     private readonly FormOptions _formOptions;
     private readonly UploadSettings _uploadSettings;
     private readonly ApiErrorResponder _errors;
-    private readonly IFileSystem _fs;
 
-    public ObjectUploadsController(IUploadManager uploads, IChunkedUploadManager chunks, IObjectsManager objectsManager,
+    public ObjectUploadsController(IUploadManager uploads, IChunkedUploadManager chunks, IEntryCommandService commands,
         ILogger<ObjectUploadsController> logger, IOptions<FormOptions> formOptions, IOptions<UploadSettings> uploadSettings,
-        ApiErrorResponder errors, IFileSystem fs)
+        ApiErrorResponder errors)
     {
-        _fs = fs;
         _uploads = uploads;
         _chunks = chunks;
-        _objectsManager = objectsManager;
+        _commands = commands;
         _logger = logger;
         _formOptions = formOptions.Value;
         _uploadSettings = uploadSettings.Value;
@@ -108,7 +106,7 @@ public class ObjectUploadsController : ControllerBaseEx
                     // Refuse a destination before its first byte is written
                     if (part.Path != null) _uploads.ValidatePath(ctx, part.Path);
                     return await _uploads.StreamAsync(ctx, part.Body, HttpContext.RequestAborted);
-                }, file => _fs.TryDelete(file.TempPath));
+                }, _uploads.Discard);
         }
         catch (Exception ex)
         {
@@ -121,7 +119,7 @@ public class ObjectUploadsController : ControllerBaseEx
         if (form.Files.Count == 0)
         {
             // No file part: folder creation (path provided as a form field)
-            var folder = await _objectsManager.AddNew(orgSlug, dsSlug, form.GetField("path"));
+            var folder = await _commands.CreateFolderAsync(orgSlug, dsSlug, form.GetField("path"));
             return Created(orgSlug, dsSlug, folder);
         }
 

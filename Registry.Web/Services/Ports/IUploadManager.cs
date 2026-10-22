@@ -51,6 +51,9 @@ public interface IUploadManager
     /// </summary>
     Task<IReadOnlyList<UploadPartResultDto>> CommitAsync(UploadRequestContext ctx, IReadOnlyList<StreamedPart> parts);
 
+    /// <summary>Deletes the temp file of a part that will not be committed (the request failed while reading it).</summary>
+    void Discard(StreamedFile file);
+
     /// <summary>Records that the request failed before its files were committed.</summary>
     Task FailAsync(UploadRequestContext ctx, System.Exception error);
 

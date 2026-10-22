@@ -25,42 +25,20 @@ using Registry.Web.Test.Support;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// Tests for ObjectsManager.InvalidateAllDatasetCaches to ensure
-/// all cache categories are correctly invalidated.
+/// Tests for <see cref="DatasetCacheInvalidator"/> (every dataset cache, used by the tools and the
+/// rescan) to ensure all cache categories are correctly invalidated.
 /// </summary>
 [TestFixture]
-[Category(TestCategories.Native)]
 public class InvalidateAllDatasetCachesTest : TestBase
 {
     private Mock<ICacheManager> _cacheManagerMock;
-    private ObjectsManager _objectsManager;
-
-    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper();
+    private DatasetCacheInvalidator _invalidator;
 
     [SetUp]
     public void Setup()
     {
         _cacheManagerMock = new Mock<ICacheManager>();
-
-        // Only the cache manager is observed; the rest are builder defaults (loose mocks, a real
-        // FileSystem, SimpleBackgroundJobsProcessor and BuildPendingService) or the fixture's wiring.
-        var context = TestDb.CreateContext<RegistryContext>();
-        var settingsOptions = TestSettings.Options(new AppSettings());
-        var ddbFactoryMock = new Mock<IDdbManager>();
-        var authManagerMock = new Mock<IAuthManager>();
-
-        var webUtils = new WebUtils(authManagerMock.Object, context, TestSettings.Options<AccountOptions>(settingsOptions), TestSettings.Options<HttpHostOptions>(settingsOptions),
-            Mock.Of<IHttpContextAccessor>(), TestCaches.Summaries(ddbFactoryMock.Object));
-
-        _objectsManager = new ObjectsManagerBuilder(context)
-            .WithLogger(CreateTestLogger<ObjectsManager>())
-            .WithSettings(settingsOptions)
-            .WithDdbManager(ddbFactoryMock.Object)
-            .WithUtils(webUtils)
-            .WithAuthManager(authManagerMock.Object)
-            .WithCacheManager(_cacheManagerMock.Object)
-            .WithDdbWrapper(DdbWrapper)
-            .Build();
+        _invalidator = TestJobs.CacheInvalidator(_cacheManagerMock.Object);
     }
 
     [Test]
@@ -71,7 +49,7 @@ public class InvalidateAllDatasetCachesTest : TestBase
         var expectedCategory = CacheCategories.ForDataset(orgSlug, dsSlug);
         var expectedThumbCategory = CacheCategories.ForDatasetThumbnail(orgSlug, dsSlug);
 
-        await _objectsManager.InvalidateAllDatasetCaches(orgSlug, dsSlug);
+        await _invalidator.InvalidateAllDatasetCachesAsync(orgSlug, dsSlug);
 
         // Verify tile cache invalidation
         _cacheManagerMock.Verify(
@@ -105,7 +83,7 @@ public class InvalidateAllDatasetCachesTest : TestBase
         const string orgSlug = "acme";
         const string dsSlug = "survey-2024";
 
-        await _objectsManager.InvalidateAllDatasetCaches(orgSlug, dsSlug);
+        await _invalidator.InvalidateAllDatasetCachesAsync(orgSlug, dsSlug);
 
         // Verify the category string format is correct
         _cacheManagerMock.Verify(
@@ -120,7 +98,7 @@ public class InvalidateAllDatasetCachesTest : TestBase
     [Test]
     public async Task InvalidateAllDatasetCaches_TotalCallsAreFive()
     {
-        await _objectsManager.InvalidateAllDatasetCaches("org", "ds");
+        await _invalidator.InvalidateAllDatasetCachesAsync("org", "ds");
 
         // Total: tile + thumb + ogc-render + build-pending + ds-thumb = 5 calls
         _cacheManagerMock.Verify(

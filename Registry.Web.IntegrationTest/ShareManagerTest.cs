@@ -1005,7 +1005,7 @@ class ShareManagerTest : TestBase
     #region SUT factories
 
     private ObjectsManager ObjectsManagerFor(RegistryContext context, IUtils utils, IDdbManager ddbManager) =>
-        new ObjectsManagerBuilder(context)
+        new ObjectServicesBuilder(context)
             .WithLogger(_objectManagerLogger)
             .WithSettings(_settingsOptions)
             .WithDdbManager(ddbManager)
@@ -1016,7 +1016,7 @@ class ShareManagerTest : TestBase
             .WithBackgroundJobs(_backgroundJobsProcessor)
             .WithDdbWrapper(DdbWrapper)
             .WithBuildPendingService(_buildPendingService)
-            .Build();
+            .Build().Manager;
 
     #endregion
 

@@ -25,6 +25,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
+using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
 using Registry.Web.Utilities;
@@ -109,13 +110,13 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils, _ddbFactoryMock.Object).Build();
 
-        await Should.ThrowAsync<BadRequestException>(async () => await objectManager.List(null, MagicStrings.DefaultDatasetSlug, "test"));
+        await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Queries.ListAsync(null, MagicStrings.DefaultDatasetSlug, "test"));
 
-        await Should.ThrowAsync<BadRequestException>(async () => await objectManager.List(MagicStrings.PublicOrganizationSlug, null, "test"));
+        await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, null, "test"));
 
-        await Should.ThrowAsync<BadRequestException>(async () => await objectManager.List(string.Empty, MagicStrings.DefaultDatasetSlug, "test"));
+        await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Queries.ListAsync(string.Empty, MagicStrings.DefaultDatasetSlug, "test"));
 
-        await Should.ThrowAsync<BadRequestException>(async () => await objectManager.List(MagicStrings.PublicOrganizationSlug, string.Empty, "test"));
+        await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, string.Empty, "test"));
     }
 
     [Test]
@@ -139,12 +140,12 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
-        var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        var res = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             null, true);
 
         res.Count().ShouldBe(24);
 
-        res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Pub");
+        res = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Pub");
 
         // We dont consider the naked folder 'Pub'
         res.Count().ShouldBe(4);
@@ -170,24 +171,24 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
-        var res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        var res = await objectManager.Queries.SearchAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "DJI*");
 
         res.Count().ShouldBe(18);
 
-        res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        res = await objectManager.Queries.SearchAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "*003*");
         res.Count().ShouldBe(6);
 
-        res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        res = await objectManager.Queries.SearchAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "*0033*");
         res.Count().ShouldBe(1);
 
-        res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        res = await objectManager.Queries.SearchAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "*217*", "Pub");
         res.Count().ShouldBe(1);
 
-        res = await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        res = await objectManager.Queries.SearchAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "*201*", "Pub", false);
         res.Count().ShouldBe(1);
     }
@@ -218,7 +219,7 @@ public class ObjectManagerTest : TestBase
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
         var objectManager = ObjectsManagerFor(context, webUtils, ddbWrapper: wrapper.Object).Build();
 
-        var res = (await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        var res = (await objectManager.Queries.SearchAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "dji_003?.jpg", null, true, EntryType.GeoImage)).ToArray();
 
         res.Length.ShouldBe(6, "same answer as the C# expression over the full listing");
@@ -254,7 +255,7 @@ public class ObjectManagerTest : TestBase
             _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
         var objectManager = ObjectsManagerFor(context, webUtils, ddbWrapper: wrapper.Object).Build();
 
-        await objectManager.Search(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        await objectManager.Queries.SearchAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             query, null, true, EntryType.GeoImage);
 
         wrapper.Verify(w => w.ListEntries(It.IsAny<string>(), It.Is<EntryQuery>(q =>
@@ -282,7 +283,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
-        await Should.ThrowAsync<NotFoundException>(async () => await objectManager.Get(MagicStrings.PublicOrganizationSlug,
+        await Should.ThrowAsync<NotFoundException>(async () => await objectManager.Queries.GetAsync(MagicStrings.PublicOrganizationSlug,
                 MagicStrings.DefaultDatasetSlug, "weriufbgeiughegr"));
     }
 
@@ -313,7 +314,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
-        var obj = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        var obj = await objectManager.Queries.GetAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "DJI_0019.JPG");
 
         obj.Name.ShouldBe(expectedName);
@@ -346,7 +347,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
-        var res = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        var res = await objectManager.Queries.GetAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             expectedName);
 
         res.Name.ShouldBe(expectedName);
@@ -378,7 +379,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
-        var res = await objectManager.DownloadStream(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        var res = await objectManager.Queries.DownloadAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             fileNames);
 
         res.Name.ShouldEndWith(".zip");
@@ -394,7 +395,7 @@ public class ObjectManagerTest : TestBase
         foreach (var entry in archive.Entries)
         {
             Debug.WriteLine(entry.FullName);
-            var obj = await objectManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+            var obj = await objectManager.Queries.GetAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 entry.FullName);
 
             // We could use entry.Crc32 but md5 comes so handy
@@ -432,7 +433,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
-        var res = await objectManager.DownloadStream(organizationSlug, datasetSlug,
+        var res = await objectManager.Queries.DownloadAsync(organizationSlug, datasetSlug,
             fileNames);
 
         res.Name.ShouldEndWith(".zip");
@@ -448,7 +449,7 @@ public class ObjectManagerTest : TestBase
         foreach (var entry in archive.Entries)
         {
             Debug.WriteLine(entry.FullName);
-            var obj = await objectManager.Get(organizationSlug, datasetSlug,
+            var obj = await objectManager.Queries.GetAsync(organizationSlug, datasetSlug,
                 entry.FullName);
 
             // We could use entry.Crc32 but md5 comes so handy
@@ -461,7 +462,7 @@ public class ObjectManagerTest : TestBase
     }
 
 
-    private ObjectsManager BuildObjectsManagerForBulkDownloadTest(string datasetsPath, RegistryContext context,
+    private ObjectServices BuildObjectsManagerForBulkDownloadTest(string datasetsPath, RegistryContext context,
         bool disableAnonymousBulkDownloads, User currentUser)
     {
         var settings = TestSettings.Default;
@@ -493,7 +494,7 @@ public class ObjectManagerTest : TestBase
             disableAnonymousBulkDownloads: true, currentUser: null);
 
         await Should.ThrowAsync<UnauthorizedException>(async () =>
-            await manager.DownloadStream(MagicStrings.PublicOrganizationSlug,
+            await manager.Queries.DownloadAsync(MagicStrings.PublicOrganizationSlug,
                 MagicStrings.DefaultDatasetSlug, fileNames));
     }
 
@@ -507,7 +508,7 @@ public class ObjectManagerTest : TestBase
             disableAnonymousBulkDownloads: true, currentUser: null);
 
         await Should.ThrowAsync<UnauthorizedException>(async () =>
-            await manager.DownloadStream(MagicStrings.PublicOrganizationSlug,
+            await manager.Queries.DownloadAsync(MagicStrings.PublicOrganizationSlug,
                 MagicStrings.DefaultDatasetSlug, null));
     }
 
@@ -520,7 +521,7 @@ public class ObjectManagerTest : TestBase
         var manager = BuildObjectsManagerForBulkDownloadTest(test.TestFolder, context,
             disableAnonymousBulkDownloads: true, currentUser: null);
 
-        var res = await manager.DownloadStream(MagicStrings.PublicOrganizationSlug,
+        var res = await manager.Queries.DownloadAsync(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, ["DJI_0019.JPG"]);
 
         res.ShouldNotBeNull();
@@ -537,7 +538,7 @@ public class ObjectManagerTest : TestBase
         var manager = BuildObjectsManagerForBulkDownloadTest(test.TestFolder, context,
             disableAnonymousBulkDownloads: true, currentUser: new User { UserName = "tester" });
 
-        var res = await manager.DownloadStream(MagicStrings.PublicOrganizationSlug,
+        var res = await manager.Queries.DownloadAsync(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, fileNames);
 
         res.ShouldNotBeNull();
@@ -555,7 +556,7 @@ public class ObjectManagerTest : TestBase
         var manager = BuildObjectsManagerForBulkDownloadTest(test.TestFolder, context,
             disableAnonymousBulkDownloads: false, currentUser: null);
 
-        var res = await manager.DownloadStream(MagicStrings.PublicOrganizationSlug,
+        var res = await manager.Queries.DownloadAsync(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, fileNames);
 
         res.ShouldNotBeNull();
@@ -587,24 +588,24 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
-        var res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        var res = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             fileName);
 
         res.Count().ShouldBe(1);
 
-        await objectManager.Delete(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName);
+        await objectManager.Manager.Delete(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName);
 
-        res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        res = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             fileName);
 
         res.Count().ShouldBe(0);
 
         var newFileUrl = TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName);
 
-        var ret = await objectManager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        var ret = await objectManager.Manager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             fileName, CommonUtils.SmartDownloadData(newFileUrl));
 
-        res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        res = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             fileName);
 
         res.Count().ShouldBe(1);
@@ -632,8 +633,8 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.GetCurrentUser()).ReturnsAsync(new User { Id = "cad-tester", UserName = "cad" });
         const string org = MagicStrings.PublicOrganizationSlug, ds = MagicStrings.DefaultDatasetSlug;
 
-        await objectManager.AddNew(org, ds, "site.dxf", CadAsset("utm32n_site.dxf"));
-        await objectManager.AddNew(org, ds, "site.prj", CadAsset("utm32n_site.prj"));
+        await objectManager.Manager.AddNew(org, ds, "site.dxf", CadAsset("utm32n_site.dxf"));
+        await objectManager.Manager.AddNew(org, ds, "site.prj", CadAsset("utm32n_site.prj"));
 
         var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
         var ddb = ddbManager.Get(org, context.Datasets.First(d => d.Slug == ds).InternalRef);
@@ -642,14 +643,14 @@ public class ObjectManagerTest : TestBase
         if (!File.Exists(Path.Combine(build, "mvt", "metadata.json")))
             Assert.Ignore("The loaded native libddb predates CAD coordinate systems (DDB-12)");
 
-        await objectManager.Delete(org, ds, "site.prj");
+        await objectManager.Manager.Delete(org, ds, "site.prj");
 
         File.Exists(Path.Combine(build, "vec", "local.json")).ShouldBeTrue();
         Directory.Exists(Path.Combine(build, "mvt")).ShouldBeFalse();
         ddb.IsBuildComplete("site.dxf").ShouldBeTrue();
     }
 
-    private ObjectsManager BuildStreamedUploadObjectsManager(string datasetsPath, RegistryContext context)
+    private ObjectServices BuildStreamedUploadObjectsManager(string datasetsPath, RegistryContext context)
     {
         var settings = TestSettings.Default;
         settings.DatasetsPath = datasetsPath;
@@ -683,7 +684,7 @@ public class ObjectManagerTest : TestBase
         var data = Encoding.UTF8.GetBytes("hello streamed upload");
         await using var ms = new MemoryStream(data);
 
-        var (tempPath, bytes, _) = await objectManager.StreamToTempAsync(
+        var (tempPath, bytes, _) = await objectManager.Manager.StreamToTempAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ms);
 
         try
@@ -714,17 +715,17 @@ public class ObjectManagerTest : TestBase
         var data = CommonUtils.SmartDownloadData(newFileUrl);
 
         await using var ms = new MemoryStream(data);
-        var (tempPath, bytes, _) = await objectManager.StreamToTempAsync(
+        var (tempPath, bytes, _) = await objectManager.Manager.StreamToTempAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ms);
 
-        var entry = await objectManager.CommitStreamedAsync(
+        var entry = await objectManager.Manager.CommitStreamedAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, destPath, Streamed(tempPath, bytes));
 
         entry.Path.ShouldBe(destPath);
         // The atomic move must consume the temp file
         File.Exists(tempPath).ShouldBeFalse();
 
-        (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, destPath))
+        (await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, destPath))
             .Count().ShouldBe(1);
     }
 
@@ -738,11 +739,11 @@ public class ObjectManagerTest : TestBase
 
         var data = Encoding.UTF8.GetBytes("reserved path payload");
         await using var ms = new MemoryStream(data);
-        var (tempPath, bytes, _) = await objectManager.StreamToTempAsync(
+        var (tempPath, bytes, _) = await objectManager.Manager.StreamToTempAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ms);
 
         // Committing onto the reserved uploads folder must be rejected (RQ-10: a 400, it was a 500)
-        var act = async () => await objectManager.CommitStreamedAsync(
+        var act = async () => await objectManager.Manager.CommitStreamedAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ".uploads/evil.bin", Streamed(tempPath, bytes));
 
         (await Should.ThrowAsync<InvalidDatasetPathException>(act)).Rejection.ShouldBe(EntryPathRejection.Reserved);
@@ -765,7 +766,7 @@ public class ObjectManagerTest : TestBase
 
         try
         {
-            var act = async () => await objectManager.CommitStreamedAsync(
+            var act = async () => await objectManager.Manager.CommitStreamedAsync(
                 MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "x.bin", Streamed(foreignFile, 10));
 
             await Should.ThrowAsync<InvalidOperationException>(act);
@@ -816,10 +817,10 @@ public class ObjectManagerTest : TestBase
         var data = CommonUtils.SmartDownloadData(newFileUrl);
 
         await using var ms = new MemoryStream(data);
-        var (tempPath, bytes, _) = await objectManager.StreamToTempAsync(
+        var (tempPath, bytes, _) = await objectManager.Manager.StreamToTempAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ms);
 
-        var act = async () => await objectManager.CommitStreamedAsync(
+        var act = async () => await objectManager.Manager.CommitStreamedAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, destPath, Streamed(tempPath, bytes));
 
         await Should.ThrowAsync<InvalidOperationException>(act);
@@ -879,7 +880,7 @@ public class ObjectManagerTest : TestBase
 
         var stream = new MemoryStream(new byte[64 * 1024], 0, 64 * 1024, false, true);
 
-        var act = async () => await objectManager.AddNew(
+        var act = async () => await objectManager.Manager.AddNew(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, destPath, stream);
 
         await Should.ThrowAsync<InvalidOperationException>(act);
@@ -948,7 +949,7 @@ public class ObjectManagerTest : TestBase
 
         var stream = new MemoryStream(payload, 0, payload.Length, false, true);
 
-        var dto = await objectManager.AddNew(
+        var dto = await objectManager.Manager.AddNew(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, destPath, stream);
 
         dto.Path.ShouldBe(destPath);
@@ -1000,9 +1001,9 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
-        (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Count().ShouldBe(20);
+        (await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Count().ShouldBe(20);
 
-        var newres = await objectManager.AddNew(MagicStrings.PublicOrganizationSlug,
+        var newres = await objectManager.Manager.AddNew(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, "Test");
         newres.Size.ShouldBe(0);
         //newres.ContentType.ShouldBeNull();
@@ -1010,35 +1011,35 @@ public class ObjectManagerTest : TestBase
 
         var newFileUrl = TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName);
 
-        await objectManager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        await objectManager.Manager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "Test/" + fileName, CommonUtils.SmartDownloadData(newFileUrl));
 
-        (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        (await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 "Test/" + fileName))
             .Count().ShouldBe(1);
 
-        await objectManager.Move(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName2,
+        await objectManager.Commands.MoveAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName2,
             "Test/" + fileName2);
 
-        (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        (await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 "Test/" + fileName2))
             .Count().ShouldBe(1);
 
-        await objectManager.Move(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test",
+        await objectManager.Commands.MoveAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test",
             "Test2");
 
-        (await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test2"))
+        (await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test2"))
             .Count().ShouldBe(2);
 
-        //await objectManager.Delete(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName);
+        //await objectManager.Manager.Delete(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName);
 
-        //res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        //res = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
         //    fileName);
 
         //res.Count().ShouldBe(0);
 
 
-        //res = await objectManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+        //res = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
         //    fileName);
 
         //res.Count().ShouldBe(1);
@@ -1048,14 +1049,14 @@ public class ObjectManagerTest : TestBase
     #region SUT factories
 
     /// <summary>
-    /// The fixture's <see cref="ObjectsManager"/> wiring. <paramref name="ddbManager"/> defaults to a real
+    /// The fixture's objects slice wiring. <paramref name="ddbManager"/> defaults to a real
     /// <see cref="DdbManager"/> on <paramref name="ddbWrapper"/> (the native wrapper by default).
     /// </summary>
-    private ObjectsManagerBuilder ObjectsManagerFor(RegistryContext context, IUtils utils,
+    private ObjectServicesBuilder ObjectsManagerFor(RegistryContext context, IUtils utils,
         IDdbManager ddbManager = null, IDdbWrapper ddbWrapper = null)
     {
         ddbWrapper ??= DdbWrapper;
-        return new ObjectsManagerBuilder(context)
+        return new ObjectServicesBuilder(context)
             .WithLogger(_objectManagerLogger)
             .WithSettings(_settingsOptions)
             .WithDdbManager(ddbManager ?? new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, ddbWrapper))
@@ -1107,7 +1108,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
-        var ex = await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Transfer(
+        var ex = await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Transfers.TransferAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027_copy.JPG",
             false
@@ -1134,7 +1135,7 @@ public class ObjectManagerTest : TestBase
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
         // Test path traversal
-        var ex1 = await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Transfer(
+        var ex1 = await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Transfers.TransferAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
             "admin", "7kd0gxti9qoemsrk", "../../../etc/passwd",
             false
@@ -1142,7 +1143,7 @@ public class ObjectManagerTest : TestBase
         ex1.Message.ShouldContain("path traversal");
 
         // Test absolute path
-        var ex2 = await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Transfer(
+        var ex2 = await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Transfers.TransferAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
             "admin", "7kd0gxti9qoemsrk", "/etc/passwd",
             false
@@ -1153,7 +1154,7 @@ public class ObjectManagerTest : TestBase
         // rule); Path.IsPathRooted accepted them on Linux
         foreach (var windowsAbsolute in new[] { @"C:\x.jpg", "c:/x.jpg", @"\\server\share\x.jpg", @"\\?\C:\x.jpg" })
         {
-            var ex3 = await Should.ThrowAsync<InvalidDatasetPathException>(async () => await objectManager.Transfer(
+            var ex3 = await Should.ThrowAsync<InvalidDatasetPathException>(async () => await objectManager.Transfers.TransferAsync(
                 MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
                 "admin", "7kd0gxti9qoemsrk", windowsAbsolute, false));
             ex3.Rejection.ShouldBe(EntryPathRejection.Absolute);
@@ -1190,11 +1191,11 @@ public class ObjectManagerTest : TestBase
         var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
         var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
-        await objectManager.Transfer(
+        await objectManager.Transfers.TransferAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
             "admin", "7kd0gxti9qoemsrk", "./flights/DJI..0027.JPG", false);
 
-        var destFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", null, true);
+        var destFiles = await objectManager.Queries.ListAsync("admin", "7kd0gxti9qoemsrk", null, true);
         destFiles.ShouldContain(f => f.Path == "flights/DJI..0027.JPG");
     }
 
@@ -1216,7 +1217,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
-        var ex = await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Transfer(
+        var ex = await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Transfers.TransferAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
             "admin", "7kd0gxti9qoemsrk", ".ddb/somefile.txt",
             false
@@ -1242,7 +1243,7 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils).Build();
 
-        var ex = await Should.ThrowAsync<NotFoundException>(async () => await objectManager.Transfer(
+        var ex = await Should.ThrowAsync<NotFoundException>(async () => await objectManager.Transfers.TransferAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "NonExistent.JPG",
             "admin", "7kd0gxti9qoemsrk", "test.JPG",
             false
@@ -1281,26 +1282,26 @@ public class ObjectManagerTest : TestBase
         var objectManager = ObjectsManagerFor(context, webUtils, ddbManager).Build();
 
         // Get the file info before transfer
-        var sourceFiles = await objectManager.List(MagicStrings.PublicOrganizationSlug,
+        var sourceFiles = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, null, true);
         sourceFiles.ShouldNotBeEmpty();
 
         var fileToTransfer = "DJI_0027.JPG";
 
         // Perform the transfer
-        await objectManager.Transfer(
+        await objectManager.Transfers.TransferAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileToTransfer,
             "admin", "7kd0gxti9qoemsrk", fileToTransfer,
             false
         );
 
         // Verify file was removed from source
-        var sourceFilesAfter = await objectManager.List(MagicStrings.PublicOrganizationSlug,
+        var sourceFilesAfter = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, null, true);
         sourceFilesAfter.ShouldNotContain(f => f.Path == fileToTransfer);
 
         // Verify file exists in destination
-        var destFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", null, true);
+        var destFiles = await objectManager.Queries.ListAsync("admin", "7kd0gxti9qoemsrk", null, true);
         destFiles.ShouldContain(f => f.Path == fileToTransfer);
     }
 
@@ -1342,7 +1343,7 @@ public class ObjectManagerTest : TestBase
         File.Exists(sourceFsPath).ShouldBeTrue();
 
         // Perform the copy-style transfer (keepSource=true)
-        await objectManager.Transfer(
+        await objectManager.Transfers.TransferAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileToTransfer,
             "admin", "7kd0gxti9qoemsrk", fileToTransfer,
             overwrite: false,
@@ -1350,13 +1351,13 @@ public class ObjectManagerTest : TestBase
         );
 
         // Source entry MUST still be present (copy semantics)
-        var sourceFilesAfter = await objectManager.List(MagicStrings.PublicOrganizationSlug,
+        var sourceFilesAfter = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, null, true);
         sourceFilesAfter.ShouldContain(f => f.Path == fileToTransfer);
         File.Exists(sourceFsPath).ShouldBeTrue();
 
         // Destination entry must exist
-        var destFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", null, true);
+        var destFiles = await objectManager.Queries.ListAsync("admin", "7kd0gxti9qoemsrk", null, true);
         destFiles.ShouldContain(f => f.Path == fileToTransfer);
     }
 
@@ -1396,19 +1397,19 @@ public class ObjectManagerTest : TestBase
         File.Exists(sourceFsPath).ShouldBeTrue();
 
         // Default behavior: keepSource=false (move)
-        await objectManager.Transfer(
+        await objectManager.Transfers.TransferAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileToTransfer,
             "admin", "7kd0gxti9qoemsrk", fileToTransfer,
             overwrite: false,
             keepSource: false
         );
 
-        var sourceFilesAfter = await objectManager.List(MagicStrings.PublicOrganizationSlug,
+        var sourceFilesAfter = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, null, true);
         sourceFilesAfter.ShouldNotContain(f => f.Path == fileToTransfer);
         File.Exists(sourceFsPath).ShouldBeFalse();
 
-        var destFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", null, true);
+        var destFiles = await objectManager.Queries.ListAsync("admin", "7kd0gxti9qoemsrk", null, true);
         destFiles.ShouldContain(f => f.Path == fileToTransfer);
     }
 
@@ -1455,7 +1456,7 @@ public class ObjectManagerTest : TestBase
         destDdb.AddRaw("DJI_0027.JPG");
 
         // Try to transfer with overwrite=false (should fail)
-        var ex = await Should.ThrowAsync<ConflictException>(async () => await objectManager.Transfer(
+        var ex = await Should.ThrowAsync<ConflictException>(async () => await objectManager.Transfers.TransferAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "DJI_0027.JPG",
             "admin", "7kd0gxti9qoemsrk", "DJI_0027.JPG",
             false
@@ -1494,19 +1495,19 @@ public class ObjectManagerTest : TestBase
         var fileToTransfer = "DJI_0027.JPG";
 
         // Perform the transfer with null destPath
-        await objectManager.Transfer(
+        await objectManager.Transfers.TransferAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileToTransfer,
             "admin", "7kd0gxti9qoemsrk", null,
             false
         );
 
         // Verify file was removed from source
-        var sourceFilesAfter = await objectManager.List(MagicStrings.PublicOrganizationSlug,
+        var sourceFilesAfter = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, null, true);
         sourceFilesAfter.ShouldNotContain(f => f.Path == fileToTransfer);
 
         // Verify file exists in destination with the same name
-        var destFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", null, true);
+        var destFiles = await objectManager.Queries.ListAsync("admin", "7kd0gxti9qoemsrk", null, true);
         destFiles.ShouldContain(f => f.Path == fileToTransfer, "file should be transferred with the same name when destPath is null");
     }
 
@@ -1563,7 +1564,7 @@ public class ObjectManagerTest : TestBase
         try
         {
             // Attempt transfer - should fail during DDB add
-            await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfer(
+            await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfers.TransferAsync(
                 MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileToTransfer,
                 "admin", "7kd0gxti9qoemsrk", fileToTransfer,
                 false
@@ -1574,7 +1575,7 @@ public class ObjectManagerTest : TestBase
                 "transferred file should be rolled back and removed from destination");
 
             // Verify source file still exists
-            var sourceFiles = await objectManager.List(MagicStrings.PublicOrganizationSlug,
+            var sourceFiles = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug,
                 MagicStrings.DefaultDatasetSlug, null, true);
             sourceFiles.ShouldContain(f => f.Path == fileToTransfer,
                 "source file should still exist after failed transfer");
@@ -1621,7 +1622,7 @@ public class ObjectManagerTest : TestBase
         var fileToTransfer = "DJI_0027.JPG";
 
         // Verify file exists in source before transfer
-        var sourceFilesBefore = await objectManager.List(MagicStrings.PublicOrganizationSlug,
+        var sourceFilesBefore = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, null, true);
         sourceFilesBefore.ShouldContain(f => f.Path == fileToTransfer);
 
@@ -1637,20 +1638,20 @@ public class ObjectManagerTest : TestBase
 
         // We can't easily simulate this failure without mocking DDB,
         // but we can verify the source file remains accessible after a successful transfer
-        await objectManager.Transfer(
+        await objectManager.Transfers.TransferAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileToTransfer,
             "admin", "7kd0gxti9qoemsrk", fileToTransfer,
             false
         );
 
         // Verify file was removed from source (successful case)
-        var sourceFilesAfter = await objectManager.List(MagicStrings.PublicOrganizationSlug,
+        var sourceFilesAfter = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, null, true);
         sourceFilesAfter.ShouldNotContain(f => f.Path == fileToTransfer,
             "source file should be removed after successful transfer");
 
         // Verify file exists in destination
-        var destFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", null, true);
+        var destFiles = await objectManager.Queries.ListAsync("admin", "7kd0gxti9qoemsrk", null, true);
         destFiles.ShouldContain(f => f.Path == fileToTransfer,
             "file should exist in destination after transfer");
     }
@@ -1703,7 +1704,7 @@ public class ObjectManagerTest : TestBase
             try
             {
                 // Attempt transfer - should fail during DDB add
-                await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfer(
+                await Should.ThrowAsync<InvalidOperationException>(async () => await objectManager.Transfers.TransferAsync(
                     "admin", "7kd0gxti9qoemsrk", folderToTransfer,
                     MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, folderToTransfer,
                     false
@@ -1723,7 +1724,7 @@ public class ObjectManagerTest : TestBase
                 }
 
                 // Verify source folder still exists with all files
-                var sourceFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", folderToTransfer, true);
+                var sourceFiles = await objectManager.Queries.ListAsync("admin", "7kd0gxti9qoemsrk", folderToTransfer, true);
                 sourceFiles.ShouldNotBeEmpty("source folder should still contain files after failed transfer");
             }
             finally
@@ -1782,7 +1783,7 @@ public class ObjectManagerTest : TestBase
         try
         {
             // Transfer should fail during DDB operations
-            await Should.ThrowAsync<Exception>(async () => await objectManager.Transfer(
+            await Should.ThrowAsync<Exception>(async () => await objectManager.Transfers.TransferAsync(
                 MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileToTransfer,
                 "admin", "7kd0gxti9qoemsrk", fileToTransfer,
                 false
@@ -1803,7 +1804,7 @@ public class ObjectManagerTest : TestBase
                 "no files from failed transfer should remain in destination");
 
             // Verify source is untouched
-            var sourceFiles = await objectManager.List(MagicStrings.PublicOrganizationSlug,
+            var sourceFiles = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug,
                 MagicStrings.DefaultDatasetSlug, null, true);
             sourceFiles.ShouldContain(f => f.Path == fileToTransfer,
                 "source file must remain intact after failed transfer");
@@ -1853,19 +1854,19 @@ public class ObjectManagerTest : TestBase
         // If build folder copy fails, the main transfer should still succeed
         // The file will just need to be rebuilt in the destination
 
-        await objectManager.Transfer(
+        await objectManager.Transfers.TransferAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileToTransfer,
             "admin", "7kd0gxti9qoemsrk", fileToTransfer,
             false
         );
 
         // Verify transfer succeeded even if build folder copy might have failed
-        var destFiles = await objectManager.List("admin", "7kd0gxti9qoemsrk", null, true);
+        var destFiles = await objectManager.Queries.ListAsync("admin", "7kd0gxti9qoemsrk", null, true);
         destFiles.ShouldContain(f => f.Path == fileToTransfer,
             "main file transfer should succeed regardless of build folder status");
 
         // Verify source was removed
-        var sourceFiles = await objectManager.List(MagicStrings.PublicOrganizationSlug,
+        var sourceFiles = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, null, true);
         sourceFiles.ShouldNotContain(f => f.Path == fileToTransfer,
             "source should be removed after successful transfer");
@@ -1905,7 +1906,7 @@ public class ObjectManagerTest : TestBase
         var objectManager = ObjectsManagerFor(context, webUtils, _ddbFactoryMock.Object).Build();
 
         var ex = await Should.ThrowAsync<ConflictException>(
-            async () => await objectManager.Build(
+            async () => await objectManager.Builds.BuildAsync(
                 MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "test.las", force: false));
         ex.Message.ShouldContain("already in progress");
     }
@@ -1947,7 +1948,7 @@ public class ObjectManagerTest : TestBase
 
         // force=true should NOT throw even though a build is running
         await Should.NotThrowAsync(
-            async () => await objectManager.Build(
+            async () => await objectManager.Builds.BuildAsync(
                 MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "test.las", force: true));
     }
 

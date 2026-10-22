@@ -15,7 +15,7 @@ using NUnit.Framework;
 using Registry.Ports.DroneDB;
 using Registry.Web.Controllers;
 using Registry.Web.Models.Configuration;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Objects;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -39,19 +39,21 @@ public class ObjectsControllerDownloadTests
         public string[] Captured { get; }
     }
 
-    private static Mock<IObjectsManager> CreateManager()
+    private static Mock<IEntryQueryService> CreateQueries()
     {
-        var manager = new Mock<IObjectsManager>(MockBehavior.Strict);
+        var queries = new Mock<IEntryQueryService>(MockBehavior.Strict);
 
         // Everything is treated as a directory so even single-path requests
-        // fall through to DownloadStream, where the parsed array is captured.
-        manager.Setup(m => m.GetEntryType(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Returns((string _, string __, string ___) => Task.FromResult<EntryType?>(EntryType.Directory));
+        // fall through to DownloadAsync, where the parsed array is captured.
+        queries.Setup(m => m.GetEntryTypeAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(EntryType.Directory);
 
-        manager.Setup(m => m.DownloadStream(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string[]>() ))
-            .Callback((string _, string __, string[] paths) => throw new DownloadSentinel(paths));
+        queries.Setup(m => m.DownloadAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string[]>(),
+                It.IsAny<CancellationToken>()))
+            .Callback((string _, string __, string[] paths, CancellationToken ___) => throw new DownloadSentinel(paths));
 
-        return manager;
+        return queries;
     }
 
     private static async Task<string[]> CaptureParsedPaths(string[] queryPathValues)
@@ -67,11 +69,8 @@ public class ObjectsControllerDownloadTests
             }
         };
 
-        var controller = new ObjectsController(
-            CreateManager().Object,
-            Mock.Of<ILogger<ObjectsController>>(),
-            MSOptions.Create(new FormOptions()),
-            TestSettings.Options<ThumbnailOptions>(MSOptions.Create(new AppSettings())), TestPaths.Policy)
+        var controller = new ObjectDownloadsController(CreateQueries().Object,
+            Mock.Of<ILogger<ObjectDownloadsController>>())
         {
             ControllerContext = new ControllerContext { HttpContext = httpContext }
         };

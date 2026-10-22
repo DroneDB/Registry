@@ -18,6 +18,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
+using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Shouldly;
@@ -26,7 +27,7 @@ using Entry = Registry.Ports.DroneDB.Entry;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// Focused unit tests for ObjectsManager.Copy (intra-dataset) and Transfer
+/// Focused unit tests for the entry transfer service: copy (intra-dataset) and transfer
 /// (cross-dataset) covering:
 ///   - storage quota delta on overwrite copy
 ///   - atomic overwrite ordering (move-to-trash before DDB index removal)
@@ -122,8 +123,8 @@ public class ObjectsManagerCopyTransferTest : TestBase
     }
 
     // The build-pending service is the builder default: a real one on the SUT context and these mocks.
-    private ObjectsManager CreateManager() =>
-        new ObjectsManagerBuilder(TestDb.CreateContext<RegistryContext>())
+    private IEntryTransferService CreateManager() =>
+        new ObjectServicesBuilder(TestDb.CreateContext<RegistryContext>())
             .WithLogger(_logger)
             .WithSettings(TestSettings.Options(_settings))
             .WithDdbManager(_ddbManagerMock.Object)
@@ -135,7 +136,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
             .WithDdbWrapper(_ddbWrapperMock.Object)
             .WithThumbnailGenerator(_thumbsMock.Object)
             .WithJobIndexQuery(_jobIndexQueryMock.Object)
-            .Build();
+            .Build().Transfers;
 
     // ---------------------------------------------------------------------
     // Copy
@@ -146,7 +147,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
     {
         var mgr = CreateManager();
         await Should.ThrowAsync<BadRequestException>(
-            () => mgr.Copy(OrgSlug, DsSlug, "a.jpg", "a.jpg"));
+            () => mgr.CopyAsync(OrgSlug, DsSlug, "a.jpg", "a.jpg"));
     }
 
     [Test]
@@ -159,7 +160,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
 
         var mgr = CreateManager();
         var ex = await Should.ThrowAsync<ConflictException>(
-            () => mgr.Copy(OrgSlug, DsSlug, "src.jpg", "dst.jpg"));
+            () => mgr.CopyAsync(OrgSlug, DsSlug, "src.jpg", "dst.jpg"));
         ex.Message.ShouldContain("overwrite");
     }
 
@@ -168,7 +169,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
     {
         var mgr = CreateManager();
         var ex = await Should.ThrowAsync<BadRequestException>(
-            () => mgr.Copy(OrgSlug, DsSlug, "folder", "folder/inside"));
+            () => mgr.CopyAsync(OrgSlug, DsSlug, "folder", "folder/inside"));
         ex.Message.ShouldContain("descendants");
     }
 
@@ -187,7 +188,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
 
         var mgr = CreateManager();
         await Should.ThrowAsync<TestStopException>(
-            () => mgr.Copy(OrgSlug, DsSlug, "src.jpg", "dst.jpg", overwrite: true));
+            () => mgr.CopyAsync(OrgSlug, DsSlug, "src.jpg", "dst.jpg", overwrite: true));
 
         observedDelta.ShouldBe(70);
     }
@@ -207,7 +208,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
 
         var mgr = CreateManager();
         await Should.ThrowAsync<TestStopException>(
-            () => mgr.Copy(OrgSlug, DsSlug, "src.jpg", "dst.jpg", overwrite: true));
+            () => mgr.CopyAsync(OrgSlug, DsSlug, "src.jpg", "dst.jpg", overwrite: true));
 
         observedDelta.ShouldBe(0);
     }
@@ -226,7 +227,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
 
         var mgr = CreateManager();
         await Should.ThrowAsync<TestStopException>(
-            () => mgr.Copy(OrgSlug, DsSlug, "src.jpg", "dst.jpg"));
+            () => mgr.CopyAsync(OrgSlug, DsSlug, "src.jpg", "dst.jpg"));
 
         observedDelta.ShouldBe(100);
     }
@@ -252,7 +253,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
         var mgr = CreateManager();
         try
         {
-            await mgr.Copy(OrgSlug, DsSlug, "src.jpg", "dst.jpg", overwrite: true);
+            await mgr.CopyAsync(OrgSlug, DsSlug, "src.jpg", "dst.jpg", overwrite: true);
         }
         catch
         {
@@ -283,7 +284,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
         _fsMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(false);
 
         var mgr = CreateManager();
-        await mgr.Transfer(OrgSlug, DsSlug, sourcePath, OrgSlug, OtherDsSlug,
+        await mgr.TransferAsync(OrgSlug, DsSlug, sourcePath, OrgSlug, OtherDsSlug,
             destPath: destPath, overwrite: false, keepSource: true);
 
         _ddbMock.Verify(x => x.Remove(It.IsAny<string>()), Times.Never);
@@ -307,7 +308,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
         _fsMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(false);
 
         var mgr = CreateManager();
-        await mgr.Transfer(OrgSlug, DsSlug, sourcePath, OrgSlug, OtherDsSlug,
+        await mgr.TransferAsync(OrgSlug, DsSlug, sourcePath, OrgSlug, OtherDsSlug,
             destPath: destPath, overwrite: false, keepSource: false);
 
         _ddbMock.Verify(x => x.Remove(sourcePath), Times.Once);
@@ -332,7 +333,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
         _fsMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(true);
 
         var mgr = CreateManager();
-        await mgr.Transfer(OrgSlug, DsSlug, sourcePath, OrgSlug, OtherDsSlug,
+        await mgr.TransferAsync(OrgSlug, DsSlug, sourcePath, OrgSlug, OtherDsSlug,
             destPath: destPath, overwrite: false, keepSource: false);
 
         // DDBCopyBuildArtifacts: the artifacts and the pending marker, copied (a build may serve other

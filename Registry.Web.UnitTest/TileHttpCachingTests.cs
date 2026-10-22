@@ -1,5 +1,6 @@
 #nullable enable
 using Registry.Web.Test.Support;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -11,7 +12,7 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Controllers;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Objects;
 using Registry.Web.Utilities;
 using Shouldly;
 
@@ -29,26 +30,26 @@ public class TileHttpCachingTests
     private const string Hash = "8f2a9c";
     private static readonly byte[] Bytes = [0x52, 0x49, 0x46, 0x46];
 
-    private Mock<IObjectsManager> _manager = null!;
+    private Mock<IObjectRenderService> _manager = null!;
     private ReadableObject _obj = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _manager = new Mock<IObjectsManager>();
+        _manager = new Mock<IObjectRenderService>();
         _obj = new ReadableObject("org", "ds", "ortho.tif", Hash, "ortho.tif", Mock.Of<IDDB>());
-        _manager.Setup(m => m.ResolveReadableObject("org", "ds", "ortho.tif")).ReturnsAsync(_obj);
-        _manager.Setup(m => m.GenerateTileData(_obj, 19, 1, 2, false))
+        _manager.Setup(m => m.ResolveReadableObjectAsync("org", "ds", "ortho.tif", It.IsAny<CancellationToken>())).ReturnsAsync(_obj);
+        _manager.Setup(m => m.GenerateTileDataAsync(_obj, 19, 1, 2, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new StorageDataDto { Data = Bytes, ContentType = "image/webp", Name = "2.webp" });
-        _manager.Setup(m => m.GenerateThumbnailData(_obj, 256))
+        _manager.Setup(m => m.GenerateThumbnailDataAsync(_obj, 256, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new StorageDataDto { Data = Bytes, ContentType = "image/webp", Name = "ortho.webp" });
     }
 
     private ObjectsController CreateController(string? ifNoneMatch = null)
     {
-        var controller = new ObjectsController(_manager.Object, NullLogger<ObjectsController>.Instance,
-            Microsoft.Extensions.Options.Options.Create(new FormOptions()),
-            TestSettings.Options<ThumbnailOptions>(Microsoft.Extensions.Options.Options.Create(new AppSettings())), TestPaths.Policy)
+        var controller = new ObjectsController(Mock.Of<IEntryQueryService>(), Mock.Of<IEntryCommandService>(),
+            Mock.Of<IEntryTransferService>(), _manager.Object, NullLogger<ObjectsController>.Instance,
+            TestSettings.Options<ThumbnailOptions>(Microsoft.Extensions.Options.Options.Create(new AppSettings())))
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
@@ -59,9 +60,9 @@ public class TileHttpCachingTests
 
     private void VerifyNeverRendered()
     {
-        _manager.Verify(m => m.GenerateTileData(It.IsAny<ReadableObject>(), It.IsAny<int>(), It.IsAny<int>(),
-            It.IsAny<int>(), It.IsAny<bool>()), Times.Never);
-        _manager.Verify(m => m.GenerateThumbnailData(It.IsAny<ReadableObject>(), It.IsAny<int?>()), Times.Never);
+        _manager.Verify(m => m.GenerateTileDataAsync(It.IsAny<ReadableObject>(), It.IsAny<int>(), It.IsAny<int>(),
+            It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+        _manager.Verify(m => m.GenerateThumbnailDataAsync(It.IsAny<ReadableObject>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]
@@ -106,9 +107,9 @@ public class TileHttpCachingTests
         result.ShouldBeOfType<StatusCodeResult>().StatusCode.ShouldBe(StatusCodes.Status304NotModified);
         second.Response.Headers.ETag.ToString().ShouldBe(etag);
         second.Response.Headers.CacheControl.ToString().ShouldBe("private, no-cache");
-        _manager.Verify(m => m.ResolveReadableObject("org", "ds", "ortho.tif"), Times.Exactly(2));
-        _manager.Verify(m => m.GenerateTileData(It.IsAny<ReadableObject>(), It.IsAny<int>(), It.IsAny<int>(),
-            It.IsAny<int>(), It.IsAny<bool>()), Times.Once);
+        _manager.Verify(m => m.ResolveReadableObjectAsync("org", "ds", "ortho.tif", It.IsAny<CancellationToken>()), Times.Exactly(2));
+        _manager.Verify(m => m.GenerateTileDataAsync(It.IsAny<ReadableObject>(), It.IsAny<int>(), It.IsAny<int>(),
+            It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -127,7 +128,7 @@ public class TileHttpCachingTests
         await etagController.GenerateTile("org", "ds", 19, 1, "2", "ortho.tif", "png");
         var etag = etagController.Response.Headers.ETag.ToString();
 
-        _manager.Setup(m => m.ResolveReadableObject("org", "ds", "ortho.tif"))
+        _manager.Setup(m => m.ResolveReadableObjectAsync("org", "ds", "ortho.tif", It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Registry.Web.Exceptions.UnauthorizedException("no"));
 
         await Should.ThrowAsync<Registry.Web.Exceptions.UnauthorizedException>(
@@ -154,14 +155,15 @@ public class TileHttpCachingTests
     [Test]
     public async Task GenerateThumbnail_ForDataset_HasNoValidator()
     {
-        _manager.Setup(m => m.GenerateThumbnailData("org", "ds", null, null, false))
+        _manager.Setup(m => m.GenerateThumbnailDataAsync("org", "ds", null, null, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new StorageDataDto { Data = Bytes, ContentType = "image/webp", Name = "thumbnail.webp" });
 
         var controller = CreateController();
         (await controller.GenerateThumbnail("org", "ds", null!, null)).ShouldBeOfType<FileContentResult>();
 
         controller.Response.Headers.ETag.ToString().ShouldBeEmpty();
-        _manager.Verify(m => m.ResolveReadableObject(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+        _manager.Verify(m => m.ResolveReadableObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<CancellationToken>()),
             Times.Never);
     }
 

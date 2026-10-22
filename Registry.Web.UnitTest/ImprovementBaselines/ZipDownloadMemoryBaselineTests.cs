@@ -104,10 +104,10 @@ public class ZipDownloadMemoryBaselineTests : TestBase
     public void TearDown() => Directory.Delete(_root, true);
 
     private FileStreamDescriptor CreateDescriptor(FileDescriptorType type = FileDescriptorType.Multiple) =>
-        new("sel.zip", "application/zip", "org", Guid.NewGuid(),
+        new("sel.zip", "application/zip", _ddbManager.Object.Get("org", Guid.NewGuid()),
             Enumerable.Range(0, Files).Select(i => $"IMG_{i}.jpg").ToArray(), [],
-            type, CreateTestLogger<ObjectsManager>(Serilog.Events.LogEventLevel.Warning),
-            _ddbManager.Object, new ZipArchiveBuilder());
+            type, CreateTestLogger<FileStreamDescriptor>(Serilog.Events.LogEventLevel.Warning),
+            new ZipArchiveBuilder());
 
     [Test]
     public async Task Target_64MBSelection_StreamsWithBoundedMemory()

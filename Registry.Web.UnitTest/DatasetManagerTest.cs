@@ -929,7 +929,6 @@ public class DatasetManagerTest : TestBase
         fileSystemMock.Setup(x => x.FolderCopy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()));
         fileSystemMock.Setup(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()));
         _stacManagerMock.Setup(x => x.ClearCache(It.IsAny<Dataset>())).Returns(Task.CompletedTask);
-        _objectsManagerMock.Setup(x => x.DeleteAll(It.IsAny<string>(), It.IsAny<string>())).Returns(Task.CompletedTask);
 
         var datasetsManager = new DatasetsManager(context, utils, _datasetsManagerLogger,
             _objectsManagerMock.Object, _stacManagerMock.Object, _ddbFactoryMock.Object,

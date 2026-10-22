@@ -161,6 +161,9 @@ public sealed partial class UploadManager : IUploadManager
         return outcomes.Select(o => o.ToDto(authenticated: ctx.User != null)).ToArray();
     }
 
+    public void Discard(StreamedFile file) =>
+        _fs.TryDelete(file.TempPath, ex => _logger.LogDebug(ex, "Cannot delete the temp upload '{TempFile}'", file.TempPath));
+
     public async Task FailAsync(UploadRequestContext ctx, Exception error)
     {
         if (ctx.UploadId == null || _receipts == null)
