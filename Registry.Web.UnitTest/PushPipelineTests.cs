@@ -148,8 +148,7 @@ public class PushPipelineTests : TestBase
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings { DatasetsPath = _root });
         var fileSystem = new FileSystem();
         var buildPending = new BuildPendingService(_ctx, new DatasetSweep(_ctx), ddbManager.Object, _jobs.Object, cache.Object, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
-        return new PushManager(_utils.Object, ddbManager.Object,
-            CreateTestLogger<PushManager>(Serilog.Events.LogEventLevel.Warning), Mock.Of<IDatasetsManager>(),
+        return TestPush.Manager(_utils.Object, ddbManager.Object, Mock.Of<IDatasetsManager>(),
             auth.Object, new DatasetAccessResolver(_utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper.Object,
             TestJobs.Scheduler(_jobs.Object, buildPending, userId: "u"), TestSettings.Options<ImportSettings>(settings), fileSystem,
             new PushSessionStore(fileSystem), new UploadQuotaGuard(_ledger, _storageQuota.Object), TestPaths.Policy, TestScratch.Provider);

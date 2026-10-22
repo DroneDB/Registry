@@ -21,6 +21,7 @@ using Registry.Web.Services.Managers.Wcs;
 using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Processing;
+using Registry.Web.Services.Push;
 using Registry.Web.Services.RemoteImport;
 using Registry.Web.Services.Users;
 using Registry.Web.Utilities;
@@ -64,6 +65,9 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<ICadCrsManager, CadCrsManager>();
         services.AddScoped<IShareManager, ShareManager>();
         services.AddScoped<IPushManager, PushManager>();
+        services.AddScoped<IPushSessions, PushSessions>();
+        services.AddScoped<IPushUploads, PushUploads>();
+        services.AddScoped<IPushCommit, PushCommit>();
         services.AddSingleton<IPushSessionStore, PushSessionStore>();
         services.AddSystemAdministration();
         services.AddScoped<IRescanManager, RescanManager>();

@@ -141,8 +141,7 @@ public class Xi05HashOnceTests
         var jobs = new Mock<IBackgroundJobsProcessor>();
         var cache = new Mock<ICacheManager>();
         var fileSystem = new FileSystem();
-        return new PushManager(utils.Object, ddbManager.Object,
-            NullLogger<PushManager>.Instance, Mock.Of<IDatasetsManager>(), auth.Object,
+        return TestPush.Manager(utils.Object, ddbManager.Object, Mock.Of<IDatasetsManager>(), auth.Object,
             new DatasetAccessResolver(utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper,
             TestJobs.Scheduler(jobs.Object, TestJobs.BuildPendingService(db, ddbManager.Object, jobs.Object, cache.Object)),
             Microsoft.Extensions.Options.Options.Create(new ImportSettings()), fileSystem, new PushSessionStore(fileSystem),
