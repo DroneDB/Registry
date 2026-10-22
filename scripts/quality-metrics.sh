@@ -171,7 +171,8 @@ metrics() {
     m "Test helpers in Registry.Common/Test"         "$(paths ':(glob)Registry.Common/**/Test*.cs' | files)"
     m "Category string literals (use TestCategories)" "$(tests | lines '\[(assembly: )?Category\("')"
 
-    # Error model (RQ-05)
+    # Error model (RQ-05). "Managers" includes the services of the objects slice (Services/Objects, RQ-11),
+    # which took over ObjectsManager's code
     m "Controller log+rethrow catch blocks"          "$(paths ':(glob)Registry.Web/Controllers/**/*.cs' |
         multiline 'catch \(Exception \w+\)\s*\{\s*_logger\.Log\w+\([^;]*;\s*throw;')"
     m "catch (Exception ...) total"                  "$(prod '' | lines 'catch \(Exception\b')"
@@ -180,9 +181,9 @@ metrics() {
     m "Controller entry debug traces"                "$(paths ':(glob)Registry.Web/Controllers/**/*.cs' |
         multiline '_logger\.LogDebug\(\s*"[^"]*[Cc]ontroller')"
     m "Controller Content-Length pre-checks"         "$(prod Registry.Web/Controllers | lines 'Request\.ContentLength is \{ \} \w+ && \w+ >')"
-    m "InvalidOperationException thrown by managers" "$(prod Registry.Web/Services/Managers | lines 'throw new InvalidOperationException')"
-    m "ArgumentException thrown by managers"         "$(prod Registry.Web/Services/Managers | lines 'throw new ArgumentException\(')"
-    m "UnauthorizedException thrown by managers"     "$(prod Registry.Web/Services/Managers | lines 'throw new UnauthorizedException')"
+    m "InvalidOperationException thrown by managers" "$(prod Registry.Web/Services/Managers Registry.Web/Services/Objects | lines 'throw new InvalidOperationException')"
+    m "ArgumentException thrown by managers"         "$(prod Registry.Web/Services/Managers Registry.Web/Services/Objects | lines 'throw new ArgumentException\(')"
+    m "UnauthorizedException thrown by managers"     "$(prod Registry.Web/Services/Managers Registry.Web/Services/Objects | lines 'throw new UnauthorizedException')"
     m "Web files importing Registry.Adapters"        "$(prod Registry.Web | list_files_matching '^using Registry\.Adapters')"
 
     # Access and authorization (RQ-06)
@@ -198,7 +199,7 @@ metrics() {
         multiline 'IsUserAdmin\(\)\)?[^;{\n]*\n(\s*[^;{\n]*\n)?\s*throw new')"
     m "Sync IUtils lookups (any receiver)"           "$(prod Registry.Web | lines '\b\w*[Uu]tils\.(GetDataset|GetOrganization)\(')"
     m "Raster prologue copies (EnsurePathValidity)"  "$(prod Registry.Web | lines '= EnsurePathValidity\(')"
-    m "new OrganizationUser in managers"             "$(prod Registry.Web/Services/Managers | lines 'new OrganizationUser\b')"
+    m "new OrganizationUser in managers"             "$(prod Registry.Web/Services/Managers Registry.Web/Services/Objects | lines 'new OrganizationUser\b')"
 
     # Composition root (RQ-07)
     m "GetService/GetRequiredService calls"          "$(prod '' | lines 'Get(Required)?Service<')"
@@ -295,7 +296,7 @@ metrics() {
     m "Per-entry build probe calls"                  "$(prod Registry.Web | lines '\.(IsBuildable|IsBuildActive|IsBuildComplete|GetBuildStatus)\(')"
 
     # Managers and API contracts (RQ-12, RQ-14)
-    m "Task.Run in managers"                         "$(prod Registry.Web/Services/Managers | lines 'Task\.Run\(')"
+    m "Task.Run in managers"                         "$(prod Registry.Web/Services/Managers Registry.Web/Services/Objects | lines 'Task\.Run\(')"
     m "Hand-built Content-Disposition"               "$(prod Registry.Web | lines 'attachment; filename=')"
 }
 
