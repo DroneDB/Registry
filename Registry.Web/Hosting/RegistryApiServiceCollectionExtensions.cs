@@ -24,7 +24,12 @@ public static class RegistryApiServiceCollectionExtensions
     /// <summary>MVC with the RQ-05 error model, the OpenAPI document, response caching and compression, rate limiting.</summary>
     public static IServiceCollection AddRegistryApi(this IServiceCollection services)
     {
-        services.AddControllers(o => o.Filters.Add<ApiExceptionFilter>());
+        services.AddControllers(o =>
+        {
+            o.Filters.Add<ApiExceptionFilter>();
+            // Dataset paths are checked by libddb's rule while the request is bound (RQ-11)
+            o.ModelBinderProviders.Insert(0, new DatasetPathModelBinderProvider());
+        });
 
         // One error model (RQ-05, D1): RFC 9457 ProblemDetails written by ApiErrorResponder from the MVC
         // filter, the model-state factory below and the pipeline-wide exception handler
@@ -71,6 +76,11 @@ public static class RegistryApiServiceCollectionExtensions
             // makes the Scalar/OpenAPI viewer recurse infinitely ("Maximum call stack size exceeded").
             // STAC and metadata endpoints return arbitrary JSON, so represent JToken as an open schema.
             c.MapType<JToken>(() => new OpenApiSchema { Description = "Arbitrary JSON value." });
+            c.MapType<DatasetPath>(() => new OpenApiSchema
+            {
+                Type = JsonSchemaType.String,
+                Description = "Dataset-relative path ('/' separated; absolute, '..' and reserved paths are refused)."
+            });
 
             // Surface the generated XML documentation (controller actions + DTOs) in the API reference
             var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
@@ -86,6 +96,9 @@ public static class RegistryApiServiceCollectionExtensions
                 options.SerializerSettings.DateTimeZoneHandling = Newtonsoft.Json.DateTimeZoneHandling.Utc;
                 options.SerializerSettings.DateFormatHandling = Newtonsoft.Json.DateFormatHandling.IsoDateFormat;
             });
+        // Dataset paths in JSON bodies: the same rule as in the query (RQ-11)
+        services.AddOptions<MvcNewtonsoftJsonOptions>().Configure<DatasetPathPolicy>((options, paths) =>
+            options.SerializerSettings.Converters.Add(new DatasetPathJsonConverter(paths)));
 
         services.AddResponseCaching(options =>
         {

@@ -29,9 +29,10 @@ public interface IBuildQueryService
         CancellationToken ct = default);
 
     /// <summary>The downloadable artifact of the entry at <paramref name="entryPath"/> (COG, COPC, GeoPackage).</summary>
+    /// <exception cref="Exceptions.InvalidDatasetPathException">The path is not a dataset path (no path: empty).</exception>
     /// <exception cref="Exceptions.BadRequestException">The entry has no downloadable artifact.</exception>
     /// <exception cref="Exceptions.NotFoundException">No such entry, or it is not built yet.</exception>
-    Task<BuildDownload> GetBuildArtifactAsync(string orgSlug, string dsSlug, string entryPath,
+    Task<BuildDownload> GetBuildArtifactAsync(string orgSlug, string dsSlug, string? entryPath,
         CancellationToken ct = default);
 
     /// <summary>The builds deferred for a missing dependency (companion file or external tool).</summary>

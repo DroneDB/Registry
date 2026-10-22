@@ -55,6 +55,14 @@ public sealed class DatasetPathPolicy
     }
 
     /// <summary>
+    /// The checked path of a request value (<see cref="DatasetPath"/>): null when nothing was sent (null or
+    /// blank: the caller's "required" rule or default decides), the normalized path otherwise.
+    /// </summary>
+    /// <exception cref="InvalidDatasetPathException">The path breaks the rule (400).</exception>
+    public DatasetPath? Parse(string? path) =>
+        string.IsNullOrWhiteSpace(path) ? null : new DatasetPath(Normalize(path));
+
+    /// <summary>
     /// Whether <paramref name="path"/> is inside a folder the Registry or libddb owns: a ".ddb"
     /// segment at any depth, or ".uploads" as the first segment. For paths the Registry produced
     /// itself (a walk of the dataset folder); a received path goes through <see cref="Normalize"/>.

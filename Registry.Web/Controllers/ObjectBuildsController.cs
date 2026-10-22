@@ -25,12 +25,10 @@ namespace Registry.Web.Controllers;
 public class ObjectBuildsController : ControllerBaseEx
 {
     private readonly IBuildQueryService _builds;
-    private readonly DatasetPathPolicy _paths;
 
-    public ObjectBuildsController(IBuildQueryService builds, DatasetPathPolicy paths)
+    public ObjectBuildsController(IBuildQueryService builds)
     {
         _builds = builds;
-        _paths = paths;
     }
 
 
@@ -118,9 +116,9 @@ public class ObjectBuildsController : ControllerBaseEx
     public async Task<IActionResult> DownloadBuildArtifact(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromQuery] string? path)
+        [FromQuery] DatasetPath? path)
     {
-        var artifact = await _builds.GetBuildArtifactAsync(orgSlug, dsSlug, _paths.Normalize(path));
+        var artifact = await _builds.GetBuildArtifactAsync(orgSlug, dsSlug, path);
 
         return PhysicalFile(artifact.LocalPath, artifact.MediaType, artifact.FileName, enableRangeProcessing: true);
     }

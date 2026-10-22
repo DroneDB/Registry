@@ -90,9 +90,11 @@ public sealed class BuildQueryService : IBuildQueryService
         }
     }
 
-    public async Task<BuildDownload> GetBuildArtifactAsync(string orgSlug, string dsSlug, string entryPath,
+    public async Task<BuildDownload> GetBuildArtifactAsync(string orgSlug, string dsSlug, string? entryPath,
         CancellationToken ct = default)
     {
+        // libddb's path rule first (a refused path is a 400 whoever asks), then read access
+        entryPath = _paths.Normalize(entryPath);
         var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct)).Ddb;
 
         var entry = ddb.GetEntry(entryPath)

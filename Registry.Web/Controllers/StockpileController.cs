@@ -22,16 +22,12 @@ namespace Registry.Web.Controllers;
 public class StockpileController : ControllerBaseEx
 {
     private readonly IRasterAnalysisService _raster;
-    private readonly DatasetPathPolicy _paths;
 
-    public StockpileController(IRasterAnalysisService raster, DatasetPathPolicy paths)
+    public StockpileController(IRasterAnalysisService raster)
     {
         _raster = raster;
-        _paths = paths;
     }
 
-    // libddb's path rule before the service runs (RQ-11 replaces these with a DatasetPath model binder)
-    private void EnsureValidPath(string path) => _paths.Normalize(path);
 
     #region Stockpile Volume
 
@@ -50,9 +46,8 @@ public class StockpileController : ControllerBaseEx
         if (request == null)
             throw new BadRequestException("Request body is required");
 
-        EnsureValidPath(request.Path);
 
-        var json = await _raster.CalculateVolumeAsync(orgSlug, dsSlug, request.Path,
+        var json = await _raster.CalculateVolumeAsync(orgSlug, dsSlug, request.Path.ToString(),
             request.Polygon, request.BaseMethod, request.FlatElevation);
 
         return Content(json, "application/json");
@@ -73,12 +68,11 @@ public class StockpileController : ControllerBaseEx
         if (request == null)
             throw new BadRequestException("Request body is required");
 
-        EnsureValidPath(request.Path);
 
         if (!request.Lat.HasValue || !request.Lon.HasValue)
             throw new BadRequestException("lat and lon are required");
 
-        var json = await _raster.DetectStockpileAsync(orgSlug, dsSlug, request.Path,
+        var json = await _raster.DetectStockpileAsync(orgSlug, dsSlug, request.Path.ToString(),
             request.Lat.Value, request.Lon.Value, request.Radius ?? 50.0, request.Sensitivity ?? 0.5f);
         return Content(json, "application/json");
     }
@@ -98,9 +92,8 @@ public class StockpileController : ControllerBaseEx
         if (request == null)
             throw new BadRequestException("Request body is required");
 
-        EnsureValidPath(request.Path);
 
-        var json = await _raster.DetectAllStockpilesAsync(orgSlug, dsSlug, request.Path,
+        var json = await _raster.DetectAllStockpilesAsync(orgSlug, dsSlug, request.Path.ToString(),
             request.Sensitivity ?? 0.5f, request.MinAreaM2 ?? 5.0, request.MaxResults ?? 50);
         return Content(json, "application/json");
     }
