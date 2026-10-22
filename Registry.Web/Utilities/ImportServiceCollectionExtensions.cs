@@ -9,13 +9,15 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.Import;
+using Registry.Web.Services.RemoteImport;
 
 namespace Registry.Web.Utilities;
 
 /// <summary>
 /// DI registration for the Import Dataset feature (spec ImportDataset). Registers the import sources,
 /// the source factory, the credential protector and the <c>import-dataset</c> heavy tool. Must be
-/// called on BOTH the web host and any processing-node host, because the heavy tool runs on the worker.
+/// called on BOTH the web host and any processing-node host, because the heavy tool and the remote import job run
+/// on the worker.
 /// The web-only <c>IImportManager</c> is registered separately in <c>Startup</c>.
 /// </summary>
 public static class ImportServiceCollectionExtensions
@@ -61,6 +63,13 @@ public static class ImportServiceCollectionExtensions
 
         // SSRF-hardened single-file downloader shared by the verify path and the import-file tool.
         services.AddSingleton<GuardedHttpDownloader>();
+
+        // The remote Registry import job (RQ-12): queued by the web host, run by any job host
+        services.AddScoped<IImportDestinations, ImportDestinations>();
+        services.AddScoped<IRemoteImportStrategy, ArchiveImportStrategy>();
+        services.AddScoped<IRemoteImportStrategy, ParallelFilesImportStrategy>();
+        services.AddScoped<RemoteRegistryImporter>();
+        services.AddScoped<RemoteImportJob>();
 
         // The import heavy tools must run on every host that executes heavy tasks.
         services.AddSingleton<IHeavyTool, ImportDatasetTool>();

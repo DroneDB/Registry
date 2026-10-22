@@ -24,7 +24,7 @@ using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.Import;
-using Registry.Web.Services.Managers;
+using Registry.Web.Services.RemoteImport;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Registry.Web.Utilities;
@@ -116,13 +116,13 @@ public class ReservedPathCallSitesTests
     }
 
     [Test]
-    public async Task SystemManager_ParallelFilesImport_SkipsReservedPathsOnly()
+    public async Task RemoteImport_ParallelFiles_SkipsReservedPathsOnly()
     {
         await using var context = TestDb.CreateContext<RegistryContext>();
         var handler = new FakeRegistryHandler(RemotePaths);
         var added = new ConcurrentBag<string>();
 
-        var result = await ImportWithSystemManagerAsync(context, handler, added);
+        var result = await ImportWithRemoteImporterAsync(context, handler, added);
 
         result.Errors.ShouldBeEmpty();
         result.FileErrors.ShouldBeEmpty();
@@ -138,13 +138,13 @@ public class ReservedPathCallSitesTests
     /// </summary>
     [TestCase(false)]
     [TestCase(true)]
-    public async Task SystemManager_ParallelFilesImport_UnsafePath_FailsBeforeDownloading(bool absolute)
+    public async Task RemoteImport_ParallelFiles_UnsafePath_FailsBeforeDownloading(bool absolute)
     {
         await using var context = TestDb.CreateContext<RegistryContext>();
         var handler = new FakeRegistryHandler(["ok.jpg", UnsafePath(absolute)]);
         var added = new ConcurrentBag<string>();
 
-        var result = await ImportWithSystemManagerAsync(context, handler, added);
+        var result = await ImportWithRemoteImporterAsync(context, handler, added);
 
         result.Errors.ShouldHaveSingleItem().Message.ShouldContain("Invalid path");
         handler.Downloaded.ShouldBeEmpty();
@@ -153,7 +153,7 @@ public class ReservedPathCallSitesTests
     }
 
     // The dataset folders sit two or more levels below _root (_root/dataset for the client,
-    // _root/datasets/<org>/<ref> for the SystemManager), so both unsafe paths target a file outside
+    // _root/datasets/<org>/<ref> for the remote importer), so both unsafe paths target a file outside
     // the dataset folder but inside _root, which TearDown removes.
     private const string EscapeName = "escape.txt";
 
@@ -180,39 +180,22 @@ public class ReservedPathCallSitesTests
             Path.Combine(_root, "dataset"), entries, null, CancellationToken.None);
     }
 
-    private async Task<ImportResultDto> ImportWithSystemManagerAsync(RegistryContext context,
+    private async Task<ImportResultDto> ImportWithRemoteImporterAsync(RegistryContext context,
         FakeRegistryHandler handler, ConcurrentBag<string> added)
     {
         var factory = new Mock<IHttpClientFactory>();
         factory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(() => ClientFor(handler));
 
-        var auth = new Mock<IAuthManager>();
-        auth.Setup(a => a.IsUserAdmin()).ReturnsAsync(true);
-        auth.Setup(a => a.GetCurrentUser()).ReturnsAsync(new User { Id = "admin", UserName = "admin" });
-
         var ddb = new Mock<IDDB>();
         ddb.Setup(d => d.AddRaw(It.IsAny<string>())).Callback<string>(added.Add);
-        var ddbManager = new Mock<IDdbManager>();
+        ddb.Setup(d => d.FindSummaries(It.IsAny<EntryQuery>())).Returns([]);
+        var ddbManager = new Mock<IDdbManager>().WithFolders(Path.Combine(_root, "datasets"));
         ddbManager.Setup(m => m.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
 
-        var settings = TestSettings.Mutable();
-        settings.Value = new AppSettings { DatasetsPath = Path.Combine(_root, "datasets") };
-        var backgroundJob = new Mock<IBackgroundJobsProcessor>();
-        var cache = new Mock<ICacheManager>();
-
-        var manager = new SystemManager(auth.Object, context, ddbManager.Object,
-            NullLogger<SystemManager>.Instance, Mock.Of<IObjectsManager>(), settings,
-            new BuildPendingService(context, new DatasetSweep(context), ddbManager.Object, backgroundJob.Object, cache.Object, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>()),
-            factory.Object, backgroundJob.Object, Mock.Of<IDatasetListingInvalidator>(), new FileSystem(), Mock.Of<IJobIndexWriter>(),
-            new SsrfGuard(new ImportSettings { SsrfAllowPrivateNetworks = true }), TestPaths.Policy, TimeProvider.System, TestJobs.Scheduler());
-
-        return await manager.ImportDataset(new ImportDatasetRequestDto
-        {
-            SourceRegistryUrl = "http://remote.test",
-            SourceOrganization = "src",
-            SourceDataset = "ds",
-            Mode = ImportMode.ParallelFiles
-        });
+        // The legacy admin import of SystemManager is the remote import job since RQ-12
+        return await TestImports.Importer(context, ddbManager.Object, factory.Object, _root).ImportAsync(
+            new RemoteImportRequest("http://remote.test", null, null, "src", "ds", "src", null, ImportMode.ParallelFiles),
+            null, CancellationToken.None);
     }
 
     /// <summary>

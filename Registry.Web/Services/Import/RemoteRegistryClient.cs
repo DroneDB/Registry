@@ -85,7 +85,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         if (!string.IsNullOrWhiteSpace(authToken))
             client.DefaultRequestHeaders.Add("Authorization", $"Bearer {authToken}");
 
-        var searchUrl = $"{registryUrl.TrimEnd('/')}/orgs/{orgSlug}/ds/{dsSlug}/search";
+        var searchUrl = $"{DatasetUrl(registryUrl, orgSlug, dsSlug)}/search";
 
         var content = new FormUrlEncodedContent([
             new KeyValuePair<string, string>("query", "*"),
@@ -130,10 +130,6 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
             .ToArray();
 
         var totalFiles = toDownload.Length;
-        var headers = new Dictionary<string, string>();
-        if (!string.IsNullOrWhiteSpace(authToken))
-            headers.Add("Authorization", $"Bearer {authToken}");
-
         var filesDone = 0;
         long bytesSoFar = 0;
 
@@ -141,7 +137,6 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         // aggressively, so a low default avoids tripping HTTP 429. Per-file downloads retry with backoff
         // and honor Retry-After (see HttpHelper.DownloadFileWithRetryAsync).
         var maxParallel = Math.Max(1, _settings.RegistryDownloadConcurrency);
-        var maxRetries = Math.Max(1, _settings.RegistryDownloadMaxRetries);
 
         await Parallel.ForEachAsync(
             toDownload,
@@ -157,12 +152,8 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
                 }
                 else
                 {
-                    var downloadUrl =
-                        $"{registryUrl.TrimEnd('/')}/orgs/{sourceOrg}/ds/{sourceDs}/download" +
-                        $"?path={Uri.EscapeDataString(entry.Path)}&inline=1";
-
-                    var result = await HttpHelper.DownloadFileWithRetryAsync(
-                        downloadUrl, localPath, headers, maxRetries, token, CreateClient());
+                    var result = await DownloadFileAsync(registryUrl, authToken, sourceOrg, sourceDs, entry.Path,
+                        localPath, token);
 
                     if (!result.Success)
                         throw new IOException(
@@ -182,6 +173,27 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
                     FilesTotal: totalFiles));
             });
     }
+
+    /// <inheritdoc />
+    public Task<HttpHelper.DownloadResult> DownloadFileAsync(string registryUrl, string? authToken, string orgSlug,
+        string dsSlug, string entryPath, string localPath, CancellationToken ct) =>
+        HttpHelper.DownloadFileWithRetryAsync(
+            $"{DatasetUrl(registryUrl, orgSlug, dsSlug)}/download?path={Uri.EscapeDataString(entryPath)}&inline=1",
+            localPath, BearerHeaders(authToken), Math.Max(1, _settings.RegistryDownloadMaxRetries), ct, CreateClient());
+
+    /// <inheritdoc />
+    public Task DownloadArchiveAsync(string registryUrl, string? authToken, string orgSlug, string dsSlug,
+        string destFile, CancellationToken ct) =>
+        HttpHelper.DownloadFileAsync($"{DatasetUrl(registryUrl, orgSlug, dsSlug)}/download", destFile,
+            BearerHeaders(authToken), (downloaded, total) => _logger.LogDebug(
+                "Archive download progress: {Downloaded:N0} / {Total:N0} bytes", downloaded, total),
+            CreateClient(), ct);
+
+    private static string DatasetUrl(string registryUrl, string orgSlug, string dsSlug) =>
+        $"{registryUrl.TrimEnd('/')}/orgs/{orgSlug}/ds/{dsSlug}";
+
+    private static Dictionary<string, string> BearerHeaders(string? authToken) =>
+        string.IsNullOrWhiteSpace(authToken) ? [] : new() { ["Authorization"] = $"Bearer {authToken}" };
 
     /// <inheritdoc />
     public async Task<RemoteBrowseItem[]> ListOrganizationsAsync(string registryUrl, string? authToken,

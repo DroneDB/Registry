@@ -3,6 +3,7 @@ using Registry.Web.Services.Jobs;
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -20,7 +21,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Import;
-using Registry.Web.Services.Managers;
+using Registry.Web.Services.RemoteImport;
 using Registry.Web.Services.Ports;
 using Shouldly;
 using Registry.Web.Test.Support;
@@ -29,28 +30,25 @@ using Registry.Web.Services.Caching;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// Integration tests for ImportDataset that test against real remote registry.
+/// The remote Registry import (<see cref="RemoteRegistryImporter"/>, the import job; SystemManager.ImportDataset before
+/// RQ-12) against a real remote registry.
 /// These tests require network access and should be run explicitly.
 /// </summary>
 [TestFixture]
 [Category(TestCategories.Network)]
 [Explicit("These tests require network access and download real data from hub.dronedb.app")]
-public class SystemManagerImportIntegrationTest : TestBase
+public class RemoteRegistryImporterNetworkTest : TestBase
 {
     private const string TestRegistryUrl = "https://hub.dronedb.app";
     private const string TestOrganization = "odm";
     private const string TestDataset = "brighton-beach";
 
-    private ILogger<SystemManager> _logger = null!;
-    private IFileSystem _fileSystem = null!;
     private string _tempDatasetsPath = null!;
     private string _tempPath = null!;
 
     [SetUp]
     public void Setup()
     {
-        _logger = CreateTestLogger<SystemManager>();
-        _fileSystem = new FileSystem();
 
         // Create temp directories for test
         _tempDatasetsPath = Path.Combine(Path.GetTempPath(), $"registry-test-{Guid.NewGuid()}");
@@ -76,52 +74,17 @@ public class SystemManagerImportIntegrationTest : TestBase
         }
     }
 
-    private RegistryContext CreateInMemoryContext()
+    private static RegistryContext CreateInMemoryContext()
     {
         return TestDb.CreateContext<RegistryContext>();
     }
 
-    private SystemManager CreateSystemManager(RegistryContext context, Mock<IDdbManager> ddbManagerMock)
-    {
-        var authManagerMock = new Mock<IAuthManager>();
-        authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
-        authManagerMock.Setup(x => x.GetCurrentUser()).ReturnsAsync(new User { Id = "test-user", UserName = "test" });
+    private RemoteRegistryImporter CreateImporter(RegistryContext context, Mock<IDdbManager> ddbManagerMock) =>
+        TestImports.Importer(context, ddbManagerMock.WithFolders(_tempDatasetsPath).Object, new TestHttpClientFactory(),
+            _tempPath);
 
-        var settings = new AppSettings
-        {
-            DatasetsPath = _tempDatasetsPath,
-            TempPath = _tempPath
-        };
-        var settingsOptions = TestSettings.Options(settings);
-
-        var backgroundJobMock = new Mock<IBackgroundJobsProcessor>();
-        backgroundJobMock.Setup(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action>>(), It.IsAny<IndexPayload>()))
-            .Returns("test-job-id");
-
-        var cacheManagerMock = new Mock<ICacheManager>();
-        var objectsManagerMock = new Mock<IObjectsManager>();
-
-        // Use real HttpClientFactory
-        var httpClientFactory = new TestHttpClientFactory();
-
-        var buildPendingService = new BuildPendingService(context, new DatasetSweep(context), ddbManagerMock.Object, backgroundJobMock.Object, cacheManagerMock.Object, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
-
-        return new SystemManager(
-            authManagerMock.Object,
-            context,
-            ddbManagerMock.Object,
-            _logger,
-            objectsManagerMock.Object,
-            settingsOptions,
-            buildPendingService,
-            httpClientFactory,
-            backgroundJobMock.Object,
-            Mock.Of<IDatasetListingInvalidator>(),
-            _fileSystem,
-            Mock.Of<IJobIndexWriter>(),
-            new SsrfGuard(new ImportSettings())
-        , TestPaths.Policy, TimeProvider.System, TestJobs.Scheduler());
-    }
+    private static RemoteImportRequest Request(string destinationOrg, string destinationDs, ImportMode mode) =>
+        new(TestRegistryUrl, null, null, TestOrganization, TestDataset, destinationOrg, destinationDs, mode);
 
     [Test]
     public async Task ImportDataset_ArchiveMode_DownloadsAndImportsPublicDataset()
@@ -137,23 +100,15 @@ public class SystemManagerImportIntegrationTest : TestBase
         ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var systemManager = CreateSystemManager(context, ddbManagerMock);
+        var importer = CreateImporter(context, ddbManagerMock);
 
-        var request = new ImportDatasetRequestDto
-        {
-            SourceRegistryUrl = TestRegistryUrl,
-            SourceOrganization = TestOrganization,
-            SourceDataset = TestDataset,
-            DestinationOrganization = "imported-org",
-            DestinationDataset = "imported-dataset",
-            Mode = ImportMode.Archive
-        };
+        var request = Request("imported-org", "imported-dataset", ImportMode.Archive);
 
         // Act
         TestContext.WriteLine($"Starting Archive mode import of {TestOrganization}/{TestDataset}...");
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-        var result = await systemManager.ImportDataset(request);
+        var result = await importer.ImportAsync(request, null, CancellationToken.None);
 
         stopwatch.Stop();
         TestContext.WriteLine($"Import completed in {stopwatch.Elapsed.TotalSeconds:F2} seconds");
@@ -180,30 +135,22 @@ public class SystemManagerImportIntegrationTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.DatasetFolderPath).Returns(() =>
             Path.Combine(_tempDatasetsPath, "imported-org-parallel", context.Datasets.First().InternalRef.ToString()));
-        ddbMock.Setup(x => x.GetEntry(It.IsAny<string>())).Returns((Entry?)null); // No existing files
+        ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([]); // No existing files
         ddbMock.Setup(x => x.AddRaw(It.IsAny<string>())); // Accept any file addition
 
         var ddbManagerMock = new Mock<IDdbManager>();
         ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var systemManager = CreateSystemManager(context, ddbManagerMock);
+        var importer = CreateImporter(context, ddbManagerMock);
 
-        var request = new ImportDatasetRequestDto
-        {
-            SourceRegistryUrl = TestRegistryUrl,
-            SourceOrganization = TestOrganization,
-            SourceDataset = TestDataset,
-            DestinationOrganization = "imported-org-parallel",
-            DestinationDataset = "imported-dataset-parallel",
-            Mode = ImportMode.ParallelFiles
-        };
+        var request = Request("imported-org-parallel", "imported-dataset-parallel", ImportMode.ParallelFiles);
 
         // Act
         TestContext.WriteLine($"Starting ParallelFiles mode import of {TestOrganization}/{TestDataset}...");
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-        var result = await systemManager.ImportDataset(request);
+        var result = await importer.ImportAsync(request, null, CancellationToken.None);
 
         stopwatch.Stop();
         TestContext.WriteLine($"Import completed in {stopwatch.Elapsed.TotalSeconds:F2} seconds");

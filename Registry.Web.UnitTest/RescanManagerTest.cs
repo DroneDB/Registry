@@ -22,6 +22,7 @@ using Registry.Web.Services.Ports;
 using Shouldly;
 using Registry.Web.Test.Support;
 using Registry.Web.Services.Builds;
+using Registry.Web.Services.Maintenance;
 
 namespace Registry.Web.Test;
 
@@ -281,7 +282,7 @@ public class RescanManagerTest : TestBase
         // AuthManager grants an administrator every access
         _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
 
-        await Should.ThrowAsync<ArgumentException>(() => CreateRescanManager(context).Rescan(new RescanRequestDto
+        await Should.ThrowAsync<ArgumentException>(() => CreateMaintenance(context).RescanAsync(new RescanRequestDto
         {
             OrganizationSlug = org,
             DatasetSlug = ds,
@@ -308,7 +309,7 @@ public class RescanManagerTest : TestBase
             .Callback<Expression<Func<IndexRescanService, Task>>>(e => job = e)
             .Returns("job-1");
 
-        var result = await CreateRescanManager(context).Rescan(new RescanRequestDto
+        var result = await CreateMaintenance(context).RescanAsync(new RescanRequestDto
         {
             Types = ["Vector"],
             Extensions = [".DWG", "dxf"]
@@ -333,10 +334,18 @@ public class RescanManagerTest : TestBase
     }
 
     private RescanManager CreateRescanManager(RegistryContext context) =>
-        new(_authManagerMock.Object, new DatasetAccessResolver(Mock.Of<IDatasetResolver>(), _authManagerMock.Object, _ddbManagerMock.Object, TestPaths.Policy),
-            context, _ddbManagerMock.Object, _backgroundJobMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object),
+        new(new CurrentUserBuildRequester(_authManagerMock.Object),
+            new DatasetAccessResolver(Mock.Of<IDatasetResolver>(), _authManagerMock.Object, _ddbManagerMock.Object, TestPaths.Policy),
+            context, _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object),
             new RescanRebuild(_cacheInvalidatorMock.Object, CreateTestLogger<RescanRebuild>()),
             CreateTestLogger<RescanManager>());
+
+    // The system rescan moved to the build maintenance (RQ-12)
+    private BuildMaintenance CreateMaintenance(RegistryContext context) =>
+        new(context, _ddbManagerMock.Object, _backgroundJobMock.Object,
+            new CurrentUserBuildRequester(_authManagerMock.Object), Mock.Of<IJobIndexWriter>(),
+            Microsoft.Extensions.Options.Options.Create(new Registry.Web.Models.Configuration.JobScheduleOptions()),
+            CreateTestLogger<BuildMaintenance>());
 
     private static RegistryContext CreateInMemoryContext()
     {

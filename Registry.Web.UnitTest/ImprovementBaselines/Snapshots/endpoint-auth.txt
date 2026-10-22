@@ -149,25 +149,27 @@ GET /stac/collections/{orgSlug}/{dsSlug}/items/{featureId} -> none [open] @ Stac
 GET /stac/conformance -> none [open] @ StacController.GetConformance
 GET /stac/search -> none [open] @ StacController.SearchGet
 POST /stac/search -> none [open] @ StacController.SearchPost
-GET /sys/build-pending-status -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.GetBuildPendingStatus
-POST /sys/check-artifact-completeness -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.CheckArtifactCompleteness
-POST /sys/cleanup -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.Cleanup
-POST /sys/cleanup-jobindices -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.CleanupJobIndices
+GET /sys/build-pending-status -> Authorize + Authorize(Policy=Admin) [admin] @ BuildMaintenanceController.GetBuildPendingStatus
+POST /sys/check-artifact-completeness -> Authorize + Authorize(Policy=Admin) [admin] @ BuildMaintenanceController.CheckArtifactCompleteness
+POST /sys/cleanup -> Authorize + Authorize(Policy=Admin) [admin] @ BuildMaintenanceController.Cleanup
+POST /sys/cleanup-jobindices -> Authorize + Authorize(Policy=Admin) [admin] @ BuildMaintenanceController.CleanupJobIndices
 POST /sys/cleanupbatches -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.CleanupBatches
 POST /sys/cleanupdatasets -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.CleanupDatasets
 GET /sys/config -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.GetConfig
-GET /sys/features -> AllowAnonymous + Authorize [anonymous] @ SystemController.GetFeatures
+GET /sys/features -> AllowAnonymous + Authorize [anonymous] @ FeaturesController.GetFeatures
 POST /sys/fix-invalid-slugs -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.FixInvalidSlugs
-POST /sys/import-dataset -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.ImportDataset
-POST /sys/import-organization -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.ImportOrganization
+POST /sys/import-dataset -> Authorize + Authorize(Policy=Admin) [admin] @ RemoteImportController.ImportDataset
+POST /sys/import-organization -> Authorize + Authorize(Policy=Admin) [admin] @ RemoteImportController.ImportOrganization
+DELETE /sys/imports/{jobId} -> Authorize + Authorize(Policy=Admin) [admin] @ RemoteImportController.CancelImport
+GET /sys/imports/{jobId} -> Authorize + Authorize(Policy=Admin) [admin] @ RemoteImportController.GetImportStatus
 POST /sys/merge-organizations -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.MergeOrganizations
 POST /sys/migratevisibility -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.MigrateVisibility
 POST /sys/move-datasets -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.MoveDatasets
-GET /sys/processingNodes -> Authorize [authenticated] @ SystemController.GetProcessingNodes
-GET /sys/processingNodes/{nodeId}/options -> Authorize [authenticated] @ SystemController.GetProcessingNodeOptions
-GET /sys/processingNodes/{nodeId}/status -> Authorize [authenticated] @ SystemController.GetProcessingNodeStatus
+GET /sys/processingNodes -> Authorize [authenticated] @ ProcessingNodesController.GetProcessingNodes
+GET /sys/processingNodes/{nodeId}/options -> Authorize [authenticated] @ ProcessingNodesController.GetProcessingNodeOptions
+GET /sys/processingNodes/{nodeId}/status -> Authorize [authenticated] @ ProcessingNodesController.GetProcessingNodeStatus
 GET /sys/report -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.GetGlobalReport
-POST /sys/rescan -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.Rescan
+POST /sys/rescan -> Authorize + Authorize(Policy=Admin) [admin] @ BuildMaintenanceController.Rescan
 GET /sys/tasks -> Authorize + Authorize(Policy=Admin) [admin] @ AdminTasksController.List
 POST /sys/tasks/{id}/delete -> Authorize + Authorize(Policy=Admin) [admin] @ AdminTasksController.Delete
 POST /sys/upload-probe -> Authorize [authenticated] @ UploadProbeController.Probe

@@ -127,6 +127,7 @@ public class ProcessingNodeDiCompletenessTests
     [TestCase(typeof(Registry.Web.Services.Jobs.HealthCheckJob))]
     [TestCase(typeof(HangfireUtils))]
     [TestCase(typeof(Registry.Web.Services.HeavyTasks.Adapters.HeavyTaskJobWrapper))]
+    [TestCase(typeof(Registry.Web.Services.RemoteImport.RemoteImportJob))] // RQ-12: queued by the web host
     public void ProcessingNode_ActivatesTheJobClasses(Type jobClass)
     {
         // Hangfire's activator creates a job's class from the job scope: the stored shapes (D4) too

@@ -24,6 +24,13 @@ public interface IDdbManager
     /// directly under the datasets path.
     /// </summary>
     bool TryParseDatasetFolder(string? datasetFolderPath, out string orgSlug, out Guid internalRef);
+
+    /// <summary>
+    /// The folder of the dataset <paramref name="orgSlug"/>/<paramref name="internalRef"/> (the one
+    /// <see cref="Get"/> opens), without creating or opening anything.
+    /// </summary>
+    string GetDatasetFolder(string orgSlug, Guid internalRef);
+
     void Delete(string orgSlug, Guid internalRef);
 
     void Delete(string orgSlug);

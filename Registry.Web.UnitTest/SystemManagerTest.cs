@@ -19,7 +19,10 @@ using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
-using Registry.Web.Services.Import;
+using Microsoft.Extensions.Logging.Abstractions;
+using Registry.Web.Services.Builds;
+using Registry.Web.Services.Maintenance;
+using Registry.Web.Services.Objects;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using System.Net.Http;
@@ -33,34 +36,23 @@ namespace Registry.Web.Test;
 public class SystemManagerTest : TestBase
 {
     private Mock<IAuthManager> _authManagerMock = null!;
-    private MutableOptions<AppSettings> _settingsOptions = null!;
     private Mock<IDdbManager> _ddbManagerMock = null!;
-    private Mock<IObjectsManager> _objectsManagerMock = null!;
-    private Mock<IHttpClientFactory> _httpClientFactoryMock = null!;
     private Mock<IBackgroundJobsProcessor> _backgroundJobMock = null!;
-    private Mock<ICacheManager> _cacheManagerMock = null!;
     private ILogger<SystemManager> _logger = null!;
     private AppSettings _settings = null!;
-    private IFileSystem _fileSystem = null!;
 
     [SetUp]
     public void Setup()
     {
         _authManagerMock = new Mock<IAuthManager>();
-        _settingsOptions = TestSettings.Mutable();
         _ddbManagerMock = new Mock<IDdbManager>();
-        _objectsManagerMock = new Mock<IObjectsManager>();
-        _httpClientFactoryMock = new Mock<IHttpClientFactory>();
         _backgroundJobMock = new Mock<IBackgroundJobsProcessor>();
-        _cacheManagerMock = new Mock<ICacheManager>();
         _logger = CreateTestLogger<SystemManager>();
-        _fileSystem = new FileSystem();
 
         _settings = new AppSettings
         {
             DatasetsPath = "test-datasets"
         };
-        _settingsOptions.Value = _settings;
     }
 
     private RegistryContext CreateInMemoryContext()
@@ -110,10 +102,8 @@ public class SystemManagerTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var systemManager = CreateSystemManager(context);
-
         // Act
-        var result = await systemManager.GetGlobalReport();
+        var result = await CreateReport(context).BuildAsync();
 
         // Assert
         result.ShouldNotBeNull();
@@ -141,10 +131,8 @@ public class SystemManagerTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Throws(new InvalidOperationException("Simulated failure"));
 
-        var systemManager = CreateSystemManager(context);
-
         // Act
-        var result = await systemManager.GetGlobalReport();
+        var result = await CreateReport(context).BuildAsync();
 
         // Assert
         result.ShouldNotBeNull();
@@ -164,9 +152,7 @@ public class SystemManagerTest : TestBase
         await using var context = CreateInMemoryContext();
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
 
-        var systemManager = CreateSystemManager(context);
-
-        Func<Task> act = async () => await systemManager.CleanupBuild(
+        Func<Task> act = async () => await CreateMaintenance(context).CleanupBuildAsync(
             new Registry.Web.Models.DTO.CleanupBuildRequestDto { DatasetSlug = "test-dataset" });
 
         var ex = await Should.ThrowAsync<ArgumentException>(act);
@@ -179,9 +165,7 @@ public class SystemManagerTest : TestBase
         await using var context = CreateInMemoryContext();
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
 
-        var systemManager = CreateSystemManager(context);
-
-        Func<Task> act = async () => await systemManager.CleanupBuild(
+        Func<Task> act = async () => await CreateMaintenance(context).CleanupBuildAsync(
             new Registry.Web.Models.DTO.CleanupBuildRequestDto { OrganizationSlug = "missing-org" });
 
         await Should.ThrowAsync<ArgumentException>(act);
@@ -193,9 +177,7 @@ public class SystemManagerTest : TestBase
         await using var context = CreateInMemoryContext();
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
 
-        var systemManager = CreateSystemManager(context);
-
-        Func<Task> act = async () => await systemManager.CleanupBuild(
+        Func<Task> act = async () => await CreateMaintenance(context).CleanupBuildAsync(
             new Registry.Web.Models.DTO.CleanupBuildRequestDto
             {
                 OrganizationSlug = "test-org",
@@ -220,9 +202,7 @@ public class SystemManagerTest : TestBase
             .Setup(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<Registry.Web.Models.IndexPayload>()))
             .Returns("job-id-1");
 
-        var systemManager = CreateSystemManager(context);
-
-        var result = await systemManager.CleanupBuild(new Registry.Web.Models.DTO.CleanupBuildRequestDto());
+        var result = await CreateMaintenance(context).CleanupBuildAsync(new Registry.Web.Models.DTO.CleanupBuildRequestDto());
 
         result.ShouldNotBeNull();
         result.Async.ShouldBeTrue();
@@ -249,9 +229,7 @@ public class SystemManagerTest : TestBase
             .Setup(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<Registry.Web.Models.IndexPayload>()))
             .Returns("job-id-2");
 
-        var systemManager = CreateSystemManager(context);
-
-        var result = await systemManager.CleanupBuild(
+        var result = await CreateMaintenance(context).CleanupBuildAsync(
             new Registry.Web.Models.DTO.CleanupBuildRequestDto { OrganizationSlug = "test-org" });
 
         // Even if the org has only one dataset, scope is "all datasets in org" -> async per the documented contract.
@@ -274,9 +252,7 @@ public class SystemManagerTest : TestBase
         });
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-        var systemManager = CreateSystemManager(context);
-
-        var result = await systemManager.CleanupBuild(new Registry.Web.Models.DTO.CleanupBuildRequestDto
+        var result = await CreateMaintenance(context).CleanupBuildAsync(new Registry.Web.Models.DTO.CleanupBuildRequestDto
         {
             OrganizationSlug = "test-org",
             DatasetSlug = "test-dataset"
@@ -303,9 +279,7 @@ public class SystemManagerTest : TestBase
         ddbMock.Setup(x => x.Cleanup()).Throws(new InvalidOperationException("boom"));
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
-        var systemManager = CreateSystemManager(context);
-
-        var result = await systemManager.CleanupBuild(new Registry.Web.Models.DTO.CleanupBuildRequestDto
+        var result = await CreateMaintenance(context).CleanupBuildAsync(new Registry.Web.Models.DTO.CleanupBuildRequestDto
         {
             OrganizationSlug = "test-org",
             DatasetSlug = "test-dataset"
@@ -327,9 +301,7 @@ public class SystemManagerTest : TestBase
         _authManagerMock.Setup(x => x.GetCurrentUser())
             .ReturnsAsync(new Registry.Web.Identity.Models.User { Id = "user-1" });
 
-        var systemManager = CreateSystemManager(context);
-
-        var result = await systemManager.CleanupBuild(new Registry.Web.Models.DTO.CleanupBuildRequestDto());
+        var result = await CreateMaintenance(context).CleanupBuildAsync(new Registry.Web.Models.DTO.CleanupBuildRequestDto());
 
         result.ShouldNotBeNull();
         result.Async.ShouldBeFalse();
@@ -368,9 +340,7 @@ public class SystemManagerTest : TestBase
             .Setup(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<Registry.Web.Models.IndexPayload>()))
             .Returns(() => $"job-{++seq}");
 
-        var systemManager = CreateSystemManager(context);
-
-        var result = await systemManager.CleanupBuild(new Registry.Web.Models.DTO.CleanupBuildRequestDto());
+        var result = await CreateMaintenance(context).CleanupBuildAsync(new Registry.Web.Models.DTO.CleanupBuildRequestDto());
 
         result.Async.ShouldBeTrue();
         result.JobIds.Count.ShouldBe(2);
@@ -408,25 +378,16 @@ public class SystemManagerTest : TestBase
         Entries = [new Registry.Web.Data.Models.Entry { Path = token + ".jpg", Hash = "h", AddedOn = lastEntry }]
     };
 
-    private SystemManager CreateSystemManager(RegistryContext context, TimeProvider? time = null)
-    {
-        // Create a real BuildPendingService instance with mocked dependencies
-        var buildPendingService = new BuildPendingService(context, new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManagerMock.Object, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
+    private GlobalReportBuilder CreateReport(RegistryContext context) =>
+        new(context, _ddbManagerMock.Object, _authManagerMock.Object, NullLogger<GlobalReportBuilder>.Instance);
 
-        return new SystemManager(
-            _authManagerMock.Object,
-            context,
-            _ddbManagerMock.Object,
-            _logger,
-            _objectsManagerMock.Object,
-            _settingsOptions,
-            buildPendingService,
-            _httpClientFactoryMock.Object,
-            _backgroundJobMock.Object,
-            Mock.Of<IDatasetListingInvalidator>(),
-            _fileSystem,
-            Mock.Of<IJobIndexWriter>(),
-            new SsrfGuard(new ImportSettings())
-        , TestPaths.Policy, time ?? TimeProvider.System, TestJobs.Scheduler());
-    }
+    private BuildMaintenance CreateMaintenance(RegistryContext context) =>
+        new(context, _ddbManagerMock.Object, _backgroundJobMock.Object,
+            new CurrentUserBuildRequester(_authManagerMock.Object), Mock.Of<IJobIndexWriter>(),
+            Microsoft.Extensions.Options.Options.Create(new JobScheduleOptions()), NullLogger<BuildMaintenance>.Instance);
+
+    private SystemManager CreateSystemManager(RegistryContext context, TimeProvider? time = null) =>
+        new(context, _ddbManagerMock.Object, Mock.Of<IEntryCommandService>(),
+            Microsoft.Extensions.Options.Options.Create(new ShareOptions { UploadBatchTimeout = _settings.UploadBatchTimeout }),
+            time ?? TimeProvider.System, Mock.Of<IDatasetListingInvalidator>(), _logger);
 }

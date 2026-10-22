@@ -11,11 +11,15 @@ using Registry.Web.Identity;
 using Registry.Web.Middlewares;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Features;
 using Registry.Web.Services.Initialization;
+using Registry.Web.Services.Maintenance;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Managers.Wcs;
 using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
+using Registry.Web.Services.Processing;
+using Registry.Web.Services.RemoteImport;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 using IMetaManager = Registry.Web.Services.Ports.IMetaManager;
@@ -47,7 +51,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IShareManager, ShareManager>();
         services.AddScoped<IPushManager, PushManager>();
         services.AddSingleton<IPushSessionStore, PushSessionStore>();
-        services.AddScoped<ISystemManager, SystemManager>();
+        services.AddSystemAdministration();
         services.AddScoped<IRescanManager, RescanManager>();
         services.AddScoped<IMetaManager, MetaManager>();
         services.AddScoped<IBuildStatusService, BuildStatusService>();
@@ -63,8 +67,6 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IImportManager, ImportManager>();
         services.AddScoped<IFileUrlImportManager, FileUrlImportManager>();
 
-        // Admin configuration view (GET /sys/config)
-        services.AddScoped<IConfigurationDataBuilder, ConfigurationDataBuilder>();
 
         services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
         services.AddSingleton<INameGenerator, NameGenerator>();
@@ -75,6 +77,32 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddSingleton<IDownloadLimiter, DownloadLimiter>();
         services.AddSingleton<IClientIpResolver, ClientIpResolver>();
 
+        return services;
+    }
+
+    /// <summary>
+    /// The <c>/sys</c> features (RQ-12): data and build maintenance, the slug repair, the global report, the
+    /// configuration view, the remote import (queued; the job is registered by <c>AddImportSources</c>), the
+    /// processing nodes and the platform features.
+    /// </summary>
+    public static IServiceCollection AddSystemAdministration(this IServiceCollection services)
+    {
+        services.AddScoped<ISystemManager, SystemManager>();
+        services.AddScoped<IDatasetSlugRepair, DatasetSlugRepair>();
+        services.AddScoped<IGlobalReportBuilder, GlobalReportBuilder>();
+        services.AddScoped<IBuildMaintenance, BuildMaintenance>();
+        services.AddScoped<IConfigurationDataBuilder, ConfigurationDataBuilder>();
+
+        services.AddSingleton<IJobOutcomeReader, HangfireJobOutcomeReader>();
+        services.AddScoped<IRemoteImportService, RemoteImportService>();
+
+        services.AddScoped<IProcessingNodeCatalog, ProcessingNodeCatalog>();
+
+        services.AddScoped<IFeaturesBuilder, FeaturesBuilder>();
+        services.AddScoped<IFeatureSection, AccountFeatures>();
+        services.AddScoped<IFeatureSection, DownloadFeatures>();
+        services.AddScoped<IFeatureSection, TaskFeatures>();
+        services.AddScoped<IFeatureSection, HubFeatures>();
         return services;
     }
 

@@ -2,6 +2,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Common;
 using Registry.Ports.Import;
 using Registry.Web.Models.DTO;
 
@@ -53,6 +54,21 @@ public interface IRemoteRegistryClient
     /// <returns>A task that completes when all files have been downloaded.</returns>
     Task DownloadFilesParallelAsync(string registryUrl, string? authToken, string sourceOrg, string sourceDs,
         string destFolder, EntryDto[] files, IProgress<ImportProgress>? progress, CancellationToken ct);
+
+    /// <summary>
+    /// Downloads one file of a remote dataset to <paramref name="localPath"/>, retrying transient failures
+    /// (<see cref="Models.Configuration.ImportSettings.RegistryDownloadMaxRetries"/>, honouring <c>Retry-After</c>).
+    /// A failure is reported in the result, not thrown; cancellation throws.
+    /// </summary>
+    Task<HttpHelper.DownloadResult> DownloadFileAsync(string registryUrl, string? authToken, string orgSlug,
+        string dsSlug, string entryPath, string localPath, CancellationToken ct);
+
+    /// <summary>
+    /// Downloads a whole remote dataset as the ZIP archive of its download route (index included) to
+    /// <paramref name="destFile"/>. Throws <see cref="System.Net.Http.HttpRequestException"/> when the remote refuses.
+    /// </summary>
+    Task DownloadArchiveAsync(string registryUrl, string? authToken, string orgSlug, string dsSlug, string destFile,
+        CancellationToken ct);
 
     /// <summary>
     /// Lists all organizations visible to the given token (or publicly visible when token is null).

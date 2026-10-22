@@ -29,7 +29,10 @@ public static class HttpHelper
     /// <param name="headers">Optional HTTP headers to include in the request</param>
     /// <param name="progressCallback">Optional callback for progress reporting (bytesDownloaded, totalBytes). totalBytes may be -1 if unknown.</param>
     /// <param name="httpClient">Optional client to use (e.g. an SSRF-hardened one); falls back to the shared static client.</param>
-    public static async Task DownloadFileAsync(string uri, string outputPath, Dictionary<string, string> headers = null, Action<long, long> progressCallback = null, HttpClient httpClient = null)
+    /// <param name="cancellationToken">Stops the transfer (the partial file stays: the caller removes it).</param>
+    public static async Task DownloadFileAsync(string uri, string outputPath, Dictionary<string, string> headers = null,
+        Action<long, long> progressCallback = null, HttpClient httpClient = null,
+        CancellationToken cancellationToken = default)
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out _))
             throw new InvalidOperationException("URI is invalid.");
@@ -48,12 +51,12 @@ public static class HttpHelper
         }
 
         // Use streaming to avoid loading entire file in memory
-        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         var totalBytes = response.Content.Headers.ContentLength ?? -1;
 
-        await using var sourceStream = await response.Content.ReadAsStreamAsync();
+        await using var sourceStream = await response.Content.ReadAsStreamAsync(cancellationToken);
         await using var fileStream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None,
             bufferSize: BufferSize, useAsync: true);
 
@@ -62,9 +65,9 @@ public static class HttpHelper
         int bytesRead;
         var lastProgressReport = DateTime.UtcNow;
 
-        while ((bytesRead = await sourceStream.ReadAsync(buffer)) > 0)
+        while ((bytesRead = await sourceStream.ReadAsync(buffer, cancellationToken)) > 0)
         {
-            await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead));
+            await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
             totalBytesRead += bytesRead;
 
             // Report progress every 5 seconds or at completion

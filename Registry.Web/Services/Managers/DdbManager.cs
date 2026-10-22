@@ -31,7 +31,7 @@ public class DdbManager : IDdbManager
 
     public IDDB Get(string orgSlug, Guid internalRef)
     {
-        var baseDdbPath = GetDdbPath(orgSlug, internalRef);
+        var baseDdbPath = GetDatasetFolder(orgSlug, internalRef);
 
         // Every request opens its dataset: check the folder and the index once per process, not
         // with two file system calls per open (REG-05 item 4)
@@ -57,7 +57,7 @@ public class DdbManager : IDdbManager
 
     public IDDB Open(string orgSlug, Guid internalRef)
     {
-        var baseDdbPath = GetDdbPath(orgSlug, internalRef);
+        var baseDdbPath = GetDatasetFolder(orgSlug, internalRef);
 
         if (_initialized.Contains(baseDdbPath) || Directory.Exists(Path.Combine(baseDdbPath, IDDB.DatabaseFolderName)))
             return new DDB(baseDdbPath, _ddbWrapper);
@@ -85,7 +85,7 @@ public class DdbManager : IDdbManager
     public void Delete(string orgSlug, Guid internalRef)
     {
 
-        var baseDdbPath = GetDdbPath(orgSlug, internalRef);
+        var baseDdbPath = GetDatasetFolder(orgSlug, internalRef);
 
         if (!Directory.Exists(baseDdbPath)) {
             _logger.LogWarning("Asked to remove the folder '{BaseDdbPath}' but it does not exist", baseDdbPath);
@@ -133,7 +133,7 @@ public class DdbManager : IDdbManager
         }
     }
 
-    private string GetDdbPath(string orgSlug, Guid internalRef)
+    public string GetDatasetFolder(string orgSlug, Guid internalRef)
     {
         if (string.IsNullOrWhiteSpace(orgSlug))
             throw new ArgumentException("Organization slug cannot be null or empty");

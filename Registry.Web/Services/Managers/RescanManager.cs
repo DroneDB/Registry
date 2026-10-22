@@ -21,30 +21,27 @@ namespace Registry.Web.Services.Managers;
 /// <summary>Default <see cref="IRescanManager"/>.</summary>
 public class RescanManager : IRescanManager
 {
-    private readonly IAuthManager _authManager;
+    private readonly IBuildRequester _requester;
     private readonly IDatasetAccessResolver _access;
     private readonly RegistryContext _context;
     private readonly IDdbManager _ddbManager;
-    private readonly IBackgroundJobsProcessor _backgroundJob;
     private readonly IBuildScheduler _builds;
     private readonly RescanRebuild _rebuild;
     private readonly ILogger<RescanManager> _logger;
 
     public RescanManager(
-        IAuthManager authManager,
+        IBuildRequester requester,
         IDatasetAccessResolver access,
         RegistryContext context,
         IDdbManager ddbManager,
-        IBackgroundJobsProcessor backgroundJob,
         IBuildScheduler builds,
         RescanRebuild rebuild,
         ILogger<RescanManager> logger)
     {
-        _authManager = authManager;
+        _requester = requester;
         _access = access;
         _context = context;
         _ddbManager = ddbManager;
-        _backgroundJob = backgroundJob;
         _builds = builds;
         _rebuild = rebuild;
         _logger = logger;
@@ -77,8 +74,7 @@ public class RescanManager : IRescanManager
         var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
         var results = ddb.RescanIndex(filter.ToOptions(options.StopOnError));
 
-        var user = await _authManager.GetCurrentUser();
-        var origin = new BuildOrigin(user?.Id ?? MagicStrings.AutoBuildServiceUserId);
+        var origin = new BuildOrigin(await _requester.UserIdAsync() ?? MagicStrings.AutoBuildServiceUserId);
         var target = new BuildTarget(ddb, new DatasetKey(orgSlug, dataset.InternalRef), orgSlug, dsSlug);
         await _rebuild.RunAsync(orgSlug, dsSlug, ddb, filter, results, new QueuedBuilds(_builds, target, origin));
 
@@ -102,29 +98,6 @@ public class RescanManager : IRescanManager
             ErrorCount = entries.Count(e => !e.Success),
             Entries = entries
         };
-    }
-
-    public async Task<RescanJobDto> Rescan(RescanRequestDto request)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        var scope = DatasetScope.Parse(request.OrganizationSlug, request.DatasetSlug);
-        var filter = RescanFilter.Parse(request.Types, request.Extensions).RequireNotEmpty();
-        scope.EnsureFound(await scope.Apply(_context.Datasets).CountAsync());
-
-        var user = await _authManager.GetCurrentUser();
-        var orgSlug = scope.OrganizationSlug;
-        var dsSlug = scope.DatasetSlug;
-        var types = filter.TypesArgument;
-        var extensions = filter.ExtensionsArgument;
-        var stopOnError = request.StopOnError;
-        var userId = user?.Id;
-
-        var jobId = _backgroundJob.Enqueue<IndexRescanService>(s =>
-            s.SubmitAsync(orgSlug, dsSlug, types, extensions, stopOnError, userId, null));
-
-        _logger.LogInformation("Enqueued system rescan ({Filter}) of {Scope} as job {JobId}", filter, scope, jobId);
-
-        return new RescanJobDto { JobId = jobId };
     }
 
     // Queued build jobs: a request must not run builds itself.

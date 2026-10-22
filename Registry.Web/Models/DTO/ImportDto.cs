@@ -107,3 +107,30 @@ public class FileImportErrorDto
     public string Message { get; set; }
     public int RetryCount { get; set; }
 }
+
+/// <summary>
+/// A remote import queued as a background job (RQ-12; <c>POST /sys/import-dataset</c> and
+/// <c>/sys/import-organization</c> answer 202 with it, <c>Location</c> is the status URL).
+/// </summary>
+public class RemoteImportJobDto
+{
+    public string JobId { get; set; }
+
+    /// <summary>The URL of <see cref="RemoteImportStatusDto"/> (<c>GET</c>; <c>DELETE</c> cancels the import).</summary>
+    public string StatusUrl { get; set; }
+}
+
+/// <summary>The state of a remote import job and, once it is over, its outcome.</summary>
+public class RemoteImportStatusDto
+{
+    public string JobId { get; set; }
+
+    /// <summary>The Hangfire state: Enqueued, Processing, Succeeded, Failed, Deleted...</summary>
+    public string State { get; set; }
+
+    /// <summary>The result of a succeeded import (the body the synchronous endpoint answered before RQ-12).</summary>
+    public ImportResultDto Result { get; set; }
+
+    /// <summary>The error of a failed job (an import that ran reports its errors in <see cref="Result"/>).</summary>
+    public string Error { get; set; }
+}

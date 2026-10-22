@@ -25,7 +25,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
-using Registry.Web.Services.Import;
+using Registry.Web.Services.Maintenance;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -37,24 +37,24 @@ namespace Registry.Web.Test;
 
 /// <summary>
 /// Slugs generated before ToSlug collapsed dashes ("a--b") fail IsValidSlug, which makes
-/// those organizations and datasets unreachable. FixInvalidSlugs renames them in the database
-/// and on disk.
+/// those organizations and datasets unreachable. <see cref="DatasetSlugRepair"/> (SystemManager before RQ-12) renames
+/// them in the database and on disk, and renews the listings that show them.
 /// </summary>
 [TestFixture("sqlite")] // relational: real primary/foreign keys and cascades
 [TestFixture(RetryingProvider)] // retrying execution strategy, as MySQL runs in production
-public class SystemManagerFixSlugsTest : TestBase
+public class DatasetSlugRepairTest : TestBase
 {
     private const string RetryingProvider = "sqlite-retrying";
 
     private readonly string _provider;
 
-    public SystemManagerFixSlugsTest(string provider) => _provider = provider;
+    public DatasetSlugRepairTest(string provider) => _provider = provider;
 
     private const string BadOrg = "thomas-knig---aerial-data";
     private const string GoodOrg = "valid-org";
 
     private string _datasetsPath = null!;
-    private Mock<IAuthManager> _authManagerMock = null!;
+    private Mock<IDatasetListingInvalidator> _listings = null!;
     private Guid _badOrgDsRef;
     private Guid _goodOrgDsRef;
 
@@ -63,8 +63,7 @@ public class SystemManagerFixSlugsTest : TestBase
     {
         _datasetsPath = Path.Combine(Path.GetTempPath(), "fix-slugs-" + Guid.NewGuid());
         Directory.CreateDirectory(_datasetsPath);
-        _authManagerMock = new Mock<IAuthManager>();
-        _authManagerMock.Setup(o => o.IsUserAdmin()).ReturnsAsync(true);
+        _listings = new Mock<IDatasetListingInvalidator>();
     }
 
     [TearDown]
@@ -80,7 +79,7 @@ public class SystemManagerFixSlugsTest : TestBase
         await using var context = CreateContext();
         var manager = CreateManager(context);
 
-        var result = await manager.FixInvalidSlugs(dryRun: true);
+        var result = await manager.FixInvalidSlugsAsync(dryRun: true);
 
         result.DryRun.ShouldBeTrue();
         result.Entries.Select(e => (e.Kind, e.OldSlug, e.NewSlug, e.Status)).ShouldBe(
@@ -101,7 +100,7 @@ public class SystemManagerFixSlugsTest : TestBase
         await using (var seed = CreateContext())
         {
             var manager = CreateManager(seed);
-            var result = await manager.FixInvalidSlugs(dryRun: false);
+            var result = await manager.FixInvalidSlugsAsync(dryRun: false);
             result.Entries.ShouldAllBe(e => e.Status == "renamed");
         }
 
@@ -144,7 +143,7 @@ public class SystemManagerFixSlugsTest : TestBase
             });
             await seed.SaveChangesAsync();
 
-            var result = await CreateManager(seed).FixInvalidSlugs(dryRun: false);
+            var result = await CreateManager(seed).FixInvalidSlugsAsync(dryRun: false);
 
             result.Entries.Where(e => e.OrganizationSlug == BadOrg).ShouldAllBe(e => e.Status == "skipped");
             result.Entries.Single(e => e.OrganizationSlug == GoodOrg).Status.ShouldBe("renamed");
@@ -162,7 +161,7 @@ public class SystemManagerFixSlugsTest : TestBase
 
         await using (var seed = CreateContext())
         {
-            var result = await CreateManager(seed).FixInvalidSlugs(dryRun: false);
+            var result = await CreateManager(seed).FixInvalidSlugsAsync(dryRun: false);
 
             result.Entries.Where(e => e.OrganizationSlug == BadOrg).ShouldAllBe(e => e.Status == "failed");
         }
@@ -184,7 +183,7 @@ public class SystemManagerFixSlugsTest : TestBase
         var flaky = new FailFirstSaveOfEachRename();
         await using (var context = ReopenContext(flaky))
         {
-            var result = await CreateManager(context).FixInvalidSlugs(dryRun: false);
+            var result = await CreateManager(context).FixInvalidSlugsAsync(dryRun: false);
             result.Entries.ShouldAllBe(e => e.Status == "renamed");
         }
 
@@ -211,7 +210,7 @@ public class SystemManagerFixSlugsTest : TestBase
         var flaky = new FailEveryCommitAfterItLands();
         await using (var context = ReopenContext(flaky))
         {
-            var result = await CreateManager(context).FixInvalidSlugs(dryRun: false);
+            var result = await CreateManager(context).FixInvalidSlugsAsync(dryRun: false);
             result.Entries.ShouldAllBe(e => e.Status == "renamed");
         }
 
@@ -248,7 +247,7 @@ public class SystemManagerFixSlugsTest : TestBase
             await seed.SaveChangesAsync();
             Directory.CreateDirectory(Path.Combine(_datasetsPath, "Upper-Case", dsRef.ToString()));
 
-            var result = await CreateManager(seed).FixInvalidSlugs(dryRun: false);
+            var result = await CreateManager(seed).FixInvalidSlugsAsync(dryRun: false);
 
             result.Entries.Where(e => e.OrganizationSlug == "Upper-Case")
                 .Select(e => (e.Kind, e.NewSlug, e.Status))
@@ -273,26 +272,31 @@ public class SystemManagerFixSlugsTest : TestBase
         Directory.Exists(Path.Combine(_datasetsPath, "upper-case", dsRef.ToString())).ShouldBeTrue();
     }
 
-    // Imports write slugs straight to the database: an invalid one must be refused up front
-    // (the source address is never contacted, the check runs before any download)
-    [TestCase(ImportMode.Archive)]
-    [TestCase(ImportMode.ParallelFiles)]
-    public async Task ImportDataset_InvalidDestinationSlug_Refused(ImportMode mode)
+    // The STAC listings show the slugs: every dataset whose slug path changed renews them
+    [Test]
+    public async Task Apply_RenewsTheListingsOfTheRenamedDatasets()
     {
         await using var context = CreateContext();
-        var datasetsBefore = context.Datasets.Count();
+        var untouched = context.Datasets.Single(d => d.Slug == "a-b").InternalRef;
+        var fine = context.Datasets.Single(d => d.Slug == "fine").InternalRef;
 
-        var result = await CreateManager(context).ImportDataset(new ImportDatasetRequestDto
-        {
-            SourceRegistryUrl = "https://93.184.216.34",
-            SourceOrganization = "src",
-            SourceDataset = "jake--amy-property",
-            DestinationOrganization = GoodOrg,
-            Mode = mode
-        });
+        await CreateManager(context).FixInvalidSlugsAsync(dryRun: false);
 
-        result.Errors.ShouldHaveSingleItem().Message.ShouldContain("Invalid destination slug");
-        context.Datasets.Count().ShouldBe(datasetsBefore);
+        // The organization rename moves both of its datasets; in the other organization only "a--b" changed
+        _listings.Verify(l => l.ListingChangedAsync(BadOrg, _badOrgDsRef), Times.Once);
+        _listings.Verify(l => l.ListingChangedAsync(BadOrg, fine), Times.Once);
+        _listings.Verify(l => l.ListingChangedAsync(GoodOrg, _goodOrgDsRef), Times.Once);
+        _listings.Verify(l => l.ListingChangedAsync(GoodOrg, untouched), Times.Never);
+    }
+
+    [Test]
+    public async Task DryRun_RenewsNoListing()
+    {
+        await using var context = CreateContext();
+
+        await CreateManager(context).FixInvalidSlugsAsync(dryRun: true);
+
+        _listings.VerifyNoOtherCalls();
     }
 
     #region Setup
@@ -368,21 +372,10 @@ public class SystemManagerFixSlugsTest : TestBase
         return context;
     }
 
-    private SystemManager CreateManager(RegistryContext context)
-    {
-        var settings = TestSettings.Options(new AppSettings { DatasetsPath = _datasetsPath });
-
-        var ddbManager = new Mock<IDdbManager>();
-        var backgroundJob = new Mock<IBackgroundJobsProcessor>();
-        var cacheManager = new Mock<ICacheManager>();
-
-        var buildPendingService = new BuildPendingService(context, new DatasetSweep(context), ddbManager.Object, backgroundJob.Object, cacheManager.Object, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
-
-        return new SystemManager(_authManagerMock.Object, context, ddbManager.Object,
-            CreateTestLogger<SystemManager>(), Mock.Of<IObjectsManager>(), settings, buildPendingService,
-            Mock.Of<IHttpClientFactory>(), backgroundJob.Object, Mock.Of<IDatasetListingInvalidator>(), new FileSystem(),
-            Mock.Of<IJobIndexWriter>(), new SsrfGuard(new ImportSettings()), TestPaths.Policy, TimeProvider.System, TestJobs.Scheduler());
-    }
+    private DatasetSlugRepair CreateManager(RegistryContext context) =>
+        new(context, new Mock<IDdbManager>().Object, new FileSystem(),
+            Microsoft.Extensions.Options.Options.Create(new StorageOptions { DatasetsPath = _datasetsPath }),
+            _listings.Object, CreateTestLogger<DatasetSlugRepair>());
 
     private sealed class TransientTestException() : Exception("Transient test failure");
 
