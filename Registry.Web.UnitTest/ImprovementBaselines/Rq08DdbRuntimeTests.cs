@@ -156,9 +156,11 @@ public class Rq08DdbRuntimeTests
         var shutdown = ApiExceptionClassifier.Classify(new DdbShutdownException("shutting down"), true);
         (shutdown.StatusCode, shutdown.NoRetry).ShouldBe((StatusCodes.Status503ServiceUnavailable, false));
 
-        // A cancellation is not a server error
+        // A cancellation is not a server error (RQ-13: 499 when the client went away, 503 otherwise)
+        ApiExceptionClassifier.Classify(new DdbCanceledException("canceled"), true, clientGone: true).StatusCode
+            .ShouldBe(StatusCodes.Status499ClientClosedRequest);
         ApiExceptionClassifier.Classify(new DdbCanceledException("canceled"), true).StatusCode
-            .ShouldBe(StatusCodes.Status408RequestTimeout);
+            .ShouldBe(StatusCodes.Status503ServiceUnavailable);
         // The generic native failure stays a 500 with the generic message
         ApiExceptionClassifier.Classify(new DdbException("engine detail"), true).Message
             .ShouldBe(ApiExceptionClassifier.InternalServerErrorMessage);

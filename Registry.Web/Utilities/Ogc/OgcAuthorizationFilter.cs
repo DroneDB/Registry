@@ -75,8 +75,15 @@ public class OgcAuthorizationFilter : IAsyncAuthorizationFilter
         catch (Exception ex)
         {
             // Any other error (an invalid slug, a busy index): the API's status and message, logged once
-            var d = ApiExceptionClassifier.Classify(ex, context.HttpContext.User.Identity?.IsAuthenticated == true);
+            var d = ApiExceptionClassifier.Classify(ex, context.HttpContext);
             _logger.Log(d.Level, ex, "OGC authorization failed: {Path}", context.HttpContext.Request.Path);
+            if (ApiExceptionClassifier.IsClientGone(d))
+            {
+                // Nobody reads an exception report any more (RQ-13)
+                context.Result = new StatusCodeResult(d.StatusCode);
+                return;
+            }
+
             if (d.RetryAfterSeconds is { } retryAfter)
                 context.HttpContext.Response.Headers.RetryAfter =
                     retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture);

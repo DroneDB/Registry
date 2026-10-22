@@ -94,9 +94,16 @@ public class OgcExceptionFilter : IExceptionFilter
             default:
                 // Every other exception: the API's status, message and log level (one mapping, RQ-05),
                 // in the OGC envelope
-                var d = ApiExceptionClassifier.Classify(context.Exception,
-                    context.HttpContext.User.Identity?.IsAuthenticated == true);
+                var d = ApiExceptionClassifier.Classify(context.Exception, context.HttpContext);
                 _logger.Log(d.Level, context.Exception, "Exception in OGC pipeline: {Path}", path);
+                if (ApiExceptionClassifier.IsClientGone(d))
+                {
+                    // Nobody reads an exception report any more (RQ-13)
+                    context.Result = new StatusCodeResult(d.StatusCode);
+                    context.ExceptionHandled = true;
+                    return;
+                }
+
                 status = d.StatusCode;
                 message = d.Message;
                 code = OgcCodeFor(status);

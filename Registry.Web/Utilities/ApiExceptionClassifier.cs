@@ -32,7 +32,8 @@ public readonly record struct ApiErrorDescriptor(
 /// level: a new client error is a subclass or a throw site, never a new arm here.</item>
 /// <item>D2: a <see cref="ForbiddenException"/> answers 403 to an authenticated request and 401 to an
 /// anonymous one; <see cref="UnauthorizedException"/> (no valid credentials) is always 401.</item>
-/// <item>The other arms are types the Registry does not own: cancellation, the DDB port's typed
+/// <item>Cancellation (RQ-13): 499 without a body when the client went away, 503 + Retry-After otherwise.</item>
+/// <item>The other arms are types the Registry does not own: the DDB port's typed
 /// errors (transient: 503; invalid arguments: 400; not found: 404), Kestrel's request errors (413 body too large) and <see cref="ArgumentException"/> from the
 /// lower layers' validators (<c>Registry.Common</c>, <c>Registry.Ports</c>), which have no
 /// <see cref="RegistryException"/> to throw.</item>
@@ -43,6 +44,9 @@ public readonly record struct ApiErrorDescriptor(
 /// </summary>
 public static class ApiExceptionClassifier
 {
+    // A stopping host is back (or replaced) within seconds
+    private const int ShutdownRetryAfterSeconds = 5;
+
     /// <summary>Generic body for 500s, so engine details never leak to the client (details are logged).</summary>
     public const string InternalServerErrorMessage = "Internal server error";
 
@@ -57,17 +61,39 @@ public static class ApiExceptionClassifier
     public static int AccessDeniedStatus(bool authenticated) =>
         authenticated ? StatusCodes.Status403Forbidden : StatusCodes.Status401Unauthorized;
 
+    /// <summary>Body of a cancellation the client did not ask for (the host stopping, a job's token, a timeout).</summary>
+    public const string CanceledMessage = "The operation was canceled; retry shortly.";
+
+    /// <summary>
+    /// The client went away (RQ-13): nothing is written for it, the status (499, nginx's "client closed request",
+    /// as ASP.NET Core's exception handler middleware uses) only reaches the server's logs.
+    /// </summary>
+    public static bool IsClientGone(ApiErrorDescriptor descriptor) =>
+        descriptor.StatusCode == StatusCodes.Status499ClientClosedRequest;
+
+    /// <summary>
+    /// Classifies <paramref name="ex"/> for <paramref name="request"/>: whether it is authenticated (D2) and
+    /// whether its client went away (<c>RequestAborted</c>, RQ-13).
+    /// </summary>
+    public static ApiErrorDescriptor Classify(Exception ex, HttpContext request) =>
+        Classify(ex, request.User.Identity?.IsAuthenticated == true, request.RequestAborted.IsCancellationRequested);
+
     /// <summary>
     /// Classifies <paramref name="ex"/> into the HTTP outcome of the request.
     /// </summary>
     /// <param name="ex">The exception that ended the request.</param>
     /// <param name="authenticated">Whether the request carries an authenticated identity (D2).</param>
-    public static ApiErrorDescriptor Classify(Exception ex, bool authenticated)
+    /// <param name="clientGone">Whether the request's client went away (its <c>RequestAborted</c> is canceled).</param>
+    public static ApiErrorDescriptor Classify(Exception ex, bool authenticated, bool clientGone = false)
     {
-        // Client disconnected mid-request: not a server error (499 → 408; ASP.NET
-        // Core has no 499 and no error envelope is produced for it).
+        // A cancellation is not a server fault (RQ-13). The client that went away reads nothing: 499, quiet. One
+        // it did not ask for (the host is stopping, a job's or a timeout's token) can succeed later: 503 +
+        // Retry-After, like DdbShutdownException
         if (ex is OperationCanceledException)
-            return new ApiErrorDescriptor(StatusCodes.Status408RequestTimeout, null, false, string.Empty, LogLevel.Debug);
+            return clientGone
+                ? new ApiErrorDescriptor(StatusCodes.Status499ClientClosedRequest, null, false, string.Empty, LogLevel.Debug)
+                : new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, ShutdownRetryAfterSeconds, false,
+                    CanceledMessage, LogLevel.Warning);
 
         return ex switch
         {
@@ -83,7 +109,7 @@ public static class ApiExceptionClassifier
             // libddb ABI 1.1 (XI-02): a transient failure (disk full, tool timeout) and a process that
             // is shutting down can succeed later; an invalid argument or a missing build never can
             DdbRetryableException e => new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, 60, false, e.Message, LogLevel.Warning),
-            DdbShutdownException e => new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, 5, false, e.Message, LogLevel.Warning),
+            DdbShutdownException e => new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, ShutdownRetryAfterSeconds, false, e.Message, LogLevel.Warning),
             DdbInvalidArgumentsException e => new ApiErrorDescriptor(StatusCodes.Status400BadRequest, null, true, e.Message, LogLevel.Information),
             DdbNotFoundException e => new ApiErrorDescriptor(StatusCodes.Status404NotFound, null, true, e.Message, LogLevel.Information),
 

@@ -113,6 +113,23 @@ public sealed class Rq13RenderAbortHttpTests : IDisposable
     }
 
     [Test]
+    public async Task ACancellationTheClientDidNotAskFor_Is503WithABody()
+    {
+        // The host is stopping (or a job's token): libddb answers CANCELED while the client still waits
+        _factory.DdbWrapper.Setup(d => d.GenerateThumbnail(It.IsAny<string>(), It.IsAny<int>()))
+            .Throws(new DdbCanceledException("Canceled by the cancel token (DDBCancel)"));
+
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            $"/orgs/{Org}/ds/{Ds}/thumb?path={Photo}&size=64").AsUser(OwnerUser);
+        using var response = await _client.SendAsync(request);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+        response.Content.Headers.ContentType!.MediaType.ShouldBe("application/problem+json");
+        response.Headers.RetryAfter!.Delta.ShouldBe(TimeSpan.FromSeconds(5));
+        (await response.Content.ReadAsStringAsync()).ShouldContain(Utilities.ApiExceptionClassifier.CanceledMessage);
+    }
+
+    [Test]
     public async Task AClientThatStays_GetsItsThumbnail()
     {
         _factory.DdbWrapper.Setup(d => d.GenerateThumbnail(It.IsAny<string>(), It.IsAny<int>()))

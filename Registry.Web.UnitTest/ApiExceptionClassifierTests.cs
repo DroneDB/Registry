@@ -24,7 +24,7 @@ namespace Registry.Web.Test;
 /// stable through the catch-block deletion waves and the residual-helper
 /// removal. Rows marked "intentional flip" document the status that
 /// deliberately changed at unification (the union mapping table):
-/// server bugs are 500 (not masked 400), cancellations are 408 (not 400),
+/// server bugs are 500 (not masked 400), cancellations are 499/503 (RQ-13; were 408, before that 400),
 /// build-in-progress is 503 (not 400), quota is 507/413/429 (not 400).
 /// </summary>
 public class ApiExceptionClassifierTests
@@ -66,27 +66,60 @@ public class ApiExceptionClassifierTests
         d.Level.ShouldBe(LogLevel.Warning);
     }
 
-    // ---- cancellation: 408, quiet ----
+    // ---- cancellation (RQ-13): by what cancelled it ----
 
     [Test]
-    public void OperationCanceled_MapsTo408Debug()
+    public void OperationCanceled_ClientGone_Is499Debug_WithoutMessage()
     {
-        var d = ApiExceptionClassifier.Classify(new OperationCanceledException("client gone"), authenticated: true);
+        var d = ApiExceptionClassifier.Classify(new OperationCanceledException("client gone"), authenticated: true,
+            clientGone: true);
 
-        d.StatusCode.ShouldBe(StatusCodes.Status408RequestTimeout);
+        d.StatusCode.ShouldBe(StatusCodes.Status499ClientClosedRequest);
         d.RetryAfterSeconds.ShouldBeNull();
-        d.NoRetry.ShouldBeFalse();
         d.Message.ShouldBeEmpty();
+        d.Level.ShouldBe(LogLevel.Debug);
+        ApiExceptionClassifier.IsClientGone(d).ShouldBeTrue();
+    }
+
+    [Test]
+    public void DdbCanceled_ClientGone_Is499Debug()
+    {
+        var d = ApiExceptionClassifier.Classify(new DdbCanceledException("Canceled by the cancel token"),
+            authenticated: false, clientGone: true);
+
+        d.StatusCode.ShouldBe(StatusCodes.Status499ClientClosedRequest);
         d.Level.ShouldBe(LogLevel.Debug);
     }
 
     [Test]
-    public void TaskCanceled_MapsTo408Debug()
+    public void OperationCanceled_ClientStillThere_Is503WithRetryAfter_LikeAShutdown()
     {
-        var d = ApiExceptionClassifier.Classify(new TaskCanceledException("client gone"), authenticated: true);
+        // The host is stopping, a job's token, an internal timeout: the client waits for an answer
+        var d = ApiExceptionClassifier.Classify(new TaskCanceledException("timed out"), authenticated: true);
+        var shutdown = ApiExceptionClassifier.Classify(new DdbShutdownException("stopping"), authenticated: true);
 
-        d.StatusCode.ShouldBe(StatusCodes.Status408RequestTimeout);
-        d.Level.ShouldBe(LogLevel.Debug);
+        d.StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        d.RetryAfterSeconds.ShouldBe(shutdown.RetryAfterSeconds);
+        d.NoRetry.ShouldBeFalse();
+        d.Message.ShouldBe(ApiExceptionClassifier.CanceledMessage);
+        d.Level.ShouldBe(LogLevel.Warning);
+        ApiExceptionClassifier.IsClientGone(d).ShouldBeFalse();
+    }
+
+    [Test]
+    public void FromTheRequest_ReadsWhetherTheClientIsGone()
+    {
+        using var aborted = new CancellationTokenSource();
+        var context = new DefaultHttpContext { RequestAborted = aborted.Token };
+
+        ApiExceptionClassifier.Classify(new OperationCanceledException(), context).StatusCode
+            .ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        aborted.Cancel();
+        ApiExceptionClassifier.Classify(new OperationCanceledException(), context).StatusCode
+            .ShouldBe(StatusCodes.Status499ClientClosedRequest);
+        // Any other error is classified as before, whether the client is there or not
+        ApiExceptionClassifier.Classify(new DdbBusyException(), context).StatusCode
+            .ShouldBe(StatusCodes.Status503ServiceUnavailable);
     }
 
     // ---- client errors: 4xx ----

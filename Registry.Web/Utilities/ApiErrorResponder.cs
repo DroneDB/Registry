@@ -43,19 +43,18 @@ public sealed class ApiErrorResponder
 
     /// <summary>
     /// Classifies and logs <paramref name="exception"/>, sets <c>Retry-After</c>, and returns the outcome:
-    /// the descriptor and the body (null for a 408: the client went away, nobody reads it).
+    /// the descriptor and the body (null when the client went away: nobody reads it, RQ-13).
     /// </summary>
     public (ApiErrorDescriptor Descriptor, ProblemDetails? Problem) Describe(HttpContext httpContext, Exception exception)
     {
-        var descriptor = ApiExceptionClassifier.Classify(exception,
-            httpContext.User.Identity?.IsAuthenticated == true);
+        var descriptor = ApiExceptionClassifier.Classify(exception, httpContext);
 
         _logger.Log(descriptor.Level, exception, "Exception in {Path}", httpContext.Request.Path);
 
         if (descriptor.RetryAfterSeconds is { } retryAfter)
             httpContext.Response.Headers.RetryAfter = retryAfter.ToString(CultureInfo.InvariantCulture);
 
-        var problem = descriptor.StatusCode == StatusCodes.Status408RequestTimeout
+        var problem = ApiExceptionClassifier.IsClientGone(descriptor)
             ? null
             : Create(httpContext, descriptor.StatusCode, descriptor.Message, descriptor.NoRetry);
         return (descriptor, problem);
