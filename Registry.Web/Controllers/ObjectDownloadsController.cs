@@ -6,7 +6,6 @@ using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models;
@@ -54,7 +53,7 @@ public class ObjectDownloadsController : ControllerBaseEx
         try
         {
             var res = await _queries.GetDdbAsync(orgSlug, dsSlug, cancellationToken);
-            return await SendDownload(res, $"attachment; filename=\"{res.Name}\"", cancellationToken);
+            return new StreamedDownloadResult(res, inline: false, _logger);
         }
         catch (OperationCanceledException)
         {
@@ -65,21 +64,6 @@ public class ObjectDownloadsController : ControllerBaseEx
     }
 
     #region Downloads
-
-    // Writes a download straight to the response as it is produced (REG-04): no Content-Length
-    // (chunked), no buffering on the way out, and the work stops when the client goes away
-    private async Task<IActionResult> SendDownload(FileStreamDescriptor download, string contentDisposition,
-        CancellationToken cancellationToken)
-    {
-        Response.StatusCode = StatusCodes.Status200OK;
-        Response.ContentType = download.ContentType;
-        Response.Headers.Append("Content-Disposition", contentDisposition);
-        Response.Headers.CacheControl = "no-store";
-        HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
-
-        await download.CopyToAsync(Response.Body, cancellationToken);
-        return new EmptyResult();
-    }
 
     private async Task<IActionResult> InternalDownload(string orgSlug, string dsSlug, string[]? paths, bool isInline,
         CancellationToken cancellationToken = default)
@@ -95,8 +79,7 @@ public class ObjectDownloadsController : ControllerBaseEx
             }
 
             var res = await _queries.DownloadAsync(orgSlug, dsSlug, paths, cancellationToken);
-            return await SendDownload(res, isInline ? "inline" : $"attachment; filename=\"{res.Name}\"",
-                cancellationToken);
+            return new StreamedDownloadResult(res, isInline, _logger);
         }
         catch (OperationCanceledException)
         {
