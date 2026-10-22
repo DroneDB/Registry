@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Exceptions;
@@ -29,14 +30,14 @@ public class WcsController : ControllerBaseEx
     }
 
     [HttpGet("wcs")]
-    public Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug)
-        => Dispatch(orgSlug, dsSlug, null);
+    public Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)
+        => Dispatch(orgSlug, dsSlug, null, ct);
 
     [HttpGet("wcs/p/{*folder}")]
     public Task<IActionResult> KvpFolder([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] string folder) => Dispatch(orgSlug, dsSlug, folder);
+        [FromRoute] string folder, CancellationToken ct) => Dispatch(orgSlug, dsSlug, folder, ct);
 
-    private async Task<IActionResult> Dispatch(string orgSlug, string dsSlug, string? folderPath)
+    private async Task<IActionResult> Dispatch(string orgSlug, string dsSlug, string? folderPath, CancellationToken ct)
     {
         var q = Request.Query;
 
@@ -71,7 +72,7 @@ public class WcsController : ControllerBaseEx
         switch (op)
         {
             case "GETCAPABILITIES":
-                return Content(await _mgr.GetCapabilitiesAsync(orgSlug, dsSlug, version, folderPath),
+                return Content(await _mgr.GetCapabilitiesAsync(orgSlug, dsSlug, version, folderPath, ct: ct),
                     "text/xml; charset=utf-8");
 
             case "DESCRIBECOVERAGE":
@@ -100,13 +101,13 @@ public class WcsController : ControllerBaseEx
                 if (string.IsNullOrWhiteSpace(cid))
                     throw new OgcException("MissingParameterValue",
                         $"{locator} is required", 400, locator);
-                return Content(await _mgr.DescribeCoverageAsync(orgSlug, dsSlug, version, cid),
+                return Content(await _mgr.DescribeCoverageAsync(orgSlug, dsSlug, version, cid, ct: ct),
                     "text/xml; charset=utf-8");
             }
 
             case "GETCOVERAGE":
             {
-                var result = await _mgr.GetCoverageAsync(orgSlug, dsSlug, version, q);
+                var result = await _mgr.GetCoverageAsync(orgSlug, dsSlug, version, q, ct: ct);
                 return File(result.Bytes, result.ContentType);
             }
 

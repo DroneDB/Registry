@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Adapters.DroneDB;
@@ -22,7 +23,7 @@ public class LocalThumbnailGenerator : IThumbnailGenerator
         _ddbWrapper = ddbWrapper;
     }
 
-    public async Task GenerateThumbnailAsync(string filePath, int size, Stream output)
+    public async Task GenerateThumbnailAsync(string filePath, int size, Stream output, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(filePath);
         ArgumentNullException.ThrowIfNull(output);
@@ -40,13 +41,14 @@ public class LocalThumbnailGenerator : IThumbnailGenerator
 
         try
         {
+            // The native render stops with the current DdbCancellation (the gate's token, RQ-13)
             var data = _ddbWrapper.GenerateThumbnail(filePath, size);
-            await output.WriteAsync(data);
+            await output.WriteAsync(data, ct);
 
             _logger.LogInformation("Successfully generated local thumbnail for '{FilePath}', size: {Size}, data: {DataSize} bytes",
                 filePath, size, data.Length);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogError(ex, "Failed to generate local thumbnail for '{FilePath}', size: {Size}. Error: {ErrorMessage}",
                 filePath, size, ex.Message);

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -52,10 +53,10 @@ public class RasterAnalysisController : ControllerBaseEx
     public async Task<IActionResult> GetRasterInfo(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromQuery, Required] DatasetPath path)
+        [FromQuery, Required] DatasetPath path, CancellationToken ct)
     {
 
-        var json = await _raster.GetRasterInfoAsync(orgSlug, dsSlug, path.ToString());
+        var json = await _raster.GetRasterInfoAsync(orgSlug, dsSlug, path.ToString(), ct: ct);
         return Content(json, "application/json");
     }
 
@@ -69,10 +70,10 @@ public class RasterAnalysisController : ControllerBaseEx
         [FromRoute, Required] string dsSlug,
         [FromQuery, Required] DatasetPath path,
         [FromQuery] string? formula,
-        [FromQuery] string? bandFilter)
+        [FromQuery] string? bandFilter, CancellationToken ct)
     {
 
-        var json = await _raster.GetRasterMetadataAsync(orgSlug, dsSlug, path.ToString(), formula, bandFilter);
+        var json = await _raster.GetRasterMetadataAsync(orgSlug, dsSlug, path.ToString(), formula, bandFilter, ct: ct);
         return Content(json, "application/json");
     }
 
@@ -91,11 +92,11 @@ public class RasterAnalysisController : ControllerBaseEx
         [FromQuery] string? formula,
         [FromQuery] string? bandFilter,
         [FromQuery] string? colormap,
-        [FromQuery] string? rescale)
+        [FromQuery] string? rescale, CancellationToken ct)
     {
 
         var res = await _renders.GenerateThumbnailDataExAsync(orgSlug, dsSlug, path.ToString(), size,
-            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale));
+            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale), ct: ct);
 
         if (res == null) return NotFound();
         return File(res.Data, res.ContentType, res.Name);
@@ -120,7 +121,7 @@ public class RasterAnalysisController : ControllerBaseEx
         [FromQuery] string? formula,
         [FromQuery] string? bandFilter,
         [FromQuery] string? colormap,
-        [FromQuery] string? rescale)
+        [FromQuery] string? rescale, CancellationToken ct)
     {
 
         var retina = tyRaw.EndsWith("@2x", StringComparison.Ordinal);
@@ -128,7 +129,7 @@ public class RasterAnalysisController : ControllerBaseEx
             throw new BadRequestException("Invalid input parameters (retina indicator should be '@2x')");
 
         var res = await _renders.GenerateTileDataExAsync(orgSlug, dsSlug, path.ToString(), tz, tx, ty, retina,
-            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale));
+            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale), ct: ct);
 
         return File(res.Data, res.ContentType, res.Name);
     }
@@ -147,11 +148,11 @@ public class RasterAnalysisController : ControllerBaseEx
         [FromQuery] string? formula = null,
         [FromQuery] string? bandFilter = null,
         [FromQuery] string? colormap = null,
-        [FromQuery] string? rescale = null)
+        [FromQuery] string? rescale = null, CancellationToken ct = default)
     {
 
         var res = await _raster.ExportRasterAsync(orgSlug, dsSlug, path.ToString(),
-            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale));
+            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale), ct: ct);
 
         return File(res.Data, res.ContentType, res.Name);
     }
@@ -164,10 +165,10 @@ public class RasterAnalysisController : ControllerBaseEx
     public async Task<IActionResult> ValidateMergeMultispectral(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromBody, Required] MergeMultispectralRequestDto request)
+        [FromBody, Required] MergeMultispectralRequestDto request, CancellationToken ct)
     {
 
-        var json = await _processing.ValidateMergeMultispectralAsync(orgSlug, dsSlug, PathsOf(request));
+        var json = await _processing.ValidateMergeMultispectralAsync(orgSlug, dsSlug, PathsOf(request), ct: ct);
         return Content(json, "application/json");
     }
 
@@ -179,11 +180,11 @@ public class RasterAnalysisController : ControllerBaseEx
     public async Task<IActionResult> PreviewMergeMultispectral(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromBody, Required] MergeMultispectralRequestDto request)
+        [FromBody, Required] MergeMultispectralRequestDto request, CancellationToken ct)
     {
 
         var data = await _processing.PreviewMergeMultispectralAsync(orgSlug, dsSlug, PathsOf(request),
-            request.PreviewBands, request.ThumbSize ?? 512);
+            request.PreviewBands, request.ThumbSize ?? 512, ct: ct);
         return File(data, "image/webp", "preview.webp");
     }
 
@@ -194,10 +195,10 @@ public class RasterAnalysisController : ControllerBaseEx
     public async Task<IActionResult> MergeMultispectral(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromBody, Required] MergeMultispectralRequestDto request)
+        [FromBody, Required] MergeMultispectralRequestDto request, CancellationToken ct)
     {
 
-        await _processing.MergeMultispectralAsync(orgSlug, dsSlug, PathsOf(request), request.OutputPath);
+        await _processing.MergeMultispectralAsync(orgSlug, dsSlug, PathsOf(request), request.OutputPath, ct: ct);
         return Ok(new { ok = true });
     }
 
@@ -209,11 +210,11 @@ public class RasterAnalysisController : ControllerBaseEx
     public async Task<IActionResult> ValidateAlignRaster(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromBody, Required] AlignRasterRequestDto request)
+        [FromBody, Required] AlignRasterRequestDto request, CancellationToken ct)
     {
 
         var json = await _processing.ValidateAlignRasterAsync(orgSlug, dsSlug,
-            request.SourcePath, request.ReferencePath);
+            request.SourcePath, request.ReferencePath, ct: ct);
         return Content(json, "application/json");
     }
 
@@ -229,10 +230,10 @@ public class RasterAnalysisController : ControllerBaseEx
     public async Task<IActionResult> GetRasterValueInfo(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromQuery, Required] DatasetPath path)
+        [FromQuery, Required] DatasetPath path, CancellationToken ct)
     {
 
-        var json = await _raster.GetRasterValueInfoAsync(orgSlug, dsSlug, path.ToString());
+        var json = await _raster.GetRasterValueInfoAsync(orgSlug, dsSlug, path.ToString(), ct: ct);
         return Content(json, "application/json");
     }
 
@@ -246,10 +247,10 @@ public class RasterAnalysisController : ControllerBaseEx
         [FromRoute, Required] string dsSlug,
         [FromQuery, Required] DatasetPath path,
         [FromQuery, Required] int x,
-        [FromQuery, Required] int y)
+        [FromQuery, Required] int y, CancellationToken ct)
     {
 
-        var json = await _raster.GetRasterPointValueAsync(orgSlug, dsSlug, path.ToString(), x, y);
+        var json = await _raster.GetRasterPointValueAsync(orgSlug, dsSlug, path.ToString(), x, y, ct: ct);
         return Content(json, "application/json");
     }
 
@@ -265,10 +266,10 @@ public class RasterAnalysisController : ControllerBaseEx
         [FromQuery, Required] int x0,
         [FromQuery, Required] int y0,
         [FromQuery, Required] int x1,
-        [FromQuery, Required] int y1)
+        [FromQuery, Required] int y1, CancellationToken ct)
     {
 
-        var json = await _raster.GetRasterAreaStatsAsync(orgSlug, dsSlug, path.ToString(), x0, y0, x1, y1);
+        var json = await _raster.GetRasterAreaStatsAsync(orgSlug, dsSlug, path.ToString(), x0, y0, x1, y1, ct: ct);
         return Content(json, "application/json");
     }
 
@@ -284,14 +285,14 @@ public class RasterAnalysisController : ControllerBaseEx
     public async Task<IActionResult> GetRasterProfile(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromBody, Required] RasterProfileRequestDto request)
+        [FromBody, Required] RasterProfileRequestDto request, CancellationToken ct)
     {
         if (request == null)
             throw new BadRequestException("Request body is required");
 
 
         var json = await _raster.GetRasterProfileAsync(orgSlug, dsSlug, request.Path.ToString(),
-            request.LineString, request.Samples ?? 256);
+            request.LineString, request.Samples ?? 256, ct: ct);
         return Content(json, "application/json");
     }
 
@@ -312,7 +313,7 @@ public class RasterAnalysisController : ControllerBaseEx
     public async Task<IActionResult> GenerateContours(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromBody, Required] ContourRequestDto request)
+        [FromBody, Required] ContourRequestDto request, CancellationToken ct)
     {
         if (request == null)
             throw new BadRequestException("Request body is required");
@@ -320,7 +321,7 @@ public class RasterAnalysisController : ControllerBaseEx
 
         var json = await _raster.GenerateContoursAsync(orgSlug, dsSlug, request.Path.ToString(),
             new ContourOptions(request.Interval, request.Count, request.BaseOffset, request.MinElev, request.MaxElev,
-                request.SimplifyTolerance, request.BandIndex));
+                request.SimplifyTolerance, request.BandIndex), ct: ct);
         return Content(json, "application/json");
     }
 
@@ -335,10 +336,10 @@ public class RasterAnalysisController : ControllerBaseEx
     public async Task<IActionResult> CheckMaskBorders(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromBody, Required] MaskBordersRequestDto request)
+        [FromBody, Required] MaskBordersRequestDto request, CancellationToken ct)
     {
 
-        var result = await _processing.CheckMaskedFileExistsAsync(orgSlug, dsSlug, request.Path.ToString());
+        var result = await _processing.CheckMaskedFileExistsAsync(orgSlug, dsSlug, request.Path.ToString(), ct: ct);
         return Ok(result);
     }
 
@@ -349,10 +350,10 @@ public class RasterAnalysisController : ControllerBaseEx
     public async Task<IActionResult> MaskBorders(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromBody, Required] MaskBordersRequestDto request)
+        [FromBody, Required] MaskBordersRequestDto request, CancellationToken ct)
     {
 
-        await _processing.MaskBordersAsync(orgSlug, dsSlug, request.Path.ToString(), request.Near, request.White);
+        await _processing.MaskBordersAsync(orgSlug, dsSlug, request.Path.ToString(), request.Near, request.White, ct: ct);
         return Ok(new { ok = true });
     }
 

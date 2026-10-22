@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -42,9 +43,9 @@ public class StacController : ControllerBaseEx
     [HttpGet("/stac", Name = nameof(StacController) + "." + nameof(GetCatalog))]
     [ProducesResponseType(typeof(StacCatalogDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> GetCatalog()
+    public async Task<IActionResult> GetCatalog(CancellationToken ct)
     {
-        return StacContent(await _stacManager.GetLandingPage(), MediaTypeJson);
+        return StacContent(await _stacManager.GetLandingPage(ct: ct), MediaTypeJson);
     }
 
     /// <summary>
@@ -68,12 +69,12 @@ public class StacController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetCollections(
         [FromQuery] int? limit = null,
-        [FromQuery] int? offset = null)
+        [FromQuery] int? offset = null, CancellationToken ct = default)
     {
         if (limit is < 1)
             throw new BadRequestException(LimitError);
 
-        return StacContent(await _stacManager.GetCollections(limit, offset), MediaTypeJson);
+        return StacContent(await _stacManager.GetCollections(limit, offset, ct: ct), MediaTypeJson);
     }
 
     /// <summary>
@@ -86,9 +87,9 @@ public class StacController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetCollection(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string dsSlug)
+        [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
-        return StacContent(await _stacManager.GetCollection(orgSlug, dsSlug), MediaTypeJson);
+        return StacContent(await _stacManager.GetCollection(orgSlug, dsSlug, ct: ct), MediaTypeJson);
     }
 
     /// <summary>
@@ -107,7 +108,7 @@ public class StacController : ControllerBaseEx
         [FromQuery] string bbox = null,
         [FromQuery] string datetime = null,
         [FromQuery] int? limit = null,
-        [FromQuery] int? offset = null)
+        [FromQuery] int? offset = null, CancellationToken ct = default)
     {
         if (!TryParseBbox(bbox, out var parsedBbox))
             throw new BadRequestException(BboxError);
@@ -119,7 +120,7 @@ public class StacController : ControllerBaseEx
             throw new BadRequestException(DatetimeError);
 
         return StacContent(
-            await _stacManager.GetCollectionItems(orgSlug, dsSlug, parsedBbox, datetime, limit, offset),
+            await _stacManager.GetCollectionItems(orgSlug, dsSlug, parsedBbox, datetime, limit, offset, ct: ct),
             MediaTypeGeoJson);
     }
 
@@ -135,9 +136,9 @@ public class StacController : ControllerBaseEx
     public async Task<IActionResult> GetCollectionItem(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromRoute, Required] string featureId)
+        [FromRoute, Required] string featureId, CancellationToken ct)
     {
-        return StacContent(await _stacManager.GetCollectionItem(orgSlug, dsSlug, featureId), MediaTypeGeoJson);
+        return StacContent(await _stacManager.GetCollectionItem(orgSlug, dsSlug, featureId, ct: ct), MediaTypeGeoJson);
     }
 
     /// <summary>
@@ -154,7 +155,7 @@ public class StacController : ControllerBaseEx
         [FromQuery] int? limit = null,
         [FromQuery] string collections = null,
         [FromQuery] string ids = null,
-        [FromQuery] string token = null)
+        [FromQuery] string token = null, CancellationToken ct = default)
     {
         var hasBbox = !string.IsNullOrWhiteSpace(bbox);
         var hasIntersects = !string.IsNullOrWhiteSpace(intersects);
@@ -199,7 +200,7 @@ public class StacController : ControllerBaseEx
                 : ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         };
 
-        return StacContent(await _stacManager.Search(request), MediaTypeGeoJson);
+        return StacContent(await _stacManager.Search(request, ct: ct), MediaTypeGeoJson);
     }
 
     /// <summary>
@@ -209,7 +210,7 @@ public class StacController : ControllerBaseEx
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> SearchPost([FromBody] StacSearchRequestDto request)
+    public async Task<IActionResult> SearchPost([FromBody] StacSearchRequestDto request, CancellationToken ct)
     {
         if (request?.Bbox is { Length: > 0 } && request.Intersects is not null)
             throw new BadRequestException(BboxIntersectsError);
@@ -223,7 +224,7 @@ public class StacController : ControllerBaseEx
         if (!IsValidDatetime(request?.Datetime))
             throw new BadRequestException(DatetimeError);
 
-        return StacContent(await _stacManager.Search(request), MediaTypeGeoJson);
+        return StacContent(await _stacManager.Search(request, ct: ct), MediaTypeGeoJson);
     }
 
     private const string BboxError =
@@ -395,9 +396,9 @@ public class StacController : ControllerBaseEx
     public async Task<IActionResult> GetStacChild(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromRoute] string pathBase64 = null)
+        [FromRoute] string pathBase64 = null, CancellationToken ct = default)
     {
-        return Ok(await _stacManager.GetStacChild(orgSlug, dsSlug, DecodePath(pathBase64)));
+        return Ok(await _stacManager.GetStacChild(orgSlug, dsSlug, DecodePath(pathBase64), ct: ct));
     }
 
     /// <summary>

@@ -24,11 +24,13 @@ public interface INativeWorkGate
 {
     /// <summary>
     /// Runs <paramref name="work"/> on a thread-pool thread once the lane has a free slot.
-    /// <paramref name="ct"/> cancels the wait for a slot only, never running work.
+    /// <paramref name="ct"/> (the request's or the job's) cancels the wait for a slot and the work: it does not
+    /// start once canceled, and while it runs it is the <see cref="Registry.Ports.DroneDB.DdbCancellation"/> of
+    /// its native calls, which libddb stops at their next checkpoint (XI-07, RQ-13).
     /// </summary>
     Task<T> RunAsync<T>(NativeLane lane, Func<T> work, CancellationToken ct = default);
 
-    /// <summary>Runs asynchronous work once the lane has a free slot.</summary>
+    /// <summary>Runs asynchronous work once the lane has a free slot, canceled like the synchronous form.</summary>
     Task<T> RunAsync<T>(NativeLane lane, Func<Task<T>> work, CancellationToken ct = default);
 
     /// <summary>Calls running on <paramref name="lane"/> right now.</summary>

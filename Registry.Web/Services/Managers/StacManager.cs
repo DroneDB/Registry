@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
@@ -62,9 +63,10 @@ public class StacManager : IStacManager
         _logger = logger;
     }
 
-    public async Task<JToken> GetStacChild(string orgSlug, string dsSlug, string path = null)
+    public async Task<JToken> GetStacChild(string orgSlug, string dsSlug, string path = null,
+        CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
         var ds = access.Dataset;
         var ddb = access.Ddb;
 
@@ -85,10 +87,10 @@ public class StacManager : IStacManager
 
     #region STAC API 1.0.0
 
-    public Task<StacCatalogDto> GetLandingPage() =>
-        _catalog.ListingAsync(CacheCategories.StacLanding, BuildLandingPage);
+    public Task<StacCatalogDto> GetLandingPage(CancellationToken ct = default) =>
+        _catalog.ListingAsync(CacheCategories.StacLanding, BuildLandingPage, ct);
 
-    private async Task<StacCatalogDto> BuildLandingPage()
+    private async Task<StacCatalogDto> BuildLandingPage(CancellationToken ct)
     {
         var links = new List<StacLinkDto>
         {
@@ -102,14 +104,14 @@ public class StacManager : IStacManager
             new() { Href = _urls.ServiceDocumentation, Relationship = "service-doc", Type = "text/html" }
         };
 
-        foreach (var ds in await _catalog.ReadableDatasetsAsync())
+        foreach (var ds in await _catalog.ReadableDatasetsAsync(ct))
         {
             links.Add(new StacLinkDto
             {
                 Href = _urls.Collection(ds.Organization.Slug, ds.Slug),
                 Relationship = "child",
                 Type = Json,
-                Title = await _catalog.NameAsync(ds)
+                Title = await _catalog.NameAsync(ds, ct)
             });
         }
 
@@ -129,23 +131,28 @@ public class StacManager : IStacManager
         return new StacConformanceDto { ConformsTo = ConformanceClasses };
     }
 
-    public Task<StacCollectionsDto> GetCollections(int? limit = null, int? offset = null)
+    public Task<StacCollectionsDto> GetCollections(int? limit = null, int? offset = null,
+        CancellationToken ct = default)
     {
         // Every collection embeds its asset list (tens of KB each), so the listing is paged
         var lim = Math.Clamp(limit ?? DefaultCollectionsLimit, 1, MaxCollectionsLimit);
         var off = Math.Max(offset ?? 0, 0);
 
         return _catalog.ListingAsync((generation, user) => CacheCategories.StacCollections(generation, user, lim, off),
-            () => BuildCollections(limit, offset, lim, off));
+            token => BuildCollections(limit, offset, lim, off, token), ct);
     }
 
-    private async Task<StacCollectionsDto> BuildCollections(int? limit, int? offset, int lim, int off)
+    private async Task<StacCollectionsDto> BuildCollections(int? limit, int? offset, int lim, int off,
+        CancellationToken ct)
     {
-        var datasets = await _catalog.ReadableDatasetsAsync();
+        var datasets = await _catalog.ReadableDatasetsAsync(ct);
 
         var collections = new List<JToken>();
         foreach (var ds in datasets.Skip(off).Take(lim))
         {
+            // One native read per dataset: nobody waits for the listing any more, stop
+            ct.ThrowIfCancellationRequested();
+
             // One unreadable dataset index must not take the whole listing down
             try
             {
@@ -188,16 +195,16 @@ public class StacManager : IStacManager
         };
     }
 
-    public async Task<JToken> GetCollection(string orgSlug, string dsSlug)
+    public async Task<JToken> GetCollection(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
         return Collection(access.Dataset, access.Ddb);
     }
 
     public async Task<JToken> GetCollectionItems(string orgSlug, string dsSlug, double[] bbox = null,
-        string datetime = null, int? limit = null, int? offset = null)
+        string datetime = null, int? limit = null, int? offset = null, CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
         var ds = access.Dataset;
 
         var lim = Math.Clamp(limit ?? DefaultLimit, 1, MaxLimit);
@@ -224,9 +231,10 @@ public class StacManager : IStacManager
         return StacDocuments.ApiItemCollection(data, ds, links, _urls);
     }
 
-    public async Task<JToken> GetCollectionItem(string orgSlug, string dsSlug, string featureId)
+    public async Task<JToken> GetCollectionItem(string orgSlug, string dsSlug, string featureId,
+        CancellationToken ct = default)
     {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
 
         // An undecodable feature id simply identifies a feature that does not exist (404),
         // not a malformed request (400).
@@ -236,7 +244,7 @@ public class StacManager : IStacManager
         return StacDocuments.ApiItem(ItemData(access.Ddb, path), access.Dataset, _urls);
     }
 
-    public async Task<JToken> Search(StacSearchRequestDto request)
+    public async Task<JToken> Search(StacSearchRequestDto request, CancellationToken ct = default)
     {
         request ??= new StacSearchRequestDto();
 
@@ -244,7 +252,7 @@ public class StacManager : IStacManager
         var bboxStr = StacQueries.BboxToString(request.Bbox);
         var datetime = request.Datetime;
 
-        var datasets = await _catalog.ReadableDatasetsAsync();
+        var datasets = await _catalog.ReadableDatasetsAsync(ct);
 
         if (request.Collections is { Length: > 0 })
         {
@@ -253,7 +261,7 @@ public class StacManager : IStacManager
         }
 
         if (request.Ids is { Length: > 0 })
-            return SearchByIds(datasets, request.Ids, bboxStr, datetime);
+            return SearchByIds(datasets, request.Ids, bboxStr, datetime, ct);
 
         StacQueries.DecodeToken(request.Token, out var startDs, out var startOffset);
 
@@ -263,6 +271,8 @@ public class StacManager : IStacManager
 
         for (var i = startDs; i < datasets.Count; i++)
         {
+            // One native query per dataset: a client that went away stops the search
+            ct.ThrowIfCancellationRequested();
             var ds = datasets[i];
             var off = i == startDs ? startOffset : 0;
             var need = lim - features.Count;
@@ -308,13 +318,15 @@ public class StacManager : IStacManager
         return FeatureCollection(features, links);
     }
 
-    private JObject SearchByIds(List<Dataset> datasets, string[] ids, string bboxStr, string datetime)
+    private JObject SearchByIds(List<Dataset> datasets, string[] ids, string bboxStr, string datetime,
+        CancellationToken ct)
     {
         var wantedIds = new HashSet<string>(ids);
         var features = new JArray();
 
         foreach (var ds in datasets)
         {
+            ct.ThrowIfCancellationRequested();
             if (features.Count >= wantedIds.Count)
                 break;
 

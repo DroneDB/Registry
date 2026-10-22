@@ -195,13 +195,22 @@ public class CacheManagerSingleFlightTests
         var stale = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
         var fresh = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
         var gates = new[] { stale.Task, fresh.Task };
-        _sut.Register(Seed, async _ => await gates[Interlocked.Increment(ref _invocations) - 1]);
+        // Generations start on the pool (RQ-13): the second one is awaited, not counted synchronously
+        var secondStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _sut.Register(Seed, async _ =>
+        {
+            var generation = Interlocked.Increment(ref _invocations);
+            if (generation == 2) secondStarted.SetResult();
+            return await gates[generation - 1];
+        });
 
         var before = _sut.GetAsync(Seed, Category, "a");
         await _sut.RemoveAsync(Seed, Category, "a");
         var after = _sut.GetAsync(Seed, Category, "a");
 
-        _invocations.ShouldBe(2, "a caller arriving after the invalidation must start a new generation");
+        // A caller arriving after the invalidation must start a new generation (the stale one is still running)
+        await secondStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        _invocations.ShouldBe(2);
 
         stale.SetResult([9]);
         (await before).ShouldBe([9]);

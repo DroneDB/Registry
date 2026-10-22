@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -30,17 +31,17 @@ public class WmtsController : ControllerBaseEx
     }
 
     [HttpGet("wmts")]
-    public async Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug)
-        => await Dispatch(orgSlug, dsSlug, folderPath: null);
+    public async Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)
+        => await Dispatch(orgSlug, dsSlug, folderPath: null, ct);
 
     [HttpGet("wmts/p/{*folder}")]
     public async Task<IActionResult> KvpFolder([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] string folder) => await Dispatch(orgSlug, dsSlug, folder);
+        [FromRoute] string folder, CancellationToken ct) => await Dispatch(orgSlug, dsSlug, folder, ct);
 
     private static readonly string[] SupportedRequests =
         ["GetCapabilities", "GetTile", "GetFeatureInfo"];
 
-    private async Task<IActionResult> Dispatch(string orgSlug, string dsSlug, string? folderPath)
+    private async Task<IActionResult> Dispatch(string orgSlug, string dsSlug, string? folderPath, CancellationToken ct)
     {
         var q = Request.Query;
         OgcKvpValidator.ValidateService(q, "WMTS");
@@ -52,7 +53,7 @@ public class WmtsController : ControllerBaseEx
                 var sections = WmtsConformance.ParseSections(OgcRequestParser.Get(q, "SECTIONS"));
                 var xml = await _mgr.GetCapabilitiesAsync(orgSlug, dsSlug,
                     sections?.Count > 0 ? (System.Collections.Generic.IReadOnlyCollection<string>)sections : null,
-                    folderPath);
+                    folderPath, ct: ct);
                 return Content(xml, "text/xml; charset=utf-8");
             }
             case "GetTile":
@@ -72,7 +73,7 @@ public class WmtsController : ControllerBaseEx
                 var row = ParseIntOrThrow(rowRaw, "tileRow");
                 var col = ParseIntOrThrow(colRaw, "tileCol");
 
-                var bytes = await _mgr.GetTileAsync(orgSlug, dsSlug, layer, style, tms, z, col, row, format);
+                var bytes = await _mgr.GetTileAsync(orgSlug, dsSlug, layer, style, tms, z, col, row, format, ct: ct);
                 return File(bytes, format);
             }
             default:
@@ -103,7 +104,7 @@ public class WmtsController : ControllerBaseEx
     [HttpGet("wmts/1.0.0/{layer}/{style}/{tms}/{z:int}/{y:int}/{x:int}.{ext:regex(^(pbf|png|jpe?g)$)}")]
     public async Task<IActionResult> Restful([FromRoute] string orgSlug, [FromRoute] string dsSlug,
         [FromRoute] string layer, [FromRoute] string style, [FromRoute] string tms,
-        [FromRoute] int z, [FromRoute] int y, [FromRoute] int x, [FromRoute] string ext)
+        [FromRoute] int z, [FromRoute] int y, [FromRoute] int x, [FromRoute] string ext, CancellationToken ct)
     {
         var format = ext.ToLowerInvariant() switch
         {
@@ -114,7 +115,7 @@ public class WmtsController : ControllerBaseEx
         };
         // Route values may arrive percent-encoded when the layer identifier contains '/' (e.g. "folder%2Ffile.shp").
         layer = Uri.UnescapeDataString(layer);
-        var bytes = await _mgr.GetTileAsync(orgSlug, dsSlug, layer, style, tms, z, x, y, format);
+        var bytes = await _mgr.GetTileAsync(orgSlug, dsSlug, layer, style, tms, z, x, y, format, ct: ct);
         return File(bytes, format);
     }
 }

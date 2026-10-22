@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Exceptions;
@@ -26,23 +27,23 @@ public class WfsController : ControllerBaseEx
     public WfsController(IWfsManager mgr) { _mgr = mgr; }
 
     [HttpGet("wfs")]
-    public Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug)
-        => Dispatch(orgSlug, dsSlug, null);
+    public Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)
+        => Dispatch(orgSlug, dsSlug, null, ct);
 
     [HttpGet("wfs/p/{*folder}")]
     public Task<IActionResult> KvpFolder([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] string folder) => Dispatch(orgSlug, dsSlug, folder);
+        [FromRoute] string folder, CancellationToken ct) => Dispatch(orgSlug, dsSlug, folder, ct);
 
     [HttpPost("wfs")]
     [Consumes("application/xml", "text/xml", "application/soap+xml")]
-    public async Task<IActionResult> PostXml([FromRoute] string orgSlug, [FromRoute] string dsSlug)
+    public async Task<IActionResult> PostXml([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)
     {
         using var reader = new StreamReader(Request.Body);
-        var xml = await reader.ReadToEndAsync();
-        return await DispatchPost(orgSlug, dsSlug, xml);
+        var xml = await reader.ReadToEndAsync(ct);
+        return await DispatchPost(orgSlug, dsSlug, xml, ct);
     }
 
-    private async Task<IActionResult> DispatchPost(string orgSlug, string dsSlug, string xml)
+    private async Task<IActionResult> DispatchPost(string orgSlug, string dsSlug, string xml, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(xml))
             throw new OgcException("MissingParameterValue", "Empty XML request body", 400);
@@ -62,23 +63,23 @@ public class WfsController : ControllerBaseEx
         const string nsFes = "http://www.opengis.net/fes/2.0";
 
         if (op == "GetCapabilities")
-            return Content(await _mgr.GetCapabilitiesAsync(orgSlug, dsSlug, null), "text/xml; charset=utf-8");
+            return Content(await _mgr.GetCapabilitiesAsync(orgSlug, dsSlug, null, ct: ct), "text/xml; charset=utf-8");
 
         if (op == "DescribeFeatureType")
         {
             var names = root.GetElementsByTagName("TypeName", nsWfs).Cast<System.Xml.XmlElement>()
                 .Select(e => e.InnerText.Trim()).Where(s => s.Length > 0).ToArray();
-            return Content(await _mgr.DescribeFeatureTypeAsync(orgSlug, dsSlug, names), "text/xml; charset=utf-8");
+            return Content(await _mgr.DescribeFeatureTypeAsync(orgSlug, dsSlug, names, ct: ct), "text/xml; charset=utf-8");
         }
 
         if (op == "ListStoredQueries")
-            return Content(await _mgr.ListStoredQueriesAsync(orgSlug, dsSlug), "text/xml; charset=utf-8");
+            return Content(await _mgr.ListStoredQueriesAsync(orgSlug, dsSlug, ct: ct), "text/xml; charset=utf-8");
 
         if (op == "DescribeStoredQueries")
         {
             var ids = root.GetElementsByTagName("StoredQueryId", nsWfs).Cast<System.Xml.XmlElement>()
                 .Select(e => e.InnerText.Trim()).Where(s => s.Length > 0).ToArray();
-            return Content(await _mgr.DescribeStoredQueriesAsync(orgSlug, dsSlug, ids), "text/xml; charset=utf-8");
+            return Content(await _mgr.DescribeStoredQueriesAsync(orgSlug, dsSlug, ids, ct: ct), "text/xml; charset=utf-8");
         }
 
         if (op == "GetFeature" || op == "GetPropertyValue")
@@ -107,7 +108,7 @@ public class WfsController : ControllerBaseEx
                 }
                 if (string.IsNullOrEmpty(idVal))
                     throw new OgcException("MissingParameterValue", "Parameter 'id' required", 400, "id");
-                var b0 = await _mgr.GetFeatureByIdAsync(orgSlug, dsSlug, idVal, outputFormat);
+                var b0 = await _mgr.GetFeatureByIdAsync(orgSlug, dsSlug, idVal, outputFormat, ct: ct);
                 return Content(b0, outputFormat);
             }
 
@@ -186,16 +187,16 @@ public class WfsController : ControllerBaseEx
             var body = (op == "GetPropertyValue")
                 ? await _mgr.GetPropertyValueAsync(orgSlug, dsSlug, typeName,
                     root.GetAttribute("valueReference"), count, startIndex, outputFormat,
-                    resourceIdsCsv, filterXml)
+                    resourceIdsCsv, filterXml, ct: ct)
                 : await _mgr.GetFeatureAsync(orgSlug, dsSlug, typeName, null, srsName,
-                    count, startIndex, outputFormat, resourceIdsCsv, filterXml);
+                    count, startIndex, outputFormat, resourceIdsCsv, filterXml, ct: ct);
             return Content(body, outputFormat);
         }
 
         throw new OgcException("OperationNotSupported", $"WFS operation '{op}' not supported", 400);
     }
 
-    private async Task<IActionResult> Dispatch(string orgSlug, string dsSlug, string? folderPath)
+    private async Task<IActionResult> Dispatch(string orgSlug, string dsSlug, string? folderPath, CancellationToken ct)
     {
         var q = Request.Query;
         var request = OgcRequestParser.GetRequired(q, "REQUEST");
@@ -213,14 +214,14 @@ public class WfsController : ControllerBaseEx
         switch (request.ToUpperInvariant())
         {
             case "GETCAPABILITIES":
-                return Content(await _mgr.GetCapabilitiesAsync(orgSlug, dsSlug, folderPath),
+                return Content(await _mgr.GetCapabilitiesAsync(orgSlug, dsSlug, folderPath, ct: ct),
                     "text/xml; charset=utf-8");
             case "DESCRIBEFEATURETYPE":
             {
                 var typeNames = OgcRequestParser.GetList(q, "TYPENAMES")
                                 ?? OgcRequestParser.GetList(q, "TYPENAME")
                                 ?? [];
-                return Content(await _mgr.DescribeFeatureTypeAsync(orgSlug, dsSlug, typeNames),
+                return Content(await _mgr.DescribeFeatureTypeAsync(orgSlug, dsSlug, typeNames, ct: ct),
                     "text/xml; charset=utf-8");
             }
             case "GETFEATURE":
@@ -236,7 +237,7 @@ public class WfsController : ControllerBaseEx
                         var idParam = OgcRequestParser.Get(q, "ID")
                                       ?? throw new OgcException("MissingParameterValue",
                                           "ID parameter required for GetFeatureById stored query", 400, "ID");
-                        var body0 = await _mgr.GetFeatureByIdAsync(orgSlug, dsSlug, idParam, format);
+                        var body0 = await _mgr.GetFeatureByIdAsync(orgSlug, dsSlug, idParam, format, ct: ct);
                         return Content(body0, format);
                     }
                     throw new OgcException("InvalidParameterValue",
@@ -294,7 +295,7 @@ public class WfsController : ControllerBaseEx
                     }
                 }
                 var body = await _mgr.GetFeatureAsync(orgSlug, dsSlug, typeName, bboxArr, bboxCrs,
-                    count, startIndex, format, resourceId, filterXml);
+                    count, startIndex, format, resourceId, filterXml, ct: ct);
                 return Content(body, format);
             }
             case "GETPROPERTYVALUE":
@@ -313,16 +314,16 @@ public class WfsController : ControllerBaseEx
                                  ?? OgcRequestParser.Get(q, "FEATUREID");
                 var filterXml = OgcRequestParser.Get(q, "FILTER");
                 var body = await _mgr.GetPropertyValueAsync(orgSlug, dsSlug, typeName, valueRef,
-                    count, startIndex, format, resourceId, filterXml);
+                    count, startIndex, format, resourceId, filterXml, ct: ct);
                 return Content(body, format);
             }
             case "LISTSTOREDQUERIES":
-                return Content(await _mgr.ListStoredQueriesAsync(orgSlug, dsSlug),
+                return Content(await _mgr.ListStoredQueriesAsync(orgSlug, dsSlug, ct: ct),
                     "text/xml; charset=utf-8");
             case "DESCRIBESTOREDQUERIES":
             {
                 var ids = OgcRequestParser.GetList(q, "STOREDQUERY_ID") ?? [];
-                return Content(await _mgr.DescribeStoredQueriesAsync(orgSlug, dsSlug, ids),
+                return Content(await _mgr.DescribeStoredQueriesAsync(orgSlug, dsSlug, ids, ct: ct),
                     "text/xml; charset=utf-8");
             }
             default:

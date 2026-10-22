@@ -90,13 +90,19 @@ public sealed class ThumbnailPrecomputeQueue : IThumbnailPrecomputeQueue, IHoste
     {
         try
         {
-            await _cache.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(r.OrgSlug, r.DsSlug), r.Hash, r.Size,
-                new Func<Task<byte[]>>(async () =>
+            // The queue's stop token: a pre-generation still running at shutdown stops
+            await _cache.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(r.OrgSlug, r.DsSlug), _stop.Token,
+                r.Hash, r.Size,
+                new Func<CancellationToken, Task<byte[]>>(async token =>
                 {
                     using var s = new MemoryStream();
-                    await _generator.GenerateThumbnailAsync(r.LocalPath, r.Size, s);
+                    await _generator.GenerateThumbnailAsync(r.LocalPath, r.Size, s, token);
                     return s.ToArray();
                 }));
+        }
+        catch (OperationCanceledException) when (_stop.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {

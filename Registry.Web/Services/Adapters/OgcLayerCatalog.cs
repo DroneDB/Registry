@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
@@ -59,26 +60,30 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         }
     }
 
-    public Task<string> CacheKeyAsync(string orgSlug, string dsSlug, string kind, string? detail = null) =>
-        _keys.ForAsync(orgSlug, dsSlug, kind, detail);
+    public Task<string> CacheKeyAsync(string orgSlug, string dsSlug, string kind, string? detail = null,
+        CancellationToken ct = default) =>
+        _keys.ForAsync(orgSlug, dsSlug, kind, detail, ct);
 
     public async Task<IReadOnlyList<OgcLayerDto>> GetLayersAsync(string orgSlug, string dsSlug,
-        string? folderPath = null, bool includeLocal = false)
+        string? folderPath = null, bool includeLocal = false, CancellationToken ct = default)
     {
-        var all = await GetAllLayersAsync(orgSlug, dsSlug, folderPath);
+        var all = await GetAllLayersAsync(orgSlug, dsSlug, folderPath, ct);
         return includeLocal ? all : all.Where(l => !l.IsLocal).ToList();
     }
 
-    private async Task<List<OgcLayerDto>> GetAllLayersAsync(string orgSlug, string dsSlug, string? folderPath)
+    private async Task<List<OgcLayerDto>> GetAllLayersAsync(string orgSlug, string dsSlug, string? folderPath,
+        CancellationToken ct)
     {
-        var key = await _keys.ForAsync(orgSlug, dsSlug, "layers", folderPath);
-        return await _records.GetOrCreateRecordAsync(key, _ => ListLayersAsync(orgSlug, dsSlug, folderPath), LayersCache);
+        var key = await _keys.ForAsync(orgSlug, dsSlug, "layers", folderPath, ct);
+        return await _records.GetOrCreateRecordAsync(key, token => ListLayersAsync(orgSlug, dsSlug, folderPath, token),
+            LayersCache, ct);
     }
 
-    private async Task<List<OgcLayerDto>> ListLayersAsync(string orgSlug, string dsSlug, string folderPath)
+    private async Task<List<OgcLayerDto>> ListLayersAsync(string orgSlug, string dsSlug, string folderPath,
+        CancellationToken ct)
     {
         // Callers are the OGC managers, after the request was authorized (OgcAuthorizationFilter)
-        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug);
+        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, ct: ct);
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         var entries = ddb.Find(EntryQuery.OfTypes(folderPath, EntryType.GeoRaster, EntryType.Vector));
@@ -242,9 +247,9 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     }
 
     public async Task<OgcLayerDto?> ResolveAsync(string orgSlug, string dsSlug, string layerName,
-        string? folderPath = null, bool includeLocal = false)
+        string? folderPath = null, bool includeLocal = false, CancellationToken ct = default)
     {
-        var layers = await GetLayersAsync(orgSlug, dsSlug, folderPath, includeLocal);
+        var layers = await GetLayersAsync(orgSlug, dsSlug, folderPath, includeLocal, ct);
         // Strip optional namespace prefix (e.g. "ddb:foo" -> "foo")
         var localName = layerName;
         var colon = layerName.IndexOf(':');

@@ -78,10 +78,11 @@ public sealed class RecordCache : IRecordCache
 
         return await _flights.RunAsync(key, async flight =>
         {
-            if (await TryReadAsync(key, read, CancellationToken.None) is { Ok: true } again)
+            // The flight's token: canceled once no caller waits for the record any more (RQ-13)
+            if (await TryReadAsync(key, read, flight.Token) is { Ok: true } again)
                 return again.Value;
 
-            var (value, bytes) = await compute(CancellationToken.None);
+            var (value, bytes) = await compute(flight.Token);
             if (bytes != null && value != null && options.CacheWhen?.Invoke(value) != false && !flight.Invalidated)
             {
                 await TrySetAsync(key, bytes, options);

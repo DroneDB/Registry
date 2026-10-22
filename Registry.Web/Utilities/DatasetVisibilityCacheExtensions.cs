@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
@@ -40,9 +41,9 @@ public static class DatasetVisibilityCacheExtensions
     /// many datasets makes no cache round trip per dataset once warm.
     /// </summary>
     public static async Task<string?> GetDatasetNameAsync(this ICacheManager cacheManager, string orgSlug,
-        Guid internalRef, IDdbManager ddbManager)
+        Guid internalRef, IDdbManager ddbManager, CancellationToken ct = default)
     {
-        var name = await cacheManager.GetAsync(MagicStrings.DatasetNameCacheSeed, orgSlug, orgSlug, internalRef,
+        var name = await cacheManager.GetAsync(MagicStrings.DatasetNameCacheSeed, orgSlug, ct, orgSlug, internalRef,
             ddbManager);
         return name.Length == 0 ? null : System.Text.Encoding.UTF8.GetString(name);
     }

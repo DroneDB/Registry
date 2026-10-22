@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Registry.Ports.DroneDB;
@@ -31,22 +32,22 @@ public class OgcApiController : ControllerBaseEx
         => $"{Request.Scheme}://{Request.Host}{Request.PathBase}/orgs/{orgSlug}/ds/{dsSlug}/ogcapi";
 
     [HttpGet("")]
-    public async Task<IActionResult> Landing([FromRoute] string orgSlug, [FromRoute] string dsSlug)
-        => Ok(await _features.GetLandingAsync(orgSlug, dsSlug, BaseUrl(orgSlug, dsSlug)));
+    public async Task<IActionResult> Landing([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)
+        => Ok(await _features.GetLandingAsync(orgSlug, dsSlug, BaseUrl(orgSlug, dsSlug), ct: ct));
 
     [HttpGet("conformance")]
-    public async Task<IActionResult> Conformance()
+    public async Task<IActionResult> Conformance(CancellationToken ct)
         => Ok(await _features.GetConformanceAsync());
 
     [HttpGet("collections")]
-    public async Task<IActionResult> Collections([FromRoute] string orgSlug, [FromRoute] string dsSlug)
-        => Ok(await _features.GetCollectionsAsync(orgSlug, dsSlug, BaseUrl(orgSlug, dsSlug)));
+    public async Task<IActionResult> Collections([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)
+        => Ok(await _features.GetCollectionsAsync(orgSlug, dsSlug, BaseUrl(orgSlug, dsSlug), ct: ct));
 
     [HttpGet("collections/{collectionId}")]
     public async Task<IActionResult> Collection([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] string collectionId)
+        [FromRoute] string collectionId, CancellationToken ct)
     {
-        var col = await _features.GetCollectionAsync(orgSlug, dsSlug, collectionId, BaseUrl(orgSlug, dsSlug));
+        var col = await _features.GetCollectionAsync(orgSlug, dsSlug, collectionId, BaseUrl(orgSlug, dsSlug), ct: ct);
         return col == null ? NotFound() : Ok(col);
     }
 
@@ -55,7 +56,7 @@ public class OgcApiController : ControllerBaseEx
         [FromRoute] string collectionId,
         [FromQuery] string? bbox = null,
         [FromQuery] int limit = 10,
-        [FromQuery] int offset = 0)
+        [FromQuery] int offset = 0, CancellationToken ct = default)
     {
         double[]? bboxArr = null;
         if (!string.IsNullOrWhiteSpace(bbox))
@@ -63,33 +64,33 @@ public class OgcApiController : ControllerBaseEx
             var parsed = OgcRequestParser.ParseBbox(bbox, "CRS:84", null);
             bboxArr = parsed.Bbox;
         }
-        var json = await _features.GetItemsAsync(orgSlug, dsSlug, collectionId, bboxArr, limit, offset);
+        var json = await _features.GetItemsAsync(orgSlug, dsSlug, collectionId, bboxArr, limit, offset, ct: ct);
         return Content(json, "application/geo+json");
     }
 
     [HttpGet("collections/{collectionId}/items/{featureId}")]
     public async Task<IActionResult> Item([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] string collectionId, [FromRoute] string featureId)
+        [FromRoute] string collectionId, [FromRoute] string featureId, CancellationToken ct)
     {
-        var json = await _features.GetItemAsync(orgSlug, dsSlug, collectionId, featureId);
+        var json = await _features.GetItemAsync(orgSlug, dsSlug, collectionId, featureId, ct: ct);
         return Content(json, "application/geo+json");
     }
 
     [HttpGet("collections/{collectionId}/tiles")]
     public async Task<IActionResult> TileSets([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] string collectionId)
-        => Ok(await _tiles.GetTileSetsAsync(orgSlug, dsSlug, collectionId, BaseUrl(orgSlug, dsSlug)));
+        [FromRoute] string collectionId, CancellationToken ct)
+        => Ok(await _tiles.GetTileSetsAsync(orgSlug, dsSlug, collectionId, BaseUrl(orgSlug, dsSlug), ct: ct));
 
     [HttpGet("collections/{collectionId}/tiles/{tileMatrixSet}/{z:int}/{y:int}/{x:int}")]
     public async Task<IActionResult> Tile([FromRoute] string orgSlug, [FromRoute] string dsSlug,
         [FromRoute] string collectionId, [FromRoute] string tileMatrixSet,
-        [FromRoute] int z, [FromRoute] int y, [FromRoute] int x)
+        [FromRoute] int z, [FromRoute] int y, [FromRoute] int x, CancellationToken ct)
     {
-        var bytes = await _tiles.GetTileAsync(orgSlug, dsSlug, collectionId, tileMatrixSet, z, x, y);
+        var bytes = await _tiles.GetTileAsync(orgSlug, dsSlug, collectionId, tileMatrixSet, z, x, y, ct: ct);
         if (bytes == null) return NotFound();
 
         // Choose the media type from the layer kind: vector layers serve MVT, rasters serve PNG.
-        var layer = await _layers.ResolveAsync(orgSlug, dsSlug, System.Uri.UnescapeDataString(collectionId));
+        var layer = await _layers.ResolveAsync(orgSlug, dsSlug, System.Uri.UnescapeDataString(collectionId), ct: ct);
         var contentType = layer?.EntryType == EntryType.Vector
             ? "application/vnd.mapbox-vector-tile"
             : "image/png";

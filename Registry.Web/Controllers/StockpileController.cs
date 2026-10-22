@@ -1,5 +1,6 @@
 #nullable enable
 using System.ComponentModel.DataAnnotations;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -41,14 +42,14 @@ public class StockpileController : ControllerBaseEx
     public async Task<IActionResult> CalculateStockpileVolume(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromBody, Required] VolumeCalculationRequestDto request)
+        [FromBody, Required] VolumeCalculationRequestDto request, CancellationToken ct)
     {
         if (request == null)
             throw new BadRequestException("Request body is required");
 
 
         var json = await _raster.CalculateVolumeAsync(orgSlug, dsSlug, request.Path.ToString(),
-            request.Polygon, request.BaseMethod, request.FlatElevation);
+            request.Polygon, request.BaseMethod, request.FlatElevation, ct: ct);
 
         return Content(json, "application/json");
     }
@@ -63,7 +64,7 @@ public class StockpileController : ControllerBaseEx
     public async Task<IActionResult> DetectStockpile(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromBody, Required] StockpileDetectionRequestDto request)
+        [FromBody, Required] StockpileDetectionRequestDto request, CancellationToken ct)
     {
         if (request == null)
             throw new BadRequestException("Request body is required");
@@ -73,7 +74,7 @@ public class StockpileController : ControllerBaseEx
             throw new BadRequestException("lat and lon are required");
 
         var json = await _raster.DetectStockpileAsync(orgSlug, dsSlug, request.Path.ToString(),
-            request.Lat.Value, request.Lon.Value, request.Radius ?? 50.0, request.Sensitivity ?? 0.5f);
+            request.Lat.Value, request.Lon.Value, request.Radius ?? 50.0, request.Sensitivity ?? 0.5f, ct: ct);
         return Content(json, "application/json");
     }
 
@@ -87,14 +88,14 @@ public class StockpileController : ControllerBaseEx
     public async Task<IActionResult> DetectAllStockpiles(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromBody, Required] StockpileBatchDetectionRequestDto request)
+        [FromBody, Required] StockpileBatchDetectionRequestDto request, CancellationToken ct)
     {
         if (request == null)
             throw new BadRequestException("Request body is required");
 
 
         var json = await _raster.DetectAllStockpilesAsync(orgSlug, dsSlug, request.Path.ToString(),
-            request.Sensitivity ?? 0.5f, request.MinAreaM2 ?? 5.0, request.MaxResults ?? 50);
+            request.Sensitivity ?? 0.5f, request.MinAreaM2 ?? 5.0, request.MaxResults ?? 50, ct: ct);
         return Content(json, "application/json");
     }
 

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
@@ -41,13 +42,14 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
         _records = records;
     }
 
-    public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath)
+    public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath,
+        CancellationToken ct = default)
     {
-        var key = await _svc.CacheKeyAsync(orgSlug, dsSlug, "caps-wcs10-v1", folderPath);
-        return await _records.GetOrCreateRecordAsync(key, async _ =>
+        var key = await _svc.CacheKeyAsync(orgSlug, dsSlug, "caps-wcs10-v1", folderPath, ct);
+        return await _records.GetOrCreateRecordAsync(key, async token =>
         {
 
-            var (_, layers) = await _svc.GetCoveragesAsync(orgSlug, dsSlug, folderPath);
+            var (_, layers) = await _svc.GetCoveragesAsync(orgSlug, dsSlug, folderPath, token);
             var baseUrl = _svc.GetBaseUrl(orgSlug, dsSlug, folderPath);
 
             var sb = new StringBuilder();
@@ -115,16 +117,17 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
             }
             var xml = Utf8XmlDecl + StripDeclaration(sb.ToString());
             return xml;
-        }, CapabilitiesCache);
+        }, CapabilitiesCache, ct);
     }
 
-    public async Task<string> DescribeCoverageAsync(string orgSlug, string dsSlug, string coverageIds)
+    public async Task<string> DescribeCoverageAsync(string orgSlug, string dsSlug, string coverageIds,
+        CancellationToken ct = default)
     {
         // WCS 1.0 §6.3.1: COVERAGE is comma-separated; omitted = all coverages.
         string[] ids;
         if (string.IsNullOrWhiteSpace(coverageIds))
         {
-            var (_, all) = await _svc.GetCoveragesAsync(orgSlug, dsSlug, null);
+            var (_, all) = await _svc.GetCoveragesAsync(orgSlug, dsSlug, null, ct);
             ids = [.. all.Select(l => l.Name)];
         }
         else
@@ -132,7 +135,7 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
             ids = coverageIds.Split(',', StringSplitOptions.RemoveEmptyEntries);
         }
 
-        var (ddb, resolved) = await _svc.ResolveCoveragesAsync(orgSlug, dsSlug, ids);
+        var (ddb, resolved) = await _svc.ResolveCoveragesAsync(orgSlug, dsSlug, ids, ct);
 
         var sb = new StringBuilder();
         await using (var w = XmlWriter.Create(sb,
@@ -145,7 +148,7 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
             w.WriteAttributeString("updateSequence", "0");
 
             foreach (var (id, layer) in resolved)
-                await WriteCoverageOfferingAsync(w, ddb, id, layer);
+                await WriteCoverageOfferingAsync(w, ddb, id, layer, ct);
 
             await w.WriteEndElementAsync();
             await w.WriteEndDocumentAsync();
@@ -154,10 +157,11 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
         return Utf8XmlDecl + StripDeclaration(sb.ToString());
     }
 
-    private async Task WriteCoverageOfferingAsync(XmlWriter w, IDDB ddb, string id, OgcLayerDto layer)
+    private async Task WriteCoverageOfferingAsync(XmlWriter w, IDDB ddb, string id, OgcLayerDto layer,
+        CancellationToken ct)
     {
         var bbox = layer.BboxWgs84 ?? [-180.0, -90.0, 180.0, 90.0];
-        var info = await _svc.ProbeRasterAsync(ddb, layer);
+        var info = await _svc.ProbeRasterAsync(ddb, layer, ct);
         var rWidth = info.Width > 0 ? info.Width : 1024;
         var rHeight = info.Height > 0 ? info.Height : 1024;
 
@@ -245,7 +249,8 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
         await w.WriteEndElementAsync();
     }
 
-    public async Task<WcsCoverageResult> GetCoverageAsync(string orgSlug, string dsSlug, IQueryCollection q)
+    public async Task<WcsCoverageResult> GetCoverageAsync(string orgSlug, string dsSlug, IQueryCollection q,
+        CancellationToken ct = default)
     {
         var coverageId = OgcRequestParser.GetRequired(q, "COVERAGE");
         var rawFormat = OgcRequestParser.GetRequired(q, "FORMAT");
@@ -271,12 +276,12 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
         var width = OgcRequestParser.GetInt(q, "WIDTH", 0, 0, 4096);
         var height = OgcRequestParser.GetInt(q, "HEIGHT", 0, 0, 4096);
 
-        var (ddb, layer) = await _svc.ResolveCoverageAsync(orgSlug, dsSlug, coverageId);
+        var (ddb, layer) = await _svc.ResolveCoverageAsync(orgSlug, dsSlug, coverageId, ct);
 
         // Optional band subset via BANDS extension (not part of WCS 1.0 proper but
         // accepted because QGIS users frequently expect it). Resolution requires
         // probing the source raster band names.
-        var info = await _svc.ProbeRasterAsync(ddb, layer);
+        var info = await _svc.ProbeRasterAsync(ddb, layer, ct);
         var bands = WcsRangeSubsetParser.ParseBands10(OgcRequestParser.Get(q, "BANDS"), info);
 
         // RESPONSE_CRS (WCS 1.0) overrides the output CRS without changing the
@@ -285,7 +290,7 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
             OgcRequestParser.Get(q, "RESPONSE_CRS") ?? OgcRequestParser.Get(q, "RESPONSE_CRS_URI"));
 
         var bytes = await _svc.RenderRegionAsync(ddb, layer, bbox, width, height, mime, bands,
-            string.IsNullOrEmpty(outputCrs) ? null : outputCrs);
+            string.IsNullOrEmpty(outputCrs) ? null : outputCrs, ct);
         return new WcsCoverageResult(bytes, mime);
     }
 

@@ -102,15 +102,16 @@ public class UploadPerFileOverheadBaselineTests : TestBase
 
         // Thumbnail cache miss every time: run the factory so the generator is invoked like in production
         _cache = new Mock<ICacheManager>();
-        _cache.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()))
-            .Returns<string, string, object[]>(async (_, _, ps) =>
+        _cache.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(),
+                It.IsAny<object[]>()))
+            .Returns<string, string, CancellationToken, object[]>(async (_, _, ct, ps) =>
             {
-                var factory = ps.OfType<Func<Task<byte[]>>>().FirstOrDefault();
-                return factory != null ? await factory() : Array.Empty<byte>();
+                var factory = ps.OfType<Func<CancellationToken, Task<byte[]>>>().FirstOrDefault();
+                return factory != null ? await factory(ct) : Array.Empty<byte>();
             });
 
         _thumbs = new Mock<IThumbnailGenerator>();
-        _thumbs.Setup(t => t.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>()))
+        _thumbs.Setup(t => t.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
             .Returns(async () =>
             {
                 Interlocked.Increment(ref _thumbCalls);

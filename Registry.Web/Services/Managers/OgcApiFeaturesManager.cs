@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
@@ -39,9 +40,10 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
 
     public Task<OgcConformanceDto> GetConformanceAsync() => Task.FromResult(new OgcConformanceDto());
 
-    public async Task<OgcApiLandingDto> GetLandingAsync(string orgSlug, string dsSlug, string baseUrl)
+    public async Task<OgcApiLandingDto> GetLandingAsync(string orgSlug, string dsSlug, string baseUrl,
+        CancellationToken ct = default)
     {
-        await ResolveAsync(orgSlug, dsSlug);
+        await ResolveAsync(orgSlug, dsSlug, ct);
         var b = baseUrl.TrimEnd('/');
         return new OgcApiLandingDto
         {
@@ -55,10 +57,11 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
         };
     }
 
-    public async Task<OgcApiCollectionsDto> GetCollectionsAsync(string orgSlug, string dsSlug, string baseUrl)
+    public async Task<OgcApiCollectionsDto> GetCollectionsAsync(string orgSlug, string dsSlug, string baseUrl,
+        CancellationToken ct = default)
     {
-        await ResolveAsync(orgSlug, dsSlug);
-        var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug);
+        await ResolveAsync(orgSlug, dsSlug, ct);
+        var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, ct: ct);
         var b = baseUrl.TrimEnd('/');
         var dto = new OgcApiCollectionsDto
         {
@@ -72,24 +75,24 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
     }
 
     public async Task<OgcApiCollectionDto?> GetCollectionAsync(string orgSlug, string dsSlug,
-        string collectionId, string baseUrl)
+        string collectionId, string baseUrl, CancellationToken ct = default)
     {
         var name = Uri.UnescapeDataString(collectionId);
-        await ResolveAsync(orgSlug, dsSlug);
+        await ResolveAsync(orgSlug, dsSlug, ct);
         // Local layers (no CRS) resolve here and in items for the Hub's local viewer; they are
         // never listed in /collections.
-        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, includeLocal: true);
+        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, includeLocal: true, ct: ct);
         return layer == null ? null : BuildCollection(layer, baseUrl.TrimEnd('/'));
     }
 
     public async Task<string> GetItemsAsync(string orgSlug, string dsSlug, string collectionId,
-        double[]? bbox, int limit, int offset)
+        double[]? bbox, int limit, int offset, CancellationToken ct = default)
     {
         if (limit <= 0) limit = 10;
         limit = Math.Clamp(limit, 1, 1000);
         if (offset < 0) offset = 0;
 
-        var (gpkg, layer) = await ResolveFeatureCollectionAsync(orgSlug, dsSlug, collectionId);
+        var (gpkg, layer) = await ResolveFeatureCollectionAsync(orgSlug, dsSlug, collectionId, ct);
         if (layer.IsLocal && bbox != null)
             throw new OgcException("InvalidParameterValue",
                 "This collection has no coordinate system (local drawing coordinates); bbox is not supported",
@@ -99,13 +102,14 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
             bbox != null ? "EPSG:4326" : null, MaxFeatures: limit, StartIndex: offset));
     }
 
-    public async Task<string> GetItemAsync(string orgSlug, string dsSlug, string collectionId, string featureId)
+    public async Task<string> GetItemAsync(string orgSlug, string dsSlug, string collectionId, string featureId,
+        CancellationToken ct = default)
     {
         // Feature ids are the GeoPackage fids (GeoJSON "id"): one primary-key read
         if (!long.TryParse(featureId, NumberStyles.None, CultureInfo.InvariantCulture, out var fid))
             return "{}";
 
-        var (gpkg, layer) = await ResolveFeatureCollectionAsync(orgSlug, dsSlug, collectionId);
+        var (gpkg, layer) = await ResolveFeatureCollectionAsync(orgSlug, dsSlug, collectionId, ct);
         var items = DdbWrapper.QueryVector(gpkg, new VectorQuery(layer.InnerLayerName, Fids: [fid], MaxFeatures: 1));
         try
         {
@@ -122,11 +126,11 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
 
     /// <summary>The GeoPackage and layer of a vector collection (local layers included).</summary>
     private async Task<(string Gpkg, OgcLayerDto Layer)> ResolveFeatureCollectionAsync(string orgSlug, string dsSlug,
-        string collectionId)
+        string collectionId, CancellationToken ct)
     {
         var name = Uri.UnescapeDataString(collectionId);
-        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug);
-        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, includeLocal: true)
+        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
+        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, includeLocal: true, ct: ct)
                     ?? throw new OgcException("InvalidParameterValue",
                         $"Unknown collection '{collectionId}'", 404, "collectionId");
         if (layer.EntryType != EntryType.Vector)

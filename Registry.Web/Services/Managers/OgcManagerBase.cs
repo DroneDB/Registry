@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
@@ -87,12 +88,13 @@ public abstract class OgcManagerBase
         return baseUrl + path;
     }
 
-    protected async Task<(Registry.Web.Data.Models.Dataset ds, IDDB ddb)> ResolveAsync(string orgSlug, string dsSlug)
+    protected async Task<(Registry.Web.Data.Models.Dataset ds, IDDB ddb)> ResolveAsync(string orgSlug, string dsSlug,
+        CancellationToken ct = default)
     {
         // OgcAuthorizationFilter (applied at controller level) granted read access to this request's
         // dataset through the same scoped resolver, which reuses the grant. A manager invoked outside an
         // authorized OGC request is checked here.
-        var access = await Access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
+        var access = await Access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
         return (access.Dataset, access.Ddb);
     }
 

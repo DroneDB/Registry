@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
@@ -26,11 +27,13 @@ public class OgcRasterTileSource : IOgcRasterTileSource
     }
 
     public Task<byte[]> GetTileAsync(string orgSlug, string dsSlug, IDDB ddb, OgcLayerDto layer,
-        int z, int x, int y, string outputFormat)
+        int z, int x, int y, string outputFormat, CancellationToken ct = default)
     {
-        return _cacheManager.GetAsync(MagicStrings.TileCacheSeed, CacheCategories.ForDataset(orgSlug, dsSlug),
+        // The render runs with the cache flight's token: it stops when every request for the tile has gone
+        return _cacheManager.GetAsync(MagicStrings.TileCacheSeed, CacheCategories.ForDataset(orgSlug, dsSlug), ct,
             layer.EntryHash, x, y, z, false, outputFormat,
-            new Func<Task<byte[]>>(() => _gate.RunAsync(NativeLane.Tiles, () => ddb.GenerateTile(layer.EntryPath, z, x, y,
-                retina: false, inputPathHash: layer.EntryHash, outputFormat: outputFormat))));
+            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles, () => ddb.GenerateTile(
+                layer.EntryPath, z, x, y, retina: false, inputPathHash: layer.EntryHash, outputFormat: outputFormat),
+                token)));
     }
 }

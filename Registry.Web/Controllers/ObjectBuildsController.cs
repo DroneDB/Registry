@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
@@ -49,9 +50,9 @@ public class ObjectBuildsController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm] string? path,
-        [FromForm] bool force = false)
+        [FromForm] bool force = false, CancellationToken ct = default)
     {
-        await _builds.BuildAsync(orgSlug, dsSlug, path, force);
+        await _builds.BuildAsync(orgSlug, dsSlug, path, force, ct: ct);
         return Ok();
     }
 
@@ -73,9 +74,9 @@ public class ObjectBuildsController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string hash,
-        [FromRoute] string? path)
+        [FromRoute] string? path, CancellationToken ct)
     {
-        var res = await _builds.GetBuildFileAsync(orgSlug, dsSlug, hash, path);
+        var res = await _builds.GetBuildFileAsync(orgSlug, dsSlug, hash, path, ct: ct);
 
         return PhysicalFile(res, MimeUtility.GetMimeMapping(res), true);
     }
@@ -97,9 +98,9 @@ public class ObjectBuildsController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string hash,
-        [FromRoute] string? path)
+        [FromRoute] string? path, CancellationToken ct)
     {
-        var res = await _builds.CheckBuildFileAsync(orgSlug, dsSlug, hash, path);
+        var res = await _builds.CheckBuildFileAsync(orgSlug, dsSlug, hash, path, ct: ct);
 
         return res ? Ok() : NotFound();
     }
@@ -116,9 +117,9 @@ public class ObjectBuildsController : ControllerBaseEx
     public async Task<IActionResult> DownloadBuildArtifact(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromQuery] DatasetPath? path)
+        [FromQuery] DatasetPath? path, CancellationToken ct)
     {
-        var artifact = await _builds.GetBuildArtifactAsync(orgSlug, dsSlug, path);
+        var artifact = await _builds.GetBuildArtifactAsync(orgSlug, dsSlug, path, ct: ct);
 
         return PhysicalFile(artifact.LocalPath, artifact.MediaType, artifact.FileName, enableRangeProcessing: true);
     }
@@ -142,9 +143,9 @@ public class ObjectBuildsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPendingBuilds(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string dsSlug)
+        [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
-        var pending = await _builds.GetPendingBuildsAsync(orgSlug, dsSlug);
+        var pending = await _builds.GetPendingBuildsAsync(orgSlug, dsSlug, ct: ct);
 
         return Ok(pending);
     }
@@ -162,9 +163,9 @@ public class ObjectBuildsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ClearCompletedBuilds(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string dsSlug)
+        [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
-        var deletedCount = await _builds.ClearCompletedBuildsAsync(orgSlug, dsSlug);
+        var deletedCount = await _builds.ClearCompletedBuildsAsync(orgSlug, dsSlug, ct: ct);
 
         return Ok(new ClearCompletedBuildsResponse { DeletedCount = deletedCount });
     }

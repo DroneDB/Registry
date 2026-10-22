@@ -22,7 +22,8 @@ namespace Registry.Web.Services.Objects;
 /// <summary>
 /// Default <see cref="IObjectRenderService"/>: renders are cached per entry hash (the dataset thumbnail per
 /// candidate path) and every native render runs through <see cref="INativeWorkGate"/> (tiles on the tiles
-/// lane, thumbnails on the heavy lane, through the gated thumbnail generator).
+/// lane, thumbnails on the heavy lane, through the gated thumbnail generator). A render runs with the cache
+/// flight's token: it stops when every request waiting for it has gone (RQ-13).
 /// </summary>
 public sealed class ObjectRenderService : IObjectRenderService
 {
@@ -83,8 +84,8 @@ public sealed class ObjectRenderService : IObjectRenderService
         var localPath = obj.Ddb.GetLocalPath(obj.SourcePath);
         var pixels = size ?? _options.DefaultThumbnailSize;
 
-        var data = await _cache.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(obj.OrgSlug, obj.DsSlug),
-            obj.Hash, pixels, new Func<Task<byte[]>>(() => RenderThumbnailAsync(localPath, pixels)));
+        var data = await _cache.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(obj.OrgSlug, obj.DsSlug), ct,
+            obj.Hash, pixels, new Func<CancellationToken, Task<byte[]>>(token => RenderThumbnailAsync(localPath, pixels, token)));
 
         var extension = MimeUtility.GetExtensions(_ddbWrapper.ThumbnailMimeType)?.FirstOrDefault() ?? "webp";
 
@@ -103,10 +104,10 @@ public sealed class ObjectRenderService : IObjectRenderService
 
     public Task<StorageDataDto> GenerateTileDataAsync(ReadableObject obj, int tz, int tx, int ty, bool retina,
         CancellationToken ct = default) =>
-        CachedTileAsync(ty, () => _cache.GetAsync(MagicStrings.TileCacheSeed, ForDataset(obj.OrgSlug, obj.DsSlug),
+        CachedTileAsync(ty, () => _cache.GetAsync(MagicStrings.TileCacheSeed, ForDataset(obj.OrgSlug, obj.DsSlug), ct,
             obj.Hash, tx, ty, tz, retina,
-            new Func<Task<byte[]>>(() => _gate.RunAsync(NativeLane.Tiles,
-                () => obj.Ddb.GenerateTile(obj.SourcePath, tz, tx, ty, retina, obj.Hash, "webp"), ct))));
+            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles,
+                () => obj.Ddb.GenerateTile(obj.SourcePath, tz, tx, ty, retina, obj.Hash, "webp"), token))));
 
     public async Task<StorageDataDto> GenerateThumbnailDataExAsync(string orgSlug, string dsSlug, string path,
         int? size, RasterVisualization visualization, CancellationToken ct = default)
@@ -115,10 +116,10 @@ public sealed class ObjectRenderService : IObjectRenderService
         var pixels = size ?? _options.DefaultThumbnailSize;
         var v = visualization;
 
-        var data = await _cache.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug),
+        var data = await _cache.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug), ct,
             source.Entry.Hash, pixels, v.CacheKey,
-            new Func<Task<byte[]>>(() => _gate.RunAsync(NativeLane.Heavy, () => source.Ddb.GenerateThumbnailEx(
-                source.SourcePath, pixels, v.Preset, v.Bands, v.Formula, v.BandFilter, v.Colormap, v.Rescale), ct)));
+            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Heavy, () => source.Ddb.GenerateThumbnailEx(
+                source.SourcePath, pixels, v.Preset, v.Bands, v.Formula, v.BandFilter, v.Colormap, v.Rescale), token)));
 
         return new StorageDataDto
         {
@@ -135,10 +136,10 @@ public sealed class ObjectRenderService : IObjectRenderService
         var v = visualization;
 
         return await CachedTileAsync(ty, () => _cache.GetAsync(MagicStrings.TileCacheSeed,
-            ForDataset(orgSlug, dsSlug), source.Entry.Hash, tx, ty, tz, retina, v.CacheKey,
-            new Func<Task<byte[]>>(() => _gate.RunAsync(NativeLane.Tiles, () => source.Ddb.GenerateTileEx(
+            ForDataset(orgSlug, dsSlug), ct, source.Entry.Hash, tx, ty, tz, retina, v.CacheKey,
+            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles, () => source.Ddb.GenerateTileEx(
                 source.SourcePath, tz, tx, ty, retina, source.Entry.Hash, v.Preset, v.Bands, v.Formula,
-                v.BandFilter, v.Colormap, v.Rescale).ToWebp(90), ct))));
+                v.BandFilter, v.Colormap, v.Rescale).ToWebp(90), token))));
     }
 
     // A tile is a webp named after its row; a tile outside the raster is a 404, not a server fault
@@ -175,18 +176,18 @@ public sealed class ObjectRenderService : IObjectRenderService
         }
 
         var localPath = ddb.GetLocalPath(thumbnailPath);
-        var data = await _cache.GetAsync(MagicStrings.ThumbnailCacheSeed, category, thumbnailPath, pixels,
-            new Func<Task<byte[]>>(() => RenderThumbnailAsync(localPath, pixels)));
+        var data = await _cache.GetAsync(MagicStrings.ThumbnailCacheSeed, category, ct, thumbnailPath, pixels,
+            new Func<CancellationToken, Task<byte[]>>(token => RenderThumbnailAsync(localPath, pixels, token)));
 
         return new StorageDataDto { Name = "thumbnail.webp", Data = data, ContentType = _ddbWrapper.ThumbnailMimeType };
     }
 
-    // The generator is gated itself (GatedThumbnailGenerator, heavy lane)
-    private async Task<byte[]> RenderThumbnailAsync(string localPath, int size)
+    // The generator is gated itself (GatedThumbnailGenerator, heavy lane); the token is the cache flight's
+    private async Task<byte[]> RenderThumbnailAsync(string localPath, int size, CancellationToken ct)
     {
         _logger.LogDebug("Cache miss - generating a thumbnail of '{LocalPath}'", localPath);
         using var stream = new MemoryStream();
-        await _thumbnails.GenerateThumbnailAsync(localPath, size, stream);
+        await _thumbnails.GenerateThumbnailAsync(localPath, size, stream, ct);
         return stream.ToArray();
     }
 }

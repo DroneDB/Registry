@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Common;
 using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Utilities.Auth;
 
@@ -75,7 +76,7 @@ internal sealed class ThumbnailRequestHandler
             return;
         }
 
-        var form = await context.Request.ReadFormAsync();
+        var form = await context.Request.ReadFormAsync(context.RequestAborted);
 
         if (!form.ContainsKey("path") || !form.ContainsKey("size"))
         {
@@ -113,7 +114,10 @@ internal sealed class ThumbnailRequestHandler
 
         try
         {
-            var thumbnail = _ddbWrapper.GenerateThumbnail(filePath, sizeInt);
+            // The render stops when the web server cancels its request (its own client went away, RQ-13)
+            byte[] thumbnail;
+            using (DdbCancellation.Enter(context.RequestAborted))
+                thumbnail = _ddbWrapper.GenerateThumbnail(filePath, sizeInt);
 
             if (thumbnail == null || thumbnail.Length == 0)
             {
@@ -123,7 +127,12 @@ internal sealed class ThumbnailRequestHandler
             }
 
             context.Response.ContentType = _ddbWrapper.ThumbnailMimeType;
-            await context.Response.Body.WriteAsync(thumbnail);
+            await context.Response.Body.WriteAsync(thumbnail, context.RequestAborted);
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            // Nobody reads the answer: not an error
+            _logger.LogDebug("Thumbnail request for {FilePath} canceled by the client", filePath);
         }
         catch (Exception e)
         {

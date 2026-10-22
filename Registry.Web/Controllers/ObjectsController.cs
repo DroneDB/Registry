@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -66,7 +67,7 @@ public class ObjectsController : ControllerBaseEx
         [FromRoute, Required] string dsSlug,
         [FromQuery] string? path,
         [FromQuery] int? size,
-        [FromQuery] string? v = null)
+        [FromQuery] string? v = null, CancellationToken ct = default)
     {
         StorageDataDto? res;
         HashedContentCachePolicy? cachePolicy = null;
@@ -74,19 +75,19 @@ public class ObjectsController : ControllerBaseEx
         // Dataset thumbnails (no path) are not tied to one entry hash: no validator.
         if (string.IsNullOrWhiteSpace(path))
         {
-            res = await _renders.GenerateThumbnailDataAsync(orgSlug, dsSlug, path, size);
+            res = await _renders.GenerateThumbnailDataAsync(orgSlug, dsSlug, path, size, ct: ct);
         }
         else
         {
             var obj = await _renders.ResolveReadableObjectAsync(orgSlug, dsSlug,
-                path.StartsWith('/') ? path[1..] : path);
+                path.StartsWith('/') ? path[1..] : path, ct: ct);
 
             cachePolicy = HashedContentCachePolicy.For(obj.Hash, v, "thumb",
                 size ?? _thumbnails.DefaultThumbnailSize, obj.SourceVersion);
             if (cachePolicy.IsNotModified(Request))
                 return NotModified(cachePolicy);
 
-            res = await _renders.GenerateThumbnailDataAsync(obj, size);
+            res = await _renders.GenerateThumbnailDataAsync(obj, size, ct: ct);
         }
 
         if (res == null)
@@ -131,7 +132,7 @@ public class ObjectsController : ControllerBaseEx
         [FromRoute, Required] string tyRaw,
         [FromQuery] string? path,
         [FromRoute, Required] string ext,
-        [FromQuery] string? v = null)
+        [FromQuery] string? v = null, CancellationToken ct = default)
     {
         var retina = tyRaw.EndsWith("@2x", StringComparison.Ordinal);
 
@@ -139,14 +140,14 @@ public class ObjectsController : ControllerBaseEx
             throw new BadRequestException("Invalid input parameters (retina indicator should be '@2x')");
 
         // Access check and lookup only; the 304 below skips the cache and the native render.
-        var obj = await _renders.ResolveReadableObjectAsync(orgSlug, dsSlug, path);
+        var obj = await _renders.ResolveReadableObjectAsync(orgSlug, dsSlug, path, ct: ct);
 
         var cachePolicy = HashedContentCachePolicy.For(obj.Hash, v, "tile", tz, tx, ty, retina ? 2 : 1,
             obj.SourceVersion);
         if (cachePolicy.IsNotModified(Request))
             return NotModified(cachePolicy);
 
-        var res = await _renders.GenerateTileDataAsync(obj, tz, tx, ty, retina);
+        var res = await _renders.GenerateTileDataAsync(obj, tz, tx, ty, retina, ct: ct);
 
         cachePolicy.Apply(Response);
         return File(res.Data, res.ContentType, res.Name);
@@ -173,9 +174,9 @@ public class ObjectsController : ControllerBaseEx
     public async Task<IActionResult> Get(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromForm] string? path)
+        [FromForm] string? path, CancellationToken ct)
     {
-        var res = await _queries.GetAsync(orgSlug, dsSlug, path);
+        var res = await _queries.GetAsync(orgSlug, dsSlug, path, ct: ct);
         return PhysicalFile(res.PhysicalPath, res.ContentType, res.Name);
     }
 
@@ -196,9 +197,9 @@ public class ObjectsController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery] string? path,
-        [FromQuery] EntryType? type = null)
+        [FromQuery] EntryType? type = null, CancellationToken ct = default)
     {
-        var res = await _queries.ListAsync(orgSlug, dsSlug, path, false, type);
+        var res = await _queries.ListAsync(orgSlug, dsSlug, path, false, type, ct: ct);
         return Ok(res);
     }
 
@@ -219,9 +220,9 @@ public class ObjectsController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm] string? path,
-        [FromForm] EntryType? type = null)
+        [FromForm] EntryType? type = null, CancellationToken ct = default)
     {
-        var res = await _queries.ListAsync(orgSlug, dsSlug, path, false, type);
+        var res = await _queries.ListAsync(orgSlug, dsSlug, path, false, type, ct: ct);
         return Ok(res);
     }
 
@@ -246,9 +247,9 @@ public class ObjectsController : ControllerBaseEx
         [FromForm] string? query,
         [FromForm] string? path,
         [FromForm] bool recursive = true,
-        [FromForm] EntryType? type = null)
+        [FromForm] EntryType? type = null, CancellationToken ct = default)
     {
-        var res = await _queries.SearchAsync(orgSlug, dsSlug, query, path, recursive, type);
+        var res = await _queries.SearchAsync(orgSlug, dsSlug, query, path, recursive, type, ct: ct);
         return Ok(res);
     }
 
@@ -267,10 +268,10 @@ public class ObjectsController : ControllerBaseEx
     public async Task<IActionResult> Delete(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromForm] string? path)
+        [FromForm] string? path, CancellationToken ct)
     {
         // No path is the empty path (the path rule refuses it)
-        await _commands.DeleteAsync(orgSlug, dsSlug, [path ?? string.Empty]);
+        await _commands.DeleteAsync(orgSlug, dsSlug, [path ?? string.Empty], ct: ct);
         return NoContent();
     }
 
@@ -288,12 +289,12 @@ public class ObjectsController : ControllerBaseEx
     public async Task<IActionResult> DeleteBatch(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromForm] string[]? paths)
+        [FromForm] string[]? paths, CancellationToken ct)
     {
         if (paths == null || paths.Length == 0)
             throw new BadRequestException("No paths provided");
 
-        var response = await _commands.DeleteBatchAsync(orgSlug, dsSlug, paths);
+        var response = await _commands.DeleteBatchAsync(orgSlug, dsSlug, paths, ct: ct);
         return Ok(response);
     }
 
@@ -314,9 +315,9 @@ public class ObjectsController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm] string? source,
-        [FromForm] string? dest)
+        [FromForm] string? dest, CancellationToken ct)
     {
-        var entry = await _commands.MoveAsync(orgSlug, dsSlug, source, dest);
+        var entry = await _commands.MoveAsync(orgSlug, dsSlug, source, dest, ct: ct);
         return Ok(entry);
     }
 
@@ -345,9 +346,9 @@ public class ObjectsController : ControllerBaseEx
         [FromForm, Required] string destDsSlug,
         [FromForm] string? destPath = null,
         [FromForm] bool overwrite = false,
-        [FromForm] bool keepSource = false)
+        [FromForm] bool keepSource = false, CancellationToken ct = default)
     {
-        await _transfers.TransferAsync(orgSlug, dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite, keepSource);
+        await _transfers.TransferAsync(orgSlug, dsSlug, sourcePath, destOrgSlug, destDsSlug, destPath, overwrite, keepSource, ct: ct);
         return NoContent();
     }
 
@@ -371,9 +372,9 @@ public class ObjectsController : ControllerBaseEx
         [FromRoute, Required] string dsSlug,
         [FromForm, Required] string source,
         [FromForm, Required] string dest,
-        [FromForm] bool overwrite = false)
+        [FromForm] bool overwrite = false, CancellationToken ct = default)
     {
-        var entry = await _transfers.CopyAsync(orgSlug, dsSlug, source, dest, overwrite);
+        var entry = await _transfers.CopyAsync(orgSlug, dsSlug, source, dest, overwrite, ct: ct);
         return Ok(entry);
     }
 }

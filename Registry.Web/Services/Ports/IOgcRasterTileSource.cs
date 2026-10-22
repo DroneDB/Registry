@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.DTO.Ogc;
@@ -15,5 +16,5 @@ public interface IOgcRasterTileSource
     /// ("png" or "jpeg"), rendered once per cache lifetime.
     /// </summary>
     Task<byte[]> GetTileAsync(string orgSlug, string dsSlug, IDDB ddb, OgcLayerDto layer,
-        int z, int x, int y, string outputFormat);
+        int z, int x, int y, string outputFormat, CancellationToken ct = default);
 }

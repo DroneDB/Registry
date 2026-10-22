@@ -67,17 +67,19 @@ public sealed class StacCatalog
     }
 
     /// <summary>The display name of a dataset, or null when it has none.</summary>
-    public Task<string?> NameAsync(Dataset ds) =>
-        _cacheManager.GetDatasetNameAsync(ds.Organization.Slug, ds.InternalRef, _ddbManager);
+    public Task<string?> NameAsync(Dataset ds, CancellationToken ct = default) =>
+        _cacheManager.GetDatasetNameAsync(ds.Organization.Slug, ds.InternalRef, _ddbManager, ct);
 
     /// <summary>
     /// A listing of the current caller, cached in the current STAC generation under the key
-    /// <paramref name="keyOf"/> makes of the generation and the caller's name.
+    /// <paramref name="keyOf"/> makes of the generation and the caller's name. <paramref name="create"/> gets the
+    /// shared computation's token (canceled once no caller waits for the listing).
     /// </summary>
-    public async Task<T> ListingAsync<T>(Func<string, string, string> keyOf, Func<Task<T>> create)
+    public async Task<T> ListingAsync<T>(Func<string, string, string> keyOf, Func<CancellationToken, Task<T>> create,
+        CancellationToken ct = default)
     {
-        var generation = await _generations.CurrentAsync(CacheCategories.StacGeneration);
+        var generation = await _generations.CurrentAsync(CacheCategories.StacGeneration, ct);
         var key = keyOf(generation, await _authManager.SafeGetCurrentUserName());
-        return await _records.GetOrCreateRecordAsync(key, _ => create(), ListingCache);
+        return await _records.GetOrCreateRecordAsync(key, create, ListingCache, ct);
     }
 }

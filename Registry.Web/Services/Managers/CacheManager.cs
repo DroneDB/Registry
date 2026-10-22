@@ -25,7 +25,7 @@ public class CacheManager : ICacheManager
 {
     private class Carrier
     {
-        public required Func<object[], Task<byte[]>> GetDataAsync { get; init; }
+        public required Func<object[], CancellationToken, Task<byte[]>> GetDataAsync { get; init; }
         public TimeSpan Expiration { get; init; }
         public TimeSpan LocalExpiration { get; init; }
     }
@@ -58,6 +58,13 @@ public class CacheManager : ICacheManager
 
     public void Register(string seed, Func<object[], Task<byte[]>> getData, TimeSpan? expiration = null,
         TimeSpan? localExpiration = null)
+    {
+        ArgumentNullException.ThrowIfNull(getData);
+        Register(seed, (parameters, _) => getData(parameters), expiration, localExpiration);
+    }
+
+    public void Register(string seed, Func<object[], CancellationToken, Task<byte[]>> getData,
+        TimeSpan? expiration = null, TimeSpan? localExpiration = null)
     {
         ArgumentNullException.ThrowIfNull(seed);
         ArgumentNullException.ThrowIfNull(getData);
@@ -139,7 +146,10 @@ public class CacheManager : ICacheManager
         return _providers.ContainsKey(seed);
     }
 
-    public async Task<byte[]> GetAsync(string seed, string category, params object[] parameters)
+    public Task<byte[]> GetAsync(string seed, string category, params object[] parameters) =>
+        GetAsync(seed, category, CancellationToken.None, parameters);
+
+    public async Task<byte[]> GetAsync(string seed, string category, CancellationToken ct, params object[] parameters)
     {
         ArgumentNullException.ThrowIfNull(seed);
         ArgumentNullException.ThrowIfNull(category);
@@ -157,8 +167,8 @@ public class CacheManager : ICacheManager
         // before the invalidation is never kept in memory
         var token = useLocal ? LocalToken(seed, category) : CancellationToken.None;
 
-        var data = await TryGetCachedAsync(key) ??
-                   await _flights.RunAsync(key, flight => GenerateAsync(key, carrier, parameters, flight));
+        var data = await TryGetCachedAsync(key, ct) ??
+                   await _flights.RunAsync(key, flight => GenerateAsync(key, carrier, parameters, flight), ct);
 
         if (useLocal && !token.IsCancellationRequested)
             _local!.Set(key, data, new MemoryCacheEntryOptions
@@ -175,7 +185,7 @@ public class CacheManager : ICacheManager
 
     /// <summary>
     /// Generates the data for <paramref name="key"/> for one flight and stores it unless the key was
-    /// invalidated meanwhile.
+    /// invalidated meanwhile. The provider gets the flight's token: canceled once no caller waits (RQ-13).
     /// </summary>
     private async Task<byte[]> GenerateAsync(string key, Carrier carrier, object[] parameters,
         SingleFlight<byte[]>.Flight flight)
@@ -184,12 +194,12 @@ public class CacheManager : ICacheManager
         {
             // A flight for this key that finished between our cache miss and our registration has
             // already stored its result: re-check so that a key is generated once per miss window.
-            var data = await TryGetCachedAsync(key);
+            var data = await TryGetCachedAsync(key, flight.Token);
             if (data != null)
                 return data;
 
             _logger.LogDebug("Cache miss for key: {Key}, generating data", key);
-            data = await carrier.GetDataAsync(parameters);
+            data = await carrier.GetDataAsync(parameters, flight.Token);
 
             if (!flight.Invalidated)
             {
@@ -207,6 +217,12 @@ public class CacheManager : ICacheManager
 
             return data;
         }
+        catch (OperationCanceledException)
+        {
+            // Every caller went away (or the host stops): not a failure of the generation
+            _logger.LogDebug("Generation of key {Key} canceled", key);
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to generate data for key: {Key}", key);
@@ -216,8 +232,8 @@ public class CacheManager : ICacheManager
 
     // Fail-open (the shared rule of the record cache): a failed read is a miss, a failed write leaves the data
     // uncached, a failed removal leaves the entry to its expiry
-    private Task<byte[]?> TryGetCachedAsync(string key) =>
-        FailOpen.RunAsync(() => _cache.GetAsync(key), null, _logger, "read", key);
+    private Task<byte[]?> TryGetCachedAsync(string key, CancellationToken ct) =>
+        FailOpen.RunAsync(() => _cache.GetAsync(key, ct), null, _logger, "read", key, ct);
 
     private Task TrySetCachedAsync(string key, byte[] data, TimeSpan expiration) =>
         FailOpen.RunAsync(() => _cache.SetAsync(key, data, new DistributedCacheEntryOptions { SlidingExpiration = expiration }),

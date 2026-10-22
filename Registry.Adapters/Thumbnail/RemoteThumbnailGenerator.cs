@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -35,7 +36,7 @@ public class RemoteThumbnailGenerator : IThumbnailGenerator
         _settings = options.Value;
     }
 
-    public async Task GenerateThumbnailAsync(string filePath, int size, Stream output)
+    public async Task GenerateThumbnailAsync(string filePath, int size, Stream output, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(filePath);
         ArgumentNullException.ThrowIfNull(output);
@@ -58,7 +59,7 @@ public class RemoteThumbnailGenerator : IThumbnailGenerator
             using var request = CreateRequest(_settings, filePath, size);
 
             _logger.LogDebug("Sending POST request to remote thumbnail generator: {Url}", _settings.Url);
-            using var response = await SharedHttpClient.SendAsync(request);
+            using var response = await SharedHttpClient.SendAsync(request, ct);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -68,14 +69,14 @@ public class RemoteThumbnailGenerator : IThumbnailGenerator
                 throw new InvalidOperationException($"Remote thumbnail generation failed with status {response.StatusCode}: {response.ReasonPhrase}");
             }
 
-            await response.Content.CopyToAsync(output);
+            await response.Content.CopyToAsync(output, ct);
 
             stopwatch.Stop();
             var contentLength = response.Content.Headers.ContentLength ?? output.Length;
             _logger.LogInformation("Successfully generated remote thumbnail for '{FilePath}', size: {Size}, data: ~{DataSize} bytes, elapsed: {ElapsedMs}ms",
                 filePath, size, contentLength, stopwatch.ElapsedMilliseconds);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             stopwatch.Stop();
             _logger.LogError(ex, "Failed to generate remote thumbnail for '{FilePath}', size: {Size} after {ElapsedMs}ms. Error: {ErrorMessage}",

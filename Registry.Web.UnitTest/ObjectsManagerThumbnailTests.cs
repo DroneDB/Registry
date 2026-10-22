@@ -97,15 +97,16 @@ public class ObjectsManagerThumbnailTests : TestBase
         _ddbManagerMock.Setup(x => x.Get(OrgSlug, _ds.InternalRef)).Returns(_ddbMock.Object);
 
         // Cache passthrough: execute the factory so generator-invocation assertions are meaningful.
-        _cacheManagerMock.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()))
-            .ReturnsAsync((string _, string _, object[] parameters) =>
+        _cacheManagerMock.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(),
+                It.IsAny<object[]>()))
+            .ReturnsAsync((string _, string _, CancellationToken ct, object[] parameters) =>
             {
-                var factory = parameters.OfType<Func<Task<byte[]>>>().FirstOrDefault();
-                return factory!.Invoke().GetAwaiter().GetResult();
+                var factory = parameters.OfType<Func<CancellationToken, Task<byte[]>>>().FirstOrDefault();
+                return factory!.Invoke(ct).GetAwaiter().GetResult();
             });
 
-        _thumbsMock.Setup(t => t.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>()))
-            .Callback<string, int, Stream>((_, _, output) => output.Write(ThumbBytes))
+        _thumbsMock.Setup(t => t.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+            .Callback<string, int, Stream, CancellationToken>((_, _, output, _) => output.Write(ThumbBytes))
             .Returns(Task.CompletedTask);
     }
 
@@ -155,8 +156,8 @@ public class ObjectsManagerThumbnailTests : TestBase
         ex.Message.ShouldContain("not available yet");
         // Pre-cache guard: one manifest call, nothing was generated or cached
         _ddbMock.Verify(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()), Times.Once);
-        _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()), Times.Never);
-        _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>()), Times.Never);
+        _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<object[]>()), Times.Never);
+        _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]
@@ -188,7 +189,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         // thumbnail is generated from the file itself
         result.Data.ShouldBe(ThumbBytes);
         _ddbMock.Verify(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()), Times.Never);
-        _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>()), Times.Once);
+        _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -205,7 +206,7 @@ public class ObjectsManagerThumbnailTests : TestBase
 
         ex.Message.ShouldContain("folder");
         _ddbMock.Verify(x => x.Search(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
-        _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>()), Times.Never);
+        _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]
@@ -228,8 +229,9 @@ public class ObjectsManagerThumbnailTests : TestBase
         _cacheManagerMock.Setup(x => x.RemoveAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()))
             .Callback<string, string, object[]>((_, _, p) => removed = p)
             .Returns(Task.CompletedTask);
-        _cacheManagerMock.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()))
-            .Callback<string, string, object[]>((_, _, p) => read = p)
+        _cacheManagerMock.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(),
+                It.IsAny<object[]>()))
+            .Callback<string, string, CancellationToken, object[]>((_, _, _, p) => read = p)
             .ReturnsAsync(ThumbBytes);
 
         await CreateManager().Renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "photo.jpg", 256, recreate: true);
@@ -251,7 +253,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         await Should.ThrowAsync<NotFoundException>(
             () => mgr.Renders.GenerateTileDataAsync(OrgSlug, DsSlug, "ortho.tif", 1, 0, 0, false));
 
-        _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()), Times.Never);
+        _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<object[]>()), Times.Never);
         _ddbMock.Verify(x => x.GenerateTile(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(),
             It.IsAny<bool>(), It.IsAny<string>()), Times.Never);
     }
@@ -267,7 +269,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         await Should.ThrowAsync<NotFoundException>(
             () => mgr.Renders.GenerateThumbnailDataExAsync(OrgSlug, DsSlug, "data/cloud.laz", null, new RasterVisualization()));
 
-        _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()), Times.Never);
+        _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Test]
@@ -281,7 +283,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         await Should.ThrowAsync<NotFoundException>(
             () => mgr.Renders.GenerateTileDataExAsync(OrgSlug, DsSlug, "data/cloud.laz", 1, 0, 0, false, new RasterVisualization()));
 
-        _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()), Times.Never);
+        _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Test]
@@ -359,7 +361,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         // One manifest call, and the native call is never reached
         _ddbMock.Verify(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()), Times.Once);
         _ddbMock.Verify(nativeCall, Times.Never);
-        _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()), Times.Never);
+        _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<object[]>()), Times.Never);
     }
 
     [Test]

@@ -220,7 +220,8 @@ public class OgcRenderCachingTests
     {
         byte[] webp = [(byte)'R', (byte)'I', (byte)'F', (byte)'F', 0, 0, 0, 0, (byte)'W', (byte)'E', (byte)'B', (byte)'P'];
         var provider = CacheProviderFactories.CreateTileProvider();
-        (await provider(["h1", 1, 2, 3, false, new Func<Task<byte[]>>(() => Task.FromResult(webp))])).ShouldBe(webp);
+        (await provider(["h1", 1, 2, 3, false, new Func<CancellationToken, Task<byte[]>>(_ => Task.FromResult(webp))],
+            CancellationToken.None)).ShouldBe(webp);
     }
 
     [Test]

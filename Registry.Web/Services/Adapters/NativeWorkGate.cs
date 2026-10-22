@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics.Metrics;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Ports.DroneDB;
 using Registry.Web.Utilities;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
@@ -13,7 +14,8 @@ namespace Registry.Web.Services.Adapters;
 /// <summary>
 /// Default <see cref="INativeWorkGate"/>: one semaphore per lane, widths from
 /// the host budget (<see cref="HostResourceBudget"/>: <see cref="NativeConcurrencySettings"/> on the cores of this process). Reports the calls in flight per lane as the
-/// <c>registry.native.in_flight</c> gauge (meter <c>Registry.NativeWork</c>).
+/// <c>registry.native.in_flight</c> gauge (meter <c>Registry.NativeWork</c>). The caller's token cancels the
+/// wait and runs the work as its <see cref="DdbCancellation"/> (RQ-13).
 /// </summary>
 public sealed class NativeWorkGate : INativeWorkGate, IDisposable
 {
@@ -67,7 +69,12 @@ public sealed class NativeWorkGate : INativeWorkGate, IDisposable
         await semaphore.WaitAsync(ct);
         try
         {
-            return await work();
+            // A slot freed after the caller went away: the work is not started for nobody
+            ct.ThrowIfCancellationRequested();
+
+            // The work's native calls get the token (libddb cancel tokens, RQ-13); Task.Run flows it in
+            using (DdbCancellation.Enter(ct))
+                return await work();
         }
         finally
         {

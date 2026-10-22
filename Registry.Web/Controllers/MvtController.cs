@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -51,13 +52,13 @@ public class MvtController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string hash,
-        [FromRoute] int z, [FromRoute] int x, [FromRoute] int y)
+        [FromRoute] int z, [FromRoute] int x, [FromRoute] int y, CancellationToken ct)
     {
         if (z < 0 || z > 24 || x < 0 || y < 0)
             throw new BadRequestException("Invalid tile coordinates");
 
         // The filter granted read access: the resolver reuses the grant
-        var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read)).Ddb;
+        var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct)).Ddb;
         var tilePath = _artifacts.FindArtifactFile(ddb, hash, ArtifactRoles.VectorMvt, MvtTiles.Tile(z, x, y));
         if (tilePath == null)
             return NotFound();
@@ -77,9 +78,9 @@ public class MvtController : ControllerBaseEx
     public async Task<IActionResult> GetMetadata(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromRoute, Required] string hash)
+        [FromRoute, Required] string hash, CancellationToken ct)
     {
-        var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read)).Ddb;
+        var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct)).Ddb;
         // The pyramid's descriptor (metadata.json)
         var path = _artifacts.FindArtifactFile(ddb, hash, ArtifactRoles.VectorMvt);
         if (path == null) return NotFound();

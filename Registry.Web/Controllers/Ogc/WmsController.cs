@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Exceptions;
@@ -23,14 +24,14 @@ public class WmsController : ControllerBaseEx
     public WmsController(IWmsManager mgr) { _mgr = mgr; }
 
     [HttpGet("wms")]
-    public Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug)
-        => Dispatch(orgSlug, dsSlug, null);
+    public Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)
+        => Dispatch(orgSlug, dsSlug, null, ct);
 
     [HttpGet("wms/p/{*folder}")]
     public Task<IActionResult> KvpFolder([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] string folder) => Dispatch(orgSlug, dsSlug, folder);
+        [FromRoute] string folder, CancellationToken ct) => Dispatch(orgSlug, dsSlug, folder, ct);
 
-    private async Task<IActionResult> Dispatch(string orgSlug, string dsSlug, string? folderPath)
+    private async Task<IActionResult> Dispatch(string orgSlug, string dsSlug, string? folderPath, CancellationToken ct)
     {
         var q = Request.Query;
         OgcKvpValidator.ValidateService(q, "WMS");
@@ -40,7 +41,7 @@ public class WmsController : ControllerBaseEx
         switch (request.ToUpperInvariant())
         {
             case "GETCAPABILITIES":
-                return Content(await _mgr.GetCapabilitiesAsync(orgSlug, dsSlug, version, folderPath),
+                return Content(await _mgr.GetCapabilitiesAsync(orgSlug, dsSlug, version, folderPath, ct: ct),
                     "text/xml; charset=utf-8");
 
             case "GETMAP":
@@ -69,7 +70,7 @@ public class WmsController : ControllerBaseEx
                 var trans = string.Equals(OgcRequestParser.Get(q, "TRANSPARENT"), "TRUE",
                     StringComparison.OrdinalIgnoreCase);
                 var bytes = await _mgr.GetMapAsync(orgSlug, dsSlug, layers, styles, bbox, resolvedCrs,
-                    width, height, format, bg, trans);
+                    width, height, format, bg, trans, ct: ct);
                 return File(bytes, format);
             }
 
@@ -101,7 +102,7 @@ public class WmsController : ControllerBaseEx
                 var info = OgcRequestParser.Get(q, "INFO_FORMAT") ?? "application/json";
                 WmsValidator.ValidateInfoFormat(info);
                 var body = await _mgr.GetFeatureInfoAsync(orgSlug, dsSlug, queryLayers[0], bbox, resolvedCrs,
-                    width, height, i, j, info);
+                    width, height, i, j, info, ct: ct);
                 return Content(body, info);
             }
 

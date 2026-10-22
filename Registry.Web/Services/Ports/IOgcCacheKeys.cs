@@ -15,7 +15,8 @@ public interface IOgcCacheKeys
     /// <param name="dsSlug">Dataset slug.</param>
     /// <param name="kind">What the document is, e.g. <c>caps-wms-v2-1.3.0</c> or <c>layers</c>.</param>
     /// <param name="detail">What else selects it (folder, sections), or null.</param>
-    Task<string> ForAsync(string orgSlug, string dsSlug, string kind, string? detail = null);
+    Task<string> ForAsync(string orgSlug, string dsSlug, string kind, string? detail = null,
+        System.Threading.CancellationToken ct = default);
 
     /// <summary>Makes every key returned so far for the dataset unreachable.</summary>
     Task InvalidateAsync(string orgSlug, string dsSlug);

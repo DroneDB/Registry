@@ -343,7 +343,7 @@ public class UploadPipelineComponentTests
         var peak = 0;
         var done = 0;
         var generator = new Mock<IThumbnailGenerator>();
-        generator.Setup(g => g.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>()))
+        generator.Setup(g => g.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
             .Returns(async () =>
             {
                 InterlockedMax(ref peak, Interlocked.Increment(ref running));
@@ -354,8 +354,9 @@ public class UploadPipelineComponentTests
                 finished.Release();
             });
         var cache = new Mock<ICacheManager>();
-        cache.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object[]>()))
-            .Returns<string, string, object[]>(async (_, _, ps) => await ps.OfType<Func<Task<byte[]>>>().Single()());
+        cache.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<object[]>()))
+            .Returns<string, string, CancellationToken, object[]>(async (_, _, ct, ps) =>
+                await ps.OfType<Func<CancellationToken, Task<byte[]>>>().Single()(ct));
 
         var queue = new ThumbnailPrecomputeQueue(cache.Object, generator.Object,
             new UploadSettings { ThumbnailPrecomputeWorkers = 2, ThumbnailPrecomputeCapacity = 3 },

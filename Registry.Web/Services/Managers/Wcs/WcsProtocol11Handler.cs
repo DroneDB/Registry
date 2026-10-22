@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
@@ -40,13 +41,14 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
         _records = records;
     }
 
-    public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath)
+    public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath,
+        CancellationToken ct = default)
     {
-        var key = await _svc.CacheKeyAsync(orgSlug, dsSlug, "caps-wcs11-v1", folderPath);
-        return await _records.GetOrCreateRecordAsync(key, async _ =>
+        var key = await _svc.CacheKeyAsync(orgSlug, dsSlug, "caps-wcs11-v1", folderPath, ct);
+        return await _records.GetOrCreateRecordAsync(key, async token =>
         {
 
-            var (_, layers) = await _svc.GetCoveragesAsync(orgSlug, dsSlug, folderPath);
+            var (_, layers) = await _svc.GetCoveragesAsync(orgSlug, dsSlug, folderPath, token);
             var baseUrl = _svc.GetBaseUrl(orgSlug, dsSlug, folderPath);
 
             var sb = new StringBuilder();
@@ -112,13 +114,14 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
             }
             var xml = Utf8XmlDecl + StripDeclaration(sb.ToString());
             return xml;
-        }, CapabilitiesCache);
+        }, CapabilitiesCache, ct);
     }
 
-    public async Task<string> DescribeCoverageAsync(string orgSlug, string dsSlug, string coverageIds)
+    public async Task<string> DescribeCoverageAsync(string orgSlug, string dsSlug, string coverageIds,
+        CancellationToken ct = default)
     {
         var ids = (coverageIds ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries);
-        var (ddb, resolved) = await _svc.ResolveCoveragesAsync(orgSlug, dsSlug, ids);
+        var (ddb, resolved) = await _svc.ResolveCoveragesAsync(orgSlug, dsSlug, ids, ct);
 
         var sb = new StringBuilder();
         await using (var w = XmlWriter.Create(sb,
@@ -129,7 +132,7 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
             await w.WriteAttributeStringAsync("xmlns", "xlink", null, NsXlink);
 
             foreach (var (id, layer) in resolved)
-                await WriteCoverageDescriptionAsync(w, ddb, id, layer);
+                await WriteCoverageDescriptionAsync(w, ddb, id, layer, ct);
 
             await w.WriteEndElementAsync();
             await w.WriteEndDocumentAsync();
@@ -138,10 +141,11 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
         return Utf8XmlDecl + StripDeclaration(sb.ToString());
     }
 
-    private async Task WriteCoverageDescriptionAsync(XmlWriter w, IDDB ddb, string id, OgcLayerDto layer)
+    private async Task WriteCoverageDescriptionAsync(XmlWriter w, IDDB ddb, string id, OgcLayerDto layer,
+        CancellationToken ct)
     {
         var bbox = layer.BboxWgs84 ?? [-180.0, -90.0, 180.0, 90.0];
-        var info = await _svc.ProbeRasterAsync(ddb, layer);
+        var info = await _svc.ProbeRasterAsync(ddb, layer, ct);
         var rWidth = info.Width > 0 ? info.Width : 1024;
         var rHeight = info.Height > 0 ? info.Height : 1024;
 
@@ -203,7 +207,8 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
         await w.WriteEndElementAsync(); // CoverageDescription
     }
 
-    public async Task<WcsCoverageResult> GetCoverageAsync(string orgSlug, string dsSlug, IQueryCollection q)
+    public async Task<WcsCoverageResult> GetCoverageAsync(string orgSlug, string dsSlug, IQueryCollection q,
+        CancellationToken ct = default)
     {
         var coverageId = OgcRequestParser.GetRequired(q, "Identifier");
         var format = OgcRequestParser.GetRequired(q, "FORMAT");
@@ -232,14 +237,14 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
             }
         }
 
-        var (ddb, layer) = await _svc.ResolveCoverageAsync(orgSlug, dsSlug, coverageId);
+        var (ddb, layer) = await _svc.ResolveCoverageAsync(orgSlug, dsSlug, coverageId, ct);
 
         // OGC 07-067r5 §9.3.2.4 - optional band subset via RangeSubset.
-        var info = await _svc.ProbeRasterAsync(ddb, layer);
+        var info = await _svc.ProbeRasterAsync(ddb, layer, ct);
         var bands = WcsRangeSubsetParser.ParseRangeSubset11(
             OgcRequestParser.Get(q, "RangeSubset"), info);
 
-        var bytes = await _svc.RenderRegionAsync(ddb, layer, bbox, width, height, format, bands);
+        var bytes = await _svc.RenderRegionAsync(ddb, layer, bbox, width, height, format, bands, ct: ct);
         return new WcsCoverageResult(bytes, format);
     }
 

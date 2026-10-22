@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
@@ -71,14 +72,15 @@ public class WfsManager : OgcManagerBase, IWfsManager
         await w.WriteEndElementAsync();
     }
 
-    public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath = null)
+    public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath = null,
+        CancellationToken ct = default)
     {
-        var key = await LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, "caps-wfs-v2-2.0.0", folderPath);
-        return await Records.GetOrCreateRecordAsync(key, async _ =>
+        var key = await LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, "caps-wfs-v2-2.0.0", folderPath, ct);
+        return await Records.GetOrCreateRecordAsync(key, async token =>
         {
 
-            await ResolveAsync(orgSlug, dsSlug);
-            var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath);
+            await ResolveAsync(orgSlug, dsSlug, token);
+            var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath, ct: token);
             // Only advertise vector layers that have a built GPKG sidecar. Unbuilt entries would
             // surface 400/InvalidParameterValue on every WFS operation, so we hide them entirely.
             var vectorLayers = layers.Where(l => l.EntryType == EntryType.Vector && l.HasBuiltArtifact).ToList();
@@ -231,18 +233,19 @@ public class WfsManager : OgcManagerBase, IWfsManager
             }
             var xml = Utf8XmlDecl + Regex.Replace(sb.ToString(), @"^\s*<\?xml[^?]*\?>\s*", "");
             return xml;
-        }, CapabilitiesCache);
+        }, CapabilitiesCache, ct);
     }
 
-    public async Task<string> DescribeFeatureTypeAsync(string orgSlug, string dsSlug, string[] typeNames)
+    public async Task<string> DescribeFeatureTypeAsync(string orgSlug, string dsSlug, string[] typeNames,
+        CancellationToken ct = default)
     {
-        var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug);
+        var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
 
         // Determine target layers. If no typeNames given, describe ALL vector layers.
         IReadOnlyList<OgcLayerDto> targetLayers;
         if (typeNames == null || typeNames.Length == 0)
         {
-            var all = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug);
+            var all = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, ct: ct);
             targetLayers = [.. all.Where(l => l.EntryType == EntryType.Vector)];
         }
         else
@@ -250,7 +253,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
             var list = new List<OgcLayerDto>();
             foreach (var name in typeNames)
             {
-                var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name);
+                var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, ct: ct);
                 if (layer == null || layer.EntryType != EntryType.Vector)
                     throw new OgcException("InvalidParameterValue",
                         $"Feature type '{name}' is not known to this service", 400, "typeNames");
@@ -353,7 +356,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
 
     public async Task<string> GetFeatureAsync(string orgSlug, string dsSlug, string typeName,
         double[]? bbox, string? bboxCrs, int count, int startIndex, string outputFormat,
-        string? resourceId = null, string? filterXml = null)
+        string? resourceId = null, string? filterXml = null, CancellationToken ct = default)
     {
         if (count <= 0) count = 1000;
         count = Math.Clamp(count, 1, 10000);
@@ -363,8 +366,8 @@ public class WfsManager : OgcManagerBase, IWfsManager
         if (!string.IsNullOrWhiteSpace(bboxCrs) && !IsSupportedCrs(bboxCrs!))
             throw new OgcException("InvalidParameterValue", $"CRS '{bboxCrs}' is not supported", 400, "srsName");
 
-        var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug);
-        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, typeName)
+        var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
+        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, typeName, ct: ct)
                     ?? throw new OgcException("InvalidParameterValue", $"Unknown typeNames '{typeName}'", 404, "typeNames");
         if (layer.EntryType != EntryType.Vector)
             throw new OgcException("OperationNotSupported", "WFS supports only Vector layers", 400);
@@ -500,9 +503,9 @@ public class WfsManager : OgcManagerBase, IWfsManager
             || c.Equals("urn:ogc:def:crs:OGC:1.3:CRS84", StringComparison.OrdinalIgnoreCase);
     }
 
-    public async Task<string> ListStoredQueriesAsync(string orgSlug, string dsSlug)
+    public async Task<string> ListStoredQueriesAsync(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
-        var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug);
+        var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, ct: ct);
         var vector = layers.Where(l => l.EntryType == EntryType.Vector).ToList();
         var sb = new StringBuilder();
         var settings = new XmlWriterSettings { Async = true, OmitXmlDeclaration = false, Encoding = new UTF8Encoding(false) };
@@ -524,9 +527,10 @@ public class WfsManager : OgcManagerBase, IWfsManager
         return Utf8XmlDecl + Regex.Replace(sb.ToString(), @"^\s*<\?xml[^?]*\?>\s*", "");
     }
 
-    public async Task<string> DescribeStoredQueriesAsync(string orgSlug, string dsSlug, string[] storedQueryIds)
+    public async Task<string> DescribeStoredQueriesAsync(string orgSlug, string dsSlug, string[] storedQueryIds,
+        CancellationToken ct = default)
     {
-        var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug);
+        var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, ct: ct);
         var vector = layers.Where(l => l.EntryType == EntryType.Vector).ToList();
         var sb = new StringBuilder();
         var settings = new XmlWriterSettings { Async = true, OmitXmlDeclaration = false, Encoding = new UTF8Encoding(false) };
@@ -565,12 +569,12 @@ public class WfsManager : OgcManagerBase, IWfsManager
 
     public async Task<string> GetPropertyValueAsync(string orgSlug, string dsSlug, string typeName,
         string valueReference, int count, int startIndex, string outputFormat,
-        string? resourceId = null, string? filterXml = null)
+        string? resourceId = null, string? filterXml = null, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(valueReference))
             throw new OgcException("InvalidParameterValue", "valueReference is required", 400, "valueReference");
         var fc = await GetFeatureAsync(orgSlug, dsSlug, typeName, null, null, count, startIndex,
-            "application/gml+xml; version=3.2", resourceId, filterXml);
+            "application/gml+xml; version=3.2", resourceId, filterXml, ct);
         return TransformToValueCollection(fc, valueReference);
     }
 
@@ -650,7 +654,8 @@ public class WfsManager : OgcManagerBase, IWfsManager
         return null;
     }
 
-    public async Task<string> GetFeatureByIdAsync(string orgSlug, string dsSlug, string id, string outputFormat)
+    public async Task<string> GetFeatureByIdAsync(string orgSlug, string dsSlug, string id, string outputFormat,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(id))
             throw new OgcException("MissingParameterValue", "id is required", 400, "id");
@@ -659,8 +664,8 @@ public class WfsManager : OgcManagerBase, IWfsManager
         // (two layer names can map to the same NCName)
         if (WfsFeatureIds.TryParse(id, out var featureType, out var fid))
         {
-            var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug);
-            var (_, ddb) = await ResolveAsync(orgSlug, dsSlug);
+            var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, ct: ct);
+            var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
             var internalFormat = MapWfsOutputFormat(outputFormat);
             foreach (var l in layers.Where(l =>
                          l.EntryType == EntryType.Vector && OgcNames.ToNcName(l.Name) == featureType))

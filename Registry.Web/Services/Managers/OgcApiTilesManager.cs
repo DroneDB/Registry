@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
@@ -37,11 +38,12 @@ public class OgcApiTilesManager : OgcManagerBase, IOgcApiTilesManager
         _rasterTiles = rasterTiles;
     }
 
-    public async Task<object> GetTileSetsAsync(string orgSlug, string dsSlug, string collectionId, string baseUrl)
+    public async Task<object> GetTileSetsAsync(string orgSlug, string dsSlug, string collectionId, string baseUrl,
+        CancellationToken ct = default)
     {
         var name = Uri.UnescapeDataString(collectionId);
-        await ResolveAsync(orgSlug, dsSlug);
-        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name)
+        await ResolveAsync(orgSlug, dsSlug, ct);
+        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, ct: ct)
                     ?? throw new OgcException("InvalidParameterValue",
                         $"Unknown collection '{collectionId}'", 404);
 
@@ -67,19 +69,19 @@ public class OgcApiTilesManager : OgcManagerBase, IOgcApiTilesManager
     }
 
     public async Task<byte[]?> GetTileAsync(string orgSlug, string dsSlug, string collectionId,
-        string tileMatrixSet, int z, int x, int y)
+        string tileMatrixSet, int z, int x, int y, CancellationToken ct = default)
     {
         var name = Uri.UnescapeDataString(collectionId);
-        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug);
-        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name)
+        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
+        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, ct: ct)
                     ?? throw new OgcException("InvalidParameterValue",
                         $"Unknown collection '{collectionId}'", 404);
 
         if (layer.EntryType == EntryType.Vector)
         {
             var path = MvtTile(ddb, layer, z, x, y);
-            return path != null ? await File.ReadAllBytesAsync(path) : null;
+            return path != null ? await File.ReadAllBytesAsync(path, ct) : null;
         }
-        return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer, z, x, y, "png");
+        return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer, z, x, y, "png", ct);
     }
 }

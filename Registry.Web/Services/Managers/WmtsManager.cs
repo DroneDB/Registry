@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
@@ -43,7 +44,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
     }
 
     public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug,
-        IReadOnlyCollection<string>? sections = null, string? folderPath = null)
+        IReadOnlyCollection<string>? sections = null, string? folderPath = null, CancellationToken ct = default)
     {
         // Normalize the sections key: null = all; otherwise sort+dedupe so order doesn't fragment the cache.
         string sectionsKey;
@@ -58,14 +59,14 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
             sectionsKey = string.Join("+", sectionsSet.OrderBy(s => s, StringComparer.OrdinalIgnoreCase));
         }
 
-        var key = await LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, "caps-wmts-v5-1.0.0", $"{folderPath}-{sectionsKey}");
-        return await Records.GetOrCreateRecordAsync(key, async _ =>
+        var key = await LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, "caps-wmts-v5-1.0.0", $"{folderPath}-{sectionsKey}", ct);
+        return await Records.GetOrCreateRecordAsync(key, async token =>
         {
 
             bool Include(string section) => sectionsSet == null || sectionsSet.Contains(section);
 
-            await ResolveAsync(orgSlug, dsSlug);
-            var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath);
+            await ResolveAsync(orgSlug, dsSlug, token);
+            var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath, ct: token);
             var baseUrl = GetServiceUrl(orgSlug, dsSlug, "wmts", folderPath);
 
             var sb = new StringBuilder();
@@ -168,7 +169,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
 
             var xml = Utf8XmlDecl + Regex.Replace(sb.ToString(), @"^\s*<\?xml[^?]*\?>\s*", "");
             return xml;
-        }, CapabilitiesCache);
+        }, CapabilitiesCache, ct);
     }
 
     private static void WriteGoogleMapsCompatible(XmlWriter w)
@@ -195,7 +196,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
     }
 
     public async Task<byte[]> GetTileAsync(string orgSlug, string dsSlug, string layerName,
-        string style, string tileMatrixSet, int z, int x, int y, string format)
+        string style, string tileMatrixSet, int z, int x, int y, string format, CancellationToken ct = default)
     {
         // Re-validate (defense-in-depth: callers other than the KVP controller may skip checks).
         // Validation/protocol errors MUST surface as proper OGC exceptions and run outside the safety net.
@@ -204,13 +205,13 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
 
         try
         {
-            return await GetTileAsyncCore(orgSlug, dsSlug, layerName, tileMatrixSet, z, x, y, format);
+            return await GetTileAsyncCore(orgSlug, dsSlug, layerName, tileMatrixSet, z, x, y, format, ct);
         }
         catch (OgcException)
         {
             throw;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // WMTS Annex A.2.3 / WMTS implementations are expected to return either a valid tile
             // or a ServiceExceptionReport. Under heavy concurrent load (CITE issues hundreds of
@@ -222,10 +223,10 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
     }
 
     private async Task<byte[]> GetTileAsyncCore(string orgSlug, string dsSlug, string layerName,
-        string tileMatrixSet, int z, int x, int y, string format)
+        string tileMatrixSet, int z, int x, int y, string format, CancellationToken ct)
     {
-        var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug);
-        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, layerName)
+        var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
+        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, layerName, ct: ct)
                     ?? throw new OgcException("InvalidParameterValue",
                         $"Layer '{layerName}' is not defined", 400, "layer");
 
@@ -246,7 +247,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
                     layerName, z, x, y);
                 return [];
             }
-            return await File.ReadAllBytesAsync(path);
+            return await File.ReadAllBytesAsync(path, ct);
         }
 
         // Raster: delegate to ddb.GenerateTile, passing the requested output format so the
@@ -257,9 +258,9 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
         var wantJpeg = string.Equals(format, "image/jpeg", StringComparison.OrdinalIgnoreCase);
         try
         {
-            return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer, z, x, y, wantJpeg ? "jpeg" : "png");
+            return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer, z, x, y, wantJpeg ? "jpeg" : "png", ct);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogError(ex, "WMTS tile generation failed for {Layer} z={Z} x={X} y={Y}; returning fallback {Fmt}",
                 layerName, z, x, y, format);

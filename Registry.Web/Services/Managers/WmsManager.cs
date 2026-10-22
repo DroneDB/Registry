@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
@@ -45,14 +46,14 @@ public class WmsManager : OgcManagerBase, IWmsManager
     }
 
     public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string version,
-        string? folderPath = null)
+        string? folderPath = null, CancellationToken ct = default)
     {
-        var key = await LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, $"caps-wms-v2-{version}", folderPath);
-        return await Records.GetOrCreateRecordAsync(key, async _ =>
+        var key = await LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, $"caps-wms-v2-{version}", folderPath, ct);
+        return await Records.GetOrCreateRecordAsync(key, async token =>
         {
 
-            await ResolveAsync(orgSlug, dsSlug);
-            var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath);
+            await ResolveAsync(orgSlug, dsSlug, token);
+            var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath, ct: token);
             var rasterLayers = layers.Where(l => l.EntryType == EntryType.GeoRaster).ToList();
             var totalBbox = AggregateBbox(rasterLayers);
             var baseUrl = GetServiceUrl(orgSlug, dsSlug, "wms", folderPath);
@@ -143,7 +144,7 @@ public class WmsManager : OgcManagerBase, IWmsManager
 
             var xml = Utf8XmlDecl + Regex.Replace(sb.ToString(), @"^\s*<\?xml[^?]*\?>\s*", "");
             return xml;
-        }, CapabilitiesCache);
+        }, CapabilitiesCache, ct);
     }
 
     private static void WriteBbox(XmlWriter w, string version, double[] bbox)
@@ -179,7 +180,8 @@ public class WmsManager : OgcManagerBase, IWmsManager
     private static string Fmt(double v) => v.ToString("R", CultureInfo.InvariantCulture);
 
     public async Task<byte[]> GetMapAsync(string orgSlug, string dsSlug, string[] layers, string[] styles,
-        double[] bbox, string crs, int width, int height, string format, string? bgColor, bool transparent)
+        double[] bbox, string crs, int width, int height, string format, string? bgColor, bool transparent,
+        CancellationToken ct = default)
     {
         // Defense-in-depth: re-validate request-level constraints. The controller validates these
         // before BBOX parsing, but the manager guarantees the same contract for any future caller.
@@ -191,7 +193,8 @@ public class WmsManager : OgcManagerBase, IWmsManager
 
         try
         {
-            return await GetMapAsyncCore(orgSlug, dsSlug, layers, styles, bbox, crs, width, height, format, bgColor, transparent);
+            return await GetMapAsyncCore(orgSlug, dsSlug, layers, styles, bbox, crs, width, height, format, bgColor,
+                transparent, ct);
         }
         catch (OgcException)
         {
@@ -199,7 +202,7 @@ public class WmsManager : OgcManagerBase, IWmsManager
             // OgcExceptionFilter can return the proper ServiceExceptionReport XML.
             throw;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // WMS 1.3 §7.3.3.11: GetMap MUST return an image when parameters are syntactically valid.
             // Under load, native (GDAL/Skia) failures or transient I/O issues can bubble up past the
@@ -212,10 +215,11 @@ public class WmsManager : OgcManagerBase, IWmsManager
     }
 
     private async Task<byte[]> GetMapAsyncCore(string orgSlug, string dsSlug, string[] layers, string[] styles,
-        double[] bbox, string crs, int width, int height, string format, string? bgColor, bool transparent)
+        double[] bbox, string crs, int width, int height, string format, string? bgColor, bool transparent,
+        CancellationToken ct)
     {
-        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug);
-        var rasters = await ResolveRasterLayersAsync(orgSlug, dsSlug, layers, styles);
+        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
+        var rasters = await ResolveRasterLayersAsync(orgSlug, dsSlug, layers, styles, ct);
 
         // Identical (and sub-pixel jittered) requests share one render; the render uses the
         // snapped BBOX so that a cached image is what a fresh render returns
@@ -223,10 +227,11 @@ public class WmsManager : OgcManagerBase, IWmsManager
             rasters.Select(r => (r.Layer.EntryHash, r.Style)));
         try
         {
+            // The render runs with the cache flight's token: it stops when every request for it has gone
             return await _cacheManager.GetAsync(MagicStrings.OgcRenderCacheSeed,
-                CacheCategories.ForDataset(orgSlug, dsSlug), renderKey.Key,
-                new Func<Task<byte[]>>(() => _gate.RunAsync(NativeLane.Tiles, () =>
-                    Render(ddb, rasters, renderKey.Bbox, crs, width, height, format, bgColor, transparent))));
+                CacheCategories.ForDataset(orgSlug, dsSlug), ct, renderKey.Key,
+                new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles, () =>
+                    Render(ddb, rasters, renderKey.Bbox, crs, width, height, format, bgColor, transparent), token)));
         }
         catch (DegradedRenderException ex)
         {
@@ -240,13 +245,13 @@ public class WmsManager : OgcManagerBase, IWmsManager
     /// protocol errors (raised before any render or cache lookup); non-raster layers are skipped.
     /// </summary>
     private async Task<List<(OgcLayerDto Layer, string Style)>> ResolveRasterLayersAsync(string orgSlug,
-        string dsSlug, string[] layers, string[] styles)
+        string dsSlug, string[] layers, string[] styles, CancellationToken ct)
     {
         var rasters = new List<(OgcLayerDto Layer, string Style)>();
         for (var idx = 0; idx < layers.Length; idx++)
         {
             var name = layers[idx];
-            var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name);
+            var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, ct: ct);
             if (layer == null)
                 throw new OgcException("LayerNotDefined", $"Layer '{name}' not found", 404, "LAYERS");
             if (layer.EntryType != EntryType.GeoRaster)
@@ -298,7 +303,7 @@ public class WmsManager : OgcManagerBase, IWmsManager
                 if (bytes.Length > 0)
                     return bytes;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogWarning(ex, "WMS layer '{Layer}' native render failed for bbox=[{B}] crs={Crs} {W}x{H}; compositing instead",
                     rasters[0].Layer.Name, string.Join(',', bbox), crs, width, height);
@@ -354,7 +359,7 @@ public class WmsManager : OgcManagerBase, IWmsManager
                 {
                     layerBytes = RenderLayer(ddb, raster, bbox, crs, width, height, "image/png");
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     failed = true;
                     _logger.LogWarning(ex, "WMS layer '{Layer}' render failed for bbox=[{B}] crs={Crs} {W}x{H}; treating as transparent",
@@ -437,12 +442,13 @@ public class WmsManager : OgcManagerBase, IWmsManager
     }
 
     public async Task<string> GetFeatureInfoAsync(string orgSlug, string dsSlug, string layerName,
-        double[] bbox, string crs, int width, int height, int i, int j, string infoFormat)
+        double[] bbox, string crs, int width, int height, int i, int j, string infoFormat,
+        CancellationToken ct = default)
     {
         if (i < 0 || i >= width || j < 0 || j >= height)
             throw new OgcException("InvalidPoint", "i/j out of bounds", 400);
-        var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug);
-        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, layerName)
+        var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
+        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, layerName, ct: ct)
                     ?? throw new OgcException("LayerNotDefined", $"Layer '{layerName}' not found", 404, "QUERY_LAYERS");
         if (layer.EntryType != EntryType.GeoRaster)
             throw new OgcException("OperationNotSupported", "GetFeatureInfo only supports raster layers", 400);

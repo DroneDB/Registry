@@ -1,5 +1,6 @@
 #nullable enable
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports;
 using Registry.Web.Services.Ports;
@@ -12,10 +13,10 @@ namespace Registry.Web.Services.Adapters;
 /// </summary>
 public sealed class GatedThumbnailGenerator(IThumbnailGenerator inner, INativeWorkGate gate) : IThumbnailGenerator
 {
-    public Task GenerateThumbnailAsync(string filePath, int size, Stream output) =>
+    public Task GenerateThumbnailAsync(string filePath, int size, Stream output, CancellationToken ct = default) =>
         gate.RunAsync(NativeLane.Heavy, async () =>
         {
-            await inner.GenerateThumbnailAsync(filePath, size, output);
+            await inner.GenerateThumbnailAsync(filePath, size, output, ct);
             return true;
-        });
+        }, ct);
 }

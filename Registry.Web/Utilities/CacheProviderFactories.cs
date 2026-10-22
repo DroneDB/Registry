@@ -1,8 +1,8 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
-using Serilog;
 
 namespace Registry.Web.Utilities;
 
@@ -16,51 +16,26 @@ public static class CacheProviderFactories
     /// Creates a cache provider function that stores what the caller generates.
     /// </summary>
     /// <returns>
-    /// A function that takes parameters (key parts..., generateFunc) and returns the bytes of
-    /// generateFunc as they are.
+    /// A function that takes parameters (key parts..., generate) and returns the bytes of generate as they are.
+    /// generate (<c>Func&lt;CancellationToken, Task&lt;byte[]&gt;&gt;</c>, always the last parameter) gets the
+    /// generation's token, canceled once no caller waits for it (RQ-13).
     /// </returns>
-    public static Func<object[], Task<byte[]>> CreatePassThroughProvider()
-    {
-        return parameters =>
-        {
-            // The generateFunc is always the last parameter
-            var generateFunc = (Func<Task<byte[]>>)parameters[^1];
-            return generateFunc();
-        };
-    }
+    public static Func<object[], CancellationToken, Task<byte[]>> CreatePassThroughProvider() =>
+        (parameters, ct) => ((Func<CancellationToken, Task<byte[]>>)parameters[^1])(ct);
 
     /// <summary>
     /// Creates a cache provider function for tiles: parameters (fileHash, tx, ty, tz, retina,
-    /// [vizKey | format], generateFunc). Each producer encodes its tiles in the format it serves
+    /// [vizKey | format], generate). Each producer encodes its tiles in the format it serves
     /// (the tile endpoint gets WebP from the native tiler, WMTS PNG or JPEG), so the bytes are
     /// stored as they are.
     /// </summary>
-    public static Func<object[], Task<byte[]>> CreateTileProvider() => CreatePassThroughProvider();
+    public static Func<object[], CancellationToken, Task<byte[]>> CreateTileProvider() => CreatePassThroughProvider();
 
     /// <summary>
-    /// Creates a cache provider function for thumbnails.
+    /// Creates a cache provider function for thumbnails: parameters (fileHash, size, [vizKey], generate), stored as
+    /// they are. A failure is logged once, by the cache.
     /// </summary>
-    /// <returns>
-    /// A function that takes parameters (fileHash, size, [vizKey], generateFunc)
-    /// and returns the thumbnail data.
-    /// </returns>
-    public static Func<object[], Task<byte[]>> CreateThumbnailProvider()
-    {
-        return async parameters =>
-        {
-            try
-            {
-                // The generateFunc is always the last parameter
-                var generateFunc = (Func<Task<byte[]>>)parameters[^1];
-                return await generateFunc();
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Error generating thumbnail");
-                throw;
-            }
-        };
-    }
+    public static Func<object[], CancellationToken, Task<byte[]>> CreateThumbnailProvider() => CreatePassThroughProvider();
 
     /// <summary>
     /// Creates a cache provider function for dataset visibility.
