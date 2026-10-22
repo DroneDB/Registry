@@ -27,4 +27,9 @@ public class DdbCanceledException : OperationCanceledException
     public DdbCanceledException(string message, CancellationToken token) : base(message, token)
     {
     }
+
+    public DdbCanceledException(string message, Exception? innerException, CancellationToken token)
+        : base(message, innerException, token)
+    {
+    }
 }

@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Runtime.InteropServices;
+using System.Threading;
 using Newtonsoft.Json;
 using Registry.Ports.DroneDB;
 
@@ -12,7 +13,9 @@ namespace Registry.Adapters.DroneDB;
 /// error and reason synchronously, on the same thread, before anything else (no await, no other
 /// libddb call in between), then throws the mapped exception (<see cref="DdbResultMapper"/>). An
 /// output is read only on success and freed in a finally block whenever it is not null. Each call
-/// runs under the current <see cref="DdbOperation"/> (<see cref="NativeOperation"/>, XI-08).
+/// runs under the current <see cref="DdbOperation"/> (<see cref="NativeOperation"/>, XI-08) and, for an
+/// export that honours cancel tokens, the current <see cref="DdbCancellation"/> (<see cref="NativeCancellation"/>,
+/// XI-07, RQ-13): a canceled call throws <see cref="DdbCanceledException"/> with the managed token.
 /// </summary>
 internal static class NativeCall
 {
@@ -27,7 +30,10 @@ internal static class NativeCall
     /// Throws the mapped exception of a failed call. Must run right after the call, on its thread.
     /// <paramref name="context"/> (the call's subject, e.g. its file) is appended to the message.
     /// </summary>
-    internal static void Check(DdbResult result, string operation, string? context = null)
+    internal static void Check(DdbResult result, string operation, string? context = null) =>
+        Check(result, operation, context, CancellationToken.None);
+
+    private static void Check(DdbResult result, string operation, string? context, CancellationToken token)
     {
         if (result == DdbResult.Success)
             return;
@@ -38,14 +44,29 @@ internal static class NativeCall
         if (context != null)
             message = $"{(message.Length == 0 ? $"{operation} failed ({result})" : message)} ({context})";
 
-        throw DdbResultMapper.Map(result, operation, message, reason);
+        throw DdbResultMapper.Map(result, operation, message, reason, token);
+    }
+
+    /// <summary>
+    /// Prepares the thread for the next native call of <paramref name="operation"/> (the export's name): its
+    /// cancel token if it gets one, then the operation id, then the token is set. The order is libddb's:
+    /// creating a token is an operation call, which resets the operation id and the token of the thread when
+    /// it returns; setting them are settings, which keep each other. Dispose the result after the call (and
+    /// after <see cref="Check(DdbResult, string, string?, CancellationToken)"/>).
+    /// </summary>
+    private static NativeCancellation Begin(string operation)
+    {
+        var cancellation = NativeCancellation.Create(operation);
+        NativeOperation.Bind();
+        cancellation.Arm();
+        return cancellation;
     }
 
     /// <summary>A call without output.</summary>
     internal static void Invoke(string operation, Func<DdbResult> call, string? context = null)
     {
-        NativeOperation.Bind();
-        Check(call(), operation, context);
+        using var cancellation = Begin(operation);
+        Check(call(), operation, context, cancellation.Token);
     }
 
     /// <summary>A call whose output is JSON, deserialized in place (<see cref="NativeJson"/>); a missing or null output fails.</summary>
@@ -54,8 +75,8 @@ internal static class NativeCall
         var output = IntPtr.Zero;
         try
         {
-            NativeOperation.Bind();
-            Check(call(out output), operation);
+            using var cancellation = Begin(operation);
+            Check(call(out output), operation, null, cancellation.Token);
             return Deserialize<T>(operation, output) ?? throw new DdbException($"{operation} returned no output");
         }
         finally
@@ -73,12 +94,12 @@ internal static class NativeCall
         var output = IntPtr.Zero;
         try
         {
-            NativeOperation.Bind();
+            using var cancellation = Begin(operation);
             var result = call(out output);
             if (result == DdbResult.NotFound)
                 return null;
 
-            Check(result, operation);
+            Check(result, operation, null, cancellation.Token);
             return Deserialize<T>(operation, output) ?? throw new DdbException($"{operation} returned no output");
         }
         finally
@@ -93,12 +114,12 @@ internal static class NativeCall
         var output = IntPtr.Zero;
         try
         {
-            NativeOperation.Bind();
+            using var cancellation = Begin(operation);
             var result = call(out output);
             if (result == DdbResult.NotFound)
                 return null;
 
-            Check(result, operation);
+            Check(result, operation, null, cancellation.Token);
             return Marshal.PtrToStringUTF8(output) ?? throw new DdbException($"{operation} returned no output");
         }
         finally
@@ -113,8 +134,8 @@ internal static class NativeCall
         var output = IntPtr.Zero;
         try
         {
-            NativeOperation.Bind();
-            Check(call(out output), operation);
+            using var cancellation = Begin(operation);
+            Check(call(out output), operation, null, cancellation.Token);
             return Marshal.PtrToStringUTF8(output);
         }
         finally
@@ -136,8 +157,8 @@ internal static class NativeCall
         var buffer = IntPtr.Zero;
         try
         {
-            NativeOperation.Bind();
-            Check(call(out buffer, out var size), operation, context);
+            using var cancellation = Begin(operation);
+            Check(call(out buffer, out var size), operation, context, cancellation.Token);
             if (buffer == IntPtr.Zero || size < 0)
                 throw new DdbException($"{operation} returned no buffer");
 
@@ -162,8 +183,8 @@ internal static class NativeCall
         var output = IntPtr.Zero;
         try
         {
-            NativeOperation.Bind();
-            Check(call(out output), operation);
+            using (var cancellation = Begin(operation))
+                Check(call(out output), operation, null, cancellation.Token);
             if (output == IntPtr.Zero)
                 throw new DdbException($"{operation} returned no output");
 

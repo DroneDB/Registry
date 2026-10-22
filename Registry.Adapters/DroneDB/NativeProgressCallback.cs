@@ -59,6 +59,16 @@ internal sealed unsafe class NativeProgressCallback : IDisposable
     /// <summary>Rethrows the first exception thrown by the observer, if any.</summary>
     public void ThrowIfFaulted() => Volatile.Read(ref _fault)?.Throw();
 
+    /// <summary>
+    /// The result of the call that used <paramref name="callback"/> (none: nothing to observe), once the
+    /// observer's exception, if any, was rethrown (<see cref="ThrowIfFaulted"/>).
+    /// </summary>
+    public static DdbResult Completed(NativeProgressCallback? callback, DdbResult result)
+    {
+        callback?.ThrowIfFaulted();
+        return result;
+    }
+
     public void Dispose()
     {
         if (_self.IsAllocated)

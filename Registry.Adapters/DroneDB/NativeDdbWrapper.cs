@@ -319,15 +319,17 @@ public class NativeDdbWrapper : IDdbWrapper
         bool pendingOnly = false)
     {
         ArgumentNullException.ThrowIfNull(ddbPath);
-        var result = NativeDdb.DDBBuild(ddbPath, source == null ? null : NormalizeSeparators(source),
-            dest == null ? null : NormalizeSeparators(dest), force, pendingOnly);
-
-        // BuildDependencyMissing: a dependency is not indexed yet, so the build is deferred (a
-        // pending marker), not failed. BuildInProgress and Busy surface as typed exceptions, which
-        // the Hangfire retry policies retry with backoff.
-        if (result != DdbResult.BuildDependencyMissing)
-            NativeCall.Check(result, nameof(NativeDdb.DDBBuild));
+        var normalizedSource = source == null ? null : NormalizeSeparators(source);
+        var normalizedDest = dest == null ? null : NormalizeSeparators(dest);
+        NativeCall.Invoke(nameof(NativeDdb.DDBBuild), () => AcceptDeferred(
+            NativeDdb.DDBBuild(ddbPath, normalizedSource, normalizedDest, force, pendingOnly)));
     }
+
+    // BuildDependencyMissing: a dependency is not indexed yet, so the build is deferred (a pending
+    // marker), not failed. BuildInProgress and Busy surface as typed exceptions, which the Hangfire
+    // retry policies retry with backoff.
+    private static DdbResult AcceptDeferred(DdbResult result) =>
+        result == DdbResult.BuildDependencyMissing ? DdbResult.Success : result;
 
     public EntryBuildArtifacts[] GetBuildArtifacts(string ddbPath, string[] paths)
     {
@@ -616,14 +618,16 @@ public class NativeDdbWrapper : IDdbWrapper
         // The bridge is only allocated when there is something to observe
         using var callback = NativeProgressCallback.Create(progress, cancellationToken);
 
-        var result = NativeDdb.DDBExportRaster2(inputPath, outputPath, preset, bands, formula, bandFilter, colormap,
-            rescale, tileSize, callback == null ? null : NativeProgressCallback.FunctionPointer,
-            callback?.UserData ?? IntPtr.Zero);
+        // The caller's token is the call's cancellation too: the export stops at its next checkpoint, not only
+        // at its next progress report (XI-07)
+        using var cancellation = DdbCancellation.Enter(cancellationToken);
 
         // An exception thrown by the observer canceled the call: it wins over the canceled result.
         // ThrowIfFaulted makes no libddb call, so the last error is still the export's.
-        callback?.ThrowIfFaulted();
-        NativeCall.Check(result, nameof(NativeDdb.DDBExportRaster2));
+        NativeCall.Invoke(nameof(NativeDdb.DDBExportRaster2), () => NativeProgressCallback.Completed(callback,
+            NativeDdb.DDBExportRaster2(inputPath, outputPath, preset, bands, formula, bandFilter, colormap,
+                rescale, tileSize, callback == null ? null : NativeProgressCallback.FunctionPointer,
+                callback?.UserData ?? IntPtr.Zero)));
     }
 
     public string GetRasterValueInfo(string path)

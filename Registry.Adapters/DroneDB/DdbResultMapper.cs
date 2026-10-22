@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Runtime.InteropServices;
+using System.Threading;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Adapters.DroneDB;
@@ -42,9 +43,11 @@ public static class DdbResultMapper
 
     /// <summary>
     /// The exception of a failed call: <paramref name="message"/> and <paramref name="reason"/> are
-    /// what libddb set ("" means none). Not for <see cref="DdbResult.Success"/>.
+    /// what libddb set ("" means none). Not for <see cref="DdbResult.Success"/>. A canceled call's
+    /// exception carries <paramref name="token"/>, the managed token its cancel token was for (RQ-13).
     /// </summary>
-    public static Exception Map(DdbResult result, string operation, string? message, string? reason)
+    public static Exception Map(DdbResult result, string operation, string? message, string? reason,
+        CancellationToken token = default)
     {
         if (result == DdbResult.Success)
             throw new ArgumentOutOfRangeException(nameof(result), result, "A successful call has no exception");
@@ -55,7 +58,7 @@ public static class DdbResultMapper
         {
             DdbResult.Busy => new DdbBusyException(text),
             DdbResult.BuildInProgress => new DdbBuildInProgressException(text),
-            DdbResult.Canceled => new DdbCanceledException(text),
+            DdbResult.Canceled => new DdbCanceledException(text, null, token),
             DdbResult.NotFound => new DdbNotFoundException(text),
             DdbResult.InvalidArgs => new DdbInvalidArgumentsException(text),
             DdbResult.Retryable => new DdbRetryableException(text, string.IsNullOrEmpty(reason) ? null : reason),
