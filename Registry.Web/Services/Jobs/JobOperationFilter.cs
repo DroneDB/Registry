@@ -9,8 +9,10 @@ namespace Registry.Web.Services.Jobs;
 
 /// <summary>
 /// Gives every job a libddb operation (<see cref="JobOperations"/>, XI-08) for as long as it
-/// runs, so the native log records of its calls carry the job id and dataset; writes the native
-/// warnings still queued when the job ends to its console. The operation flows into the job from
+/// runs, so the native log records of its calls carry the job id and dataset, and the job's
+/// cancellation (RQ-13): its cancellable native calls (a build, an export) stop at their next
+/// checkpoint when Hangfire cancels the job (server shutdown, job aborted). Writes the native
+/// warnings still queued when the job ends to its console. Both flow into the job from
 /// <see cref="OnPerforming"/> (synchronous, same flow as the job).
 /// </summary>
 public sealed class JobOperationFilter(ILogger<JobOperationFilter> log) : IServerFilter
@@ -29,7 +31,7 @@ public sealed class JobOperationFilter(ILogger<JobOperationFilter> log) : IServe
                 ? null
                 : $"{orgSlug}/{dsSlug}";
 
-            context.Items[ItemKey] = JobOperations.Begin(jobId, dataset);
+            context.Items[ItemKey] = JobOperations.Begin(jobId, dataset, JobCancellation.Of(context));
         }
         catch (Exception ex)
         {

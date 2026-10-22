@@ -136,6 +136,13 @@ public class DdbJobs : DdbRetriedJob, IDatasetBuilds
             console.Debug("Build lock currently held by another process ({Reason}); skipping", ex.Message);
             skipped = true;
         }
+        catch (OperationCanceledException)
+        {
+            // Hangfire canceled the job (shutdown: it is requeued; aborted: it ends here). libddb stopped the build
+            // at its next checkpoint and left no partial artifact: not a build failure (RQ-13)
+            console.Debug("Build canceled");
+            throw;
+        }
         catch (Exception ex)
         {
             // Must land in the JobIndex log tail: without this the Task History shows only

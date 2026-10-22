@@ -131,6 +131,20 @@ public class DdbJobsTests
     }
 
     [Test]
+    public void Build_Canceled_RethrowsWithoutAFailureLineOrWarning()
+    {
+        // RQ-13: Hangfire canceled the job (its token reached libddb through the job's operation)
+        _ddb.Setup(x => x.Build("ortho.tif", null!, false))
+            .Throws(new DdbCanceledException("Canceled by the cancel token (DDBCancel)"));
+
+        Should.Throw<OperationCanceledException>(() => Jobs().Build(Org, Ref, "ortho.tif", false, null));
+
+        Logged.ShouldContain(m => m.Contains("Build canceled"));
+        Logged.ShouldNotContain(m => m.Contains("Build failed:"));
+        _log.Entries.ShouldNotContain(e => e.Level >= LogLevel.Warning);
+    }
+
+    [Test]
     public void Build_Success_WritesDoneLine()
     {
         Should.NotThrow(() => Jobs().Build(Org, Ref, "ortho.tif", false, null));

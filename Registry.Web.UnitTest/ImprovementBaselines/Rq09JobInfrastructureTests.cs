@@ -189,6 +189,24 @@ public class Rq09JobInfrastructureTests
         JobOperations.Find(operation.Id).ShouldBeNull();
     }
 
+    [Test]
+    public void JobOperationFilter_TheJobsCancellation_IsItsNativeCallsCancellation()
+    {
+        // RQ-13: a build (or any cancellable native call of a job) stops when Hangfire cancels the job
+        using var shutdown = new CancellationTokenSource();
+        var token = new Mock<IJobCancellationToken>();
+        token.SetupGet(t => t.ShutdownToken).Returns(shutdown.Token);
+        var job = new BackgroundJob("10", Job.FromExpression<HealthCheckJob>(j => j.Ping(null)), DateTime.UtcNow);
+        var perform = new PerformContext(null, Mock.Of<IStorageConnection>(), job, token.Object);
+        var filter = new JobOperationFilter(Mock.Of<ILogger<JobOperationFilter>>());
+
+        filter.OnPerforming(new PerformingContext(perform));
+        DdbCancellation.Current.ShouldBe(shutdown.Token);
+
+        filter.OnPerformed(new PerformedContext(perform, null, false, null));
+        DdbCancellation.Current.CanBeCanceled.ShouldBeFalse("the job's cancellation ends with the job");
+    }
+
     private sealed class StructuredLoggerFactory : ILoggerFactory
     {
         public StructuredLogger Logger { get; } = new();

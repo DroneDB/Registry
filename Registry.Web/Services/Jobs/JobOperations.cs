@@ -11,6 +11,8 @@ namespace Registry.Web.Services.Jobs;
 /// The libddb operation ids of the running jobs (XI-08): one per job, mapped to the job id and
 /// its dataset, so a native log record (<see cref="Adapters.DdbLogSink"/>) says which job and
 /// dataset it belongs to. Process-wide like libddb's log callback: ids are unique in the process.
+/// An operation also carries the job's cancellation (RQ-13): its native calls stop at their next
+/// checkpoint when Hangfire cancels the job (server shutdown, job aborted).
 /// </summary>
 public static class JobOperations
 {
@@ -19,14 +21,16 @@ public static class JobOperations
 
     /// <summary>
     /// Starts the operation of job <paramref name="jobId"/> and makes it the current one
-    /// (<see cref="DdbOperation"/>) until it is disposed. Begin and dispose in the same flow.
+    /// (<see cref="DdbOperation"/>), with <paramref name="cancellation"/> as the current
+    /// <see cref="DdbCancellation"/>, until it is disposed. Begin and dispose in the same flow.
     /// </summary>
     /// <param name="jobId">The Hangfire job id.</param>
     /// <param name="dataset">"org/dataset" of the job, or null when it has none.</param>
-    public static JobOperation Begin(string jobId, string? dataset)
+    /// <param name="cancellation">The job's token (<see cref="JobCancellation.Of"/>).</param>
+    public static JobOperation Begin(string jobId, string? dataset, CancellationToken cancellation = default)
     {
         var id = (ulong)Interlocked.Increment(ref _lastId);
-        var operation = new JobOperation(id, jobId, dataset, DdbOperation.Enter(id));
+        var operation = new JobOperation(id, jobId, dataset, DdbOperation.Enter(id), DdbCancellation.Enter(cancellation));
         Running[id] = operation;
         return operation;
     }
@@ -52,16 +56,19 @@ public sealed class JobOperation : IDisposable
 
     private readonly ConcurrentQueue<string> _nativeLines = new();
     private readonly DdbOperation.Scope _scope;
+    private readonly DdbCancellation.Scope _cancellation;
     private int _queued;
     private int _dropped;
     private int _disposed;
 
-    internal JobOperation(ulong id, string jobId, string? dataset, DdbOperation.Scope scope)
+    internal JobOperation(ulong id, string jobId, string? dataset, DdbOperation.Scope scope,
+        DdbCancellation.Scope cancellation)
     {
         Id = id;
         JobId = jobId;
         Dataset = dataset;
         _scope = scope;
+        _cancellation = cancellation;
     }
 
     public ulong Id { get; }
@@ -91,13 +98,14 @@ public sealed class JobOperation : IDisposable
             yield return $"({dropped} more native messages in the server log)";
     }
 
-    /// <summary>Ends the operation and restores the previous current one.</summary>
+    /// <summary>Ends the operation and restores the previous current one (and cancellation).</summary>
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
         JobOperations.End(this);
+        _cancellation.Dispose();
         _scope.Dispose();
     }
 }
