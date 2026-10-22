@@ -11,6 +11,7 @@ using Registry.Web.Identity;
 using Registry.Web.Middlewares;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Configuration;
 using Registry.Web.Services.Features;
 using Registry.Web.Services.Initialization;
 using Registry.Web.Services.Maintenance;
@@ -91,7 +92,16 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IDatasetSlugRepair, DatasetSlugRepair>();
         services.AddScoped<IGlobalReportBuilder, GlobalReportBuilder>();
         services.AddScoped<IBuildMaintenance, BuildMaintenance>();
+        services.AddSingleton<IConfigurationView, ConfigurationView>();
         services.AddScoped<IConfigurationDataBuilder, ConfigurationDataBuilder>();
+        services.AddScoped<IConfigurationSectionBuilder, IdentitySections>();
+        services.AddScoped<IConfigurationSectionBuilder, DataStoreSections>();
+        services.AddScoped<IConfigurationSectionBuilder, TransferSections>();
+        services.AddScoped<IConfigurationSectionBuilder, JobScheduleSections>();
+        services.AddScoped<IConfigurationSectionBuilder, HubSections>();
+        services.AddScoped<IConfigurationSectionBuilder, ProcessingSections>();
+        services.AddScoped<IConfigurationSectionBuilder, ImportSections>();
+        services.AddScoped<IConfigurationSectionBuilder, HostSections>();
 
         services.AddSingleton<IJobOutcomeReader, HangfireJobOutcomeReader>();
         services.AddScoped<IRemoteImportService, RemoteImportService>();
