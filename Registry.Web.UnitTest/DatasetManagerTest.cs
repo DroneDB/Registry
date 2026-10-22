@@ -38,9 +38,7 @@ public class DatasetManagerTest : TestBase
     private Mock<IAuthManager> _authManagerMock;
     private MutableOptions<AppSettings> _settingsOptions;
     private Mock<IDatasetsManager> _datasetManagerMock;
-    private ILogger<DatasetsManager> _datasetsManagerLogger;
     private Mock<IDdbManager> _ddbFactoryMock;
-    private Mock<IObjectsManager> _objectsManagerMock;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private Mock<IDatasetListingInvalidator> _listingsMock;
     private Mock<IBackgroundJobsProcessor> _backgroundJobMock;
@@ -48,10 +46,9 @@ public class DatasetManagerTest : TestBase
 
     /// <summary>The manager over the test's collaborators; the listing invalidator is the mock.</summary>
     private DatasetsManager CreateManager(RegistryContext context, WebPorts utils, IFileSystem fileSystem = null) =>
-        new(context, utils.Datasets, utils.Urls, _datasetsManagerLogger, _objectsManagerMock.Object, _ddbFactoryMock.Object,
-            _authManagerMock.Object, new DatasetAccessResolver(utils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
-            _listingsMock.Object, fileSystem ?? _fileSystem, _backgroundJobMock.Object, _settingsOptions,
-            TestCaches.Summaries(_ddbFactoryMock.Object));
+        TestDatasets.Manager(context, utils, _ddbFactoryMock.WithFolders(() => _settingsOptions.Value.DatasetsPath).Object,
+            _authManagerMock.Object, _listingsMock.Object, fileSystem ?? _fileSystem, _backgroundJobMock.Object,
+            TestSettings.Options<ThumbnailOptions>(_settingsOptions));
 
     [SetUp]
     public void Setup()
@@ -60,11 +57,9 @@ public class DatasetManagerTest : TestBase
         _authManagerMock = new Mock<IAuthManager>();
         _datasetManagerMock = new Mock<IDatasetsManager>();
         _ddbFactoryMock = new Mock<IDdbManager>();
-        _objectsManagerMock = new Mock<IObjectsManager>();
         _listingsMock = new Mock<IDatasetListingInvalidator>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
         _backgroundJobMock = new Mock<IBackgroundJobsProcessor>();
-        _datasetsManagerLogger = CreateTestLogger<DatasetsManager>();
         _fileSystem = new FileSystem();
     }
 

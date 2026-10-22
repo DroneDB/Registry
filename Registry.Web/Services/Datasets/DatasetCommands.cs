@@ -1,0 +1,220 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Registry.Ports;
+using Registry.Ports.DroneDB;
+using Registry.Web.Data;
+using Registry.Web.Data.Models;
+using Registry.Web.Exceptions;
+using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
+using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Caching;
+using Registry.Web.Services.Managers;
+using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
+
+namespace Registry.Web.Services.Datasets;
+
+/// <summary>The changes to a dataset by its writers: creation, edit, deletion, rename, the legacy public flag. Each renews the listings it changes.</summary>
+public interface IDatasetCommands
+{
+    Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset);
+    Task Edit(string orgSlug, string dsSlug, DatasetEditDto dataset);
+    Task Delete(string orgSlug, string dsSlug);
+    Task Rename(string orgSlug, string dsSlug, string newSlug);
+
+    /// <summary>Sets the legacy public flag (use the dataset metadata).</summary>
+    Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, AttributesDto attributes);
+}
+
+/// <summary>Default <see cref="IDatasetCommands"/> (RQ-12, out of <c>DatasetsManager</c>).</summary>
+public sealed class DatasetCommands : IDatasetCommands
+{
+    private readonly RegistryContext _context;
+    private readonly IDatasetResolver _datasets;
+    private readonly IDatasetAccessResolver _access;
+    private readonly IDdbManager _ddbManager;
+    private readonly IDatasetListingInvalidator _listings;
+    private readonly IBackgroundJobsProcessor _backgroundJob;
+    private readonly ILogger<DatasetCommands> _logger;
+
+    public DatasetCommands(RegistryContext context, IDatasetResolver datasets, IDatasetAccessResolver access, IDdbManager ddbManager, IDatasetListingInvalidator listings, IBackgroundJobsProcessor backgroundJob, ILogger<DatasetCommands> logger)
+    {
+        _context = context;
+        _datasets = datasets;
+        _access = access;
+        _ddbManager = ddbManager;
+        _listings = listings;
+        _backgroundJob = backgroundJob;
+        _logger = logger;
+    }
+
+    public async Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset)
+    {
+        var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Write, withTracking: true,
+            withDatasets: true);
+
+        if (dataset == null)
+            throw new BadRequestException("Dataset is null");
+
+        if (dataset.Slug == null)
+            throw new BadRequestException("Dataset slug is null");
+
+        if (!dataset.Slug.IsValidSlug())
+            throw new BadRequestException("Dataset slug is invalid");
+
+        if (_context.Datasets.AsNoTracking()
+            .Any(item => item.Slug == dataset.Slug && item.Organization.Slug == orgSlug))
+            throw new BadRequestException("Dataset with this slug already exists");
+
+        var ds = new Dataset
+        {
+            Slug = dataset.Slug,
+            Organization = org,
+            InternalRef = Guid.NewGuid(),
+            CreationDate = DateTime.UtcNow
+        };
+
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var meta = ddb.Meta.GetSafe();
+
+        meta.Name = string.IsNullOrWhiteSpace(dataset.Name) ? dataset.Slug : dataset.Name;
+
+        if (dataset.Visibility.HasValue)
+            meta.Visibility = dataset.Visibility.Value;
+
+        if (!string.IsNullOrWhiteSpace(dataset.Tagline))
+            meta.Tagline = dataset.Tagline;
+
+        org.Datasets.Add(ds);
+
+        await _context.SaveChangesAsync();
+
+        return ds.ToDto(ddb.GetInfo());
+    }
+
+    public async Task Edit(string orgSlug, string dsSlug, DatasetEditDto dataset)
+    {
+        if (dataset == null)
+            throw new BadRequestException("Dataset is null");
+
+        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
+        await _access.EnsureAccessAsync(ds, AccessType.Write);
+
+        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        var meta = ddb.Meta.GetSafe();
+
+        if (dataset.Visibility.HasValue)
+            meta.Visibility = dataset.Visibility.Value;
+
+        if (!string.IsNullOrWhiteSpace(dataset.Name))
+            meta.Name = dataset.Name;
+
+        await _context.SaveChangesAsync();
+
+        // Who may list it (visibility) and how it is listed (name)
+        if (dataset.Visibility.HasValue)
+            await _listings.VisibilityChangedAsync(orgSlug, ds.InternalRef);
+        else if (!string.IsNullOrWhiteSpace(dataset.Name))
+            await _listings.ListingChangedAsync(orgSlug, ds.InternalRef);
+    }
+
+    public async Task Delete(string orgSlug, string dsSlug)
+    {
+        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
+        await _access.EnsureAccessAsync(ds, AccessType.Delete);
+
+        // Save references before removing from DB
+        var internalRef = ds.InternalRef;
+
+        // Remove from database immediately (fast operation)
+        _context.Datasets.Remove(ds);
+        await _context.SaveChangesAsync();
+
+        // It leaves every listing
+        await _listings.ListingChangedAsync(orgSlug, internalRef);
+
+        // Schedule background cleanup job for: cancelling active jobs, removing JobIndex entries, deleting filesystem
+        string jobId = null;
+        try
+        {
+            jobId = _backgroundJob.Enqueue<DatasetCleanupService>(
+                service => service.CleanupDeletedDatasetAsync(orgSlug, dsSlug, internalRef, null));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to enqueue cleanup job for dataset {OrgSlug}/{DsSlug} with internalRef {InternalRef}",
+                orgSlug, dsSlug, internalRef);
+        }
+
+        if (string.IsNullOrEmpty(jobId))
+        {
+            _logger.LogError(
+                "Cleanup job could not be scheduled for dataset {OrgSlug}/{DsSlug} with internalRef {InternalRef}. " +
+                "Orphaned folder cleanup will handle this later.",
+                orgSlug, dsSlug, internalRef);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Dataset {OrgSlug}/{DsSlug} removed from DB, cleanup job scheduled with JobId {JobId}",
+                orgSlug, dsSlug, jobId);
+        }
+    }
+
+    public async Task Rename(string orgSlug, string dsSlug, string newSlug)
+    {
+        if (string.IsNullOrWhiteSpace(newSlug))
+            throw new BadRequestException("New slug is empty");
+
+        if (dsSlug == MagicStrings.DefaultDatasetSlug || newSlug == MagicStrings.DefaultDatasetSlug)
+            throw new BadRequestException("Cannot move default dataset");
+
+        if (!newSlug.IsValidSlug())
+            throw new BadRequestException($"Invalid slug '{newSlug}'");
+
+        if (dsSlug == newSlug) return; // Nothing to do
+
+        // Access first: a caller who may not rename learns nothing about the other slugs
+        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
+        await _access.EnsureAccessAsync(ds, AccessType.Write);
+
+        if (await _datasets.GetDatasetAsync(orgSlug, newSlug, safe: true) != null)
+            throw new BadRequestException($"Dataset '{newSlug}' already exists");
+
+        ds.Slug = newSlug;
+
+        await _context.SaveChangesAsync();
+
+        // The listings link to the old slug
+        await _listings.ListingChangedAsync(orgSlug, ds.InternalRef);
+    }
+
+    [Obsolete("Use meta")]
+    public async Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug,
+        AttributesDto attributes)
+    {
+        if (attributes == null)
+            throw new BadRequestException("Attributes are null");
+
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
+        var ds = access.Dataset;
+
+        var ddb = access.Ddb;
+        var meta = ddb.Meta.GetSafe();
+        meta.IsPublic = attributes.IsPublic;
+
+        // Changing IsPublic may indirectly modify visibility
+        await _listings.VisibilityChangedAsync(orgSlug, ds.InternalRef);
+
+        return new Dictionary<string, object> { { "public", attributes.IsPublic } };
+    }
+}

@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using System.IO;
 using System.Net.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -38,13 +37,5 @@ public static class TestImports
             new ParallelFilesImportStrategy(remote, destinations, fileSystem, TestPaths.Policy, settings,
                 NullLogger<ParallelFilesImportStrategy>.Instance)
         ], TimeProvider.System, NullLogger<RemoteRegistryImporter>.Instance);
-    }
-
-    /// <summary>Puts the dataset folders of <paramref name="ddbManager"/> under <paramref name="datasetsPath"/>.</summary>
-    public static Mock<IDdbManager> WithFolders(this Mock<IDdbManager> ddbManager, string datasetsPath)
-    {
-        ddbManager.Setup(m => m.GetDatasetFolder(It.IsAny<string>(), It.IsAny<Guid>()))
-            .Returns((string org, Guid internalRef) => Path.Combine(datasetsPath, org, internalRef.ToString()));
-        return ddbManager;
     }
 }

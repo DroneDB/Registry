@@ -12,6 +12,7 @@ using Registry.Web.Middlewares;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Configuration;
+using Registry.Web.Services.Datasets;
 using Registry.Web.Services.Features;
 using Registry.Web.Services.Initialization;
 using Registry.Web.Services.Maintenance;
@@ -52,6 +53,9 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IUserDeletion, UserDeletion>();
         services.AddScoped<IOrganizationsManager, OrganizationsManager>();
         services.AddScoped<IDatasetsManager, DatasetsManager>();
+        services.AddScoped<IDatasetQueries, DatasetQueries>();
+        services.AddScoped<IDatasetCommands, DatasetCommands>();
+        services.AddScoped<IDatasetMover, DatasetMover>();
         services.AddScoped<IStacManager, StacManager>();
         services.AddScoped<Services.Stac.StacCatalog>();
         services.AddScoped<Services.Stac.StacUrls>();

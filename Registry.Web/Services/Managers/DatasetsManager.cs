@@ -1,500 +1,54 @@
-using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Registry.Ports;
-using Registry.Ports.DroneDB;
-using Registry.Web.Data;
-using Registry.Web.Data.Models;
-using Registry.Web.Exceptions;
-using Registry.Web.Models.Configuration;
+using Registry.Common;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Adapters;
-using Registry.Web.Services.Caching;
+using Registry.Web.Services.Datasets;
 using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// CRUD operations for datasets including creation, editing, deletion, renaming, and attribute changes.
+/// The datasets API (<see cref="IDatasetsManager"/>, what the controllers and the organizations call) over the
+/// dataset services RQ-12 split it into (13 parameters before): queries, commands, the move between organizations.
 /// </summary>
 public class DatasetsManager : IDatasetsManager
 {
-    private readonly RegistryContext _context;
-    private readonly IDatasetResolver _datasets;
-    private readonly IUrlBuilder _urls;
-    private readonly ILogger<DatasetsManager> _logger;
-    private readonly IObjectsManager _objectsManager;
-    private readonly IDdbManager _ddbManager;
-    private readonly IAuthManager _authManager;
-    private readonly IDatasetAccessResolver _access;
-    private readonly IDatasetListingInvalidator _listings;
-    private readonly IFileSystem _fileSystem;
-    private readonly IBackgroundJobsProcessor _backgroundJob;
-    private readonly AppSettings _settings;
-    private readonly IDatasetSummaryProvider _summaries;
+    private readonly IDatasetQueries _queries;
+    private readonly IDatasetCommands _commands;
+    private readonly IDatasetMover _mover;
 
-    public DatasetsManager(
-        RegistryContext context,
-        IDatasetResolver datasets,
-        IUrlBuilder urls,
-        ILogger<DatasetsManager> logger,
-        IObjectsManager objectsManager,
-        IDdbManager ddbManager,
-        IAuthManager authManager,
-        IDatasetAccessResolver access,
-        IDatasetListingInvalidator listings,
-        IFileSystem fileSystem,
-        IBackgroundJobsProcessor backgroundJob,
-        IOptions<AppSettings> settings,
-        IDatasetSummaryProvider summaries)
+    public DatasetsManager(IDatasetQueries queries, IDatasetCommands commands, IDatasetMover mover)
     {
-        _context = context;
-        _datasets = datasets;
-        _urls = urls;
-        _logger = logger;
-        _objectsManager = objectsManager;
-        _ddbManager = ddbManager;
-        _authManager = authManager;
-        _access = access;
-        _listings = listings;
-        _fileSystem = fileSystem;
-        _backgroundJob = backgroundJob;
-        _settings = settings.Value;
-        _summaries = summaries;
+        _queries = queries;
+        _commands = commands;
+        _mover = mover;
     }
 
-    public async Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false) =>
-        (await ListPage(orgSlug, new DatasetListQuery(), includeThumbnailCheck)).Items;
+    public Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false) =>
+        _queries.List(orgSlug, includeThumbnailCheck);
 
-    public async Task<(IReadOnlyList<DatasetDto> Items, int Total)> ListPage(string orgSlug, DatasetListQuery query,
-        bool includeThumbnailCheck = false)
-    {
-        var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Read, withDatasets: true);
+    public Task<(IReadOnlyList<DatasetDto> Items, int Total)> ListPage(string orgSlug, DatasetListQuery query,
+        bool includeThumbnailCheck = false) => _queries.ListPage(orgSlug, query, includeThumbnailCheck);
 
-        var datasets = org.Datasets.ToArray();
+    public Task<DatasetDto> Get(string orgSlug, string dsSlug) => _queries.GetDataset(orgSlug, dsSlug);
 
-        // Optimization C: Short-circuit for owner/admin - they can read all datasets
-        var isOwnerOrAdmin = await _authManager.IsOwnerOrAdmin(org);
+    public Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug) => _queries.GetEntry(orgSlug, dsSlug);
 
-        // Optimization D: Prefetch Organization.Users once to avoid N lazy loads
-        if (!isOwnerOrAdmin && org.Users == null)
-            await _context.Entry(org).Collection(o => o.Users).LoadAsync();
+    public Task<StampDto> GetStamp(string orgSlug, string dsSlug) => _queries.GetStamp(orgSlug, dsSlug);
 
-        var readable = new List<(DatasetDto Dto, Dataset Dataset)>();
+    public Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset) => _commands.AddNew(orgSlug, dataset);
 
-        foreach (var ds in datasets)
-        {
-            DatasetPermissionsDto permissions;
+    public Task Edit(string orgSlug, string dsSlug, DatasetEditDto dataset) => _commands.Edit(orgSlug, dsSlug, dataset);
 
-            if (isOwnerOrAdmin)
-            {
-                // Owner/admin has full access - skip permission check
-                permissions = new DatasetPermissionsDto
-                {
-                    CanRead = true,
-                    CanWrite = true,
-                    CanDelete = true
-                };
-            }
-            else
-            {
-                // Check if user can read this dataset before including it
-                permissions = await _authManager.GetDatasetPermissions(ds);
-                if (!permissions.CanRead)
-                    continue;
-            }
+    public Task Delete(string orgSlug, string dsSlug) => _commands.Delete(orgSlug, dsSlug);
 
-            // Sizes and properties are cached per dataset until its index changes (REG-06)
-            var summary = _summaries.Get(orgSlug, ds.InternalRef);
+    public Task Rename(string orgSlug, string dsSlug, string newSlug) => _commands.Rename(orgSlug, dsSlug, newSlug);
 
-            readable.Add((new DatasetDto
-            {
-                Slug = ds.Slug,
-                CreationDate = ds.CreationDate,
-                Properties = summary.Properties,
-                Size = summary.Size,
-                Permissions = permissions
-            }, ds));
-        }
+    public Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, AttributesDto attributes) =>
+        _commands.ChangeAttributes(orgSlug, dsSlug, attributes);
 
-        var bySlug = readable.ToDictionary(r => r.Dto.Slug, r => r.Dataset);
-        var matching = query.Apply(readable.Select(r => r.Dto)).ToList();
-        var total = string.IsNullOrWhiteSpace(query.Query)
-            ? readable.Count
-            : (query with { Skip = 0, Take = null }).Apply(readable.Select(r => r.Dto)).Count();
-
-        // The only per-dataset native call left: for the page shown, not the whole organization
-        if (includeThumbnailCheck)
-            foreach (var dto in matching)
-                dto.HasThumbnail = CheckHasThumbnail(_ddbManager.Get(orgSlug, bySlug[dto.Slug].InternalRef));
-
-        return (matching, total);
-    }
-
-    public async Task<DatasetDto> Get(string orgSlug, string dsSlug)
-    {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
-        var dataset = access.Dataset;
-
-        var ddb = access.Ddb;
-
-        var dto = dataset.ToDto(ddb.GetInfo());
-        dto.Permissions = await _authManager.GetDatasetPermissions(dataset);
-        dto.HasThumbnail = CheckHasThumbnail(ddb);
-
-        return dto;
-    }
-
-    private bool CheckHasThumbnail(IDDB ddb)
-    {
-        var rootEntries = ddb.FindSummaries(new EntryQuery(Recursive: false));
-        var rootNames = new HashSet<string>(
-            rootEntries.Select(e => Path.GetFileName(e.Path)),
-            StringComparer.OrdinalIgnoreCase);
-        return _settings.EffectiveDatasetThumbnailCandidates().Any(c => rootNames.Contains(c));
-    }
-
-    public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug)
-    {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
-        var dataset = access.Dataset;
-
-        var ddb = access.Ddb;
-
-        var info = ddb.GetInfo();
-        info.Depth = 0;
-        info.Path = _urls.GenerateDatasetUrl(dataset, true);
-
-        var dto = info.ToDto();
-
-        // Add permissions to properties
-        if (dto.Properties == null)
-            dto.Properties = new Dictionary<string, object>();
-
-        var permissions = await _authManager.GetDatasetPermissions(dataset);
-        dto.Properties["permissions"] = new
-        {
-            canRead = permissions.CanRead,
-            canWrite = permissions.CanWrite,
-            canDelete = permissions.CanDelete
-        };
-
-        return [dto];
-    }
-
-    public async Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset)
-    {
-        var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Write, withTracking: true,
-            withDatasets: true);
-
-        if (dataset == null)
-            throw new BadRequestException("Dataset is null");
-
-        if (dataset.Slug == null)
-            throw new BadRequestException("Dataset slug is null");
-
-        if (!dataset.Slug.IsValidSlug())
-            throw new BadRequestException("Dataset slug is invalid");
-
-        if (_context.Datasets.AsNoTracking()
-            .Any(item => item.Slug == dataset.Slug && item.Organization.Slug == orgSlug))
-            throw new BadRequestException("Dataset with this slug already exists");
-
-        var ds = new Dataset
-        {
-            Slug = dataset.Slug,
-            Organization = org,
-            InternalRef = Guid.NewGuid(),
-            CreationDate = DateTime.UtcNow
-        };
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-        var meta = ddb.Meta.GetSafe();
-
-        meta.Name = string.IsNullOrWhiteSpace(dataset.Name) ? dataset.Slug : dataset.Name;
-
-        if (dataset.Visibility.HasValue)
-            meta.Visibility = dataset.Visibility.Value;
-
-        if (!string.IsNullOrWhiteSpace(dataset.Tagline))
-            meta.Tagline = dataset.Tagline;
-
-        org.Datasets.Add(ds);
-
-        await _context.SaveChangesAsync();
-
-        return ds.ToDto(ddb.GetInfo());
-    }
-
-    public async Task Edit(string orgSlug, string dsSlug, DatasetEditDto dataset)
-    {
-        if (dataset == null)
-            throw new BadRequestException("Dataset is null");
-
-        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
-        await _access.EnsureAccessAsync(ds, AccessType.Write);
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-        var meta = ddb.Meta.GetSafe();
-
-        if (dataset.Visibility.HasValue)
-            meta.Visibility = dataset.Visibility.Value;
-
-        if (!string.IsNullOrWhiteSpace(dataset.Name))
-            meta.Name = dataset.Name;
-
-        await _context.SaveChangesAsync();
-
-        // Who may list it (visibility) and how it is listed (name)
-        if (dataset.Visibility.HasValue)
-            await _listings.VisibilityChangedAsync(orgSlug, ds.InternalRef);
-        else if (!string.IsNullOrWhiteSpace(dataset.Name))
-            await _listings.ListingChangedAsync(orgSlug, ds.InternalRef);
-    }
-
-
-    public async Task Delete(string orgSlug, string dsSlug)
-    {
-        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
-        await _access.EnsureAccessAsync(ds, AccessType.Delete);
-
-        // Save references before removing from DB
-        var internalRef = ds.InternalRef;
-
-        // Remove from database immediately (fast operation)
-        _context.Datasets.Remove(ds);
-        await _context.SaveChangesAsync();
-
-        // It leaves every listing
-        await _listings.ListingChangedAsync(orgSlug, internalRef);
-
-        // Schedule background cleanup job for: cancelling active jobs, removing JobIndex entries, deleting filesystem
-        string? jobId = null;
-        try
-        {
-            jobId = _backgroundJob.Enqueue<DatasetCleanupService>(
-                service => service.CleanupDeletedDatasetAsync(orgSlug, dsSlug, internalRef, null));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Failed to enqueue cleanup job for dataset {OrgSlug}/{DsSlug} with internalRef {InternalRef}",
-                orgSlug, dsSlug, internalRef);
-        }
-
-        if (string.IsNullOrEmpty(jobId))
-        {
-            _logger.LogError(
-                "Cleanup job could not be scheduled for dataset {OrgSlug}/{DsSlug} with internalRef {InternalRef}. " +
-                "Orphaned folder cleanup will handle this later.",
-                orgSlug, dsSlug, internalRef);
-        }
-        else
-        {
-            _logger.LogInformation(
-                "Dataset {OrgSlug}/{DsSlug} removed from DB, cleanup job scheduled with JobId {JobId}",
-                orgSlug, dsSlug, jobId);
-        }
-    }
-
-    public async Task Rename(string orgSlug, string dsSlug, string newSlug)
-    {
-        if (string.IsNullOrWhiteSpace(newSlug))
-            throw new BadRequestException("New slug is empty");
-
-        if (dsSlug == MagicStrings.DefaultDatasetSlug || newSlug == MagicStrings.DefaultDatasetSlug)
-            throw new BadRequestException("Cannot move default dataset");
-
-        if (!newSlug.IsValidSlug())
-            throw new BadRequestException($"Invalid slug '{newSlug}'");
-
-        if (dsSlug == newSlug) return; // Nothing to do
-
-        // Access first: a caller who may not rename learns nothing about the other slugs
-        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true);
-        await _access.EnsureAccessAsync(ds, AccessType.Write);
-
-        if (await _datasets.GetDatasetAsync(orgSlug, newSlug, safe: true) != null)
-            throw new BadRequestException($"Dataset '{newSlug}' already exists");
-
-        ds.Slug = newSlug;
-
-        await _context.SaveChangesAsync();
-
-        // The listings link to the old slug
-        await _listings.ListingChangedAsync(orgSlug, ds.InternalRef);
-    }
-
-    [Obsolete("Use meta")]
-    public async Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug,
-        AttributesDto attributes)
-    {
-        if (attributes == null)
-            throw new BadRequestException("Attributes are null");
-
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write);
-        var ds = access.Dataset;
-
-        var ddb = access.Ddb;
-        var meta = ddb.Meta.GetSafe();
-        meta.IsPublic = attributes.IsPublic;
-
-        // Changing IsPublic may indirectly modify visibility
-        await _listings.VisibilityChangedAsync(orgSlug, ds.InternalRef);
-
-        return new Dictionary<string, object> { { "public", attributes.IsPublic } };
-    }
-
-    public async Task<StampDto> GetStamp(string orgSlug, string dsSlug)
-    {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read);
-
-        return access.Ddb.GetStamp().ToDto();
-    }
-
-    public async Task<IEnumerable<MoveDatasetResultDto>> MoveToOrganization(
-        string sourceOrgSlug,
-        string[] datasetSlugs,
-        string destOrgSlug,
-        ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict)
-    {
-        if (string.IsNullOrWhiteSpace(sourceOrgSlug))
-            throw new BadRequestException("Source organization slug is required");
-
-        if (string.IsNullOrWhiteSpace(destOrgSlug))
-            throw new BadRequestException("Destination organization slug is required");
-
-        if (datasetSlugs == null || datasetSlugs.Length == 0)
-            throw new BadRequestException("At least one dataset slug is required");
-
-        if (sourceOrgSlug == destOrgSlug)
-            throw new BadRequestException("Source and destination organizations cannot be the same");
-
-        var sourceOrg = await _datasets.GetOrganizationAsync(sourceOrgSlug, withTracking: true);
-        var destOrg = await _datasets.GetOrganizationAsync(destOrgSlug, withTracking: true);
-
-        var results = new List<MoveDatasetResultDto>();
-
-        // Get existing datasets in destination for conflict detection
-        var existingDestDatasets = await _context.Datasets
-            .AsNoTracking()
-            .Where(d => d.Organization.Slug == destOrgSlug)
-            .Select(d => d.Slug)
-            .ToListAsync();
-
-        foreach (var dsSlug in datasetSlugs)
-        {
-            var result = new MoveDatasetResultDto
-            {
-                OriginalSlug = dsSlug,
-                NewSlug = dsSlug
-            };
-
-            try
-            {
-                var dataset = await _datasets.GetDatasetAsync(sourceOrgSlug, dsSlug, safe: true, withTracking: true);
-
-                if (dataset == null)
-                {
-                    result.Success = false;
-                    result.Error = $"Dataset '{dsSlug}' not found in organization '{sourceOrgSlug}'";
-                    results.Add(result);
-                    continue;
-                }
-
-                // Check for slug conflict in destination
-                var targetSlug = dsSlug;
-                var conflictExists = existingDestDatasets.Contains(dsSlug, StringComparer.OrdinalIgnoreCase);
-
-                if (conflictExists)
-                {
-                    switch (conflictResolution)
-                    {
-                        case ConflictResolutionStrategy.HaltOnConflict:
-                            result.Success = false;
-                            result.Error = $"Dataset '{dsSlug}' already exists in destination organization '{destOrgSlug}'";
-                            results.Add(result);
-                            continue;
-
-                        case ConflictResolutionStrategy.Overwrite:
-                            // Delete existing dataset in destination
-                            _logger.LogInformation("Overwriting existing dataset '{DsSlug}' in organization '{DestOrgSlug}'", dsSlug, destOrgSlug);
-                            await Delete(destOrgSlug, dsSlug);
-                            existingDestDatasets.Remove(dsSlug);
-                            break;
-
-                        case ConflictResolutionStrategy.Rename:
-                            // Generate a unique name
-                            var counter = 1;
-                            targetSlug = $"{dsSlug}_{counter}";
-                            while (existingDestDatasets.Contains(targetSlug, StringComparer.OrdinalIgnoreCase))
-                            {
-                                counter++;
-                                targetSlug = $"{dsSlug}_{counter}";
-                            }
-                            result.NewSlug = targetSlug;
-                            _logger.LogInformation("Renaming dataset '{DsSlug}' to '{TargetSlug}' to avoid conflict", dsSlug, targetSlug);
-                            break;
-                        default:
-                            throw new ArgumentOutOfRangeException(nameof(conflictResolution), conflictResolution, null);
-                    }
-                }
-
-                // Move the physical files using copy + delete strategy
-                var sourcePath = Path.Combine(_settings.DatasetsPath, sourceOrgSlug, dataset.InternalRef.ToString());
-                var destPath = Path.Combine(_settings.DatasetsPath, destOrgSlug, dataset.InternalRef.ToString());
-
-                if (_fileSystem.FolderExists(sourcePath))
-                {
-                    // The copy then the delete of the source need its index files closed
-                    _ddbManager.ReleaseConnections(sourcePath);
-                    _logger.LogInformation("Copying dataset files from '{SourcePath}' to '{DestPath}'", sourcePath, destPath);
-
-                    // Copy all files and subdirectories
-                    _fileSystem.FolderCopy(sourcePath, destPath);
-                }
-
-                // Update the database record
-                dataset.Organization = destOrg;
-                dataset.Slug = targetSlug;
-
-                await _context.SaveChangesAsync();
-
-                // Add to existing list to avoid future conflicts in this batch
-                existingDestDatasets.Add(targetSlug);
-
-                // Delete source files after successful database update
-                if (_fileSystem.FolderExists(sourcePath))
-                {
-                    _logger.LogInformation("Deleting source files at '{SourcePath}'", sourcePath);
-                    _fileSystem.FolderDelete(sourcePath);
-                }
-
-                // Invalidate caches
-                await _listings.ListingChangedAsync(sourceOrgSlug, dataset.InternalRef);
-
-                result.Success = true;
-                _logger.LogInformation("Successfully moved dataset '{DsSlug}' from '{SourceOrgSlug}' to '{DestOrgSlug}'",
-                    dsSlug, sourceOrgSlug, destOrgSlug);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error moving dataset '{DsSlug}' from '{SourceOrgSlug}' to '{DestOrgSlug}'",
-                    dsSlug, sourceOrgSlug, destOrgSlug);
-                result.Success = false;
-                result.Error = ex.Message;
-            }
-
-            results.Add(result);
-        }
-
-        return results;
-    }
+    public Task<IEnumerable<MoveDatasetResultDto>> MoveToOrganization(string sourceOrgSlug, string[] datasetSlugs,
+        string destOrgSlug, ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict) =>
+        _mover.MoveToOrganization(sourceOrgSlug, datasetSlugs, destOrgSlug, conflictResolution);
 }

@@ -156,13 +156,14 @@ RQ12_SET=(Registry.Web/Services/Managers/SystemManager.cs Registry.Web/Controlle
     Registry.Web/Services/Managers/DatasetsManager.cs Registry.Web/Services/Managers/PushManager.cs
     Registry.Web/Services/Managers/ShareManager.cs Registry.Web/Services/Managers/LocalLoginManager.cs
     Registry.Web/Controllers/ProcessingNodesController.cs Registry.Web/Controllers/FeaturesController.cs
-    Registry.Web/Controllers/RemoteImportController.cs
+    Registry.Web/Controllers/RemoteImportController.cs Registry.Web/Controllers/BuildMaintenanceController.cs
     ':(glob)Registry.Web/Services/RemoteImport/**/*.cs' ':(glob)Registry.Web/Services/Maintenance/**/*.cs'
     ':(glob)Registry.Web/Services/Configuration/**/*.cs' ':(glob)Registry.Web/Services/Stac/**/*.cs'
     ':(glob)Registry.Web/Services/Users/**/*.cs' ':(glob)Registry.Web/Services/Datasets/**/*.cs'
     ':(glob)Registry.Web/Services/Shares/**/*.cs' ':(glob)Registry.Web/Services/Push/**/*.cs'
     ':(glob)Registry.Web/Services/Builds/**/*.cs' ':(glob)Registry.Web/Services/Caching/**/*.cs'
-    ':(glob)Registry.Web/Services/Urls/**/*.cs')
+    ':(glob)Registry.Web/Services/Urls/**/*.cs' ':(glob)Registry.Web/Services/Features/**/*.cs'
+    ':(glob)Registry.Web/Services/Processing/**/*.cs')
 rq12() { printf '%s\0' "${RQ12_SET[@]}"; }
 
 # "<class> <parameters>" for every public constructor of the classes declared in the given files (NUL-separated on stdin).

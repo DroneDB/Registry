@@ -53,7 +53,6 @@ class ShareManagerTest : TestBase
     private ILogger<ShareManager> _shareManagerLogger;
     private ILogger<ObjectsManager> _objectManagerLogger;
     private ILogger<DdbManager> _ddbFactoryLogger;
-    private ILogger<DatasetsManager> _datasetsManagerLogger;
     private ILogger<OrganizationsManager> _organizationsManagerLogger;
     private ILogger<BatchTokenGenerator> _batchTokenGeneratorLogger;
     private ILogger<NameGenerator> _nameGeneratorLogger;
@@ -108,7 +107,6 @@ class ShareManagerTest : TestBase
         _objectManagerLogger = CreateTestLogger<ObjectsManager>();
         _ddbFactoryLogger = CreateTestLogger<DdbManager>();
         _organizationsManagerLogger = CreateTestLogger<OrganizationsManager>();
-        _datasetsManagerLogger = CreateTestLogger<DatasetsManager>();
         _batchTokenGeneratorLogger = CreateTestLogger<BatchTokenGenerator>();
         _nameGeneratorLogger = CreateTestLogger<NameGenerator>();
 
@@ -203,7 +201,7 @@ class ShareManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils, ddbFactory);
 
-        var datasetManager = DatasetsManagerFor(context, webUtils, objectManager);
+        var datasetManager = DatasetsManagerFor(context, webUtils);
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
             new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets,
             datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), _organizationsManagerLogger,
@@ -309,7 +307,7 @@ class ShareManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils, ddbFactory);
 
-        var datasetManager = DatasetsManagerFor(context, webUtils, objectManager);
+        var datasetManager = DatasetsManagerFor(context, webUtils);
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
             new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets,
             datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), _organizationsManagerLogger,
@@ -425,7 +423,7 @@ class ShareManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils, ddbFactory);
 
-        var datasetManager = DatasetsManagerFor(context, webUtils, objectManager);
+        var datasetManager = DatasetsManagerFor(context, webUtils);
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
             new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets,
             datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), _organizationsManagerLogger,
@@ -566,7 +564,7 @@ class ShareManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils, ddbFactory);
 
-        var datasetManager = DatasetsManagerFor(context, webUtils, objectManager);
+        var datasetManager = DatasetsManagerFor(context, webUtils);
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
             new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets,
             datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), _organizationsManagerLogger,
@@ -712,7 +710,7 @@ class ShareManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils, ddbFactory);
 
-        var datasetManager = DatasetsManagerFor(context, webUtils, objectManager);
+        var datasetManager = DatasetsManagerFor(context, webUtils);
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
             new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets,
             datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), _organizationsManagerLogger,
@@ -843,7 +841,7 @@ class ShareManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils, ddbFactory);
 
-        var datasetManager = DatasetsManagerFor(context, webUtils, objectManager);
+        var datasetManager = DatasetsManagerFor(context, webUtils);
         var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
             new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets,
             datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), _organizationsManagerLogger,
@@ -986,11 +984,10 @@ class ShareManagerTest : TestBase
 
     #region SUT factories
 
-    private DatasetsManager DatasetsManagerFor(RegistryContext context, WebPorts utils, IObjectsManager objectManager) =>
-        new(context, utils.Datasets, utils.Urls, _datasetsManagerLogger, objectManager, _ddbFactoryMock.Object, _authManagerMock.Object,
-            new DatasetAccessResolver(utils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
-            _listingsMock.Object, _fileSystem, _backgroundJobsProcessor, _settingsOptions,
-            TestCaches.Summaries(_ddbFactoryMock.Object));
+    private DatasetsManager DatasetsManagerFor(RegistryContext context, WebPorts utils) =>
+        TestDatasets.Manager(context, utils, _ddbFactoryMock.WithFolders(() => _settingsOptions.Value.DatasetsPath).Object,
+            _authManagerMock.Object, _listingsMock.Object, _fileSystem, _backgroundJobsProcessor,
+            TestSettings.Options<ThumbnailOptions>(_settingsOptions));
 
     private ObjectsManager ObjectsManagerFor(RegistryContext context, WebPorts utils, IDdbManager ddbManager) =>
         new ObjectServicesBuilder(context)
