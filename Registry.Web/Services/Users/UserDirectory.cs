@@ -101,7 +101,7 @@ public sealed class UserDirectory : IUserDirectory
             string grantedByUserName = null;
             if (membership?.GrantedBy != null)
             {
-                var grantedByUser = await _applicationDbContext.Users.FindAsync(membership.GrantedBy);
+                var grantedByUser = await _applicationDbContext.Users.FindAsync([membership.GrantedBy], ct);
                 grantedByUserName = grantedByUser?.UserName;
             }
 

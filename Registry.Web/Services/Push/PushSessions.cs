@@ -66,10 +66,10 @@ public sealed class PushSessions : IPushSessions
             {
                 Name = dsSlug,
                 Slug = dsSlug
-            });
+            }, ct);
 
             _logger.LogInformation("New dataset {OrgSlug}/{DsSlug} created", orgSlug, dsSlug);
-            ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug);
+            ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, ct: CancellationToken.None);
 
         }
         else

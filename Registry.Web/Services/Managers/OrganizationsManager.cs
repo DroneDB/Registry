@@ -325,8 +325,8 @@ public class OrganizationsManager : IOrganizationsManager
 
         // Honoured until the organization is written (RQ-13)
         ct.ThrowIfCancellationRequested();
-        await _context.Organizations.AddAsync(org);
-        await _context.SaveChangesAsync();
+        await _context.Organizations.AddAsync(org, CancellationToken.None);
+        await _context.SaveChangesAsync(CancellationToken.None);
 
         return await ToDtoWithOwnerNameAsync(org);
     }
@@ -352,7 +352,7 @@ public class OrganizationsManager : IOrganizationsManager
         org.Name = organization.Name;
         org.Description = organization.Description;
 
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(CancellationToken.None);
     }
 
     public async Task Delete(string orgSlug, CancellationToken ct = default)
@@ -364,11 +364,11 @@ public class OrganizationsManager : IOrganizationsManager
         foreach (var ds in org.Datasets.ToArray())
         {
             // TODO: To check and re-check and re-check and re-check
-            await _datasetManager.Delete(org.Slug, ds.Slug);
+            await _datasetManager.Delete(org.Slug, ds.Slug, CancellationToken.None);
         }
 
         _context.Organizations.Remove(org);
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(CancellationToken.None);
     }
 
     public async Task<MergeOrganizationResultDto> Merge(
@@ -415,7 +415,7 @@ public class OrganizationsManager : IOrganizationsManager
                 sourceOrgSlug,
                 datasetSlugs,
                 destOrgSlug,
-                conflictResolution);
+                conflictResolution, CancellationToken.None);
 
             result.DatasetResults = [.. moveResults];
             result.DatasetsMovedCount = result.DatasetResults.Count(r => r.Success);
@@ -430,7 +430,7 @@ public class OrganizationsManager : IOrganizationsManager
 
         // The members of the source join the destination with their permissions (the source's members
         // were never loaded here, so a merge used to drop every one of them)
-        await _memberships.CopyMembersAsync(sourceOrgSlug, destOrgSlug, await _authManager.GetCurrentUser());
+        await _memberships.CopyMembersAsync(sourceOrgSlug, destOrgSlug, await _authManager.GetCurrentUser(), CancellationToken.None);
 
         // Delete source organization if requested and all datasets were moved successfully
         if (deleteSourceOrganization)
@@ -440,13 +440,13 @@ public class OrganizationsManager : IOrganizationsManager
                 _logger.LogInformation("Deleting source organization '{SourceOrgSlug}' after successful merge", sourceOrgSlug);
 
                 // Reload the organization to ensure we have the latest state
-                sourceOrg = await _datasets.GetOrganizationAsync(sourceOrgSlug, withTracking: true);
+                sourceOrg = await _datasets.GetOrganizationAsync(sourceOrgSlug, withTracking: true, ct: CancellationToken.None);
 
                 // Clear remaining users
                 sourceOrg.Users?.Clear();
 
                 _context.Organizations.Remove(sourceOrg);
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync(CancellationToken.None);
 
                 result.SourceOrganizationDeleted = true;
             }
@@ -491,11 +491,11 @@ public class OrganizationsManager : IOrganizationsManager
 
         foreach (var orgUser in org.Users ?? Enumerable.Empty<OrganizationUser>())
         {
-            var user = await _appContext.Users.FindAsync(orgUser.UserId);
+            var user = await _appContext.Users.FindAsync([orgUser.UserId], ct);
             if (user == null) continue;
 
             var grantedByUser = !string.IsNullOrEmpty(orgUser.GrantedBy)
-                ? await _appContext.Users.FindAsync(orgUser.GrantedBy)
+                ? await _appContext.Users.FindAsync([orgUser.GrantedBy], ct)
                 : null;
 
             members.Add(new OrganizationMemberDto
@@ -533,20 +533,20 @@ public class OrganizationsManager : IOrganizationsManager
         CancellationToken ct = default)
     {
         var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug, ct);
-        await _memberships.AddAsync(org, userName, permissions, currentUser);
+        await _memberships.AddAsync(org, userName, permissions, currentUser, CancellationToken.None);
     }
 
     public async Task UpdateMemberPermission(string orgSlug, string userName, OrganizationPermissions permission,
         CancellationToken ct = default)
     {
         var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug, ct);
-        await _memberships.UpdateAsync(org, userName, permission, currentUser);
+        await _memberships.UpdateAsync(org, userName, permission, currentUser, CancellationToken.None);
     }
 
     public async Task RemoveMember(string orgSlug, string userName, CancellationToken ct = default)
     {
         var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug, ct);
-        await _memberships.RemoveAsync(org, userName, currentUser);
+        await _memberships.RemoveAsync(org, userName, currentUser, CancellationToken.None);
     }
 
     private async Task<bool> CanManageMembers(Organization org, User user)

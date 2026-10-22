@@ -66,7 +66,7 @@ public sealed class PushUploads : IPushUploads
         {
             var ddb = access.Ddb;
             var (tempPath, bytes, hash) =
-                await DatasetUploads.StreamToTempAsync(_scratch, _fileSystem, ddb.DatasetFolderPath, source);
+                await DatasetUploads.StreamToTempAsync(_scratch, _fileSystem, ddb.DatasetFolderPath, source, ct);
 
             try
             {
@@ -144,6 +144,6 @@ public sealed class PushUploads : IPushUploads
         JsonConvert.DeserializeObject<List<MetaDump>>(meta);
 
         // Save file
-        await _fileSystem.WriteAllTextAsync(metaFile, meta);
+        await _fileSystem.WriteAllTextAsync(metaFile, meta, CancellationToken.None);
     }
 }

@@ -32,12 +32,12 @@ public static class DdbCancellation
         if (!previous.CanBeCanceled)
         {
             CurrentToken.Value = token;
-            return new Scope(previous, null);
+            return new Scope(null, previous);
         }
 
         var linked = CancellationTokenSource.CreateLinkedTokenSource(previous, token);
         CurrentToken.Value = linked.Token;
-        return new Scope(previous, linked);
+        return new Scope(linked, previous);
     }
 
     /// <summary>Restores the previous cancellation when disposed.</summary>
@@ -47,7 +47,7 @@ public static class DdbCancellation
         private readonly CancellationTokenSource? _linked;
         private readonly bool _entered;
 
-        internal Scope(CancellationToken previous, CancellationTokenSource? linked)
+        internal Scope(CancellationTokenSource? linked, CancellationToken previous)
         {
             _previous = previous;
             _linked = linked;

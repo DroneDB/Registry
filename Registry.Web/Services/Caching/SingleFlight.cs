@@ -27,11 +27,11 @@ public sealed class SingleFlight<T>
     private readonly Lock _lock = new();
 
     /// <summary>One computation in progress.</summary>
-    public sealed class Flight
+    public sealed class Flight : IDisposable
     {
         private readonly TaskCompletionSource<T> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        // No timer and no wait handle: nothing to release, so it is never disposed (a late cancel stays safe)
+        // Disposed by the owner when the computation has ended and no caller is canceling it (see End, Leave)
         private readonly CancellationTokenSource _abandoned = new();
         private volatile bool _invalidated;
 
@@ -43,14 +43,19 @@ public sealed class SingleFlight<T>
         /// <summary>Canceled when every caller waiting for the flight has cancelled: the computation's token.</summary>
         public CancellationToken Token => _abandoned.Token;
 
-        // Callers waiting that have not cancelled, and whether the computation ended (both under the owner's lock)
+        // Callers waiting that have not cancelled, whether the computation ended, and whether the last caller is
+        // canceling it right now (all under the owner's lock)
         internal int Waiters;
         internal bool Ended;
+        internal bool Abandoning;
 
         internal void Invalidate() => _invalidated = true;
         internal void Abandon() => _abandoned.Cancel();
         internal void Complete(T value) => _completion.SetResult(value);
         internal void Fail(Exception error) => _completion.SetException(error);
+
+        /// <summary>Releases the token source; the owner calls it once nothing can cancel the flight any more.</summary>
+        public void Dispose() => _abandoned.Dispose();
     }
 
     /// <summary>
@@ -84,7 +89,7 @@ public sealed class SingleFlight<T>
         // Started on the pool, not on this thread: a computation that blocks (a native render behind an async
         // signature) never holds the leader, which waits like the others and leaves when its token is canceled
         if (lead)
-            _ = Task.Run(() => LeadAsync(key, flight, compute));
+            _ = Task.Run(() => LeadAsync(key, flight, compute), CancellationToken.None);
 
         try
         {
@@ -130,7 +135,8 @@ public sealed class SingleFlight<T>
     }
 
     // A caller cancelled: the last one to leave a running flight abandons it, and it leaves the table in the
-    // same lock, so no caller can join it after that
+    // same lock, so no caller can join it after that. The cancel runs outside the lock (it runs the computation's
+    // callbacks); whichever of this and End comes last disposes the token source
     private void Leave(string key, Flight flight)
     {
         lock (_lock)
@@ -139,9 +145,17 @@ public sealed class SingleFlight<T>
                 return;
 
             Detach(key, flight);
+            flight.Abandoning = true;
         }
 
         flight.Abandon();
+
+        lock (_lock)
+        {
+            flight.Abandoning = false;
+            if (flight.Ended)
+                flight.Dispose();
+        }
     }
 
     // The flight leaves the table before it completes: a caller that arrives after the value was stored
@@ -170,6 +184,8 @@ public sealed class SingleFlight<T>
         {
             flight.Ended = true;
             Detach(key, flight);
+            if (!flight.Abandoning)
+                flight.Dispose();
         }
     }
 

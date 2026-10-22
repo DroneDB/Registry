@@ -78,7 +78,7 @@ public class RescanManager : IRescanManager
 
         var origin = new BuildOrigin(await _requester.UserIdAsync() ?? MagicStrings.AutoBuildServiceUserId);
         var target = new BuildTarget(ddb, new DatasetKey(orgSlug, dataset.InternalRef), orgSlug, dsSlug);
-        await _rebuild.RunAsync(orgSlug, dsSlug, ddb, filter, results, new QueuedBuilds(_builds, target, origin));
+        await _rebuild.RunAsync(orgSlug, dsSlug, ddb, filter, results, new QueuedBuilds(_builds, target, origin), ct: CancellationToken.None);
 
         var entries = results.Select(r => new RescanEntryResultDto
         {

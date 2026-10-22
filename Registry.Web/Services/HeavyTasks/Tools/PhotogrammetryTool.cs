@@ -286,7 +286,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
                     Name = newDatasetName.Replace("-", " "),
                     Visibility = visibility,
                     Tagline = "Photogrammetry results"
-                });
+                }, ct);
 
                 targetDsSlug = newDs.Slug;
                 progress.Report(new HeavyToolProgress(0.96, "creating-dataset",

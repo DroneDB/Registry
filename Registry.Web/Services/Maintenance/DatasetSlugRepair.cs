@@ -139,7 +139,7 @@ public sealed class DatasetSlugRepair : IDatasetSlugRepair
 
             // The listings show the slugs (an organization rename changes the slug path of all its datasets)
             foreach (var ds in org.Datasets.Where(d => renameOrg || dsRenames.ContainsKey(d.Slug)))
-                await _listings.ListingChangedAsync(org.Slug, ds.InternalRef);
+                await _listings.ListingChangedAsync(org.Slug, ds.InternalRef, CancellationToken.None);
         }
 
         return result;

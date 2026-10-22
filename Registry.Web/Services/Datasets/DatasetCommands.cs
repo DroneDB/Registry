@@ -96,7 +96,7 @@ public sealed class DatasetCommands : IDatasetCommands
 
         org.Datasets.Add(ds);
 
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(CancellationToken.None);
 
         return ds.ToDto(ddb.GetInfo());
     }
@@ -118,13 +118,13 @@ public sealed class DatasetCommands : IDatasetCommands
         if (!string.IsNullOrWhiteSpace(dataset.Name))
             meta.Name = dataset.Name;
 
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(CancellationToken.None);
 
         // Who may list it (visibility) and how it is listed (name)
         if (dataset.Visibility.HasValue)
-            await _listings.VisibilityChangedAsync(orgSlug, ds.InternalRef);
+            await _listings.VisibilityChangedAsync(orgSlug, ds.InternalRef, CancellationToken.None);
         else if (!string.IsNullOrWhiteSpace(dataset.Name))
-            await _listings.ListingChangedAsync(orgSlug, ds.InternalRef);
+            await _listings.ListingChangedAsync(orgSlug, ds.InternalRef, CancellationToken.None);
     }
 
     public async Task Delete(string orgSlug, string dsSlug, CancellationToken ct = default)
@@ -137,10 +137,10 @@ public sealed class DatasetCommands : IDatasetCommands
 
         // Remove from database immediately (fast operation)
         _context.Datasets.Remove(ds);
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(CancellationToken.None);
 
         // It leaves every listing
-        await _listings.ListingChangedAsync(orgSlug, internalRef);
+        await _listings.ListingChangedAsync(orgSlug, internalRef, CancellationToken.None);
 
         // Schedule background cleanup job for: cancelling active jobs, removing JobIndex entries, deleting filesystem
         string jobId = null;
@@ -193,10 +193,10 @@ public sealed class DatasetCommands : IDatasetCommands
 
         ds.Slug = newSlug;
 
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(CancellationToken.None);
 
         // The listings link to the old slug
-        await _listings.ListingChangedAsync(orgSlug, ds.InternalRef);
+        await _listings.ListingChangedAsync(orgSlug, ds.InternalRef, CancellationToken.None);
     }
 
     [Obsolete("Use meta")]
@@ -214,7 +214,7 @@ public sealed class DatasetCommands : IDatasetCommands
         meta.IsPublic = attributes.IsPublic;
 
         // Changing IsPublic may indirectly modify visibility
-        await _listings.VisibilityChangedAsync(orgSlug, ds.InternalRef);
+        await _listings.VisibilityChangedAsync(orgSlug, ds.InternalRef, CancellationToken.None);
 
         return new Dictionary<string, object> { { "public", attributes.IsPublic } };
     }

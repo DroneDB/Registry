@@ -148,7 +148,7 @@ public class ImportManager : IImportManager
             Slug = slug,
             Name = name,
             Visibility = request.Visibility ?? Visibility.Private
-        });
+        }, ct);
 
         try
         {
@@ -186,7 +186,7 @@ public class ImportManager : IImportManager
                 orgSlug, ds.Slug);
             try
             {
-                await _datasetsManager.Delete(orgSlug, ds.Slug);
+                await _datasetsManager.Delete(orgSlug, ds.Slug, CancellationToken.None);
             }
             catch (Exception delEx)
             {

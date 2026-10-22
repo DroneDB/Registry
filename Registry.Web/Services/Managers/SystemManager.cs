@@ -69,7 +69,7 @@ public class SystemManager : ISystemManager
                 if (ddb.IsEmpty())
                 {
                     _context.Remove(ds);
-                    await _context.SaveChangesAsync();
+                    await _context.SaveChangesAsync(CancellationToken.None);
 
                     deleted.Add(ds.Slug);
                     _logger.LogInformation("Deleted");
@@ -122,7 +122,7 @@ public class SystemManager : ISystemManager
             };
 
             // Its cached visibility, and the listings that depend on it
-            await _listings.VisibilityChangedAsync(pair.Org, pair.InternalRef);
+            await _listings.VisibilityChangedAsync(pair.Org, pair.InternalRef, CancellationToken.None);
 
             res.Add(new MigrateVisibilityEntryDTO
             {
@@ -171,7 +171,7 @@ public class SystemManager : ISystemManager
                     foreach (var entry in entries)
                     {
                         _logger.LogInformation("Deleting '{EntryPath}' of '{OrgSlug}/{DsSlug}'", entry.Path, org.Slug, ds.Slug);
-                        await _entries.DeleteAsync(org.Slug, ds.Slug, [entry.Path]);
+                        await _entries.DeleteAsync(org.Slug, ds.Slug, [entry.Path], CancellationToken.None);
                     }
 
                     var ddb = _ddbManager.Get(org.Slug, ds.InternalRef);
@@ -184,7 +184,7 @@ public class SystemManager : ISystemManager
 
                 _context.Batches.Remove(batch);
 
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync(CancellationToken.None);
 
                 removed.Add(new RemovedBatchDto
                 {

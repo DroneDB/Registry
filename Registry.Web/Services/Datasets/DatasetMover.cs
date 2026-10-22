@@ -94,7 +94,7 @@ public sealed class DatasetMover : IDatasetMover
 
             try
             {
-                var dataset = await _datasets.GetDatasetAsync(sourceOrgSlug, dsSlug, safe: true, withTracking: true);
+                var dataset = await _datasets.GetDatasetAsync(sourceOrgSlug, dsSlug, safe: true, withTracking: true, CancellationToken.None);
 
                 if (dataset == null)
                 {
@@ -121,7 +121,7 @@ public sealed class DatasetMover : IDatasetMover
                         case ConflictResolutionStrategy.Overwrite:
                             // Delete existing dataset in destination
                             _logger.LogInformation("Overwriting existing dataset '{DsSlug}' in organization '{DestOrgSlug}'", dsSlug, destOrgSlug);
-                            await _commands.Delete(destOrgSlug, dsSlug);
+                            await _commands.Delete(destOrgSlug, dsSlug, CancellationToken.None);
                             existingDestDatasets.Remove(dsSlug);
                             break;
 
@@ -160,7 +160,7 @@ public sealed class DatasetMover : IDatasetMover
                 dataset.Organization = destOrg;
                 dataset.Slug = targetSlug;
 
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync(CancellationToken.None);
 
                 // Add to existing list to avoid future conflicts in this batch
                 existingDestDatasets.Add(targetSlug);
@@ -173,7 +173,7 @@ public sealed class DatasetMover : IDatasetMover
                 }
 
                 // Invalidate caches
-                await _listings.ListingChangedAsync(sourceOrgSlug, dataset.InternalRef);
+                await _listings.ListingChangedAsync(sourceOrgSlug, dataset.InternalRef, CancellationToken.None);
 
                 result.Success = true;
                 _logger.LogInformation("Successfully moved dataset '{DsSlug}' from '{SourceOrgSlug}' to '{DestOrgSlug}'",

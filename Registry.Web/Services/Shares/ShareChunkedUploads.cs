@@ -91,7 +91,7 @@ public sealed class ShareChunkedUploads : IShareChunkedUploads
 
         _chunks.Open(root, chunkInfo.FileId, new ChunkManifest(chunkInfo.Path, chunkInfo.TotalFileSize,
             chunkInfo.TotalChunks, chunkSize, null));
-        var status = await _chunks.WriteAsync(root, chunkInfo.FileId, chunkInfo.ChunkIndex, chunkStream);
+        var status = await _chunks.WriteAsync(root, chunkInfo.FileId, chunkInfo.ChunkIndex, chunkStream, ct);
 
         return new ChunkUploadResultDto
         {

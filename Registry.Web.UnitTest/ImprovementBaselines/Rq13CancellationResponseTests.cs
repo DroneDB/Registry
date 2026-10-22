@@ -116,7 +116,7 @@ public sealed class Rq13CancellationResponseTests
 
         var result = context.Result.ShouldBeOfType<ContentResult>();
         result.StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
-        result.Content.ShouldContain("ServiceUnavailable");
+        result.Content!.ShouldContain("ServiceUnavailable");
         http.Response.Headers.RetryAfter.ToString().ShouldBe("5");
     }
 

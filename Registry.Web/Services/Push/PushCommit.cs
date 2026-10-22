@@ -99,7 +99,7 @@ public sealed class PushCommit : IPushCommit
         string metaDump = null;
         if (_fileSystem.Exists(metaFile))
         {
-            metaDump = await _fileSystem.ReadAllTextAsync(metaFile);
+            metaDump = await _fileSystem.ReadAllTextAsync(metaFile, ct);
         }
 
         // Applies delta
@@ -117,7 +117,7 @@ public sealed class PushCommit : IPushCommit
 
         // Build the pushed files libddb reports buildable, then what their arrival unblocked
         var dataset = BuildTarget.Of(access, orgSlug, dsSlug);
-        await _builds.QueueBuildableAsync(dataset, [.. delta.Adds.Where(item => item.Hash.Length > 0).Select(item => item.Path)]);
-        await _builds.QueuePendingAsync(dataset);
+        await _builds.QueueBuildableAsync(dataset, [.. delta.Adds.Where(item => item.Hash.Length > 0).Select(item => item.Path)], ct: CancellationToken.None);
+        await _builds.QueuePendingAsync(dataset, ct: CancellationToken.None);
     }
 }
