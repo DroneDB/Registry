@@ -5,7 +5,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using Registry.Ports;
@@ -15,6 +14,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Caching;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -30,17 +30,15 @@ public class StacManager : IStacManager
     private readonly RegistryContext _context;
     private readonly IUtils _utils;
     private readonly IDdbManager _ddbManager;
-    private readonly IDistributedCache _cache;
+    private readonly IRecordCache _records;
     private readonly ICacheManager _cacheManager;
     private readonly ILogger<StacManager> _logger;
-
-    private const string CacheKey = "stac-catalog";
 
     // These could end up in the config
     private const string CatalogTitle = "DroneDB public datasets catalog";
     private const string CatalogId = "DroneDB Catalog";
     private const string StacVersion = "1.1.0";
-    private readonly TimeSpan _expiration = TimeSpan.FromMinutes(5);
+    private static readonly RecordCacheOptions ListingCache = RecordCacheOptions.For(TimeSpan.FromMinutes(5));
 
     // STAC API 1.0.0 conformance classes implemented by this server
     private static readonly string[] ConformanceClasses =
@@ -59,7 +57,7 @@ public class StacManager : IStacManager
 
     private const int DefaultCollectionsLimit = 10;
     private const int MaxCollectionsLimit = 100;
-    private static readonly TimeSpan NameExpiration = TimeSpan.FromHours(1);
+    private static readonly RecordCacheOptions NameCache = RecordCacheOptions.For(TimeSpan.FromHours(1));
 
 
     public StacManager(
@@ -68,7 +66,7 @@ public class StacManager : IStacManager
         RegistryContext context,
         IUtils utils,
         IDdbManager ddbManager,
-        IDistributedCache cache,
+        IRecordCache records,
         ILogger<StacManager> logger,
         ICacheManager cacheManager)
     {
@@ -77,7 +75,7 @@ public class StacManager : IStacManager
         _context = context;
         _utils = utils;
         _ddbManager = ddbManager;
-        _cache = cache;
+        _records = records;
         _logger = logger;
         _cacheManager = cacheManager;
     }
@@ -108,32 +106,23 @@ public class StacManager : IStacManager
 
         foreach (var ds in datasets)
         {
-
-            var key = MakeCacheKey(ds);
-
-            var item = await _cache.GetRecordAsync<StacLinkDto>(key);
+            // Public datasets only; a private one is not cached and costs no native call once its visibility is
+            var item = await _records.GetOrCreateRecordAsync(CacheCategories.StacCatalogLink(ds.InternalRef.ToString()),
+                async _ =>
+                {
+                    var visibility = await _cacheManager.GetDatasetVisibilityAsync(ds.Organization.Slug, ds.InternalRef, _ddbManager);
+                    return visibility != Visibility.Public
+                        ? null
+                        : new StacLinkDto
+                        {
+                            Href = _utils.GenerateDatasetStacUrl(ds.Organization.Slug, ds.Slug),
+                            Relationship = "child",
+                            Title = await GetDatasetName(ds)
+                        };
+                }, ListingCache);
 
             if (item != null)
-            {
                 links.Add(item);
-                await _cache.RefreshAsync(key);
-                continue;
-            }
-
-            // From the shared visibility cache: a private dataset costs no native call once cached
-            var visibility = await _cacheManager.GetDatasetVisibilityAsync(ds.Organization.Slug, ds.InternalRef, _ddbManager);
-            if (visibility != Visibility.Public) continue;
-
-            item = new StacLinkDto
-            {
-                Href = _utils.GenerateDatasetStacUrl(ds.Organization.Slug, ds.Slug),
-                Relationship = "child",
-                Title = await GetDatasetName(ds)
-            };
-
-            await _cache.SetRecordAsync(key, item, _expiration);
-
-            links.Add(item);
         }
 
         var catalog = new StacCatalogDto
@@ -153,8 +142,8 @@ public class StacManager : IStacManager
     {
         _logger.LogInformation("In ClearCache('{DsSlug}')", ds.Slug);
 
-        await _cache.RemoveAsync(MakeCacheKey(ds));
-        await _cache.RemoveAsync(MakeNameCacheKey(ds));
+        await _records.RemoveAsync(CacheCategories.StacCatalogLink(ds.InternalRef.ToString()));
+        await _records.RemoveAsync(CacheCategories.StacDatasetName(ds.InternalRef.ToString()));
     }
 
     public async Task<JToken> GetStacChild(string orgSlug, string dsSlug, string path = null)
@@ -178,11 +167,12 @@ public class StacManager : IStacManager
 
     public async Task<StacCatalogDto> GetLandingPage()
     {
-        var cacheKey = $"stac-landing-{await _authManager.SafeGetCurrentUserName()}";
-        var cached = await _cache.GetRecordAsync<StacCatalogDto>(cacheKey);
-        if (cached != null)
-            return cached;
+        var cacheKey = CacheCategories.StacLanding(await _authManager.SafeGetCurrentUserName());
+        return await _records.GetOrCreateRecordAsync(cacheKey, _ => BuildLandingPage(), ListingCache);
+    }
 
+    private async Task<StacCatalogDto> BuildLandingPage()
+    {
         var root = StacRoot();
         var host = _utils.GetLocalHost();
 
@@ -219,7 +209,6 @@ public class StacManager : IStacManager
             Links = links
         };
 
-        await _cache.SetRecordAsync(cacheKey, result, _expiration);
         return result;
     }
 
@@ -234,11 +223,13 @@ public class StacManager : IStacManager
         var lim = Math.Clamp(limit ?? DefaultCollectionsLimit, 1, MaxCollectionsLimit);
         var off = Math.Max(offset ?? 0, 0);
 
-        var cacheKey = $"stac-collections-{await _authManager.SafeGetCurrentUserName()}-{lim}-{off}";
-        var cached = await _cache.GetRecordAsync<StacCollectionsDto>(cacheKey);
-        if (cached != null)
-            return cached;
+        var cacheKey = CacheCategories.StacCollections(await _authManager.SafeGetCurrentUserName(), lim, off);
+        return await _records.GetOrCreateRecordAsync(cacheKey, _ => BuildCollections(limit, offset, lim, off),
+            ListingCache);
+    }
 
+    private async Task<StacCollectionsDto> BuildCollections(int? limit, int? offset, int lim, int off)
+    {
         var datasets = await GetReadableDatasets();
 
         var collections = new List<JToken>();
@@ -286,7 +277,6 @@ public class StacManager : IStacManager
             NumberMatched = datasets.Count,
             NumberReturned = collections.Count
         };
-        await _cache.SetRecordAsync(cacheKey, result, _expiration);
         return result;
     }
 
@@ -576,14 +566,11 @@ public class StacManager : IStacManager
     /// </summary>
     private async Task<string> GetDatasetName(Dataset ds)
     {
-        var key = MakeNameCacheKey(ds);
-        var cached = await _cache.GetRecordAsync<string>(key);
-        if (cached != null)
-            return cached.Length == 0 ? null : cached;
-
-        var name = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef).Meta.GetSafe().Name;
-        await _cache.SetRecordAsync(key, name ?? string.Empty, NameExpiration);
-        return name;
+        // A dataset without a name is cached as "" (null is never cached)
+        var name = await _records.GetOrCreateRecordAsync(CacheCategories.StacDatasetName(ds.InternalRef.ToString()),
+            _ => Task.FromResult(_ddbManager.Get(ds.Organization.Slug, ds.InternalRef).Meta.GetSafe().Name ?? string.Empty),
+            NameCache);
+        return string.IsNullOrEmpty(name) ? null : name;
     }
 
     private static JObject Link(string rel, string href, string type)
@@ -742,15 +729,5 @@ public class StacManager : IStacManager
     }
 
     #endregion
-
-    private static string MakeCacheKey(Dataset ds)
-    {
-        return $"{CacheKey}-{ds.InternalRef}";
-    }
-
-    private static string MakeNameCacheKey(Dataset ds)
-    {
-        return $"stac-name-{ds.InternalRef}";
-    }
 
 }

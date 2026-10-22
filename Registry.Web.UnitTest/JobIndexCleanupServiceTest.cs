@@ -20,6 +20,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Shouldly;
 using Registry.Web.Test.Support;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test;
 
@@ -28,14 +29,14 @@ public class JobIndexCleanupServiceTest : TestBase
 {
     private ILogger<JobIndexCleanupService> _cleanupLogger;
     private ILogger<JobIndexWriter> _writerLogger;
-        private Mock<IDistributedCache> _cache;
+        private Mock<IRecordCache> _cache;
 
         [SetUp]
         public void Setup()
         {
             _cleanupLogger = CreateTestLogger<JobIndexCleanupService>();
             _writerLogger = CreateTestLogger<JobIndexWriter>();
-            _cache = new Mock<IDistributedCache>();
+            _cache = new Mock<IRecordCache>();
         }
 
     #region JobIndexWriter.DeleteTerminalBeforeAsync

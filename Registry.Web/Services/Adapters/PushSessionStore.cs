@@ -44,7 +44,7 @@ public class PushSessionStore : IPushSessionStore
 
         // Valid while the file is the one that was read
         var version = (_fileSystem.GetFileSize(path), _fileSystem.GetLastWriteTime(path).ToUniversalTime());
-        var key = "push-session:" + Path.GetFullPath(path);
+        var key = CacheCategories.PushSession(Path.GetFullPath(path));
         if (_cache != null && _cache.TryGetValue(key, out CachedSession? cached) && cached!.Version == version)
             return cached.Session;
 

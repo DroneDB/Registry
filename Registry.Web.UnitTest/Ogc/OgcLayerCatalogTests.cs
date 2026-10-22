@@ -15,6 +15,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Shouldly;
 using Entry = Registry.Ports.DroneDB.Entry;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test.Ogc;
 
@@ -52,10 +53,10 @@ public class OgcLayerCatalogTests
         _catalog = new OgcLayerCatalog(
             _ddbManager.Object,
             _utils.Object,
-            _cache,
+            TestCaches.Records(_cache),
             _artifacts.Object,
             _wrapper.Object,
-            new OgcCacheKeys(_cache),
+            TestCaches.OgcKeys(_cache),
             NullLogger<OgcLayerCatalog>.Instance);
     }
 
@@ -260,7 +261,7 @@ public class OgcLayerCatalogTests
         await Should.NotThrowAsync(() => CatalogWith(_keys.Object).InvalidateAsync(Org, Ds));
     }
 
-    private OgcLayerCatalog CatalogWith(IOgcCacheKeys keys) => new(_ddbManager.Object, _utils.Object, _cache,
+    private OgcLayerCatalog CatalogWith(IOgcCacheKeys keys) => new(_ddbManager.Object, _utils.Object, TestCaches.Records(_cache),
         _artifacts.Object, _wrapper.Object, keys, NullLogger<OgcLayerCatalog>.Instance);
 
     [Test]

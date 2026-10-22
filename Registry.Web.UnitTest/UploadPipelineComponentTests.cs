@@ -196,8 +196,7 @@ public class UploadPipelineComponentTests
     [Test]
     public async Task OgcCacheKeys_ChangeOnInvalidation_OnEveryProvider()
     {
-        var keys = new OgcCacheKeys(new MemoryDistributedCache(
-            Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions())));
+        var keys = TestCaches.OgcKeys();
 
         var before = await keys.ForAsync("org", "ds", "caps-wms-v2-1.3.0", "f");
         (await keys.ForAsync("org", "ds", "caps-wms-v2-1.3.0", "f")).ShouldBe(before);

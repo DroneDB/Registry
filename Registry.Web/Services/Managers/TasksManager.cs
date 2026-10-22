@@ -19,6 +19,7 @@ using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.Caching;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Managers;
@@ -31,6 +32,9 @@ public sealed class TasksManager : ITasksManager
 {
     private const int MaxTake = 200;
 
+    // The canonical first page lives a minute: JobIndexWriter removes it on every change of the dataset's tasks
+    private static readonly RecordCacheOptions TasksListCacheOptions = RecordCacheOptions.For(TimeSpan.FromSeconds(60));
+
     private readonly IHeavyTaskRunner _runner;
     private readonly IHeavyToolRegistry _registry;
     private readonly IHeavyToolGating _gating;
@@ -41,7 +45,7 @@ public sealed class TasksManager : ITasksManager
     private readonly IUtils _utils;
     private readonly IBackgroundJobsProcessor _processor;
     private readonly IDdbManager _ddbManager;
-    private readonly IDistributedCache _cache;
+    private readonly IRecordCache _cache;
     private readonly ITaskChangeNotifier? _changes;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ProcessingPlatformSettings _settings;
@@ -60,7 +64,7 @@ public sealed class TasksManager : ITasksManager
         IUtils utils,
         IBackgroundJobsProcessor processor,
         IDdbManager ddbManager,
-        IDistributedCache cache,
+        IRecordCache cache,
         IHttpContextAccessor httpContextAccessor,
         IOptions<ProcessingPlatformSettings> platformSettings,
         IScratchFileProvider scratch,
@@ -166,26 +170,14 @@ public sealed class TasksManager : ITasksManager
 
         // The cached payload is always the canonical page (first MaxTake rows) so that a
         // request with a small take cannot poison later requests asking for more rows.
-        var cacheKey = MagicStrings.TasksListCacheKey(orgSlug, dsSlug);
-        var cachedBytes = await _cache.GetAsync(cacheKey, ct);
-
-        TaskSummaryDto[] canonical;
-        if (cachedBytes != null)
-        {
-            canonical = JsonSerializer.Deserialize<TaskSummaryDto[]>(cachedBytes) ?? [];
-        }
-        else
-        {
-            var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state,
-                Skip: 0, Take: MaxTake);
-            var rows = await _query.QueryAsync(filter, ct);
-            canonical = [.. rows.Select(ToSummary)];
-            cachedBytes = JsonSerializer.SerializeToUtf8Bytes(canonical);
-
-            var options = new DistributedCacheEntryOptions
-                { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60) };
-            await _cache.SetAsync(cacheKey, cachedBytes, options, ct);
-        }
+        var cachedBytes = await _cache.GetOrCreateBytesAsync(CacheCategories.TasksList(orgSlug, dsSlug),
+            async token =>
+            {
+                var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state, Skip: 0, Take: MaxTake);
+                TaskSummaryDto[] rows = [.. (await _query.QueryAsync(filter, token)).Select(ToSummary)];
+                return JsonSerializer.SerializeToUtf8Bytes(rows);
+            }, TasksListCacheOptions, ct);
+        var canonical = JsonSerializer.Deserialize<TaskSummaryDto[]>(cachedBytes) ?? [];
 
         // The tag of a page of the canonical list: the canonical bytes and the page size
         return new TaskListPage(canonical.Length > clampedTake ? canonical[..clampedTake] : canonical,

@@ -40,6 +40,7 @@ using Registry.Web.Test.Support;
 using Registry.Web.Utilities;
 using Shouldly;
 using Registry.Test.Common;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test;
 
@@ -122,7 +123,7 @@ public class PendingRecoveryIntegrationTests
 
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddDistributedMemoryCache();
+        services.AddDistributedMemoryCache().AddRecordCache();
         services.AddSingleton<ICacheKeyScanner, NullCacheKeyScanner>();
         services.AddSingleton<ICacheManager, CacheManager>();
         services.AddSingleton(manager.Object);
@@ -510,7 +511,7 @@ public class PendingRecoveryIntegrationTests
             JsonSerializer.SerializeToUtf8Bytes(new { HasPending = true, RetryAttempt = 3, RetryEpoch = "legacy-epoch" }));
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddDistributedMemoryCache();
+        services.AddDistributedMemoryCache().AddRecordCache();
         services.AddSingleton<ICacheKeyScanner, NullCacheKeyScanner>();
         services.AddSingleton<ICacheManager, CacheManager>();
         services.AddSingleton(_provider.GetRequiredService<IDdbManager>());

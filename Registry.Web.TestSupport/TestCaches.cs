@@ -4,6 +4,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Registry.Ports;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Caching;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -15,6 +16,21 @@ namespace Registry.Web.Test;
 /// </summary>
 public static class TestCaches
 {
+    /// <summary>A new in-memory distributed cache.</summary>
+    public static MemoryDistributedCache MemoryStore() =>
+        new(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
+
+    /// <summary>The record cache over <paramref name="store"/> (a new in-memory store when null).</summary>
+    public static RecordCache Records(IDistributedCache? store = null) =>
+        new(store ?? MemoryStore(), NullLogger<RecordCache>.Instance);
+
+    /// <summary>The cache generations over <paramref name="store"/> (a new in-memory store when null).</summary>
+    public static CacheGenerations Generations(IDistributedCache? store = null) =>
+        new(store ?? MemoryStore(), NullLogger<CacheGenerations>.Instance);
+
+    /// <summary>The OGC cache keys over <paramref name="store"/> (a new in-memory store when null).</summary>
+    public static OgcCacheKeys OgcKeys(IDistributedCache? store = null) => new(Generations(store));
+
     /// <summary>A <see cref="DatasetSummaryProvider"/> with its own memory cache.</summary>
     public static IDatasetSummaryProvider Summaries(IDdbManager ddbManager) =>
         new DatasetSummaryProvider(new MemoryCache(new MemoryCacheOptions()), ddbManager);

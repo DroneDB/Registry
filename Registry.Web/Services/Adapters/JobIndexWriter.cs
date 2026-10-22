@@ -8,12 +8,12 @@ using Hangfire.Client;
 using Hangfire.Server;
 using Hangfire.States;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
+using Registry.Web.Services.Caching;
 using Registry.Web.Services.Ports;
 using Registry.Ports.DroneDB;
 
@@ -26,7 +26,7 @@ namespace Registry.Web.Services.Adapters;
 /// Also invalidates the per-dataset task-list cache after each mutation.
 /// </summary>
 public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
-    IDistributedCache cache, ITaskChangeNotifier? notifier = null) : IJobIndexWriter
+    IRecordCache cache, ITaskChangeNotifier? notifier = null) : IJobIndexWriter
 {
     public async Task UpsertOnEnqueueAsync(string jobId, IndexPayload meta, DateTime createdAtUtc,
         string? methodDisplay, CancellationToken ct = default)
@@ -524,15 +524,9 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
     /// </summary>
     private async Task InvalidateTasksListCacheAsync(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
-        var cacheKey = MagicStrings.TasksListCacheKey(orgSlug, dsSlug);
-        try
-        {
-            await cache.RemoveAsync(cacheKey, ct);
-        }
-        catch (Exception ex)
-        {
-            log.LogDebug(ex, "Failed to invalidate task-list cache for {Org}/{Ds}", orgSlug, dsSlug);
-        }
+        var cacheKey = CacheCategories.TasksList(orgSlug, dsSlug);
+        // Logs and swallows a cache error itself; a list being computed now is not stored
+        await cache.RemoveAsync(cacheKey, ct);
 
         // After the invalidation: a listener that refreshes now reads the new list
         notifier?.Publish(orgSlug, dsSlug);

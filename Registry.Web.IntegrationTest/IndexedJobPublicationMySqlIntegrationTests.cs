@@ -28,6 +28,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Shouldly;
 using Registry.Test.Common;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test;
 
@@ -412,7 +413,7 @@ public class IndexedJobPublicationMySqlIntegrationTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddDistributedMemoryCache();
+        services.AddDistributedMemoryCache().AddRecordCache();
         services.AddDbContext<RegistryContext>(o => o.UseSqlite("Data Source=" + Path.Combine(_root, "registry.sqlite")));
         services.AddScoped<IJobIndexWriter, JobIndexWriter>();
         var sp = services.BuildServiceProvider();
@@ -591,7 +592,7 @@ public class IndexedJobPublicationWorkerIntegrationTests
 
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddDistributedMemoryCache();
+        services.AddDistributedMemoryCache().AddRecordCache();
         services.AddDbContext<RegistryContext>(o => o.UseSqlite("Data Source=" + Path.Combine(_root, "registry.sqlite")));
         services.AddScoped<IJobIndexWriter, JobIndexWriter>();
         _provider = services.BuildServiceProvider();

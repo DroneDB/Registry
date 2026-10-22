@@ -6,7 +6,6 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
@@ -15,6 +14,7 @@ using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Services.Managers;
 
@@ -37,9 +37,11 @@ public abstract class OgcManagerBase
     protected readonly IOgcBuildArtifactPaths Artifacts;
     protected readonly IDdbWrapper DdbWrapper;
     protected readonly IOgcLayerCatalog LayerCatalog;
-    protected readonly IDistributedCache Cache;
+    protected readonly IRecordCache Records;
     protected readonly IHttpContextAccessor HttpContext;
-    protected static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
+
+    /// <summary>Capabilities documents: kept 5 minutes, and dropped at once by a new OGC generation.</summary>
+    protected static readonly RecordCacheOptions CapabilitiesCache = RecordCacheOptions.For(TimeSpan.FromMinutes(5));
 
     /// <summary>XML declaration with explicit UTF-8 (matches the actual wire encoding produced by .NET strings).</summary>
     protected const string Utf8XmlDecl = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
@@ -52,10 +54,10 @@ public abstract class OgcManagerBase
 
     protected OgcManagerBase(IDatasetAccessResolver access,
         IOgcBuildArtifactPaths artifacts, IDdbWrapper ddbWrapper, IOgcLayerCatalog catalog,
-        IDistributedCache cache, IHttpContextAccessor httpContext)
+        IRecordCache records, IHttpContextAccessor httpContext)
     {
         Access = access;
-        Artifacts = artifacts; DdbWrapper = ddbWrapper; LayerCatalog = catalog; Cache = cache;
+        Artifacts = artifacts; DdbWrapper = ddbWrapper; LayerCatalog = catalog; Records = records;
         HttpContext = httpContext;
     }
 

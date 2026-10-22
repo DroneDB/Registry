@@ -62,8 +62,7 @@ public static class TestJobs
             NullLogger<Services.HeavyTasks.TaskFileIndexer>.Instance);
 
     /// <summary>The OGC cache generations on a memory cache of their own.</summary>
-    public static OgcCacheKeys OgcCacheKeys() =>
-        new(new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions())));
+    public static OgcCacheKeys OgcCacheKeys() => TestCaches.OgcKeys();
 
     /// <summary>The dataset cache invalidator over <paramref name="cache"/> (OGC keys on a memory cache).</summary>
     public static DatasetCacheInvalidator CacheInvalidator(ICacheManager cache, JobStorage? storage = null) =>

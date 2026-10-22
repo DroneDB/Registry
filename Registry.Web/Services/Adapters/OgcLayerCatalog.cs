@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.DTO.Ogc;
+using Registry.Web.Services.Caching;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -24,21 +24,21 @@ public class OgcLayerCatalog : IOgcLayerCatalog
 {
     private readonly IDdbManager _ddbManager;
     private readonly IUtils _utils;
-    private readonly IDistributedCache _cache;
+    private readonly IRecordCache _records;
     private readonly IOgcBuildArtifactPaths _artifacts;
     private readonly IDdbWrapper _ddbWrapper;
     private readonly IOgcCacheKeys _keys;
     private readonly ILogger<OgcLayerCatalog> _logger;
-    private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);
+    private static readonly RecordCacheOptions LayersCache = RecordCacheOptions.For(TimeSpan.FromMinutes(5));
 
-    public OgcLayerCatalog(IDdbManager ddbManager, IUtils utils, IDistributedCache cache,
+    public OgcLayerCatalog(IDdbManager ddbManager, IUtils utils, IRecordCache records,
         IOgcBuildArtifactPaths artifacts, IDdbWrapper ddbWrapper,
         IOgcCacheKeys keys,
         ILogger<OgcLayerCatalog> logger)
     {
         _ddbManager = ddbManager;
         _utils = utils;
-        _cache = cache;
+        _records = records;
         _artifacts = artifacts;
         _ddbWrapper = ddbWrapper;
         _keys = keys;
@@ -72,9 +72,11 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     private async Task<List<OgcLayerDto>> GetAllLayersAsync(string orgSlug, string dsSlug, string? folderPath)
     {
         var key = await _keys.ForAsync(orgSlug, dsSlug, "layers", folderPath);
-        var cached = await _cache.GetRecordAsync<List<OgcLayerDto>>(key);
-        if (cached != null) return cached;
+        return await _records.GetOrCreateRecordAsync(key, _ => ListLayersAsync(orgSlug, dsSlug, folderPath), LayersCache);
+    }
 
+    private async Task<List<OgcLayerDto>> ListLayersAsync(string orgSlug, string dsSlug, string folderPath)
+    {
         // Callers are the OGC managers, after the request was authorized (OgcAuthorizationFilter)
         var ds = await _utils.GetDatasetAsync(orgSlug, dsSlug);
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
@@ -129,7 +131,6 @@ public class OgcLayerCatalog : IOgcLayerCatalog
             }
         }
 
-        await _cache.SetRecordAsync(key, result, Ttl);
         return result;
     }
 

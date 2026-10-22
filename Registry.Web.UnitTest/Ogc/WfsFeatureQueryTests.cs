@@ -24,6 +24,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities.Ogc;
 using Shouldly;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test.Ogc;
 
@@ -94,8 +95,7 @@ public class WfsFeatureQueryTests
         $"<fes:PropertyIsEqualTo><fes:ValueReference>{property}</fes:ValueReference>" +
         $"<fes:Literal>{literal}</fes:Literal></fes:PropertyIsEqualTo>";
 
-    private IDistributedCache Cache() =>
-        new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
+    private static IRecordCache Cache() => TestCaches.Records();
 
     private WfsManager CreateWfs() => new(new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object, TestPaths.Policy), _artifacts.Object,
         _wrapper.Object, _catalog.Object, Cache(), new HttpContextAccessor { HttpContext = new DefaultHttpContext() },

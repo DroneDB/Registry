@@ -22,6 +22,7 @@ using Registry.Web.Services.Ports;
 using Shouldly;
 using Entry = Registry.Ports.DroneDB.Entry;
 using Registry.Web.Test.Support;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test;
 
@@ -138,7 +139,7 @@ public class DatasetSummaryTests : TestBase
             Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
         var auth = Mock.Of<IAuthManager>();
         var stac = new StacManager(auth, new DatasetAccessResolver(utils.Object, auth, ddbManager.Object, TestPaths.Policy), _ctx, utils.Object,
-            ddbManager.Object, cache,
+            ddbManager.Object, TestCaches.Records(cache),
             CreateTestLogger<StacManager>(), TestCaches.WithDatasetVisibility(cache));
 
         (await stac.GetCatalog()).Links.ShouldNotContain(l => l.Relationship == "child");

@@ -8,7 +8,6 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -19,6 +18,7 @@ using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Services.Managers;
 
@@ -30,7 +30,7 @@ public class OgcApiTilesManager : OgcManagerBase, IOgcApiTilesManager
     private readonly IOgcRasterTileSource _rasterTiles;
 
     public OgcApiTilesManager(IDatasetAccessResolver access, IOgcBuildArtifactPaths ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx,
+        IDdbWrapper w, IOgcLayerCatalog c, IRecordCache cache, IHttpContextAccessor ctx,
         IOgcRasterTileSource rasterTiles)
         : base(access, ar, w, c, cache, ctx)
     {

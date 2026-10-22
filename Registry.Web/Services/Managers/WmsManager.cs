@@ -8,7 +8,6 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using Registry.Ports;
@@ -20,6 +19,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 using SkiaSharp;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Services.Managers;
 
@@ -28,12 +28,14 @@ namespace Registry.Web.Services.Managers;
 /// </summary>
 public class WmsManager : OgcManagerBase, IWmsManager
 {
+    private static readonly string[] Requests = ["GetCapabilities", "GetMap", "GetFeatureInfo"];
+
     private readonly ILogger<WmsManager> _logger;
     private readonly ICacheManager _cacheManager;
     private readonly INativeWorkGate _gate;
 
     public WmsManager(IDatasetAccessResolver access, IOgcBuildArtifactPaths ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx, ILogger<WmsManager> logger,
+        IDdbWrapper w, IOgcLayerCatalog c, IRecordCache cache, IHttpContextAccessor ctx, ILogger<WmsManager> logger,
         ICacheManager cacheManager, INativeWorkGate? gate = null)
         : base(access, ar, w, c, cache, ctx)
     {
@@ -46,102 +48,102 @@ public class WmsManager : OgcManagerBase, IWmsManager
         string? folderPath = null)
     {
         var key = await LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, $"caps-wms-v2-{version}", folderPath);
-        var cached = await Cache.GetRecordAsync<string>(key);
-        if (cached != null) return cached;
-
-        await ResolveAsync(orgSlug, dsSlug);
-        var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath);
-        var rasterLayers = layers.Where(l => l.EntryType == EntryType.GeoRaster).ToList();
-        var totalBbox = AggregateBbox(rasterLayers);
-        var baseUrl = GetServiceUrl(orgSlug, dsSlug, "wms", folderPath);
-
-        var sb = new StringBuilder();
-        await using (var w = CreateXmlWriter(sb))
+        return await Records.GetOrCreateRecordAsync(key, async _ =>
         {
-            await w.WriteStartElementAsync(null, "WMS_Capabilities", NsWms);
-            w.WriteAttributeString("version", version);
-            await w.WriteAttributeStringAsync("xmlns", "xlink", null, NsXlink);
-            await w.WriteAttributeStringAsync("xmlns", "xsi", null, "http://www.w3.org/2001/XMLSchema-instance");
-            await w.WriteAttributeStringAsync("xsi", "schemaLocation", "http://www.w3.org/2001/XMLSchema-instance",
-                version == "1.3.0"
-                    ? "http://www.opengis.net/wms http://schemas.opengis.net/wms/1.3.0/capabilities_1_3_0.xsd"
-                    : "http://www.opengis.net/wms http://schemas.opengis.net/wms/1.1.1/capabilities_1_1_1.xsd");
 
-            w.WriteStartElement("Service");
-            w.WriteElementString("Name", "WMS");
-            w.WriteElementString("Title", $"DroneDB WMS - {orgSlug}/{dsSlug}");
-            w.WriteElementString("Abstract", $"OGC Web Map Service for dataset {orgSlug}/{dsSlug}");
-            w.WriteStartElement("OnlineResource");
-            await w.WriteAttributeStringAsync("xlink", "type", NsXlink, "simple");
-            await w.WriteAttributeStringAsync("xlink", "href", NsXlink, baseUrl + "?");
-            await w.WriteEndElementAsync(); // OnlineResource
-            await w.WriteEndElementAsync(); // Service
+            await ResolveAsync(orgSlug, dsSlug);
+            var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath);
+            var rasterLayers = layers.Where(l => l.EntryType == EntryType.GeoRaster).ToList();
+            var totalBbox = AggregateBbox(rasterLayers);
+            var baseUrl = GetServiceUrl(orgSlug, dsSlug, "wms", folderPath);
 
-            w.WriteStartElement("Capability");
-            w.WriteStartElement("Request");
-            foreach (var req in new[] { "GetCapabilities", "GetMap", "GetFeatureInfo" })
+            var sb = new StringBuilder();
+            await using (var w = CreateXmlWriter(sb))
             {
-                w.WriteStartElement(req);
-                w.WriteElementString("Format", req == "GetMap" ? "image/png" : "text/xml");
-                WriteWmsDcp(w, baseUrl);
+                await w.WriteStartElementAsync(null, "WMS_Capabilities", NsWms);
+                w.WriteAttributeString("version", version);
+                await w.WriteAttributeStringAsync("xmlns", "xlink", null, NsXlink);
+                await w.WriteAttributeStringAsync("xmlns", "xsi", null, "http://www.w3.org/2001/XMLSchema-instance");
+                await w.WriteAttributeStringAsync("xsi", "schemaLocation", "http://www.w3.org/2001/XMLSchema-instance",
+                    version == "1.3.0"
+                        ? "http://www.opengis.net/wms http://schemas.opengis.net/wms/1.3.0/capabilities_1_3_0.xsd"
+                        : "http://www.opengis.net/wms http://schemas.opengis.net/wms/1.1.1/capabilities_1_1_1.xsd");
+
+                w.WriteStartElement("Service");
+                w.WriteElementString("Name", "WMS");
+                w.WriteElementString("Title", $"DroneDB WMS - {orgSlug}/{dsSlug}");
+                w.WriteElementString("Abstract", $"OGC Web Map Service for dataset {orgSlug}/{dsSlug}");
+                w.WriteStartElement("OnlineResource");
+                await w.WriteAttributeStringAsync("xlink", "type", NsXlink, "simple");
+                await w.WriteAttributeStringAsync("xlink", "href", NsXlink, baseUrl + "?");
+                await w.WriteEndElementAsync(); // OnlineResource
+                await w.WriteEndElementAsync(); // Service
+
+                w.WriteStartElement("Capability");
+                w.WriteStartElement("Request");
+                foreach (var req in Requests)
+                {
+                    w.WriteStartElement(req);
+                    w.WriteElementString("Format", req == "GetMap" ? "image/png" : "text/xml");
+                    WriteWmsDcp(w, baseUrl);
+                    await w.WriteEndElementAsync();
+                }
+                await w.WriteEndElementAsync(); // Request
+
+                w.WriteStartElement("Exception");
+                w.WriteElementString("Format", "XML");
                 await w.WriteEndElementAsync();
-            }
-            await w.WriteEndElementAsync(); // Request
 
-            w.WriteStartElement("Exception");
-            w.WriteElementString("Format", "XML");
-            await w.WriteEndElementAsync();
-
-            // Aggregated root layer
-            w.WriteStartElement("Layer");
-            w.WriteAttributeString("queryable", "1");
-            w.WriteElementString("Title", $"{orgSlug}/{dsSlug}");
-            w.WriteElementString(version == "1.3.0" ? "CRS" : "SRS", "EPSG:4326");
-            w.WriteElementString(version == "1.3.0" ? "CRS" : "SRS", "EPSG:3857");
-            w.WriteElementString(version == "1.3.0" ? "CRS" : "SRS", "CRS:84");
-
-            if (totalBbox != null)
-                WriteBbox(w, version, totalBbox);
-
-            foreach (var layer in rasterLayers)
-            {
+                // Aggregated root layer
                 w.WriteStartElement("Layer");
                 w.WriteAttributeString("queryable", "1");
-                w.WriteElementString("Name", layer.Name);
-                w.WriteElementString("Title", layer.Title);
-                if (layer.BboxWgs84 != null)
-                    WriteBbox(w, version, layer.BboxWgs84);
+                w.WriteElementString("Title", $"{orgSlug}/{dsSlug}");
+                w.WriteElementString(version == "1.3.0" ? "CRS" : "SRS", "EPSG:4326");
+                w.WriteElementString(version == "1.3.0" ? "CRS" : "SRS", "EPSG:3857");
+                w.WriteElementString(version == "1.3.0" ? "CRS" : "SRS", "CRS:84");
 
-                // Always advertise the default style. Spectral-index styles (NDVI/NDRE/NDWI/EVI/SAVI)
-                // are advertised per-layer only when the underlying raster is multispectral, so the
-                // advertised contract matches what the server enforces in GetMap (CITE "each-style"
-                // tests would otherwise fail on RGB orthophotos).
-                w.WriteStartElement("Style");
-                w.WriteElementString("Name", "default");
-                w.WriteElementString("Title", "Default natural color");
-                await w.WriteEndElementAsync();
+                if (totalBbox != null)
+                    WriteBbox(w, version, totalBbox);
 
-                if (layer.IsMultispectral)
+                foreach (var layer in rasterLayers)
                 {
-                    foreach (var idx in WmsValidator.SpectralIndexes)
-                    {
-                        w.WriteStartElement("Style");
-                        w.WriteElementString("Name", idx);
-                        w.WriteElementString("Title", $"{idx} spectral index");
-                        await w.WriteEndElementAsync();
-                    }
-                }
-                await w.WriteEndElementAsync();
-            }
-            await w.WriteEndElementAsync(); // root Layer
-            await w.WriteEndElementAsync(); // Capability
-            await w.WriteEndElementAsync(); // WMS_Capabilities
-            await w.WriteEndDocumentAsync();
-        }
+                    w.WriteStartElement("Layer");
+                    w.WriteAttributeString("queryable", "1");
+                    w.WriteElementString("Name", layer.Name);
+                    w.WriteElementString("Title", layer.Title);
+                    if (layer.BboxWgs84 != null)
+                        WriteBbox(w, version, layer.BboxWgs84);
 
-        var xml = Utf8XmlDecl + Regex.Replace(sb.ToString(), @"^\s*<\?xml[^?]*\?>\s*", "");
-        await Cache.SetRecordAsync(key, xml, CacheTtl);
-        return xml;
+                    // Always advertise the default style. Spectral-index styles (NDVI/NDRE/NDWI/EVI/SAVI)
+                    // are advertised per-layer only when the underlying raster is multispectral, so the
+                    // advertised contract matches what the server enforces in GetMap (CITE "each-style"
+                    // tests would otherwise fail on RGB orthophotos).
+                    w.WriteStartElement("Style");
+                    w.WriteElementString("Name", "default");
+                    w.WriteElementString("Title", "Default natural color");
+                    await w.WriteEndElementAsync();
+
+                    if (layer.IsMultispectral)
+                    {
+                        foreach (var idx in WmsValidator.SpectralIndexes)
+                        {
+                            w.WriteStartElement("Style");
+                            w.WriteElementString("Name", idx);
+                            w.WriteElementString("Title", $"{idx} spectral index");
+                            await w.WriteEndElementAsync();
+                        }
+                    }
+                    await w.WriteEndElementAsync();
+                }
+                await w.WriteEndElementAsync(); // root Layer
+                await w.WriteEndElementAsync(); // Capability
+                await w.WriteEndElementAsync(); // WMS_Capabilities
+                await w.WriteEndDocumentAsync();
+            }
+
+            var xml = Utf8XmlDecl + Regex.Replace(sb.ToString(), @"^\s*<\?xml[^?]*\?>\s*", "");
+            return xml;
+        }, CapabilitiesCache);
     }
 
     private static void WriteBbox(XmlWriter w, string version, double[] bbox)

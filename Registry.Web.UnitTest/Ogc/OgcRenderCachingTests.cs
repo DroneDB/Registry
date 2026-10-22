@@ -26,6 +26,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 using Shouldly;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test.Ogc;
 
@@ -102,7 +103,7 @@ public class OgcRenderCachingTests
     private IDatasetAccessResolver Resolver => _resolver ??= new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object, TestPaths.Policy);
 
     private WmsManager CreateWms() => new(Resolver, _artifacts.Object,
-        _wrapper.Object, _catalog.Object, _cache, new HttpContextAccessor { HttpContext = _http },
+        _wrapper.Object, _catalog.Object, TestCaches.Records(_cache), new HttpContextAccessor { HttpContext = _http },
         NullLogger<WmsManager>.Instance, _cacheManager);
 
     private Task<byte[]> GetMap(WmsManager wms, double[] bbox, string format = "image/png", bool transparent = true) =>
@@ -228,7 +229,7 @@ public class OgcRenderCachingTests
         _wrapper.Setup(w => w.GetRasterInfo("/data/cog.tif"))
             .Returns("{\"width\":2516,\"height\":1956,\"bandCount\":4,\"crs\":\"EPSG:32630\",\"bands\":[{\"name\":\"red\"}]}");
         var svc = new WcsCoverageService(Resolver, _artifacts.Object,
-            _wrapper.Object, _catalog.Object, _cache, new HttpContextAccessor(), NullLogger<WcsCoverageService>.Instance);
+            _wrapper.Object, _catalog.Object, TestCaches.Records(_cache), new HttpContextAccessor(), NullLogger<WcsCoverageService>.Instance);
         var layer = new OgcLayerDto { Name = "ortho", EntryType = EntryType.GeoRaster, EntryPath = "ortho.tif", EntryHash = "h1" };
 
         var first = await svc.ProbeRasterAsync(_ddb.Object, layer);

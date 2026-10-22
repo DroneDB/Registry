@@ -8,7 +8,6 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Formatting = Newtonsoft.Json.Formatting;
@@ -20,6 +19,7 @@ using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Services.Managers;
 
@@ -31,7 +31,7 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
     private readonly ILogger<OgcApiFeaturesManager> _logger;
 
     public OgcApiFeaturesManager(IDatasetAccessResolver access, IOgcBuildArtifactPaths ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx, ILogger<OgcApiFeaturesManager> logger)
+        IDdbWrapper w, IOgcLayerCatalog c, IRecordCache cache, IHttpContextAccessor ctx, ILogger<OgcApiFeaturesManager> logger)
         : base(access, ar, w, c, cache, ctx)
     {
         _logger = logger;

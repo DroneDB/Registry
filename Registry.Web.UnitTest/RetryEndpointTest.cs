@@ -32,6 +32,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Shouldly;
 using Registry.Web.Test.Support;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test;
 
@@ -88,7 +89,7 @@ public class RetryEndpointTest : IDisposable
         ddbManager.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(_ddb.Object);
 
         var writer = new JobIndexWriter(_db, new Mock<ILogger<JobIndexWriter>>().Object,
-            new Mock<IDistributedCache>().Object);
+            new Mock<IRecordCache>().Object);
 
         var appSettings = TestSettings.Options(new AppSettings { TempPath = Path.GetTempPath() });
 
@@ -103,7 +104,7 @@ public class RetryEndpointTest : IDisposable
             _utils.Object,
             new BackgroundJobsProcessor(_client.Object, NullIndexedEnqueuer.Create(), _storage.Object),
             ddbManager.Object,
-            new Mock<IDistributedCache>().Object,
+            new Mock<IRecordCache>().Object,
             new Mock<IHttpContextAccessor>().Object,
             TestSettings.Options<ProcessingPlatformSettings>(appSettings),
             TestScratch.Provider,

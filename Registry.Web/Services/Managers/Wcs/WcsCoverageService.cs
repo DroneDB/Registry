@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using Registry.Ports;
@@ -13,6 +12,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using Registry.Web.Services.Caching;
 
 #nullable enable
 
@@ -30,7 +30,7 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
     private readonly INativeWorkGate _gate;
 
     public WcsCoverageService(IDatasetAccessResolver access, IOgcBuildArtifactPaths ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx,
+        IDdbWrapper w, IOgcLayerCatalog c, IRecordCache cache, IHttpContextAccessor ctx,
         ILogger<WcsCoverageService> logger, INativeWorkGate? gate = null) : base(access, ar, w, c, cache, ctx)
     {
         _logger = logger;
@@ -91,58 +91,29 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
     /// <summary>Probes do not change for a given raster content: kept a day after their last use.</summary>
     private static readonly TimeSpan ProbeCacheExpiration = TimeSpan.FromDays(1);
 
+    // A probe without a size is not kept: the next request probes again
+    private static readonly RecordCacheOptions ProbeCache = new(ProbeCacheExpiration, ProbeCacheExpiration)
+    {
+        CacheWhen = info => info is WcsRasterInfo { Width: > 0, Height: > 0 }
+    };
+
     public async Task<WcsRasterInfo> ProbeRasterAsync(IDDB ddb, OgcLayerDto layer)
     {
-        string src, key;
-        WcsRasterInfo info;
         try
         {
-            src = ResolveRasterArtifact(ddb, layer);
+            var src = ResolveRasterArtifact(ddb, layer);
             // The build COG and the source it falls back to are probed separately
-            key = $"ogc-wcs-probe-{layer.EntryHash}-{(src == Artifacts.GetCogPath(ddb, layer.EntryHash) ? "cog" : "src")}";
+            var key = CacheCategories.OgcRasterProbe(layer.EntryHash,
+                src == Artifacts.GetCogPath(ddb, layer.EntryHash) ? "cog" : "src");
+
+            return await Records.GetOrCreateRecordAsync(key,
+                _ => Task.FromResult(ParseRasterInfo(DdbWrapper.GetRasterInfo(src))), ProbeCache);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "WCS: probing raster info failed");
             return WcsRasterInfo.Empty;
         }
-
-        // The cache only saves the native probe: when it fails, probe anyway
-        try
-        {
-            var cached = await Cache.GetRecordAsync<WcsRasterInfo>(key);
-            if (cached != null)
-                return cached;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "WCS: cannot read the cached raster info of {Key}", key);
-        }
-
-        try
-        {
-            info = ParseRasterInfo(DdbWrapper.GetRasterInfo(src));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "WCS: probing raster info failed");
-            return WcsRasterInfo.Empty;
-        }
-
-        if (info.Width > 0 && info.Height > 0)
-        {
-            try
-            {
-                await Cache.SetRecordAsync(key, info, unusedExpireTime: ProbeCacheExpiration,
-                    absoluteExpireTime: ProbeCacheExpiration);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "WCS: cannot cache the raster info of {Key}", key);
-            }
-        }
-
-        return info;
     }
 
     private static WcsRasterInfo ParseRasterInfo(string info)

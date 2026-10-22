@@ -9,6 +9,7 @@ using Registry.Web.Data;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using StackExchange.Redis;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Utilities;
 
@@ -51,7 +52,9 @@ public static class StartupExtenders
 
     public static void AddCacheProvider(this IServiceCollection services, CachingOptions appSettings)
     {
-        // OGC document keys carry a per-dataset generation kept in the distributed cache
+        // Records computed on a miss (single-flight, fail-open) and the cache generations their keys carry
+        // (OGC documents: one per dataset, kept in the distributed cache)
+        services.AddRecordCache();
         services.AddSingleton<Services.Ports.IOgcCacheKeys, OgcCacheKeys>();
 
         if (appSettings.CacheProvider == null)

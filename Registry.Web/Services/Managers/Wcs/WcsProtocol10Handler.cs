@@ -7,12 +7,12 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Caching.Distributed;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Services.Managers.Wcs;
 
@@ -26,96 +26,96 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
     public string Version => "1.0.0";
 
     private readonly IWcsCoverageService _svc;
-    private readonly IDistributedCache _cache;
+    private readonly IRecordCache _records;
 
     private const string NsWcs = "http://www.opengis.net/wcs";
     private const string NsGml = "http://www.opengis.net/gml";
     private const string NsXlink = "http://www.w3.org/1999/xlink";
     private const string NsXsi = "http://www.w3.org/2001/XMLSchema-instance";
     private const string Utf8XmlDecl = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
-    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
+    private static readonly RecordCacheOptions CapabilitiesCache = RecordCacheOptions.For(TimeSpan.FromMinutes(5));
 
-    public WcsProtocol10Handler(IWcsCoverageService svc, IDistributedCache cache)
+    public WcsProtocol10Handler(IWcsCoverageService svc, IRecordCache records)
     {
         _svc = svc;
-        _cache = cache;
+        _records = records;
     }
 
     public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath)
     {
         var key = await _svc.CacheKeyAsync(orgSlug, dsSlug, "caps-wcs10-v1", folderPath);
-        var cached = await _cache.GetRecordAsync<string>(key);
-        if (cached != null) return cached;
-
-        var (_, layers) = await _svc.GetCoveragesAsync(orgSlug, dsSlug, folderPath);
-        var baseUrl = _svc.GetBaseUrl(orgSlug, dsSlug, folderPath);
-
-        var sb = new StringBuilder();
-        await using (var w = XmlWriter.Create(sb,
-            new XmlWriterSettings { Indent = true, Async = true, OmitXmlDeclaration = true }))
+        return await _records.GetOrCreateRecordAsync(key, async _ =>
         {
-            await w.WriteStartElementAsync(null, "WCS_Capabilities", NsWcs);
-            await w.WriteAttributeStringAsync("xmlns", "gml", null, NsGml);
-            await w.WriteAttributeStringAsync("xmlns", "xlink", null, NsXlink);
-            await w.WriteAttributeStringAsync("xmlns", "xsi", null, NsXsi);
-            w.WriteAttributeString("version", "1.0.0");
-            w.WriteAttributeString("updateSequence", "0");
 
-            // Service
-            await w.WriteStartElementAsync(null, "Service", NsWcs);
-            await w.WriteElementStringAsync(null, "description", NsWcs,
-                $"DroneDB WCS 1.0.0 - {orgSlug}/{dsSlug}");
-            await w.WriteElementStringAsync(null, "name", NsWcs, "OGC:WCS");
-            await w.WriteElementStringAsync(null, "label", NsWcs,
-                $"DroneDB WCS - {orgSlug}/{dsSlug}");
-            await w.WriteElementStringAsync(null, "fees", NsWcs, "NONE");
-            await w.WriteElementStringAsync(null, "accessConstraints", NsWcs, "NONE");
-            await w.WriteEndElementAsync();
+            var (_, layers) = await _svc.GetCoveragesAsync(orgSlug, dsSlug, folderPath);
+            var baseUrl = _svc.GetBaseUrl(orgSlug, dsSlug, folderPath);
 
-            // Capability
-            await w.WriteStartElementAsync(null, "Capability", NsWcs);
-            await w.WriteStartElementAsync(null, "Request", NsWcs);
-            foreach (var op in new[] { "GetCapabilities", "DescribeCoverage", "GetCoverage" })
+            var sb = new StringBuilder();
+            await using (var w = XmlWriter.Create(sb,
+                new XmlWriterSettings { Indent = true, Async = true, OmitXmlDeclaration = true }))
             {
-                await w.WriteStartElementAsync(null, op, NsWcs);
-                await w.WriteStartElementAsync(null, "DCPType", NsWcs);
-                await w.WriteStartElementAsync(null, "HTTP", NsWcs);
-                await w.WriteStartElementAsync(null, "Get", NsWcs);
-                await w.WriteStartElementAsync(null, "OnlineResource", NsWcs);
-                await w.WriteAttributeStringAsync("xlink", "href", NsXlink, baseUrl + "?");
-                await w.WriteEndElementAsync();
-                await w.WriteEndElementAsync();
-                await w.WriteEndElementAsync();
-                await w.WriteEndElementAsync();
-                await w.WriteEndElementAsync();
-            }
-            await w.WriteEndElementAsync();
-            await w.WriteStartElementAsync(null, "Exception", NsWcs);
-            await w.WriteElementStringAsync(null, "Format", NsWcs, "application/vnd.ogc.se_xml");
-            await w.WriteEndElementAsync();
-            await w.WriteEndElementAsync();
+                await w.WriteStartElementAsync(null, "WCS_Capabilities", NsWcs);
+                await w.WriteAttributeStringAsync("xmlns", "gml", null, NsGml);
+                await w.WriteAttributeStringAsync("xmlns", "xlink", null, NsXlink);
+                await w.WriteAttributeStringAsync("xmlns", "xsi", null, NsXsi);
+                w.WriteAttributeString("version", "1.0.0");
+                w.WriteAttributeString("updateSequence", "0");
 
-            // ContentMetadata
-            await w.WriteStartElementAsync(null, "ContentMetadata", NsWcs);
-            foreach (var l in layers)
-            {
-                await w.WriteStartElementAsync(null, "CoverageOfferingBrief", NsWcs);
-                await w.WriteElementStringAsync(null, "name", NsWcs, OgcNames.ToNcName(l.Name));
+                // Service
+                await w.WriteStartElementAsync(null, "Service", NsWcs);
+                await w.WriteElementStringAsync(null, "description", NsWcs,
+                    $"DroneDB WCS 1.0.0 - {orgSlug}/{dsSlug}");
+                await w.WriteElementStringAsync(null, "name", NsWcs, "OGC:WCS");
                 await w.WriteElementStringAsync(null, "label", NsWcs,
-                    string.IsNullOrEmpty(l.Title) ? l.Name : l.Title);
-                if (l.BboxWgs84 != null)
-                    await WriteLonLatEnvelopeAsync(w, l.BboxWgs84);
+                    $"DroneDB WCS - {orgSlug}/{dsSlug}");
+                await w.WriteElementStringAsync(null, "fees", NsWcs, "NONE");
+                await w.WriteElementStringAsync(null, "accessConstraints", NsWcs, "NONE");
                 await w.WriteEndElementAsync();
-            }
-            await w.WriteEndElementAsync();
 
-            await w.WriteEndElementAsync(); // WCS_Capabilities
-            await w.WriteEndDocumentAsync();
-            await w.FlushAsync();
-        }
-        var xml = Utf8XmlDecl + StripDeclaration(sb.ToString());
-        await _cache.SetRecordAsync(key, xml, CacheTtl);
-        return xml;
+                // Capability
+                await w.WriteStartElementAsync(null, "Capability", NsWcs);
+                await w.WriteStartElementAsync(null, "Request", NsWcs);
+                foreach (var op in WcsConformance.Operations)
+                {
+                    await w.WriteStartElementAsync(null, op, NsWcs);
+                    await w.WriteStartElementAsync(null, "DCPType", NsWcs);
+                    await w.WriteStartElementAsync(null, "HTTP", NsWcs);
+                    await w.WriteStartElementAsync(null, "Get", NsWcs);
+                    await w.WriteStartElementAsync(null, "OnlineResource", NsWcs);
+                    await w.WriteAttributeStringAsync("xlink", "href", NsXlink, baseUrl + "?");
+                    await w.WriteEndElementAsync();
+                    await w.WriteEndElementAsync();
+                    await w.WriteEndElementAsync();
+                    await w.WriteEndElementAsync();
+                    await w.WriteEndElementAsync();
+                }
+                await w.WriteEndElementAsync();
+                await w.WriteStartElementAsync(null, "Exception", NsWcs);
+                await w.WriteElementStringAsync(null, "Format", NsWcs, "application/vnd.ogc.se_xml");
+                await w.WriteEndElementAsync();
+                await w.WriteEndElementAsync();
+
+                // ContentMetadata
+                await w.WriteStartElementAsync(null, "ContentMetadata", NsWcs);
+                foreach (var l in layers)
+                {
+                    await w.WriteStartElementAsync(null, "CoverageOfferingBrief", NsWcs);
+                    await w.WriteElementStringAsync(null, "name", NsWcs, OgcNames.ToNcName(l.Name));
+                    await w.WriteElementStringAsync(null, "label", NsWcs,
+                        string.IsNullOrEmpty(l.Title) ? l.Name : l.Title);
+                    if (l.BboxWgs84 != null)
+                        await WriteLonLatEnvelopeAsync(w, l.BboxWgs84);
+                    await w.WriteEndElementAsync();
+                }
+                await w.WriteEndElementAsync();
+
+                await w.WriteEndElementAsync(); // WCS_Capabilities
+                await w.WriteEndDocumentAsync();
+                await w.FlushAsync();
+            }
+            var xml = Utf8XmlDecl + StripDeclaration(sb.ToString());
+            return xml;
+        }, CapabilitiesCache);
     }
 
     public async Task<string> DescribeCoverageAsync(string orgSlug, string dsSlug, string coverageIds)

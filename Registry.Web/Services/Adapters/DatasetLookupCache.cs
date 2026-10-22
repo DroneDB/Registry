@@ -87,7 +87,7 @@ public sealed class DatasetLookupCache : IDatasetLookupCache
             InvalidateOrganization(orgSlug);
     }
 
-    private static string Key(string orgSlug, string dsSlug) => $"ds-lookup:{orgSlug}/{dsSlug}";
+    private static string Key(string orgSlug, string dsSlug) => CacheCategories.DatasetLookup(orgSlug, dsSlug);
 
     // Callers may change what they get (EF entities are mutable): never hand out the cached instance
     private static Dataset Copy(Dataset d) => new()

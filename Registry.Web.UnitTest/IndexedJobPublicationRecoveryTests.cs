@@ -28,6 +28,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Web.Test.Support;
 using Shouldly;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test;
 
@@ -124,7 +125,7 @@ internal sealed class PublicationEnv : IDisposable
     }
 
     public static JobIndexWriter NewWriter(RegistryContext db) =>
-        new(db, NullLogger<JobIndexWriter>.Instance, Mock.Of<IDistributedCache>());
+        new(db, NullLogger<JobIndexWriter>.Instance, Mock.Of<IRecordCache>());
 
     public IndexedJobPublicationRecoveryService NewService(IJobIndexWriter? writer = null, JobStorage? storage = null,
         ILogger<IndexedJobPublicationRecoveryService>? log = null) =>

@@ -27,5 +27,5 @@ public sealed class DistributedUploadReceiptStore(IDistributedCache cache, IOpti
     public Task RemoveAsync(string orgSlug, string dsSlug, string uploadId) =>
         cache.RemoveAsync(Key(orgSlug, dsSlug, uploadId));
 
-    private static string Key(string orgSlug, string dsSlug, string uploadId) => $"upload-receipt-{orgSlug}-{dsSlug}-{uploadId}";
+    private static string Key(string orgSlug, string dsSlug, string uploadId) => CacheCategories.UploadReceipt(orgSlug, dsSlug, uploadId);
 }
