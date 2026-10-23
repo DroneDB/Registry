@@ -187,7 +187,9 @@ public class DatasetsController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Changes the attributes (visibility) of a dataset.
+    /// Changes the attributes of a dataset. Obsolete alias of the visibility change (<c>PUT</c> of the dataset, or
+    /// the <c>visibility</c> meta): <c>{"public": true}</c> makes it Public, <c>false</c> Private, no <c>public</c>
+    /// changes nothing.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>

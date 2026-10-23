@@ -199,6 +199,8 @@ public sealed class DatasetCommands : IDatasetCommands
         await _listings.ListingChangedAsync(orgSlug, ds.InternalRef, CancellationToken.None);
     }
 
+    // The legacy attribute of the DroneDB CLI's old "chattr": "public" is the visibility, changed like a dataset
+    // edit changes it (one rule: the visibility meta and the listings' invalidation). No "public" is no change.
     [Obsolete("Use meta")]
     public async Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug,
         AttributesDto attributes, CancellationToken ct = default)
@@ -206,16 +208,16 @@ public sealed class DatasetCommands : IDatasetCommands
         if (attributes == null)
             throw new BadRequestException("Attributes are null");
 
+        // Write access first, also when there is nothing to change
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
-        var ds = access.Dataset;
 
-        var ddb = access.Ddb;
-        var meta = ddb.Meta.GetSafe();
-        meta.IsPublic = attributes.IsPublic;
+        if (attributes.IsPublic is { } isPublic)
+            await Edit(orgSlug, dsSlug,
+                new DatasetEditDto { Visibility = isPublic ? Visibility.Public : Visibility.Private }, ct);
 
-        // Changing IsPublic may indirectly modify visibility
-        await _listings.VisibilityChangedAsync(orgSlug, ds.InternalRef, CancellationToken.None);
-
-        return new Dictionary<string, object> { { "public", attributes.IsPublic } };
+        return new Dictionary<string, object>
+        {
+            { "public", access.Ddb.Meta.GetSafe().Visibility == Visibility.Public }
+        };
     }
 }
