@@ -103,7 +103,7 @@ public class RasterAnalysisController : ControllerBaseEx
     }
 
     /// <summary>Generate tile with extended visualization params.</summary>
-    [HttpGet("tiles-ex/{tz:int}/{tx:int}/{tyRaw}.{ext:regex(^(png|webp)$)}",
+    [HttpGet("tiles-ex/{tz:int}/{tx:int}/{tyRaw}.{ext:regex(^(" + TileFormat.RouteExtensions + ")$)}",
         Name = nameof(ObjectsController) + "." + nameof(GenerateTileEx))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -129,7 +129,8 @@ public class RasterAnalysisController : ControllerBaseEx
             throw new BadRequestException("Invalid input parameters (retina indicator should be '@2x')");
 
         var res = await _renders.GenerateTileDataExAsync(orgSlug, dsSlug, path.ToString(), tz, tx, ty, retina,
-            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale), ct: ct);
+            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale),
+            TileFormat.FromExtension(ext), ct: ct);
 
         return File(res.Data, res.ContentType, res.Name);
     }

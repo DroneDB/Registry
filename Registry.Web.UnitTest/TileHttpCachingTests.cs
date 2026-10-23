@@ -40,8 +40,8 @@ public class TileHttpCachingTests
         _obj = new ReadableObject("org", "ds", "ortho.tif", Hash, "ortho.tif", Mock.Of<IDDB>());
         _manager.Setup(m => m.ResolveReadableObjectAsync("org", "ds", "ortho.tif", It.IsAny<CancellationToken>())).ReturnsAsync(_obj);
         _manager.Setup(m => m.ResolveThumbnailObjectAsync("org", "ds", "ortho.tif", It.IsAny<CancellationToken>())).ReturnsAsync(_obj);
-        _manager.Setup(m => m.GenerateTileDataAsync(_obj, 19, 1, 2, false, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new StorageDataDto { Data = Bytes, ContentType = "image/webp", Name = "2.webp" });
+        _manager.Setup(m => m.GenerateTileDataAsync(_obj, 19, 1, 2, false, TileFormat.Png, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new StorageDataDto { Data = Bytes, ContentType = "image/png", Name = "2.png" });
         _manager.Setup(m => m.GenerateThumbnailDataAsync(_obj, 256, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new StorageDataDto { Data = Bytes, ContentType = "image/webp", Name = "ortho.webp" });
     }
@@ -62,7 +62,7 @@ public class TileHttpCachingTests
     private void VerifyNeverRendered()
     {
         _manager.Verify(m => m.GenerateTileDataAsync(It.IsAny<ReadableObject>(), It.IsAny<int>(), It.IsAny<int>(),
-            It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<TileFormat>(), It.IsAny<CancellationToken>()), Times.Never);
         _manager.Verify(m => m.GenerateThumbnailDataAsync(It.IsAny<ReadableObject>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -73,7 +73,7 @@ public class TileHttpCachingTests
         var result = await controller.GenerateTile("org", "ds", 19, 1, "2", "ortho.tif", "png");
 
         result.ShouldBeOfType<FileContentResult>().FileContents.ShouldBe(Bytes);
-        controller.Response.Headers.ETag.ToString().ShouldStartWith($"\"{Hash}-tile-19-1-2-1-");
+        controller.Response.Headers.ETag.ToString().ShouldStartWith($"\"{Hash}-tile-19-1-2-1-png-");
         controller.Response.Headers.CacheControl.ToString().ShouldBe("private, no-cache");
     }
 
@@ -110,7 +110,7 @@ public class TileHttpCachingTests
         second.Response.Headers.CacheControl.ToString().ShouldBe("private, no-cache");
         _manager.Verify(m => m.ResolveReadableObjectAsync("org", "ds", "ortho.tif", It.IsAny<CancellationToken>()), Times.Exactly(2));
         _manager.Verify(m => m.GenerateTileDataAsync(It.IsAny<ReadableObject>(), It.IsAny<int>(), It.IsAny<int>(),
-            It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<TileFormat>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]

@@ -27,8 +27,6 @@ namespace Registry.Web.Services.Objects;
 /// </summary>
 public sealed class ObjectRenderService : IObjectRenderService
 {
-    private const string TileMediaType = "image/webp";
-
     private readonly RenderSources _sources;
     private readonly ICacheManager _cache;
     private readonly IThumbnailGenerator _thumbnails;
@@ -102,16 +100,16 @@ public sealed class ObjectRenderService : IObjectRenderService
     }
 
     public async Task<StorageDataDto> GenerateTileDataAsync(string orgSlug, string dsSlug, string? path, int tz,
-        int tx, int ty, bool retina, CancellationToken ct = default) =>
+        int tx, int ty, bool retina, TileFormat format, CancellationToken ct = default) =>
         await GenerateTileDataAsync(await _sources.ResolveReadableAsync(orgSlug, dsSlug, path, ct), tz, tx, ty,
-            retina, ct);
+            retina, format, ct);
 
     public Task<StorageDataDto> GenerateTileDataAsync(ReadableObject obj, int tz, int tx, int ty, bool retina,
-        CancellationToken ct = default) =>
-        CachedTileAsync(ty, () => _cache.GetAsync(MagicStrings.TileCacheSeed, ForDataset(obj.OrgSlug, obj.DsSlug), ct,
-            obj.Hash, tx, ty, tz, retina,
+        TileFormat format, CancellationToken ct = default) =>
+        CachedTileAsync(ty, format, () => _cache.GetAsync(MagicStrings.TileCacheSeed, ForDataset(obj.OrgSlug, obj.DsSlug),
+            ct, obj.Hash, tx, ty, tz, retina, format.MediaType,
             new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles,
-                () => obj.Ddb.GenerateTile(obj.SourcePath, tz, tx, ty, retina, obj.Hash, "webp"), token))));
+                () => obj.Ddb.GenerateTile(obj.SourcePath, tz, tx, ty, retina, obj.Hash, format.DdbName), token))));
 
     public async Task<StorageDataDto> GenerateThumbnailDataExAsync(string orgSlug, string dsSlug, string path,
         int? size, RasterVisualization visualization, CancellationToken ct = default)
@@ -134,24 +132,27 @@ public sealed class ObjectRenderService : IObjectRenderService
     }
 
     public async Task<StorageDataDto> GenerateTileDataExAsync(string orgSlug, string dsSlug, string path, int tz,
-        int tx, int ty, bool retina, RasterVisualization visualization, CancellationToken ct = default)
+        int tx, int ty, bool retina, RasterVisualization visualization, TileFormat format,
+        CancellationToken ct = default)
     {
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
         var v = visualization;
 
-        return await CachedTileAsync(ty, () => _cache.GetAsync(MagicStrings.TileCacheSeed,
-            ForDataset(orgSlug, dsSlug), ct, source.Entry.Hash, tx, ty, tz, retina, v.CacheKey,
-            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles, () => source.Ddb.GenerateTileEx(
-                source.SourcePath, tz, tx, ty, retina, source.Entry.Hash, v.Preset, v.Bands, v.Formula,
-                v.BandFilter, v.Colormap, v.Rescale).ToWebp(90), token))));
+        // libddb renders a visualization tile as a PNG: the other formats are encoded from it
+        return await CachedTileAsync(ty, format, () => _cache.GetAsync(MagicStrings.TileCacheSeed,
+            ForDataset(orgSlug, dsSlug), ct, source.Entry.Hash, tx, ty, tz, retina, v.CacheKey, format.MediaType,
+            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles, () => format.FromPng(
+                source.Ddb.GenerateTileEx(source.SourcePath, tz, tx, ty, retina, source.Entry.Hash, v.Preset, v.Bands,
+                    v.Formula, v.BandFilter, v.Colormap, v.Rescale)), token))));
     }
 
-    // A tile is a webp named after its row; a tile outside the raster is a 404, not a server fault
-    private static async Task<StorageDataDto> CachedTileAsync(int ty, Func<Task<byte[]>> tile)
+    // A tile is an image in the format asked for, named after its row; a tile outside the raster is a 404, not a
+    // server fault
+    private static async Task<StorageDataDto> CachedTileAsync(int ty, TileFormat format, Func<Task<byte[]>> tile)
     {
         try
         {
-            return new StorageDataDto { Data = await tile(), ContentType = TileMediaType, Name = $"{ty}.webp" };
+            return new StorageDataDto { Data = await tile(), ContentType = format.MediaType, Name = $"{ty}.{format.Extension}" };
         }
         catch (InvalidOperationException ex) when (ex.InnerException?.Message.Contains("Out of bounds",
                                                         StringComparison.OrdinalIgnoreCase) == true)

@@ -251,7 +251,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         var mgr = CreateManager();
 
         await Should.ThrowAsync<NotFoundException>(
-            () => mgr.Renders.GenerateTileDataAsync(OrgSlug, DsSlug, "ortho.tif", 1, 0, 0, false));
+            () => mgr.Renders.GenerateTileDataAsync(OrgSlug, DsSlug, "ortho.tif", 1, 0, 0, false, TileFormat.Webp));
 
         _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<object[]>()), Times.Never);
         _ddbMock.Verify(x => x.GenerateTile(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(),
@@ -281,7 +281,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         var mgr = CreateManager();
 
         await Should.ThrowAsync<NotFoundException>(
-            () => mgr.Renders.GenerateTileDataExAsync(OrgSlug, DsSlug, "data/cloud.laz", 1, 0, 0, false, new RasterVisualization()));
+            () => mgr.Renders.GenerateTileDataExAsync(OrgSlug, DsSlug, "data/cloud.laz", 1, 0, 0, false, new RasterVisualization(), TileFormat.Webp));
 
         _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<object[]>()), Times.Never);
     }

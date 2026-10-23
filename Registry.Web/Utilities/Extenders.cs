@@ -352,15 +352,16 @@ public static class Extenders
     }
 
     /// <summary>
-    /// Converts an image byte array to WebP format with the specified quality.
+    /// Decodes an image byte array and encodes it again in <paramref name="format"/>.
     /// </summary>
     /// <param name="bytes">The source image byte array.</param>
-    /// <param name="quality">The quality of the WebP image (0-100). Default is 70.</param>
-    /// <returns>A byte array containing the WebP image.</returns>
+    /// <param name="format">The target format (the encoder of SkiaSharp: PNG, JPEG or WebP).</param>
+    /// <param name="quality">The quality of the image (0-100); ignored by lossless PNG.</param>
+    /// <returns>A byte array containing the encoded image.</returns>
     /// <exception cref="ArgumentException"></exception>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     /// <exception cref="InvalidOperationException"></exception>
-    public static byte[] ToWebp(this byte[] bytes, int quality = 70)
+    public static byte[] Encode(this byte[] bytes, SKEncodedImageFormat format, int quality = 70)
     {
         if (bytes == null || bytes.Length == 0)
             throw new ArgumentException("Source image is null or empty.", nameof(bytes));
@@ -370,7 +371,7 @@ public static class Extenders
 
         using var bitmap = SKBitmap.Decode(bytes) ?? throw new InvalidOperationException("Source image could not be decoded.");
         using var image = SKImage.FromBitmap(bitmap) ?? throw new InvalidOperationException("Failed to create image from bitmap.");
-        using var data = image.Encode(SKEncodedImageFormat.Webp, quality) ?? throw new InvalidOperationException("Failed to encode image to WebP format.");
+        using var data = image.Encode(format, quality) ?? throw new InvalidOperationException($"Failed to encode image to {format}.");
 
         return data.ToArray();
     }

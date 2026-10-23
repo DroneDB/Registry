@@ -13,7 +13,7 @@ namespace Registry.Web.Services.Adapters;
 /// Serves OGC raster tiles through the cache of the Registry tile endpoint
 /// (<see cref="MagicStrings.TileCacheSeed"/>, dataset category): concurrent requests for a tile
 /// render it once, entries expire with the other tiles and a dataset invalidation clears them.
-/// The format is part of the key, since the tile endpoint caches WebP.
+/// The format is part of the key: the tile endpoint caches one entry per format too.
 /// </summary>
 public class OgcRasterTileSource : IOgcRasterTileSource
 {

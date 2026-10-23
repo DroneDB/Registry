@@ -115,10 +115,10 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="tx">The tile X coordinate.</param>
     /// <param name="tyRaw">The tile Y coordinate (supports @2x retina suffix).</param>
     /// <param name="path">The path to the object.</param>
-    /// <param name="ext">The tile image extension (png or webp).</param>
+    /// <param name="ext">The tile image extension: the format of the image served (png, webp or jpg).</param>
     /// <param name="v">Optional entry hash; when it matches the entry, the response may be cached without revalidation.</param>
     /// <returns>The tile image file.</returns>
-    [HttpGet("tiles/{tz:int}/{tx:int}/{tyRaw}.{ext:regex(^(png|webp)$)}",
+    [HttpGet("tiles/{tz:int}/{tx:int}/{tyRaw}.{ext:regex(^(" + TileFormat.RouteExtensions + ")$)}",
         Name = nameof(ObjectsController) + "." + nameof(GenerateTile))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status304NotModified)]
@@ -136,6 +136,7 @@ public class ObjectsController : ControllerBaseEx
         [FromQuery] string? v = null, CancellationToken ct = default)
     {
         var retina = tyRaw.EndsWith("@2x", StringComparison.Ordinal);
+        var format = TileFormat.FromExtension(ext);
 
         if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
             throw new BadRequestException("Invalid input parameters (retina indicator should be '@2x')");
@@ -143,12 +144,13 @@ public class ObjectsController : ControllerBaseEx
         // Access check and lookup only; the 304 below skips the cache and the native render.
         var obj = await _renders.ResolveReadableObjectAsync(orgSlug, dsSlug, path, ct: ct);
 
+        // The format is part of what the URL identifies: a validator of a PNG never matches the WebP
         var cachePolicy = HashedContentCachePolicy.For(obj.Hash, v, "tile", tz, tx, ty, retina ? 2 : 1,
-            obj.SourceVersion);
+            format.Extension, obj.SourceVersion);
         if (cachePolicy.IsNotModified(Request))
             return NotModified(cachePolicy);
 
-        var res = await _renders.GenerateTileDataAsync(obj, tz, tx, ty, retina, ct: ct);
+        var res = await _renders.GenerateTileDataAsync(obj, tz, tx, ty, retina, format, ct: ct);
 
         cachePolicy.Apply(Response);
         return File(res.Data, res.ContentType, res.Name);
