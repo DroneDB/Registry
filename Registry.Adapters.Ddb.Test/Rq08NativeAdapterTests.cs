@@ -140,9 +140,11 @@ public class Rq08NativeAdapterTests : TestBase
         var withThumbnail = Wrapper.GetEntryTypes().Where(t => t.HasThumbnail).Select(t => t.Id);
 
         withThumbnail.ShouldBe(
-            [EntryType.GeoImage, EntryType.GeoRaster, EntryType.PointCloud, EntryType.Image, EntryType.GaussianSplat],
+            [EntryType.GeoImage, EntryType.GeoRaster, EntryType.PointCloud, EntryType.Image, EntryType.Panorama,
+                EntryType.GeoPanorama, EntryType.GaussianSplat],
             ignoreOrder: true);
         Wrapper.GetEntryTypes().Single(t => t.Id == EntryType.Model).Thumbnail.ShouldBe("none");
+        Wrapper.GetEntryTypes().Single(t => t.Id == EntryType.Video).Thumbnail.ShouldBe("none");
     }
 
     /// <summary>XI-02: the message of a failure is the failing call's own, never a stale one of an earlier call.</summary>

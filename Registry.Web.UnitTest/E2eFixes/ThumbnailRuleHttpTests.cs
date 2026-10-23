@@ -96,7 +96,6 @@ public sealed class ThumbnailRuleHttpTests : IDisposable
     [TestCase("model/x.mtl", EntryType.Generic)]
     [TestCase("notes.md", EntryType.Markdown)]
     [TestCase("clip.mp4", EntryType.Video)]
-    [TestCase("pano.jpg", EntryType.Panorama)]
     [TestCase("roads.geojson", EntryType.Vector)]
     public async Task EntryOfATypeWithoutAThumbnail_Is404_WithoutNativeWorkOrErrorLog(string path, EntryType type)
     {
@@ -110,12 +109,16 @@ public sealed class ThumbnailRuleHttpTests : IDisposable
         _logs.AtLeast(LogLevel.Error).ShouldBeEmpty("a client asking for a thumbnail that does not exist is not a server fault");
     }
 
-    [Test]
-    public async Task EntryOfATypeWithAThumbnailFile_IsRendered()
+    // libddb 2.0.0 + 77f088e: images and panoramas are rendered from the file
+    [TestCase("photo.jpg", EntryType.GeoImage)]
+    [TestCase("photo.jpg", EntryType.Image)]
+    [TestCase("photo.jpg", EntryType.Panorama)]
+    [TestCase("photo.jpg", EntryType.GeoPanorama)]
+    public async Task EntryOfATypeWithAThumbnailFile_IsRendered(string path, EntryType type)
     {
-        SetupEntry("photo.jpg", EntryType.GeoImage);
+        SetupEntry(path, type);
 
-        using var response = await GetThumbnailAsync("photo.jpg");
+        using var response = await GetThumbnailAsync(path);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await response.Content.ReadAsByteArrayAsync()).ShouldBe(ThumbnailBytes);

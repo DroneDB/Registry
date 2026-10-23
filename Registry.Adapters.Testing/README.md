@@ -83,3 +83,8 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   (`build-artifacts`, `build-artifacts-pending`, `list-entries-ex`) and `pending-build-info` gain
   `retryAfter` (required in both schemas; volatile next to `lastAttempt` in the two pending fixtures).
   `PendingBuildInfo.RetryAfter` and `EntryBuild.RetryAfter` read it, required.
+* 2026-10-23: DroneDB `77f088efab98e982cf1a0258869850d8c16a9526`: `entry-types` reports `thumbnail: "file"` for
+  `Panorama` and `GeoPanorama` (was `"none"`; `Video` and `GeoVideo` stay `"none"`), so the thumbnail endpoints
+  render panoramas again. The commits since the last vendoring (`6b9daee`) that touch `tests/contract` are that
+  one and a README-only one (the CI note: DroneDB no longer runs Registry's contract tests); no other fixture or
+  schema changed.
