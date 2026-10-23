@@ -24,8 +24,11 @@ public interface IBuildQueryService
     Task<string> GetBuildFileAsync(string orgSlug, string dsSlug, string hash, string? path,
         CancellationToken ct = default);
 
-    /// <summary>Whether <paramref name="path"/> is a file of the build <paramref name="hash"/>.</summary>
-    Task<bool> CheckBuildFileAsync(string orgSlug, string dsSlug, string hash, string? path,
+    /// <summary>
+    /// The local path of the file <paramref name="path"/> of the build <paramref name="hash"/>, or null when it is
+    /// not a file of that build (a malformed hash names no build): <see cref="GetBuildFileAsync"/> without the 404.
+    /// </summary>
+    Task<string?> FindBuildFileAsync(string orgSlug, string dsSlug, string hash, string? path,
         CancellationToken ct = default);
 
     /// <summary>The downloadable artifact of the entry at <paramref name="entryPath"/> (COG, COPC, GeoPackage).</summary>

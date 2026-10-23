@@ -78,20 +78,26 @@ public class ObjectBuildsController : ControllerBaseEx
     {
         var res = await _builds.GetBuildFileAsync(orgSlug, dsSlug, hash, path, ct: ct);
 
-        return PhysicalFile(res, MimeUtility.GetMimeMapping(res), true);
+        return BuildFileResult(res);
     }
 
+    // GET and HEAD send the same file result: the executor sends the headers (length, type, validators, ranges) of
+    // both and the body of GET only
+    private PhysicalFileResult BuildFileResult(string file) =>
+        PhysicalFile(file, MimeUtility.GetMimeMapping(file), enableRangeProcessing: true);
+
     /// <summary>
-    /// Checks if a build file exists by hash and path.
+    /// Checks if a build file exists by hash and path: the headers of <c>GET</c> (length, type, validators, range
+    /// support) without the body, or 404.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>
     /// <param name="hash">The build hash.</param>
     /// <param name="path">The path to the file within the build.</param>
-    /// <returns>Ok if file exists, NotFound otherwise.</returns>
+    /// <returns>The headers of the file if it exists, NotFound otherwise.</returns>
     [BasicAuthentication]
     [HttpHead("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(CheckBuildFile))]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> CheckBuildFile(
@@ -100,9 +106,9 @@ public class ObjectBuildsController : ControllerBaseEx
         [FromRoute, Required] string hash,
         [FromRoute] string? path, CancellationToken ct)
     {
-        var res = await _builds.CheckBuildFileAsync(orgSlug, dsSlug, hash, path, ct: ct);
+        var res = await _builds.FindBuildFileAsync(orgSlug, dsSlug, hash, path, ct: ct);
 
-        return res ? Ok() : NotFound();
+        return res == null ? NotFound() : BuildFileResult(res);
     }
 
     /// <summary>

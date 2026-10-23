@@ -75,18 +75,18 @@ public sealed class BuildQueryService : IBuildQueryService
                ?? throw new NotFoundException($"'{file}' is not a file of the build '{hash}'");
     }
 
-    public async Task<bool> CheckBuildFileAsync(string orgSlug, string dsSlug, string hash, string? path,
+    public async Task<string?> FindBuildFileAsync(string orgSlug, string dsSlug, string hash, string? path,
         CancellationToken ct = default)
     {
         var (ddb, file) = await ResolveBuildFilePathAsync(orgSlug, dsSlug, path, ct);
         try
         {
-            return _artifacts.ResolveFile(ddb, hash, file) != null;
+            return _artifacts.ResolveFile(ddb, hash, file);
         }
         catch (DdbInvalidArgumentsException)
         {
             // A malformed hash names no build: the file does not exist (HEAD answers 404, as it always did)
-            return false;
+            return null;
         }
     }
 

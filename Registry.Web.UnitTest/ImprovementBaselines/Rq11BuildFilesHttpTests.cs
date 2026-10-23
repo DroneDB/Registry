@@ -126,6 +126,29 @@ public sealed class Rq11BuildFilesHttpTests : IDisposable
         absent.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    // The end-to-end check of Registry eb1311f2: HEAD answered 200 with no Content-Length, Content-Type or
+    // Accept-Ranges (a client sizing a download or probing for range support learned nothing). HEAD is GET without
+    // the body now: the same file result, so the same headers.
+    [Test]
+    public async Task BuildFile_Head_SendsTheHeadersOfGet_WithoutABody()
+    {
+        var file = BuildFile("cog/sized.tif", "0123456789");
+        _factory.DdbWrapper.Setup(d => d.ResolveBuildFile(_datasetFolder, Hash, "cog/sized.tif")).Returns(file);
+        var url = $"/orgs/{Org}/ds/{Ds}/build/{Hash}/cog/sized.tif";
+
+        using var get = await SendAsync(HttpMethod.Get, url);
+        using var head = await SendAsync(HttpMethod.Head, url);
+
+        head.StatusCode.ShouldBe(HttpStatusCode.OK);
+        head.Content.Headers.ContentLength.ShouldBe(10);
+        head.Content.Headers.ContentType!.MediaType.ShouldBe(get.Content.Headers.ContentType!.MediaType);
+        head.Headers.AcceptRanges.ShouldContain("bytes");
+        head.Headers.AcceptRanges.ShouldBe(get.Headers.AcceptRanges);
+        head.Content.Headers.LastModified.ShouldBe(get.Content.Headers.LastModified);
+        head.Headers.ETag.ShouldBe(get.Headers.ETag);
+        (await head.Content.ReadAsByteArrayAsync()).ShouldBeEmpty();
+    }
+
     private static IEnumerable<TestCaseData> Downloads()
     {
         yield return new TestCaseData("ortho.tif", EntryType.GeoRaster, ArtifactRoles.RasterCog, "cog/cog.tif",
