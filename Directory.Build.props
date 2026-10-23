@@ -60,23 +60,23 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-10-22): DroneDB 2.0.0 (libddb ABI 1.1) is not tagged until Registry is proven
-        on it, so Registry pins the CI build of DroneDB fixes-and-optimizations commit 4e8c9ee, run
-        39706761293 (a pull request run of DroneDB#472, built from the merge with master), every job
-        green (Linux and Windows builds and tests, ASan + UBSan, the Registry contract job, the Docker
-        image). It has retryAfter in the build manifest and the Windows exit-hang fix. Next: the
+        Pinned now (2026-10-23): DroneDB 2.0.0 (libddb ABI 1.1) is not tagged until Registry is proven
+        on it, so Registry pins the CI build of DroneDB fixes-and-optimizations commit 9092885, run
+        40015265825 (a pull request run of DroneDB#472, built from the merge with master), every job
+        green (Linux and Windows builds and tests, ASan + UBSan, the Docker image). It has the
+        end-to-end fixes (Nexus exit crash, GDAL data shipped, panorama thumbnails). Next: the
         v2.0.0 release (DdbSource release) once it is tagged.
     -->
     <PropertyGroup>
         <DdbSource>ci</DdbSource>
         <DdbVersion>2.0.0</DdbVersion>
-        <DdbDebFileVersion>2.0.0~git1813815</DdbDebFileVersion>
-        <DdbCiCommit>4e8c9ee51b6f8125dbf7849bf542af280d232bad</DdbCiCommit>
-        <DdbCiRunId>39706761293</DdbCiRunId>
-        <DdbDebArtifactId>12395544303</DdbDebArtifactId>
-        <DdbWindowsArtifactId>12398428032</DdbWindowsArtifactId>
-        <DdbDebSha256>ff2762e347fb81511e293a3708901ef2178bfac14af64254810b8407ea9dceef</DdbDebSha256>
-        <DdbWindowsZipSha256>f8c8f47257a99cbff44d00403e6399fc0d84052c72703ddb0ecab0875bd2bad4</DdbWindowsZipSha256>
+        <DdbDebFileVersion>2.0.0~git908f582</DdbDebFileVersion>
+        <DdbCiCommit>90928856e1d3248663e7b0c3d6bc4994ce8f6325</DdbCiCommit>
+        <DdbCiRunId>40015265825</DdbCiRunId>
+        <DdbDebArtifactId>12529683969</DdbDebArtifactId>
+        <DdbWindowsArtifactId>12529697982</DdbWindowsArtifactId>
+        <DdbDebSha256>0e62b17b5834f9a4a94c2c198b71811b9e857039b0bce9a91ab7d3a1ac2ab469</DdbDebSha256>
+        <DdbWindowsZipSha256>8bfbde1017ef3e845a084fcb2e695b788c6d80dfcad9c954fa2451d3dabcafc1</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
