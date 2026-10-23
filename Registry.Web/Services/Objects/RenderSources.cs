@@ -74,7 +74,7 @@ public sealed class RenderSources
     }
 
     /// <summary>
-    /// <see cref="ResolveAsync"/> with the version of the rendered file: a rebuild rewrites the artifact
+    /// <see cref="ResolveAsync(string, string, string?, CancellationToken)"/> with the version of the rendered file: a rebuild rewrites the artifact
     /// but keeps the entry hash, its write time tells them apart.
     /// </summary>
     public Task<ReadableObject> ResolveReadableAsync(string orgSlug, string dsSlug, string? path,

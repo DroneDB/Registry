@@ -141,9 +141,9 @@ public sealed class ObjectRenderService : IObjectRenderService
         // libddb renders a visualization tile as a PNG: the other formats are encoded from it
         return await CachedTileAsync(ty, format, () => _cache.GetAsync(MagicStrings.TileCacheSeed,
             ForDataset(orgSlug, dsSlug), ct, source.Entry.Hash, tx, ty, tz, retina, v.CacheKey, format.MediaType,
-            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles, () => format.FromPng(
-                source.Ddb.GenerateTileEx(source.SourcePath, tz, tx, ty, retina, source.Entry.Hash, v.Preset, v.Bands,
-                    v.Formula, v.BandFilter, v.Colormap, v.Rescale)), token))));
+            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles, () => source.Ddb.GenerateTileEx(
+                source.SourcePath, tz, tx, ty, retina, source.Entry.Hash, v.Preset, v.Bands, v.Formula,
+                v.BandFilter, v.Colormap, v.Rescale).InFormat(format), token))));
     }
 
     // A tile is an image in the format asked for, named after its row; a tile outside the raster is a 404, not a

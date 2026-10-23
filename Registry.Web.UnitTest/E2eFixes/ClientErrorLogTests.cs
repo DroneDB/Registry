@@ -74,7 +74,7 @@ public sealed class ClientErrorLogTests
 
         var record = log.Records.ShouldHaveSingleItem();
         record.Exception.ShouldBeNull("an expected client error carries no stack");
-        record.Message.ShouldContain(status.ToString());
+        record.Message.ShouldContain(status.ToString(System.Globalization.CultureInfo.InvariantCulture));
         record.Message.ShouldContain("/orgs/org/ds/private");
         record.Message.ShouldContain(exception.Message);
         record.Level.ShouldBe(ApiExceptionClassifier.Classify(exception, authenticated).Level);

@@ -62,3 +62,14 @@ public sealed record TileFormat
         return _encoding == SKEncodedImageFormat.Png ? png : png.Encode(_encoding, EncodeQuality);
     }
 }
+
+/// <summary>Reading a tile libddb rendered as a PNG in a <see cref="TileFormat"/>.</summary>
+public static class TileFormatExtensions
+{
+    /// <summary>The PNG tile in <paramref name="format"/> (see <see cref="TileFormat.FromPng"/>).</summary>
+    public static byte[] InFormat(this byte[] png, TileFormat format)
+    {
+        ArgumentNullException.ThrowIfNull(format);
+        return format.FromPng(png);
+    }
+}

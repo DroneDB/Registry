@@ -34,7 +34,7 @@ public sealed class LogCapture : ILogEventSink
         var category = logEvent.Properties.TryGetValue(Constants.SourceContextPropertyName, out var source)
             ? source.ToString().Trim('"')
             : string.Empty;
-        _records.Enqueue(new LogRecord(category, ToLogLevel(logEvent.Level), logEvent.RenderMessage(),
+        _records.Enqueue(new LogRecord(category, ToLogLevel(logEvent.Level), logEvent.RenderMessage(System.Globalization.CultureInfo.InvariantCulture),
             logEvent.Exception));
     }
 
