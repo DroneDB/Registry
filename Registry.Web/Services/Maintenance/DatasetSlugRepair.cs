@@ -18,12 +18,15 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Maintenance;
 
-/// <summary>Repairs the organizations and datasets stored with a slug the slug rules refuse (e.g. "--").</summary>
+/// <summary>
+/// Repairs the organizations and datasets stored with a slug the slug rules (<see cref="SlugRules"/>) refuse: "--"
+/// from the pre-collapsing generator, or one character from before the validator agreed with the routes.
+/// </summary>
 public interface IDatasetSlugRepair
 {
     /// <summary>
     /// Renames organizations and datasets whose slug fails validation (e.g. "--" from the
-    /// pre-collapsing slug generator) to their ToSlug form, moving organization folders.
+    /// pre-collapsing slug generator, or a single character) to their ToSlug form, moving organization folders.
     /// With dryRun only the plan is returned. Entries with active jobs are skipped.
     /// </summary>
     Task<FixInvalidSlugsResultDto> FixInvalidSlugsAsync(bool dryRun = true, CancellationToken ct = default);
@@ -145,7 +148,7 @@ public sealed class DatasetSlugRepair : IDatasetSlugRepair
         return result;
     }
 
-    // ToSlug form of an invalid slug, suffixed with _N when another slug already takes it.
+    // ToSlug form of an invalid slug (always long enough: "o" is "o0"), suffixed with _N when another slug already takes it.
     // Compared ignoring case: case-insensitive collations (MySQL) see "a-b" and "A-B" as the same key
     private static string FreeSlug(string invalidSlug, IEnumerable<string> taken)
     {

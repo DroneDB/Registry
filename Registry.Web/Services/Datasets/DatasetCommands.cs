@@ -69,7 +69,7 @@ public sealed class DatasetCommands : IDatasetCommands
             throw new BadRequestException("Dataset slug is null");
 
         if (!dataset.Slug.IsValidSlug())
-            throw new BadRequestException("Dataset slug is invalid");
+            throw new BadRequestException(SlugRules.InvalidMessage("Dataset"));
 
         if (_context.Datasets.AsNoTracking()
             .Any(item => item.Slug == dataset.Slug && item.Organization.Slug == orgSlug))
@@ -180,7 +180,7 @@ public sealed class DatasetCommands : IDatasetCommands
             throw new BadRequestException("Cannot move default dataset");
 
         if (!newSlug.IsValidSlug())
-            throw new BadRequestException($"Invalid slug '{newSlug}'");
+            throw new BadRequestException(SlugRules.InvalidMessage("Dataset"));
 
         if (dsSlug == newSlug) return; // Nothing to do
 

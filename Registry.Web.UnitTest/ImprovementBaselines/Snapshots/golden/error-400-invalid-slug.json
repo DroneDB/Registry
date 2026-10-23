@@ -8,7 +8,7 @@
     "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
     "title": "Bad Request",
     "status": 400,
-    "detail": "Dataset slug is invalid",
+    "detail": "Dataset slug is invalid: it has 2 to 128 characters (lowercase letters, digits, '_' and '-'), starts with a letter or digit and has no '--'",
     "traceId": "<trace-id>",
     "noRetry": false
   }

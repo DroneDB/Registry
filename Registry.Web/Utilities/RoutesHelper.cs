@@ -9,9 +9,12 @@ public static class RoutesHelper
 {
     public const string OrganizationsRadix = "orgs";
     public const string DatasetRadix = "ds";
-    public const string OrganizationSlug = "{orgSlug:regex(" + SlugRegex + ")}";
-    public const string DatasetSlug = "{dsSlug:regex(" + SlugRegex + ")}";
-    public const string SlugRegex = "^[[a-z0-9]][[a-z0-9_-]]{{1,128}}$";
+
+    /// <summary>The route constraint of a slug segment (<see cref="SlugRouteConstraint"/>, registered with the API).</summary>
+    public const string SlugConstraint = "slug";
+
+    public const string OrganizationSlug = "{orgSlug:" + SlugConstraint + "}";
+    public const string DatasetSlug = "{dsSlug:" + SlugConstraint + "}";
     public const string ShareRadix = "share";
     public const string UsersRadix = "users";
     public const string ObjectsRadix = "obj";

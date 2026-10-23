@@ -149,59 +149,19 @@ public static class Extenders
     }
 
     /// <summary>
-    /// Fast validator for slugs.
-    /// Rules:
-    /// - length 1..128
-    /// - first char must be [a-z0-9]
-    /// - allowed chars are [a-z0-9_-]
-    /// - no consecutive dashes ("--") to match ToSlug collapsing behavior
+    /// Validator for slugs: <see cref="SlugRules"/> (length, characters, no consecutive dashes), the one definition
+    /// the routes and the slug generator share.
     /// </summary>
-    public static bool IsValidSlug(this string s)
-    {
-        if (string.IsNullOrEmpty(s)) return false;
-        if (s.Length > 128) return false;
-
-        // first must be [a-z0-9]
-        var first = s[0];
-        var firstIsLower = first >= 'a' && first <= 'z';
-        var firstIsDigit = first >= '0' && first <= '9';
-        if (!(firstIsLower || firstIsDigit)) return false;
-
-        var prevDash = false;
-
-        foreach (var c in s)
-        {
-            switch (c)
-            {
-                // [a-z]
-                case >= 'a' and <= 'z':
-                // [0-9]
-                case >= '0' and <= '9':
-                // underscore
-                case '_':
-                    prevDash = false; continue;
-                // dash (reject if consecutive)
-                case '-' when prevDash:
-                    return false;
-                case '-':
-                    prevDash = true;
-                    continue;
-                default:
-                    // anything else -> invalid
-                    return false;
-            }
-        }
-
-        return true;
-    }
+    public static bool IsValidSlug(this string s) => SlugRules.IsValid(s);
 
     /// <summary>
     /// High-performance slug generator.
     /// - Uses Unicode normalization (NFD) to strip diacritics.
     /// - Emits only ASCII [a-z0-9_-].
     /// - Replaces any non-allowed char with '-' and collapses consecutive dashes.
-    /// - Ensures max length 128 and that slug does not start with '-' or '_'
-    ///   (prefixes '0' if necessary, matching the original behavior).
+    /// - Ensures the length of <see cref="SlugRules"/> (cut to its maximum, padded with '0' to its minimum) and that
+    ///   slug does not start with '-' or '_' (prefixes '0' if necessary, matching the original behavior): the
+    ///   result is always a valid slug.
     /// </summary>
     public static string ToSlug(this string name)
     {
@@ -211,8 +171,8 @@ public static class Extenders
         // 1) Normalize to NFD so diacritics become NonSpacingMark and can be dropped
         var normalized = name.Normalize(NormalizationForm.FormD);
 
-        // 2) Rent a buffer. Upper bound is min(128, normalized.Length) since we never write more than input length.
-        var capacity = Math.Min(128, normalized.Length);
+        // 2) Rent a buffer. Upper bound is min(MaxLength, normalized.Length) since we never write more than input length.
+        var capacity = Math.Min(SlugRules.MaxLength, normalized.Length);
         if (capacity == 0) return "0";
 
         var buffer = ArrayPool<char>.Shared.Rent(capacity);
@@ -264,9 +224,11 @@ public static class Extenders
             if (slug[0] == '-' || slug[0] == '_')
                 slug = "0" + slug;
 
-            // Enforce max length 128 (after potential prefix)
-            if (slug.Length > 128)
-                slug = slug[..128];
+            // Enforce the length bounds (after potential prefix)
+            if (slug.Length > SlugRules.MaxLength)
+                slug = slug[..SlugRules.MaxLength];
+            else if (slug.Length < SlugRules.MinLength)
+                slug = slug.PadRight(SlugRules.MinLength, '0');
 
             return slug;
         }

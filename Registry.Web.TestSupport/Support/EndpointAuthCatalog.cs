@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.Extensions.DependencyInjection;
 using Registry.Web.Attributes;
 using Registry.Web.Identity.Models;
+using Registry.Web.Utilities;
 using Registry.Web.Utilities.Auth;
 
 namespace Registry.Web.Test.Support;
@@ -43,7 +44,7 @@ public enum EndpointGate
 
 /// <summary>One HTTP method of one routed endpoint and the authorization in effect on it.</summary>
 /// <param name="Method">HTTP method, or <c>ANY</c> when the endpoint does not restrict it.</param>
-/// <param name="Template">Route template; parameter constraints other than regex are kept.</param>
+/// <param name="Template">Route template; parameter constraints other than regex and slug are kept.</param>
 /// <param name="Handler"><c>Controller.Action</c> for MVC actions, the display name otherwise.</param>
 /// <param name="Controller">Controller name without the suffix; null for non-MVC endpoints.</param>
 /// <param name="Declared">The declared metadata: attributes, inline policies, auth filters.</param>
@@ -134,7 +135,7 @@ public static class EndpointAuthCatalog
             .ToList();
 
     /// <summary>
-    /// The template with regex constraints dropped (they are the long slug patterns), so the
+    /// The template with regex and slug constraints dropped (the long patterns, and the slug rules), so the
     /// snapshot stays readable; other constraints, optional and catch-all markers are kept.
     /// </summary>
     public static string RenderTemplate(RoutePattern pattern) => RenderPath(pattern, RenderParameter);
@@ -160,7 +161,7 @@ public static class EndpointAuthCatalog
     {
         var constraints = parameter.ParameterPolicies
             .Select(p => p.Content)
-            .Where(c => c != null && !c.StartsWith("regex(", StringComparison.Ordinal))
+            .Where(c => c != null && !c.StartsWith("regex(", StringComparison.Ordinal) && c != RoutesHelper.SlugConstraint)
             .Select(c => ":" + c);
 
         var prefix = parameter.IsCatchAll ? (parameter.EncodeSlashes ? "*" : "**") : string.Empty;

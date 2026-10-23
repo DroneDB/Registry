@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
@@ -30,6 +31,9 @@ public static class RegistryApiServiceCollectionExtensions
             // Dataset paths are checked by libddb's rule while the request is bound (RQ-11)
             o.ModelBinderProviders.Insert(0, new DatasetPathModelBinderProvider());
         });
+
+        // {orgSlug:slug} and {dsSlug:slug}: the slug rules decide what routes, as they decide what is created
+        services.Configure<RouteOptions>(o => o.ConstraintMap[RoutesHelper.SlugConstraint] = typeof(SlugRouteConstraint));
 
         // One error model (RQ-05, D1): RFC 9457 ProblemDetails written by ApiErrorResponder from the MVC
         // filter, the model-state factory below and the pipeline-wide exception handler

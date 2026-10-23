@@ -103,8 +103,9 @@ public class SystemController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Renames organizations and datasets whose slug is invalid (e.g. contains "--") to their
-    /// ToSlug form and moves organization folders accordingly. Dry run by default: pass
+    /// Renames organizations and datasets whose slug is invalid (e.g. contains "--", or has one character: the
+    /// slug rules need two) to their ToSlug form (padded to the minimum length) and moves organization folders
+    /// accordingly. Dry run by default: pass
     /// dryRun=false to apply. Entries with active jobs are skipped; run again once they finish.
     /// </summary>
     /// <param name="dryRun">When true (default) only returns the planned renames.</param>

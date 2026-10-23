@@ -284,7 +284,7 @@ public class OrganizationsManager : IOrganizationsManager
                 throw new UnauthorizedException("Invalid user");
 
             if (!organization.Slug.IsValidSlug())
-                throw new BadRequestException("Invalid organization orgSlug");
+                throw new BadRequestException(SlugRules.InvalidMessage("Organization"));
 
             var existingOrg = _context.Organizations.FirstOrDefault(item => item.Slug == organization.Slug);
 
@@ -317,7 +317,7 @@ public class OrganizationsManager : IOrganizationsManager
         else
         {
             if (!organization.Slug.IsValidSlug())
-                throw new BadRequestException("Invalid organization orgSlug");
+                throw new BadRequestException(SlugRules.InvalidMessage("Organization"));
         }
 
         var org = organization.ToEntity();
