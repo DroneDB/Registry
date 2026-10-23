@@ -133,6 +133,18 @@ public class Rq08NativeAdapterTests : TestBase
         Wrapper.GetEntryTypes().ShouldBeSameAs(types, "the types never change in a process");
     }
 
+    // The one rule of the thumbnail endpoints (a type without a thumbnail is a 404, not a render): libddb's
+    [Test]
+    public void EntryTypes_SayWhichHaveAThumbnail()
+    {
+        var withThumbnail = Wrapper.GetEntryTypes().Where(t => t.HasThumbnail).Select(t => t.Id);
+
+        withThumbnail.ShouldBe(
+            [EntryType.GeoImage, EntryType.GeoRaster, EntryType.PointCloud, EntryType.Image, EntryType.GaussianSplat],
+            ignoreOrder: true);
+        Wrapper.GetEntryTypes().Single(t => t.Id == EntryType.Model).Thumbnail.ShouldBe("none");
+    }
+
     /// <summary>XI-02: the message of a failure is the failing call's own, never a stale one of an earlier call.</summary>
     [Test]
     public void LastError_IsTheFailingCallsOwn()

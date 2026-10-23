@@ -602,6 +602,22 @@ public class NativeDdbWrapperTests : TestBase
         buffer.Length.ShouldBeGreaterThan(0);
     }
 
+    // libddb renders the format it is asked for (DDBMemoryTileFmt): what the tile endpoints rely on to serve a real
+    // PNG for .png, WebP for .webp and JPEG for .jpg
+    [TestCase("png", new byte[] { 0x89, 0x50, 0x4E, 0x47 })]
+    [TestCase("jpeg", new byte[] { 0xFF, 0xD8 })]
+    [TestCase("webp", new byte[] { (byte)'R', (byte)'I', (byte)'F', (byte)'F' })]
+    public void GenerateMemoryTile_InTheFormatAsked_IsThatFormat(string format, byte[] signature)
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+
+        var buffer = DdbWrapper.GenerateMemoryTile(tempFile.FilePath, 18, 64083, 92370, 256, true, false, "", format);
+
+        buffer.Take(signature.Length).ShouldBe(signature);
+        if (format == "webp")
+            System.Text.Encoding.ASCII.GetString(buffer, 8, 4).ShouldBe("WEBP");
+    }
+
     [Test]
     public void Tag_HappyPath_Ok()
     {
