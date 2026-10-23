@@ -53,6 +53,7 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
 
     private readonly Lazy<FrozenSet<EntryType>> _renderedTypes;
     private readonly Lazy<FrozenSet<EntryType>> _buildableTypes;
+    private readonly Lazy<FrozenSet<EntryType>> _thumbnailTypes;
     private readonly Lazy<IReadOnlyList<EntryTypeInfo>> _types;
     private readonly IFileSystem _fs;
     private readonly MemoryCache _locations = new(new MemoryCacheOptions { SizeLimit = LocationCacheSize });
@@ -68,6 +69,10 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
             .Where(t => t.Buildable)
             .Select(t => t.Id)
             .ToFrozenSet());
+        _thumbnailTypes = new Lazy<FrozenSet<EntryType>>(() => _types.Value
+            .Where(t => t.HasThumbnail)
+            .Select(t => t.Id)
+            .ToFrozenSet());
         _renderedTypes = new Lazy<FrozenSet<EntryType>>(() => _types.Value
             .Where(t => t.Roles.Any(r => RenderRoles.Contains(r, StringComparer.Ordinal)))
             .Select(t => t.Id)
@@ -75,6 +80,8 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
     }
 
     public bool IsBuildableType(EntryType type) => _buildableTypes.Value.Contains(type);
+
+    public bool HasThumbnail(EntryType type) => _thumbnailTypes.Value.Contains(type);
 
     public EntryBuildArtifacts GetBuild(IDDB ddb, string entryPath) => GetBuilds(ddb, [entryPath])[0];
 

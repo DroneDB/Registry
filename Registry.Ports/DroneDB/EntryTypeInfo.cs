@@ -23,6 +23,10 @@ public sealed class EntryTypeInfo
     [JsonProperty("thumbnail")]
     public string Thumbnail { get; set; } = "";
 
+    /// <summary>The type has a thumbnail, rendered from the entry's file or from a build artifact.</summary>
+    [JsonIgnore]
+    public bool HasThumbnail => Thumbnail is "file" or "build";
+
     /// <summary>Lowercase extensions, without the dot, of the files that belong to a main file of this type.</summary>
     [JsonProperty("sidecarExtensions")]
     public IReadOnlyList<string> SidecarExtensions { get; set; } = [];

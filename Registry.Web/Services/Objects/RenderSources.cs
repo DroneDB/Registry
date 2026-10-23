@@ -17,9 +17,10 @@ namespace Registry.Web.Services.Objects;
 /// <summary>
 /// The file a read request renders (thumbnails, tiles, raster analysis): read access first (an anonymous
 /// caller learns nothing about paths), then the path (libddb's rule, no wildcard, an existing entry that is
-/// not a folder: 400 otherwise), then the file a renderer reads (its build artifact from libddb's manifest,
-/// or the entry itself). A missing artifact is a 404 "not available yet", decided before any response
-/// cache, so deleting an artifact invalidates what was served from it.
+/// not a folder: 400 otherwise), for a thumbnail the type's rule (libddb: some types have none, 404), then the
+/// file a renderer reads (its build artifact from libddb's manifest, or the entry itself). A missing artifact is
+/// a 404 "not available yet", decided before any response cache, so deleting an artifact invalidates what was
+/// served from it.
 /// </summary>
 public sealed class RenderSources
 {
@@ -45,8 +46,12 @@ public sealed class RenderSources
     /// <exception cref="InvalidDatasetPathException">The path is not a dataset path (a missing one is empty).</exception>
     /// <exception cref="BadRequestException">A wildcard, no such entry, or a folder.</exception>
     /// <exception cref="NotFoundException">The build artifact a renderer reads does not exist yet.</exception>
-    public async Task<RenderSource> ResolveAsync(string orgSlug, string dsSlug, string? path,
-        CancellationToken ct = default)
+    public Task<RenderSource> ResolveAsync(string orgSlug, string dsSlug, string? path,
+        CancellationToken ct = default) =>
+        ResolveAsync(orgSlug, dsSlug, path, thumbnail: false, ct);
+
+    private async Task<RenderSource> ResolveAsync(string orgSlug, string dsSlug, string? path, bool thumbnail,
+        CancellationToken ct)
     {
         // A render names an entry: no path is the empty path (400 with the path rule's message)
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, path ?? string.Empty, ct);
@@ -61,6 +66,10 @@ public sealed class RenderSources
         if (entry.Type == EntryType.Directory)
             throw new BadRequestException($"'{normalized}' is a folder");
 
+        // libddb's rule, before any native work: a type without a thumbnail has nothing a renderer could open
+        if (thumbnail && !_artifacts.HasThumbnail(entry.Type))
+            throw new NotFoundException($"'{normalized}' has no thumbnail ({entry.Type} entries have none)");
+
         return new RenderSource(entry, access.Ddb, normalized, SourceOf(entry, access.Ddb, normalized));
     }
 
@@ -68,10 +77,20 @@ public sealed class RenderSources
     /// <see cref="ResolveAsync"/> with the version of the rendered file: a rebuild rewrites the artifact
     /// but keeps the entry hash, its write time tells them apart.
     /// </summary>
-    public async Task<ReadableObject> ResolveReadableAsync(string orgSlug, string dsSlug, string? path,
-        CancellationToken ct = default)
+    public Task<ReadableObject> ResolveReadableAsync(string orgSlug, string dsSlug, string? path,
+        CancellationToken ct = default) =>
+        ResolveReadableAsync(orgSlug, dsSlug, path, thumbnail: false, ct);
+
+    /// <summary><see cref="ResolveReadableAsync(string, string, string?, CancellationToken)"/> for a thumbnail.</summary>
+    /// <exception cref="NotFoundException">The entry's type has no thumbnail, or its artifact does not exist yet.</exception>
+    public Task<ReadableObject> ResolveThumbnailAsync(string orgSlug, string dsSlug, string? path,
+        CancellationToken ct = default) =>
+        ResolveReadableAsync(orgSlug, dsSlug, path, thumbnail: true, ct);
+
+    private async Task<ReadableObject> ResolveReadableAsync(string orgSlug, string dsSlug, string? path,
+        bool thumbnail, CancellationToken ct)
     {
-        var source = await ResolveAsync(orgSlug, dsSlug, path, ct);
+        var source = await ResolveAsync(orgSlug, dsSlug, path, thumbnail, ct);
 
         long version = 0;
         try

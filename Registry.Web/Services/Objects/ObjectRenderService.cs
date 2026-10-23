@@ -54,6 +54,10 @@ public sealed class ObjectRenderService : IObjectRenderService
         CancellationToken ct = default) =>
         _sources.ResolveReadableAsync(orgSlug, dsSlug, path, ct);
 
+    public Task<ReadableObject> ResolveThumbnailObjectAsync(string orgSlug, string dsSlug, string? path,
+        CancellationToken ct = default) =>
+        _sources.ResolveThumbnailAsync(orgSlug, dsSlug, path, ct);
+
     public async Task<StorageDataDto?> GenerateThumbnailDataAsync(string orgSlug, string dsSlug, string? path,
         int? size, bool recreate = false, CancellationToken ct = default)
     {
@@ -64,7 +68,7 @@ public sealed class ObjectRenderService : IObjectRenderService
         if (string.IsNullOrWhiteSpace(path))
             return await GenerateDatasetThumbnailDataAsync(orgSlug, dsSlug, size, recreate, ct);
 
-        var obj = await _sources.ResolveReadableAsync(orgSlug, dsSlug, path, ct);
+        var obj = await _sources.ResolveThumbnailAsync(orgSlug, dsSlug, path, ct);
 
         if (recreate)
         {

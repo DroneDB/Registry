@@ -19,6 +19,13 @@ public interface IBuildArtifactResolver
     /// </summary>
     bool IsBuildableType(EntryType type);
 
+    /// <summary>
+    /// Whether entries of <paramref name="type"/> have a thumbnail at all (<c>DDBGetEntryTypes</c>: "file" or "build",
+    /// not "none"): the one rule of the thumbnail endpoints, read once per process. A type without one (models,
+    /// videos, panoramas, vectors, ...) has nothing a renderer could open.
+    /// </summary>
+    bool HasThumbnail(EntryType type);
+
     /// <summary>The build of one entry (one native call).</summary>
     EntryBuildArtifacts GetBuild(IDDB ddb, string entryPath);
 

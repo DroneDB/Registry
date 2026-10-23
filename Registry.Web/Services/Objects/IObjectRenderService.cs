@@ -17,13 +17,21 @@ public interface IObjectRenderService
         CancellationToken ct = default);
 
     /// <summary>
+    /// <see cref="ResolveReadableObjectAsync"/> for a thumbnail: an entry whose type has none (libddb's entry
+    /// types: models, videos, panoramas, vectors, ...) is a 404 before any native work.
+    /// </summary>
+    /// <exception cref="Exceptions.NotFoundException">The type has no thumbnail, or its artifact is not built yet.</exception>
+    Task<ReadableObject> ResolveThumbnailObjectAsync(string orgSlug, string dsSlug, string? path,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// The thumbnail of <paramref name="path"/>, or the dataset's thumbnail when it is null or blank (null when
     /// the dataset has no thumbnail candidate). <paramref name="recreate"/> drops the cached one first.
     /// </summary>
     Task<StorageDataDto?> GenerateThumbnailDataAsync(string orgSlug, string dsSlug, string? path, int? size,
         bool recreate = false, CancellationToken ct = default);
 
-    /// <summary>The thumbnail of an entry resolved by <see cref="ResolveReadableObjectAsync"/>.</summary>
+    /// <summary>The thumbnail of an entry resolved by <see cref="ResolveThumbnailObjectAsync"/>.</summary>
     Task<StorageDataDto> GenerateThumbnailDataAsync(ReadableObject obj, int? size, CancellationToken ct = default);
 
     /// <summary>The map tile of <paramref name="path"/>.</summary>

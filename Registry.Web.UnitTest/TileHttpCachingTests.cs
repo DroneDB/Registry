@@ -39,6 +39,7 @@ public class TileHttpCachingTests
         _manager = new Mock<IObjectRenderService>();
         _obj = new ReadableObject("org", "ds", "ortho.tif", Hash, "ortho.tif", Mock.Of<IDDB>());
         _manager.Setup(m => m.ResolveReadableObjectAsync("org", "ds", "ortho.tif", It.IsAny<CancellationToken>())).ReturnsAsync(_obj);
+        _manager.Setup(m => m.ResolveThumbnailObjectAsync("org", "ds", "ortho.tif", It.IsAny<CancellationToken>())).ReturnsAsync(_obj);
         _manager.Setup(m => m.GenerateTileDataAsync(_obj, 19, 1, 2, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new StorageDataDto { Data = Bytes, ContentType = "image/webp", Name = "2.webp" });
         _manager.Setup(m => m.GenerateThumbnailDataAsync(_obj, 256, It.IsAny<CancellationToken>()))
@@ -163,6 +164,9 @@ public class TileHttpCachingTests
 
         controller.Response.Headers.ETag.ToString().ShouldBeEmpty();
         _manager.Verify(m => m.ResolveReadableObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<CancellationToken>()),
+            Times.Never);
+        _manager.Verify(m => m.ResolveThumbnailObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<CancellationToken>()),
             Times.Never);
     }

@@ -55,7 +55,8 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="path">The path to the object.</param>
     /// <param name="size">Optional thumbnail size.</param>
     /// <param name="v">Optional entry hash; when it matches the entry, the response may be cached without revalidation.</param>
-    /// <returns>The thumbnail image file.</returns>
+    /// <returns>The thumbnail image file; 404 when the entry's type has no thumbnail (libddb's entry types) or its
+    /// build artifact does not exist yet.</returns>
     [HttpGet("thumb", Name = nameof(ObjectsController) + "." + nameof(GenerateThumbnail))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status304NotModified)]
@@ -79,7 +80,7 @@ public class ObjectsController : ControllerBaseEx
         }
         else
         {
-            var obj = await _renders.ResolveReadableObjectAsync(orgSlug, dsSlug,
+            var obj = await _renders.ResolveThumbnailObjectAsync(orgSlug, dsSlug,
                 path.StartsWith('/') ? path[1..] : path, ct: ct);
 
             cachePolicy = HashedContentCachePolicy.For(obj.Hash, v, "thumb",
