@@ -95,7 +95,7 @@ public class OgcExceptionFilter : IExceptionFilter
                 // Every other exception: the API's status, message and log level (one mapping, RQ-05),
                 // in the OGC envelope
                 var d = ApiExceptionClassifier.Classify(context.Exception, context.HttpContext);
-                _logger.Log(d.Level, context.Exception, "Exception in OGC pipeline: {Path}", path);
+                ApiExceptionClassifier.Log(_logger, d, context.Exception, context.HttpContext.Request);
                 if (ApiExceptionClassifier.IsClientGone(d))
                 {
                     // Nobody reads an exception report any more (RQ-13)

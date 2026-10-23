@@ -49,7 +49,7 @@ public sealed class ApiErrorResponder
     {
         var descriptor = ApiExceptionClassifier.Classify(exception, httpContext);
 
-        _logger.Log(descriptor.Level, exception, "Exception in {Path}", httpContext.Request.Path);
+        ApiExceptionClassifier.Log(_logger, descriptor, exception, httpContext.Request);
 
         if (descriptor.RetryAfterSeconds is { } retryAfter)
             httpContext.Response.Headers.RetryAfter = retryAfter.ToString(CultureInfo.InvariantCulture);

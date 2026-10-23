@@ -37,12 +37,21 @@ internal sealed class CapturingLogger<T> : ILogger<T>
 {
     public List<(LogLevel Level, string Message)> Entries { get; } = [];
 
+    /// <summary>Every call with the exception it carried (a stack in the log).</summary>
+    public List<(LogLevel Level, string Message, Exception? Exception)> Records { get; } = [];
+
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
     public bool IsEnabled(LogLevel logLevel) => true;
 
     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
         Func<TState, Exception?, string> formatter) =>
-        Entries.Add((logLevel, formatter(state, exception)));
+        Record(logLevel, formatter(state, exception), exception);
+
+    private void Record(LogLevel logLevel, string message, Exception? exception)
+    {
+        Entries.Add((logLevel, message));
+        Records.Add((logLevel, message, exception));
+    }
 
     public int Count(LogLevel level) => Entries.Count(e => e.Level == level);
 }

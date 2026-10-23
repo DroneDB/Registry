@@ -72,6 +72,25 @@ public static class ApiExceptionClassifier
         descriptor.StatusCode == StatusCodes.Status499ClientClosedRequest;
 
     /// <summary>
+    /// Logs an incident once, at the classifier's level. A client error (4xx: a denial, a missing dataset, a bad
+    /// argument) is expected traffic: one line with the method, the route, the status and the message, and no
+    /// stack. A server fault (5xx) keeps its exception.
+    /// </summary>
+    public static void Log(ILogger logger, ApiErrorDescriptor descriptor, Exception exception, HttpRequest request)
+    {
+        if (descriptor.StatusCode >= StatusCodes.Status500InternalServerError)
+        {
+            logger.Log(descriptor.Level, exception, "Exception in {Path}", request.Path);
+            return;
+        }
+
+        // The client that went away has no message: nobody wrote one
+        var message = IsClientGone(descriptor) ? "the client closed the request" : descriptor.Message;
+        logger.Log(descriptor.Level, "{Method} {Path} -> {StatusCode}: {Message}", request.Method, request.Path,
+            descriptor.StatusCode, message);
+    }
+
+    /// <summary>
     /// Classifies <paramref name="ex"/> for <paramref name="request"/>: whether it is authenticated (D2) and
     /// whether its client went away (<c>RequestAborted</c>, RQ-13).
     /// </summary>
