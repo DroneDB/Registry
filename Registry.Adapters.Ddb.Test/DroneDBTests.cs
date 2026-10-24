@@ -1054,11 +1054,13 @@ public class NativeDdbWrapperTests : TestBase
 
         DdbWrapper.Add(area.TestFolder, f);
 
-        var act = () => DdbWrapper.MetaSet(area.TestFolder, "tests", "123", f);
+        // The entry is named by its dataset-relative path (an absolute one is refused: DQ-09)
+        const string entry = "test.txt";
+        var act = () => DdbWrapper.MetaSet(area.TestFolder, "tests", "123", entry);
         Should.Throw<DdbException>(act); // Needs singular key
 
-        DdbWrapper.MetaSet(area.TestFolder, "test", "abc", f).Data!.Value.GetString().ShouldBe("abc");
-        DdbWrapper.MetaSet(area.TestFolder, "test", "efg", f).Data!.Value.GetString().ShouldBe("efg");
+        DdbWrapper.MetaSet(area.TestFolder, "test", "abc", entry).Data!.Value.GetString().ShouldBe("abc");
+        DdbWrapper.MetaSet(area.TestFolder, "test", "efg", entry).Data!.Value.GetString().ShouldBe("efg");
     }
 
     [Test]
@@ -1119,7 +1121,7 @@ public class NativeDdbWrapperTests : TestBase
         DdbWrapper.Add(area.TestFolder, f);
 
         DdbWrapper.MetaSet(area.TestFolder, "abc", "[1,2,3]");
-        DdbWrapper.MetaUnset(area.TestFolder, "abc", f).ShouldBe(0);
+        DdbWrapper.MetaUnset(area.TestFolder, "abc", "test.txt").ShouldBe(0);
         DdbWrapper.MetaUnset(area.TestFolder, "abc").ShouldBe(1);
         DdbWrapper.MetaUnset(area.TestFolder, "abc").ShouldBe(0);
     }
