@@ -97,7 +97,7 @@ Build-layout literals in production C#	12
 Per-entry build probe calls	0
 RQ-12 files over 800 lines	0
 RQ-12 constructors over 7 parameters	0
-Registry.Web constructors over 7 parameters	5
+Registry.Web constructors over 7 parameters	2
 Registry.Web files over 800 lines	0
 Whole-section AppSettings in the container	0
 Files injecting IUtils	0

@@ -103,8 +103,10 @@ public class OgcRenderCachingTests
     private IDatasetAccessResolver? _resolver;
     private IDatasetAccessResolver Resolver => _resolver ??= new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object, TestPaths.Policy);
 
-    private WmsManager CreateWms() => new(Resolver, _artifacts.Object,
-        _wrapper.Object, _catalog.Object, TestCaches.Records(_cache), new HttpContextAccessor { HttpContext = _http },
+    private OgcManagerDependencies Dependencies(IRecordCache records, HttpContext? http = null) => new(Resolver,
+        _artifacts.Object, _wrapper.Object, _catalog.Object, records, new HttpContextAccessor { HttpContext = http });
+
+    private WmsManager CreateWms() => new(Dependencies(TestCaches.Records(_cache), _http),
         NullLogger<WmsManager>.Instance, _cacheManager, Mock.Of<IRasterIndexCatalog>());
 
     private Task<byte[]> GetMap(WmsManager wms, double[] bbox, string format = "image/png", bool transparent = true) =>
@@ -242,8 +244,7 @@ public class OgcRenderCachingTests
         _wrapper.Verify(w => w.GetRasterInfo(It.IsAny<string>()), Times.Once);
     }
 
-    private WcsCoverageService CreateWcs(IRecordCache records) => new(Resolver, _artifacts.Object,
-        _wrapper.Object, _catalog.Object, records, new HttpContextAccessor(),
+    private WcsCoverageService CreateWcs(IRecordCache records) => new(Dependencies(records),
         new RasterInfoCache(_wrapper.Object, records), NullLogger<WcsCoverageService>.Instance);
 
     // WMS (the spectral indices) and WCS (size, bands) read the same libddb document of a raster

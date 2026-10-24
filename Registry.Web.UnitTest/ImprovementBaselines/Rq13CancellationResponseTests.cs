@@ -146,8 +146,7 @@ public sealed class Rq13CancellationResponseTests
         cache.Setup(c => c.GetAsync(MagicStrings.OgcRenderCacheSeed, It.IsAny<string>(), It.IsAny<CancellationToken>(),
                 It.IsAny<object[]>()))
             .ThrowsAsync(new DdbCanceledException("Canceled by the cancel token"));
-        var wms = new WmsManager(Access(), Mock.Of<IBuildArtifactResolver>(), Mock.Of<IDdbWrapper>(), Catalog(),
-            TestCaches.Records(), new HttpContextAccessor(), log, cache.Object, Mock.Of<IRasterIndexCatalog>());
+        var wms = new WmsManager(OgcDependencies(), log, cache.Object, Mock.Of<IRasterIndexCatalog>());
 
         await Should.ThrowAsync<OperationCanceledException>(() => wms.GetMapAsync(Org, Ds, ["ortho"], [""],
             [0, 0, 10, 10], "EPSG:3857", 256, 256, "image/png", null, true));
@@ -163,14 +162,17 @@ public sealed class Rq13CancellationResponseTests
         tiles.Setup(t => t.GetTileAsync(Org, Ds, It.IsAny<IDDB>(), It.IsAny<OgcLayerDto>(), 3, 1, 2, "png",
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new DdbCanceledException("Canceled by the cancel token"));
-        var wmts = new WmtsManager(Access(), Mock.Of<IBuildArtifactResolver>(), Mock.Of<IDdbWrapper>(), Catalog(),
-            TestCaches.Records(), new HttpContextAccessor(), log, tiles.Object);
+        var wmts = new WmtsManager(OgcDependencies(), log, tiles.Object);
 
         await Should.ThrowAsync<OperationCanceledException>(() => wmts.GetTileAsync(Org, Ds, "ortho",
             WmtsConformance.DefaultStyle, WmtsConformance.DefaultTileMatrixSet, 3, 1, 2, "image/png"));
 
         log.Count(LogLevel.Error).ShouldBe(0);
     }
+
+    private static OgcManagerDependencies OgcDependencies() =>
+        new(Access(), Mock.Of<IBuildArtifactResolver>(), Mock.Of<IDdbWrapper>(), Catalog(), TestCaches.Records(),
+            new HttpContextAccessor());
 
     private static IDatasetAccessResolver Access()
     {

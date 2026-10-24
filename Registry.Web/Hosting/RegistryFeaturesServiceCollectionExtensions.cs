@@ -184,6 +184,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
     /// <summary>OGC services (WMS/WMTS/WFS/WCS/OGC API + MVT endpoint) and their filters.</summary>
     public static IServiceCollection AddRegistryOgc(this IServiceCollection services)
     {
+        services.AddScoped<OgcManagerDependencies>();
         services.AddScoped<IOgcLayerCatalog, OgcLayerCatalog>();
         services.AddScoped<IOgcRasterTileSource, OgcRasterTileSource>();
         services.AddScoped<IRasterInfoCache, RasterInfoCache>();

@@ -38,9 +38,8 @@ public interface IWfsCapabilities
 /// <summary>Default <see cref="IWfsCapabilities"/>: WFS 2.0.0, vector layers only.</summary>
 public class WfsCapabilities : OgcManagerBase, IWfsCapabilities
 {
-    public WfsCapabilities(IDatasetAccessResolver access, IBuildArtifactResolver ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IRecordCache cache, IHttpContextAccessor ctx)
-        : base(access, ar, w, c, cache, ctx)
+    public WfsCapabilities(OgcManagerDependencies dependencies)
+        : base(dependencies)
     {
     }
 

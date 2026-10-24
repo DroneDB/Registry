@@ -105,10 +105,11 @@ public class WmsIndexStylesTests
             TimeSpan.FromMinutes(10));
 
         var records = TestCaches.Records(store);
-        _wms = new WmsManager(new DatasetAccessResolver(utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy),
-            _artifacts.Object, _wrapper.Object, _catalog.Object, records,
-            new HttpContextAccessor { HttpContext = new DefaultHttpContext() }, NullLogger<WmsManager>.Instance,
-            cacheManager, new RasterIndexCatalog(new RasterInfoCache(_wrapper.Object, records), NullLogger<RasterIndexCatalog>.Instance));
+        _wms = new WmsManager(
+            new OgcManagerDependencies(new DatasetAccessResolver(utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy),
+                _artifacts.Object, _wrapper.Object, _catalog.Object, records,
+                new HttpContextAccessor { HttpContext = new DefaultHttpContext() }),
+            NullLogger<WmsManager>.Instance, cacheManager, new RasterIndexCatalog(new RasterInfoCache(_wrapper.Object, records), NullLogger<RasterIndexCatalog>.Instance));
     }
 
     private Task<byte[]> GetMap(string layer, string? style, double[]? bbox = null) =>

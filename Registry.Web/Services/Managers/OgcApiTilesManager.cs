@@ -28,10 +28,8 @@ public class OgcApiTilesManager : OgcManagerBase, IOgcApiTilesManager
 {
     private readonly IOgcRasterTileSource _rasterTiles;
 
-    public OgcApiTilesManager(IDatasetAccessResolver access, IBuildArtifactResolver ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IRecordCache cache, IHttpContextAccessor ctx,
-        IOgcRasterTileSource rasterTiles)
-        : base(access, ar, w, c, cache, ctx)
+    public OgcApiTilesManager(OgcManagerDependencies dependencies, IOgcRasterTileSource rasterTiles)
+        : base(dependencies)
     {
         _rasterTiles = rasterTiles;
     }

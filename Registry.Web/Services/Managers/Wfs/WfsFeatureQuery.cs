@@ -46,9 +46,8 @@ public class WfsFeatureQuery : OgcManagerBase, IWfsFeatureQuery
 {
     private readonly ILogger<WfsFeatureQuery> _logger;
 
-    public WfsFeatureQuery(IDatasetAccessResolver access, IBuildArtifactResolver ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IRecordCache cache, IHttpContextAccessor ctx, ILogger<WfsFeatureQuery> logger)
-        : base(access, ar, w, c, cache, ctx)
+    public WfsFeatureQuery(OgcManagerDependencies dependencies, ILogger<WfsFeatureQuery> logger)
+        : base(dependencies)
     {
         _logger = logger;
     }

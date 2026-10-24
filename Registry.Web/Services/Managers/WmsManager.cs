@@ -35,10 +35,9 @@ public class WmsManager : OgcManagerBase, IWmsManager
     private readonly INativeWorkGate _gate;
     private readonly IRasterIndexCatalog _indexes;
 
-    public WmsManager(IDatasetAccessResolver access, IBuildArtifactResolver ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IRecordCache cache, IHttpContextAccessor ctx, ILogger<WmsManager> logger,
+    public WmsManager(OgcManagerDependencies dependencies, ILogger<WmsManager> logger,
         ICacheManager cacheManager, IRasterIndexCatalog indexes, INativeWorkGate? gate = null)
-        : base(access, ar, w, c, cache, ctx)
+        : base(dependencies)
     {
         _logger = logger;
         _cacheManager = cacheManager;

@@ -31,10 +31,9 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
     private readonly INativeWorkGate _gate;
     private readonly IRasterInfoCache _rasterInfo;
 
-    public WcsCoverageService(IDatasetAccessResolver access, IBuildArtifactResolver ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IRecordCache cache, IHttpContextAccessor ctx,
-        IRasterInfoCache rasterInfo, ILogger<WcsCoverageService> logger, INativeWorkGate? gate = null)
-        : base(access, ar, w, c, cache, ctx)
+    public WcsCoverageService(OgcManagerDependencies dependencies, IRasterInfoCache rasterInfo,
+        ILogger<WcsCoverageService> logger, INativeWorkGate? gate = null)
+        : base(dependencies)
     {
         _logger = logger;
         _rasterInfo = rasterInfo;

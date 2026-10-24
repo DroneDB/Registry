@@ -103,17 +103,19 @@ public class WfsFeatureQueryTests
         var access = new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object, TestPaths.Policy);
         var records = Cache();
         var context = new HttpContextAccessor { HttpContext = new DefaultHttpContext() };
+        var dependencies = new OgcManagerDependencies(access, _artifacts.Object, _wrapper.Object, _catalog.Object,
+            records, context);
         return new WfsManager(
-            new WfsCapabilities(access, _artifacts.Object, _wrapper.Object, _catalog.Object, records, context),
-            new WfsSchema(access, _artifacts.Object, _wrapper.Object, _catalog.Object, records, context,
-                NullLogger<WfsSchema>.Instance),
-            new WfsFeatureQuery(access, _artifacts.Object, _wrapper.Object, _catalog.Object, records, context,
-                NullLogger<WfsFeatureQuery>.Instance));
+            new WfsCapabilities(dependencies),
+            new WfsSchema(dependencies, NullLogger<WfsSchema>.Instance),
+            new WfsFeatureQuery(dependencies, NullLogger<WfsFeatureQuery>.Instance));
     }
 
-    private OgcApiFeaturesManager CreateFeatures() => new(new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object, TestPaths.Policy),
-        _artifacts.Object, _wrapper.Object, _catalog.Object, Cache(),
-        new HttpContextAccessor { HttpContext = new DefaultHttpContext() }, NullLogger<OgcApiFeaturesManager>.Instance);
+    private OgcApiFeaturesManager CreateFeatures() => new(
+        new OgcManagerDependencies(new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object, TestPaths.Policy),
+            _artifacts.Object, _wrapper.Object, _catalog.Object, Cache(),
+            new HttpContextAccessor { HttpContext = new DefaultHttpContext() }),
+        NullLogger<OgcApiFeaturesManager>.Instance);
 
     private static bool Fids(VectorQuery q, params long[] fids) => q.Fids != null && q.Fids.SequenceEqual(fids);
 

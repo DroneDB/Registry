@@ -53,13 +53,15 @@ public abstract class OgcManagerBase
     protected static XmlWriter CreateXmlWriter(StringBuilder sb) =>
         XmlWriter.Create(sb, new XmlWriterSettings { Indent = true, Async = true, OmitXmlDeclaration = true });
 
-    protected OgcManagerBase(IDatasetAccessResolver access,
-        IBuildArtifactResolver builds, IDdbWrapper ddbWrapper, IOgcLayerCatalog catalog,
-        IRecordCache records, IHttpContextAccessor httpContext)
+    protected OgcManagerBase(OgcManagerDependencies dependencies)
     {
-        Access = access;
-        Builds = builds; DdbWrapper = ddbWrapper; LayerCatalog = catalog; Records = records;
-        HttpContext = httpContext;
+        ArgumentNullException.ThrowIfNull(dependencies);
+        Access = dependencies.Access;
+        Builds = dependencies.Builds;
+        DdbWrapper = dependencies.DdbWrapper;
+        LayerCatalog = dependencies.LayerCatalog;
+        Records = dependencies.Records;
+        HttpContext = dependencies.HttpContext;
     }
 
     /// <summary>

@@ -37,9 +37,8 @@ public class WfsSchema : OgcManagerBase, IWfsSchema
 {
     private readonly ILogger<WfsSchema> _logger;
 
-    public WfsSchema(IDatasetAccessResolver access, IBuildArtifactResolver ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IRecordCache cache, IHttpContextAccessor ctx, ILogger<WfsSchema> logger)
-        : base(access, ar, w, c, cache, ctx)
+    public WfsSchema(OgcManagerDependencies dependencies, ILogger<WfsSchema> logger)
+        : base(dependencies)
     {
         _logger = logger;
     }
