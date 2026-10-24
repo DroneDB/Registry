@@ -15,8 +15,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Moq;
 using NUnit.Framework;
 using Registry.Adapters.Testing;
+using Registry.Adapters.Thumbnail;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
@@ -192,7 +194,38 @@ public class Rq07HostTests
         runtime.Calls.ShouldBe(["SetLogSink", "Configure", "RegisterProcess", "Shutdown"]);
     }
 
-    private IHost ThumbnailHost(string token, FakeDdbRuntime? runtime = null) =>
+    /// <summary>XI-08: the generator serves HTTP requests and calls libddb too: its native calls carry the request's id.</summary>
+    [Test]
+    public async Task ThumbnailGenerator_ANativeCallOfARequest_CarriesTheRequestsOperation()
+    {
+        var file = Path.Combine(_root, "datasets", "o", "d", "photo.jpg");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        await File.WriteAllBytesAsync(file, [1, 2, 3]);
+        (ulong Id, string? RequestId) seen = default;
+        var wrapper = new Mock<FakeDdbWrapper> { CallBase = true };
+        wrapper.Setup(d => d.GenerateThumbnail(It.IsAny<string>(), It.IsAny<int>())).Returns(() =>
+        {
+            seen = (DdbOperation.Current, RequestOperations.Current);
+            return [1, 2, 3, 4];
+        });
+        using var host = ThumbnailHost(token: "rq07-thumbnail-token", wrapper: wrapper.Object);
+        await host.StartAsync();
+        var address = host.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, address + ThumbnailRequestHandler.Route)
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["path"] = file, ["size"] = "64" })
+        };
+        request.Headers.Add(RemoteThumbnailGeneratorSettings.TokenHeaderName, "rq07-thumbnail-token");
+        using var client = new HttpClient();
+        (await client.SendAsync(request)).IsSuccessStatusCode.ShouldBeTrue();
+        await host.StopAsync();
+
+        seen.Id.ShouldNotBe(0UL);
+        seen.RequestId.ShouldNotBeNullOrEmpty();
+    }
+
+    private IHost ThumbnailHost(string token, FakeDdbRuntime? runtime = null, IDdbWrapper? wrapper = null) =>
         RegistryHost.CreateThumbnailGeneratorBuilder(["--urls", "http://127.0.0.1:0"])
             .UseContentRoot(_root)
             .ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(Settings(token)))
@@ -201,7 +234,7 @@ public class Rq07HostTests
                 services.RemoveAll<IDdbRuntime>();
                 services.AddSingleton<IDdbRuntime>(runtime ?? new FakeDdbRuntime());
                 services.RemoveAll<IDdbWrapper>();
-                services.AddSingleton<IDdbWrapper>(new FakeDdbWrapper());
+                services.AddSingleton(wrapper ?? new FakeDdbWrapper());
             })
             .Build();
 
