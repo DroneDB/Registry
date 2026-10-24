@@ -14,19 +14,19 @@ using Shouldly;
 namespace Registry.Adapters.Ddb.Test;
 
 /// <summary>
-/// What the ABI 1.1 contract tests (<see cref="Abi11ContractTests"/>) and the shutdown probe
-/// process (<see cref="Abi11ShutdownProbe"/>) share: the ABI gate, the native library setup and
+/// What the libddb contract tests (<see cref="LibddbContractTests"/>) and the shutdown probe
+/// process (<see cref="LibddbShutdownProbe"/>) share: the ABI gate, the native library setup and
 /// the handling of native outputs. Assertions are Shouldly's, so they work outside NUnit too.
 /// </summary>
-internal static class Abi11Native
+internal static class LibddbNative
 {
-    /// <summary>The outcome of the ABI handshake for the ABI 1.1 contract.</summary>
+    /// <summary>The outcome of the ABI handshake for the libddb 2.x contract.</summary>
     internal enum Gate
     {
-        /// <summary>ABI 1.x with x &gt;= 1 and every export Registry calls: the contract applies in full.</summary>
+        /// <summary>ABI 2.x (minor at least <see cref="DdbAbi.Minor"/>) and every export Registry calls: the contract applies in full.</summary>
         Applies,
 
-        /// <summary>The adapter cannot use this library (another ABI, ABI 1.0, a missing export).</summary>
+        /// <summary>The adapter cannot use this library (another ABI major, such as a libddb 1.x, or a missing export).</summary>
         Incompatible
     }
 
@@ -43,7 +43,7 @@ internal static class Abi11Native
 
     /// <summary>
     /// The startup handshake of the adapter (<see cref="DdbAbi.Verify"/>): since RQ-08 Registry runs on
-    /// libddb ABI 1.1 only, so a library that fails it fails the tests, it never makes them inconclusive.
+    /// libddb 2.x only, so a library that fails it fails the tests, it never makes them inconclusive.
     /// </summary>
     internal static (Gate Gate, string Message) CheckAbi()
     {

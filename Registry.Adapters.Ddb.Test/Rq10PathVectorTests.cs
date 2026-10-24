@@ -7,7 +7,7 @@ using Registry.Adapters.Testing;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Shouldly;
-using static Registry.Adapters.Ddb.Test.Abi11Native;
+using static Registry.Adapters.Ddb.Test.LibddbNative;
 
 namespace Registry.Adapters.Ddb.Test;
 

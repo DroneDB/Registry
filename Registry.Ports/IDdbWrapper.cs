@@ -117,7 +117,7 @@ public interface IDdbWrapper
 
     /// <summary>
     /// <see cref="ApplyDelta(Delta, string, string, MergeStrategy, string?)"/> for files whose hashes
-    /// the caller checked against the delta while it received them (<c>DDBApplyDeltaEx</c>, ABI 1.1,
+    /// the caller checked against the delta while it received them (<c>DDBApplyDeltaEx</c>, ABI 2.0,
     /// XI-05): libddb does not read those files again. <paramref name="verifiedHashes"/> maps a delta
     /// path (its exact spelling) to the lowercase hex SHA-256 the delta gives it; every other added file
     /// is hashed by libddb. An entry that is not a file the delta adds, or has another hash, fails the
@@ -180,14 +180,14 @@ public interface IDdbWrapper
 
     /// <summary>
     /// Whether the dataset has pending (deferred) builds (DDBIsBuildPending, deprecated in libddb
-    /// ABI 1.1). Kept for the pending-build scheduling until RQ-11/RQ-12 hand it to libddb
-    /// (DDBBuild pendingOnly, XI-04): ABI 1.1 has no other dataset-wide pending query.
+    /// 2.x). Kept for the pending-build scheduling until RQ-11/RQ-12 hand it to libddb
+    /// (DDBBuild pendingOnly, XI-04): libddb 2.x has no other dataset-wide pending query.
     /// </summary>
     public bool IsBuildPending(string ddbPath);
 
     /// <summary>
     /// The pending (deferred) builds of the dataset: builds skipped because a dependency was
-    /// missing at the last attempt (DDBGetPendingBuildInfo, deprecated in libddb ABI 1.1).
+    /// missing at the last attempt (DDBGetPendingBuildInfo, deprecated in libddb 2.x).
     /// Read-only. Kept until RQ-11/RQ-12, like <see cref="IsBuildPending"/>.
     /// </summary>
     public PendingBuildInfo[] GetPendingBuildInfo(string ddbPath);

@@ -125,7 +125,7 @@ public static class ApiExceptionClassifier
             // before the 500 default: both derive from DdbException.
             DdbBusyException e => new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, 2, false, e.Message, LogLevel.Warning),
             DdbBuildInProgressException e => new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, 2, false, e.Message, LogLevel.Warning),
-            // libddb ABI 1.1 (XI-02): a transient failure (disk full, tool timeout) and a process that
+            // libddb ABI 2.0 (XI-02): a transient failure (disk full, tool timeout) and a process that
             // is shutting down can succeed later; an invalid argument or a missing build never can
             DdbRetryableException e => new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, 60, false, e.Message, LogLevel.Warning),
             DdbShutdownException e => new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, ShutdownRetryAfterSeconds, false, e.Message, LogLevel.Warning),

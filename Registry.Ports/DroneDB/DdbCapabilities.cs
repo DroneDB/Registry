@@ -7,7 +7,7 @@ using System.Text.Json;
 namespace Registry.Ports.DroneDB;
 
 /// <summary>
-/// What the loaded libddb supports (<c>DDBGetCapabilities</c>, ABI 1.1, XI-01): its ABI and
+/// What the loaded libddb supports (<c>DDBGetCapabilities</c>, ABI 2.0, XI-01): its ABI and
 /// version, its error codes and reasons, the exports that honour a cancel token and every exported
 /// symbol. Read once at startup; it replaces probing an export by calling it and catching
 /// <see cref="EntryPointNotFoundException"/>.
@@ -54,7 +54,7 @@ public sealed class DdbCapabilities
     public override string ToString() => $"libddb {Version}, ABI {AbiMajor}.{AbiMinor}, {Symbols.Count} exports";
 
     /// <summary>Parses the <c>DDBGetCapabilities()</c> JSON (fields are only ever added: unknown ones are ignored).</summary>
-    /// <exception cref="FormatException">The JSON lacks a field ABI 1.1 defines.</exception>
+    /// <exception cref="FormatException">The JSON lacks a field ABI 2.0 defines.</exception>
     public static DdbCapabilities Parse(string json)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(json);

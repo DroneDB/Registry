@@ -18,7 +18,7 @@ namespace Registry.Adapters.DroneDB;
 /// <item><term>NotFound</term><description><see cref="DdbNotFoundException"/> (404) where the call has no "absent" answer</description></item>
 /// <item><term>InvalidArgs</term><description><see cref="DdbInvalidArgumentsException"/> (400, noRetry)</description></item>
 /// <item><term>Retryable</term><description><see cref="DdbRetryableException"/> with its reason (transient: retried, noRetry false)</description></item>
-/// <item><term>Exception with a retryable reason</term><description><see cref="DdbRetryableException"/>: the exports older than ABI 1.1 (DDBBuild) keep DDBERR_EXCEPTION but set the reason</description></item>
+/// <item><term>Exception with a retryable reason</term><description><see cref="DdbRetryableException"/>: the exports that predate the reason codes (DDBBuild) keep DDBERR_EXCEPTION but set the reason</description></item>
 /// <item><term>Shutdown</term><description><see cref="DdbShutdownException"/> (the process is stopping)</description></item>
 /// <item><term>anything else</term><description><see cref="DdbException"/></description></item>
 /// </list>
@@ -69,7 +69,7 @@ public static class DdbResultMapper
     }
 
     /// <summary>
-    /// A reason ABI 1.1 defines for a transient failure. ddb.h: reasons are only ever added and an
+    /// A reason ABI 2.0 defines for a transient failure. ddb.h: reasons are only ever added and an
     /// unknown one is treated like none.
     /// </summary>
     public static bool IsRetryableReason(string? reason) => reason is

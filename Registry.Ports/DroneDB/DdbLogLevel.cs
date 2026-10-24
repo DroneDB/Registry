@@ -1,6 +1,6 @@
 namespace Registry.Ports.DroneDB;
 
-/// <summary><c>DDBLogLevel</c> (libddb ABI 1.1), in increasing severity like .NET's LogLevel.</summary>
+/// <summary><c>DDBLogLevel</c> (libddb ABI 2.0), in increasing severity like .NET's LogLevel.</summary>
 public enum DdbLogLevel
 {
     Trace = 0,

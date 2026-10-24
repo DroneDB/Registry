@@ -2,7 +2,7 @@ namespace Registry.Ports.DroneDB;
 
 /// <summary>
 /// The process configuration a host gives libddb before <c>DDBRegisterProcess</c>
-/// (<c>DDBConfigure</c>, ABI 1.1, XI-06). A null value is not sent: libddb then uses its
+/// (<c>DDBConfigure</c>, ABI 2.0, XI-06). A null value is not sent: libddb then uses its
 /// environment variable or its default.
 /// </summary>
 /// <param name="CpuPoolSize">Worker threads libddb may run at once beside the calling threads (0..4096).</param>

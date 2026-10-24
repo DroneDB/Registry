@@ -9,7 +9,7 @@ using Registry.Ports.DroneDB;
 namespace Registry.Adapters.DroneDB;
 
 /// <summary>
-/// <see cref="IDdbRuntime"/> over libddb ABI 1.1. The state it changes (configuration, log
+/// <see cref="IDdbRuntime"/> over libddb ABI 2.0. The state it changes (configuration, log
 /// callback, initialization, shutdown) belongs to the process, so every instance shares it.
 /// </summary>
 public sealed unsafe class NativeDdbRuntime : IDdbRuntime

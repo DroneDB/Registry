@@ -8,17 +8,17 @@ using Registry.Adapters.DroneDB;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Shouldly;
-using static Registry.Adapters.Ddb.Test.Abi11Native;
+using static Registry.Adapters.Ddb.Test.LibddbNative;
 
 namespace Registry.Adapters.Ddb.Test;
 
 /// <summary>
-/// RQ-08 on the real libddb (ABI 1.1): the startup handshake, the new port members
+/// RQ-08 on the real libddb (ABI 2.0): the startup handshake, the new port members
 /// (<see cref="NativeDdbWrapper.GetBuildArtifacts"/>, <see cref="NativeDdbWrapper.ResolveBuildFile"/>,
 /// <see cref="NativeDdbWrapper.GetEntryTypes"/>, <see cref="NativeDdbWrapper.CopyBuildArtifacts"/>), the
 /// error contract through the adapter (each code its typed exception, with the failing call's own
 /// message and reason, XI-02) and the runtime's log sink (XI-08). The raw exports are covered by
-/// <see cref="Abi11ContractTests"/>.
+/// <see cref="LibddbContractTests"/>.
 /// Run: dotnet test Registry.Adapters.Ddb.Test --filter "FullyQualifiedName~Rq08NativeAdapterTests"
 /// </summary>
 [TestFixture]
@@ -51,7 +51,7 @@ public class Rq08NativeAdapterTests : TestBase
     public void DeleteDownloads() => TestDownloadCache.Evict(_geoRaster);
 
     [Test]
-    public void Handshake_TheLoadedLibraryIsAbi11_AndExportsEveryImport()
+    public void Handshake_TheLoadedLibraryIsLibddb2_AndExportsEveryImport()
     {
         var capabilities = DdbAbi.Verify();
 

@@ -231,7 +231,7 @@ public class ArtifactCompletenessCheckerService
     /// same hash (latest first), the next nightly retry waits 2^(n-1) days, at most
     /// <see cref="MaxBackoffDays"/>. A build that keeps failing (an unreadable file)
     /// fades to a monthly attempt instead of failing every night. A transient failure
-    /// (contention, disk full, tool timeout: libddb ABI 1.1 reports them as
+    /// (contention, disk full, tool timeout: libddb ABI 2.0 reports them as
     /// <see cref="DdbRetryableException"/>) never counts. A new upload (new hash)
     /// or any non-failed build (e.g. a manual retry that succeeded) resets the count.
     /// </summary>

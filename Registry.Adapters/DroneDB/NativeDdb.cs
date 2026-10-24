@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 namespace Registry.Adapters.DroneDB;
 
 /// <summary>
-/// The libddb C ABI as Registry calls it (ddb.h of DroneDB 2.0.0, ABI 1.1): the only place an export
+/// The libddb C ABI as Registry calls it (ddb.h of DroneDB 2.0.0, ABI 2.0): the only place an export
 /// is declared (RQ-08, XI-03). Every declaration is a source-generated
 /// <see cref="LibraryImportAttribute"/> stub named exactly like its export, so
 /// <see cref="DdbAbi.RequiredSymbols"/> (the startup check) is derived from this class.
@@ -202,12 +202,12 @@ internal static unsafe partial class NativeDdb
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBCleanup(string ddbPath, out IntPtr output);
 
-    /// <summary>Deprecated in ABI 1.1 (no other dataset-wide pending query yet): RQ-11/RQ-12.</summary>
+    /// <summary>Deprecated in libddb 2.x (no other dataset-wide pending query yet): RQ-11/RQ-12.</summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBIsBuildPending(string ddbPath,
         [MarshalAs(UnmanagedType.U1)] out bool isBuildPending);
 
-    /// <summary>Deprecated in ABI 1.1 (no other dataset-wide pending query yet): RQ-11/RQ-12.</summary>
+    /// <summary>Deprecated in libddb 2.x (no other dataset-wide pending query yet): RQ-11/RQ-12.</summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBGetPendingBuildInfo(string ddbPath, out IntPtr output);
 
@@ -429,7 +429,7 @@ internal struct DdbAddHint
 }
 
 /// <summary>
-/// <c>DDBListEntriesOptions</c> (ABI 1.1): 8 bytes, <c>structSize</c> at 0, then three 1-byte
+/// <c>DDBListEntriesOptions</c> (ABI 2.0): 8 bytes, <c>structSize</c> at 0, then three 1-byte
 /// bools at 4, 5 and 6, and one reserved byte (keep it zero). A later ABI appends fields after
 /// the 8 bytes and raises <c>structSize</c>; a library rejects a struct whose bytes past the size
 /// it knows are not zero (DDBERR_INVALIDARGS).

@@ -92,7 +92,7 @@ public sealed class FakeDdbWrapperTests
         "pending-build-info", "build-artifacts-pending",
         // A deprecated export Registry no longer calls (GetBuildArtifacts replaces it, XI-04)
         "build-status",
-        // ABI 1.1 outputs with no port member yet: the listing with build objects (RQ-11)
+        // ABI 2.0 outputs with no port member yet: the listing with build objects (RQ-11)
         "list-entries-ex",
         // The STAC exports that build Registry's URLs, which Registry no longer calls (XI-09, RQ-12: the data-only
         // documents replace them and Registry builds every id, link and href)

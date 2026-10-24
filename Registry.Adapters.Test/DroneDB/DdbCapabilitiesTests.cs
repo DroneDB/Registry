@@ -40,7 +40,7 @@ public class DdbCapabilitiesTests
     [TestCase("""{"abi": {"major": 1, "minor": 1}, "version": "x", "errorCodes": {}, "errorReasons": [], "cancellable": []}""")]
     [TestCase("[]")]
     [TestCase("not json")]
-    public void Parse_WithoutAnAbi11Field_IsAFormatError(string json)
+    public void Parse_WithoutAnAbiField_IsAFormatError(string json)
     {
         Should.Throw<FormatException>(() => DdbCapabilities.Parse(json));
     }

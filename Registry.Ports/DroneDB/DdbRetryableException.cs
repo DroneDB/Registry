@@ -10,7 +10,7 @@ namespace Registry.Ports.DroneDB;
 /// </summary>
 public class DdbRetryableException : DdbException
 {
-    /// <summary><c>DDBGetLastErrorReason()</c> values defined by ABI 1.1 (names are only ever added).</summary>
+    /// <summary><c>DDBGetLastErrorReason()</c> values defined by ABI 2.0 (names are only ever added).</summary>
     public static class Reasons
     {
         public const string LowDiskSpace = "lowDiskSpace";

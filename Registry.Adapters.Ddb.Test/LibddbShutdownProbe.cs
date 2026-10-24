@@ -7,13 +7,13 @@ using System.Threading;
 using Registry.Adapters.DroneDB;
 using Registry.Ports.DroneDB;
 using Shouldly;
-using static Registry.Adapters.Ddb.Test.Abi11Native;
+using static Registry.Adapters.Ddb.Test.LibddbNative;
 
 namespace Registry.Adapters.Ddb.Test;
 
 /// <summary>
 /// The test assembly's entry point. <c>dotnet test</c> never calls it; the shutdown contract test
-/// starts this assembly with <see cref="Abi11ShutdownProbe.Argument"/> to run DDBShutdown in a
+/// starts this assembly with <see cref="LibddbShutdownProbe.Argument"/> to run DDBShutdown in a
 /// process of its own (GenerateProgramFile is off in the csproj for this).
 /// </summary>
 internal static class Program
@@ -21,28 +21,28 @@ internal static class Program
     public static int Main(string[] args) => args switch
     {
         [] => 0,
-        [Abi11ShutdownProbe.Argument] => Abi11ShutdownProbe.Run(),
+        [LibddbShutdownProbe.Argument] => LibddbShutdownProbe.Run(),
         _ => 2
     };
 }
 
 /// <summary>
-/// DDBShutdown (ABI 1.1, DQ-15/XI-07) in a child process, since no call but the exempt accessors
-/// works after it. Run by <see cref="Abi11ContractTests"/>; prints one line per step and
+/// DDBShutdown (ABI 2.0, DQ-15/XI-07) in a child process, since no call but the exempt accessors
+/// works after it. Run by <see cref="LibddbContractTests"/>; prints one line per step and
 /// <see cref="Passed"/> at the end. Exit codes: 0 passed, 1 a step failed, 3 the loaded libddb is
-/// not ABI 1.1 (the parent test checks the gate first, so 3 is a failure there too).
+/// not libddb 2.x (the parent test checks the gate first, so 3 is a failure there too).
 /// </summary>
-internal static unsafe class Abi11ShutdownProbe
+internal static unsafe class LibddbShutdownProbe
 {
-    public const string Argument = "--abi11-shutdown-probe";
-    public const string Passed = "ABI 1.1 SHUTDOWN PROBE PASSED";
+    public const string Argument = "--libddb-shutdown-probe";
+    public const string Passed = "LIBDDB SHUTDOWN PROBE PASSED";
 
     private const int NotRun = int.MinValue;
     private static int _shutdownFromCallback = NotRun;
 
     public static int Run()
     {
-        var folder = Path.Combine(Path.GetTempPath(), nameof(Abi11ShutdownProbe), Guid.NewGuid().ToString("N"));
+        var folder = Path.Combine(Path.GetTempPath(), nameof(LibddbShutdownProbe), Guid.NewGuid().ToString("N"));
         try
         {
             UseDdbFolder();

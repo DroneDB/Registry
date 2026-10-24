@@ -3,7 +3,7 @@ using System;
 namespace Registry.Ports.DroneDB;
 
 /// <summary>
-/// libddb rejected an argument (native result <c>DDBERR_INVALIDARGS</c>, returned by the ABI 1.1
+/// libddb rejected an argument (native result <c>DDBERR_INVALIDARGS</c>, returned by the ABI 2.0
 /// exports): the same call can never succeed, so the HTTP API answers 400 with <c>noRetry</c>.
 /// </summary>
 public class DdbInvalidArgumentsException : DdbException

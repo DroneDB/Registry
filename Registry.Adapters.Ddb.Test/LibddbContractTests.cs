@@ -18,36 +18,37 @@ using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Shouldly;
-using static Registry.Adapters.Ddb.Test.Abi11Native;
+using static Registry.Adapters.Ddb.Test.LibddbNative;
 
 namespace Registry.Adapters.Ddb.Test;
 
 /// <summary>
-/// The libddb ABI 1.1 contract (XI-01, XI-09; DroneDB P3-10): one test per export added in ABI
-/// 1.1, called through the P/Invoke declarations of <see cref="NativeDdb"/>, the adapter's one
+/// The libddb 2.x contract (XI-01, XI-09; DroneDB P3-10): one test per export of the ABI that
+/// Registry uses beyond the original wrapper, called through the P/Invoke declarations of <see cref="NativeDdb"/>, the adapter's one
 /// native-methods home (UTF-8 strings, 1-byte bools, <see cref="DdbListEntriesOptions"/>, outputs
 /// freed with DDBFree), with the outputs checked against DroneDB's contract fixtures
 /// (tests/contract/fixtures, named in each test) and the documented error codes.
 /// <para>
 /// <b>The gate.</b> The fixture runs the adapter's startup handshake (<see cref="DdbAbi.Verify"/>):
-/// ABI 1.x with x &gt;= 1 and every export the adapter declares. Since RQ-08 Registry runs on ABI 1.1
-/// only, so a library that fails the handshake fails the fixture; a wrong result fails its test.
+/// ABI 2.x (major equal to <see cref="DdbAbi.Major"/>, minor at least <see cref="DdbAbi.Minor"/>) and
+/// every export the adapter declares. Registry runs on libddb 2.x only (DroneDB has one version and
+/// the ABI follows it: a removed export is a new major), so a library that fails the handshake fails the fixture; a wrong result fails its test.
 /// DroneDB's registry_contract job (the freshly built .deb) and Registry's CI (the pinned DroneDB
 /// build) run every test.
 /// </para>
 /// <para>
-/// DDBShutdown is process-final, so it runs in a child process (<see cref="Abi11ShutdownProbe"/>).
+/// DDBShutdown is process-final, so it runs in a child process (<see cref="LibddbShutdownProbe"/>).
 /// The tests that change process-wide state (DDBConfigure, DDBSetLogCallback) put it back in a
-/// finally block. Run: dotnet test Registry.Adapters.Ddb.Test --filter "FullyQualifiedName~Abi11ContractTests"
+/// finally block. Run: dotnet test Registry.Adapters.Ddb.Test --filter "FullyQualifiedName~LibddbContractTests"
 /// </para>
 /// </summary>
 [TestFixture]
 [NonParallelizable]
 [Category(TestCategories.Native)]
 [Category(TestCategories.Network)]
-public unsafe class Abi11ContractTests : TestBase
+public unsafe class LibddbContractTests : TestBase
 {
-    private const string BaseTestFolder = nameof(Abi11ContractTests);
+    private const string BaseTestFolder = nameof(LibddbContractTests);
 
     // A 20x20 GeoTIFF (EPSG:26711): a GeoRaster that builds a COG in a moment
     private static readonly string GeoRasterUrl = TestData.Url("testdata/raster/byte.tif");
@@ -97,7 +98,7 @@ public unsafe class Abi11ContractTests : TestBase
     private string? _geoRaster;
 
     [OneTimeSetUp]
-    public void RequireAbi11()
+    public void RequireLibddb2()
     {
         UseDdbFolder();
 
@@ -105,9 +106,9 @@ public unsafe class Abi11ContractTests : TestBase
         if (gate != Gate.Applies)
             Assert.Fail(message);
 
-        // The first call of every DDB process (GDAL drivers, PROJ data): ABI 1.1 returns DDBErr
+        // The first call of every DDB process (GDAL drivers, PROJ data): ABI 2.0 returns DDBErr
         Ok(NativeDdb.DDBRegisterProcess(false), "DDBRegisterProcess");
-        TestContext.Progress.WriteLine($"{nameof(Abi11ContractTests)}: {message}, libddb {DdbWrapper.GetVersion()}");
+        TestContext.Progress.WriteLine($"{nameof(LibddbContractTests)}: {message}, libddb {DdbWrapper.GetVersion()}");
         _geoRaster = TestDownloadCache.GetOrDownload(GeoRasterUrl, Path.Combine(Path.GetTempPath(), BaseTestFolder));
     }
 
@@ -121,7 +122,7 @@ public unsafe class Abi11ContractTests : TestBase
     #region Handshake: DDBGetAbiVersion, DDBGetCapabilities, DDBRegisterProcess, DDBGetLastErrorReason
 
     [Test]
-    public void GetAbiVersion_IsAbi1AtLeast1_1_AndTheCapabilitiesAgree()
+    public void GetAbiVersion_IsAbi2_AndTheCapabilitiesAgree()
     {
         var version = NativeDdb.DDBGetAbiVersion();
         var (major, minor) = DdbAbi.Decode(version);
@@ -162,8 +163,7 @@ public unsafe class Abi11ContractTests : TestBase
     }
 
     /// <summary>
-    /// Every libddb export Registry.Adapters declares (the ABI 1.0 DllImports of the wrapper and the
-    /// ABI 1.1 LibraryImports) exists in the loaded library and is listed in "symbols": one
+    /// Every libddb export Registry.Adapters declares (every LibraryImport of <see cref="NativeDdb"/>) exists in the loaded library and is listed in "symbols": one
     /// failure that names every missing export.
     /// </summary>
     [Test]
@@ -678,13 +678,13 @@ public unsafe class Abi11ContractTests : TestBase
     }
 
     /// <summary>
-    /// DDBShutdown is process-final, so <see cref="Abi11ShutdownProbe"/> runs it in a child
+    /// DDBShutdown is process-final, so <see cref="LibddbShutdownProbe"/> runs it in a child
     /// process (this test assembly started with its probe argument) and reports each step.
     /// </summary>
     [Test]
     public void Shutdown_RunsInAChildProcess_RefusesLaterCalls_AndKeepsTheExemptOnes()
     {
-        var assembly = typeof(Abi11ShutdownProbe).Assembly.Location;
+        var assembly = typeof(LibddbShutdownProbe).Assembly.Location;
         var dotnet = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } host ? host : "dotnet";
         var start = new ProcessStartInfo(dotnet)
         {
@@ -692,7 +692,7 @@ public unsafe class Abi11ContractTests : TestBase
             RedirectStandardError = true,
             UseShellExecute = false,
             WorkingDirectory = AppContext.BaseDirectory,
-            ArgumentList = { "exec", assembly, Abi11ShutdownProbe.Argument }
+            ArgumentList = { "exec", assembly, LibddbShutdownProbe.Argument }
         };
 
         using var process = Process.Start(start) ?? throw new InvalidOperationException($"Cannot start {dotnet}");
@@ -709,7 +709,7 @@ public unsafe class Abi11ContractTests : TestBase
         TestContext.Out.WriteLine(output);
 
         process.ExitCode.ShouldBe(0, output);
-        stdout.Result.ShouldContain(Abi11ShutdownProbe.Passed, Case.Sensitive, output);
+        stdout.Result.ShouldContain(LibddbShutdownProbe.Passed, Case.Sensitive, output);
     }
 
     #endregion
@@ -829,10 +829,10 @@ public unsafe class Abi11ContractTests : TestBase
     /// GeoRaster, both with the contract mtime, indexed.
     /// </summary>
     private string CreateDataset(TestArea area, string name, bool withGeoRaster) =>
-        Abi11Native.CreateDataset(DdbWrapper, area, name, withGeoRaster ? _geoRaster : null);
+        LibddbNative.CreateDataset(DdbWrapper, area, name, withGeoRaster ? _geoRaster : null);
 
     private static string WriteContractFile(string root, string name, string content) =>
-        Abi11Native.WriteContractFile(root, name, content);
+        LibddbNative.WriteContractFile(root, name, content);
 
     private string GeoRasterHash()
     {
@@ -880,7 +880,7 @@ public unsafe class Abi11ContractTests : TestBase
             Assert.Fail($"{because ?? "JSON differs"}\nexpected: {expected.ToString(Formatting.None)}\nactual:   {actual.ToString(Formatting.None)}");
     }
 
-    /// <summary>A DDBListEntriesOptions of a later ABI: the ABI 1.1 struct and a field appended after it.</summary>
+    /// <summary>A DDBListEntriesOptions of a later ABI: the ABI 2.0 struct and a field appended after it.</summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct LaterListEntriesOptions
     {

@@ -14,7 +14,7 @@ using Registry.Ports.DroneDB;
 namespace Registry.Adapters.DroneDB;
 
 /// <summary>
-/// <see cref="IDdbWrapper"/> over the libddb C ABI 1.1 (<see cref="NativeDdb"/>). Each member validates
+/// <see cref="IDdbWrapper"/> over the libddb C ABI 2.0 (<see cref="NativeDdb"/>). Each member validates
 /// its arguments, then makes one call through <see cref="NativeCall"/>, which owns the error, free and
 /// deserialize envelope. The process lifecycle (configuration, initialization, shutdown) is
 /// <see cref="NativeDdbRuntime"/>'s; the ABI is checked once at startup (<see cref="DdbAbi"/>).

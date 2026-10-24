@@ -186,8 +186,8 @@ public class Program
     }
 
     /// <summary>
-    /// Fails fast when the libddb on the library path cannot be used (XI-01): it must load, have ABI
-    /// 1.x with x >= 1 and export every function Registry calls (<see cref="DdbAbi.Verify"/>). The
+    /// Fails fast when the libddb on the library path cannot be used (XI-01): it must load, be libddb
+    /// 2.x (ABI major 2) and export every function Registry calls (<see cref="DdbAbi.Verify"/>). The
     /// library itself is configured and initialized by each host's <c>DdbRuntimeService</c>.
     /// </summary>
     private static bool InitializeDdb()

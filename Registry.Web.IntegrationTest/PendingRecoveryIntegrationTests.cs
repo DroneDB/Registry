@@ -630,7 +630,7 @@ public class PendingRecoveryIntegrationTests
         var failed = (await Rows(ds)).Single(x => x.JobId == stagedId);
         failed.CurrentState.ShouldBe("Failed");
         // XI-02: the low-disk failure is typed (libddb's reason "lowDiskSpace"), so the completeness
-        // checker treats it as transient; before libddb ABI 1.1 it was a generic InvalidOperationException
+        // checker treats it as transient; before libddb reported reasons it was a generic InvalidOperationException
         failed.ErrorType.ShouldBe(nameof(DdbRetryableException));
         var retry = await WaitForRetry(ds, 1);
         _environment.Set("DDB_MIN_FREE_DISK_MB", "0");

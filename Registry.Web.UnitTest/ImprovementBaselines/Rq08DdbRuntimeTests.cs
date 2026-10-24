@@ -25,7 +25,7 @@ using Shouldly;
 namespace Registry.Web.Test.ImprovementBaselines;
 
 /// <summary>
-/// RQ-08 (XI-01, XI-02, XI-06, XI-07, XI-08), the host side of libddb ABI 1.1: the process lifecycle
+/// RQ-08 (XI-01, XI-02, XI-06, XI-07, XI-08), the host side of libddb ABI 2.0: the process lifecycle
 /// runs in the order libddb requires (log sink and configuration before DDBRegisterProcess, checked;
 /// DDBShutdown after every hosted service stopped), its timeouts nest inside the host's and Docker's,
 /// and the typed libddb errors reach clients with their HTTP status.
@@ -139,7 +139,7 @@ public class Rq08DdbRuntimeTests
         periods.ShouldAllBe(p => TimeSpan.FromSeconds(p) >= ShutdownTimeouts.ComposeStopGracePeriod);
     }
 
-    /// <summary>XI-02: the libddb ABI 1.1 error codes reach the client with a status that says whether to retry.</summary>
+    /// <summary>XI-02: the libddb ABI 2.0 error codes reach the client with a status that says whether to retry.</summary>
     [Test]
     public void TypedLibddbErrors_HaveTheirHttpStatus()
     {

@@ -50,7 +50,7 @@ public class DdbResultMapperTests
         ex.Reason.ShouldBe(DdbRetryableException.Reasons.NoSpaceOnDevice);
     }
 
-    /// <summary>The exports older than ABI 1.1 (DDBBuild) keep DDBERR_EXCEPTION but set the reason of a transient failure.</summary>
+    /// <summary>The exports that predate the reason codes (DDBBuild) keep DDBERR_EXCEPTION but set the reason of a transient failure.</summary>
     [TestCase("lowDiskSpace")]
     [TestCase("noSpaceOnDevice")]
     [TestCase("idleTimeout")]

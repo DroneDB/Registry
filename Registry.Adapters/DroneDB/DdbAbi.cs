@@ -17,11 +17,15 @@ namespace Registry.Adapters.DroneDB;
 /// </summary>
 public static class DdbAbi
 {
-    /// <summary><c>DDB_ABI_MAJOR</c> Registry is written for: another major cannot be used.</summary>
-    public const int Major = 1;
+    /// <summary>
+    /// <c>DDB_ABI_MAJOR</c> Registry is written for: another major cannot be used. DroneDB has one
+    /// version (package.json) and the ABI follows it: libddb 2.x is ABI 2.y, a removed export is a
+    /// new major.
+    /// </summary>
+    public const int Major = 2;
 
     /// <summary><c>DDB_ABI_MINOR</c> Registry needs at least (DroneDB 2.0.0).</summary>
-    public const int Minor = 1;
+    public const int Minor = 0;
 
     private const string Library = "ddb";
 
@@ -48,7 +52,7 @@ public static class DdbAbi
     /// Checks the loaded libddb once per process and returns its capabilities.
     /// </summary>
     /// <exception cref="DdbAbiMismatchException">
-    /// The library cannot be loaded, predates ABI 1.1, has another ABI major or lacks an export.
+    /// The library cannot be loaded, is older than libddb 2.x, has another ABI major or lacks an export.
     /// </exception>
     public static DdbCapabilities Verify() => Verified.Value;
 
@@ -72,12 +76,9 @@ public static class DdbAbi
 
         if (!NativeLibrary.TryGetExport(handle, nameof(NativeDdb.DDBGetAbiVersion), out var abiExport))
             throw new DdbAbiMismatchException(
-                $"libddb {version} predates ABI {Major}.{Minor} (it has no DDBGetAbiVersion). {Requirement}");
+                $"libddb {version} predates ABI {Major}.{Minor} (it has no DDBGetAbiVersion); Registry needs libddb {Major}.x. {Requirement}");
 
-        var (major, minor) = Decode(((delegate* unmanaged<uint>)abiExport)());
-        if (major != Major || minor < Minor)
-            throw new DdbAbiMismatchException(
-                $"libddb {version} has ABI {major}.{minor}; Registry needs ABI {Major}.x with x >= {Minor}. {Requirement}");
+        var (major, minor) = RequireAbi(version, ((delegate* unmanaged<uint>)abiExport)());
 
         var missing = RequiredSymbols.Where(s => !NativeLibrary.TryGetExport(handle, s, out _)).ToArray();
         if (missing.Length > 0)
@@ -99,8 +100,24 @@ public static class DdbAbi
         }
     }
 
+    /// <summary>
+    /// The ABI rule of the handshake on a <c>DDBGetAbiVersion()</c> value: the major must be
+    /// <see cref="Major"/> and the minor at least <see cref="Minor"/>.
+    /// </summary>
+    /// <param name="version">The library version, for the message.</param>
+    /// <param name="abiVersion">The <c>DDBGetAbiVersion()</c> value.</param>
+    /// <exception cref="DdbAbiMismatchException">The ABI is not one Registry is written for.</exception>
+    internal static (int Major, int Minor) RequireAbi(string version, uint abiVersion)
+    {
+        var (major, minor) = Decode(abiVersion);
+        if (major != Major || minor < Minor)
+            throw new DdbAbiMismatchException(
+                $"libddb {version} has ABI {major}.{minor}; Registry needs libddb {Major}.x (ABI {Major}.x with x >= {Minor}). {Requirement}");
+        return (major, minor);
+    }
+
     private static string Requirement =>
-        $"Install the DroneDB build Registry is pinned to (DdbVersion in Directory.Build.props; libddb ABI {Major}.{Minor}).";
+        $"Install the DroneDB build Registry is pinned to (DdbVersion in Directory.Build.props; libddb {Major}.x, ABI {Major}.{Minor} or later).";
 }
 
 /// <summary>The loaded libddb cannot be used by this Registry (<see cref="DdbAbi.Verify"/>).</summary>

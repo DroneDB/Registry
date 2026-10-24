@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace Registry.Ports.DroneDB;
 
 /// <summary>
-/// The libddb process settings in effect (<c>DDBGetEffectiveConfig</c>, ABI 1.1, XI-06): the
+/// The libddb process settings in effect (<c>DDBGetEffectiveConfig</c>, ABI 2.0, XI-06): the
 /// <c>DDBConfigure</c> values, else the environment variables, else libddb's defaults. Registry reads
 /// the free-disk floor here so its own disk guards leave what a build needs.
 /// </summary>

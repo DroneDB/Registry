@@ -21,7 +21,7 @@ namespace Registry.Web.Test.ImprovementBaselines;
 /// <summary>
 /// Found by RQ-14's A/B run: <c>POST …/meta/set/tags</c> and <c>GET …/meta/get/tags</c> answered 500. libddb's key
 /// rule (a key ending with "s" is a list: <c>add</c>, not <c>set</c>) is reported by the <c>DDBMeta*</c> exports as
-/// <c>DDBERR_EXCEPTION</c> with a message (ABI 1.1 keeps the old codes), and a key with no value is the same kind of
+/// <c>DDBERR_EXCEPTION</c> with a message (ABI 2.0 keeps the old codes), and a key with no value is the same kind of
 /// failure: Registry could only answer 500 for what the client got wrong. The key rule is checked first
 /// (<see cref="Registry.Web.Utilities.MetaKeyRule"/>, 400 with libddb's message, libddb is never called) and a read
 /// that fails for a key nobody wrote is a 404, decided by asking libddb which keys exist, not by reading its
