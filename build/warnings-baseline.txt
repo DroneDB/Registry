@@ -157,7 +157,6 @@ Registry.Web/Services/Adapters/UploadQuotaLedger.cs CA1822 1
 Registry.Web/Services/HeavyTasks/Models/HeavyToolModels.cs CA1711 1
 Registry.Web/Services/HeavyTasks/NodeOdm/NodeOdxClient.cs CA1305 1
 Registry.Web/Services/HeavyTasks/NodeOdm/NodeOdxClient.cs CA1859 1
-Registry.Web/Services/Import/ArchiveUrlImportSource.cs CA1822 1
 Registry.Web/Services/Initialization/HangfireJobsInitializer.cs CS8632 3
 Registry.Web/Services/Managers/AdminTasksManager.cs CA1859 1
 Registry.Web/Services/Managers/DdbManager.cs CS8632 1
