@@ -103,3 +103,10 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   no other contract file. WMS reads the list instead of its own band-count rule (`IRasterIndexCatalog`).
 * 2026-10-24: DroneDB `58a55a560dabf7633fad904ddb11d8a00edb4e98` (the pinned build): no file changes since `d3b4945` (a test-only
   fix), SOURCE names the pinned commit.
+* 2026-10-24: DroneDB `2c9508aff26c63321fb5821ca2ac8e3041d7c221` (DQ-09, DQ-15): `effective-config` has `gdalCacheMb` (XI-06: integer
+  16..1048576 MiB, in `settings` and in `sources`, both required by the schema; the fixture sets 256 through `DDBConfigure`), so a libddb
+  built before `36d2b54` no longer matches this fixture and schema; `capabilities` lists 13 more `cancellable` exports (26 in all:
+  the raster analysis exports, `DDBCalculateVolume`, `DDBDetectStockpile`, `DDBDetectAllStockpiles`, `DDBGenerateContours`,
+  `DDBMaskBorders`, `DDBComputeDeltaLocals`, `DDBApplyDelta`, `DDBApplyDeltaEx`: XI-07 steps 3 and 4). The README changelog
+  of `Contract/` also describes the entry-path rule (every export that takes an entry path refuses an absolute path, a `..`
+  segment, `.ddb` and invalid UTF-8 with `DDBERR_INVALIDARGS`), which changes no fixture. No other file changed.

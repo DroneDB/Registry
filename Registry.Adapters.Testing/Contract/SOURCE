@@ -1,17 +1,17 @@
 # libddb contract fixtures vendored from DroneDB (XI-09). Do not edit the vendored files:
 # run Registry.Adapters.Testing/update-contract.sh <DroneDB clone> <commit> instead.
 repository: https://github.com/DroneDB/DroneDB
-commit: 58a55a560dabf7633fad904ddb11d8a00edb4e98
+commit: 2c9508aff26c63321fb5821ca2ac8e3041d7c221
 path: tests/contract
 # sha256 and path relative to Contract/ (sha256sum format), one line per vendored file
-62453001d98b54a655ced6423f2523d5e17d82f98dbff8f457db7608d43fc003  README.md
+b19e35b089c0e255b246713c48a16bfe1a56e47696b98d49ea824e99444c0232  README.md
 ea51b328026bc175031f1cfe2e0b1d2b2426a092b1a6ab3f19e35731a8293e7a  fixtures/add.json
 dff459b55c29be8b45ef095a5e8a6e97e80f4e1fc6524e5a568815ac5c780eb3  fixtures/build-artifacts-pending.json
 ef0d8f7b505ed504c5f347727bba943cd89b7bfec7ccbfcbe49a88c61da02443  fixtures/build-artifacts.json
 d2c21f116f1007b33f66fa1f12001f51acb46a16913e0f97a329740f409c130e  fixtures/build-status.json
-829cf412a3854eb627afa220ead414789c259d97a7b8a5d14fafb24670c84e45  fixtures/capabilities.json
+ea14729e7f813daa5910489217d760b5edefe7c0c060de54e63a80d8a7803a83  fixtures/capabilities.json
 3ebec81e6ada5a83420b5d0387df43e412b23de5ec43d7072cb51155a750cc5e  fixtures/copy-build-artifacts.json
-6cbf205764bf65a1469a20c5021802d8a198161266319eb97642040d2c4ecaf9  fixtures/effective-config.json
+8aef2149dc83c4a9a1031144c495093cf6818b19b2f8b1fad345473d1b0de9d9  fixtures/effective-config.json
 6c4a60c12426cbafc03f00b6d686b3d4dbc6b3918c61a896b508e8df66b6c0b9  fixtures/entry-types.json
 d4f618c3f8ebbb4b31d27d7ec212678e20d3f1144ba779307ef6814ba7fe578c  fixtures/get-drone-image.json
 224400d9bf0459d10c07884a3f4065dea8a6410ac0f008b312b9dd110d371055  fixtures/get-folder.json
@@ -59,7 +59,7 @@ efcf704f9d3a884754f708fc34c95362fda07e7e09e70e2014869f3d66b0f9d7  fixtures/stac-
 fe705ccf4cc7bc0deb94f6c091e01a990a6bcae1499a3ba1efe19d98812f4e24  schemas/build-status.schema.json
 176536794df6b9aac410b88102928651d52aae3c7cecdcf86b388e17f36f4ef3  schemas/capabilities.schema.json
 f9643fbdc66abfb6c69fe43579d8ba3cf08e7c1bfb3e6e7689a31b90fe92f20f  schemas/copy-build-artifacts.schema.json
-9c5ab007ded5d8c593ffa3ca4ff75f99055b65832b880da58e01fba1c4b956a5  schemas/effective-config.schema.json
+d64a16b22f71cf00db754d7a009ad03abbc9bb94d06e27756d5ab6153c553895  schemas/effective-config.schema.json
 8fa9c3c0818bbc2615281724f080761f0f34a843fe66dc55cd85e7785270d120  schemas/entries.schema.json
 cd7869c505d71a5ffc440799eed7040d278b9ade0f3296107a21c04f322d1dc8  schemas/entry-summaries.schema.json
 4fd9295f3e88b154ed4f8f354b84aa92f22a117b7a029e6d7e7a70c49dfc7139  schemas/entry-types.schema.json
