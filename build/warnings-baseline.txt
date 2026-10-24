@@ -37,7 +37,6 @@ Registry.Web.Data.MySqlMigrations/Migrations/20260601003737_AddProcessingPlatfor
 Registry.Web.Data.SqliteMigrations/Migrations/20250924151919_AddedJobIndexTable.cs CA1861 2
 Registry.Web.Data.SqliteMigrations/Migrations/20250926062948_OptimizeEntityFrameworkIndexes.cs CA1861 1
 Registry.Web.Data.SqliteMigrations/Migrations/20260601003723_AddProcessingPlatformColumns.cs CA1861 2
-Registry.Web.Identity/ApplicationDbContext.cs CS8603 1
 Registry.Web.IntegrationTest/DdbFactoryTest.cs CA1829 2
 Registry.Web.IntegrationTest/DdbFactoryTest.cs CA1859 1
 Registry.Web.IntegrationTest/GlobalSetup.cs CA2201 1

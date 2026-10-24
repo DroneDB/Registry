@@ -123,3 +123,11 @@ JToken/JObject/JArray/JValue in port signatures	0
 Production files using Newtonsoft outside the allow-list	0
 AddNewtonsoftJson / MvcNewtonsoftJsonOptions	0
 Dataset route prefix copies in controllers	2
+Entity configuration inline in OnModelCreating	0
+Value comparers hashing the reference (x => x.GetHashCode())	0
+TODO comments in the persistence projects	0
+DEBUG_EF / DebugEf references (cs, csproj, sln)	0
+Provider configuration sites (MigrationsAssembly calls)	2
+appsettings-eftools.json tracked	0
+Synchronous EF queries in request paths	0
+AddDbContext registrations (the host pools its contexts)	0

@@ -152,6 +152,21 @@ newtonsoft_attributes() {
         awk '{ s += $1 } END { print s + 0 }'
 }
 
+# Synchronous EF queries (RQ-15): a statement that starts at a DbSet of a context variable and ends in a synchronous terminal
+# operator (no ...Async( in it), in the given pathspecs (read NUL-separated from stdin).
+sync_ef_queries() {
+    list_files | xargs -0 -r perl -0777 -ne '
+        BEGIN { $c = 0 }
+        while (/\b(\w+)\.(Organizations|OrganizationsUsers|Datasets|Batches|JobIndices)\b(?!\s*=)(?![\w(])([^;{}]*);/g) {
+            my ($recv, $rest) = ($1, $3);
+            next if $rest =~ /Async\(/ || $rest =~ /^\.Local\b/;
+            next unless $recv =~ /ontext|^_?db$|^_?registry|^_?identity|^ctx$/i;
+            $c++ if $rest =~ /\.(Any|All|First|FirstOrDefault|Single|SingleOrDefault|Count|LongCount|ToList|ToArray|Find|Sum|Max|Min|ToDictionary|ToHashSet|Last|LastOrDefault)\(/;
+        }
+        END { print $c + 0, "\n" }' |
+        awk '{ s += $1 } END { print s + 0 }'
+}
+
 # The libddb exports that honour a cancel token (DDBGetCapabilities().cancellable) and Registry calls (RQ-13).
 CANCELLABLE_EXPORTS='NativeDdb\.(DDBBuild|DDBExportRaster2?|DDBGenerateMemoryThumbnail(Ex)?|DDBGenerateThumbnail|DDBMemoryTile(Ex|Fmt)?|DDBRenderRasterIndex|DDBRenderRasterRegion(Ex)?|DDBTile)\('
 
@@ -405,11 +420,22 @@ metrics() {
     m "Actions without [ProducesResponseType]"       "$(prod Registry.Web/Controllers | actions_without_produces)"
     m "Newtonsoft attributes in Models and Ports"    "$(prod Registry.Web/Models Registry.Ports | newtonsoft_attributes)"
     m "JToken/JObject/JArray/JValue in port signatures" "$(prod Registry.Ports Registry.Web/Services/Ports | lines '\bJ(Token|Object|Array|Value)\b')"
-    # The allow-list (RQ-14): UserMetadataJson (the User.Metadata column is stored by Json.NET until RQ-15) and DDB (Hangfire
-    # reads the jobs stored before RQ-09 with Json.NET). Nothing else may use it.
-    m "Production files using Newtonsoft outside the allow-list" "$({ prod ""; paths ':(exclude,glob)Registry.Web.Identity/UserMetadataJson.cs' ':(exclude,glob)Registry.Adapters/DroneDB/Ddb.cs'; } | list_files_matching 'Newtonsoft')"
+    # The allow-list (RQ-14, RQ-15): DDB (Hangfire reads the jobs stored before RQ-09 with Json.NET). Nothing else may use it:
+    # the User.Metadata column left it in RQ-15.
+    m "Production files using Newtonsoft outside the allow-list" "$({ prod ""; paths ':(exclude,glob)Registry.Adapters/DroneDB/Ddb.cs'; } | list_files_matching 'Newtonsoft')"
     m "AddNewtonsoftJson / MvcNewtonsoftJsonOptions" "$(prod "" | lines 'AddNewtonsoftJson|MvcNewtonsoftJsonOptions')"
     m "Dataset route prefix copies in controllers"   "$(prod Registry.Web/Controllers | lines 'RoutesHelper\.DatasetRadix|/ds/\{dsSlug\}')"
+
+    # Persistence (RQ-15): one configuration class per entity, no second host for the EF tools, one provider
+    # configuration, queries that do not block a thread, no comparer that hashes a reference
+    m "Entity configuration inline in OnModelCreating" "$(prod Registry.Web.Data Registry.Web.Identity | lines '\b(modelBuilder|builder)\s*\.Entity<')"
+    m "Value comparers hashing the reference (x => x.GetHashCode())" "$(prod Registry.Web.Data Registry.Web.Identity | lines 'x => x\.GetHashCode\(\)')"
+    m "TODO comments in the persistence projects"    "$(prod Registry.Web.Data Registry.Web.Identity | lines 'TODO')"
+    m "DEBUG_EF / DebugEf references (cs, csproj, sln)" "$(paths '*.cs' '*.csproj' '*.sln' ':(exclude,glob)**/ClientApp/**' | lines 'DEBUG_EF|DebugEf')"
+    m "Provider configuration sites (MigrationsAssembly calls)" "$(prod '' | lines 'MigrationsAssembly\(')"
+    m "appsettings-eftools.json tracked"             "$(paths ':(glob)**/appsettings-eftools.json' | files)"
+    m "Synchronous EF queries in request paths"      "$(prod Registry.Web Registry.Web.Identity Registry.Adapters | sync_ef_queries)"
+    m "AddDbContext registrations (the host pools its contexts)" "$(prod '' | lines '\.AddDbContext<')"
 }
 
 current="$(metrics)"
