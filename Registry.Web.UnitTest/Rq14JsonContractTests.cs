@@ -140,6 +140,21 @@ public sealed class Rq14JsonContractTests
     }
 
     [Test]
+    public void TheStampTheCliPushes_IsRead_AndTheInitAnswerIsWhatTheCliParses()
+    {
+        // ddb push sends the stamp as JSON in a form field and reads the answer with nlohmann (DroneDB src/library/pushmanager.cpp)
+        var stamp = ApiJson.Deserialize<StampDto>(
+            """{"checksum":"c0ffee","entries":[{"path":"a.txt","hash":"h1"},{"path":"sub","hash":""}],"meta":["1b4e28ba-2fa1-11d2-883f-0016d3cca427"]}""")!;
+
+        stamp.Checksum.ShouldBe("c0ffee");
+        stamp.Entries.Select(e => e["path"]).ShouldBe(["a.txt", "sub"]);
+        stamp.Meta.ShouldBe(["1b4e28ba-2fa1-11d2-883f-0016d3cca427"]);
+
+        ApiJson.Serialize(new PushInitResultDto { NeededFiles = ["a.txt"], NeededMeta = [], PullRequired = false, Token = "t" })
+            .ShouldBe("""{"neededFiles":["a.txt"],"neededMeta":[],"pullRequired":false,"token":"t"}""");
+    }
+
+    [Test]
     public void AChunkManifestJsonNetWrote_IsReadAsItIs()
     {
         // Json.NET's default: member names as the type spells them (PascalCase)
