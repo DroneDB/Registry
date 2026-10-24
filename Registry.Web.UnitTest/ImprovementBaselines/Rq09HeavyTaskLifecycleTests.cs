@@ -110,8 +110,9 @@ public class Rq09HeavyTaskLifecycleTests
         var registry = new Mock<IHeavyToolRegistry>();
         registry.Setup(r => r.Resolve(tool.Id, tool.Version)).Returns(tool);
         return new HeavyTaskJobWrapper(_provider.GetRequiredService<IServiceScopeFactory>(), registry.Object,
-            Microsoft.Extensions.Options.Options.Create(new ProcessingPlatformSettings { ArtifactTtlHours = 6 }), TestScratch.For(_temp),
-            new FileSystem(), new FileJobs(new FileSystem(), Mock.Of<ILogger<FileJobs>>()),
+            Microsoft.Extensions.Options.Options.Create(new ProcessingPlatformSettings { ArtifactTtlHours = 6 }),
+            new TaskWorkDirectories(TestScratch.For(_temp), new FileSystem(), Microsoft.Extensions.Logging.Abstractions.NullLogger<TaskWorkDirectories>.Instance),
+            new FileJobs(new FileSystem(), Mock.Of<ILogger<FileJobs>>()),
             Mock.Of<ILogger<HeavyTaskJobWrapper>>());
     }
 

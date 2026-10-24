@@ -64,16 +64,7 @@ public class OrganizationManagerTest : TestBase
         // Initialize utils and manager
         _webUtils = TestPorts.All(_authManagerMock.Object, _context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
-        _organizationsManager = new OrganizationsManager(
-            _authManagerMock.Object,
-            new DatasetAccessResolver(_webUtils.Datasets, _authManagerMock.Object, Mock.Of<IDdbManager>(), TestPaths.Policy),
-            _context,
-            _webUtils.Datasets,
-            _datasetManagerMock.Object,
-            _appContext,
-            TestSettings.Options<AccountOptions>(_settingsOptions),
-            _logger,
-            new OrganizationMembershipService(_context, _appContext, new UpperInvariantLookupNormalizer(),
+        _organizationsManager = TestOrganizations.Create(_authManagerMock.Object, new DatasetAccessResolver(_webUtils.Datasets, _authManagerMock.Object, Mock.Of<IDdbManager>(), TestPaths.Policy), _context, _webUtils.Datasets, _datasetManagerMock.Object, _appContext, TestSettings.Options<AccountOptions>(_settingsOptions), new OrganizationMembershipService(_context, _appContext, new UpperInvariantLookupNormalizer(),
                 NullLogger<OrganizationMembershipService>.Instance));
     }
 

@@ -1,8 +1,6 @@
 #nullable enable
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Registry.Adapters;
-using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
@@ -56,8 +54,8 @@ public static class ProcessingNodeServiceCollectionExtensions
         services.AddHttpClient();
 
         // Native library and file system
-        services.AddSingleton<IDdbWrapper, NativeDdbWrapper>();
-        services.AddSingleton<IFileSystem, FileSystem>();
+        services.AddNativeDdbWrapper();
+        services.AddFileSystemAdapter();
         services.AddDatasetFileSystem();
 
         // Per-dataset index write coalescer (process-local singleton): coalesces concurrent index

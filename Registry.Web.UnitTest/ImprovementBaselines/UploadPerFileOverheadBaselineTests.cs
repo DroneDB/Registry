@@ -140,16 +140,16 @@ public class UploadPerFileOverheadBaselineTests : TestBase
         var ctx = TestDb.CreateContext<RegistryContext>();
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings { DatasetsPath = _root, DefaultThumbnailSize = 512 });
         var jobs = new Mock<IBackgroundJobsProcessor>();
-        var buildPending = new BuildPendingService(ctx, new DatasetSweep(ctx), _ddbManager.Object, jobs.Object, _cache.Object, TestJobs.NewStorage(), Mock.Of<Microsoft.Extensions.Logging.ILogger<BuildPendingService>>());
+        var buildPending = new BuildPendingService(new DatasetSweep(ctx), _ddbManager.Object, jobs.Object, _cache.Object, TestJobs.NewStorage(), Mock.Of<Microsoft.Extensions.Logging.ILogger<BuildPendingService>>());
 
         var changes = new DatasetChangeCoalescer(_ogcKeys.Object, _cache.Object, [], TimeSpan.FromMinutes(1),
             NullLogger<DatasetChangeCoalescer>.Instance);
         var thumbnails = new ThumbnailPrecomputeQueue(_cache.Object, _thumbs.Object, new UploadSettings(),
             NullLogger<ThumbnailPrecomputeQueue>.Instance);
 
-        var uploads = new UploadManager(NullLogger<UploadManager>.Instance, _auth.Object,
-            new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object, TestPaths.Policy), _ddbManager.Object, new Registry.Adapters.FileSystem(), TestSettings.Options<ThumbnailOptions>(settings), TestSettings.Options<ImportSettings>(settings), TestJobs.Scheduler(jobs.Object, buildPending),
-            new UploadQuotaGuard(new UploadQuotaLedger(TestSettings.Options<UploadSettings>(settings)), _quota.Object), changes, TestPaths.Policy, TestScratch.Provider, thumbnails: thumbnails);
+        var uploads = TestUploads.Create(_auth.Object,
+            new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object, TestPaths.Policy), new Registry.Adapters.FileSystem(), TestSettings.Options<ThumbnailOptions>(settings), TestSettings.Options<ImportSettings>(settings), TestJobs.Scheduler(jobs.Object, buildPending),
+            new UploadQuotaGuard(new UploadQuotaLedger(TestSettings.Options<UploadSettings>(settings)), _quota.Object), changes, thumbnails: thumbnails);
         return (uploads, changes, thumbnails);
     }
 

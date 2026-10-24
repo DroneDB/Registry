@@ -3,7 +3,6 @@ using System;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Registry.Adapters.Thumbnail;
 using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.HealthChecks;
@@ -14,16 +13,21 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Configuration;
 using Registry.Web.Services.Datasets;
 using Registry.Web.Services.Features;
+using Registry.Web.Services.Import;
 using Registry.Web.Services.Initialization;
 using Registry.Web.Services.Maintenance;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Managers.Wcs;
+using Registry.Web.Services.Managers.Wfs;
 using Registry.Web.Services.Objects;
+using Registry.Web.Services.Organizations;
+using Registry.Web.Services.PlatformTasks;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Processing;
 using Registry.Web.Services.Push;
 using Registry.Web.Services.RemoteImport;
 using Registry.Web.Services.Shares;
+using Registry.Web.Services.Uploads;
 using Registry.Web.Services.Users;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
@@ -54,6 +58,10 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddScoped<IUserDeletion, UserDeletion>();
         services.AddScoped<IOrganizationsManager, OrganizationsManager>();
+        services.AddScoped<IOrganizationQueries, OrganizationQueries>();
+        services.AddScoped<IOrganizationCommands, OrganizationCommands>();
+        services.AddScoped<IOrganizationMerger, OrganizationMerger>();
+        services.AddScoped<IOrganizationMembers, OrganizationMembers>();
         services.AddScoped<IDatasetsManager, DatasetsManager>();
         services.AddScoped<IDatasetQueries, DatasetQueries>();
         services.AddScoped<IDatasetCommands, DatasetCommands>();
@@ -84,12 +92,20 @@ public static class RegistryFeaturesServiceCollectionExtensions
         // Admin global tasks dashboard and the per-dataset Processing Platform tasks (TasksController)
         services.AddScoped<IAdminTasksManager, AdminTasksManager>();
         services.AddScoped<ITasksManager, TasksManager>();
+        services.AddScoped<ITaskSubmission, TaskSubmission>();
+        services.AddScoped<ITaskHistory, TaskHistory>();
+        services.AddScoped<ITaskLifecycle, TaskLifecycle>();
+        services.AddScoped<ITaskRetry, TaskRetry>();
+        services.AddScoped<ITaskAuthorizer, TaskAuthorizer>();
+        services.AddScoped<ITaskArtifactStore, TaskArtifactStore>();
 
         // Web-only submission side of the task substrate (gating, quota, runner)
         services.AddProcessingPlatformSubmission();
 
         // Import orchestration (the import heavy tools are registered by AddImportSources for every job host)
         services.AddScoped<IImportManager, ImportManager>();
+        services.AddScoped<IImportQuotaGate, ImportQuotaGate>();
+        services.AddScoped<IImportTargetDatasets, ImportTargetDatasets>();
         services.AddScoped<IFileUrlImportManager, FileUrlImportManager>();
 
 
@@ -175,6 +191,9 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IWmtsManager, WmtsManager>();
         services.AddScoped<IWmsManager, WmsManager>();
         services.AddScoped<IWfsManager, WfsManager>();
+        services.AddScoped<IWfsCapabilities, WfsCapabilities>();
+        services.AddScoped<IWfsSchema, WfsSchema>();
+        services.AddScoped<IWfsFeatureQuery, WfsFeatureQuery>();
         services.AddScoped<IWcsCoverageService, WcsCoverageService>();
         services.AddScoped<IWcsProtocolHandler, WcsProtocol10Handler>();
         services.AddScoped<IWcsProtocolHandler, WcsProtocol11Handler>();
@@ -198,23 +217,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
 
         services.AddSingleton<INativeWorkGate, NativeWorkGate>();
 
-        if (!string.IsNullOrWhiteSpace(configuration.GetRegistryOptions<ThumbnailOptions>().RemoteThumbnailGeneratorUrl))
-        {
-            services.AddOptions<RemoteThumbnailGeneratorSettings>().Configure<IOptions<ThumbnailOptions>>((options, thumbnails) =>
-            {
-                options.Url = thumbnails.Value.RemoteThumbnailGeneratorUrl!;
-                options.Token = thumbnails.Value.ThumbnailGeneratorToken;
-            });
-            services.AddSingleton<RemoteThumbnailGenerator>();
-            services.AddSingleton<IThumbnailGenerator>(sp => new GatedThumbnailGenerator(
-                sp.GetRequiredService<RemoteThumbnailGenerator>(), sp.GetRequiredService<INativeWorkGate>()));
-        }
-        else
-        {
-            services.AddSingleton<LocalThumbnailGenerator>();
-            services.AddSingleton<IThumbnailGenerator>(sp => new GatedThumbnailGenerator(
-                sp.GetRequiredService<LocalThumbnailGenerator>(), sp.GetRequiredService<INativeWorkGate>()));
-        }
+        services.AddThumbnailGeneratorAdapter(configuration);
 
         return services;
     }
@@ -226,6 +229,11 @@ public static class RegistryFeaturesServiceCollectionExtensions
     public static IServiceCollection AddUploadPipeline(this IServiceCollection services)
     {
         services.AddScoped<IUploadManager, UploadManager>();
+        services.AddScoped<IUploadFiles, UploadFiles>();
+        services.AddScoped<IUploadReceiptTracker, UploadReceiptTracker>();
+        services.AddScoped<IUploadIndexer, UploadIndexer>();
+        services.AddScoped<IUploadFinalizer, UploadFinalizer>();
+        services.AddScoped<IUploadCommitter, UploadCommitter>();
         services.AddScoped<IChunkedUploadManager, ChunkedUploadManager>();
         services.AddSingleton<IChunkStore, ChunkStore>();
         services.AddSingleton<UploadQuotaLedger>();
@@ -280,6 +288,8 @@ public static class RegistryFeaturesServiceCollectionExtensions
     public static IServiceCollection AddRegistryWebStartup(this IServiceCollection services)
     {
         services.AddStartupTask<ThreadPoolInitializer>();
+        services.AddScoped<DatabaseMigrator>();
+        services.AddScoped<DefaultAdminProvisioner>();
         services.AddStartupTask<DatabaseInitializer>();
         services.AddBackgroundStartupTask<DatasetVisibilityCacheInitializer>();
         return services;

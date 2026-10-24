@@ -65,6 +65,13 @@ public sealed class GuardedHttpDownloader
         _time = time ?? TimeProvider.System;
     }
 
+    /// <summary>
+    /// Fast SSRF rejection of <paramref name="host"/> (the pre-validation every request here does), for a caller that
+    /// wants to refuse a URL before it queues anything. The connection is validated again when it is made.
+    /// </summary>
+    /// <exception cref="ArgumentException">The host resolves to a private or reserved address.</exception>
+    public Task AssertHostAllowedAsync(string host, CancellationToken ct) => _ssrfGuard.AssertAllowedAsync(host, ct);
+
     // Outbound calls go through the SSRF-hardened client (connect-time IP validation + redirect guard).
     private HttpClient CreateClient() => _httpClientFactory.CreateClient(SsrfHttpHandler.HttpClientName);
 

@@ -96,8 +96,8 @@ public sealed class HubSections : IConfigurationSectionBuilder
 
     private ConfigurationSectionDataDto BuildThumbnailsSection()
     {
-        var host = _view.Configured<HostResourceOptions>();
-        var hostDefault = _view.Shipped<HostResourceOptions>();
+        var host = _view.Configured<HostResourceOptions>().WithDefaults();
+        var hostDefault = _view.Shipped<HostResourceOptions>().WithDefaults();
         var thumbnails = _view.Configured<ThumbnailOptions>();
         var thumbnailsDefault = _view.Shipped<ThumbnailOptions>();
         return Section("Thumbnails", "Thumbnails",
@@ -122,11 +122,11 @@ public sealed class HubSections : IConfigurationSectionBuilder
 
                 NumberField("NativeConcurrency.Tiles", "Concurrent Tile Renders",
                     "Map tiles and map images rendered at once by this instance. 0 = half the CPU cores (at least 2).",
-                    (host.NativeConcurrency ?? new NativeConcurrencySettings()).Tiles, (hostDefault.NativeConcurrency ?? new NativeConcurrencySettings()).Tiles, minValue: 0),
+                    host.NativeConcurrency.Tiles, hostDefault.NativeConcurrency.Tiles, minValue: 0),
 
                 NumberField("NativeConcurrency.Heavy", "Concurrent Thumbnail Renders",
                     "Thumbnails and coverages rendered at once by this instance. 0 = a quarter of the CPU cores (at least 1).",
-                    (host.NativeConcurrency ?? new NativeConcurrencySettings()).Heavy, (hostDefault.NativeConcurrency ?? new NativeConcurrencySettings()).Heavy, minValue: 0)
+                    host.NativeConcurrency.Heavy, hostDefault.NativeConcurrency.Heavy, minValue: 0)
             ]);
     }
 }

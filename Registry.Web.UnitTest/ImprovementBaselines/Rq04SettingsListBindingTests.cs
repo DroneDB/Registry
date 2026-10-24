@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Registry.Test.Common;
+using Registry.Web.Hosting;
 using Registry.Web.Models.Configuration;
 using Shouldly;
 
@@ -20,7 +21,7 @@ namespace Registry.Web.Test.ImprovementBaselines;
 /// appends the configured items to it, so a settings list with a non-empty initializer ended up as
 /// initializer + configured list. <c>Import:BlockedFileExtensions</c> had the same defect.
 /// Config-bound lists now have no initializer; their defaults are applied by the settings class when the
-/// list is not configured (<c>Effective…</c>), like <see cref="AppSettings.DefaultKnownProxies"/>.
+/// list is not configured (<c>Effective…</c>, <c>Candidates</c>, <c>ApplyDefaults</c>), like <see cref="HttpHostOptions.DefaultKnownProxies"/>.
 /// The binding is in memory: deployments whose own <c>appsettings.json</c> lists these settings get the
 /// exact list on the next start, nothing stored needs a repair.
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~Rq04SettingsListBindingTests"
@@ -29,7 +30,7 @@ namespace Registry.Web.Test.ImprovementBaselines;
 [Category(TestCategories.Baseline)]
 public class Rq04SettingsListBindingTests
 {
-    private const string Section = "AppSettings";
+    private const string Section = RegistryOptions.SectionName;
 
     [Test]
     public void EveryListOfTheDefaultSettings_BindsToExactlyTheConfiguredItems()
@@ -62,9 +63,10 @@ public class Rq04SettingsListBindingTests
             }
             """);
 
-        bound.DatasetThumbnailCandidates.ShouldBe(["preview.png"]);
-        bound.EffectiveDatasetThumbnailCandidates().ShouldBe(["preview.png"]);
-        var import = bound.Import.ShouldNotBeNull();
+        var thumbnails = bound.GetRegistryOptions<ThumbnailOptions>();
+        thumbnails.DatasetThumbnailCandidates.ShouldBe(["preview.png"]);
+        thumbnails.Candidates.ShouldBe(["preview.png"]);
+        var import = bound.GetRegistryOptions<ImportSettings>();
         import.BlockedFileExtensions.ShouldBe([".exe"]);
         import.EffectiveBlockedFileExtensions().ShouldBe([".exe"]);
     }
@@ -74,8 +76,8 @@ public class Rq04SettingsListBindingTests
     {
         var defaults = (JObject)DefaultSettingsJson()[Section]!;
 
-        AppSettings.DefaultDatasetThumbnailCandidates.ShouldBe(Items((JArray)defaults["DatasetThumbnailCandidates"]!));
-        AppSettings.DefaultKnownProxies.ShouldBe(Items((JArray)defaults["KnownProxies"]!));
+        ThumbnailOptions.DefaultDatasetThumbnailCandidates.ShouldBe(Items((JArray)defaults["DatasetThumbnailCandidates"]!));
+        HttpHostOptions.DefaultKnownProxies.ShouldBe(Items((JArray)defaults["KnownProxies"]!));
         ImportSettings.DefaultBlockedFileExtensions.ShouldBe(Items((JArray)defaults["Import"]!["BlockedFileExtensions"]!));
     }
 
@@ -88,16 +90,16 @@ public class Rq04SettingsListBindingTests
     {
         var bound = Bind(json);
 
-        bound.EffectiveDatasetThumbnailCandidates().ShouldBe(AppSettings.DefaultDatasetThumbnailCandidates);
-        bound.EffectiveKnownProxies().ShouldBe(AppSettings.DefaultKnownProxies);
-        bound.Import.ShouldNotBeNull().EffectiveBlockedFileExtensions().ShouldBe(ImportSettings.DefaultBlockedFileExtensions);
+        bound.GetRegistryOptions<ThumbnailOptions>().Candidates.ShouldBe(ThumbnailOptions.DefaultDatasetThumbnailCandidates);
+        bound.GetRegistryOptions<HttpHostOptions>().KnownProxies.ShouldBe(HttpHostOptions.DefaultKnownProxies);
+        bound.GetRegistryOptions<ImportSettings>().EffectiveBlockedFileExtensions().ShouldBe(ImportSettings.DefaultBlockedFileExtensions);
         new ImportSettings().IsExtensionBlocked("setup.exe").ShouldBeTrue();
     }
 
     /// <summary>The embedded <c>appsettings-default.json</c>: what a new deployment's <c>appsettings.json</c> starts from.</summary>
     private static JObject DefaultSettingsJson()
     {
-        var assembly = typeof(AppSettings).Assembly;
+        var assembly = typeof(RegistryOptions).Assembly;
         var name = assembly.GetManifestResourceNames()
             .Single(n => n.EndsWith(MagicStrings.AppSettingsDefaultFileName, StringComparison.Ordinal));
 
@@ -105,22 +107,29 @@ public class Rq04SettingsListBindingTests
         return JObject.Parse(reader.ReadToEnd());
     }
 
-    /// <summary>Binds <paramref name="json"/> as the host does (<c>GetSection("AppSettings").Get&lt;AppSettings&gt;()</c>).</summary>
-    private static AppSettings Bind(string json) =>
-        new ConfigurationBuilder()
-            .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)))
-            .Build()
-            .GetSection(Section)
-            .Get<AppSettings>()
-            .ShouldNotBeNull();
+    /// <summary>The configuration of <paramref name="json"/>, as a host reads it.</summary>
+    private static IConfiguration Bind(string json) =>
+        new ConfigurationBuilder().AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json))).Build();
 
     private static string[] Items(JArray list) => [.. list.Select(item => item.ToString())];
 
-    /// <summary>The bound list at <paramref name="path"/> (dotted, as in the JSON); an unset list has no item.</summary>
-    private static string[] BoundItems(AppSettings settings, string path)
+    /// <summary>
+    /// The list at <paramref name="path"/> (dotted, as in the JSON) as the focused options class that owns its
+    /// first key binds it, before the defaults (<c>ApplyDefaults</c>); an unset list has no item.
+    /// </summary>
+    private static string[] BoundItems(IConfiguration configuration, string path)
     {
-        object? value = settings;
-        foreach (var name in path.Split('.'))
+        var names = path.Split('.');
+        var owner = RegistryOptions.Sections
+            .Where(entry => entry.Value == Section
+                ? entry.Key.GetProperty(names[0]) != null
+                : entry.Value == Section + ":" + names[0])
+            .Select(entry => entry.Key)
+            .ShouldHaveSingleItem($"AppSettings:{path} must be bound by exactly one focused class");
+
+        var section = RegistryOptions.Sections[owner];
+        object? value = configuration.GetSection(section).Get(owner) ?? Activator.CreateInstance(owner);
+        foreach (var name in section == Section ? names : names[1..])
         {
             var property = value?.GetType().GetProperty(name,
                 BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);

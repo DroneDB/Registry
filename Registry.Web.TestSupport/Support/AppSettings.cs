@@ -1,27 +1,27 @@
 using System;
 using System.Text.Json.Serialization;
-using Registry.Common;
 using Registry.Web.Data;
+using Registry.Web.Hosting;
 
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>
-/// The whole <c>AppSettings</c> configuration section as one object: the schema of the section for the
-/// readers that show all of it (<c>GET /sys/config</c>, <c>GET /sys/features</c>) and for the consumers
-/// not yet moved to their focused options class (RQ-07). Services take the focused class they read
-/// (<see cref="AuthTokenOptions"/>, <see cref="StorageOptions"/>, …), bound from the same keys; the
-/// table of classes and sections is <c>Hosting.RegistryOptions</c>, and a test checks that every
-/// property here is bound identically by exactly one of them.
+/// The whole <c>AppSettings</c> configuration section as one object, for tests (RQ-07): one settings object
+/// that a fixture fills and <see cref="Registry.Web.Test.Support.TestSettings"/> projects into the focused
+/// options classes the services take (<see cref="AuthTokenOptions"/>, <see cref="StorageOptions"/>, ...),
+/// through the same keys the host binds. Production code never reads it: the table of classes and sections
+/// is <c>Hosting.RegistryOptions</c>, and a test checks that every property here is bound identically by
+/// exactly one of them.
 /// </summary>
 public class AppSettings
 {
     /// <summary>The configuration section.</summary>
-    public const string SectionName = "AppSettings";
+    public const string SectionName = RegistryOptions.SectionName;
 
     /// <summary>
     /// Secret to generate JWT tokens
     /// </summary>
-    public string Secret { get; set; }
+    public string? Secret { get; set; }
 
     /// <summary>
     /// JWT token expiration in days
@@ -31,7 +31,7 @@ public class AppSettings
     /// <summary>
     /// List of JWT revoked tokens
     /// </summary>
-    public string[] RevokedTokens { get; set; }
+    public string[]? RevokedTokens { get; set; }
 
     /// <summary>
     /// Provider for authentication database
@@ -50,7 +50,7 @@ public class AppSettings
     /// When set, the server is never probed for its version; when empty it is auto-detected once
     /// per connection string on first use (see <c>MySqlServerVersionCache</c>).
     /// </summary>
-    public string MySqlServerVersion { get; set; }
+    public string? MySqlServerVersion { get; set; }
 
     /// <summary>
     /// Provider for hangfire
@@ -61,22 +61,22 @@ public class AppSettings
     /// <summary>
     /// Default admin details
     /// </summary>
-    public AdminInfo DefaultAdmin { get; set; }
+    public AdminInfo? DefaultAdmin { get; set; }
 
     /// <summary>
     /// Main storage path
     /// </summary>
-    public string StoragePath { get; set; }
+    public string? StoragePath { get; set; }
 
     /// <summary>
     /// Storage path for datasets
     /// </summary>
-    public string DatasetsPath { get; set; }
+    public string? DatasetsPath { get; set; }
 
     /// <summary>
     /// Storage path for temp files
     /// </summary>
-    public string TempPath { get; set; }
+    public string? TempPath { get; set; }
 
     /// <summary>
     /// Max request body size
@@ -101,28 +101,28 @@ public class AppSettings
     /// <summary>
     /// Name of the auth cookie that contains the jwt token
     /// </summary>
-    public string AuthCookieName { get; set; }
+    public string? AuthCookieName { get; set; }
 
     /// <summary>
     /// Overrides the external url
     /// </summary>
-    public string ExternalUrlOverride { get; set; }
+    public string? ExternalUrlOverride { get; set; }
 
     /// <summary>
     /// External authentication provider url
     /// </summary>
-    public string ExternalAuthUrl { get; set; }
+    public string? ExternalAuthUrl { get; set; }
 
     /// <summary>
     /// LDAP/Active Directory authentication settings.
     /// Mutually exclusive with <see cref="ExternalAuthUrl"/>.
     /// </summary>
-    public LdapSettings LdapSettings { get; set; }
+    public LdapSettings? LdapSettings { get; set; }
 
     /// <summary>
     /// Cache provider settings
     /// </summary>
-    public CacheProvider CacheProvider { get; set; }
+    public CacheProvider? CacheProvider { get; set; }
 
     /// <summary>
     /// Enables the user storage limiter
@@ -168,19 +168,19 @@ public class AppSettings
     /// <summary>
     /// File cache path
     /// </summary>
-    public string CachePath { get; set; }
+    public string? CachePath { get; set; }
 
     /// <summary>
     /// Remote thumbnail generator url (if null the local one will be used)
     /// </summary>
-    public string RemoteThumbnailGeneratorUrl { get; set; }
+    public string? RemoteThumbnailGeneratorUrl { get; set; }
 
     /// <summary>
     /// Shared secret between the web server and the ThumbnailGenerator host (header
     /// <c>X-Thumbnail-Token</c>). Generated on first start when empty and stored in appsettings.json,
     /// like <see cref="Secret"/>; the ThumbnailGenerator host refuses to start without it.
     /// </summary>
-    public string ThumbnailGeneratorToken { get; set; }
+    public string? ThumbnailGeneratorToken { get; set; }
 
     /// <summary>
     /// Default thumbnail size in pixels when no size is specified
@@ -190,19 +190,9 @@ public class AppSettings
     /// <summary>
     /// File names (in dataset root) considered as dataset thumbnail candidates, in priority order.
     /// The first matching file found is used as the dataset thumbnail. When null or empty,
-    /// <see cref="DefaultDatasetThumbnailCandidates"/> applies: read it through
-    /// <see cref="EffectiveDatasetThumbnailCandidates"/>.
+    /// <see cref="ThumbnailOptions.DefaultDatasetThumbnailCandidates"/> applies.
     /// </summary>
-#nullable enable
     public string[]? DatasetThumbnailCandidates { get; set; }
-#nullable restore
-
-    /// <summary>The dataset thumbnail candidates used when <see cref="DatasetThumbnailCandidates"/> is not set.</summary>
-    public static readonly string[] DefaultDatasetThumbnailCandidates = ThumbnailOptions.DefaultDatasetThumbnailCandidates;
-
-    /// <summary><see cref="DatasetThumbnailCandidates"/>, or <see cref="DefaultDatasetThumbnailCandidates"/> when not set.</summary>
-    public string[] EffectiveDatasetThumbnailCandidates() =>
-        ConfigurationLists.ConfiguredOrDefault(DatasetThumbnailCandidates, DefaultDatasetThumbnailCandidates);
 
     /// <summary>
     /// Thumbnails cache expiration
@@ -242,7 +232,7 @@ public class AppSettings
     /// <summary>
     /// Monitor token to call health checks
     /// </summary>
-    public string MonitorToken { get; set; }
+    public string? MonitorToken { get; set; }
 
     /// <summary>
     /// Maximum size in bytes for GeoTIFF raster export operations (multispectral and thermal).
@@ -257,7 +247,7 @@ public class AppSettings
     /// Default (when null, empty, or omitted): Hangfire's daily cron.
     /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
-    public string CleanupExpiredJobsCron { get; set; }
+    public string? CleanupExpiredJobsCron { get; set; }
 
     /// <summary>
     /// Cron expression for the JobIndex reconciliation safety-net task. JobIndex
@@ -267,7 +257,7 @@ public class AppSettings
     /// Default (when null, empty, or omitted): "0 * * * *" (hourly).
     /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
-    public string SyncJobIndexStatesCron { get; set; }
+    public string? SyncJobIndexStatesCron { get; set; }
 
     /// <summary>
     /// Cron expression for the recovery of indexed jobs whose publication was interrupted
@@ -276,7 +266,7 @@ public class AppSettings
     /// Default (when null, empty, or omitted): "* * * * *" (every minute).
     /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
-    public string RecoverIndexedJobPublicationsCron { get; set; }
+    public string? RecoverIndexedJobPublicationsCron { get; set; }
 
     /// <summary>
     /// Cron expression for the pending-builds safety-net sweep. Pending builds are
@@ -286,14 +276,14 @@ public class AppSettings
     /// Default (when null, empty, or omitted): "0 */6 * * *" (every 6 hours).
     /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
-    public string ProcessPendingBuildsCron { get; set; }
+    public string? ProcessPendingBuildsCron { get; set; }
 
     /// <summary>
     /// Cron expression for orphaned dataset folder cleanup task.
     /// Default (when null, empty, or omitted): "0 3 * * *" (daily at 3:00 AM).
     /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
-    public string OrphanedDatasetCleanupCron { get; set; }
+    public string? OrphanedDatasetCleanupCron { get; set; }
 
     /// <summary>
     /// Cron expression for the recurring full-cleanup task that runs DDB
@@ -301,7 +291,7 @@ public class AppSettings
     /// Default (when null, empty, or omitted): "0 0 * * *" (daily at midnight).
     /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
-    public string DatasetCleanupCron { get; set; }
+    public string? DatasetCleanupCron { get; set; }
 
     /// <summary>
     /// Cron expression for the recurring artifact completeness checker that
@@ -312,14 +302,14 @@ public class AppSettings
     /// Default (when null, empty, or omitted): "0 2 * * *" (daily at 2:00 AM).
     /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
-    public string ArtifactCompletenessCheckerCron { get; set; }
+    public string? ArtifactCompletenessCheckerCron { get; set; }
 
     /// <summary>
     /// Cron expression for job index cleanup task (removes old terminal records).
     /// Default (when null, empty, or omitted): "0 4 * * *" (daily at 4:00 AM).
     /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
-    public string JobIndexCleanupCron { get; set; }
+    public string? JobIndexCleanupCron { get; set; }
 
     /// <summary>
     /// Number of days to retain terminal (Succeeded/Failed/Deleted) JobIndex records.
@@ -349,40 +339,26 @@ public class AppSettings
     /// <summary>
     /// Password complexity policy. When null, no password requirements are enforced.
     /// </summary>
-#nullable enable
     public PasswordPolicy? PasswordPolicy { get; set; }
-#nullable restore
 
     /// <summary>
     /// Hub UI branding and customization options exposed to the frontend at runtime.
     /// </summary>
-#nullable enable
     public HubOptions? HubOptions { get; set; }
-#nullable restore
 
     /// <summary>
     /// Allowed CORS origins. When null or empty, all origins are allowed.
     /// </summary>
-#nullable enable
     public string[]? AllowedOrigins { get; set; }
-#nullable restore
 
     /// <summary>
     /// IP addresses of the reverse proxies whose <c>X-Forwarded-For</c> / <c>X-Forwarded-Proto</c>
     /// headers are trusted (the client address and scheme they forward replace the connection's).
-    /// When null or empty, <see cref="DefaultKnownProxies"/> (loopback, a proxy on the same host)
+    /// When null or empty, <see cref="HttpHostOptions.DefaultKnownProxies"/> (loopback, a proxy on the same host)
     /// applies. When set, it replaces the default: list loopback too if the proxy also connects
     /// over it.
     /// </summary>
-#nullable enable
     public string[]? KnownProxies { get; set; }
-#nullable restore
-
-    /// <summary>The reverse proxies trusted when <see cref="KnownProxies"/> is not set.</summary>
-    public static readonly string[] DefaultKnownProxies = HttpHostOptions.DefaultKnownProxies;
-
-    /// <summary><see cref="KnownProxies"/>, or <see cref="DefaultKnownProxies"/> when not set.</summary>
-    public string[] EffectiveKnownProxies() => ConfigurationLists.ConfiguredOrDefault(KnownProxies, DefaultKnownProxies);
 
     /// <summary>
     /// Networks (CIDR, e.g. <c>172.16.0.0/12</c>) whose addresses are trusted as reverse proxies, in
@@ -390,29 +366,22 @@ public class AppSettings
     /// port published by Docker the app sees the bridge gateway (<c>172.x.0.1</c>) as the peer, not
     /// loopback. Null or empty: no network is trusted.
     /// </summary>
-#nullable enable
     public string[]? KnownNetworks { get; set; }
-#nullable restore
 
     /// <summary>
     /// Processing Platform (Layer 1 task substrate) settings. When null, defaults apply.
     /// </summary>
-#nullable enable
     public ProcessingPlatformSettings? ProcessingPlatform { get; set; }
-#nullable restore
 
     /// <summary>
     /// Import Dataset feature settings. When null, defaults apply.
     /// </summary>
-#nullable enable
     public ImportSettings? Import { get; set; }
-#nullable restore
 
     /// <summary>
     /// Per-dataset index write queue settings (coalesces concurrent add requests into
     /// short-lived native batches). When null, defaults apply.
     /// </summary>
-#nullable enable
     public IndexQueueSettings? IndexQueue { get; set; }
 
     /// <summary>Concurrency of native renders (tiles, thumbnails, coverages) in this process.</summary>
@@ -423,15 +392,12 @@ public class AppSettings
 
     /// <summary>Tuning of the upload pipeline.</summary>
     public UploadSettings? Uploads { get; set; }
-#nullable restore
 
     /// <summary>
     /// Recurring index reconciliation sweep settings (unindexed re-index, missing report,
     /// quarantine ageing). When null, defaults apply.
     /// </summary>
-#nullable enable
     public ReconciliationSettings? Reconciliation { get; set; }
-#nullable restore
 
     /// <summary>
     /// Cron expression for the recurring index reconciliation sweep. Re-enqueues unindexed
@@ -439,7 +405,7 @@ public class AppSettings
     /// quarantined files. Default (when null, empty, or omitted): "0 * * * *" (hourly).
     /// Set to "disabled", "off", or "none" to remove the job.
     /// </summary>
-    public string IndexReconciliationCron { get; set; }
+    public string? IndexReconciliationCron { get; set; }
 
     /// <summary>
     /// Path to a shared directory for ASP.NET Core Data Protection key storage. Required when the
@@ -447,7 +413,5 @@ public class AppSettings
     /// decrypt credentials the web host encrypted. When Redis is the cache provider the key ring is
     /// shared via Redis instead and this can be left null.
     /// </summary>
-#nullable enable
     public string? DataProtectionKeysPath { get; set; }
-#nullable restore
 }

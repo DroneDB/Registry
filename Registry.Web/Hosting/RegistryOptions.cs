@@ -18,36 +18,40 @@ namespace Registry.Web.Hosting;
 /// </summary>
 public static class RegistryOptions
 {
+    /// <summary>The configuration section the Registry settings live in (<c>appsettings.json</c>, <c>AppSettings__…</c> variables).</summary>
+    public const string SectionName = "AppSettings";
+
     /// <summary>
     /// The section each focused class binds. The keys are the ones the Registry always read: the flat
     /// classes split the <c>AppSettings</c> section by feature, the nested ones keep their subsection.
     /// </summary>
     public static readonly IReadOnlyDictionary<Type, string> Sections = new Dictionary<Type, string>
     {
-        [typeof(AuthTokenOptions)] = AppSettings.SectionName,
-        [typeof(IdentityProviderOptions)] = AppSettings.SectionName,
-        [typeof(AccountOptions)] = AppSettings.SectionName,
-        [typeof(DataStoreOptions)] = AppSettings.SectionName,
-        [typeof(StorageOptions)] = AppSettings.SectionName,
-        [typeof(CachingOptions)] = AppSettings.SectionName,
-        [typeof(HttpHostOptions)] = AppSettings.SectionName,
-        [typeof(JobScheduleOptions)] = AppSettings.SectionName,
-        [typeof(ThumbnailOptions)] = AppSettings.SectionName,
-        [typeof(DownloadOptions)] = AppSettings.SectionName,
-        [typeof(ShareOptions)] = AppSettings.SectionName,
-        [typeof(HostResourceOptions)] = AppSettings.SectionName,
-        [typeof(ImportSettings)] = AppSettings.SectionName + ":" + nameof(AppSettings.Import),
-        [typeof(ProcessingPlatformSettings)] = AppSettings.SectionName + ":" + nameof(AppSettings.ProcessingPlatform),
-        [typeof(UploadSettings)] = AppSettings.SectionName + ":" + nameof(AppSettings.Uploads),
-        [typeof(IndexQueueSettings)] = AppSettings.SectionName + ":" + nameof(AppSettings.IndexQueue),
-        [typeof(ReconciliationSettings)] = AppSettings.SectionName + ":" + nameof(AppSettings.Reconciliation),
-        [typeof(HubOptions)] = AppSettings.SectionName + ":" + nameof(AppSettings.HubOptions)
+        [typeof(AuthTokenOptions)] = SectionName,
+        [typeof(IdentityProviderOptions)] = SectionName,
+        [typeof(AccountOptions)] = SectionName,
+        [typeof(DataStoreOptions)] = SectionName,
+        [typeof(StorageOptions)] = SectionName,
+        [typeof(CachingOptions)] = SectionName,
+        [typeof(HttpHostOptions)] = SectionName,
+        [typeof(JobScheduleOptions)] = SectionName,
+        [typeof(ThumbnailOptions)] = SectionName,
+        [typeof(DownloadOptions)] = SectionName,
+        [typeof(ShareOptions)] = SectionName,
+        [typeof(HostResourceOptions)] = SectionName,
+        [typeof(ImportSettings)] = Nested("Import"),
+        [typeof(ProcessingPlatformSettings)] = Nested("ProcessingPlatform"),
+        [typeof(UploadSettings)] = Nested("Uploads"),
+        [typeof(IndexQueueSettings)] = Nested("IndexQueue"),
+        [typeof(ReconciliationSettings)] = Nested("Reconciliation"),
+        [typeof(HubOptions)] = Nested("HubOptions")
     };
 
+    private static string Nested(string name) => SectionName + ":" + name;
+
     /// <summary>
-    /// Registers every options class of <see cref="Sections"/>, the whole-section <see cref="AppSettings"/>
-    /// view and <see cref="DdbRuntimeOptions"/>, each with its validator and <c>ValidateOnStart</c>, plus
-    /// the rules of <paramref name="role"/>. Idempotent: the modules of a host may each call it.
+    /// Registers every options class of <see cref="Sections"/> and <see cref="DdbRuntimeOptions"/>, each with
+    /// its validator and <c>ValidateOnStart</c>, plus the rules of <paramref name="role"/>. Idempotent: the modules of a host may each call it.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="configuration">The host configuration the options bind.</param>
@@ -90,12 +94,6 @@ public static class RegistryOptions
                 Validate<DataStoreOptions, ProcessingNodeDataStoreValidator>(services);
                 break;
         }
-
-        // The whole section, for the readers that show all of it and the consumers not moved yet; the
-        // same defaults as the focused classes
-        services.AddOptions<AppSettings>()
-            .Bind(configuration.GetSection(AppSettings.SectionName))
-            .PostConfigure(settings => settings.TempPath = StorageOptions.ResolveTempPath(settings.TempPath));
 
         // libddb's process settings (RQ-08): the cache under the temp folder by default
         services.AddOptions<DdbRuntimeOptions>()

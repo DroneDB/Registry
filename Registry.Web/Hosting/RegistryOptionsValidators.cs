@@ -28,7 +28,7 @@ internal sealed class OptionsFailures
     public ValidateOptionsResult Result() =>
         _failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(_failures);
 
-    public static string Key(string name) => AppSettings.SectionName + ":" + name;
+    public static string Key(string name) => RegistryOptions.SectionName + ":" + name;
 
     public static bool AtLeastOneMinute(TimeSpan? value) => value is not { TotalMinutes: < 1 };
 }

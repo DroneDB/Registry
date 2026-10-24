@@ -3,14 +3,15 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Registry.Ports.DroneDB;
 
-namespace Registry.Adapters.DroneDB;
+namespace Registry.Ports.Json;
 
 /// <summary>
-/// The JSON contract with libddb (RQ-14, D3, XI-09), source-generated: every type <see cref="NativeJson"/> reads from or
+/// The JSON contract with libddb (RQ-14, D3, XI-09), source-generated: every type <c>NativeJson</c> (Registry.Adapters) reads from or
 /// writes to libddb. The member names are libddb's (<c>point_geom</c>, <c>mtime</c>, <c>missingDependencies</c>), fixed on
 /// the contract types with <c>[JsonPropertyName]</c>, so no naming policy can rename them. Metadata only: the
 /// options carry converters (epoch seconds) and a text encoder that the generated fast path would not honour.
-/// Registry's own wire (<c>RegistryJsonContext</c> in Registry.Web) chains this context for the port types it carries.
+/// Registry's own wire (<c>RegistryJsonContext</c> in Registry.Web) chains this context for the port types it carries; it lives
+/// with those types (RQ-05) so that Registry.Web reads it without importing the adapter assembly.
 /// </summary>
 [JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(Entry))]

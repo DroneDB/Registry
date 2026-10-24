@@ -238,7 +238,7 @@ internal static class Rq10ExtractionHarness
             ProcessingPlatform = new ProcessingPlatformSettings { MaxArchiveExtractSizeBytes = maxArchiveBytes }
         });
         var extractor = new SharpCompressArchiveExtractor();
-        return new ArchiveExtractTool(extractor, Support.TestArchives.Extractor(extractor), scopes, Support.TestSettings.Options<ImportSettings>(settings), Support.TestSettings.Options<ProcessingPlatformSettings>(settings),
+        return new ArchiveExtractTool(Support.TestArchives.Extractor(extractor), scopes, Support.TestSettings.Options<ImportSettings>(settings), Support.TestSettings.Options<ProcessingPlatformSettings>(settings),
             Support.TestPaths.Policy, Support.TestHeadroom.Default, Support.TestJobs.FileIndexer());
     }
 }

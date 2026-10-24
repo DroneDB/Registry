@@ -76,38 +76,29 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         }
         """);
 
-    private readonly INodeOdxClient _client;
-    private readonly INodeOdxNodeRegistry _nodes;
+    private readonly INodeOdxTaskRunner _node;
     private readonly DatasetArchiveExtractor _archives;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ProcessingPlatformSettings _settings;
     private readonly ImportSettings _importSettings;
     private readonly DatasetPathPolicy _paths;
-    private readonly IScratchFileProvider _scratch;
     private readonly TaskFileIndexer _indexer;
-    private readonly TimeSpan _pollInterval;
 
     public PhotogrammetryTool(
-        INodeOdxClient client,
-        INodeOdxNodeRegistry nodes,
+        INodeOdxTaskRunner node,
         DatasetArchiveExtractor archives,
         IServiceScopeFactory scopeFactory,
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
         DatasetPathPolicy paths,
-        IScratchFileProvider scratch,
         TaskFileIndexer indexer)
     {
-        _scratch = scratch;
-        _client = client;
+        _node = node;
         _paths = paths;
-        _nodes = nodes;
         _archives = archives;
         _scopeFactory = scopeFactory;
         _settings = platformSettings.Value;
         _importSettings = importSettings.Value;
         _indexer = indexer;
-        var seconds = platformSettings.Value.RemoteNodePollIntervalSeconds;
-        _pollInterval = TimeSpan.FromSeconds(Math.Max(1, seconds));
     }
 
     public override string Id => "photogrammetry";
@@ -120,11 +111,11 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
     protected override async Task ValidateAsync(HeavyToolRequest request, Parameters args,
         IHeavyToolValidationContext ctx, CancellationToken ct)
     {
-        if (!_nodes.HasNodes)
+        if (!_node.HasNodes)
             throw new InvalidOperationException("No NodeODX processing node is configured.");
 
         var nodeId = args.NodeId;
-        if (_nodes.Resolve(nodeId) is null)
+        if (_node.Resolve(nodeId) is null)
             throw new ArgumentException($"NodeODX node '{nodeId}' is not configured.");
 
         // Validate the optional image folder path (empty = whole dataset). Reject
@@ -212,7 +203,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
     {
         // --- Phase 1: Submit to NodeODX and download results ---
         var nodeId = args.NodeId;
-        var node = _nodes.Resolve(nodeId)
+        var node = _node.Resolve(nodeId)
                    ?? throw new InvalidOperationException($"NodeODX node '{nodeId}' is not configured.");
 
         var entries = CollectImageEntries(request, args, ctx.Ddb);
@@ -223,34 +214,9 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         var taskName = args.Name ?? $"{request.OrgSlug}/{request.DsSlug}";
         var optionsJson = args.Options;
 
-        progress.Report(new HeavyToolProgress(0, "submitting",
-            LogChunk: $"Submitting {imagePaths.Count} images to NodeODX node '{node.Id}'"));
-
-        var uuid = await _client.CreateTaskAsync(node, taskName, imagePaths, optionsJson, ct);
-        progress.Report(new HeavyToolProgress(0, "queued", LogChunk: $"NodeODX task created: {uuid}"));
-
-        try
-        {
-            await PollUntilDoneAsync(node, uuid, progress, ct);
-        }
-        catch (OperationCanceledException)
-        {
-            await _client.CancelTaskAsync(node, uuid, CancellationToken.None);
-            throw;
-        }
-
-        // Download all.zip to the configured temp folder for extraction; deleted at the end
-        using var tempZip = _scratch.Create("photogrammetry_", ".zip");
-        var tempZipPath = tempZip.Path;
-        progress.Report(new HeavyToolProgress(0.95, "downloading", LogChunk: "Downloading result bundle (all.zip)"));
-        await _client.DownloadAssetAsync(node, uuid, "all.zip", tempZipPath, ct);
-
-        var info = new FileInfo(tempZipPath);
-        if (!info.Exists || info.Length == 0)
-            throw new InvalidOperationException("NodeODX produced no downloadable result bundle.");
-
-        // Best-effort remote cleanup.
-        await _client.RemoveTaskAsync(node, uuid, CancellationToken.None);
+        // Submit, follow the node, download the result bundle (deleted at the end)
+        using var bundle = await _node.RunAsync(node, taskName, imagePaths, optionsJson, progress, ct);
+        var tempZipPath = bundle.Path;
 
         // --- Phase 2: Determine output target ---
         var createNewDataset = args.CreateNewDataset ?? false;
@@ -345,55 +311,6 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         progress.Report(new HeavyToolProgress(0.99, "extracting",
             LogChunk: $"Extraction complete: {extraction.Extracted.Count} extracted, {extraction.Skipped} skipped"));
     }
-
-    private async Task PollUntilDoneAsync(
-        NodeOdxEndpoint node, string uuid, IProgress<HeavyToolProgress> progress, CancellationToken ct)
-    {
-        var outputLine = 0;
-        while (true)
-        {
-            ct.ThrowIfCancellationRequested();
-
-            var info = await _client.GetTaskInfoAsync(node, uuid, ct);
-            var fraction = Math.Clamp(info.Progress / 100.0, 0, 1);
-            var phase = PhaseFor(info.StatusCode);
-
-            var lines = await _client.GetTaskOutputAsync(node, uuid, outputLine, ct);
-            if (lines.Count > 0)
-            {
-                outputLine += lines.Count;
-                foreach (var line in lines)
-                    progress.Report(new HeavyToolProgress(fraction * 0.95, phase, LogChunk: line));
-            }
-            else
-            {
-                progress.Report(new HeavyToolProgress(fraction * 0.95, phase));
-            }
-
-            switch (info.StatusCode)
-            {
-                case NodeOdxTaskStatusCode.Completed:
-                    return;
-                case NodeOdxTaskStatusCode.Failed:
-                    throw new InvalidOperationException(
-                        $"NodeODX task failed: {info.ErrorMessage ?? "unknown error"}");
-                case NodeOdxTaskStatusCode.Canceled:
-                    throw new OperationCanceledException("NodeODX task was canceled.");
-            }
-
-            await Task.Delay(_pollInterval, ct);
-        }
-    }
-
-    private static string PhaseFor(NodeOdxTaskStatusCode code) => code switch
-    {
-        NodeOdxTaskStatusCode.Queued => "queued",
-        NodeOdxTaskStatusCode.Running => "processing",
-        NodeOdxTaskStatusCode.Completed => "completed",
-        NodeOdxTaskStatusCode.Failed => "failed",
-        NodeOdxTaskStatusCode.Canceled => "canceled",
-        _ => "processing"
-    };
 
     private List<Entry> CollectImageEntries(HeavyToolRequest request, Parameters args, IDDB ddb)
     {

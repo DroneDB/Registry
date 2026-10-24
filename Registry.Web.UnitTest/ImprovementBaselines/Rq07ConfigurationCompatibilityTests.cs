@@ -26,8 +26,8 @@ namespace Registry.Web.Test.ImprovementBaselines;
 /// <item>the settings files shipped in the repository (the embedded defaults a first start writes, the
 /// production template rendered as <c>run.sh</c> renders it, the testing compose settings) bind and
 /// validate for the roles they are used with;</item>
-/// <item>every <see cref="AppSettings"/> property is bound by exactly one focused class, to the same value
-/// (so the transitional whole-section view cannot drift from the classes);</item>
+/// <item>every key of those files is a property of exactly one focused class, and every <see cref="AppSettings"/>
+/// property (the test fixture that holds the whole section) is bound by exactly one, to the same value;</item>
 /// <item>Docker-style environment variables reach the focused classes;</item>
 /// <item>each rule of the removed <c>Program.VerifySettings</c> is a validator rule, and nothing else is.</item>
 /// </list>
@@ -111,6 +111,39 @@ public class Rq07ConfigurationCompatibilityTests
             actual.ShouldBe(expected, $"AppSettings:{property.Name} ({owner.Name}, {source})");
         }
     }
+
+    /// <summary>
+    /// The keys of the files themselves, not of a class: every key under <c>AppSettings</c> in the shipped settings is a
+    /// property of exactly one focused class (a nested section is the class of that section), so a key a deployment
+    /// has today is never silently ignored.
+    /// </summary>
+    [TestCaseSource(nameof(ShippedSettings))]
+    public void EveryKeyOfTheShippedSettings_IsAPropertyOfExactlyOneFocusedClass(string source, InstanceType[] _)
+    {
+        var section = Load(source)[RegistryOptions.SectionName]!.AsObject();
+
+        foreach (var (key, value) in section.Where(pair => !LegacyKeys.Contains(pair.Key)))
+        {
+            var owners = RegistryOptions.Sections
+                .Where(entry => entry.Value == RegistryOptions.SectionName + ":" + key ||
+                                (entry.Value == RegistryOptions.SectionName && HasProperty(entry.Key, key)))
+                .Select(entry => entry.Key)
+                .ToList();
+
+            owners.Count.ShouldBe(1, $"AppSettings:{key} ({source}) must be bound by exactly one focused class, found " +
+                                     string.Join(", ", owners.Select(o => o.Name)));
+
+            if (value is JsonObject nested && RegistryOptions.Sections[owners[0]] != RegistryOptions.SectionName)
+                foreach (var (name, _) in nested)
+                    HasProperty(owners[0], name).ShouldBeTrue($"AppSettings:{key}:{name} ({source}) is not a property of {owners[0].Name}");
+        }
+    }
+
+    /// <summary>Keys the shipped files still carry that no code reads (the binder ignores them): left in the file, not bound.</summary>
+    private static readonly string[] LegacyKeys = ["ChunkedUploadSessionTimeout"];
+
+    private static bool HasProperty(Type type, string name) =>
+        type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) != null;
 
     /// <summary>The Docker style: <c>AppSettings__…</c> environment variables override the file, in every focused class.</summary>
     [Test]

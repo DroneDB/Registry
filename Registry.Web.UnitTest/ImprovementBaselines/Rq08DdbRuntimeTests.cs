@@ -82,7 +82,7 @@ public class Rq08DdbRuntimeTests
             factory.Services.GetServices<IHostedService>().First().ShouldBeOfType<DdbRuntimeService>();
             runtime.Calls.ShouldBe(["SetLogSink", "Configure", "RegisterProcess"]);
             runtime.Settings!.CacheDir.ShouldBe(Path.GetFullPath(
-                Path.Combine(factory.Services.GetRequiredService<IOptions<AppSettings>>().Value.TempPath,
+                Path.Combine(factory.Services.GetRequiredService<IOptions<StorageOptions>>().Value.TempPath!,
                     DdbRuntimeOptions.DefaultCacheFolderName)));
             factory.Services.GetRequiredService<IOptions<HostOptions>>().Value.ShutdownTimeout
                 .ShouldBe(ShutdownTimeouts.Host);

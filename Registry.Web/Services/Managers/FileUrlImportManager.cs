@@ -5,11 +5,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Common;
-using Registry.Ports.Import;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
@@ -27,39 +24,30 @@ namespace Registry.Web.Services.Managers;
 /// </summary>
 public class FileUrlImportManager : IFileUrlImportManager
 {
-    private readonly IAuthManager _authManager;
     private readonly IDatasetAccessResolver _access;
-    private readonly IHeavyTaskRunner _runner;
-    private readonly IImportCredentialProtector _protector;
+    private readonly ICurrentUserTaskSubmitter _submitter;
+    private readonly ImportCredentials _credentials;
     private readonly GuardedHttpDownloader _downloader;
-    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ImportSettings _settings;
     private readonly DatasetPathPolicy _paths;
-    private readonly ILogger<FileUrlImportManager> _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="FileUrlImportManager"/> class.
     /// </summary>
     public FileUrlImportManager(
-        IAuthManager authManager,
         IDatasetAccessResolver access,
-        IHeavyTaskRunner runner,
-        IImportCredentialProtector protector,
+        ICurrentUserTaskSubmitter submitter,
+        ImportCredentials credentials,
         GuardedHttpDownloader downloader,
-        IHttpContextAccessor httpContextAccessor,
         IOptions<ImportSettings> importSettings,
-        DatasetPathPolicy paths,
-        ILogger<FileUrlImportManager> logger)
+        DatasetPathPolicy paths)
     {
-        _paths = paths;
-        _authManager = authManager;
         _access = access;
-        _runner = runner;
-        _protector = protector;
+        _submitter = submitter;
+        _credentials = credentials;
         _downloader = downloader;
-        _httpContextAccessor = httpContextAccessor;
         _settings = importSettings.Value;
-        _logger = logger;
+        _paths = paths;
     }
 
     /// <inheritdoc />
@@ -111,13 +99,9 @@ public class FileUrlImportManager : IFileUrlImportManager
         var folder = _paths.NormalizeFolder(request.Folder);
 
         var toolParams = BuildToolParams(uri, fileName, folder, request);
-        var user = await _authManager.GetCurrentUser();
 
-        var submit = new HeavyTaskSubmitRequest(
-            orgSlug, ds.Slug, "import-file", "1", fileName, toolParams, false,
-            user?.Id, _httpContextAccessor.HttpContext?.User);
-
-        var result = await _runner.SubmitAsync(submit, ct);
+        var result = await _submitter.SubmitAsync(orgSlug, ds.Slug, "import-file", "1", fileName, toolParams,
+            force: false, ct);
 
         return new UrlImportResultDto { TaskId = result.TaskId };
     }
@@ -135,14 +119,13 @@ public class FileUrlImportManager : IFileUrlImportManager
             ["username"] = request.Username ?? string.Empty,
             ["password"] = string.IsNullOrEmpty(request.Password)
                 ? string.Empty
-                : "ENC:" + _protector.Protect(request.Password)
+                : _credentials.Seal(request.Password)
         };
 
         if (request.SizeBytes is { } size && size > 0)
             root["sizeBytes"] = size;
 
-        using var doc = JsonDocument.Parse(root.ToJsonString());
-        return doc.RootElement.Clone();
+        return root.ToElement();
     }
 
     private static string? BuildNote(UrlProbeResult probe, bool blocked, bool sizeExceeds, long cap)

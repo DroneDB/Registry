@@ -108,7 +108,7 @@ public class PendingBuildCoordinationTests
                 _cacheData[key] = value;
                 return Task.CompletedTask;
             });
-        _service = new BuildPendingService(_context, new DatasetSweep(_context), _manager.Object, _jobs.Object, _cache.Object, _storage, Mock.Of<ILogger<BuildPendingService>>());
+        _service = new BuildPendingService(new DatasetSweep(_context), _manager.Object, _jobs.Object, _cache.Object, _storage, Mock.Of<ILogger<BuildPendingService>>());
     }
 
     private PendingBuildEnqueuer Enqueuer(IBackgroundJobsProcessor jobs, IJobIndexQuery index, JobStorage storage) =>
@@ -605,7 +605,7 @@ public class PendingBuildCoordinationTests
         secondCache.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(stale);
         secondCache.Setup(x => x.SetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<byte[]>()))
             .ThrowsAsync(new InvalidOperationException("second host observation cache write unavailable"));
-        var second = new BuildPendingService(_context, new DatasetSweep(_context), _manager.Object, _jobs.Object, secondCache.Object, _storage, Mock.Of<ILogger<BuildPendingService>>());
+        var second = new BuildPendingService(new DatasetSweep(_context), _manager.Object, _jobs.Object, secondCache.Object, _storage, Mock.Of<ILogger<BuildPendingService>>());
 
         await _service.ScheduleRetryIfPending(Org, Ds);
         await second.ScheduleRetryIfPending(Org, Ds);

@@ -126,14 +126,12 @@ public class UploadManagerTests
         var options = Microsoft.Extensions.Options.Options.Create(_settings);
         var context = TestDb.CreateContext<RegistryContext>();
         var jobs = Mock.Of<IBackgroundJobsProcessor>();
-        var buildPending = new BuildPendingService(context, new DatasetSweep(context), ddbManager.Object, jobs, Mock.Of<ICacheManager>(), TestJobs.NewStorage(), NullLogger<BuildPendingService>.Instance);
+        var buildPending = new BuildPendingService(new DatasetSweep(context), ddbManager.Object, jobs, Mock.Of<ICacheManager>(), TestJobs.NewStorage(), NullLogger<BuildPendingService>.Instance);
 
-        return new UploadManager(NullLogger<UploadManager>.Instance, _auth.Object,
-            new DatasetAccessResolver(_utils.Object, _auth.Object, ddbManager.Object, TestPaths.Policy), ddbManager.Object,
+        return TestUploads.Create(_auth.Object,
+            new DatasetAccessResolver(_utils.Object, _auth.Object, ddbManager.Object, TestPaths.Policy),
             new Registry.Adapters.FileSystem(), TestSettings.Options<ThumbnailOptions>(options), TestSettings.Options<ImportSettings>(options), TestJobs.Scheduler(jobs, buildPending, userId: "u"),
             new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _quota.Object), _changes.Object,
-            TestPaths.Policy,
-            TestScratch.Provider,
             _receipts, _queue.Object);
     }
 

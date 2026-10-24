@@ -100,7 +100,7 @@ class ShareManagerTest : TestBase
         _listingsMock = new Mock<IDatasetListingInvalidator>();
 
         var bpsContext = TestDb.CreateContext<RegistryContext>();
-        _buildPendingService = new BuildPendingService(bpsContext, new DatasetSweep(bpsContext), _ddbFactoryMock.Object, _backgroundJobsProcessor, _cacheManager, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
+        _buildPendingService = new BuildPendingService(new DatasetSweep(bpsContext), _ddbFactoryMock.Object, _backgroundJobsProcessor, _cacheManager, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
 
         _objectManagerLogger = CreateTestLogger<ObjectsManager>();
         _ddbFactoryLogger = CreateTestLogger<DdbManager>();
@@ -198,10 +198,7 @@ class ShareManagerTest : TestBase
         var objectManager = objectServices.Manager;
 
         var datasetManager = DatasetsManagerFor(context, webUtils);
-        var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
-            new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets,
-            datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), _organizationsManagerLogger,
-            new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
+        var organizationsManager = TestOrganizations.Create(_authManagerMock.Object, new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets, datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
                 NullLogger<OrganizationMembershipService>.Instance));
 
         var shareManager = TestShares.Manager(objectManager,
@@ -302,10 +299,7 @@ class ShareManagerTest : TestBase
         var objectManager = objectServices.Manager;
 
         var datasetManager = DatasetsManagerFor(context, webUtils);
-        var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
-            new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets,
-            datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), _organizationsManagerLogger,
-            new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
+        var organizationsManager = TestOrganizations.Create(_authManagerMock.Object, new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets, datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
                 NullLogger<OrganizationMembershipService>.Instance));
 
         var shareManager = TestShares.Manager(objectManager,
@@ -416,10 +410,7 @@ class ShareManagerTest : TestBase
         var objectManager = objectServices.Manager;
 
         var datasetManager = DatasetsManagerFor(context, webUtils);
-        var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
-            new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets,
-            datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), _organizationsManagerLogger,
-            new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
+        var organizationsManager = TestOrganizations.Create(_authManagerMock.Object, new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets, datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
                 NullLogger<OrganizationMembershipService>.Instance));
 
         var shareManager = TestShares.Manager(objectManager,
@@ -555,10 +546,7 @@ class ShareManagerTest : TestBase
         var objectManager = objectServices.Manager;
 
         var datasetManager = DatasetsManagerFor(context, webUtils);
-        var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
-            new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets,
-            datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), _organizationsManagerLogger,
-            new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
+        var organizationsManager = TestOrganizations.Create(_authManagerMock.Object, new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets, datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
                 NullLogger<OrganizationMembershipService>.Instance));
 
         var shareManager = TestShares.Manager(objectManager,
@@ -699,10 +687,7 @@ class ShareManagerTest : TestBase
         var objectManager = objectServices.Manager;
 
         var datasetManager = DatasetsManagerFor(context, webUtils);
-        var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
-            new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets,
-            datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), _organizationsManagerLogger,
-            new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
+        var organizationsManager = TestOrganizations.Create(_authManagerMock.Object, new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets, datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
                 NullLogger<OrganizationMembershipService>.Instance));
 
         var shareManager = TestShares.Manager(objectManager,
@@ -828,10 +813,7 @@ class ShareManagerTest : TestBase
         var objectManager = objectServices.Manager;
 
         var datasetManager = DatasetsManagerFor(context, webUtils);
-        var organizationsManager = new OrganizationsManager(_authManagerMock.Object,
-            new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets,
-            datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), _organizationsManagerLogger,
-            new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
+        var organizationsManager = TestOrganizations.Create(_authManagerMock.Object, new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy), context, webUtils.Datasets, datasetManager, appContext, TestSettings.Options<AccountOptions>(_settingsOptions), new OrganizationMembershipService(context, appContext, new UpperInvariantLookupNormalizer(),
                 NullLogger<OrganizationMembershipService>.Instance));
 
         var shareManager = TestShares.Manager(objectManager,

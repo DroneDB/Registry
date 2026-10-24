@@ -81,7 +81,7 @@ public class BuildJobFailureFilterTests
         var services = new ServiceCollection();
         services.AddSingleton(_cacheMock.Object);
         services.AddSingleton(_writerMock.Object);
-        services.AddSingleton(new BuildPendingService(_registryContext, new DatasetSweep(_registryContext), Mock.Of<IDdbManager>(), Mock.Of<IBackgroundJobsProcessor>(), _cacheMock.Object, storage, Mock.Of<ILogger<BuildPendingService>>()));
+        services.AddSingleton(new BuildPendingService(new DatasetSweep(_registryContext), Mock.Of<IDdbManager>(), Mock.Of<IBackgroundJobsProcessor>(), _cacheMock.Object, storage, Mock.Of<ILogger<BuildPendingService>>()));
         _provider = services.BuildServiceProvider();
 
         _filter = new BuildJobFailureFilter(_provider.GetRequiredService<IServiceScopeFactory>(), Mock.Of<ILogger<BuildJobFailureFilter>>());

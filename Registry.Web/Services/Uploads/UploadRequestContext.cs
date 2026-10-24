@@ -43,6 +43,9 @@ public sealed class UploadRequestContext : IDisposable
 
     public DatasetKey Key => new(OrgSlug, Dataset.InternalRef);
 
+    /// <summary>The id the quota ledger knows the user by: empty for an anonymous caller.</summary>
+    internal string QuotaUserId => User?.Id ?? string.Empty;
+
     internal IQuotaReservation? Reservation { get; set; }
     internal UploadTicket? Ticket { get; set; }
 

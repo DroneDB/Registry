@@ -27,7 +27,7 @@ public static class TestJobs
     /// <summary>The pending-build service over the test's collaborators.</summary>
     public static BuildPendingService BuildPendingService(RegistryContext context, IDdbManager ddbManager,
         IBackgroundJobsProcessor jobs, ICacheManager cache, JobStorage? storage = null) =>
-        new(context, new DatasetSweep(context), ddbManager, jobs, cache, storage ?? NewStorage(),
+        new(new DatasetSweep(context), ddbManager, jobs, cache, storage ?? NewStorage(),
             NullLogger<BuildPendingService>.Instance);
 
     /// <summary>
@@ -47,8 +47,9 @@ public static class TestJobs
     public static Services.HeavyTasks.Adapters.HeavyToolExecutionContext ExecutionContext(Registry.Ports.DroneDB.IDDB ddb,
         string orgSlug = "org", System.Guid internalRef = default, string taskId = "task-1", string? workDir = null,
         IBackgroundJobsProcessor? jobs = null, IDatasetBuilds? builds = null) =>
-        new(ddb, new DatasetKey(orgSlug, internalRef == default ? System.Guid.NewGuid() : internalRef), null,
-            NullLogger.Instance, taskId, workDir, null!, Scheduler(jobs), builds ?? DdbJobs(jobs: jobs));
+        new(ddb, new DatasetKey(orgSlug, internalRef == default ? System.Guid.NewGuid() : internalRef),
+            NullLogger.Instance, new Services.HeavyTasks.Adapters.TaskRun(taskId, workDir), null!, Scheduler(jobs),
+            builds ?? DdbJobs(jobs: jobs));
 
     /// <summary>
     /// The build scheduler over <paramref name="jobs"/> (loose mocks unless given), libddb's manifest through the

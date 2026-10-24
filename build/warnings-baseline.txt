@@ -166,7 +166,6 @@ Registry.Web/Services/Managers/OgcApiTilesManager.cs CS8632 1
 Registry.Web/Services/Managers/OgcManagerBase.cs CA1051 6
 Registry.Web/Services/Managers/OgcManagerBase.cs CS8632 2
 Registry.Web/Services/Managers/OrganizationsManager.cs CA1725 1
-Registry.Web/Services/Managers/OrganizationsManager.cs CA1859 1
 Registry.Web/Services/Managers/Wcs/IWcsCoverageService.cs CS8632 5
 Registry.Web/Services/Managers/Wcs/IWcsProtocolHandler.cs CS8632 1
 Registry.Web/Services/Managers/Wcs/WcsProtocol10Handler.cs CA1725 1
@@ -176,9 +175,6 @@ Registry.Web/Services/Managers/Wcs/WcsProtocol11Handler.cs CS8632 1
 Registry.Web/Services/Managers/Wcs/WcsProtocol20Handler.cs CA1725 1
 Registry.Web/Services/Managers/Wcs/WcsProtocol20Handler.cs CS8632 1
 Registry.Web/Services/Managers/WcsManager.cs CS8632 1
-Registry.Web/Services/Managers/WfsManager.cs CA1310 1
-Registry.Web/Services/Managers/WfsManager.cs CA1866 1
-Registry.Web/Services/Managers/WfsManager.cs CS8632 16
 Registry.Web/Services/Managers/WmsManager.cs CS8632 10
 Registry.Web/Services/Ports/IDatasetIndexQueue.cs CA1711 1
 Registry.Web/Services/Ports/IDatasetIndexQueue.cs CS0419 1

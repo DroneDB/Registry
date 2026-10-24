@@ -94,9 +94,10 @@ public class Rq01AdminPasswordTests
     private async Task RunDatabaseInitializerAsync(IdentityProviderOptions? settingsOverride = null)
     {
         using var scope = _factory.Services.CreateScope();
-        var initializer = settingsOverride == null
-            ? ActivatorUtilities.CreateInstance<DatabaseInitializer>(scope.ServiceProvider)
-            : ActivatorUtilities.CreateInstance<DatabaseInitializer>(scope.ServiceProvider, MsOptions.Create(settingsOverride));
+        var admin = settingsOverride == null
+            ? ActivatorUtilities.CreateInstance<DefaultAdminProvisioner>(scope.ServiceProvider)
+            : ActivatorUtilities.CreateInstance<DefaultAdminProvisioner>(scope.ServiceProvider, MsOptions.Create(settingsOverride));
+        var initializer = ActivatorUtilities.CreateInstance<DatabaseInitializer>(scope.ServiceProvider, admin);
 
         await initializer.ExecuteAsync(CancellationToken.None);
     }
@@ -152,8 +153,6 @@ public class Rq01AdminPasswordTests
         var after = SnapshotAppSettingsFiles();
         foreach (var (path, content) in before)
             after[path].ShouldBe(content, $"the admin password must not be written to {path}");
-        _factory.Services.GetRequiredService<IOptions<AppSettings>>().Value.DefaultAdmin.Password
-            .ShouldBe(RegistryWebFactory.AdminPassword, "a request must not mutate the singleton settings");
         _factory.Services.GetRequiredService<IOptions<IdentityProviderOptions>>().Value.DefaultAdmin!.Password
             .ShouldBe(RegistryWebFactory.AdminPassword, "a request must not mutate the singleton settings");
     }

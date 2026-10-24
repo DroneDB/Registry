@@ -407,18 +407,8 @@ public class OrganizationMemberPermissionsTest : TestBase
 
     private OrganizationsManager CreateManager()
     {
-        return new OrganizationsManager(
-            _authManagerMock.Object,
-            new DatasetAccessResolver(_utilsMock.Object, _authManagerMock.Object, Mock.Of<IDdbManager>(), TestPaths.Policy),
-            _context,
-            _utilsMock.Object,
-            _datasetManagerMock.Object,
-            _appContext,
-            TestSettings.Options<AccountOptions>(_settingsOptions),
-            _logger,
-            new OrganizationMembershipService(_context, _appContext, new UpperInvariantLookupNormalizer(),
-                NullLogger<OrganizationMembershipService>.Instance)
-        );
+        return TestOrganizations.Create(_authManagerMock.Object, new DatasetAccessResolver(_utilsMock.Object, _authManagerMock.Object, Mock.Of<IDdbManager>(), TestPaths.Policy), _context, _utilsMock.Object, _datasetManagerMock.Object, _appContext, TestSettings.Options<AccountOptions>(_settingsOptions), new OrganizationMembershipService(_context, _appContext, new UpperInvariantLookupNormalizer(),
+                NullLogger<OrganizationMembershipService>.Instance));
     }
 
     private void SetupAsUser(User user)
