@@ -13,7 +13,7 @@ namespace Registry.Web.Test.Support;
 /// <summary>
 /// An <see cref="UploadManager"/> over its collaborators for tests that build the upload pipeline by hand (RQ-12:
 /// the manager takes the services it was split into; this wires them the way <c>AddUploadPipeline</c> does).
-/// Without <paramref name="receipts"/>, <paramref name="indexQueue"/> or <paramref name="thumbnails"/> the pipeline
+/// Without a receipt store, an index queue or a thumbnail queue the pipeline
 /// keeps no receipts, indexes with <c>AddRaw</c> and pre-generates no thumbnail.
 /// </summary>
 public static class TestUploads

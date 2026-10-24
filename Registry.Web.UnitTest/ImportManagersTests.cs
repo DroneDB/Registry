@@ -108,7 +108,7 @@ public class ImportManagersTests
 
     private static IOptions<ImportSettings> Options(ImportSettings settings) => Microsoft.Extensions.Options.Options.Create(settings);
 
-    private ICurrentUserTaskSubmitter Submitter() => new CurrentUserTaskSubmitter(_runner.Object, _auth.Object,
+    private CurrentUserTaskSubmitter Submitter() => new CurrentUserTaskSubmitter(_runner.Object, _auth.Object,
         new HttpContextAccessor { HttpContext = new DefaultHttpContext { User = _caller } });
 
     private ImportManager CreateImportManager() => new(_access.Object,

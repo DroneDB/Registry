@@ -31,7 +31,7 @@ public interface IOrganizationQueries
     Task<IEnumerable<OrganizationDto>> ListPublic(CancellationToken ct = default);
 
     /// <summary>One organization (read access) with the permissions of the current user in it.</summary>
-    Task<OrganizationDto> Get(string orgSlug, CancellationToken ct = default);
+    Task<OrganizationDto> GetOrganization(string orgSlug, CancellationToken ct = default);
 
     /// <summary><paramref name="org"/> as every organization answer shows it: the owner is the user name.</summary>
     Task<OrganizationDto> ToDtoWithOwnerNameAsync(Organization org);
@@ -177,9 +177,9 @@ public sealed class OrganizationQueries : IOrganizationQueries
     ///   - falling back to a single small IN query for tiny inputs.
     /// Returns an empty dictionary when there are no IDs to resolve.
     /// </summary>
-    private async Task<Dictionary<string, string>> ResolveUserNamesAsync(IReadOnlyCollection<string> userIds)
+    private async Task<Dictionary<string, string>> ResolveUserNamesAsync(string[] userIds)
     {
-        if (userIds == null || userIds.Count == 0)
+        if (userIds == null || userIds.Length == 0)
             return new Dictionary<string, string>(StringComparer.Ordinal);
 
         // Threshold tuned so that, beyond it, the parameterized IN-clause cost (network +
@@ -187,7 +187,7 @@ public sealed class OrganizationQueries : IOrganizationQueries
         // a single full projection of the Users table. Hub-scale: users << datasets/orgs.
         const int InClauseThreshold = 64;
 
-        if (userIds.Count <= InClauseThreshold)
+        if (userIds.Length <= InClauseThreshold)
         {
             return await _appContext.Users
                 .AsNoTracking()
@@ -198,9 +198,7 @@ public sealed class OrganizationQueries : IOrganizationQueries
 
         // Single parameter-less query, then filter in memory.
         // The Users table is small relative to datasets/organizations.
-        var wanted = userIds is HashSet<string> hs
-            ? hs
-            : new HashSet<string>(userIds, StringComparer.Ordinal);
+        var wanted = new HashSet<string>(userIds, StringComparer.Ordinal);
 
         var allUsers = await _appContext.Users
             .AsNoTracking()
@@ -217,7 +215,7 @@ public sealed class OrganizationQueries : IOrganizationQueries
         return result;
     }
 
-    public async Task<OrganizationDto> Get(string orgSlug, CancellationToken ct = default)
+    public async Task<OrganizationDto> GetOrganization(string orgSlug, CancellationToken ct = default)
     {
         var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Read, ct: ct);
 

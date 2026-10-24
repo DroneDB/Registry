@@ -34,7 +34,7 @@ public class OrganizationsManager : IOrganizationsManager
 
     public Task<IEnumerable<OrganizationDto>> ListPublic(CancellationToken ct = default) => _queries.ListPublic(ct);
 
-    public Task<OrganizationDto> Get(string orgSlug, CancellationToken ct = default) => _queries.Get(orgSlug, ct);
+    public Task<OrganizationDto> Get(string orgSlug, CancellationToken ct = default) => _queries.GetOrganization(orgSlug, ct);
 
     public Task<OrganizationDto> AddUserDefaultAsync(string userId, string userName, CancellationToken ct = default) =>
         _commands.AddUserDefaultAsync(userId, userName, ct);
