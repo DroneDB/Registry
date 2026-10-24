@@ -26,8 +26,9 @@ public sealed class RasterIndexCatalog : IRasterIndexCatalog
     }
 
     /// <summary>
-    /// The list of one raster, empty when it cannot be read (logged): a raster libddb cannot open renders no index, and
-    /// must not fail the capabilities of the dataset. A canceled call is not a failure and propagates.
+    /// The list of one raster. A raster libddb cannot read (or whose document is not libddb's) renders no index and
+    /// must not fail the capabilities of the dataset: logged, empty. A failure that can pass (libddb busy, its disk
+    /// full, shutting down: <see cref="DdbErrors.IsTransient"/>) and a canceled call are not "no index" and propagate.
     /// </summary>
     public async Task<IReadOnlyList<string>> GetAsync(string entryHash, RasterSource source,
         CancellationToken ct = default)
@@ -42,7 +43,7 @@ public sealed class RasterIndexCatalog : IRasterIndexCatalog
                 "libddb's raster info of {Path} has no \"indexLayer\" (a libddb older than 2.0?); it renders none",
                 source.Path);
         }
-        catch (DdbException ex)
+        catch (DdbException ex) when (!DdbErrors.IsTransient(ex))
         {
             _logger.LogWarning(ex, "Reading the spectral indices of {Path} failed; it renders none", source.Path);
         }

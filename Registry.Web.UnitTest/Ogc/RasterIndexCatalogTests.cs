@@ -179,6 +179,35 @@ public class RasterIndexCatalogTests
         (await catalog.GetAsync(Hash, Cog)).ShouldBe(["NDVI"]);
     }
 
+    [TestCase(typeof(DdbRetryableException))]
+    [TestCase(typeof(DdbBusyException))]
+    [TestCase(typeof(DdbBuildInProgressException))]
+    [TestCase(typeof(DdbShutdownException))]
+    public async Task Get_AFailureThatCanPass_IsNotNoIndex_AndIsNotRemembered(Type failure)
+    {
+        var fail = true;
+        _ddb.Setup(d => d.GetRasterInfo(It.IsAny<string>()))
+            .Returns(() => fail ? throw (Exception)Activator.CreateInstance(failure, "the disk is full")! : _info);
+        var catalog = Create();
+
+        await Should.ThrowAsync(() => catalog.GetAsync(Hash, Cog), failure);
+        _log.Count(LogLevel.Warning).ShouldBe(0, "the caller answers it: nothing says the raster has no index");
+
+        fail = false;
+        (await catalog.GetAsync(Hash, Cog)).Count.ShouldBe(5, "the next request asks libddb again");
+    }
+
+    [TestCase(typeof(DdbInvalidArgumentsException))]
+    [TestCase(typeof(DdbNotFoundException))]
+    public async Task Get_ARasterLibddbSaysIsUnreadable_IsNoIndex(Type failure)
+    {
+        _ddb.Setup(d => d.GetRasterInfo(It.IsAny<string>()))
+            .Throws((Exception)Activator.CreateInstance(failure, "not a raster")!);
+
+        (await Create().GetAsync(Hash, Cog)).ShouldBeEmpty();
+        _log.Count(LogLevel.Warning).ShouldBe(1);
+    }
+
     [Test]
     public async Task Get_ACanceledCaller_StopsInsteadOfAnsweringNoIndex()
     {

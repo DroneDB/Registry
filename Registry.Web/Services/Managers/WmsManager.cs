@@ -200,8 +200,11 @@ public class WmsManager : OgcManagerBase, IWmsManager
             // OgcExceptionFilter can return the proper ServiceExceptionReport XML.
             throw;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException && !DdbErrors.IsTransient(ex))
         {
+            // A failure that can pass (libddb busy, disk full, shutting down) is not turned into a picture: it answers
+            // 503 + Retry-After (OgcExceptionFilter), the one the client can act on, instead of a blank map it would keep.
+            //
             // WMS 1.3 §7.3.3.11: GetMap MUST return an image when parameters are syntactically valid.
             // Under load, native (GDAL/Skia) failures or transient I/O issues can bubble up past the
             // per-layer try/catch; we never want a 500 here, so synthesize a fully transparent (or
