@@ -111,7 +111,7 @@ public sealed class ShareBatchStore : IShareBatchStore
             return IsBatchReadyResult.NotReady;
         }
 
-        return new IsBatchReadyResult(true, batch);
+        return new IsBatchReadyResult(true, batch.Entries.Select(entry => entry.Path).ToHashSet(StringComparer.Ordinal));
     }
 
     public async Task<bool> IsPathAllowedAsync(string token, string path, CancellationToken ct = default)
@@ -124,9 +124,7 @@ public sealed class ShareBatchStore : IShareBatchStore
             return false;
         }
 
-        var entry = res.Batch.Entries.FirstOrDefault(item => item.Path == path);
-
-        if (entry != null)
+        if (res.EntryPaths.Contains(path))
         {
             _logger.LogDebug("The batch '{Token}' already contains path '{Path}'", token, path);
             return false;

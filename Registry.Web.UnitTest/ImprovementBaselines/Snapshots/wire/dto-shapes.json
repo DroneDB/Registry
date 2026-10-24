@@ -2040,105 +2040,13 @@
   "Registry.Web.Models.DTO.IsBatchReadyResult": {
     "full": {
       "isReady": true,
-      "batch": {
-        "token": "Token-text",
-        "dataset": {
-          "slug": "Slug-text",
-          "internalRef": "0a223495-84a0-4c15-b425-c7ef88110e75",
-          "id": 42,
-          "creationDate": "2026-10-21T07:31:17.123Z",
-          "fileTypes": [
-            "FileTypes-text"
-          ],
-          "organization": {
-            "slug": "Slug-text",
-            "name": "Name-text",
-            "description": "Description-text",
-            "creationDate": "2026-10-21T07:31:17.123Z",
-            "ownerId": "OwnerId-text",
-            "isPublic": true,
-            "datasets": [
-              {
-                "slug": null,
-                "internalRef": "00000000-0000-0000-0000-000000000000",
-                "id": 0,
-                "creationDate": "0001-01-01T00:00:00Z",
-                "fileTypes": null,
-                "organization": null,
-                "batches": null
-              }
-            ],
-            "users": [
-              {
-                "organization": null,
-                "userId": null,
-                "organizationSlug": null,
-                "permissions": 0,
-                "grantedAt": null,
-                "grantedBy": null
-              }
-            ]
-          },
-          "batches": [
-            {
-              "token": "Token-text",
-              "dataset": {
-                "slug": null,
-                "internalRef": "00000000-0000-0000-0000-000000000000",
-                "id": 0,
-                "creationDate": "0001-01-01T00:00:00Z",
-                "fileTypes": null,
-                "organization": null,
-                "batches": null
-              },
-              "userName": "UserName-text",
-              "start": "2026-10-21T07:31:17.123Z",
-              "end": "2026-10-21T07:31:17.123Z",
-              "status": 1,
-              "entries": [
-                null
-              ]
-            }
-          ]
-        },
-        "userName": "UserName-text",
-        "start": "2026-10-21T07:31:17.123Z",
-        "end": "2026-10-21T07:31:17.123Z",
-        "status": 1,
-        "entries": [
-          {
-            "id": 42,
-            "path": "Path-text",
-            "hash": "Hash-text",
-            "type": 1,
-            "size": 1234567890123,
-            "addedOn": "2026-10-21T07:31:17.123Z",
-            "batch": {
-              "token": "Token-text",
-              "dataset": {
-                "slug": null,
-                "internalRef": "00000000-0000-0000-0000-000000000000",
-                "id": 0,
-                "creationDate": "0001-01-01T00:00:00Z",
-                "fileTypes": null,
-                "organization": null,
-                "batches": null
-              },
-              "userName": "UserName-text",
-              "start": "2026-10-21T07:31:17.123Z",
-              "end": "2026-10-21T07:31:17.123Z",
-              "status": 1,
-              "entries": [
-                null
-              ]
-            }
-          }
-        ]
-      }
+      "entryPaths": [
+        "EntryPaths-text"
+      ]
     },
     "sparse": {
       "isReady": false,
-      "batch": null
+      "entryPaths": null
     }
   },
   "Registry.Web.Models.DTO.LoginResultDto": {

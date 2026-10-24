@@ -137,6 +137,14 @@ public sealed class WirePopulator(Func<Type, string, object?> jsonLiteral)
             return true;
         }
 
+        // IReadOnlySet<T>, ISet<T>: a hash set
+        var set = Activator.CreateInstance(typeof(HashSet<>).MakeGenericType(element), list);
+        if (type.IsInstanceOfType(set))
+        {
+            result = set;
+            return true;
+        }
+
         // HashSet<T>, ImmutableArray<T>, ...: a constructor taking the sequence
         result = Activator.CreateInstance(type, list);
         return true;

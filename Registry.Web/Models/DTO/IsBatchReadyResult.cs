@@ -1,26 +1,14 @@
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Registry.Web.Data.Models;
 
 namespace Registry.Web.Models.DTO;
 
-public class IsBatchReadyResult
+/// <summary>
+/// Whether a share batch can take an upload for the caller, and the paths it already holds: the facts of the batch
+/// the callers read, not the tracked entity (RQ-14).
+/// </summary>
+/// <param name="IsReady">The batch exists, is running and belongs to the caller (or the caller is an administrator).</param>
+/// <param name="EntryPaths">The paths of the batch's entries (empty when it is not ready).</param>
+public sealed record IsBatchReadyResult(bool IsReady, IReadOnlySet<string> EntryPaths)
 {
-    public IsBatchReadyResult(bool isReady, Batch batch)
-    {
-        IsReady = isReady;
-        Batch = batch;
-    }
-
-    public IsBatchReadyResult(bool isReady)
-    {
-        IsReady = isReady;
-    }
-
-    public bool IsReady { get; }
-    public Batch Batch { get; }
-
-    public static readonly IsBatchReadyResult NotReady = new(false);
+    public static readonly IsBatchReadyResult NotReady = new(false, new HashSet<string>());
 }
