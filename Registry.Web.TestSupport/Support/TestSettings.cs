@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Registry.Web.Hosting;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Data;
 
 namespace Registry.Web.Test.Support;
 

@@ -17,6 +17,5 @@ Registry.Adapters.Ddb.Test
 Registry.Adapters.Test
 Registry.Common
 Registry.Web
-Registry.Web.Data
 Registry.Web.IntegrationTest
 Registry.Web.UnitTest

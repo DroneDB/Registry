@@ -14,7 +14,7 @@
         <IsPackable>false</IsPackable>
         <IsTestProject>false</IsTestProject>
         <Platforms>AnyCPU;x64</Platforms>
-        <Configurations>Debug;Release;DebugEf</Configurations>
+        <Configurations>Debug;Release</Configurations>
     </PropertyGroup>
 
     <ItemGroup>

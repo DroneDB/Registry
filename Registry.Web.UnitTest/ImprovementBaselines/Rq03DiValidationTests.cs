@@ -16,6 +16,7 @@ using Registry.Web.Utilities;
 using Serilog;
 using Shouldly;
 using Registry.Test.Common;
+using Registry.Web.Data;
 
 namespace Registry.Web.Test.ImprovementBaselines;
 

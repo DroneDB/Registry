@@ -31,22 +31,13 @@ public static class StartupExtenders
         var connectionString = configuration.GetConnectionString(connectionStringName);
         mySqlVersions ??= MySqlServerVersionCache.FromConfiguration(configuration);
 
+        var migrationsAssembly = DbProviderConfigurator.MigrationsAssemblyName(migrationsNamespace, provider);
+
         services.AddDbContext<T>((sp, options) =>
         {
             // Hooks on saved changes (e.g. DatasetChangeInterceptor) registered by the host
             options.AddInterceptors(sp.GetServices<Microsoft.EntityFrameworkCore.Diagnostics.ISaveChangesInterceptor>());
-            _ = provider switch
-            {
-                DbProvider.Sqlite => options.UseSqlite(connectionString,
-                    x => x.MigrationsAssembly($"Registry.Web.{migrationsNamespace}.SqliteMigrations")),
-                DbProvider.Mysql => options.UseMySql(connectionString, mySqlVersions.Resolve(connectionString),
-                    x =>
-                    {
-                        x.EnableRetryOnFailure();
-                        x.MigrationsAssembly($"Registry.Web.{migrationsNamespace}.MySqlMigrations");
-                    }),
-                _ => throw new ArgumentOutOfRangeException(nameof(provider), $"Unrecognised provider: '{provider}'")
-            };
+            DbProviderConfigurator.Configure(options, provider, connectionString, migrationsAssembly, mySqlVersions.Resolve);
         });
     }
 

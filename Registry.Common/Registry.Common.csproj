@@ -4,7 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <Platforms>AnyCPU;x64</Platforms>
-    <Configurations>Debug;Release;DebugEf</Configurations>
+    <Configurations>Debug;Release</Configurations>
     <!-- Nullable allow-list (build/nullable-allowlist.txt): it may only shrink. -->
     <Nullable>disable</Nullable>
     <!-- The khellang/MimeTypes source generator (used by CommonUtils) does not emit its class when
@@ -17,15 +17,7 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugEf|AnyCPU'">
-    <WarningLevel>4</WarningLevel>
-  </PropertyGroup>
-
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <WarningLevel>4</WarningLevel>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugEf|x64'">
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
 

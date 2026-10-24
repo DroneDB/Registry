@@ -15,11 +15,11 @@ public class Entry
 
     /// <summary>File path within the dataset.</summary>
     [Required]
-    public string Path { get; set; }
+    public string Path { get; set; } = null!;
 
     /// <summary>Content hash of the uploaded file.</summary>
     [Required]
-    public string Hash { get; set; }
+    public string Hash { get; set; } = null!;
 
     /// <summary>DroneDB entry type (image, video, pointcloud, etc.).</summary>
     [Required]
@@ -35,5 +35,5 @@ public class Entry
 
     /// <summary>Parent batch this entry belongs to.</summary>
     [Required]
-    public Batch Batch { get; set; }
+    public Batch Batch { get; set; } = null!;
 }

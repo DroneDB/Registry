@@ -1,7 +1,5 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Registry.Common;
 using Registry.Web.Identity.Models;
 
 namespace Registry.Web.Identity;
@@ -20,19 +18,7 @@ public sealed class ApplicationDbContext : IdentityDbContext<User>
     {
         base.OnModelCreating(builder);
 
-        var valueComparer = new ValueComparer<Dictionary<string, object>>(
-            (x, y) => x.IsSameAs(y),
-            x => x.GetHashCode(),
-            x => UserMetadataJson.Clone(x));
-
-        // TODO: Need to set value comparer
-        builder.Entity<User>()
-            .Property(b => b.Metadata)
-            .HasConversion(
-                v => UserMetadataJson.Serialize(v),
-                v => UserMetadataJson.Deserialize(v),
-                valueComparer);
-
+        builder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
     }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

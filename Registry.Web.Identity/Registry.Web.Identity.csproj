@@ -12,6 +12,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
+      <ProjectReference Include="..\Registry.Web.Data\Registry.Web.Data.csproj" />
     </ItemGroup>
 
 </Project>

@@ -26,8 +26,7 @@ public static class HostDbContexts
 
     /// <summary>The migrations assembly the host configures for <typeparamref name="TContext"/> on <paramref name="provider"/>.</summary>
     public static string MigrationsAssembly<TContext>(DbProvider provider) where TContext : DbContext =>
-        $"Registry.Web.{Registration<TContext>().MigrationsNamespace}." +
-        $"{(provider == DbProvider.Sqlite ? "Sqlite" : "MySql")}Migrations";
+        DbProviderConfigurator.MigrationsAssemblyName(Registration<TContext>().MigrationsNamespace, provider);
 
     /// <summary>
     /// Registers <typeparamref name="TContext"/> on <paramref name="connectionString"/> as the host does.

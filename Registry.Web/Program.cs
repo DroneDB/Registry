@@ -49,15 +49,6 @@ public class Program
     /// <summary>Entry point; the process exit code is one of <see cref="ExitCodes"/>.</summary>
     public static int Main(string[] args)
     {
-#if DEBUG_EF
-            // EF core tools compatibility
-            if (IsEfTool(args))
-            {
-                RunEfToolsHost(args);
-                return ExitCodes.Success;
-            }
-#endif
-
         return Run(args, StartInstance, ReadAdminPasswordFromConsole);
     }
 
@@ -185,18 +176,12 @@ public class Program
     /// <summary>
     /// The web host builder (<see cref="RegistryHost.CreateWebBuilder"/>; the instance type comes from the
     /// configuration). Used by the integration tests (WebApplicationFactory resolves this method by
-    /// convention), <c>--reset-admin-password</c> and the EF Core tools.
+    /// convention) and <c>--reset-admin-password</c>.
     /// </summary>
     /// <param name="args">Host arguments (e.g. <c>--urls</c>).</param>
     /// <returns>The configured, not yet built, host builder.</returns>
     public static IHostBuilder CreateHostBuilder(string[] args)
     {
-#if DEBUG_EF
-        // dotnet-ef resolves this method before Main: route its invocations to the design-time host
-        if (IsEfTool(args))
-            return CreateEfToolsHostBuilder(args);
-#endif
-
         return RegistryHost.CreateWebBuilder(null, args);
     }
 
@@ -683,132 +668,4 @@ public class Program
 
         return true;
     }
-
-    #region EF Tool
-
-    /*
-        Add new migration (RegistryContext)
-        dotnet ef migrations add NewMigration --project Registry.Web.Data.SqliteMigrations --context Registry.Web.Data.RegistryContext --configuration DebugEF --startup-project Registry.Web --verbose -- --provider Sqlite
-        dotnet ef migrations add NewMigration --project Registry.Web.Data.MysqlMigrations  --context Registry.Web.Data.RegistryContext --configuration DebugEF --startup-project Registry.Web --verbose -- --provider MySql
-
-        Generate SQL script (RegistryContext)
-        dotnet ef migrations script --project Registry.Web.Data.SqliteMigrations --context Registry.Web.Data.RegistryContext --configuration DebugEF --startup-project Registry.Web -o sqlite.sql --verbose -- --provider Sqlite
-        dotnet ef migrations script --project Registry.Web.Data.MysqlMigrations  --context Registry.Web.Data.RegistryContext --configuration DebugEF --startup-project Registry.Web -o mysql.sql --verbose -- --provider MySql
-
-        Add new migration (ApplicationDbContext)
-        dotnet ef migrations add NewMigration --project Registry.Web.Identity.SqliteMigrations --context Registry.Web.Identity.ApplicationDbContext --configuration DebugEF --startup-project Registry.Web --verbose -- --provider Sqlite
-        dotnet ef migrations add NewMigration --project Registry.Web.Identity.MysqlMigrations  --context Registry.Web.Identity.ApplicationDbContext --configuration DebugEF --startup-project Registry.Web --verbose -- --provider MySql
-
-        Generate SQL script (ApplicationDbContext)
-        dotnet ef migrations script --project Registry.Web.Identity.SqliteMigrations --context Registry.Web.Identity.ApplicationDbContext --configuration DebugEF --startup-project Registry.Web -o sqlite.sql --verbose -- --provider Sqlite
-        dotnet ef migrations script --project Registry.Web.Identity.MysqlMigrations  --context Registry.Web.Identity.ApplicationDbContext --configuration DebugEF --startup-project Registry.Web -o mysql.sql --verbose -- --provider MySql
-
-    */
-
-    private const string EfProviderOption = "--provider";
-
-    /// <summary>
-    /// Reads the provider of an EF Core tools invocation (<c>dotnet ef ... -- --provider MySql</c>).
-    /// dotnet-ef hands the arguments after <c>--</c> to the startup assembly in no fixed order and
-    /// may add others (e.g. <c>--applicationName</c>, as one <c>--name=value</c> token or two), so
-    /// the option is looked up anywhere, in both the <c>--provider value</c> and
-    /// <c>--provider=value</c> forms. The application's own command line has no such option.
-    /// </summary>
-    /// <param name="args">The arguments the host receives.</param>
-    /// <param name="provider">The provider name (e.g. <c>Sqlite</c>, <c>MySql</c>) when found.</param>
-    /// <returns>True when the arguments carry a provider, i.e. they come from the EF Core tools.</returns>
-    internal static bool TryGetEfToolProvider(IReadOnlyList<string> args, out string provider)
-    {
-        provider = null;
-        if (args == null)
-            return false;
-
-        for (var i = 0; i < args.Count; i++)
-        {
-            var arg = args[i];
-            if (arg == null)
-                continue;
-
-            if (arg.Equals(EfProviderOption, StringComparison.OrdinalIgnoreCase))
-            {
-                var value = i + 1 < args.Count ? args[i + 1] : null;
-                if (!string.IsNullOrWhiteSpace(value) && !value.StartsWith("--", StringComparison.Ordinal))
-                    provider = value;
-            }
-            else if (arg.StartsWith(EfProviderOption + "=", StringComparison.OrdinalIgnoreCase))
-            {
-                var value = arg[(EfProviderOption.Length + 1)..];
-                if (!string.IsNullOrWhiteSpace(value))
-                    provider = value;
-            }
-        }
-
-        return provider != null;
-    }
-
-#if DEBUG_EF
-        private static bool IsEfTool(string[] args) => TryGetEfToolProvider(args, out _);
-
-        private static void RunEfToolsHost(string[] args) => CreateEfToolsHostBuilder(args).Build().Run();
-
-        /// <summary>
-        /// The design-time host for the EF Core tools: only the two DbContexts, on the provider
-        /// passed with <c>--provider</c> (<see cref="TryGetEfToolProvider"/>), default Sqlite.
-        /// </summary>
-        private static IHostBuilder CreateEfToolsHostBuilder(string[] args)
-        {
-            var provider = TryGetEfToolProvider(args, out var requested) ? requested : "Sqlite";
-
-            return Host.CreateDefaultBuilder(args)
-                .ConfigureAppConfiguration(x => x.AddJsonFile("appsettings-eftools.json"))
-                .ConfigureServices(
-                    (hostContext, services) =>
-                    {
-                        var configuration = hostContext.Configuration;
-
-                        var registrySqliteConnectionString =
-                            configuration.GetConnectionString("RegistrySqliteConnection");
-                        var registryMysqlConnectionString =
-                            configuration.GetConnectionString("RegistryMysqlConnection");
-
-                        // One probe per connection string for the whole host, or none when pinned
-                        var mySqlVersions = MySqlServerVersionCache.FromConfiguration(configuration);
-
-                        services.AddDbContext<RegistryContext>(
-                            options => _ = provider switch
-                            {
-                                "Sqlite" => options.UseSqlite(
-                                    registrySqliteConnectionString,
-                                    x => x.MigrationsAssembly("Registry.Web.Data.SqliteMigrations")),
-
-                                "MySql" => options.UseMySql(
-                                    registryMysqlConnectionString, mySqlVersions.Resolve(registryMysqlConnectionString),
-                                    x => x.MigrationsAssembly("Registry.Web.Data.MySqlMigrations")),
-
-                                _ => throw new Exception($"Unsupported provider: {provider}")
-                            });
-
-                        var identitySqliteConnectionString =
-                            configuration.GetConnectionString("IdentitySqliteConnection");
-                        var identityMysqlConnectionString =
-                            configuration.GetConnectionString("IdentityMysqlConnection");
-
-                        services.AddDbContext<ApplicationDbContext>(
-                            options => _ = provider switch
-                            {
-                                "Sqlite" => options.UseSqlite(
-                                    identitySqliteConnectionString,
-                                    x => x.MigrationsAssembly("Registry.Web.Identity.SqliteMigrations")),
-
-                                "MySql" => options.UseMySql(
-                                    identityMysqlConnectionString, mySqlVersions.Resolve(identityMysqlConnectionString),
-                                    x => x.MigrationsAssembly("Registry.Web.Identity.MySqlMigrations")),
-
-                                _ => throw new Exception($"Unsupported provider: {provider}")
-                            });
-                    });
-        }
-#endif
-
-    #endregion
 }

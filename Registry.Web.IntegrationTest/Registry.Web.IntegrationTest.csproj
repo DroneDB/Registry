@@ -14,7 +14,7 @@
         <RootNamespace>Registry.Web.Test</RootNamespace>
         <IsPackable>false</IsPackable>
         <Platforms>AnyCPU;x64</Platforms>
-        <Configurations>Debug;Release;DebugEf</Configurations>
+        <Configurations>Debug;Release</Configurations>
         <!-- Nullable allow-list (build/nullable-allowlist.txt): it may only shrink. -->
         <Nullable>disable</Nullable>
     </PropertyGroup>

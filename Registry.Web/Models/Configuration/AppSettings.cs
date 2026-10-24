@@ -1,6 +1,7 @@
 using System;
 using System.Text.Json.Serialization;
 using Registry.Common;
+using Registry.Web.Data;
 
 namespace Registry.Web.Models.Configuration;
 

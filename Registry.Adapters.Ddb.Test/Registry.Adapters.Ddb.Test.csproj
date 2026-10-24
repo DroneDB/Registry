@@ -7,7 +7,7 @@
 
         <Platforms>AnyCPU;x64</Platforms>
 
-        <Configurations>Debug;Release;DebugEf</Configurations>
+        <Configurations>Debug;Release</Configurations>
         <!-- Nullable allow-list (build/nullable-allowlist.txt): it may only shrink. -->
         <Nullable>disable</Nullable>
         <!-- The ABI 1.1 contract tests pass a function pointer to DDBSetLogCallback (Abi11ContractTests) -->
@@ -21,16 +21,8 @@
         <WarningLevel>4</WarningLevel>
     </PropertyGroup>
 
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugEf|AnyCPU'">
-      <WarningLevel>4</WarningLevel>
-    </PropertyGroup>
-
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
         <WarningLevel>4</WarningLevel>
-    </PropertyGroup>
-
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugEf|x64'">
-      <WarningLevel>4</WarningLevel>
     </PropertyGroup>
 
     <ItemGroup>

@@ -27,10 +27,10 @@ namespace Registry.Web.Test.ImprovementBaselines;
 /// SQLite needs none for the comparison, and MySQL uses a pinned server version
 /// (<see cref="MySqlServerVersionCache.PinnedVersionKey"/>), so it never probes a server.
 /// <para>
-/// A failure means a migration is missing for that provider: add it against the named assembly
-/// through the DebugEF design-time host, as the commands in <c>Program.cs</c> show (<c>dotnet ef
-/// migrations add Name --project &lt;assembly&gt; --context &lt;context&gt; --configuration DebugEF
-/// --startup-project Registry.Web -- --provider Sqlite|MySql</c>); do not change this test.
+/// A failure means a migration is missing for that provider: add it to the named assembly with the design-time factory
+/// that assembly carries (RQ-15: no startup project, no configuration), <c>dotnet ef migrations add Name --project
+/// &lt;assembly&gt;</c>, for example <c>dotnet ef migrations add Name --project Registry.Web.Data.SqliteMigrations</c>
+/// (MySQL: set <c>REGISTRY_EF_MYSQL_VERSION</c> to generate for another server version); do not change this test.
 /// </para>
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~Rq04ModelChangesTests"
 /// </summary>
