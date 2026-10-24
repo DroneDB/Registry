@@ -31,7 +31,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
     private static readonly string[] ArchiveExtensions =
         [".zip", ".tar.gz", ".tgz", ".tar", ".7z", ".rar"];
 
-    private readonly SsrfGuard _ssrfGuard;
+    private readonly IArchiveExtractor _extractor;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly GuardedHttpDownloader _downloader;
     private readonly ImportSettings _settings;
@@ -43,20 +43,20 @@ public sealed class ArchiveUrlImportSource : IImportSource
     /// <summary>
     /// Initializes a new instance of the <see cref="ArchiveUrlImportSource"/> class.
     /// </summary>
-    /// <param name="ssrfGuard">The SSRF guard.</param>
+    /// <param name="extractor">The archive extractor.</param>
     /// <param name="httpClientFactory">The HTTP client factory.</param>
-    /// <param name="downloader">The SSRF-hardened, disk- and speed-guarded single-file downloader.</param>
+    /// <param name="downloader">The SSRF-hardened, disk- and speed-guarded single-file downloader (it also pre-validates the host).</param>
     /// <param name="importSettings">The import settings.</param>
     /// <param name="platformSettings">The processing platform settings (size cap, disk safety margin).</param>
     /// <param name="archives">The shared extraction into a dataset (path rule, budget, rollback).</param>
     /// <param name="scratch">Where the downloaded archive is written (the configured temp folder).</param>
-    public ArchiveUrlImportSource(SsrfGuard ssrfGuard,
+    public ArchiveUrlImportSource(IArchiveExtractor extractor,
         IHttpClientFactory httpClientFactory, GuardedHttpDownloader downloader,
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings, DatasetArchiveExtractor archives, IScratchFileProvider scratch)
     {
         _archives = archives;
         _scratch = scratch;
-        _ssrfGuard = ssrfGuard;
+        _extractor = extractor;
         _httpClientFactory = httpClientFactory;
         _downloader = downloader;
         _settings = importSettings.Value;
@@ -76,7 +76,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
     public async Task<ImportSourceProbe> ProbeAsync(JsonElement parameters, CancellationToken ct)
     {
         var p = ReadParams(parameters);
-        await _ssrfGuard.AssertAllowedAsync(p.Host, ct);
+        await _downloader.AssertHostAllowedAsync(p.Host, ct);
 
         var client = CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Head, p.Url);
@@ -109,7 +109,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
         CancellationToken ct)
     {
         var p = ReadParams(parameters);
-        await _ssrfGuard.AssertAllowedAsync(p.Host, ct);
+        await _downloader.AssertHostAllowedAsync(p.Host, ct);
 
         Directory.CreateDirectory(destFolder);
 
@@ -122,11 +122,11 @@ public sealed class ArchiveUrlImportSource : IImportSource
 
         // Content-based guard: reject a non-archive served with an archive name (e.g. an HTML error
         // page) BEFORE attempting extraction, instead of relying on Open() failing mid-stream.
-        if (!_archives.IsValidArchive(scratch.Path))
+        if (!_extractor.IsValidArchive(scratch.Path))
             throw new InvalidOperationException(
                 "The downloaded file is not a valid or supported archive.");
 
-        // The extraction throws on a truly unsupported/corrupt archive (surfaced as a task failure).
+        // _extractor.Open throws on a truly unsupported/corrupt archive (surfaced as a task failure).
         await ExtractIntoAsync(scratch.Path, destFolder, progress, ct);
     }
 

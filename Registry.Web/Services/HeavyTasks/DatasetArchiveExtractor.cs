@@ -84,9 +84,6 @@ public sealed class DatasetArchiveExtractor
     /// <summary>Whether the file name has a supported archive format.</summary>
     public bool IsSupported(string fileName) => _archives.IsSupported(fileName);
 
-    /// <summary>Whether the file really is a supported archive, by its content (a non-archive served under an archive name is not).</summary>
-    public bool IsValidArchive(string filePath) => _archives.IsValidArchive(filePath);
-
     /// <summary>
     /// The size the archive has once extracted, when it is known without decompressing (random-access formats:
     /// zip, rar, 7z, tar; not compressed tarballs), else null.
