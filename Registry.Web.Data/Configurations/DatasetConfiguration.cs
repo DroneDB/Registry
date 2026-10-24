@@ -17,6 +17,10 @@ internal sealed class DatasetConfiguration : IEntityTypeConfiguration<Dataset>
     {
         builder.HasIndex(ds => ds.Slug);
 
+        // A slug names one dataset of an organization: the database keeps it so, not only the check before the insert
+        // (two requests that pass the check together). The organization is the foreign key's shadow property.
+        builder.HasIndex("OrganizationSlug", nameof(Dataset.Slug)).IsUnique();
+
         // For dataset queries by InternalRef (used in GetUserStorage)
         builder.HasIndex(ds => ds.InternalRef);
 

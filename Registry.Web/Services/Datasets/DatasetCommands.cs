@@ -71,9 +71,8 @@ public sealed class DatasetCommands : IDatasetCommands
         if (!dataset.Slug.IsValidSlug())
             throw new BadRequestException(SlugRules.InvalidMessage("Dataset"));
 
-        if (_context.Datasets.AsNoTracking()
-            .Any(item => item.Slug == dataset.Slug && item.Organization.Slug == orgSlug))
-            throw new BadRequestException("Dataset with this slug already exists");
+        if (await SlugIsTakenAsync(orgSlug, dataset.Slug, ct))
+            throw SlugTakenOnCreate();
 
         var ds = new Dataset
         {
@@ -96,7 +95,7 @@ public sealed class DatasetCommands : IDatasetCommands
 
         org.Datasets.Add(ds);
 
-        await _context.SaveChangesAsync(CancellationToken.None);
+        await SaveUniqueSlugAsync(orgSlug, ds.Slug, SlugTakenOnCreate);
 
         return ds.ToDto(ddb.GetInfo());
     }
@@ -189,11 +188,11 @@ public sealed class DatasetCommands : IDatasetCommands
         await _access.EnsureAccessAsync(ds, AccessType.Write);
 
         if (await _datasets.GetDatasetAsync(orgSlug, newSlug, safe: true, ct: ct) != null)
-            throw new BadRequestException($"Dataset '{newSlug}' already exists");
+            throw SlugTakenOnRename(newSlug);
 
         ds.Slug = newSlug;
 
-        await _context.SaveChangesAsync(CancellationToken.None);
+        await SaveUniqueSlugAsync(orgSlug, newSlug, inner => SlugTakenOnRename(newSlug, inner));
 
         // The listings link to the old slug
         await _listings.ListingChangedAsync(orgSlug, ds.InternalRef, CancellationToken.None);
@@ -219,5 +218,37 @@ public sealed class DatasetCommands : IDatasetCommands
         {
             { "public", access.Ddb.Meta.GetSafe().Visibility == Visibility.Public }
         };
+    }
+
+    private Task<bool> SlugIsTakenAsync(string orgSlug, string slug, CancellationToken ct) =>
+        _context.Datasets.AsNoTracking().AnyAsync(item => item.Slug == slug && item.Organization.Slug == orgSlug, ct);
+
+    private static BadRequestException SlugTakenOnCreate(Exception inner = null) =>
+        new("Dataset with this slug already exists", innerException: inner);
+
+    private static BadRequestException SlugTakenOnRename(string slug, Exception inner = null) =>
+        new($"Dataset '{slug}' already exists", innerException: inner);
+
+    /// <summary>
+    /// Saves a dataset that takes <paramref name="slug"/> in <paramref name="orgSlug"/>. The check made before is not
+    /// enough: another request may save the same slug in between, and the unique index of the database refuses the
+    /// second. That request is answered as the one that found the slug taken in the check (<paramref name="taken"/>); a
+    /// failure with the slug still free is not a lost race and propagates.
+    /// </summary>
+    private async Task SaveUniqueSlugAsync(string orgSlug, string slug, Func<Exception, BadRequestException> taken)
+    {
+        try
+        {
+            await _context.SaveChangesAsync(CancellationToken.None);
+        }
+        catch (DbUpdateException ex)
+        {
+            // What the context tracked did not reach the database: ask it fresh whether the slug is the reason
+            _context.ChangeTracker.Clear();
+            if (await SlugIsTakenAsync(orgSlug, slug, CancellationToken.None))
+                throw taken(ex);
+
+            throw;
+        }
     }
 }

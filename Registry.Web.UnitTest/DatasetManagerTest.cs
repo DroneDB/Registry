@@ -498,16 +498,12 @@ public class DatasetManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), AccessType.Read))
             .Returns(Task.FromResult(true));
 
-        // Setup permissions - first dataset readable, second not
-        var callCount = 0;
+        // Setup permissions: the public dataset is readable, the other not (by slug: the order in which the database
+        // returns the datasets of an organization is not a contract)
         _authManagerMock.Setup(o => o.GetDatasetPermissions(It.IsAny<Dataset>()))
-            .ReturnsAsync(() =>
+            .ReturnsAsync((Dataset dataset) => new DatasetPermissionsDto
             {
-                callCount++;
-                // First call: can read, second call: cannot read
-                return callCount == 1
-                    ? new DatasetPermissionsDto { CanRead = true, CanWrite = false, CanDelete = false }
-                    : new DatasetPermissionsDto { CanRead = false, CanWrite = false, CanDelete = false };
+                CanRead = dataset.Slug == "public-dataset", CanWrite = false, CanDelete = false
             });
 
         var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));

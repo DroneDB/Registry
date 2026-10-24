@@ -34,9 +34,15 @@ public sealed class MariaDbServer
 
     private static readonly Lazy<Task<MariaDbServer>> Starting = new(StartAsync, LazyThreadSafetyMode.ExecutionAndPublication);
 
-    private readonly MariaDbContainer _container;
+    /// <summary>
+    /// A server to use instead of starting the container (a root connection string, for example a MySQL 8 the developer
+    /// runs): the MySQL-version-sensitive tests (RQ-15) can be run against it. Not used by CI.
+    /// </summary>
+    public const string ServerOverrideVariable = "REGISTRY_TEST_MYSQL_CONNECTION";
 
-    private MariaDbServer(MariaDbContainer container, string connectionString)
+    private readonly MariaDbContainer? _container;
+
+    private MariaDbServer(MariaDbContainer? container, string connectionString)
     {
         _container = container;
         ConnectionString = connectionString;
@@ -54,7 +60,7 @@ public sealed class MariaDbServer
     /// </summary>
     public static Task<MariaDbServer> GetAsync()
     {
-        if (TestcontainersSettings.OS.DockerEndpointAuthConfig is null)
+        if (TestcontainersSettings.OS.DockerEndpointAuthConfig is null && OverrideConnection is null)
         {
             const string reason = "Docker is not available (no Docker endpoint found): the MariaDB tests need it";
             if (IsCi)
@@ -71,7 +77,8 @@ public sealed class MariaDbServer
         if (Starting is not { IsValueCreated: true, Value.IsCompletedSuccessfully: true })
             return;
 
-        await Starting.Value.Result._container.DisposeAsync();
+        if (Starting.Value.Result._container is { } container)
+            await container.DisposeAsync();
     }
 
     /// <summary>
@@ -108,8 +115,19 @@ public sealed class MariaDbServer
     private static bool IsCi =>
         string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase);
 
+    private static string? OverrideConnection => Environment.GetEnvironmentVariable(ServerOverrideVariable) is { Length: > 0 } value ? value : null;
+
     private static async Task<MariaDbServer> StartAsync()
     {
+        if (OverrideConnection is { } existing)
+        {
+            var overridden = new MySqlConnectionStringBuilder(existing) { AllowUserVariables = true };
+            await ExecuteAsync(overridden.ConnectionString, $"CREATE DATABASE IF NOT EXISTS `{SharedDatabase}` COLLATE '{ProductionCollation}'");
+            overridden.Database = SharedDatabase;
+            TestContext.Progress.WriteLine($"MySQL test server from {ServerOverrideVariable} at {overridden.Server}:{overridden.Port}");
+            return new MariaDbServer(null, overridden.ConnectionString);
+        }
+
         var container = new MariaDbBuilder(Image)
             .WithUsername("root")
             .WithDatabase(SharedDatabase)
