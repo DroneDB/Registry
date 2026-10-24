@@ -55,7 +55,7 @@ public class DatasetResolverTest : TestBase
         const string organizationName = "uav4geo";
         const string expectedOrganizationSlug = "uav4geo";
 
-        var slug = webUtils.Datasets.GetFreeOrganizationSlug(organizationName);
+        var slug = await webUtils.Datasets.GetFreeOrganizationSlugAsync(organizationName);
 
         slug.ShouldBe(expectedOrganizationSlug);
 
@@ -74,7 +74,7 @@ public class DatasetResolverTest : TestBase
         const string organizationName = "public";
         const string expectedOrganizationSlug = "public-1";
 
-        var slug = webUtils.Datasets.GetFreeOrganizationSlug(organizationName);
+        var slug = await webUtils.Datasets.GetFreeOrganizationSlugAsync(organizationName);
 
         slug.ShouldBe(expectedOrganizationSlug);
 
@@ -96,7 +96,7 @@ public class DatasetResolverTest : TestBase
 
         var webUtils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
-        var slug = webUtils.Datasets.GetFreeOrganizationSlug(organizationName);
+        var slug = await webUtils.Datasets.GetFreeOrganizationSlugAsync(organizationName);
 
         slug.ShouldBe(expectedOrganizationSlug);
 
@@ -123,7 +123,7 @@ public class DatasetResolverTest : TestBase
         var webUtils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
 
-        var slug = webUtils.Datasets.GetFreeOrganizationSlug(organizationName);
+        var slug = await webUtils.Datasets.GetFreeOrganizationSlugAsync(organizationName);
 
         slug.ShouldBe(expectedOrganizationSlug);
 

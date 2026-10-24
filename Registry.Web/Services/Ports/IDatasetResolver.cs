@@ -28,5 +28,5 @@ public interface IDatasetResolver
         CancellationToken ct = default);
 
     /// <summary>The slug of <paramref name="orgName"/>, with a numeric suffix when an organization has it.</summary>
-    string GetFreeOrganizationSlug(string orgName);
+    Task<string> GetFreeOrganizationSlugAsync(string orgName, CancellationToken ct = default);
 }

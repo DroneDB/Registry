@@ -23,7 +23,7 @@ public interface IOrganizationsManager
     /// The personal organization of a new user (AccountOptions.EnableDefaultUserOrganization): private, named
     /// after the user, under the first free slug from the user name.
     /// </summary>
-    public Task<OrganizationDto> AddUserDefaultAsync(string userId, string userName);
+    public Task<OrganizationDto> AddUserDefaultAsync(string userId, string userName, CancellationToken ct = default);
     public Task Edit(string orgSlug, OrganizationRequestDto organization, CancellationToken ct = default);
     public Task Delete(string orgSlug, CancellationToken ct = default);
 

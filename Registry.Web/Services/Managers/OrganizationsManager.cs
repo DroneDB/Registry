@@ -263,14 +263,14 @@ public class OrganizationsManager : IOrganizationsManager
         return dto;
     }
 
-    public Task<OrganizationDto> AddUserDefaultAsync(string userId, string userName) =>
-        AddNew(new OrganizationRequestDto
+    public async Task<OrganizationDto> AddUserDefaultAsync(string userId, string userName, CancellationToken ct = default) =>
+        await AddNew(new OrganizationRequestDto
         {
             Name = userName,
             IsPublic = false,
             Owner = userId,
-            Slug = _datasets.GetFreeOrganizationSlug(userName)
-        }, skipAuthCheck: true);
+            Slug = await _datasets.GetFreeOrganizationSlugAsync(userName, ct)
+        }, skipAuthCheck: true, ct);
 
     public async Task<OrganizationDto> AddNew(OrganizationRequestDto organization, bool skipAuthCheck = false,
         CancellationToken ct = default)
@@ -287,9 +287,7 @@ public class OrganizationsManager : IOrganizationsManager
             if (!organization.Slug.IsValidSlug())
                 throw new BadRequestException(SlugRules.InvalidMessage("Organization"));
 
-            var existingOrg = _context.Organizations.FirstOrDefault(item => item.Slug == organization.Slug);
-
-            if (existingOrg != null)
+            if (await _context.Organizations.AnyAsync(item => item.Slug == organization.Slug, ct))
                 throw new ConflictException("The organization already exists");
 
             if (!await _authManager.IsUserAdmin())

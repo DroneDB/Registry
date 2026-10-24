@@ -90,7 +90,7 @@ public class DatasetResolver : IDatasetResolver
             throw new BadRequestException($"Invalid {kind} id");
     }
 
-    public string GetFreeOrganizationSlug(string orgName)
+    public async Task<string> GetFreeOrganizationSlugAsync(string orgName, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(orgName))
             throw new BadRequestException("Empty organization name");
@@ -101,9 +101,7 @@ public class DatasetResolver : IDatasetResolver
 
         for (var n = 1;; n++)
         {
-            var org = _context.Organizations.AsNoTracking().FirstOrDefault(item => item.Slug == res);
-
-            if (org == null) return res;
+            if (!await _context.Organizations.AsNoTracking().AnyAsync(item => item.Slug == res, ct)) return res;
 
             res = slug + "-" + n;
         }

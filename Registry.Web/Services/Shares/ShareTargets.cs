@@ -82,7 +82,7 @@ public sealed class ShareTargets : IShareTargets
 
             // We start from the principle that a default user organization begins with the username in slug form
             // If we notice that this strategy is weak we have to add a new field to the db entry
-            var userOrganization = _context.Organizations.FirstOrDefault(item =>
+            var userOrganization = await _context.Organizations.FirstOrDefaultAsync(item =>
                 item.OwnerId == currentUser.Id && item.Name.StartsWith(nameSlug));
 
             // Some idiot removed its own organization, maybe we should prevent this, btw nevermind: let's take care of it
@@ -92,14 +92,14 @@ public sealed class ShareTargets : IShareTargets
 
                 _logger.LogInformation("No default user organization found, added a new one: '{OrgSlug}'", orgSlug);
 
-                userOrganization = _context.Organizations.First(item => item.Slug == orgSlug);
+                userOrganization = await _context.Organizations.FirstAsync(item => item.Slug == orgSlug);
             }
 
             orgSlug = userOrganization.Slug;
 
             _logger.LogInformation("Using default user organization '{OrgSlug}'", orgSlug);
 
-            var dsSlug = GetUniqueDatasetSlug();
+            var dsSlug = await GetUniqueDatasetSlugAsync();
 
             _logger.LogInformation("Generated unique dataset slug '{DsSlug}'", dsSlug);
 
@@ -127,7 +127,7 @@ public sealed class ShareTargets : IShareTargets
             // If no dataset is specified, we create a new one with a random slug
             if (tag.DatasetSlug == null)
             {
-                var dsSlug = GetUniqueDatasetSlug();
+                var dsSlug = await GetUniqueDatasetSlugAsync();
 
                 _logger.LogInformation("Generated unique dataset slug '{DsSlug}'", dsSlug);
 
@@ -177,7 +177,7 @@ public sealed class ShareTargets : IShareTargets
     private Task<Dataset> GetTrackedDatasetAsync(string orgSlug, string dsSlug, bool safe = false) =>
         _datasets.GetDatasetAsync(orgSlug, dsSlug, safe, withTracking: true);
 
-    private string GetUniqueDatasetSlug()
+    private async Task<string> GetUniqueDatasetSlugAsync()
     {
         // We are pretty sure this is unique but ALWAYS CHECK
         string dsSlug;
@@ -185,7 +185,7 @@ public sealed class ShareTargets : IShareTargets
         {
             // NOTE: We could generate a more language friendly slug, like docker does for its running containers
             dsSlug = _nameGenerator.GenerateName().ToSlug();
-        } while (_context.Datasets.FirstOrDefault(item => item.Slug == dsSlug) != null);
+        } while (await _context.Datasets.AnyAsync(item => item.Slug == dsSlug));
 
         return dsSlug;
     }
