@@ -157,8 +157,12 @@ public sealed class DatasetMover : IDatasetMover
                 }
 
                 // Update the database record
+                var storedSlug = dataset.Slug;
                 dataset.Organization = destOrg;
                 dataset.Slug = targetSlug;
+
+                // Its job history follows it, saved with the record
+                await _context.FollowDatasetAsync(sourceOrg.Slug, storedSlug, destOrg.Slug, targetSlug, CancellationToken.None);
 
                 await _context.SaveChangesAsync(CancellationToken.None);
 

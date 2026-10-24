@@ -230,11 +230,12 @@ public sealed class DatasetSlugRepair : IDatasetSlugRepair
             if (dsRenames.TryGetValue(ds.Slug, out var newDsSlug))
                 ds.Slug = newDsSlug;
 
-        foreach (var job in await _context.JobIndices.Where(j => j.OrgSlug == orgSlug).ToArrayAsync(ct))
-        {
-            if (newOrgSlug != null) job.OrgSlug = newOrgSlug;
-            if (dsRenames.TryGetValue(job.DsSlug, out var newDsSlug)) job.DsSlug = newDsSlug;
-        }
+        // The job history follows its dataset (the datasets first: their rows then no longer carry the old
+        // organization slug, which moves only the rows of the datasets that keep their slug)
+        foreach (var (oldDsSlug, newDsSlug) in dsRenames)
+            await _context.FollowDatasetAsync(orgSlug, oldDsSlug, newOrgSlug ?? orgSlug, newDsSlug, ct);
+        if (newOrgSlug != null)
+            await _context.FollowOrganizationAsync(orgSlug, newOrgSlug, ct);
 
         await _context.SaveChangesAsync(ct);
     }

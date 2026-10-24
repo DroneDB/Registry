@@ -1,8 +1,10 @@
 #nullable enable
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Moq;
 using Registry.Ports;
 using Registry.Web.Data;
+using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Caching;
@@ -28,5 +30,26 @@ public static class TestDatasets
             commands,
             new DatasetMover(context, ports.Datasets, commands, ddbManager, fileSystem, listings,
                 NullLogger<DatasetMover>.Instance));
+    }
+
+    /// <summary>
+    /// The datasets API for a test that renames and moves datasets: the caller is an administrator (every access is
+    /// granted), there are no dataset folders and no native library, and what the database holds is what is checked.
+    /// </summary>
+    public static DatasetsManager AdminManager(RegistryContext context)
+    {
+        var auth = new Mock<IAuthManager>();
+        auth.Setup(a => a.GetCurrentUser()).ReturnsAsync(new User { UserName = "admin", Id = "admin-id" });
+        auth.Setup(a => a.IsUserAdmin()).ReturnsAsync(true);
+        auth.Setup(a => a.RequestAccess(It.IsAny<Registry.Web.Data.Models.Dataset>(), It.IsAny<AccessType>()))
+            .ReturnsAsync(true);
+
+        var ddbManager = new Mock<IDdbManager>().WithFolders("test-datasets");
+        var ports = TestPorts.All(auth.Object, context, Microsoft.Extensions.Options.Options.Create(new AccountOptions()),
+            Microsoft.Extensions.Options.Options.Create(new HttpHostOptions()), new Microsoft.AspNetCore.Http.HttpContextAccessor(),
+            TestCaches.Summaries(ddbManager.Object));
+        return Manager(context, ports, ddbManager.Object, auth.Object, Mock.Of<IDatasetListingInvalidator>(),
+            new Registry.Adapters.FileSystem(), Mock.Of<IBackgroundJobsProcessor>(),
+            Microsoft.Extensions.Options.Options.Create(new ThumbnailOptions()));
     }
 }

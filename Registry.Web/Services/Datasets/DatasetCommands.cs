@@ -192,6 +192,9 @@ public sealed class DatasetCommands : IDatasetCommands
 
         ds.Slug = newSlug;
 
+        // Its job history follows the slug, saved with it
+        await _context.FollowDatasetAsync(orgSlug, dsSlug, orgSlug, newSlug, ct);
+
         await SaveUniqueSlugAsync(orgSlug, newSlug, inner => SlugTakenOnRename(newSlug, inner));
 
         // The listings link to the old slug
