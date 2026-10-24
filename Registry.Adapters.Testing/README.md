@@ -101,3 +101,5 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   schema: the subset of `NDVI`, `NDRE`, `NDWI`, `SAVI`, `EVI` the WMS vegetation-index layer renders from the raster, in that
   order, `[]` when none; the fixture's RGB raster lists none). The commits since the last vendoring (`c5633bb`) change
   no other contract file. WMS reads the list instead of its own band-count rule (`IRasterIndexCatalog`).
+* 2026-10-24: DroneDB `58a55a560dabf7633fad904ddb11d8a00edb4e98` (the pinned build): no file changes since `d3b4945` (a test-only
+  fix), SOURCE names the pinned commit.
