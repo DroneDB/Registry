@@ -281,6 +281,8 @@ public static class RegistryFeaturesServiceCollectionExtensions
     public static IServiceCollection AddRegistryWebStartup(this IServiceCollection services)
     {
         services.AddStartupTask<ThreadPoolInitializer>();
+        services.AddScoped<DatabaseMigrator>();
+        services.AddScoped<DefaultAdminProvisioner>();
         services.AddStartupTask<DatabaseInitializer>();
         services.AddBackgroundStartupTask<DatasetVisibilityCacheInitializer>();
         return services;

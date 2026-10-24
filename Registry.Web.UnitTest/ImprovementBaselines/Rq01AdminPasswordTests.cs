@@ -94,9 +94,10 @@ public class Rq01AdminPasswordTests
     private async Task RunDatabaseInitializerAsync(IdentityProviderOptions? settingsOverride = null)
     {
         using var scope = _factory.Services.CreateScope();
-        var initializer = settingsOverride == null
-            ? ActivatorUtilities.CreateInstance<DatabaseInitializer>(scope.ServiceProvider)
-            : ActivatorUtilities.CreateInstance<DatabaseInitializer>(scope.ServiceProvider, MsOptions.Create(settingsOverride));
+        var admin = settingsOverride == null
+            ? ActivatorUtilities.CreateInstance<DefaultAdminProvisioner>(scope.ServiceProvider)
+            : ActivatorUtilities.CreateInstance<DefaultAdminProvisioner>(scope.ServiceProvider, MsOptions.Create(settingsOverride));
+        var initializer = ActivatorUtilities.CreateInstance<DatabaseInitializer>(scope.ServiceProvider, admin);
 
         await initializer.ExecuteAsync(CancellationToken.None);
     }
