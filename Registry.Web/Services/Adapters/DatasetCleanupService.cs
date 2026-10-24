@@ -53,19 +53,31 @@ public class DatasetCleanupService
     }
 
     /// <summary>
-    /// Cleans up a deleted dataset by cancelling active jobs, removing JobIndex entries,
-    /// and deleting the filesystem folder.
+    /// Cleans up a deleted dataset by cancelling its active jobs, removing its JobIndex entries and deleting the
+    /// filesystem folder. The dataset's job rows were moved to its tombstone slug
+    /// (<see cref="SlugKeyedRows.TombstoneSlug"/>) when it was deleted, so this acts on the rows and jobs of the dataset
+    /// that was deleted, never on those of another dataset that has taken its slug since.
     /// </summary>
     /// <param name="orgSlug">Organization slug</param>
-    /// <param name="dsSlug">Dataset slug</param>
     /// <param name="internalRef">Dataset internal reference (folder GUID)</param>
     /// <param name="context">Hangfire context for logging</param>
     [AutomaticRetry(Attempts = 3, DelaysInSeconds = [30, 120, 300])]
-    public async Task CleanupDeletedDatasetAsync(
-        string orgSlug,
-        string dsSlug,
-        Guid internalRef,
-        PerformContext? context = null)
+    public Task CleanupDeletedAsync(string orgSlug, Guid internalRef, PerformContext? context = null) =>
+        CleanupAsync(orgSlug, SlugKeyedRows.TombstoneSlug(internalRef), internalRef, context);
+
+    /// <summary>
+    /// The job as it was queued before its rows moved to a tombstone: it names the dataset's slug, so it still runs
+    /// with the behaviour it was queued with (jobs already in Hangfire storage; remove after one release, like the
+    /// other stored shapes of <c>HangfireUtils</c>). It cannot tell the deleted dataset's rows from those of a dataset
+    /// that has taken the slug since.
+    /// </summary>
+    [AutomaticRetry(Attempts = 3, DelaysInSeconds = [30, 120, 300])]
+    public Task CleanupDeletedDatasetAsync(string orgSlug, string dsSlug, Guid internalRef,
+        PerformContext? context = null) =>
+        CleanupAsync(orgSlug, dsSlug, internalRef, context);
+
+    // The cleanup of the rows of (orgSlug, dsSlug): dsSlug is the dataset's slug for a job queued before the tombstone, its tombstone since
+    private async Task CleanupAsync(string orgSlug, string dsSlug, Guid internalRef, PerformContext? context)
     {
         var console = JobConsole.For(_logger, context);
         console.Info("Starting cleanup for deleted dataset {OrgSlug}/{DsSlug} (InternalRef: {InternalRef})",

@@ -11,6 +11,7 @@ using Hangfire.Common;
 using Hangfire.InMemory;
 using Hangfire.Server;
 using Hangfire.Storage;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -74,6 +75,7 @@ public sealed class Rq09LegacyJobPayloadTests : IDisposable
     private Mock<IDdbWrapper> _wrapper = null!;
     private InMemoryStorage _storage = null!;
     private ServiceProvider _provider = null!;
+    private Registry.Web.Data.RegistryContext _context = null!;
 
     [OneTimeSetUp]
     public void UseProductionSerializerSettings() =>
@@ -100,6 +102,9 @@ public sealed class Rq09LegacyJobPayloadTests : IDisposable
         services.AddScoped<IDdbManager, DdbManager>();
         services.AddSingleton(Mock.Of<IBackgroundJobsProcessor>());
         services.AddSingleton(Mock.Of<IJobIndexQuery>());
+        _context = TestDb.CreateContext<Registry.Web.Data.RegistryContext>();
+        services.AddSingleton(_context);
+        services.AddScoped<DatasetCleanupService>();
         services.AddScoped<PendingBuildEnqueuer>();
         services.AddScoped<DdbJobs>();
         services.AddScoped<FileJobs>();
@@ -113,6 +118,7 @@ public sealed class Rq09LegacyJobPayloadTests : IDisposable
     public void TearDown()
     {
         _provider.Dispose();
+        _context.Dispose();
         _storage.Dispose();
         if (Directory.Exists(_root)) Directory.Delete(_root, true);
     }
@@ -268,6 +274,10 @@ public sealed class Rq09LegacyJobPayloadTests : IDisposable
         RetryPolicy(Job.FromExpression<DdbJobs>(j => j.Cleanup(Org, Ref, null))).OnlyOn
             .ShouldContain(typeof(DdbRetryableException));
         RetryPolicy(Job.FromExpression<FileJobs>(j => j.Delete("x", null))).Attempts.ShouldBe(1);
+        var cleanup = RetryPolicy(Job.FromExpression<DatasetCleanupService>(s => s.CleanupDeletedAsync(Org, Ref, null)));
+        var storedCleanup = RetryPolicy(Deserialize(Payload("CleanupDeletedDataset"), true));
+        cleanup.Attempts.ShouldBe(storedCleanup.Attempts);
+        cleanup.DelaysInSeconds.ShouldBe(storedCleanup.DelaysInSeconds);
     }
 
     [Test]
@@ -288,6 +298,29 @@ public sealed class Rq09LegacyJobPayloadTests : IDisposable
         job.Method.Name.ShouldBe(nameof(DatasetCleanupService.CleanupDeletedDatasetAsync));
         job.Args[2].ShouldBe(Ref);
     }
+
+    /// <summary>
+    /// A cleanup queued before a deleted dataset's rows moved to a tombstone names the slug: the stored job, activated
+    /// through DI, still runs as it was queued (it cleans by slug), and is not mistaken for the new cleanup.
+    /// </summary>
+    [TestCase(false)]
+    [TestCase(true)]
+    public void CleanupDeletedDataset_StillCleansBySlugAsQueued(bool split)
+    {
+        _context.JobIndices.AddRange(Row("stored", Org, "ds1"), Row("other-dataset", Org, "ds2"));
+        _context.SaveChanges();
+
+        Perform(Deserialize(Payload("CleanupDeletedDataset"), split));
+
+        _context.JobIndices.AsNoTracking().Select(j => j.JobId).ToArray().ShouldBe(["other-dataset"]);
+        Job.FromExpression<DatasetCleanupService>(s => s.CleanupDeletedAsync(Org, Ref, null)).Method.Name
+            .ShouldNotBe(Deserialize(Payload("CleanupDeletedDataset"), split).Method.Name);
+    }
+
+    private static Registry.Web.Data.Models.JobIndex Row(string id, string org, string dataset) => new()
+    {
+        JobId = id, OrgSlug = org, DsSlug = dataset, CurrentState = "Succeeded", CreatedAtUtc = DateTime.UtcNow
+    };
 
     [Test]
     public void RecurringJobsStoredWithOnlyAContext_ResolveToTheirD4Overload()

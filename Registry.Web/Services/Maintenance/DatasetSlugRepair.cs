@@ -14,6 +14,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Caching;
+using Registry.Web.Services.Datasets;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Maintenance;
@@ -53,10 +54,6 @@ public sealed class DatasetSlugRepair : IDatasetSlugRepair
         _logger = logger;
     }
 
-    // Job states during which a dataset's slug and folder must not change under the job
-    private static readonly string[] SlugFixBlockingJobStates =
-        ["Created", "Indexing", "Enqueued", "Scheduled", "Processing", "Awaiting"];
-
     public async Task<FixInvalidSlugsResultDto> FixInvalidSlugsAsync(bool dryRun = true, CancellationToken ct = default)
     {
         var result = new FixInvalidSlugsResultDto { DryRun = dryRun };
@@ -65,12 +62,7 @@ public sealed class DatasetSlugRepair : IDatasetSlugRepair
         var orgs = await _context.Organizations.AsNoTracking().Include(o => o.Datasets).ToArrayAsync(ct);
         var takenOrgSlugs = orgs.Select(o => o.Slug).ToHashSet();
 
-        var busy = (await _context.JobIndices.AsNoTracking()
-                .Where(j => SlugFixBlockingJobStates.Contains(j.CurrentState))
-                .Select(j => new { j.OrgSlug, j.DsSlug })
-                .ToArrayAsync(ct))
-            .Select(j => (j.OrgSlug, j.DsSlug))
-            .ToHashSet();
+        var busy = await _context.BusyDatasetsAsync(ct);
 
         foreach (var org in orgs)
         {
@@ -117,14 +109,14 @@ public sealed class DatasetSlugRepair : IDatasetSlugRepair
                 entries.ForEach(e =>
                 {
                     e.Status = blocked ? "skipped" : "planned";
-                    e.Reason = blocked ? "active jobs" : null;
+                    e.Reason = blocked ? DatasetJobsRule.Reason : null;
                 });
                 continue;
             }
 
             if (blocked)
             {
-                entries.ForEach(e => { e.Status = "skipped"; e.Reason = "active jobs, retry when they finish"; });
+                entries.ForEach(e => { e.Status = "skipped"; e.Reason = DatasetJobsRule.RetryReason; });
                 continue;
             }
 

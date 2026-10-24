@@ -35,8 +35,9 @@ public static class TestDatasets
     /// <summary>
     /// The datasets API for a test that renames and moves datasets: the caller is an administrator (every access is
     /// granted), there are no dataset folders and no native library, and what the database holds is what is checked.
+    /// <paramref name="jobs"/> is the background job client (a mock that records what is queued, by default).
     /// </summary>
-    public static DatasetsManager AdminManager(RegistryContext context)
+    public static DatasetsManager AdminManager(RegistryContext context, IBackgroundJobsProcessor? jobs = null)
     {
         var auth = new Mock<IAuthManager>();
         auth.Setup(a => a.GetCurrentUser()).ReturnsAsync(new User { UserName = "admin", Id = "admin-id" });
@@ -49,7 +50,7 @@ public static class TestDatasets
             Microsoft.Extensions.Options.Options.Create(new HttpHostOptions()), new Microsoft.AspNetCore.Http.HttpContextAccessor(),
             TestCaches.Summaries(ddbManager.Object));
         return Manager(context, ports, ddbManager.Object, auth.Object, Mock.Of<IDatasetListingInvalidator>(),
-            new Registry.Adapters.FileSystem(), Mock.Of<IBackgroundJobsProcessor>(),
+            new Registry.Adapters.FileSystem(), jobs ?? Mock.Of<IBackgroundJobsProcessor>(),
             Microsoft.Extensions.Options.Options.Create(new ThumbnailOptions()));
     }
 }

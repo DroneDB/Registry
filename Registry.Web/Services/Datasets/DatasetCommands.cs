@@ -134,8 +134,12 @@ public sealed class DatasetCommands : IDatasetCommands
         // Save references before removing from DB
         var internalRef = ds.InternalRef;
 
-        // Remove from database immediately (fast operation)
+        // Remove from database immediately (fast operation). Its job rows leave with it, to a slug nobody can have: the
+        // cleanup below runs later, and by then another dataset may hold this slug (a rename or a move into it) with
+        // its own history and jobs, which a cleanup by slug would delete and cancel
         _context.Datasets.Remove(ds);
+        await _context.FollowDatasetAsync(orgSlug, ds.Slug, orgSlug, SlugKeyedRows.TombstoneSlug(internalRef),
+            CancellationToken.None);
         await _context.SaveChangesAsync(CancellationToken.None);
 
         // It leaves every listing
@@ -146,7 +150,7 @@ public sealed class DatasetCommands : IDatasetCommands
         try
         {
             jobId = _backgroundJob.Enqueue<DatasetCleanupService>(
-                service => service.CleanupDeletedDatasetAsync(orgSlug, dsSlug, internalRef, null));
+                service => service.CleanupDeletedAsync(orgSlug, internalRef, null));
         }
         catch (Exception ex)
         {
@@ -186,6 +190,9 @@ public sealed class DatasetCommands : IDatasetCommands
         // Access first: a caller who may not rename learns nothing about the other slugs
         var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true, ct: ct);
         await _access.EnsureAccessAsync(ds, AccessType.Write);
+
+        // Its queued and running jobs name it by the old slug (the same rule as the slug repair)
+        await _context.EnsureNoActiveJobsAsync(orgSlug, dsSlug, ct);
 
         if (await _datasets.GetDatasetAsync(orgSlug, newSlug, safe: true, ct: ct) != null)
             throw SlugTakenOnRename(newSlug);

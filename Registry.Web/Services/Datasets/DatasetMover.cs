@@ -104,6 +104,9 @@ public sealed class DatasetMover : IDatasetMover
                     continue;
                 }
 
+                // Its queued and running jobs name it by the old organization and slug (the same rule as the slug repair)
+                await _context.EnsureNoActiveJobsAsync(sourceOrg.Slug, dataset.Slug, CancellationToken.None);
+
                 // Check for slug conflict in destination
                 var targetSlug = dsSlug;
                 var conflictExists = existingDestDatasets.Contains(dsSlug, StringComparer.OrdinalIgnoreCase);

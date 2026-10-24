@@ -22,6 +22,43 @@ namespace Registry.Web.Data;
 /// </remarks>
 public static class SlugKeyedRows
 {
+    /// <summary>
+    /// The job states during which the slugs and the folder of a dataset must not change under its jobs: a queued or
+    /// running job names the dataset by the slugs it was queued with (Hangfire arguments, job parameters, the slugs a
+    /// task request carries), so a rename or a move waits until none is left.
+    /// </summary>
+    public static readonly string[] BlockingJobStates =
+        ["Created", "Indexing", "Enqueued", "Scheduled", "Processing", "Awaiting"];
+
+    /// <summary>
+    /// The slug the rows of a deleted dataset move to when it is deleted: no dataset can have it (it does not pass the slug
+    /// rules), and it names the dataset's <paramref name="internalRef"/>, so the cleanup that runs later acts on the rows of
+    /// the dataset that was deleted and never on those of whoever holds its slug by then (a rename or a move into it).
+    /// </summary>
+    public static string TombstoneSlug(Guid internalRef) => "~deleted-" + internalRef.ToString("N");
+
+    /// <summary>The datasets (organization slug, dataset slug) that have a job in a <see cref="BlockingJobStates"/> state.</summary>
+    public static async Task<HashSet<(string OrgSlug, string DsSlug)>> BusyDatasetsAsync(this RegistryContext context,
+        CancellationToken ct = default) =>
+        (await context.JobIndices.AsNoTracking()
+            .Where(j => BlockingJobStates.Contains(j.CurrentState))
+            .Select(j => new { j.OrgSlug, j.DsSlug })
+            .ToArrayAsync(ct))
+        .Select(j => (j.OrgSlug, j.DsSlug))
+        .ToHashSet();
+
+    /// <summary>
+    /// The dataset has a job in a <see cref="BlockingJobStates"/> state. The slugs are compared ordinally in memory (the
+    /// MariaDB collation matches "SOURCE" to "source").
+    /// </summary>
+    public static async Task<bool> HasBlockingJobsAsync(this RegistryContext context, string orgSlug, string dsSlug,
+        CancellationToken ct = default) =>
+        (await context.JobIndices.AsNoTracking()
+            .Where(j => j.OrgSlug == orgSlug && j.DsSlug == dsSlug && BlockingJobStates.Contains(j.CurrentState))
+            .Select(j => new { j.OrgSlug, j.DsSlug })
+            .ToArrayAsync(ct))
+        .Any(j => j.OrgSlug == orgSlug && j.DsSlug == dsSlug);
+
     /// <summary>The rows of dataset <paramref name="dsSlug"/> of <paramref name="orgSlug"/> become those of
     /// <paramref name="newDsSlug"/> of <paramref name="newOrgSlug"/>. Rows already changed through this context keep
     /// the new slugs, so renames of datasets and of their organization compose.</summary>

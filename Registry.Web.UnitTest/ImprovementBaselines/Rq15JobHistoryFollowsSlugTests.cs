@@ -39,7 +39,8 @@ public class Rq15JobHistoryFollowsSlugTests
 
     private static JobIndex Job(string id, string org, string dataset) => new()
     {
-        JobId = id, OrgSlug = org, DsSlug = dataset, CreatedAtUtc = DateTime.UtcNow
+        // Finished jobs: a dataset with jobs queued or running is not renamed or moved (DatasetJobsRule)
+        JobId = id, OrgSlug = org, DsSlug = dataset, CurrentState = "Succeeded", CreatedAtUtc = DateTime.UtcNow
     };
 
     private static (string Job, string Org, string Dataset)[] Jobs(RegistryContext context) =>
