@@ -44,15 +44,6 @@ public class DdbBuildBusyPassthroughTests
     }
 
     [Test]
-    public void BuildAll_DdbBusyException_PassesThroughUnwrapped()
-    {
-        var (ddb, wrapper) = CreateDdb();
-        SetupBuildThrow(wrapper, new DdbBusyException("locked"));
-
-        Assert.Throws<DdbBusyException>(() => ddb.BuildAll());
-    }
-
-    [Test]
     public void BuildPending_DdbBusyException_PassesThroughUnwrapped()
     {
         var (ddb, wrapper) = CreateDdb();
@@ -67,7 +58,7 @@ public class DdbBuildBusyPassthroughTests
         var (ddb, wrapper) = CreateDdb();
         SetupBuildThrow(wrapper, new DdbBuildInProgressException("building"));
 
-        Assert.Throws<DdbBuildInProgressException>(() => ddb.BuildAll());
+        Assert.Throws<DdbBuildInProgressException>(() => ddb.Build("src.tif"));
     }
 
     [Test]

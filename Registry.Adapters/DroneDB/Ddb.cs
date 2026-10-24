@@ -73,16 +73,6 @@ public class DDB : IDDB
         Meta = new MetaManager(this, ddbWrapper);
     }
 
-    public byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash)
-    {
-        return Wrap(() =>
-        {
-            var fullPath = GetLocalPath(inputPath);
-            return Wrapper.GenerateMemoryTile(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
-                inputPathHash);
-        }, ex => $"Cannot generate tile of '{inputPath}'");
-    }
-
     public byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash, string outputFormat)
     {
         return Wrap(() =>
@@ -100,12 +90,6 @@ public class DDB : IDDB
             var res = Wrapper.Init(DatasetFolderPath);
             Debug.WriteLine(res);
         }, ex => $"Cannot initialize ddb in folder '{DatasetFolderPath}'");
-    }
-
-
-    public long GetSize()
-    {
-        return Wrapper.Info(DatasetFolderPath).FirstOrDefault()?.Size ?? 0;
     }
 
     public bool IsEmpty()
@@ -174,25 +158,6 @@ public class DDB : IDDB
         return GetEntry(path) != null;
     }
 
-
-    public IEnumerable<Entry> Search(string path, bool recursive = false)
-    {
-        return Wrap(() =>
-        {
-            var fullPath = path != null ? GetLocalPath(path) : DatasetFolderPath;
-
-            var entries = Wrapper.List(DatasetFolderPath, fullPath, recursive);
-
-            if (entries == null)
-            {
-                Debug.WriteLine("Strange null return value");
-                return [];
-            }
-
-            return entries;
-        }, ex => $"Cannot list '{path}' to ddb '{DatasetFolderPath}'");
-    }
-
     public IReadOnlyList<Entry> Find(EntryQuery query) => FindWith(query, Wrapper.ListEntries);
 
     public IReadOnlyList<EntrySummary> FindSummaries(EntryQuery query) =>
@@ -205,12 +170,6 @@ public class DDB : IDDB
                      throw new ArgumentException($"Path '{query.Path}' is outside the dataset", nameof(query));
         return Wrap(() => list(DatasetFolderPath, query with { Path = folder }),
             ex => $"Cannot list '{query.Path}' in ddb '{DatasetFolderPath}'");
-    }
-
-    public void Add(string path, byte[] data)
-    {
-        using var stream = new MemoryStream(data);
-        Add(path, stream);
     }
 
     public void Remove(string path)
@@ -233,12 +192,6 @@ public class DDB : IDDB
     {
         Wrap(() => Wrapper.Build(DatasetFolderPath, path?.ToDdbPath(), dest, force),
             ex => $"Cannot build '{path}' from ddb '{DatasetFolderPath}'");
-    }
-
-    public void BuildAll(string dest = null, bool force = false)
-    {
-        Wrap(() => Wrapper.Build(DatasetFolderPath, null, dest, force),
-            ex => $"Cannot build all from ddb '{DatasetFolderPath}'");
     }
 
     public void BuildPending(string dest = null, bool force = false)

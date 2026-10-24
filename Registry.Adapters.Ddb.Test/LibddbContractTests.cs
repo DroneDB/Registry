@@ -783,7 +783,7 @@ public unsafe class LibddbContractTests : TestBase
         Directory.CreateDirectory(destination);
         DdbWrapper.Init(destination);
 
-        var delta = DdbWrapper.Delta(source, destination);
+        var delta = DdbWrapper.Delta(DdbWrapper.GetStamp(source), DdbWrapper.GetStamp(destination));
         delta.Adds.Select(a => (a.Path, a.Hash)).ToArray().ShouldBe(new[] { (TextName, TextHash) });
         var deltaJson = NativeJson.Serialize(delta);
 

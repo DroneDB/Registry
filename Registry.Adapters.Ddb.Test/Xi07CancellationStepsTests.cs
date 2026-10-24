@@ -22,7 +22,7 @@ namespace Registry.Adapters.Ddb.Test;
 /// own: the envelope picks the new exports up from <c>DDBGetCapabilities().cancellable</c>, and these tests show it does.
 /// <see cref="DdbCancellation"/> is entered right around each call, as the native work gate and the push commit do.
 /// <para>
-/// <c>DDBApplyDelta</c> is atomic to a cancel: canceled before it changes anything it returns
+/// <c>DDBApplyDeltaEx</c> is atomic to a cancel: canceled before it changes anything it returns
 /// <c>DDBERR_CANCELED</c> with the dataset, the index and the source files as they were; from its first change on it
 /// applies the delta whole and returns <c>DDBERR_NONE</c>, whatever the token says. The late cancel is made without
 /// timing: the token is canceled by the log record libddb writes when the part that changes the dataset starts.
@@ -55,7 +55,7 @@ public class Xi07CancellationStepsTests : TestBase
         nameof(NativeDdb.DDBGetRasterProfile), nameof(NativeDdb.DDBCalculateVolume),
         nameof(NativeDdb.DDBDetectStockpile), nameof(NativeDdb.DDBDetectAllStockpiles),
         nameof(NativeDdb.DDBGenerateContours), nameof(NativeDdb.DDBMaskBorders),
-        nameof(NativeDdb.DDBComputeDeltaLocals), nameof(NativeDdb.DDBApplyDelta), nameof(NativeDdb.DDBApplyDeltaEx)
+        nameof(NativeDdb.DDBComputeDeltaLocals), nameof(NativeDdb.DDBApplyDeltaEx)
     ];
 
     private string _raster = null!;
@@ -175,25 +175,24 @@ public class Xi07CancellationStepsTests : TestBase
     }
 
     /// <summary>Before the delta changes anything a cancel is an error and nothing changed: the same call then applies it.</summary>
-    [TestCase(false, TestName = "ApplyDelta_CanceledBeforeItChangesAnything_ChangesNothing")]
-    [TestCase(true, TestName = "ApplyDeltaEx_CanceledBeforeItChangesAnything_ChangesNothing")]
-    public void ApplyDelta_CanceledBeforeItChangesAnything_ChangesNothing(bool verified)
+    [Test]
+    public void ApplyDelta_CanceledBeforeItChangesAnything_ChangesNothing()
     {
-        using var area = new TestArea($"{nameof(ApplyDelta_CanceledBeforeItChangesAnything_ChangesNothing)}-{verified}");
+        using var area = new TestArea(nameof(ApplyDelta_CanceledBeforeItChangesAnything_ChangesNothing));
         var delta = new DeltaCase(area, 20);
         using var canceled = new CancellationTokenSource();
         canceled.Cancel();
 
         using (DdbCancellation.Enter(canceled.Token))
         {
-            var ex = Should.Throw<DdbCanceledException>(() => delta.Apply(verified));
+            var ex = Should.Throw<DdbCanceledException>(() => delta.Apply());
             ex.CancellationToken.ShouldBe(canceled.Token);
             ex.Message.ShouldContain(CanceledByToken);
         }
 
         delta.ShouldNotBeApplied();
 
-        delta.Apply(verified).ShouldBeEmpty();
+        delta.Apply().ShouldBeEmpty();
         delta.ShouldBeApplied();
     }
 
@@ -201,11 +200,10 @@ public class Xi07CancellationStepsTests : TestBase
     /// The token is canceled at the first record of the part that changes the dataset: the delta is applied whole and the
     /// call returns normally (a cancel that came too late is not an error), with the managed token canceled.
     /// </summary>
-    [TestCase(false, TestName = "ApplyDelta_CanceledOnceItChangesTheDataset_IsAppliedWhole")]
-    [TestCase(true, TestName = "ApplyDeltaEx_CanceledOnceItChangesTheDataset_IsAppliedWhole")]
-    public void ApplyDelta_CanceledOnceItChangesTheDataset_IsAppliedWhole(bool verified)
+    [Test]
+    public void ApplyDelta_CanceledOnceItChangesTheDataset_IsAppliedWhole()
     {
-        using var area = new TestArea($"{nameof(ApplyDelta_CanceledOnceItChangesTheDataset_IsAppliedWhole)}-{verified}");
+        using var area = new TestArea(nameof(ApplyDelta_CanceledOnceItChangesTheDataset_IsAppliedWhole));
         var delta = new DeltaCase(area, 60);
         using var request = new CancellationTokenSource();
         var sink = new CancelOnRecord("Applying a delta", request);
@@ -214,7 +212,7 @@ public class Xi07CancellationStepsTests : TestBase
         try
         {
             using (DdbCancellation.Enter(request.Token))
-                delta.Apply(verified).ShouldBeEmpty();
+                delta.Apply().ShouldBeEmpty();
         }
         finally
         {
@@ -279,9 +277,8 @@ public class Xi07CancellationStepsTests : TestBase
 
         private IReadOnlyDictionary<string, string> Verified { get; }
 
-        public List<string> Apply(bool verified) => verified
-            ? Wrapper.ApplyDelta(Delta, _addFolder, Root, MergeStrategy.KeepTheirs, null, Verified)
-            : Wrapper.ApplyDelta(Delta, _addFolder, Root, MergeStrategy.KeepTheirs);
+        public List<string> Apply() =>
+            Wrapper.ApplyDelta(Delta, _addFolder, Root, MergeStrategy.KeepTheirs, null, Verified);
 
         public void ShouldNotBeApplied()
         {

@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Ports.DroneDB;
@@ -8,46 +9,33 @@ namespace Registry.Web.Test;
 
 /// <summary>
 /// Unit coverage for the DdbResult → typed-exception mapping, centralized in
-/// <see cref="DdbResultMapper.ThrowForFinalResult"/>. The assertions target the exception
+/// <see cref="DdbResultMapper.Map"/>. The assertions target the exception
 /// TYPES (the systemic property: transient contention must surface as the typed transient
 /// exception, not a generic <c>DdbException</c>), and do not pin the native last-error
-/// message text (it is an empty string whenever no native call has set a last error).
+/// message text.
 /// </summary>
 [TestFixture]
 [Category(TestCategories.Native)]
 public class NativeDdbWrapperResultMappingTests
 {
     [Test]
-    public void Success_DoesNotThrow()
-        => Assert.That(() => DdbResultMapper.ThrowForFinalResult(DdbResult.Success, "op"), Throws.Nothing);
+    public void Success_HasNoException()
+        => Assert.Throws<ArgumentOutOfRangeException>(() => DdbResultMapper.Map(DdbResult.Success, "op", null, null));
 
     [Test]
     public void Busy_MapsToDdbBusyException()
-    {
-        Assert.Throws<DdbBusyException>(
-            () => DdbResultMapper.ThrowForFinalResult(DdbResult.Busy, "op"));
-    }
+        => DdbResultMapper.Map(DdbResult.Busy, "op", null, null).ShouldBeOfType<DdbBusyException>();
 
     [Test]
     public void BuildInProgress_MapsToDdbBuildInProgressException()
-    {
-        Assert.Throws<DdbBuildInProgressException>(
-            () => DdbResultMapper.ThrowForFinalResult(DdbResult.BuildInProgress, "op"));
-    }
+        => DdbResultMapper.Map(DdbResult.BuildInProgress, "op", null, null).ShouldBeOfType<DdbBuildInProgressException>();
 
     [Test]
     public void Canceled_MapsToDdbCanceledException()
-    {
-        Assert.Throws<DdbCanceledException>(
-            () => DdbResultMapper.ThrowForFinalResult(DdbResult.Canceled, "op"));
-    }
+        => DdbResultMapper.Map(DdbResult.Canceled, "op", null, null).ShouldBeOfType<DdbCanceledException>();
 
     [Test]
     public void UnknownResult_MapsToBaseDdbException()
-    {
-        var unknown = (DdbResult)99;
-        var ex = Assert.Throws<DdbException>(() => DdbResultMapper.ThrowForFinalResult(unknown, "op"));
-        // type-specific base: not any of the subclasses
-        ex.ShouldNotBeOfType<DdbBusyException>();
-    }
+        // exactly the base type: not any of the subclasses
+        => DdbResultMapper.Map((DdbResult)99, "op", null, null).ShouldBeOfType<DdbException>();
 }

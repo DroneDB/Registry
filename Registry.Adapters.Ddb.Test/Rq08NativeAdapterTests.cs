@@ -57,7 +57,7 @@ public class Rq08NativeAdapterTests : TestBase
 
         capabilities.AbiMajor.ShouldBe(DdbAbi.Major);
         capabilities.AbiMinor.ShouldBeGreaterThanOrEqualTo(DdbAbi.Minor);
-        DdbAbi.RequiredSymbols.Where(s => !capabilities.Exports(s)).ShouldBeEmpty();
+        DdbAbi.RequiredSymbols.Where(s => !capabilities.Symbols.Contains(s)).ShouldBeEmpty();
         Runtime.Capabilities.ShouldBeSameAs(capabilities);
     }
 

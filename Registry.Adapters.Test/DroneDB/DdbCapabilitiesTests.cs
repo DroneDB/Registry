@@ -32,8 +32,8 @@ public class DdbCapabilitiesTests
         capabilities.ErrorReasons.ShouldBe(["lowDiskSpace"]);
         capabilities.IsCancellable("DDBBuild").ShouldBeTrue();
         capabilities.IsCancellable("DDBAdd").ShouldBeFalse();
-        capabilities.Exports("DDBGetAbiVersion").ShouldBeTrue();
-        capabilities.Exports("DDBAdd").ShouldBeFalse();
+        capabilities.Symbols.ShouldContain("DDBGetAbiVersion");
+        capabilities.Symbols.ShouldNotContain("DDBAdd");
     }
 
     [TestCase("""{"version": "x", "errorCodes": {}, "errorReasons": [], "cancellable": [], "symbols": []}""")]

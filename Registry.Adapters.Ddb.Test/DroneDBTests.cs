@@ -40,6 +40,9 @@ public class NativeDdbWrapperTests : TestBase
 
     private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper();
 
+    // ApplyDelta with libddb hashing every file it adds
+    private static readonly Dictionary<string, string> NoVerifiedHashes = new();
+
     [OneTimeSetUp]
     public void Setup()
     {
@@ -218,24 +221,7 @@ public class NativeDdbWrapperTests : TestBase
     }
 
     [Test]
-    public void List_Nonexistant_Exception()
-    {
-        Action act = () => DdbWrapper.List("invalid", "");
-        Should.Throw<DdbException>(act);
-
-        act = () => DdbWrapper.List("invalid", "wefrfwef");
-        Should.Throw<DdbException>(act);
-
-        act = () => DdbWrapper.List(null, "wefrfwef");
-        Should.Throw<ArgumentNullException>(act);
-
-/*        act = () => DdbWrapper.List("invalid", (string)null);
-        act.Should().Throw<DdbException>();
-*/
-    }
-
-    [Test]
-    public void List_ExistingFileSubFolder_Ok()
+    public void GetEntry_FileInSubFolder_Details()
     {
         using var fs = new TestFS(Test1ArchiveUrl, nameof(NativeDdbWrapperTests));
 
@@ -254,11 +240,7 @@ public class NativeDdbWrapperTests : TestBase
 
         var ddbPath = Path.Combine(fs.TestFolder, "public", "default");
 
-        var res = DdbWrapper.List(ddbPath, Path.Combine(ddbPath, fileName));
-
-        res.Count.ShouldBe(1);
-
-        var file = res.First();
+        var file = DdbWrapper.GetEntry(ddbPath, fileName).ShouldNotBeNull();
 
         file.Path.ShouldBe(fileName);
         // TODO: Handle different timezones
@@ -276,16 +258,13 @@ public class NativeDdbWrapperTests : TestBase
     }
 
     [Test]
-    public void List_ExistingFile_Ok()
+    public void GetEntry_RootFile_Details()
     {
         using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
 
         var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
-        var res = DdbWrapper.List(ddbPath, Path.Combine(ddbPath, "DJI_0027.JPG"));
-
-        res.Count.ShouldBe(1);
-        var entry = res.First();
+        var entry = DdbWrapper.GetEntry(ddbPath, "DJI_0027.JPG").ShouldNotBeNull();
 
         Entry expectedEntry = System.Text.Json.JsonSerializer.Deserialize<Entry>(
             "{\"depth\":0,\"hash\":\"3157958dd4f2562c8681867dfd6ee5bf70b6e9595b3e3b4b76bbda28342569ed\",\"properties\":{\"cameraPitch\":-89.9000015258789,\"cameraRoll\":0.0,\"cameraYaw\":-131.3000030517578,\"captureTime\":1466699584000.0,\"focalLength\":3.4222222222222225,\"focalLength35\":20.0,\"height\":2250,\"make\":\"DJI\",\"model\":\"FC300S\",\"orientation\":1,\"sensor\":\"dji fc300s\",\"sensorHeight\":3.4650000000000003,\"sensorWidth\":6.16,\"width\":4000},\"mtime\":1491156087,\"path\":\"DJI_0027.JPG\",\"point_geom\":{\"crs\":{\"properties\":{\"name\":\"EPSG:4326\"},\"type\":\"name\"},\"geometry\":{\"coordinates\":[-91.99408299999999,46.84260499999999,198.5099999999999],\"type\":\"Point\"},\"properties\":{},\"type\":\"Feature\"},\"polygon_geom\":{\"crs\":{\"properties\":{\"name\":\"EPSG:4326\"},\"type\":\"name\"},\"geometry\":{\"coordinates\":[[[-91.99397836402999,46.8422402913,158.5099999999999],[-91.99357489543,46.84247729175999,158.5099999999999],[-91.99418894036,46.84296945989999,158.5099999999999],[-91.99459241001999,46.8427324573,158.5099999999999],[-91.99397836402999,46.8422402913,158.5099999999999]]],\"type\":\"Polygon\"},\"properties\":{},\"type\":\"Feature\"},\"size\":3185449,\"type\":3}", NativeJson.Options)!;
@@ -295,8 +274,8 @@ public class NativeDdbWrapperTests : TestBase
     }
 
     /// <summary>
-    /// REG-08: DDBListEntries returns what DDBList returns once filtered with the rules
-    /// ObjectsManager.Search applies (FileSystemName expression on the name, entry type).
+    /// DDBListEntries returns what the unfiltered listing of the folder returns once filtered with the rules
+    /// the entry queries apply (FileSystemName expression on the name, entry type).
     /// </summary>
     [TestCase("", true, null, null)]
     [TestCase("", false, null, null)]
@@ -312,7 +291,7 @@ public class NativeDdbWrapperTests : TestBase
         using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
         var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
-        var full = DdbWrapper.List(ddbPath, Path.Combine(ddbPath, folder), recursive);
+        var full = DdbWrapper.ListEntries(ddbPath, new EntryQuery(folder, recursive));
         var expected = full
             .Where(e => pattern == null ||
                         System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(pattern, Path.GetFileName(e.Path)))
@@ -346,7 +325,8 @@ public class NativeDdbWrapperTests : TestBase
 
         var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
-        var listed = DdbWrapper.List(ddbPath, Path.Combine(ddbPath, "Sub/20200610_144436.jpg")).Single();
+        var listed = DdbWrapper.ListEntries(ddbPath, new EntryQuery("Sub", false))
+            .Single(e => e.Path == "Sub/20200610_144436.jpg");
         var entry = DdbWrapper.GetEntry(ddbPath, "Sub/20200610_144436.jpg");
 
         entry.ShouldNotBeNull();
@@ -410,24 +390,17 @@ public class NativeDdbWrapperTests : TestBase
 
         entry.ShouldNotBeNull();
         entry.Path.ShouldBe("DJI_0027.JPG");
-        DdbWrapper.List(ddbPath, Path.Combine(ddbPath, "DJI_0027.JPG")).Count.ShouldBe(1);
+        DdbWrapper.ListEntries(ddbPath, EntryQuery.All).Count(e => e.Path == "DJI_0027.JPG").ShouldBe(1);
     }
 
     [Test]
-    public void List_AllFiles_Ok()
+    public void ListEntries_AllFiles_Ok()
     {
         using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
 
         var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
-        var res = DdbWrapper.List(ddbPath, Path.Combine(ddbPath, "."), true);
-
-        res.Count.ShouldBe(26);
-
-        res = DdbWrapper.List(ddbPath, ddbPath, true);
-
-        res.Count.ShouldBe(26);
-
+        DdbWrapper.ListEntries(ddbPath, EntryQuery.All).Count.ShouldBe(26);
     }
 
 
@@ -455,13 +428,11 @@ public class NativeDdbWrapperTests : TestBase
 
         var ddbPath = Path.Combine(test.TestFolder, "public", "default");
 
-        var res = DdbWrapper.List(ddbPath, Path.Combine(ddbPath, fileName));
-        res.Count.ShouldBe(1);
+        DdbWrapper.GetEntry(ddbPath, fileName).ShouldNotBeNull();
 
         DdbWrapper.Remove(ddbPath, Path.Combine(ddbPath, fileName));
 
-        res = DdbWrapper.List(ddbPath, Path.Combine(ddbPath, fileName));
-        res.Count.ShouldBe(0);
+        DdbWrapper.GetEntry(ddbPath, fileName).ShouldBeNull();
 
     }
 
@@ -476,7 +447,7 @@ public class NativeDdbWrapperTests : TestBase
 
         DdbWrapper.Remove(ddbPath, Path.Combine(ddbPath, fileName));
 
-        var res = DdbWrapper.List(ddbPath, ".", true);
+        var res = DdbWrapper.ListEntries(ddbPath, EntryQuery.All);
         res.Count.ShouldBe(0);
 
     }
@@ -506,96 +477,10 @@ public class NativeDdbWrapperTests : TestBase
 
 
     [Test]
-    public void Password_HappyPath_Ok()
-    {
-
-        using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
-
-        var ddbPath = Path.Combine(test.TestFolder, "public", "default");
-
-        DdbWrapper.VerifyPassword(ddbPath, string.Empty).ShouldBeTrue();
-
-        DdbWrapper.AppendPassword(ddbPath, "testpassword");
-
-        DdbWrapper.VerifyPassword(ddbPath, "testpassword").ShouldBeTrue();
-        DdbWrapper.VerifyPassword(ddbPath, "wrongpassword").ShouldBeFalse();
-
-        DdbWrapper.ClearPasswords(ddbPath);
-        DdbWrapper.VerifyPassword(ddbPath, "testpassword").ShouldBeFalse();
-
-
-    }
-
-    [Test]
-    public void Chaddr_NullAttr_Exception()
-    {
-
-        using var test = new TestFS(Test3ArchiveUrl, BaseTestFolder);
-
-        var ddbPath = test.TestFolder;
-
-        Action act = () => DdbWrapper.ChangeAttributes(ddbPath, null);
-
-        Should.Throw<ArgumentException>(act);
-
-    }
-
-    [Test]
-    public void GenerateThumbnail_HappyPath_Ok()
-    {
-
-        using var tempFile = new TempFile(TestFileUrl, BaseTestFolder);
-
-        var destPath = Path.Combine(Path.GetTempPath(), "test.jpg");//Path.GetTempFileName();
-
-        try
-        {
-            DdbWrapper.GenerateThumbnail(tempFile.FilePath, 300, destPath);
-
-            var info = new FileInfo(destPath);
-            info.Exists.ShouldBeTrue();
-            info.Length.ShouldBeGreaterThan(0);
-
-        }
-        finally
-        {
-            if (File.Exists(destPath)) File.Delete(destPath);
-        }
-    }
-
-    [Test]
     public void GenerateMemoryThumbnail_HappyPath_Ok()
     {
         using var tempFile = new TempFile(TestFileUrl, BaseTestFolder);
         var buffer = DdbWrapper.GenerateThumbnail(tempFile.FilePath, 300);
-        buffer.Length.ShouldBeGreaterThan(0);
-    }
-
-    [Test]
-    public void GenerateTile_HappyPath_Ok()
-    {
-
-        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
-
-        var destPath = Path.Combine(Path.GetTempPath(), "test.jpg");
-
-        try
-        {
-            var path = DdbWrapper.GenerateTile(tempFile.FilePath, 18, 64083, 92370, 256, true);
-            Debug.WriteLine(path);
-        }
-        finally
-        {
-            if (File.Exists(destPath)) File.Delete(destPath);
-        }
-    }
-
-    [Test]
-    public void GenerateMemoryTile_HappyPath_Ok()
-    {
-        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
-
-        var buffer = DdbWrapper.GenerateMemoryTile(tempFile.FilePath, 18, 64083, 92370, 256, true);
         buffer.Length.ShouldBeGreaterThan(0);
     }
 
@@ -616,64 +501,6 @@ public class NativeDdbWrapperTests : TestBase
     }
 
     [Test]
-    public void Tag_HappyPath_Ok()
-    {
-
-        const string goodTag = "pippo/pluto";
-        const string goodTagWithRegistry = "https://test.com/pippo/pluto";
-
-        using var test = new TestFS(Test3ArchiveUrl, BaseTestFolder);
-
-        var ddbPath = Path.Combine(test.TestFolder, DdbFolder);
-
-        var tag = DdbWrapper.GetTag(ddbPath);
-
-        tag.ShouldBeNull();
-
-        DdbWrapper.SetTag(ddbPath, goodTag);
-
-        tag = DdbWrapper.GetTag(ddbPath);
-
-        tag.ShouldBe(goodTag);
-
-        DdbWrapper.SetTag(ddbPath, goodTagWithRegistry);
-
-        tag = DdbWrapper.GetTag(ddbPath);
-
-        tag.ShouldBe(goodTagWithRegistry);
-
-    }
-
-    [Test]
-    public void Tag_ErrorCases_Ok()
-    {
-
-        const string badTag = "pippo";
-        const string badTag2 = "����+���+�AAadff_-.-.,";
-
-        using var test = new TestFS(Test3ArchiveUrl, BaseTestFolder);
-
-        var ddbPath = Path.Combine(test.TestFolder, DdbFolder);
-
-        var act = () => DdbWrapper.SetTag(ddbPath, badTag);
-
-        Should.Throw<DdbException>(act);
-
-        act = () => DdbWrapper.SetTag(ddbPath, badTag2);
-
-        Should.Throw<DdbException>(act);
-
-        act = () => DdbWrapper.SetTag(ddbPath, string.Empty);
-
-        Should.Throw<DdbException>(act);
-
-        act = () => DdbWrapper.SetTag(ddbPath, null);
-
-        Should.Throw<ArgumentException>(act);
-
-    }
-
-    [Test]
     public void Stamp_HappyPath_Ok()
     {
         using var test = new TestFS(Test3ArchiveUrl, BaseTestFolder);
@@ -691,7 +518,7 @@ public class NativeDdbWrapperTests : TestBase
         using var source = new TestFS(TestDelta2ArchiveUrl, BaseTestFolder);
         using var destination = new TestFS(TestDelta1ArchiveUrl, BaseTestFolder);
 
-        var delta = DdbWrapper.Delta(source.TestFolder, destination.TestFolder);
+        var delta = DdbWrapper.Delta(DdbWrapper.GetStamp(source.TestFolder), DdbWrapper.GetStamp(destination.TestFolder));
 
         delta.Adds.Length.ShouldBeGreaterThan(0);
         delta.Removes.Length.ShouldBeGreaterThan(0);
@@ -724,7 +551,7 @@ public class NativeDdbWrapperTests : TestBase
             Adds = [new AddAction("dir", ""), new AddAction("dir/a.txt", hash)],
             Removes = [], MetaAdds = [], MetaRemoves = []
         };
-        DdbWrapper.ApplyDelta(delta, addFolder, area.TestFolder, MergeStrategy.KeepTheirs).ShouldBeEmpty();
+        DdbWrapper.ApplyDelta(delta, addFolder, area.TestFolder, MergeStrategy.KeepTheirs, null, NoVerifiedHashes).ShouldBeEmpty();
 
         File.Exists(Path.Combine(addFolder, "dir", "a.txt")).ShouldBeFalse("the file is moved, not copied");
         File.ReadAllText(Path.Combine(area.TestFolder, "dir", "a.txt")).ShouldBe("alpha");
@@ -736,7 +563,7 @@ public class NativeDdbWrapperTests : TestBase
         {
             Adds = [new AddAction("b.txt", hash)], Removes = [], MetaAdds = [], MetaRemoves = []
         };
-        Should.Throw<DdbException>(() => DdbWrapper.ApplyDelta(bad, addFolder, area.TestFolder, MergeStrategy.KeepTheirs));
+        Should.Throw<DdbException>(() => DdbWrapper.ApplyDelta(bad, addFolder, area.TestFolder, MergeStrategy.KeepTheirs, null, NoVerifiedHashes));
         File.Exists(Path.Combine(addFolder, "b.txt")).ShouldBeTrue();
         DdbWrapper.GetEntry(area.TestFolder, "b.txt").ShouldBeNull();
     }
@@ -759,7 +586,7 @@ public class NativeDdbWrapperTests : TestBase
 
         ddb.IsEmpty().ShouldBeFalse();
         ddb.GetInfo();
-        DdbWrapper.List(area.TestFolder, area.TestFolder, true);
+        DdbWrapper.ListEntries(area.TestFolder, EntryQuery.All);
         ddb.GetIndexFingerprint().ShouldBe(afterAdd, "reads do not change the fingerprint");
 
         var noIndex = Directory.CreateDirectory(Path.Join(area.TestFolder, "no-index")).FullName;
@@ -820,7 +647,7 @@ public class NativeDdbWrapperTests : TestBase
 
         DdbWrapper.MoveEntry(test.TestFolder, "plutone.txt", "test.txt");
 
-        var res = DdbWrapper.List(test.TestFolder, test.TestFolder, true);
+        var res = DdbWrapper.ListEntries(test.TestFolder, EntryQuery.All);
 
         res.Count.ShouldBe(11);
         res[8].Path.ShouldBe("test.txt");
@@ -1297,7 +1124,7 @@ public class NativeDdbWrapperTests : TestBase
         addResult[0].Path.ShouldBe(fileName);
 
         // List
-        var listResult = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        var listResult = DdbWrapper.ListEntries(area.TestFolder, EntryQuery.All);
         listResult.Count.ShouldBe(1);
         listResult[0].Path.ShouldBe(fileName);
 
@@ -1307,7 +1134,7 @@ public class NativeDdbWrapperTests : TestBase
 
         // Remove
         DdbWrapper.Remove(area.TestFolder, filePath);
-        var afterRemove = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        var afterRemove = DdbWrapper.ListEntries(area.TestFolder, EntryQuery.All);
         afterRemove.Count.ShouldBe(0);
     }
 
@@ -1327,7 +1154,7 @@ public class NativeDdbWrapperTests : TestBase
         addResult[0].Path.ShouldBe(fileName);
 
         // List
-        var listResult = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        var listResult = DdbWrapper.ListEntries(area.TestFolder, EntryQuery.All);
         listResult.Count.ShouldBe(1);
         listResult[0].Path.ShouldBe(fileName);
 
@@ -1337,7 +1164,7 @@ public class NativeDdbWrapperTests : TestBase
 
         // Remove
         DdbWrapper.Remove(area.TestFolder, filePath);
-        var afterRemove = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        var afterRemove = DdbWrapper.ListEntries(area.TestFolder, EntryQuery.All);
         afterRemove.Count.ShouldBe(0);
     }
 
@@ -1357,7 +1184,7 @@ public class NativeDdbWrapperTests : TestBase
         addResult[0].Path.ShouldBe(fileName);
 
         // List
-        var listResult = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        var listResult = DdbWrapper.ListEntries(area.TestFolder, EntryQuery.All);
         listResult.Count.ShouldBe(1);
         listResult[0].Path.ShouldBe(fileName);
 
@@ -1367,7 +1194,7 @@ public class NativeDdbWrapperTests : TestBase
 
         // Remove
         DdbWrapper.Remove(area.TestFolder, filePath);
-        var afterRemove = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        var afterRemove = DdbWrapper.ListEntries(area.TestFolder, EntryQuery.All);
         afterRemove.Count.ShouldBe(0);
     }
 
@@ -1387,7 +1214,7 @@ public class NativeDdbWrapperTests : TestBase
         addResult[0].Path.ShouldBe(fileName);
 
         // List
-        var listResult = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        var listResult = DdbWrapper.ListEntries(area.TestFolder, EntryQuery.All);
         listResult.Count.ShouldBe(1);
         listResult[0].Path.ShouldBe(fileName);
 
@@ -1397,7 +1224,7 @@ public class NativeDdbWrapperTests : TestBase
 
         // Remove
         DdbWrapper.Remove(area.TestFolder, filePath);
-        var afterRemove = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        var afterRemove = DdbWrapper.ListEntries(area.TestFolder, EntryQuery.All);
         afterRemove.Count.ShouldBe(0);
     }
 
@@ -1421,7 +1248,7 @@ public class NativeDdbWrapperTests : TestBase
         addResult.ShouldContain(e => e.Path == fileName.Replace('\\', '/'));
 
         // List
-        var listResult = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        var listResult = DdbWrapper.ListEntries(area.TestFolder, EntryQuery.All);
         listResult.Count.ShouldBeGreaterThanOrEqualTo(1);
         listResult.ShouldContain(e => e.Path == fileName.Replace('\\', '/'));
 
@@ -1431,8 +1258,8 @@ public class NativeDdbWrapperTests : TestBase
 
         // Remove
         DdbWrapper.Remove(area.TestFolder, filePath);
-        var afterRemove = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
-        afterRemove.Count.ShouldBe(0);
+        var afterRemove = DdbWrapper.ListEntries(area.TestFolder, EntryQuery.All);
+        afterRemove.ShouldNotContain(e => e.Path == fileName.Replace('\\', '/'));
     }
 
     [Test]
@@ -1458,7 +1285,7 @@ public class NativeDdbWrapperTests : TestBase
         paths.ShouldContain("résumé.txt");
 
         // Verify list returns same paths
-        var listResult = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        var listResult = DdbWrapper.ListEntries(area.TestFolder, EntryQuery.All);
         listResult.Count.ShouldBe(3);
 
         var listPaths = listResult.Select(e => e.Path).ToArray();
@@ -1483,7 +1310,7 @@ public class NativeDdbWrapperTests : TestBase
         // Remove multiple UTF-8 files at once
         DdbWrapper.Remove(area.TestFolder, [file1, file2]);
 
-        var listResult = DdbWrapper.List(area.TestFolder, Path.Combine(area.TestFolder, "."), true);
+        var listResult = DdbWrapper.ListEntries(area.TestFolder, EntryQuery.All);
         listResult.Count.ShouldBe(0);
     }
 

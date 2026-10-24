@@ -9,8 +9,7 @@ namespace Registry.Adapters.DroneDB;
 /// <summary>
 /// The libddb error contract (XI-02): every non-success <see cref="DdbResult"/> maps to one typed
 /// exception, with the message and reason libddb set for that call. Public static so the mapping is
-/// unit-tested without native code (<see cref="Map"/>) and the native read with it
-/// (<see cref="ThrowForFinalResult"/>).
+/// unit-tested without native code (<see cref="Map"/>).
 /// <list type="table">
 /// <item><term>Busy</term><description><see cref="DdbBusyException"/> (transient contention: retried)</description></item>
 /// <item><term>BuildInProgress</term><description><see cref="DdbBuildInProgressException"/> (retried)</description></item>
@@ -31,15 +30,6 @@ public static class DdbResultMapper
     /// <summary>The reason of the last failed libddb call on this thread ("" for none).</summary>
     public static string GetNativeLastErrorReason() =>
         Marshal.PtrToStringUTF8(NativeDdb.DDBGetLastErrorReason()) ?? "";
-
-    /// <summary>
-    /// Throws the exception of a final <paramref name="result"/> (nothing for
-    /// <see cref="DdbResult.Success"/>), with the native message and reason. Call it on the thread
-    /// of the failed call, right after it: libddb clears both when the next call on that thread
-    /// starts.
-    /// </summary>
-    public static void ThrowForFinalResult(DdbResult result, string operation) =>
-        NativeCall.Check(result, operation);
 
     /// <summary>
     /// The exception of a failed call: <paramref name="message"/> and <paramref name="reason"/> are

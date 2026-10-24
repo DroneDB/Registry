@@ -129,10 +129,6 @@ internal static unsafe partial class NativeDdb
     internal static partial DdbResult DDBGet(string ddbPath, string path, out IntPtr output);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBList(string ddbPath, string[] paths, int numPaths, out IntPtr output,
-        string format, [MarshalAs(UnmanagedType.U1)] bool recursive, int maxRecursionDepth);
-
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBListEntries(string ddbPath, string folder,
         [MarshalAs(UnmanagedType.U1)] bool recursive, string namePattern, string types,
         [MarshalAs(UnmanagedType.U1)] bool withDetails, out IntPtr output);
@@ -140,25 +136,6 @@ internal static unsafe partial class NativeDdb
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBListEntriesEx(string? ddbPath, string? folder, string? namePattern,
         string? types, in DdbListEntriesOptions options, out IntPtr output);
-
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBAppendPassword(string ddbPath, string password);
-
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBVerifyPassword(string ddbPath, string password,
-        [MarshalAs(UnmanagedType.U1)] out bool verified);
-
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBClearPasswords(string ddbPath);
-
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBChattr(string ddbPath, string attrsJson, out IntPtr output);
-
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBSetTag(string ddbPath, string newTag);
-
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBGetTag(string ddbPath, out IntPtr outTag);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBGetStamp(string ddbPath, out IntPtr output);
@@ -169,10 +146,6 @@ internal static unsafe partial class NativeDdb
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBDelta(string ddbSourceStamp, string ddbTargetStamp, out IntPtr output,
         string format);
-
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBApplyDelta(string delta, string sourcePath, string ddbPath, int mergeStrategy,
-        string sourceMetaDump, out IntPtr conflicts);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBApplyDeltaEx(string? delta, string? sourcePath, string? ddbPath,
@@ -263,9 +236,6 @@ internal static unsafe partial class NativeDdb
     // ------------------------------------------------------------------ thumbnails and tiles
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBGenerateThumbnail(string filePath, int size, string destPath);
-
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBGenerateMemoryThumbnail(string filePath, int size, out IntPtr outBuffer,
         out int outBufferSize);
 
@@ -273,15 +243,6 @@ internal static unsafe partial class NativeDdb
     internal static partial DdbResult DDBGenerateMemoryThumbnailEx(string filePath, int size, string? preset,
         string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
         out IntPtr outBuffer, out int outBufferSize);
-
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBTile(string inputPath, int tz, int tx, int ty, out IntPtr outputTilePath,
-        int tileSize, [MarshalAs(UnmanagedType.U1)] bool tms, [MarshalAs(UnmanagedType.U1)] bool forceRecreate);
-
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBMemoryTile(string inputPath, int tz, int tx, int ty, out IntPtr outBuffer,
-        out int outBufferSize, int tileSize, [MarshalAs(UnmanagedType.U1)] bool tms,
-        [MarshalAs(UnmanagedType.U1)] bool forceRecreate, string inputPathHash);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBMemoryTileFmt(string inputPath, int tz, int tx, int ty, out IntPtr outBuffer,

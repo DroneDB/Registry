@@ -110,10 +110,8 @@ public class Dq09EntryPathTests : TestBase
             };
 
             Should.Throw<DdbInvalidArgumentsException>(
-                () => Wrapper.ApplyDelta(delta, addFolder, root, MergeStrategy.KeepTheirs), $"ApplyDelta with '{path}'");
-            Should.Throw<DdbInvalidArgumentsException>(
                 () => Wrapper.ApplyDelta(delta, addFolder, root, MergeStrategy.KeepTheirs, null, new Dictionary<string, string>()),
-                $"ApplyDeltaEx with '{path}'");
+                $"ApplyDelta with '{path}'");
             Should.Throw<DdbInvalidArgumentsException>(() => Wrapper.ComputeDeltaLocals(delta, root),
                 $"ComputeDeltaLocals with '{path}'");
         }

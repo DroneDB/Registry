@@ -5,7 +5,7 @@ Registry.Adapters.Ddb.Test/DroneDBTests.cs CA1859 1
 Registry.Adapters.Ddb.Test/Rq02ProgressCallbackTests.cs CA1859 1
 Registry.Adapters/DroneDB/Ddb.cs CA1725 1
 Registry.Adapters/DroneDB/Ddb.cs CS8618 1
-Registry.Adapters/DroneDB/Ddb.cs CS8625 6
+Registry.Adapters/DroneDB/Ddb.cs CS8625 5
 Registry.Adapters/Thumbnail/RemoteThumbnailGeneratorSettings.cs CS8618 1
 Registry.Common/CommonUtils.cs CA1305 2
 Registry.Common/CommonUtils.cs CS8632 1
@@ -15,7 +15,7 @@ Registry.Ports/DroneDB/BatchAddResult.cs CS8618 5
 Registry.Ports/DroneDB/Delta.cs CS8618 4
 Registry.Ports/DroneDB/Entry.cs CS8618 1
 Registry.Ports/DroneDB/EntrySummary.cs CS8618 2
-Registry.Ports/DroneDB/IDdbBuild.cs CS8625 3
+Registry.Ports/DroneDB/IDdbBuild.cs CS8625 2
 Registry.Ports/DroneDB/IDdbIndex.cs CS8625 3
 Registry.Ports/DroneDB/IDdbRaster.cs CA1711 2
 Registry.Ports/DroneDB/IMetaManager.cs CA1716 3

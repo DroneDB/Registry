@@ -61,10 +61,8 @@ public class Rq13NativeCancellationTests : TestBase
                  {
                      nameof(NativeDdb.DDBBuild), nameof(NativeDdb.DDBExportRaster), nameof(NativeDdb.DDBExportRaster2),
                      nameof(NativeDdb.DDBGenerateMemoryThumbnail), nameof(NativeDdb.DDBGenerateMemoryThumbnailEx),
-                     nameof(NativeDdb.DDBGenerateThumbnail), nameof(NativeDdb.DDBMemoryTile),
                      nameof(NativeDdb.DDBMemoryTileEx), nameof(NativeDdb.DDBMemoryTileFmt),
-                     nameof(NativeDdb.DDBRenderRasterIndex), nameof(NativeDdb.DDBRenderRasterRegionEx),
-                     nameof(NativeDdb.DDBTile)
+                     nameof(NativeDdb.DDBRenderRasterIndex), nameof(NativeDdb.DDBRenderRasterRegionEx)
                  })
             capabilities.IsCancellable(export).ShouldBeTrue(export);
 

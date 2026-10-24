@@ -45,9 +45,6 @@ public sealed class DdbCapabilities
     /// <summary>Every exported <c>DDB*</c> function.</summary>
     public IReadOnlySet<string> Symbols { get; }
 
-    /// <summary>The library exports <paramref name="symbol"/>.</summary>
-    public bool Exports(string symbol) => Symbols.Contains(symbol);
-
     /// <summary>The work of <paramref name="symbol"/> stops when its cancel token is canceled.</summary>
     public bool IsCancellable(string symbol) => Cancellable.Contains(symbol);
 

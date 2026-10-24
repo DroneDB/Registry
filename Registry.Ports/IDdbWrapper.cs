@@ -14,19 +14,10 @@ public interface IDdbWrapper
     public List<Entry> Add(string ddbPath, string[] paths, bool recursive = false);
 
     /// <summary>
-    /// Batch add with per-item error isolation (DDBAddWithOptions). With stopOnError false, an
-    /// item-scoped failure is reported in the result's Errors list instead of aborting the
-    /// whole call; every input path appears in exactly one of Entries/Unchanged/Errors.
-    /// Paths are dataset-relative and are indexed exactly as given (never recursively: a
-    /// recursive native walk would surface paths the caller never asked for and break the
-    /// completeness mapping).
-    /// </summary>
-    public BatchAddResult AddWithOptions(string ddbPath, string[] paths, bool stopOnError = false);
-
-    /// <summary>
-    /// <see cref="AddWithOptions"/> for files with the hash their writer computed
-    /// (DDBAddWithHints): DroneDB uses a hint only while the file still has its size and write
-    /// time, so a stale hint is never indexed. Paths are absolute; folders are not expanded.
+    /// Adds files in one native call, each with the hash its writer computed (DDBAddWithHints): DroneDB
+    /// uses a hint only while the file still has its size and write time, so a stale hint is never
+    /// indexed. Paths are absolute; folders are not expanded. With <paramref name="stopOnError"/> false
+    /// a file that fails only fails itself.
     /// </summary>
     public BatchAddResult AddWithHints(string ddbPath, IReadOnlyList<AddItem> files, bool stopOnError = false);
 
@@ -35,8 +26,6 @@ public interface IDdbWrapper
     public void Remove(string ddbPath, string[] paths);
 
     public List<Entry> Info(string path, bool recursive = false, int maxRecursionDepth = 0, bool withHash = false);
-
-    public List<Entry> Info(string[] paths, bool recursive = false, int maxRecursionDepth = 0, bool withHash = false);
 
     /// <summary>
     /// Closes the idle pooled index connections of the datasets under a folder
@@ -58,9 +47,6 @@ public interface IDdbWrapper
     /// <returns>The entry, or null if the index has no entry with this path</returns>
     public Entry? GetEntry(string ddbPath, string path);
 
-    public List<Entry> List(string ddbPath, string path, bool recursive = false, int maxRecursionDepth = 0);
-    public List<Entry> List(string ddbPath, string[] paths, bool recursive = false, int maxRecursionDepth = 0);
-
     /// <summary>
     /// The entries selected by <paramref name="query"/> (filtered natively), sorted by path,
     /// with properties, geometries and meta.
@@ -75,32 +61,10 @@ public interface IDdbWrapper
     /// </summary>
     public List<EntrySummary> ListEntrySummaries(string ddbPath, EntryQuery query);
 
-    public void AppendPassword(string ddbPath, string password);
-
-    public bool VerifyPassword(string ddbPath, string password);
-
-    public void ClearPasswords(string ddbPath);
-
-    public Dictionary<string, object> ChangeAttributes(string ddbPath, Dictionary<string, object> attributes);
-
-    public Dictionary<string, object> GetAttributes(string ddbPath);
-
-    public void GenerateThumbnail(string filePath, int size, string destPath);
-
     public byte[] GenerateThumbnail(string filePath, int size);
-
-    public string GenerateTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
-        bool forceRecreate = false);
-
-    public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
-        bool forceRecreate = false, string inputPathHash = "");
 
     public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
         bool forceRecreate, string inputPathHash, string outputFormat);
-
-    public void SetTag(string ddbPath, string newTag);
-
-    public string? GetTag(string ddbPath);
 
     public Stamp GetStamp(string ddbPath);
 
@@ -110,15 +74,10 @@ public interface IDdbWrapper
     /// </summary>
     public string GetStampChecksum(string ddbPath);
 
-    public Delta Delta(string ddbPath, string ddbTarget);
-
-    public List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,
-        string? sourceMetaDump = null);
-
     /// <summary>
-    /// <see cref="ApplyDelta(Delta, string, string, MergeStrategy, string?)"/> for files whose hashes
-    /// the caller checked against the delta while it received them (<c>DDBApplyDeltaEx</c>, ABI 2.0,
-    /// XI-05): libddb does not read those files again. <paramref name="verifiedHashes"/> maps a delta
+    /// Applies <paramref name="delta"/> with the files it adds taken from <paramref name="sourcePath"/>, and returns
+    /// the conflicts. For files whose hashes the caller checked against the delta while it received them
+    /// (<c>DDBApplyDeltaEx</c>, ABI 2.0): libddb does not read those files again. <paramref name="verifiedHashes"/> maps a delta
     /// path (its exact spelling) to the lowercase hex SHA-256 the delta gives it; every other added file
     /// is hashed by libddb. An entry that is not a file the delta adds, or has another hash, fails the
     /// call (<see cref="DroneDB.DdbInvalidArgumentsException"/>) before anything changes.
@@ -236,8 +195,6 @@ public interface IDdbWrapper
     /// <param name="options">What to rescan; null rescans every entry and stops on the first error</param>
     /// <returns>List of rescan results for each processed entry</returns>
     public List<RescanResult> RescanIndex(string ddbPath, RescanOptions? options = null);
-
-    string TileMimeType { get; }
     string ThumbnailMimeType { get; }
 
     /// <summary>

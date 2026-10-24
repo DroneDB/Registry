@@ -97,7 +97,7 @@ public class DdbFactoryTest : TestBase
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
-        var res = ddb.Search("asasdadas.jpg");
+        var res = ddb.Find(new EntryQuery(NamePattern: "asasdadas.jpg"));
 
         res.ShouldBeEmpty();
 
@@ -129,7 +129,7 @@ public class DdbFactoryTest : TestBase
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
-        var list = ddb.Search(fileName).ToArray();
+        var list = ddb.Find(new EntryQuery(fileName)).ToArray();
 
         list.Count().ShouldBe(1);
 
@@ -184,7 +184,7 @@ public class DdbFactoryTest : TestBase
 
         var ddb = factory.Get(MagicStrings.PublicOrganizationSlug, _datasetGuid);
 
-        var list = ddb.Search(fileName).ToArray();
+        var list = ddb.Find(new EntryQuery(fileName)).ToArray();
 
         list.Count().ShouldBe(1);
 
@@ -237,9 +237,9 @@ public class DdbFactoryTest : TestBase
         if (!File.Exists(path))
             File.Copy(TestDownloadCache.GetOrDownload(TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName), TestDownloadCache.SharedFolder), path, true);
 
-        ddb.Add(fileName, File.ReadAllBytes(path));
+        ddb.Add(fileName, new MemoryStream(File.ReadAllBytes(path)));
 
-        ddb.Search(fileName).Count().ShouldBe(1);
+        ddb.Find(new EntryQuery(fileName)).Count.ShouldBe(1);
 
     }
 

@@ -628,9 +628,9 @@ public sealed class Rq04GoldenJsonTests : IDisposable
             }
             catch (NotSupportedException)
             {
-                // Indexed, but no get-* fixture: the list fixture holds the same entry JSON
+                // Indexed, but no get-* fixture: the entry listing fixture holds the same entry JSON
                 var relative = Generic(path).Trim('/');
-                return _fixtures.List(ddbPath, ddbPath, recursive: true).Single(e => e.Path == relative);
+                return _fixtures.ListEntries(ddbPath, EntryQuery.All).Single(e => e.Path == relative);
             }
         }
 

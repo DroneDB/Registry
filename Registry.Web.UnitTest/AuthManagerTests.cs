@@ -101,7 +101,7 @@ public class AuthManagerTests : TestBase
 
         // Setup DDB mocks for dataset metadata
         _publicDdbMock = new Mock<IDDB>();
-        _publicDdbMock.Setup(x => x.GetInfo(null)).Returns(new Entry
+        _publicDdbMock.Setup(x => x.GetInfo()).Returns(new Entry
             {
                 Properties = TestJson.Props(new Dictionary<string, object>
                 {
@@ -119,7 +119,7 @@ public class AuthManagerTests : TestBase
         _publicDdbMock.Setup(x => x.Meta).Returns(publicMetaManagerMock.Object);
 
         _privateDdbMock = new Mock<IDDB>();
-        _privateDdbMock.Setup(x => x.GetInfo(null)).Returns(new Entry
+        _privateDdbMock.Setup(x => x.GetInfo()).Returns(new Entry
             {
                 Properties = TestJson.Props(new Dictionary<string, object>
                 {

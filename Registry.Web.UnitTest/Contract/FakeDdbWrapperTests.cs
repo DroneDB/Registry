@@ -51,8 +51,6 @@ public sealed class FakeDdbWrapperTests
         ["info-image"] = d => d.Info(Path.Combine(Root, "sub", "img.jpg"), withHash: true),
         ["info-pointcloud"] = d => d.Info(Path.Combine(Root, "cloud.las"), withHash: true),
         ["info-vector"] = d => d.Info(Path.Combine(Root, "layer.geojson"), withHash: true),
-        ["list"] = d => d.List(Root, Root, true),
-        ["list-folder"] = d => d.List(Root, Path.Combine(Root, "sub")),
         ["list-entries"] = d => d.ListEntries(Root, EntryQuery.All),
         ["list-entry-summaries"] = d => d.ListEntrySummaries(Root, EntryQuery.All),
         ["list-entries-filtered"] = d => d.ListEntrySummaries(Root,
@@ -90,8 +88,9 @@ public sealed class FakeDdbWrapperTests
     [
         // Recorded on another dataset (a Shapefile without .shx): read directly
         "pending-build-info", "build-artifacts-pending",
-        // A deprecated export Registry no longer calls (GetBuildArtifacts replaces it, XI-04)
-        "build-status",
+        // Deprecated exports Registry no longer calls (GetBuildArtifacts replaces the build status; the entry
+        // listing is ListEntries)
+        "build-status", "list", "list-folder",
         // ABI 2.0 outputs with no port member yet: the listing with build objects (RQ-11)
         "list-entries-ex",
         // The STAC exports that build Registry's URLs, which Registry no longer calls (XI-09, RQ-12: the data-only
@@ -159,9 +158,9 @@ public sealed class FakeDdbWrapperTests
     }
 
     [Test]
-    public void List_DeserializesLikeTheNativeAdapter()
+    public void ListEntries_DeserializesLikeTheNativeAdapter()
     {
-        var entries = _ddb.List(Root, Root, true);
+        var entries = _ddb.ListEntries(Root, EntryQuery.All);
 
         entries.Select(e => e.Path).ShouldBe(["a.txt", "cloud.las", "layer.geojson", "ortho.tif", "sub", "sub/img.jpg"]);
         var image = entries.Single(e => e.Path == "sub/img.jpg");
@@ -257,8 +256,6 @@ public sealed class FakeDdbWrapperTests
     {
         Should.Throw<NotSupportedException>(() => _ddb.GetStamp(Root)).Message.ShouldContain("IDdbWrapper.GetStamp");
         Should.Throw<NotSupportedException>(() => _ddb.Init(Root));
-        Should.Throw<NotSupportedException>(() => _ddb.List(Root, Path.Combine(Root, "sub"), true))
-            .Message.ShouldContain("no libddb contract fixture records List(");
         Should.Throw<NotSupportedException>(() => _ddb.Info(Path.Combine(Root, "a.txt")));
         Should.Throw<NotSupportedException>(() => _ddb.StacItemCollectionData(Root, "1,2,3,4", null, 10, 0));
     }
@@ -269,7 +266,6 @@ public sealed class FakeDdbWrapperTests
         // The parameterless NativeDdbWrapper does not call libddb
         var native = new NativeDdbWrapper();
 
-        _ddb.TileMimeType.ShouldBe(native.TileMimeType);
         _ddb.ThumbnailMimeType.ShouldBe(native.ThumbnailMimeType);
         _ddb.GetVersion().ShouldBe(FakeDdbWrapper.Version);
     }

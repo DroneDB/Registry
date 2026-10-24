@@ -30,8 +30,6 @@ public class NativeDdbWrapper : IDdbWrapper
     private static readonly Lazy<IReadOnlyList<EntryTypeInfo>> EntryTypes = new(() =>
         NativeCall.Invoke<List<EntryTypeInfo>>(nameof(NativeDdb.DDBGetEntryTypes),
             (out IntPtr output) => NativeDdb.DDBGetEntryTypes(out output)));
-
-    public string TileMimeType => "image/png";
     public string ThumbnailMimeType => "image/webp";
 
     public string GetVersion()
@@ -181,62 +179,6 @@ public class NativeDdbWrapper : IDdbWrapper
                 withDetails, out output));
     }
 
-    public List<Entry> List(string ddbPath, string path, bool recursive = false, int maxRecursionDepth = 0) =>
-        List(ddbPath, [path], recursive, maxRecursionDepth);
-
-    public List<Entry> List(string ddbPath, string[] paths, bool recursive = false, int maxRecursionDepth = 0)
-    {
-        ArgumentNullException.ThrowIfNull(ddbPath);
-        ArgumentNullException.ThrowIfNull(paths);
-        if (paths.Length == 0)
-            throw new ArgumentException("Paths is empty", nameof(paths));
-
-        var normalized = NormalizeSeparators(paths);
-        return NativeCall.Invoke<List<Entry>>(nameof(NativeDdb.DDBList),
-            (out IntPtr output) => NativeDdb.DDBList(ddbPath, normalized, normalized.Length, out output, "json",
-                recursive, maxRecursionDepth));
-    }
-
-    public void AppendPassword(string ddbPath, string password) =>
-        NativeCall.Invoke(nameof(NativeDdb.DDBAppendPassword), () => NativeDdb.DDBAppendPassword(ddbPath, password));
-
-    public bool VerifyPassword(string ddbPath, string password)
-    {
-        var verified = false;
-        NativeCall.Invoke(nameof(NativeDdb.DDBVerifyPassword),
-            () => NativeDdb.DDBVerifyPassword(ddbPath, password, out verified));
-        return verified;
-    }
-
-    public void ClearPasswords(string ddbPath) =>
-        NativeCall.Invoke(nameof(NativeDdb.DDBClearPasswords), () => NativeDdb.DDBClearPasswords(ddbPath));
-
-    public Dictionary<string, object> ChangeAttributes(string ddbPath, Dictionary<string, object> attributes)
-    {
-        ArgumentNullException.ThrowIfNull(attributes);
-        var json = NativeJson.Serialize(attributes);
-        return NativeCall.Invoke<Dictionary<string, object>>(nameof(NativeDdb.DDBChattr),
-            (out IntPtr output) => NativeDdb.DDBChattr(ddbPath, json, out output));
-    }
-
-    public Dictionary<string, object> GetAttributes(string ddbPath) =>
-        ChangeAttributes(ddbPath, new Dictionary<string, object>());
-
-    public void SetTag(string ddbPath, string newTag)
-    {
-        ArgumentNullException.ThrowIfNull(ddbPath);
-        ArgumentNullException.ThrowIfNull(newTag);
-        NativeCall.Invoke(nameof(NativeDdb.DDBSetTag), () => NativeDdb.DDBSetTag(ddbPath, newTag));
-    }
-
-    public string? GetTag(string ddbPath)
-    {
-        ArgumentNullException.ThrowIfNull(ddbPath);
-        var tag = NativeCall.InvokeString(nameof(NativeDdb.DDBGetTag),
-            (out IntPtr output) => NativeDdb.DDBGetTag(ddbPath, out output));
-        return string.IsNullOrWhiteSpace(tag) ? null : tag;
-    }
-
     public Stamp GetStamp(string ddbPath)
     {
         ArgumentNullException.ThrowIfNull(ddbPath);
@@ -251,24 +193,12 @@ public class NativeDdbWrapper : IDdbWrapper
             (out IntPtr output) => NativeDdb.DDBGetStampChecksum(ddbPath, out output));
     }
 
-    public Delta Delta(string ddbPath, string ddbTarget) => Delta(GetStamp(ddbPath), GetStamp(ddbTarget));
-
     public Delta Delta(Stamp source, Stamp target)
     {
         var sourceJson = NativeJson.Serialize(source);
         var targetJson = NativeJson.Serialize(target);
         return NativeCall.Invoke<Delta>(nameof(NativeDdb.DDBDelta),
             (out IntPtr output) => NativeDdb.DDBDelta(sourceJson, targetJson, out output, "json"));
-    }
-
-    public List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,
-        string? sourceMetaDump = null)
-    {
-        var deltaJson = NativeJson.Serialize(delta);
-        var metaDump = sourceMetaDump ?? "[]";
-        return NativeCall.Invoke<List<string>>(nameof(NativeDdb.DDBApplyDelta),
-            (out IntPtr output) => NativeDdb.DDBApplyDelta(deltaJson, sourcePath, ddbPath, (int)mergeStrategy,
-                metaDump, out output));
     }
 
     public List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,
@@ -454,20 +384,6 @@ public class NativeDdbWrapper : IDdbWrapper
             (out IntPtr output) => NativeDdb.DDBStacItemCollectionData(ddbPath, bbox ?? string.Empty,
                 datetime ?? string.Empty, limit, offset, out output));
 
-    // ---------------------------------------------------------------- thumbnails and tiles
-
-    public void GenerateThumbnail(string filePath, int size, string destPath)
-    {
-        ArgumentNullException.ThrowIfNull(filePath);
-        ArgumentNullException.ThrowIfNull(destPath);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(size);
-        RequireFile(filePath);
-
-        NativeCall.Invoke(nameof(NativeDdb.DDBGenerateThumbnail),
-            () => NativeDdb.DDBGenerateThumbnail(filePath, size, destPath),
-            $"file: '{filePath}', size: {size}, dest: '{destPath}'");
-    }
-
     public byte[] GenerateThumbnail(string filePath, int size)
     {
         ArgumentNullException.ThrowIfNull(filePath);
@@ -492,23 +408,6 @@ public class NativeDdbWrapper : IDdbWrapper
             (out IntPtr buffer, out int length) => NativeDdb.DDBGenerateMemoryThumbnailEx(filePath, size, preset,
                 bands, formula, bandFilter, colormap, rescale, out buffer, out length),
             $"file: '{filePath}', size: {size}");
-    }
-
-    public string GenerateTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
-        bool forceRecreate = false)
-    {
-        ArgumentNullException.ThrowIfNull(inputPath);
-        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBTile),
-            (out IntPtr output) => NativeDdb.DDBTile(inputPath, tz, tx, ty, out output, tileSize, tms, forceRecreate));
-    }
-
-    public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
-        bool forceRecreate = false, string inputPathHash = "")
-    {
-        ArgumentNullException.ThrowIfNull(inputPath);
-        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBMemoryTile),
-            (out IntPtr buffer, out int length) => NativeDdb.DDBMemoryTile(inputPath, tz, tx, ty, out buffer,
-                out length, tileSize, tms, forceRecreate, inputPathHash ?? string.Empty));
     }
 
     public byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,

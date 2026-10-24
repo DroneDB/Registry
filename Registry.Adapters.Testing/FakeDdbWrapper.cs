@@ -85,7 +85,6 @@ public class FakeDdbWrapper : IDdbWrapper
     private const string BuiltHash = "d0d2b869615dca09ef0055f2014401bab298503e3e1f10e339f14f5788ea702f";
     private const string BuiltFile = "cog/cog.tif";
 
-    public virtual string TileMimeType => "image/png";
     public virtual string ThumbnailMimeType => "image/webp";
 
     public virtual string GetVersion() => Version;
@@ -136,22 +135,6 @@ public class FakeDdbWrapper : IDdbWrapper
             return null;
 
         throw NoFixture($"GetEntry({ddbPath}, {path})");
-    }
-
-    public virtual List<Entry> List(string ddbPath, string path, bool recursive = false, int maxRecursionDepth = 0) =>
-        List(ddbPath, [path], recursive, maxRecursionDepth);
-
-    public virtual List<Entry> List(string ddbPath, string[] paths, bool recursive = false, int maxRecursionDepth = 0)
-    {
-        var relative = paths.Select(p => Relative(ddbPath, p)).ToArray();
-        var fixture = (relative, recursive, maxRecursionDepth) switch
-        {
-            ([""], true, 0) => "list",
-            (["sub"], false, 0) => "list-folder",
-            _ => null
-        };
-        return Serve<List<Entry>>(fixture,
-            $"List({ddbPath}, [{string.Join(", ", paths)}], recursive: {recursive}, maxRecursionDepth: {maxRecursionDepth})");
     }
 
     public virtual List<Entry> ListEntries(string ddbPath, EntryQuery query) =>
@@ -376,34 +359,13 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual void Remove(string ddbPath, string[] paths) => throw Unsupported();
     public virtual int ReleaseConnections(string path) => throw Unsupported();
     public virtual bool Checkpoint(string ddbPath) => throw Unsupported();
-    public virtual void AppendPassword(string ddbPath, string password) => throw Unsupported();
-    public virtual bool VerifyPassword(string ddbPath, string password) => throw Unsupported();
-    public virtual void ClearPasswords(string ddbPath) => throw Unsupported();
-
-    public virtual Dictionary<string, object> ChangeAttributes(string ddbPath, Dictionary<string, object> attributes) =>
-        throw Unsupported();
-
-    public virtual Dictionary<string, object> GetAttributes(string ddbPath) => throw Unsupported();
-    public virtual void GenerateThumbnail(string filePath, int size, string destPath) => throw Unsupported();
     public virtual byte[] GenerateThumbnail(string filePath, int size) => throw Unsupported();
-
-    public virtual string GenerateTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
-        bool forceRecreate = false) => throw Unsupported();
-
-    public virtual byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
-        bool forceRecreate = false, string inputPathHash = "") => throw Unsupported();
 
     public virtual byte[] GenerateMemoryTile(string inputPath, int tz, int tx, int ty, int tileSize, bool tms,
         bool forceRecreate, string inputPathHash, string outputFormat) => throw Unsupported();
 
-    public virtual void SetTag(string ddbPath, string newTag) => throw Unsupported();
-    public virtual string? GetTag(string ddbPath) => throw Unsupported();
     public virtual Stamp GetStamp(string ddbPath) => throw Unsupported();
     public virtual string GetStampChecksum(string ddbPath) => throw Unsupported();
-    public virtual Delta Delta(string ddbPath, string ddbTarget) => throw Unsupported();
-
-    public virtual List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,
-        string? sourceMetaDump = null) => throw Unsupported();
 
     public virtual List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,
         string? sourceMetaDump, IReadOnlyDictionary<string, string> verifiedHashes) => throw Unsupported();

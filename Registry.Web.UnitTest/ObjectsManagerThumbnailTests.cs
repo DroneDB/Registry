@@ -129,7 +129,6 @@ public class ObjectsManagerThumbnailTests : TestBase
     private void SetupEntry(string path, EntryType type, string hash)
     {
         var entry = new Entry { Path = path, Type = type, Hash = hash, Size = 100 };
-        _ddbMock.Setup(x => x.Search(path, It.IsAny<bool>())).Returns(new[] { entry });
         _ddbMock.Setup(x => x.GetEntry(path)).Returns(entry);
     }
 
@@ -198,14 +197,12 @@ public class ObjectsManagerThumbnailTests : TestBase
         // DDB-11 B5: the folder listing's first child used to be thumbnailed in its place
         var folder = new Entry { Path = "photos", Type = EntryType.Directory };
         var child = new Entry { Path = "photos/a.jpg", Type = EntryType.GeoImage, Hash = "img1", Size = 100 };
-        _ddbMock.Setup(x => x.Search("photos", It.IsAny<bool>())).Returns(new[] { child });
         _ddbMock.Setup(x => x.GetEntry("photos")).Returns(folder);
 
         var ex = await Should.ThrowAsync<BadRequestException>(
             () => CreateManager().Renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "photos", null));
 
         ex.Message.ShouldContain("folder");
-        _ddbMock.Verify(x => x.Search(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
         _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -218,7 +215,6 @@ public class ObjectsManagerThumbnailTests : TestBase
             () => CreateManager().Renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "missing.jpg", null));
 
         _ddbMock.Verify(x => x.GetEntry("missing.jpg"), Times.Once);
-        _ddbMock.Verify(x => x.Search(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
     }
 
     [Test]
@@ -255,7 +251,7 @@ public class ObjectsManagerThumbnailTests : TestBase
 
         _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<object[]>()), Times.Never);
         _ddbMock.Verify(x => x.GenerateTile(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(),
-            It.IsAny<bool>(), It.IsAny<string>()), Times.Never);
+            It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Test]
