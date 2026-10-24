@@ -63,22 +63,22 @@
         Pinned now (2026-10-24): DroneDB has ONE version, 2.0.0 (package.json); the libddb ABI follows
         it (ABI 2.0, semver: a removed export is a new major, an added one a new minor) and so does
         the handshake (libddb 2.x). It is not tagged until Registry is proven on it, so Registry pins
-        the CI build of DroneDB fixes-and-optimizations commit 58a55a5, run 40093320993 (a pull
+        the CI build of DroneDB fixes-and-optimizations commit 00b6768, run 40117330023 (a pull
         request run of DroneDB#472, built from the merge with master; the .deb is named after that
-        merge commit, 2.0.0~gitbaaa2967), every job green (Linux and Windows builds and tests,
+        merge commit, 2.0.0~gitad2e16f0), every job green (Linux and Windows builds and tests,
         ASan + UBSan, the Docker image). Next: the v2.0.0 release (DdbSource release) once it is
         tagged.
     -->
     <PropertyGroup>
         <DdbSource>ci</DdbSource>
         <DdbVersion>2.0.0</DdbVersion>
-        <DdbDebFileVersion>2.0.0~gitbaaa2967</DdbDebFileVersion>
-        <DdbCiCommit>58a55a560dabf7633fad904ddb11d8a00edb4e98</DdbCiCommit>
-        <DdbCiRunId>40093320993</DdbCiRunId>
-        <DdbDebArtifactId>12560368211</DdbDebArtifactId>
-        <DdbWindowsArtifactId>12560618677</DdbWindowsArtifactId>
-        <DdbDebSha256>2141499260258768381afccb4a750827dd3cd72f0782c3ed87f6c220a9c5719c</DdbDebSha256>
-        <DdbWindowsZipSha256>77037e7876fcc3e267a7079c71c07e27b9d04829212600d9b0d87929551dfe15</DdbWindowsZipSha256>
+        <DdbDebFileVersion>2.0.0~gitad2e16f0</DdbDebFileVersion>
+        <DdbCiCommit>00b6768fcfd4738ea8d4b308b59db959289af875</DdbCiCommit>
+        <DdbCiRunId>40117330023</DdbCiRunId>
+        <DdbDebArtifactId>12571675354</DdbDebArtifactId>
+        <DdbWindowsArtifactId>12570847625</DdbWindowsArtifactId>
+        <DdbDebSha256>fb3d606b2fb3e7019df21362872bc4425533d2a4695e6e00cfe7a32436a3516a</DdbDebSha256>
+        <DdbWindowsZipSha256>dd92f3e93e83ddde7aa6424c6d2a38ffce388843d19214823e76e49ed3b26dc2</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>

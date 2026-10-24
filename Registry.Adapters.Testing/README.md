@@ -110,3 +110,5 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   `DDBMaskBorders`, `DDBComputeDeltaLocals`, `DDBApplyDelta`, `DDBApplyDeltaEx`: XI-07 steps 3 and 4). The README changelog
   of `Contract/` also describes the entry-path rule (every export that takes an entry path refuses an absolute path, a `..`
   segment, `.ddb` and invalid UTF-8 with `DDBERR_INVALIDARGS`), which changes no fixture. No other file changed.
+* 2026-10-24: DroneDB `00b6768fcfd4738ea8d4b308b59db959289af875` (the pinned build): no file changes since `2c9508a`, SOURCE
+  names the pinned commit.
