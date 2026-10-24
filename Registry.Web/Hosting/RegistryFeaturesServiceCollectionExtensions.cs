@@ -19,6 +19,7 @@ using Registry.Web.Services.Maintenance;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Managers.Wcs;
 using Registry.Web.Services.Objects;
+using Registry.Web.Services.Organizations;
 using Registry.Web.Services.PlatformTasks;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Processing;
@@ -56,6 +57,10 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddScoped<IUserDeletion, UserDeletion>();
         services.AddScoped<IOrganizationsManager, OrganizationsManager>();
+        services.AddScoped<IOrganizationQueries, OrganizationQueries>();
+        services.AddScoped<IOrganizationCommands, OrganizationCommands>();
+        services.AddScoped<IOrganizationMerger, OrganizationMerger>();
+        services.AddScoped<IOrganizationMembers, OrganizationMembers>();
         services.AddScoped<IDatasetsManager, DatasetsManager>();
         services.AddScoped<IDatasetQueries, DatasetQueries>();
         services.AddScoped<IDatasetCommands, DatasetCommands>();
