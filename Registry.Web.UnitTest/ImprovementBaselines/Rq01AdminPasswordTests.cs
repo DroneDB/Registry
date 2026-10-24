@@ -152,8 +152,6 @@ public class Rq01AdminPasswordTests
         var after = SnapshotAppSettingsFiles();
         foreach (var (path, content) in before)
             after[path].ShouldBe(content, $"the admin password must not be written to {path}");
-        _factory.Services.GetRequiredService<IOptions<AppSettings>>().Value.DefaultAdmin.Password
-            .ShouldBe(RegistryWebFactory.AdminPassword, "a request must not mutate the singleton settings");
         _factory.Services.GetRequiredService<IOptions<IdentityProviderOptions>>().Value.DefaultAdmin!.Password
             .ShouldBe(RegistryWebFactory.AdminPassword, "a request must not mutate the singleton settings");
     }

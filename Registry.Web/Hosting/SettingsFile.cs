@@ -99,10 +99,10 @@ public static class SettingsFile
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (settings[AppSettings.SectionName] is not JsonObject section)
+        if (settings[RegistryOptions.SectionName] is not JsonObject section)
         {
             section = new JsonObject();
-            settings[AppSettings.SectionName] = section;
+            settings[RegistryOptions.SectionName] = section;
         }
 
         var generated = new List<string>();
