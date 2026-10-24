@@ -17,13 +17,6 @@ public readonly record struct DatasetKey(string OrgSlug, Guid InternalRef);
 /// </summary>
 public interface IDatasetIndexQueue
 {
-    /// <summary>
-    /// Enqueues a dataset-relative path and completes once it has been committed to the index
-    /// (or found unchanged, or failed). Multiple concurrent calls for the same dataset are
-    /// coalesced into a single native batch call.
-    /// </summary>
-    Task<Entry> EnqueueAsync(DatasetKey dataset, string path, CancellationToken ct = default);
-
     /// <summary>Enqueues several paths as one logical unit.</summary>
     Task<IReadOnlyList<Entry>> EnqueueAsync(DatasetKey dataset, IReadOnlyList<string> paths,
         CancellationToken ct = default);
@@ -64,9 +57,6 @@ public readonly record struct IndexOutcome(Entry? Entry, Exception? Error);
 public abstract class UploadTicket : IDisposable
 {
     private int _ended;
-
-    /// <summary>Whether the upload ended (its files were enqueued or it was disposed).</summary>
-    public bool Ended => Volatile.Read(ref _ended) != 0;
 
     /// <summary>Ends the upload; returns false when it had already ended.</summary>
     public bool End()

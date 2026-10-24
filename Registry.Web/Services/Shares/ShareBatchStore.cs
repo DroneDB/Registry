@@ -26,7 +26,6 @@ namespace Registry.Web.Services.Shares;
 public interface IShareBatchStore
 {
     Task<Batch> GetRunningAsync(string token, CancellationToken ct = default);
-    Task<IsBatchReadyResult> IsReadyAsync(string token, CancellationToken ct = default);
     Task<bool> IsPathAllowedAsync(string token, string path, CancellationToken ct = default);
     Task<BatchDto> GetBatchInfo(string token, CancellationToken ct = default);
     Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug, CancellationToken ct = default);
@@ -158,7 +157,6 @@ public sealed class ShareBatchStore : IShareBatchStore
 
     public async Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
-
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
         var ds = access.Dataset;
 

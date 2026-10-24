@@ -205,7 +205,7 @@ public class Rq07HostTests
         var wrapper = new Mock<FakeDdbWrapper> { CallBase = true };
         wrapper.Setup(d => d.GenerateThumbnail(It.IsAny<string>(), It.IsAny<int>())).Returns(() =>
         {
-            seen = (DdbOperation.Current, RequestOperations.Current);
+            seen = (DdbOperation.Current, RequestOperations.Find(DdbOperation.Current));
             return [1, 2, 3, 4];
         });
         using var host = ThumbnailHost(token: "rq07-thumbnail-token", wrapper: wrapper.Object);

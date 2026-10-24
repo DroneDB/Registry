@@ -31,8 +31,6 @@ public sealed class TransferSections : IConfigurationSectionBuilder
         var httpDefault = _view.Shipped<HttpHostOptions>();
         var share = _view.Configured<ShareOptions>();
         var shareDefault = _view.Shipped<ShareOptions>();
-        var storage = _view.Configured<StorageOptions>();
-        var thumbnails = _view.Configured<ThumbnailOptions>();
         var uploads = _view.Configured<UploadSettings>();
         var uploadsDefault = _view.Shipped<UploadSettings>();
         return Section("Upload", "Upload Settings",

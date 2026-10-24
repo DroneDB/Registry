@@ -68,10 +68,6 @@ public sealed class DatasetLookupCache : IDatasetLookupCache
         return dataset;
     }
 
-    // The whole organization: a lookup of this dataset that is loading right now holds the
-    // organization's token, so cancelling it is what keeps that load from caching a stale row
-    public void InvalidateDataset(string orgSlug, string dsSlug) => InvalidateOrganization(orgSlug);
-
     public void InvalidateOrganization(string orgSlug)
     {
         if (_organizations.TryRemove(orgSlug, out var organization))

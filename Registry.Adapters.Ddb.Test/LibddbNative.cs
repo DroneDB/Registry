@@ -37,8 +37,7 @@ internal static class LibddbNative
             return;
 
         Directory.SetCurrentDirectory(AppContext.BaseDirectory);
-        var ddbFolder = CommonUtils.FindDdbFolder() ?? throw new InvalidOperationException("DDB not found");
-        CommonUtils.SetDefaultDllPath(ddbFolder);
+        DdbLibrary.UseFromPath();
     }
 
     /// <summary>

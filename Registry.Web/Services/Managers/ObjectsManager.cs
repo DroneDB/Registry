@@ -38,12 +38,6 @@ public class ObjectsManager : IObjectsManager
         _logger = logger;
     }
 
-    public async Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data)
-    {
-        await using var stream = new MemoryStream(data);
-        return await AddNew(orgSlug, dsSlug, path, stream);
-    }
-
     public async Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, Stream? stream = null)
     {
         // A folder has no payload to stage: validated, created and indexed at once
@@ -92,8 +86,6 @@ public class ObjectsManager : IObjectsManager
         using (ctx)
             return await _uploads.CommitAsync(ctx, path, file);
     }
-
-    public Task Delete(string orgSlug, string dsSlug, string path) => _commands.DeleteAsync(orgSlug, dsSlug, [path]);
 
     private async Task DeleteStreamedTempAsync(string orgSlug, string dsSlug, string? tempFilePath)
     {

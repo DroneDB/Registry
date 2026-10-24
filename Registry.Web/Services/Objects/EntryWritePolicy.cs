@@ -30,6 +30,6 @@ public sealed class EntryWritePolicy
         await _quota.CheckCurrentUserStorage(bytes);
 
         if (!isFolder && !_import.IsExtensionAllowed(destinationPath))
-            throw new ExtensionBlockedException(destinationPath, _import, _import.AllowedFileExtensions.Length > 0);
+            throw new ExtensionBlockedException(destinationPath, _import.AllowedFileExtensions.Length > 0);
     }
 }

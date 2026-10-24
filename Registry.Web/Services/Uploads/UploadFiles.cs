@@ -85,7 +85,7 @@ public sealed class UploadFiles : IUploadFiles
         // before anything is written into the dataset
         var normalized = _paths.Normalize(path);
         if (!_import.IsExtensionAllowed(normalized))
-            throw new ExtensionBlockedException(normalized, _import, _import.AllowedFileExtensions.Length > 0);
+            throw new ExtensionBlockedException(normalized, _import.AllowedFileExtensions.Length > 0);
         return normalized;
     }
 

@@ -12,7 +12,4 @@ public interface IDatasetChangeCoalescer
 {
     /// <summary>Files were added to the dataset (they are already in its index).</summary>
     void FilesAdded(string orgSlug, string dsSlug, IEnumerable<string> paths);
-
-    /// <summary>Runs every pending invalidation now.</summary>
-    Task FlushAsync();
 }

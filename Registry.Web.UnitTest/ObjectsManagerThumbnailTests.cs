@@ -243,7 +243,7 @@ public class ObjectsManagerThumbnailTests : TestBase
     }
 
     [Test]
-    public async Task GenerateTileData_GeoRaster_MissingCogArtifact_ThrowsNotFound_BeforeCache()
+    public async Task ResolveReadableObject_GeoRaster_MissingCogArtifact_ThrowsNotFound_BeforeCache()
     {
         SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");
         SetupBuild("ortho.tif", EntryType.GeoRaster, "raster1", BuildState.Pending);
@@ -251,7 +251,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         var mgr = CreateManager();
 
         await Should.ThrowAsync<NotFoundException>(
-            () => mgr.Renders.GenerateTileDataAsync(OrgSlug, DsSlug, "ortho.tif", 1, 0, 0, false, TileFormat.Webp));
+            () => mgr.Renders.ResolveReadableObjectAsync(OrgSlug, DsSlug, "ortho.tif"));
 
         _cacheManagerMock.Verify(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<object[]>()), Times.Never);
         _ddbMock.Verify(x => x.GenerateTile(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(),
@@ -330,20 +330,6 @@ public class ObjectsManagerThumbnailTests : TestBase
         _ddbMock.Verify(x => x.ExportRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<string>()), Times.Never);
-    }
-
-    [Test]
-    public async Task EstimateExportSize_GeoRaster_MissingCogArtifact_ThrowsNotFound()
-    {
-        SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");
-        SetupBuild("ortho.tif", EntryType.GeoRaster, "raster1", BuildState.None);
-
-        var mgr = CreateManager();
-
-        await Should.ThrowAsync<NotFoundException>(
-            () => mgr.Raster.EstimateExportSizeAsync(OrgSlug, DsSlug, "ortho.tif"));
-
-        _ddbMock.Verify(x => x.GetRasterInfo(It.IsAny<string>()), Times.Never);
     }
 
     // ---- Raster analysis endpoint family: same pre-native 404 guard ----

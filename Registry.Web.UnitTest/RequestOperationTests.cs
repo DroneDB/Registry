@@ -44,10 +44,10 @@ public sealed class RequestOperationTests
         ulong id;
         using (var scope = RequestOperations.Begin("0HREQUEST:00000001"))
         {
-            id = scope.Id;
+            id = DdbOperation.Current;
             DdbOperation.Current.ShouldBe(id);
             id.ShouldNotBe(0UL);
-            RequestOperations.Current.ShouldBe("0HREQUEST:00000001");
+            RequestOperations.Find(DdbOperation.Current).ShouldBe("0HREQUEST:00000001");
             RequestOperations.Find(id).ShouldBe("0HREQUEST:00000001");
         }
 
@@ -60,12 +60,13 @@ public sealed class RequestOperationTests
     public async Task TheOperation_FollowsTheRequestAcrossAwaitsAndThreads()
     {
         using var scope = RequestOperations.Begin("0HREQUEST:00000002");
+        var id = DdbOperation.Current;
 
         await Task.Yield();
         var onThePool = await Task.Run(() => DdbOperation.Current);
 
-        DdbOperation.Current.ShouldBe(scope.Id);
-        onThePool.ShouldBe(scope.Id);
+        DdbOperation.Current.ShouldBe(id);
+        onThePool.ShouldBe(id);
     }
 
     [Test]
@@ -77,7 +78,7 @@ public sealed class RequestOperationTests
             if (i % 2 == 0)
             {
                 using var request = RequestOperations.Begin("r" + i);
-                ids.Add(request.Id);
+                ids.Add(DdbOperation.Current);
             }
             else
             {
@@ -96,8 +97,9 @@ public sealed class RequestOperationTests
         var sink = new DdbLogSink(new SingleLoggerFactory(logger));
 
         using var request = RequestOperations.Begin("0HREQUEST:00000003");
+        var requestOperation = DdbOperation.Current;
         // As libddb's callback calls it, from a native thread
-        var native = new Thread(() => sink.Write(DdbLogLevel.Warning, "GDAL: cannot open a.tif", "gdal", request.Id));
+        var native = new Thread(() => sink.Write(DdbLogLevel.Warning, "GDAL: cannot open a.tif", "gdal", requestOperation));
         native.Start();
         native.Join();
 
@@ -121,7 +123,7 @@ public sealed class RequestOperationTests
 
         // The request's own operation is back when the job's ends
         job.Dispose();
-        RequestOperations.Current.ShouldBe("0HREQUEST:00000004");
+        RequestOperations.Find(DdbOperation.Current).ShouldBe("0HREQUEST:00000004");
     }
 
     [Test]
@@ -152,7 +154,7 @@ public sealed class RequestOperationTests
         factory.DdbWrapper.Setup(d => d.GenerateThumbnail(It.IsAny<string>(), It.IsAny<int>()))
             .Returns(() =>
             {
-                seen.Enqueue((DdbOperation.Current, RequestOperations.Current));
+                seen.Enqueue((DdbOperation.Current, RequestOperations.Find(DdbOperation.Current)));
                 return [1, 2, 3, 4];
             });
 

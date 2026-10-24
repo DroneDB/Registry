@@ -60,20 +60,6 @@ public sealed class JobConsole
     public void Error(Exception? exception, string template, params object?[] args) =>
         Write(LogLevel.Error, exception, template, args);
 
-    /// <summary>
-    /// Writes the native warnings queued for this job to the console and the tail; the job's own
-    /// lines do it before each write, a filter does it when the job ends.
-    /// </summary>
-    public void DrainNativeLines()
-    {
-        if (_operation == null || _context == null)
-            return;
-
-        lock (_gate)
-            foreach (var line in _operation.TakeNativeLines())
-                Emit(line);
-    }
-
     private void Write(LogLevel level, Exception? exception, string template, object?[] args)
     {
         var values = new LogValues(template, args);

@@ -23,9 +23,6 @@ public interface IUploadQuotaGuard
 /// </summary>
 public interface IQuotaReservation : IDisposable
 {
-    /// <summary>Bytes reserved.</summary>
-    long Bytes { get; }
-
     /// <summary>Changes the reservation to the actual size (e.g. once the file is on disk).</summary>
     /// <exception cref="Registry.Web.Exceptions.QuotaExceededException">The new size does not fit.</exception>
     void Resize(long bytes);

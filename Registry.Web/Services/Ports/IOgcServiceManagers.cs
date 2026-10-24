@@ -50,9 +50,6 @@ public interface IWfsManager
 
 public interface IWcsManager
 {
-    /// <summary>List of WCS protocol versions handled by this manager (highest first).</summary>
-    IReadOnlyList<string> SupportedVersions { get; }
-
     Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string version, string? folderPath = null,
         CancellationToken ct = default);
     Task<string> DescribeCoverageAsync(string orgSlug, string dsSlug, string version, string coverageId,

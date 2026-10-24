@@ -429,7 +429,7 @@ public class WmsManager : OgcManagerBase, IWmsManager
     {
         if (i < 0 || i >= width || j < 0 || j >= height)
             throw new OgcException("InvalidPoint", "i/j out of bounds", 400);
-        var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
+        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
         var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, layerName, ct: ct)
                     ?? throw new OgcException("LayerNotDefined", $"Layer '{layerName}' not found", 404, "QUERY_LAYERS");
         if (layer.EntryType != EntryType.GeoRaster)

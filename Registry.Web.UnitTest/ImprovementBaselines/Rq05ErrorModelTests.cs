@@ -425,7 +425,6 @@ public sealed class Rq05ErrorModelTests : IDisposable
         public bool IsEnabled => true;
         public bool TryAcquireSlot(string key) => false;
         public void ReleaseSlot(string key) { }
-        public int GetActiveDownloads(string key) => 1;
         public bool CanAcquireSlot(string key) => false;
     }
 
@@ -451,7 +450,5 @@ public sealed class Rq05ErrorModelTests : IDisposable
                 Busy => throw new TransientException("middleware busy", BusyRetryAfter),
                 _ => true
             };
-
-        public bool IsActive(string token) => true;
     }
 }

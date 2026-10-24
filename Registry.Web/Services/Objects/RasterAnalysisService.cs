@@ -166,12 +166,6 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
         };
     }
 
-    public async Task<long> EstimateExportSizeAsync(string orgSlug, string dsSlug, string path,
-        CancellationToken ct = default)
-    {
-        return await EstimateExportBytesAsync(await _sources.ResolveAsync(orgSlug, dsSlug, path, ct), ct);
-    }
-
     // Native raster work runs on the heavy lane of the gate (XI-06), as thumbnails do
     private Task<T> RunAsync<T>(Func<T> work, CancellationToken ct) => _gate.RunAsync(NativeLane.Heavy, work, ct);
 

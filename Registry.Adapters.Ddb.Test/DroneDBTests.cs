@@ -48,11 +48,7 @@ public class NativeDdbWrapperTests : TestBase
         {
             Directory.SetCurrentDirectory(TestContext.CurrentContext.TestDirectory);
 
-            var ddbFolder = CommonUtils.FindDdbFolder();
-            if (ddbFolder == null)
-                throw new Exception("DDB not found");
-
-            CommonUtils.SetDefaultDllPath(ddbFolder);
+            DdbLibrary.UseFromPath();
         }
 
 

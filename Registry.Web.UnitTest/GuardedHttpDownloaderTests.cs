@@ -30,8 +30,7 @@ public class GuardedHttpDownloaderTests
     {
         var guard = new SsrfGuard(new ImportSettings { SsrfAllowPrivateNetworks = true });
         return new GuardedHttpDownloader(guard, new StubFactory(handler),
-            TestHeadroom.Default,
-            NullLogger<GuardedHttpDownloader>.Instance, time);
+            TestHeadroom.Default, time);
     }
 
     private static string TempFile() => Path.Combine(Path.GetTempPath(), "ddb-dltest-" + Guid.NewGuid().ToString("N"));

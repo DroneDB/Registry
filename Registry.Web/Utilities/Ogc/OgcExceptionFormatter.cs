@@ -109,17 +109,4 @@ public static class OgcExceptionFormatter
         w.Flush();
         return sw.ToString();
     }
-
-    /// <summary>
-    /// Pick the right envelope flavor given the OGC service version of the failing request.
-    /// </summary>
-    public static string Format(OgcException ex, string serviceVersion)
-    {
-        return serviceVersion switch
-        {
-            "1.1.1" => FormatWms111(ex.Code, ex.Message),
-            "1.3.0" => FormatWms130(ex.Code, ex.Message),
-            _ => FormatOws(ex.Code, ex.Message, serviceVersion, ex.Locator)
-        };
-    }
 }

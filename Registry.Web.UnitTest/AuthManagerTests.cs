@@ -791,11 +791,8 @@ public class AuthManagerTests : TestBase
     [Test]
     public async Task CanListOrganizations_AnonymousUser_Denied()
     {
-        // Arrange
-        SetupCurrentUser(null);
-
         // Act
-        var result = await _authManager.CanListOrganizations();
+        var result = await _authManager.CanListOrganizations(null);
 
         // Assert
         result.ShouldBeFalse();
@@ -804,11 +801,8 @@ public class AuthManagerTests : TestBase
     [Test]
     public async Task CanListOrganizations_DeactivatedUser_Denied()
     {
-        // Arrange
-        SetupCurrentUser(_deactivatedUser);
-
         // Act
-        var result = await _authManager.CanListOrganizations();
+        var result = await _authManager.CanListOrganizations(_deactivatedUser);
 
         // Assert
         result.ShouldBeFalse();
@@ -817,11 +811,8 @@ public class AuthManagerTests : TestBase
     [Test]
     public async Task CanListOrganizations_NormalUser_Allowed()
     {
-        // Arrange
-        SetupCurrentUser(_normalUser);
-
         // Act
-        var result = await _authManager.CanListOrganizations();
+        var result = await _authManager.CanListOrganizations(_normalUser);
 
         // Assert
         result.ShouldBeTrue();

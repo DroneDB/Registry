@@ -25,6 +25,12 @@ public static class TestDownloadCache
     /// <summary>Suffix of the temp files that downloads write to.</summary>
     public const string PartialSuffix = ".part";
 
+    /// <summary>The cache folder tests share when they have no fixture folder of their own.</summary>
+    public static string SharedFolder => Path.Combine(Path.GetTempPath(), "SharedTestDownloads");
+
+    /// <summary>The content of <paramref name="url"/>, from the cache of <see cref="SharedFolder"/>.</summary>
+    public static byte[] GetBytes(string url) => File.ReadAllBytes(GetOrDownload(url, SharedFolder));
+
     /// <summary>
     /// Returns the path of the cached copy of <paramref name="url"/> in <paramref name="cacheFolder"/>,
     /// downloading it over HTTP first when there is no valid cached copy.

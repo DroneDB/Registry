@@ -27,7 +27,6 @@ public sealed class AdminTasksManager : IAdminTasksManager
 {
     private readonly IJobIndexQuery _query;
     private readonly IJobIndexWriter _writer;
-    private readonly IAuthManager _authManager;
     private readonly UserManager<User> _userManager;
     private readonly int _artifactTtlHours;
     private readonly string _tempPath;
@@ -36,7 +35,6 @@ public sealed class AdminTasksManager : IAdminTasksManager
     public AdminTasksManager(
         IJobIndexQuery query,
         IJobIndexWriter writer,
-        IAuthManager authManager,
         UserManager<User> userManager,
         IOptions<ProcessingPlatformSettings> platformSettings,
         IScratchFileProvider scratch,
@@ -44,7 +42,6 @@ public sealed class AdminTasksManager : IAdminTasksManager
     {
         _query = query;
         _writer = writer;
-        _authManager = authManager;
         _userManager = userManager;
         _artifactTtlHours = platformSettings.Value.ArtifactTtlHours;
         _tempPath = scratch.Root;

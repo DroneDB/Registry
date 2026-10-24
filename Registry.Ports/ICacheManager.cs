@@ -24,8 +24,6 @@ public interface ICacheManager
     void Register(string seed, Func<object[], CancellationToken, Task<byte[]>> getData, TimeSpan? expiration = null,
         TimeSpan? localExpiration = null);
 
-    void Unregister(string seed);
-
     /// <summary>The entry of <paramref name="parameters"/>, generated on a miss; nobody can cancel the wait.</summary>
     Task<byte[]> GetAsync(string seed, string category, params object[] parameters);
 

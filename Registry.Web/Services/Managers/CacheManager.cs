@@ -83,13 +83,6 @@ public class CacheManager : ICacheManager
             seed, expiration ?? _defaultCacheExpiration);
     }
 
-    public void Unregister(string seed)
-    {
-        ArgumentNullException.ThrowIfNull(seed);
-        _providers.TryRemove(seed, out _);
-        _logger.LogDebug("Unregistered cache provider for seed: {Seed}", seed);
-    }
-
     private static string MakeKey(string seed, string category, object[]? parameters)
     {
         return parameters == null

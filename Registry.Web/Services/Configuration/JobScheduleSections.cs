@@ -27,7 +27,6 @@ public sealed class JobScheduleSections : IConfigurationSectionBuilder
     {
         var jobs = _view.Configured<JobScheduleOptions>();
         var jobsDefault = _view.Shipped<JobScheduleOptions>();
-        var storage = _view.Configured<StorageOptions>();
         return Section("CronJobs", "Cron Jobs",
             "Recurring background job schedules (cron expressions) and retention periods.",
             [

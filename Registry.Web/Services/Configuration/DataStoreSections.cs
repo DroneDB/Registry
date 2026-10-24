@@ -32,7 +32,6 @@ public sealed class DataStoreSections : IConfigurationSectionBuilder
         var cachingDefault = _view.Shipped<CachingOptions>();
         var store = _view.Configured<DataStoreOptions>();
         var storeDefault = _view.Shipped<DataStoreOptions>();
-        var thumbnails = _view.Configured<ThumbnailOptions>();
         var cacheType = caching.CacheProvider?.Type.ToString() ?? "InMemory";
         var defaultCacheType = cachingDefault.CacheProvider?.Type.ToString() ?? "InMemory";
 
@@ -64,7 +63,6 @@ public sealed class DataStoreSections : IConfigurationSectionBuilder
     {
         var storage = _view.Configured<StorageOptions>();
         var storageDefault = _view.Shipped<StorageOptions>();
-        var thumbnails = _view.Configured<ThumbnailOptions>();
         return Section("StoragePaths", "Storage Paths",
             "Filesystem paths for Registry data, datasets, cache, and temporary files.",
             [
@@ -90,7 +88,6 @@ public sealed class DataStoreSections : IConfigurationSectionBuilder
     {
         var caching = _view.Configured<CachingOptions>();
         var cachingDefault = _view.Shipped<CachingOptions>();
-        var thumbnails = _view.Configured<ThumbnailOptions>();
         return Section("Cache", "Cache Expiration",
             "TTL for cached thumbnails, tiles, dataset visibility, authorization facts, and cache cleanup interval.",
             [

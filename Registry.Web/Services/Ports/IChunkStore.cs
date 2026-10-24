@@ -64,7 +64,4 @@ public interface IChunkStore
     /// <returns>The file's hash hint (its SHA-256, size and write time).</returns>
     /// <exception cref="Registry.Web.Exceptions.ConflictException">Chunks are missing.</exception>
     Task<FileHashHint> TakeAsync(string root, string fileId, string destination);
-
-    /// <summary>Forgets an upload and deletes what it stored.</summary>
-    void Delete(string root, string fileId);
 }

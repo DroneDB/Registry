@@ -117,7 +117,6 @@ public sealed class SharpCompressArchiveExtractor : IArchiveExtractor
 
         private int? _fileEntryCount;
         private long? _total;
-        private bool _counted;
 
         public SharpCompressArchiveReadSession(IArchive? archive, string archivePath, bool isCompressedTar)
         {
@@ -139,18 +138,7 @@ public sealed class SharpCompressArchiveExtractor : IArchiveExtractor
                 }
 
                 _total = total > 0 ? total : null;
-                _counted = true;
             }
-        }
-
-        public int FileEntryCount
-        {
-            get { EnsureCounted(); return _fileEntryCount ?? 0; }
-        }
-
-        public long? TotalUncompressedBytes
-        {
-            get { EnsureCounted(); return _total; }
         }
 
         // Cheap variants that never trigger decompression. For compressed tarballs the
@@ -162,27 +150,6 @@ public sealed class SharpCompressArchiveExtractor : IArchiveExtractor
 
         public IEnumerable<ArchiveEntry> Entries()
             => _isCompressedTar ? CompressedTarEntries() : RandomAccessEntries();
-
-        // Forward-only count + size pass for compressed tarballs (the Reader API
-        // transparently decompresses the outer gz/bz2/xz layer).
-        private void EnsureCounted()
-        {
-            if (_counted) return;
-            _counted = true;
-
-            var count = 0;
-            long total = 0;
-            using var reader = ReaderFactory.OpenReader(_archivePath, ReaderOptions.ForFilePath);
-            while (reader.MoveToNextEntry())
-            {
-                if (reader.Entry.IsDirectory) continue;
-                count++;
-                if (reader.Entry.Size > 0) total += reader.Entry.Size;
-            }
-
-            _fileEntryCount = count;
-            _total = total > 0 ? total : null;
-        }
 
         private IEnumerable<ArchiveEntry> RandomAccessEntries()
         {

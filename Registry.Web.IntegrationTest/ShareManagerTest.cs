@@ -474,7 +474,7 @@ class ShareManagerTest : TestBase
 
         // Upload
         var uploadRes =
-            await shareManager.Upload(initRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
+            await shareManager.Upload(objectManager, initRes.Token, fileName, TestDownloadCache.GetBytes(newFileUrl));
 
         uploadRes.Path.ShouldBe(fileName);
         uploadRes.Size.ShouldBe(fileSize);
@@ -609,7 +609,7 @@ class ShareManagerTest : TestBase
 
         // Upload
         var uploadRes =
-            await shareManager.Upload(initRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
+            await shareManager.Upload(objectManager, initRes.Token, fileName, TestDownloadCache.GetBytes(newFileUrl));
 
         uploadRes.Path.ShouldBe(fileName);
         uploadRes.Size.ShouldBe(fileSize);
@@ -729,7 +729,7 @@ class ShareManagerTest : TestBase
         dsSlug.ShouldBe(datasetTestSlug);
 
         // Stream to a temp file on the dataset volume, then finalize via the streamed path
-        var data = CommonUtils.SmartDownloadData(newFileUrl);
+        var data = TestDownloadCache.GetBytes(newFileUrl);
         await using var ms = new MemoryStream(data);
         var streamed = await objectManager.StreamToTempAsync(orgSlug, dsSlug, ms);
 
@@ -865,7 +865,7 @@ class ShareManagerTest : TestBase
 
 
         // Upload
-        await shareManager.Upload(initRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
+        await shareManager.Upload(objectManager, initRes.Token, fileName, TestDownloadCache.GetBytes(newFileUrl));
 
         // Initialize
         var newInitRes = await shareManager.Initialize(new ShareInitDto
@@ -896,7 +896,7 @@ class ShareManagerTest : TestBase
         newBatch.Status.ShouldBe(BatchStatus.Running);
 
         // Upload to old batch -> Exception
-        var act1 = async () => await shareManager.Upload(initRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
+        var act1 = async () => await shareManager.Upload(objectManager, initRes.Token, fileName, TestDownloadCache.GetBytes(newFileUrl));
         await Should.ThrowAsync<BadRequestException>(act1);
 
         // Commit old batch -> Exception
@@ -908,7 +908,7 @@ class ShareManagerTest : TestBase
 
         // Upload to new batch
         var uploadRes =
-            await shareManager.Upload(newInitRes.Token, fileName, CommonUtils.SmartDownloadData(newFileUrl));
+            await shareManager.Upload(objectManager, newInitRes.Token, fileName, TestDownloadCache.GetBytes(newFileUrl));
         uploadRes.Path.ShouldBe(fileName);
         uploadRes.Size.ShouldBe(fileSize);
         uploadRes.Hash.ShouldBe(fileHash);

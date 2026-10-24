@@ -99,11 +99,6 @@ public sealed class ObjectRenderService : IObjectRenderService
         };
     }
 
-    public async Task<StorageDataDto> GenerateTileDataAsync(string orgSlug, string dsSlug, string? path, int tz,
-        int tx, int ty, bool retina, TileFormat format, CancellationToken ct = default) =>
-        await GenerateTileDataAsync(await _sources.ResolveReadableAsync(orgSlug, dsSlug, path, ct), tz, tx, ty,
-            retina, format, ct);
-
     public Task<StorageDataDto> GenerateTileDataAsync(ReadableObject obj, int tz, int tx, int ty, bool retina,
         TileFormat format, CancellationToken ct = default) =>
         CachedTileAsync(ty, format, () => _cache.GetAsync(MagicStrings.TileCacheSeed, ForDataset(obj.OrgSlug, obj.DsSlug),

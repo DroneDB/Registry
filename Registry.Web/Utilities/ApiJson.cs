@@ -33,12 +33,6 @@ public static class ApiJson
     /// <summary><typeparamref name="T"/> from JSON text.</summary>
     public static T? Deserialize<T>(string json) => JsonSerializer.Deserialize<T>(json, Options);
 
-    /// <summary><typeparamref name="T"/> from UTF-8 JSON.</summary>
-    public static T? Deserialize<T>(ReadOnlySpan<byte> utf8Json) => JsonSerializer.Deserialize<T>(utf8Json, Options);
-
     /// <summary><paramref name="value"/> as JSON text.</summary>
     public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Options);
-
-    /// <summary><paramref name="value"/> as UTF-8 JSON.</summary>
-    public static byte[] SerializeToUtf8Bytes<T>(T value) => JsonSerializer.SerializeToUtf8Bytes(value, Options);
 }

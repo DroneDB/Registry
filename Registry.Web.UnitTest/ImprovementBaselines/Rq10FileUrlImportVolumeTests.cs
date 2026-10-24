@@ -88,8 +88,7 @@ public sealed class Rq10FileUrlImportVolumeTests
         var settings = new ImportSettings { SsrfAllowPrivateNetworks = true };
         var guard = new SsrfGuard(settings);
         var downloader = new GuardedHttpDownloader(guard, new HandlerFactory(handler),
-            TestHeadroom.Default,
-            NullLogger<GuardedHttpDownloader>.Instance);
+            TestHeadroom.Default);
         var options = Microsoft.Extensions.Options.Options.Create(new AppSettings
         {
             Import = settings,
@@ -113,7 +112,6 @@ public sealed class Rq10FileUrlImportVolumeTests
         var ctx = new Mock<IHeavyToolExecutionContext>();
         ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
         ctx.SetupGet(c => c.TaskId).Returns("task-1");
-        ctx.SetupGet(c => c.Logger).Returns(NullLogger.Instance);
         ctx.SetupGet(c => c.BuildQueue).Returns(Support.TestJobs.Scheduler());
         return ctx.Object;
     }

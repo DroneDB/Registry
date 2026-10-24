@@ -54,11 +54,6 @@ public interface IRasterAnalysisService
     /// <summary>The raster as a GeoTIFF with the visualization applied, within the export size limit.</summary>
     Task<StorageDataDto> ExportRasterAsync(string orgSlug, string dsSlug, string path,
         RasterVisualization visualization, CancellationToken ct = default);
-
-    /// <summary>
-    /// An upper bound of the size of the GeoTIFF export: width × height × bytes per pixel × bands of the source.
-    /// </summary>
-    Task<long> EstimateExportSizeAsync(string orgSlug, string dsSlug, string path, CancellationToken ct = default);
 }
 
 /// <summary>

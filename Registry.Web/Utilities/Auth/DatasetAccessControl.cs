@@ -51,9 +51,6 @@ public class DatasetAccessControl : AccessControlBase
         return visibility.Value;
     }
 
-    public Task<bool> CanAccessDataset(Dataset dataset, AccessType access, User user)
-        => CanAccessDataset(dataset, access, user?.Id);
-
     /// <param name="userId">Id of an existing user, or null for anonymous access</param>
     public async Task<bool> CanAccessDataset(Dataset dataset, AccessType access, string userId)
     {

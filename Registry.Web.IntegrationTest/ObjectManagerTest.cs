@@ -377,7 +377,7 @@ public class ObjectManagerTest : TestBase
 
         await using var memoryStream = new MemoryStream();
         await res.CopyToAsync(memoryStream);
-        memoryStream.Reset();
+        memoryStream.SafeReset();
 
         var md5 = MD5.Create();
 
@@ -432,7 +432,7 @@ public class ObjectManagerTest : TestBase
 
         await using var memoryStream = new MemoryStream();
         await res.CopyToAsync(memoryStream);
-        memoryStream.Reset();
+        memoryStream.SafeReset();
 
         // Let's check if the archive is not corrupted and all the files have the right checksums
         using var archive = new ZipArchive(memoryStream, ZipArchiveMode.Read);
@@ -581,7 +581,7 @@ public class ObjectManagerTest : TestBase
 
         res.Count().ShouldBe(1);
 
-        await objectManager.Manager.Delete(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName);
+        await objectManager.Commands.DeleteAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, [fileName]);
 
         res = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             fileName);
@@ -591,7 +591,7 @@ public class ObjectManagerTest : TestBase
         var newFileUrl = TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName);
 
         var ret = await objectManager.Manager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
-            fileName, CommonUtils.SmartDownloadData(newFileUrl));
+            fileName, TestDownloadCache.GetBytes(newFileUrl));
 
         res = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             fileName);
@@ -610,7 +610,7 @@ public class ObjectManagerTest : TestBase
             var local = Environment.GetEnvironmentVariable("DDB_CAD_TEST_ASSETS");
             if (!string.IsNullOrEmpty(local))
                 return new MemoryStream(File.ReadAllBytes(Path.Combine(local, name)));
-            return new MemoryStream(CommonUtils.SmartDownloadData(
+            return new MemoryStream(TestDownloadCache.GetBytes(
                 TestData.Url("vector/autocad/" + name)));
         }
 
@@ -631,7 +631,7 @@ public class ObjectManagerTest : TestBase
         if (!File.Exists(Path.Combine(build, "mvt", "metadata.json")))
             Assert.Ignore("The loaded native libddb predates CAD coordinate systems (DDB-12)");
 
-        await objectManager.Manager.Delete(org, ds, "site.prj");
+        await objectManager.Commands.DeleteAsync(org, ds, ["site.prj"]);
 
         File.Exists(Path.Combine(build, "vec", "local.json")).ShouldBeTrue();
         Directory.Exists(Path.Combine(build, "mvt")).ShouldBeFalse();
@@ -699,7 +699,7 @@ public class ObjectManagerTest : TestBase
         var objectManager = BuildStreamedUploadObjectsManager(test.TestFolder, context);
 
         var newFileUrl = TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName);
-        var data = CommonUtils.SmartDownloadData(newFileUrl);
+        var data = TestDownloadCache.GetBytes(newFileUrl);
 
         await using var ms = new MemoryStream(data);
         var (tempPath, bytes, _) = await objectManager.Manager.StreamToTempAsync(
@@ -800,7 +800,7 @@ public class ObjectManagerTest : TestBase
             .Build();
 
         var newFileUrl = TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName);
-        var data = CommonUtils.SmartDownloadData(newFileUrl);
+        var data = TestDownloadCache.GetBytes(newFileUrl);
 
         await using var ms = new MemoryStream(data);
         var (tempPath, bytes, _) = await objectManager.Manager.StreamToTempAsync(
@@ -995,7 +995,7 @@ public class ObjectManagerTest : TestBase
         var newFileUrl = TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName);
 
         await objectManager.Manager.AddNew(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
-            "Test/" + fileName, CommonUtils.SmartDownloadData(newFileUrl));
+            "Test/" + fileName, TestDownloadCache.GetBytes(newFileUrl));
 
         (await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 "Test/" + fileName))

@@ -13,9 +13,6 @@ namespace Registry.Web.Services.Ports;
 /// </summary>
 public interface IClientIpResolver
 {
-    /// <summary>The client address, or null when the server does not know it (e.g. in-process tests).</summary>
-    IPAddress? Resolve(HttpContext context);
-
     /// <summary>
     /// The per-client partition key of anonymous requests: <c>ip:</c> followed by the client address
     /// (<c>ip:unknown</c> when the address is not known).

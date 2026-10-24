@@ -29,7 +29,6 @@ public sealed class HubSections : IConfigurationSectionBuilder
     {
         var hub = _view.ConfiguredOrNull<HubOptions>();
         var hubDefault = _view.ShippedOrNull<HubOptions>();
-        var storage = _view.Configured<StorageOptions>();
         var ho = hub;
         var do_ = hubDefault;
         return Section("HubOptions", "Hub Options",

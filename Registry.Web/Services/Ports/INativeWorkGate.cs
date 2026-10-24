@@ -32,9 +32,6 @@ public interface INativeWorkGate
 
     /// <summary>Runs asynchronous work once the lane has a free slot, canceled like the synchronous form.</summary>
     Task<T> RunAsync<T>(NativeLane lane, Func<Task<T>> work, CancellationToken ct = default);
-
-    /// <summary>Calls running on <paramref name="lane"/> right now.</summary>
-    int InFlight(NativeLane lane);
 }
 
 /// <summary>Native work without a result through <see cref="INativeWorkGate"/>.</summary>

@@ -29,8 +29,6 @@ public interface IJobIndexQuery
     /// </summary>
     Task<Dictionary<string, string>> GetLatestStatesByPathAsync(string orgSlug, string dsSlug, string toolId,
         IReadOnlyCollection<string> paths, CancellationToken ct = default);
-
-    Task<JobIndex[]> GetByOrgDsHashAsync(string orgSlug, string dsSlug, string hash, int skip = 0, int take = 200, CancellationToken ct = default);
     Task<JobIndex[]> GetByStateAsync(string state, int skip = 0, int take = 1000, CancellationToken ct = default);
 
     /// <summary>Flexible TaskHistory query filtered by tool/state/path/user/workflow.</summary>

@@ -32,10 +32,8 @@ public sealed class Rq12SafeMetaManagerTests
     private static readonly Dictionary<string, Func<SafeMetaManager, object?>> Getters = new()
     {
         ["Name"] = m => m.Name,
-        ["Entries"] = m => m.Entries,
         ["Visibility"] = m => m.Visibility,
         ["IsPublic"] = m => m.IsPublic,
-        ["LastUpdate"] = m => m.LastUpdate,
         ["Tagline"] = m => m.Tagline
     };
 

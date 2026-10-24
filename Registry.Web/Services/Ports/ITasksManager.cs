@@ -28,17 +28,8 @@ public interface ITasksManager
         CancellationToken ct = default);
 
     /// <summary>
-    /// Returns the dataset's task history, newest first.
-    /// </summary>
-    /// <param name="toolId">Optional tool filter.</param>
-    /// <param name="state">Optional state filter.</param>
-    /// <returns>The requested page of task summaries.</returns>
-    Task<TaskSummaryDto[]> ListAsync(string orgSlug, string dsSlug, string? toolId, string? state,
-        int skip, int take, CancellationToken ct = default);
-
-    /// <summary>
-    /// <see cref="ListAsync"/> with an entity tag of the page (HUB-05): equal tags mean equal
-    /// pages, so a client that already has the page gets a 304 instead of the list again.
+    /// A page of the dataset's tasks with an entity tag: equal tags mean equal pages, so a client
+    /// that already has the page gets a 304 instead of the list again.
     /// </summary>
     Task<TaskListPage> ListPageAsync(string orgSlug, string dsSlug, string? toolId, string? state,
         int skip, int take, CancellationToken ct = default);

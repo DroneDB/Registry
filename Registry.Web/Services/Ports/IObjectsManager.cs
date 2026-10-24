@@ -13,9 +13,6 @@ namespace Registry.Web.Services.Ports;
 /// </summary>
 public interface IObjectsManager
 {
-    /// <summary>Adds the file <paramref name="data"/> at <paramref name="path"/> through the upload pipeline.</summary>
-    Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data);
-
     /// <summary>
     /// Adds the file <paramref name="stream"/> at <paramref name="path"/> through the upload pipeline (validation,
     /// atomic move, index, quarantine on index failure, quota), or creates the folder <paramref name="path"/>
@@ -36,7 +33,4 @@ public interface IObjectsManager
     /// </summary>
     /// <returns>The created entry.</returns>
     Task<EntryDto> CommitStreamedAsync(string orgSlug, string dsSlug, string path, StreamedFile file);
-
-    /// <summary>Deletes the entry at <paramref name="path"/> (a folder with everything in it).</summary>
-    Task Delete(string orgSlug, string dsSlug, string path);
 }

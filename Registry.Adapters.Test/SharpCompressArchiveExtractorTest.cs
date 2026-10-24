@@ -94,7 +94,7 @@ public class SharpCompressArchiveExtractorTest
     }
 
     [Test]
-    public void Open_Zip_CountsEntriesAndReadsContent()
+    public void Open_Zip_ReadsEntriesAndContent()
     {
         var zipPath = Path.Combine(_dir, "test.zip");
         CreateZip(zipPath, new Dictionary<string, string>
@@ -105,9 +105,6 @@ public class SharpCompressArchiveExtractorTest
 
         var ex = new SharpCompressArchiveExtractor();
         using var session = ex.Open(zipPath);
-
-        session.FileEntryCount.ShouldBe(2);
-        session.TotalUncompressedBytes.ShouldBe(12); // "hello" (5) + "world!!" (7)
 
         var entries = session.Entries().Where(e => !e.IsDirectory).ToList();
         entries.Select(e => e.Key).ShouldContain("a.txt");
@@ -127,8 +124,6 @@ public class SharpCompressArchiveExtractorTest
 
         var ex = new SharpCompressArchiveExtractor();
         using var session = ex.Open(gzPath);
-
-        session.FileEntryCount.ShouldBe(1);
 
         var entry = session.Entries().Single(e => !e.IsDirectory);
         entry.Key.ShouldNotBeNullOrEmpty();
@@ -152,8 +147,6 @@ public class SharpCompressArchiveExtractorTest
 
         var ex = new SharpCompressArchiveExtractor();
         using var session = ex.Open(tgzPath);
-
-        session.FileEntryCount.ShouldBe(2);
 
         var keys = session.Entries().Where(e => !e.IsDirectory).Select(e => e.Key).ToList();
         keys.ShouldContain("one.txt");

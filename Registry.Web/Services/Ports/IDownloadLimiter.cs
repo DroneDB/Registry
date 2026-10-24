@@ -23,11 +23,6 @@ public interface IDownloadLimiter
     void ReleaseSlot(string key);
 
     /// <summary>
-    /// Gets the number of active downloads for the given key.
-    /// </summary>
-    int GetActiveDownloads(string key);
-
-    /// <summary>
     /// Checks whether a slot could be acquired for the given key, without actually acquiring it.
     /// Used for preflight checks.
     /// </summary>

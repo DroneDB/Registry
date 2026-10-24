@@ -347,8 +347,6 @@ public class IndexedJobPublicationTests
         result.Outcome.ShouldBe(IndexedJobPublicationOutcome.AlreadyLeftIndexing);
         result.ActualState.ShouldBe("Enqueued");
         env.StateHistoryCount(id, "Enqueued").ShouldBe(1);
-        writer.Verify(x => x.UpsertOnEnqueueAsync(It.IsAny<string>(), It.IsAny<IndexPayload>(), It.IsAny<DateTime>(),
-            It.IsAny<string>(), default), Times.Never);
     }
 
     [Test]

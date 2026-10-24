@@ -24,18 +24,16 @@ public sealed class EntryCommandService : IEntryCommandService
     private readonly IFileSystem _fs;
     private readonly EntryChangeNotifier _changes;
     private readonly EntryJobs _jobs;
-    private readonly IDdbManager _ddbManager;
     private readonly ILogger<EntryCommandService> _logger;
 
     public EntryCommandService(IDatasetAccessResolver access, DatasetPathPolicy paths, IFileSystem fs,
-        EntryChangeNotifier changes, EntryJobs jobs, IDdbManager ddbManager, ILogger<EntryCommandService> logger)
+        EntryChangeNotifier changes, EntryJobs jobs, ILogger<EntryCommandService> logger)
     {
         _access = access;
         _paths = paths;
         _fs = fs;
         _changes = changes;
         _jobs = jobs;
-        _ddbManager = ddbManager;
         _logger = logger;
     }
 
@@ -169,17 +167,6 @@ public sealed class EntryCommandService : IEntryCommandService
             deleted.Count, failed.Count);
 
         return new DeleteBatchResponse { Deleted = [.. deleted], Failed = failed };
-    }
-
-    public async Task DeleteAllAsync(string orgSlug, string dsSlug, CancellationToken ct = default)
-    {
-        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
-
-        _logger.LogInformation("Deleting everything in '{OrgSlug}/{DsSlug}'", orgSlug, dsSlug);
-
-        await _changes.AllEntriesChangedAsync(orgSlug, dsSlug);
-
-        _ddbManager.Delete(orgSlug, access.Dataset.InternalRef);
     }
 
     /// <summary>

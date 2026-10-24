@@ -60,7 +60,6 @@ public interface IHeavyToolValidationContext
 {
     IDDB Ddb { get; }
     ClaimsPrincipal? Caller { get; }
-    ILogger Logger { get; }
 }
 
 /// <summary>

@@ -166,8 +166,8 @@ public class PendingBuildCoordinationTests
         _statuses["live"] = JobStatus.Scheduled;
         await _service.SetDatasetHasPendingBuilds(Org, Ds, true);
         State().GetProperty("StampChecksum").ValueKind.ShouldBe(JsonValueKind.Null);
-        await _service.RefreshPendingStatus(Org, Ds);
-        await _service.ScheduleRetryIfPending(Org, Ds);
+        await _service.RefreshPendingStatus(Org, Ds, null);
+        await _service.ScheduleRetryIfPending(Org, Ds, null, null, null);
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(8);
         State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe("live");
         State().GetProperty("RetryEpoch").GetString().ShouldBe("old-epoch");
@@ -229,7 +229,7 @@ public class PendingBuildCoordinationTests
         Seed(4);
         _jobs.Setup(x => x.ScheduleIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()))
             .Throws(new InvalidOperationException("queue unavailable"));
-        await _service.ScheduleRetryIfPending(Org, Ds);
+        await _service.ScheduleRetryIfPending(Org, Ds, null, null, null);
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(4);
     }
 
@@ -239,7 +239,7 @@ public class PendingBuildCoordinationTests
         Seed();
         for (var i = 0; i < 13; i++)
         {
-            await _service.ScheduleRetryIfPending(Org, Ds);
+            await _service.ScheduleRetryIfPending(Org, Ds, null, null, null);
             if (i < 12) _statuses["retry-" + (i + 1)] = JobStatus.Succeeded;
         }
         _delays.Select(d => d.TotalMinutes).ShouldBe(new double[] { 1, 2, 5, 10, 20, 40, 60, 60, 60, 60, 60, 60 });
@@ -476,16 +476,16 @@ public class PendingBuildCoordinationTests
         using var secondScope = secondHost.CreateScope();
         var first = firstScope.ServiceProvider.GetRequiredService<BuildPendingService>();
         var second = secondScope.ServiceProvider.GetRequiredService<BuildPendingService>();
-        await first.ScheduleRetryIfPending(Org, Ds);
-        await second.ScheduleRetryIfPending(Org, Ds);
+        await first.ScheduleRetryIfPending(Org, Ds, null, null, null);
+        await second.ScheduleRetryIfPending(Org, Ds, null, null, null);
         _delays.ShouldBe([TimeSpan.FromMinutes(10)]);
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(4);
         JsonDocument.Parse(secondData[CacheCategories.ForDataset(Org, Ds)]).RootElement
             .GetProperty("RetryAttempt").GetInt32().ShouldBe(4);
 
         _statuses["retry-1"] = JobStatus.Succeeded;
-        await second.ScheduleRetryIfPending(Org, Ds);
-        await first.ScheduleRetryIfPending(Org, Ds);
+        await second.ScheduleRetryIfPending(Org, Ds, null, null, null);
+        await first.ScheduleRetryIfPending(Org, Ds, null, null, null);
         _delays.ShouldBe([TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(20)]);
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(5);
         State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe("retry-2");
@@ -508,7 +508,7 @@ public class PendingBuildCoordinationTests
         await new DatasetCacheInvalidator(Mock.Of<ILogger<DatasetCacheInvalidator>>(), _cache.Object,
             Mock.Of<IOgcCacheKeys>(), _storage).InvalidateAllDatasetCachesAsync(Org, Ds);
         _cacheData.ShouldBeEmpty();
-        await _service.ScheduleRetryIfPending(Org, Ds);
+        await _service.ScheduleRetryIfPending(Org, Ds, null, null, null);
         _delays.ShouldBeEmpty();
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(attempt);
         State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe(jobId);
@@ -521,7 +521,7 @@ public class PendingBuildCoordinationTests
         _statuses["live"] = JobStatus.Scheduled;
         await _service.SetDatasetHasPendingBuilds(Org, Ds, true);
         Seed(0);
-        await _service.ScheduleRetryIfPending(Org, Ds);
+        await _service.ScheduleRetryIfPending(Org, Ds, null, null, null);
         _delays.ShouldBeEmpty();
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(8);
         State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe("live");
@@ -567,7 +567,7 @@ public class PendingBuildCoordinationTests
         await _service.SetDatasetHasPendingBuilds(Org, Ds, true);
         _cache.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ThrowsAsync(new InvalidOperationException("observation cache unavailable"));
-        await _service.ScheduleRetryIfPending(Org, Ds);
+        await _service.ScheduleRetryIfPending(Org, Ds, null, null, null);
         await _service.ProcessPendingBuilds(null, CancellationToken.None);
         _delays.ShouldBe([TimeSpan.FromMinutes(10)]);
         _enqueued.ShouldBe(0);
@@ -585,7 +585,7 @@ public class PendingBuildCoordinationTests
         await _service.SetDatasetHasPendingBuilds(Org, Ds, true);
         _cache.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ThrowsAsync(new InvalidOperationException("observation cache unavailable"));
-        await _service.ScheduleRetryIfPending(Org, Ds);
+        await _service.ScheduleRetryIfPending(Org, Ds, null, null, null);
         _delays.ShouldBeEmpty();
         await _service.ProcessPendingBuilds(null, CancellationToken.None);
         await _service.ProcessPendingBuilds(null, CancellationToken.None);
@@ -607,8 +607,8 @@ public class PendingBuildCoordinationTests
             .ThrowsAsync(new InvalidOperationException("second host observation cache write unavailable"));
         var second = new BuildPendingService(new DatasetSweep(_context), _manager.Object, _jobs.Object, secondCache.Object, _storage, Mock.Of<ILogger<BuildPendingService>>());
 
-        await _service.ScheduleRetryIfPending(Org, Ds);
-        await second.ScheduleRetryIfPending(Org, Ds);
+        await _service.ScheduleRetryIfPending(Org, Ds, null, null, null);
+        await second.ScheduleRetryIfPending(Org, Ds, null, null, null);
         await _service.ProcessPendingBuilds(null, CancellationToken.None);
         _delays.ShouldBe([TimeSpan.FromMinutes(10)]);
         _enqueued.ShouldBe(0);
@@ -625,7 +625,7 @@ public class PendingBuildCoordinationTests
         }
 
         _statuses["retry-1"] = JobStatus.Succeeded;
-        await second.ScheduleRetryIfPending(Org, Ds);
+        await second.ScheduleRetryIfPending(Org, Ds, null, null, null);
         _delays.ShouldBe([TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(20)]);
         using var advanced = JsonDocument.Parse(connection.GetAllEntriesFromHash(
             DatasetBuildCoordinator.RetryStateKey(Org, Ds))["Controls"]);
@@ -640,7 +640,7 @@ public class PendingBuildCoordinationTests
         State().GetProperty("RetryControlsVersion").GetInt32().ShouldBe(1);
         Seed(8, "legacy-live");
         _statuses["legacy-live"] = JobStatus.Scheduled;
-        await _service.ScheduleRetryIfPending(Org, Ds);
+        await _service.ScheduleRetryIfPending(Org, Ds, null, null, null);
         _delays.ShouldBeEmpty();
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(8);
         State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe("legacy-live");
@@ -658,14 +658,14 @@ public class PendingBuildCoordinationTests
                 _statuses[id] = JobStatus.Scheduled;
                 return id;
             });
-        await _service.ScheduleRetryIfPending(Org, Ds);
+        await _service.ScheduleRetryIfPending(Org, Ds, null, null, null);
         var sharedLive = State().GetProperty("ScheduledRetryJobId").GetString();
         State().GetProperty("RetryControlsVersion").GetInt32().ShouldBe(1);
         var legacyLive = client.Create(Job.FromExpression<HealthCheckJob>(j => j.Ping(null)),
             new ScheduledState(TimeSpan.FromHours(1)));
         _statuses[legacyLive] = JobStatus.Scheduled;
         Seed(8, legacyLive);
-        await _service.ScheduleRetryIfPending(Org, Ds);
+        await _service.ScheduleRetryIfPending(Org, Ds, null, null, null);
         _delays.ShouldBe([TimeSpan.FromMinutes(1)]);
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(8);
         State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe(sharedLive);
@@ -686,7 +686,7 @@ public class PendingBuildCoordinationTests
         await new DatasetCacheInvalidator(Mock.Of<ILogger<DatasetCacheInvalidator>>(), _cache.Object,
             Mock.Of<IOgcCacheKeys>(), _storage).InvalidateAllDatasetCachesAsync(Org, Ds);
         _cacheData.ShouldBeEmpty();
-        await _service.ScheduleRetryIfPending(Org, Ds);
+        await _service.ScheduleRetryIfPending(Org, Ds, null, null, null);
         _delays.ShouldBeEmpty();
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(8);
         State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe("legacy-live");
@@ -723,7 +723,7 @@ public class PendingBuildCoordinationTests
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(8);
         // When storage returns, importing the preserved tracker must retain the
         // existing retry chain rather than schedule an immediate fresh budget.
-        await _service.ScheduleRetryIfPending(Org, Ds);
+        await _service.ScheduleRetryIfPending(Org, Ds, null, null, null);
         _delays.ShouldBeEmpty();
         State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe("legacy-live");
     }
@@ -736,7 +736,7 @@ public class PendingBuildCoordinationTests
         Seed(8, "legacy-live");
         _statuses["legacy-live"] = JobStatus.Scheduled;
         _ddb.Setup(x => x.IsBuildPending()).Returns(true);
-        await _service.ScheduleRetryIfPending(Org, Ds);
+        await _service.ScheduleRetryIfPending(Org, Ds, null, null, null);
         _delays.ShouldBe([TimeSpan.FromMinutes(1)]);
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(1);
         State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe("retry-1");

@@ -19,7 +19,7 @@ public class ExtensionBlockedException : RegistryException
     /// <summary><c>true</c> when the rejection was due to allow-list mode (not block-list).</summary>
     public bool AllowListMode { get; }
 
-    public ExtensionBlockedException(string fileName, ImportSettings settings, bool allowListMode)
+    public ExtensionBlockedException(string fileName, bool allowListMode)
         : base(StatusCodes.Status400BadRequest, BuildSingleMessage(fileName, allowListMode), noRetry: true)
     {
         FileNames = [fileName];

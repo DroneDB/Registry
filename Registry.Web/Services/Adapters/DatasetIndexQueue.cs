@@ -20,7 +20,7 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Default <see cref="IDatasetIndexQueue"/>: a per-dataset FIFO lane that coalesces concurrent
-/// <see cref="EnqueueAsync(DatasetKey,string,CancellationToken)"/> calls into a single native
+/// <see cref="EnqueueAsync(DatasetKey,IReadOnlyList{string},CancellationToken)"/> calls into a single native
 /// <see cref="IDdbIndex.AddRawBatchWithOptions(System.Collections.Generic.IReadOnlyList{string},bool)"/> call. Registered as a singleton (one set of lanes
 /// for the whole process); resolves the scoped <see cref="IDdbManager"/> via
 /// <see cref="IServiceScopeFactory"/> once per batch, not once per file.
@@ -123,12 +123,6 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             throw new ArgumentException(
                 $"{nameof(IndexQueueSettings)}.{nameof(IndexQueueSettings.IdleLaneTrimSeconds)} must be in (0, {MaxIdleLaneTrimSeconds}], got {o.IdleLaneTrimSeconds}.",
                 nameof(o));
-    }
-
-    public async Task<Entry> EnqueueAsync(DatasetKey dataset, string path, CancellationToken ct = default)
-    {
-        var results = await EnqueueAsync(dataset, [path], ct);
-        return results[0];
     }
 
     public async Task<IReadOnlyList<Entry>> EnqueueAsync(DatasetKey dataset, IReadOnlyList<string> paths,

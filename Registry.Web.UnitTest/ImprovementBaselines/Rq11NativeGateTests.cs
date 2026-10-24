@@ -126,8 +126,6 @@ public sealed class Rq11NativeGateTests : IDisposable
             (r, ct) => r.DetectAllStockpilesAsync(OrgSlug, DsSlug, "ortho.tif", 0.5f, 5, 50, ct: ct));
         yield return Case("GenerateContours", d => d.GenerateContours(It.IsAny<string>(), 1.0, null, 0, null, null, 0, 1),
             (r, ct) => r.GenerateContoursAsync(OrgSlug, DsSlug, "ortho.tif", new ContourOptions(1.0, null, 0, null, null, 0, 1), ct: ct));
-        yield return Case("EstimateExportSize", d => d.GetRasterInfo(It.IsAny<string>()),
-            (r, ct) => r.EstimateExportSizeAsync(OrgSlug, DsSlug, "ortho.tif", ct: ct));
     }
 
     [TestCaseSource(nameof(AnalysisCalls))]

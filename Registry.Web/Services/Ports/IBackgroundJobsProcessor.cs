@@ -13,41 +13,16 @@ namespace Registry.Web.Services.Ports;
 /// </summary>
 public interface IBackgroundJobsProcessor
 {
-    public string Enqueue(Expression<Action> methodCall);
-    public string Enqueue(Expression<Func<Task>> methodCall);
-    public string Enqueue<T>(Expression<Action<T>> methodCall);
     public string Enqueue<T>(Expression<Func<T, Task>> methodCall);
-
-    public string Schedule(Expression<Action> methodCall, TimeSpan delay);
-    public string Schedule(Expression<Func<Task>> methodCall, TimeSpan delay);
     public string Schedule<T>(Expression<Action<T>> methodCall, TimeSpan delay);
-    public string Schedule<T>(Expression<Func<T, Task>> methodCall, TimeSpan delay);
 
     public bool Delete(string jobId);
     public bool Requeue(string jobId);
 
     public JobStatus GetJobStatus(string jobId);
-
-    public string ContinueJobWith(string parentId, Expression<Action> methodCall, BackgroundJobContinuationOptions options = BackgroundJobContinuationOptions.OnlyOnSucceededState);
-    public string ContinueJobWith<T>(string parentId, Expression<Action<T>> methodCall, BackgroundJobContinuationOptions options = BackgroundJobContinuationOptions.OnlyOnSucceededState);
-
-    // New indexed job methods
-    public string EnqueueIndexed(Expression<Action> methodCall, IndexPayload meta);
-    public string EnqueueIndexed(Expression<Func<Task>> methodCall, IndexPayload meta);
     public string EnqueueIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta);
     public string EnqueueIndexed<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta);
-
-    // Indexed scheduled (delayed) jobs - tracked in the JobIndex like EnqueueIndexed
-    public string ScheduleIndexed(Expression<Action> methodCall, IndexPayload meta, TimeSpan delay);
-    public string ScheduleIndexed(Expression<Func<Task>> methodCall, IndexPayload meta, TimeSpan delay);
     public string ScheduleIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta, TimeSpan delay);
-    public string ScheduleIndexed<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta, TimeSpan delay);
-}
-
-public enum BackgroundJobContinuationOptions
-{
-    OnAnyFinishedState,
-    OnlyOnSucceededState,
 }
 
 public enum JobStatus

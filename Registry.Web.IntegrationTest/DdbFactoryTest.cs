@@ -235,7 +235,7 @@ public class DdbFactoryTest : TestBase
         var path = Path.Combine(TestDataFolder, fileName);
 
         if (!File.Exists(path))
-            CommonUtils.SmartDownloadFile(TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName), path);
+            File.Copy(TestDownloadCache.GetOrDownload(TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName), TestDownloadCache.SharedFolder), path, true);
 
         ddb.Add(fileName, File.ReadAllBytes(path));
 

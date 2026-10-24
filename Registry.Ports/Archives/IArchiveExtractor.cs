@@ -46,24 +46,6 @@ public interface IArchiveExtractor
 /// </summary>
 public interface IArchiveReadSession : IDisposable
 {
-    /// <summary>Number of non-directory entries (used to compute progress).</summary>
-    /// <remarks>
-    /// For compressed tarballs this triggers a full decompression pass to count the
-    /// entries. Prefer <see cref="FastFileEntryCount"/> when an exact count is not
-    /// required and the decompression cost must be avoided.
-    /// </remarks>
-    int FileEntryCount { get; }
-
-    /// <summary>
-    /// Estimated total uncompressed size in bytes (used for the quota / disk-space
-    /// / decompression-bomb guard). Null when the format does not expose it cheaply.
-    /// </summary>
-    /// <remarks>
-    /// For compressed tarballs this triggers a full decompression pass. Prefer
-    /// <see cref="FastUncompressedBytes"/> to avoid that cost when an estimate suffices.
-    /// </remarks>
-    long? TotalUncompressedBytes { get; }
-
     /// <summary>
     /// Uncompressed size in bytes when it can be obtained WITHOUT decompressing the
     /// archive (random-access formats such as zip/rar/7z/tar). Null for compressed

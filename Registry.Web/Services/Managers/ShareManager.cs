@@ -33,19 +33,11 @@ public class ShareManager : IShareManager
 
     public Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug, CancellationToken ct = default) => _store.ListBatches(orgSlug, dsSlug, ct: ct);
 
-    public Task<bool> IsPathAllowed(string token, string path, CancellationToken ct = default) => _store.IsPathAllowedAsync(token, path, ct: ct);
-
-    public Task<IsBatchReadyResult> IsBatchReady(string token, CancellationToken ct = default) => _store.IsReadyAsync(token, ct: ct);
-
     public Task<ShareInitResultDto> Initialize(ShareInitDto parameters, CancellationToken ct = default) => _batches.Initialize(parameters, ct: ct);
 
     public Task<CommitResultDto> Commit(string token, CancellationToken ct = default) => _batches.Commit(token, ct: ct);
 
     public Task Rollback(string token, CancellationToken ct = default) => _batches.Rollback(token, ct: ct);
-
-    public Task<UploadResultDto> Upload(string token, string path, byte[] data, CancellationToken ct = default) => _uploads.Upload(token, path, data, ct: ct);
-
-    public Task<UploadResultDto> Upload(string token, string path, Stream stream, CancellationToken ct = default) => _uploads.Upload(token, path, stream, ct: ct);
 
     public Task<(string OrgSlug, string DsSlug)> GetUploadTarget(string token, CancellationToken ct = default) => _uploads.GetUploadTarget(token, ct: ct);
 

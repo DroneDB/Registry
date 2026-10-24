@@ -71,13 +71,6 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
         return result;
     }
 
-    public async Task<JobIndex[]> GetByOrgDsHashAsync(string orgSlug, string dsSlug, string hash, int skip = 0, int take = 200, CancellationToken ct = default)
-    {
-        var q =
-            db.JobIndices.AsNoTracking().Where(x => x.OrgSlug == orgSlug && x.DsSlug == dsSlug && x.Hash == hash);
-        return await q.OrderByDescending(x => x.CreatedAtUtc).Skip(skip).Take(take).ToArrayAsync(cancellationToken: ct);
-    }
-
     public async Task<JobIndex?> GetByJobIdAsync(string orgSlug, string dsSlug, string jobId, CancellationToken ct = default)
         => await db.JobIndices
             .AsNoTracking()

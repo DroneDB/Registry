@@ -25,8 +25,6 @@ namespace Registry.Web.Services.Shares;
 /// <summary>The files of a share batch, in one request: added through the upload pipeline, recorded on the batch.</summary>
 public interface IShareUploads
 {
-    Task<UploadResultDto> Upload(string token, string path, byte[] data, CancellationToken ct = default);
-    Task<UploadResultDto> Upload(string token, string path, Stream stream, CancellationToken ct = default);
     Task<(string OrgSlug, string DsSlug)> GetUploadTarget(string token, CancellationToken ct = default);
     Task<UploadResultDto> UploadStreamed(string token, string path, StreamedFile file, CancellationToken ct = default);
 }
@@ -35,53 +33,16 @@ public interface IShareUploads
 public sealed class ShareUploads : IShareUploads
 {
     private readonly IShareBatchStore _batches;
-    private readonly IStorageQuota _quota;
     private readonly IObjectsManager _objectsManager;
     private readonly IFileSystem _fileSystem;
     private readonly ILogger<ShareUploads> _logger;
 
-    public ShareUploads(IShareBatchStore batches, IStorageQuota quota, IObjectsManager objectsManager, IFileSystem fileSystem, ILogger<ShareUploads> logger)
+    public ShareUploads(IShareBatchStore batches, IObjectsManager objectsManager, IFileSystem fileSystem, ILogger<ShareUploads> logger)
     {
         _batches = batches;
-        _quota = quota;
         _objectsManager = objectsManager;
         _fileSystem = fileSystem;
         _logger = logger;
-    }
-
-    public async Task<UploadResultDto> Upload(string token, string path, byte[] data, CancellationToken ct = default)
-    {
-        await using var stream = new MemoryStream(data);
-        return await Upload(token, path, stream, ct);
-    }
-
-    public async Task<UploadResultDto> Upload(string token, string path, Stream stream, CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-            throw new BadRequestException("Missing path");
-
-        if (stream == null)
-            throw new BadRequestException("Missing data stream");
-
-        if (!stream.CanRead)
-            throw new BadRequestException("Cannot read from data stream");
-
-        var batch = await _batches.GetRunningAsync(token, ct);
-
-        // Check if user has enough space to upload this
-        await _quota.CheckCurrentUserStorage(stream.Length);
-
-        if (batch.Entries.Any(item => item.Path == path))
-            throw new BadRequestException("Entry already uploaded");
-
-        _logger.LogInformation("Adding '{Path}' in batch '{BatchToken}'", path, batch.Token);
-
-        var orgSlug = batch.Dataset.Organization.Slug;
-        var dsSlug = batch.Dataset.Slug;
-
-        var added = await _objectsManager.AddNew(orgSlug, dsSlug, path, stream);
-
-        return await _batches.AddEntryAsync(batch, path, added);
     }
 
     /// <summary>

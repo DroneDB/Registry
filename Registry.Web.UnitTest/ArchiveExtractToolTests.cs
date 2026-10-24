@@ -83,7 +83,6 @@ public class ArchiveExtractToolTests
     {
         var ctx = new Mock<IHeavyToolValidationContext>();
         ctx.SetupGet(c => c.Ddb).Returns(ddb);
-        ctx.SetupGet(c => c.Logger).Returns(NullLogger.Instance);
         // At submit time the caller is the authenticated principal; on the Hangfire
         // worker it is null. The quota guard only runs when the caller is present.
         ctx.SetupGet(c => c.Caller)

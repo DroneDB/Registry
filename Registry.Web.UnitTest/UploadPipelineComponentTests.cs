@@ -425,7 +425,7 @@ public class UploadPipelineComponentTests
         await cache.GetOrLoadAsync("org", "ds", _ =>
         {
             loads++;
-            cache.InvalidateDataset("org", "ds"); // the row changes while it is being read
+            cache.InvalidateOrganization("org"); // the row changes while it is being read
             return Task.FromResult<Data.Models.Dataset>(new Data.Models.Dataset { Slug = "ds", Organization = new Data.Models.Organization { Slug = "org" } });
         });
         await cache.GetOrLoadAsync("org", "ds", _ =>

@@ -41,13 +41,6 @@ public sealed class EntryChangeNotifier
         await _ogcCatalog.InvalidateAsync(orgSlug, dsSlug);
     }
 
-    /// <summary>Every entry of the dataset changed (it was emptied).</summary>
-    public async Task AllEntriesChangedAsync(string orgSlug, string dsSlug)
-    {
-        await InvalidateDatasetThumbnailAsync(orgSlug, dsSlug);
-        await _ogcCatalog.InvalidateAsync(orgSlug, dsSlug);
-    }
-
     private async Task InvalidateDatasetThumbnailAsync(string orgSlug, string dsSlug)
     {
         _logger.LogDebug("Invalidating dataset thumbnail cache for {OrgSlug}/{DsSlug}", orgSlug, dsSlug);

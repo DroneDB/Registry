@@ -192,14 +192,6 @@ public class BuildPendingService : Builds.IPendingBuildFlag
         }
     }
 
-    /// <summary>
-    /// Refreshes native pending observations after a failed job while preserving
-    /// the budget and coordinator scheduled by another state filter.
-    /// </summary>
-    /// <returns>A task representing the observation refresh.</returns>
-    public async Task RefreshPendingStatus(string orgSlug, string dsSlug)
-        => await RefreshPendingStatus(orgSlug, dsSlug, _storage);
-
     internal async Task RefreshPendingStatus(string orgSlug, string dsSlug, JobStorage? storage)
     {
         using var coordination = DatasetBuildCoordinator.Acquire(orgSlug, dsSlug, storage ?? _storage,
@@ -226,13 +218,6 @@ public class BuildPendingService : Builds.IPendingBuildFlag
     // Keep the existing bounded policy; exhausted chains await the low-frequency sweep.
     private static readonly int[] RetryBackoffMinutes = [1, 2, 5, 10, 20, 40, 60];
     private const int MaxRetryAttempts = PendingBuildRetryControlStore.MaxRetryAttempts;
-
-    /// <summary>
-    /// Schedules one bounded delayed coordinator when native pending work remains.
-    /// </summary>
-    /// <returns>A task representing the scheduling attempt.</returns>
-    public Task ScheduleRetryIfPending(string orgSlug, string dsSlug) =>
-        ScheduleRetryIfPending(orgSlug, dsSlug, null, null, null);
 
     // A terminal job's state is still Processing in storage until OnStateApplied's
     // transaction commits. Exclude precisely that ID from live-coordinator dedup.

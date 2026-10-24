@@ -15,8 +15,6 @@ namespace Registry.Web.Services.Ports;
 public interface IShareManager
 {
     public Task<ShareInitResultDto> Initialize(ShareInitDto parameters, CancellationToken ct = default);
-    public Task<UploadResultDto> Upload(string token, string path, byte[] data, CancellationToken ct = default);
-    public Task<UploadResultDto> Upload(string token, string path, Stream stream, CancellationToken ct = default);
 
     /// <summary>
     /// Resolves the organization/dataset of a running batch so the caller can stream an upload
@@ -38,8 +36,6 @@ public interface IShareManager
     public Task<CommitResultDto> Commit(string token, CancellationToken ct = default);
     public Task Rollback(string token, CancellationToken ct = default);
     Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug, CancellationToken ct = default);
-    public Task<bool> IsPathAllowed(string token, string path, CancellationToken ct = default);
-    public Task<IsBatchReadyResult> IsBatchReady(string token, CancellationToken ct = default);
 
     public Task<BatchDto> GetBatchInfo(string token, CancellationToken ct = default);
 

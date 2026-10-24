@@ -98,7 +98,6 @@ public sealed class Rq13RenderAbortHttpTests : IDisposable
             var response = _client.SendAsync(request, client.Token);
 
             await started.Task.WaitAsync(Guard);
-            gate.InFlight(NativeLane.Heavy).ShouldBe(1);
 
             await client.CancelAsync();
 

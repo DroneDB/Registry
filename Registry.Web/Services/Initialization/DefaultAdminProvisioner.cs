@@ -68,15 +68,15 @@ internal sealed class DefaultAdminProvisioner
         _logger.LogInformation("Setting up default admin user '{Username}'", defaultAdmin.UserName);
 
         // Ensure admin role exists
-        await EnsureRoleExistsAsync(roleManager, ApplicationDbContext.AdminRoleName, token);
-        await EnsureRoleExistsAsync(roleManager, ApplicationDbContext.DeactivatedRoleName, token);
+        await EnsureRoleExistsAsync(roleManager, ApplicationDbContext.AdminRoleName);
+        await EnsureRoleExistsAsync(roleManager, ApplicationDbContext.DeactivatedRoleName);
 
         // Get or create admin user
         var adminUser = await userManager.Users.FirstOrDefaultAsync(usr => usr.UserName == defaultAdmin.UserName, token);
 
         if (adminUser == null)
         {
-            adminUser = await CreateAdminUserAsync(userManager, defaultAdmin, token);
+            adminUser = await CreateAdminUserAsync(userManager, defaultAdmin);
         }
         else
         {
@@ -89,7 +89,7 @@ internal sealed class DefaultAdminProvisioner
         _logger.LogInformation("Default admin setup completed");
     }
 
-    private async Task EnsureRoleExistsAsync(RoleManager<IdentityRole> roleManager, string roleName, CancellationToken token)
+    private async Task EnsureRoleExistsAsync(RoleManager<IdentityRole> roleManager, string roleName)
     {
         var role = await roleManager.FindByNameAsync(roleName);
 
@@ -105,7 +105,7 @@ internal sealed class DefaultAdminProvisioner
             throw new InvalidOperationException($"Cannot create role '{roleName}': {result.Errors.ToErrorString()}");
     }
 
-    private async Task<User> CreateAdminUserAsync(UserManager<User> userManager, AdminInfo defaultAdmin, CancellationToken token)
+    private async Task<User> CreateAdminUserAsync(UserManager<User> userManager, AdminInfo defaultAdmin)
     {
         _logger.LogInformation("Creating default admin user '{Username}'", defaultAdmin.UserName);
 

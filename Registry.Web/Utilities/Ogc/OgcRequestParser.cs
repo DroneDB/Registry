@@ -65,14 +65,6 @@ public static class OgcRequestParser
         return Math.Clamp(parsed, min, max);
     }
 
-    public static double GetDouble(IQueryCollection q, string key)
-    {
-        var v = GetRequired(q, key);
-        if (!double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
-            throw new OgcException("InvalidParameterValue", $"Parameter '{key}' is not a number", 400, key);
-        return parsed;
-    }
-
     public static string[]? GetList(IQueryCollection q, string key, char sep = ',')
     {
         var v = Get(q, key);

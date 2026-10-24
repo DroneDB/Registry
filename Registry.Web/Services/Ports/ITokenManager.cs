@@ -6,6 +6,4 @@ namespace Registry.Web.Services.Ports;
 public interface ITokenManager
 {
     bool IsCurrentActiveToken();
-    bool IsActive(string token);
-
 }

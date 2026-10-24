@@ -40,9 +40,6 @@ public sealed class VolumeHeadroom
     /// <summary>libddb's free-disk floor in bytes (0 when libddb's check is off).</summary>
     public long FloorBytes => _floor.Value;
 
-    /// <summary>The volume of <paramref name="path"/>, or null when no mounted volume contains it.</summary>
-    public VolumeInfo? For(string path) => _measure(path);
-
     /// <summary>
     /// Free bytes on the volume of <paramref name="path"/>, or <see cref="long.MaxValue"/> when they
     /// cannot be read (the guards then rely on their size caps: best effort).

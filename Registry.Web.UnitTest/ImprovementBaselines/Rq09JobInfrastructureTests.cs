@@ -146,7 +146,7 @@ public class Rq09JobInfrastructureTests
             record.State.ShouldContain(new KeyValuePair<string, object?>("Dataset", "org/ds"));
 
             // Nothing reached the console from the native thread; the job's next line writes it first
-            tail.Count.ShouldBe(0);
+            tail.Snapshot().Lines.ShouldBeEmpty();
             JobConsole.For(new StructuredLogger(), context, "/data/datasets/o/abc").Info("Done build");
             tail.Snapshot().Lines.Select(l => l.Msg).ShouldBe([
                 "[gdal] GDAL: cannot open [dataset]/a.tif", // warnings only, scrubbed

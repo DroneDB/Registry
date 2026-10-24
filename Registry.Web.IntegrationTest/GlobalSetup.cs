@@ -25,14 +25,7 @@ public class GlobalSetup
     {
         Directory.SetCurrentDirectory(TestContext.CurrentContext.TestDirectory);
 
-        if (Environment.OSVersion.Platform == PlatformID.Win32NT)
-        {
-            var ddbFolder = CommonUtils.FindDdbFolder();
-            if (ddbFolder == null)
-                throw new Exception("DDB not found");
-
-            CommonUtils.SetDefaultDllPath(ddbFolder);
-        }
+        DdbLibrary.UseFromPath();
 
         // What a host does at startup: the ABI handshake, then the initialization (DdbRuntimeService)
         var capabilities = DdbAbi.Verify();

@@ -171,8 +171,6 @@ public sealed partial class ChunkStore : IChunkStore
         }
     }
 
-    public void Delete(string root, string fileId) => Forget(Folder(root, fileId));
-
     // Feeds the in-order hash with every stored chunk after the hashed prefix (from disk)
     private static void CatchUp(string folder, ChunkManifest manifest, Upload upload)
     {

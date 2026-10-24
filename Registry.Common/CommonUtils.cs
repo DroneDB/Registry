@@ -61,48 +61,6 @@ public static class CommonUtils
         }
     }
 
-    private const string SmartFileCacheFolder = "SmartFileCache";
-
-    /// <summary>
-    /// Downloads a file using a rudimentary cache in temp folder
-    /// </summary>
-    /// <param name="url"></param>
-    /// <param name="path"></param>
-    public static void SmartDownloadFile(string url, string path)
-    {
-        var uri = new Uri(url);
-        var fileName = uri.Segments.Last();
-
-        var smartFileCacheFolder = Path.Combine(Path.GetTempPath(), SmartFileCacheFolder);
-
-        if (!Directory.Exists(smartFileCacheFolder))
-            Directory.CreateDirectory(smartFileCacheFolder);
-
-        var cachedFilePath = Path.Combine(smartFileCacheFolder, fileName);
-
-        if (!File.Exists(cachedFilePath))
-            HttpHelper.DownloadFileAsync(url, cachedFilePath).Wait();
-
-        File.Copy(cachedFilePath, path, true);
-    }
-
-    /// <summary>
-    /// Downloads a file using a rudimentary cache in temp folder
-    /// </summary>
-    /// <param name="url"></param>
-    public static byte[] SmartDownloadData(string url)
-    {
-        var tmp = Path.GetTempFileName();
-
-        SmartDownloadFile(url, tmp);
-
-        var data = File.ReadAllBytes(tmp);
-
-        File.Delete(tmp);
-
-        return data;
-    }
-
     /// <summary>
     /// Combines an array of strings into a path using the forward slash as folder separator
     /// </summary>
@@ -255,42 +213,6 @@ public static class CommonUtils
         _ => 4 // Conservative default for unknown types
     };
 
-    public static void WriteLineColor(string text, ConsoleColor color)
-    {
-        Console.ForegroundColor = color;
-        Console.WriteLine(text);
-        Console.ResetColor();
-    }
-
-    public static void WriteColor(string text, ConsoleColor color)
-    {
-        Console.ForegroundColor = color;
-        Console.Write(text);
-        Console.ResetColor();
-    }
-
-    public static void SetDefaultDllPath(string path)
-    {
-        const uint LOAD_LIBRARY_SEARCH_DEFAULT_DIRS = 0x00001000;
-
-        if (!OperatingSystem.IsWindows())
-            return;
-
-        if (!SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS))
-            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-
-        var dirHandle = AddDllDirectory(path);
-        if (dirHandle == IntPtr.Zero)
-            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-        return;
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        static extern IntPtr AddDllDirectory([MarshalAs(UnmanagedType.LPWStr)] string lpPathName);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        static extern bool SetDefaultDllDirectories(uint flags);
-    }
-
 
     public const string DroneDBDllNameWindows = "ddb.dll";
     public const string DroneDBDllNameLinux = "libddb.so";
@@ -344,6 +266,4 @@ public static class CommonUtils
             }
         }
     }
-
-
 }

@@ -2,9 +2,7 @@
 # run scripts/check-warnings.sh --update after removing warnings.
 # Format: <path> <code> <number of distinct locations>
 Registry.Adapters.Ddb.Test/DroneDBTests.cs CA1859 1
-Registry.Adapters.Ddb.Test/DroneDBTests.cs CA2201 1
 Registry.Adapters.Ddb.Test/Rq02ProgressCallbackTests.cs CA1859 1
-Registry.Adapters.Ddb.Test/Rq02ProgressCallbackTests.cs CA2201 1
 Registry.Adapters/DroneDB/Ddb.cs CA1725 1
 Registry.Adapters/DroneDB/Ddb.cs CS8618 1
 Registry.Adapters/DroneDB/Ddb.cs CS8625 6
@@ -39,7 +37,6 @@ Registry.Web.Data.SqliteMigrations/Migrations/20250926062948_OptimizeEntityFrame
 Registry.Web.Data.SqliteMigrations/Migrations/20260601003723_AddProcessingPlatformColumns.cs CA1861 2
 Registry.Web.IntegrationTest/DdbFactoryTest.cs CA1829 2
 Registry.Web.IntegrationTest/DdbFactoryTest.cs CA1859 1
-Registry.Web.IntegrationTest/GlobalSetup.cs CA2201 1
 Registry.Web.IntegrationTest/ImprovementBaselines/Rq02ExitCodeTests.cs CA1001 1
 Registry.Web.IntegrationTest/IndexedJobPublicationMySqlIntegrationTests.cs CA1001 2
 Registry.Web.IntegrationTest/IndexedJobPublicationMySqlIntegrationTests.cs CA1305 2
@@ -54,7 +51,7 @@ Registry.Web.IntegrationTest/PendingRecoveryIntegrationTests.cs CA1305 1
 Registry.Web.IntegrationTest/PendingRecoveryIntegrationTests.cs CA2016 1
 Registry.Web.IntegrationTest/PendingRecoveryIntegrationTests.cs CS0618 1
 Registry.Web.IntegrationTest/ShareManagerTest.cs CA1852 1
-Registry.Web.TestSupport/Adapters/SimpleBackgroundJobsProcessor.cs CA1305 13
+Registry.Web.TestSupport/Adapters/SimpleBackgroundJobsProcessor.cs CA1305 6
 Registry.Web.UnitTest/ApiExceptionClassifierTests.cs CA1861 1
 Registry.Web.UnitTest/ArchiveExtractToolTests.cs CA1822 1
 Registry.Web.UnitTest/BuildJobFailureFilterTests.cs CA1001 1
@@ -144,13 +141,12 @@ Registry.Web/Models/DTO/Ogc/OgcApiDtos.cs CS8632 7
 Registry.Web/Models/DTO/Ogc/OgcLayerDto.cs CS8632 4
 Registry.Web/Models/RescanFilter.cs CA1870 1
 Registry.Web/Program.cs CA1309 1
-Registry.Web/Services/Adapters/BuildPendingService.cs CS0419 1
 Registry.Web/Services/Adapters/BuildStatusService.cs CA1859 1
 Registry.Web/Services/Adapters/ChunkStore.cs CA1001 1
 Registry.Web/Services/Adapters/ChunkStore.cs CA2016 1
 Registry.Web/Services/Adapters/DatasetIndexQueue.cs CA1711 1
 Registry.Web/Services/Adapters/OgcLayerCatalog.cs CS8632 9
-Registry.Web/Services/Adapters/SafeMetaManager.cs CA1305 2
+Registry.Web/Services/Adapters/SafeMetaManager.cs CA1305 1
 Registry.Web/Services/Adapters/ThumbnailPrecomputeQueue.cs CA1711 1
 Registry.Web/Services/Adapters/UploadQuotaLedger.cs CA1001 1
 Registry.Web/Services/Adapters/UploadQuotaLedger.cs CA1822 1

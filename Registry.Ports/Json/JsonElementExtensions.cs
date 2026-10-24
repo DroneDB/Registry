@@ -15,9 +15,6 @@ public static class JsonElementExtensions
     public static JsonElement? Member(this JsonElement element, string name) =>
         element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) ? value : null;
 
-    /// <summary>The member <paramref name="name"/> of an object (null: none).</summary>
-    public static JsonElement? Member(this JsonElement? element, string name) => element?.Member(name);
-
     /// <summary>The text of a string value (null for null and for none); any other value as its JSON text.</summary>
     public static string? Text(this JsonElement? element) =>
         element is not { } value ? null : value.ValueKind switch

@@ -34,10 +34,6 @@ public interface IObjectRenderService
     /// <summary>The thumbnail of an entry resolved by <see cref="ResolveThumbnailObjectAsync"/>.</summary>
     Task<StorageDataDto> GenerateThumbnailDataAsync(ReadableObject obj, int? size, CancellationToken ct = default);
 
-    /// <summary>The map tile of <paramref name="path"/>, as an image in <paramref name="format"/>.</summary>
-    Task<StorageDataDto> GenerateTileDataAsync(string orgSlug, string dsSlug, string? path, int tz, int tx, int ty,
-        bool retina, TileFormat format, CancellationToken ct = default);
-
     /// <summary>The map tile of an entry resolved by <see cref="ResolveReadableObjectAsync"/>.</summary>
     Task<StorageDataDto> GenerateTileDataAsync(ReadableObject obj, int tz, int tx, int ty, bool retina,
         TileFormat format, CancellationToken ct = default);

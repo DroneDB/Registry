@@ -33,7 +33,6 @@ public class BuildToolTests
         ddb.SetupGet(x => x.DatasetFolderPath).Returns("/data/datasets/o/d");
         var ctx = new Mock<IHeavyToolExecutionContext>();
         ctx.SetupGet(x => x.Ddb).Returns(ddb.Object);
-        ctx.SetupGet(x => x.Logger).Returns(Mock.Of<ILogger>());
         ctx.SetupGet(x => x.Builds).Returns(TestJobs.DdbJobs());
         return (ddb, ctx.Object);
     }

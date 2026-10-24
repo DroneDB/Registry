@@ -348,8 +348,6 @@ public class Rq01ClientIpTests
         {
         }
 
-        public int GetActiveDownloads(string key) => 0;
-
         public bool CanAcquireSlot(string key)
         {
             Keys.Enqueue(key);

@@ -11,18 +11,6 @@ public static class CommonExtenders
     /// Safe reset to the beginning
     /// </summary>
     /// <param name="stream"></param>
-    public static void Reset(this Stream stream)
-    {
-        if (!stream.CanSeek)
-            throw new InvalidOperationException("Stream does not support seeking");
-
-        stream.Seek(0, SeekOrigin.Begin);
-    }
-
-    /// <summary>
-    /// Safe reset to the beginning
-    /// </summary>
-    /// <param name="stream"></param>
     public static void SafeReset(this Stream stream)
     {
         if (stream.CanSeek)
@@ -35,5 +23,4 @@ public static class CommonExtenders
     /// </summary>
     public static bool IsSameAs(this Dictionary<string, object> a, Dictionary<string, object> b) =>
         PlainValue.AreEqual(a, b);
-
 }

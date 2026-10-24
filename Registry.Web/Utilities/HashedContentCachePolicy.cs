@@ -35,8 +35,6 @@ public sealed class HashedContentCachePolicy
 
     public string CacheControl { get; }
 
-    public EntityTagHeaderValue ETag => _etag;
-
     private HashedContentCachePolicy(EntityTagHeaderValue etag, string cacheControl)
     {
         _etag = etag;

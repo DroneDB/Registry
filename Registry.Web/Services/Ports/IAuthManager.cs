@@ -34,15 +34,10 @@ public interface IAuthManager
     public Task<bool> IsOwnerOrAdmin(Organization org);
 
     public Task<bool> UserExists(string userId);
-
-    public Task<bool> RequestAccess<T>(T obj, AccessType access, User user) where T: IRequestAccess;
     public Task<bool> RequestAccess<T>(T obj, AccessType access) where T : IRequestAccess;
 
     public Task<bool> CanListOrganizations(User user);
-    public Task<bool> CanListOrganizations();
     public Task<bool> CanRefreshToken(User user);
-
-    public Task<bool> CanRefreshToken();
 
     public Task<DatasetPermissionsDto> GetDatasetPermissions(Dataset dataset);
 }

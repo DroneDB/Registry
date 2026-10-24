@@ -14,24 +14,6 @@ public class ResourceAccessControl : AccessControlBase
         : base(snapshots, context, logger) { }
 
     /// <summary>
-    /// Validates if an owner exists and is not deactivated
-    /// </summary>
-    public async Task<bool> ValidateOwner(string ownerId, string resourceIdentifier)
-    {
-        if (ownerId == null) return true;
-
-        var owner = await Snapshots.GetAsync(ownerId);
-        if (!owner.Exists)
-        {
-            Logger.LogInformation("Owner {UserId} not found for resource {ResourceId}",
-                ownerId, resourceIdentifier);
-            return true;
-        }
-
-        return !owner.IsDeactivated;
-    }
-
-    /// <summary>
     /// Checks if a user has elevated privileges (admin or owner)
     /// </summary>
     public async Task<bool> HasElevatedPrivileges(string userId, string ownerId)

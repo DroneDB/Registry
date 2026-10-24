@@ -118,24 +118,11 @@ public class AuthManager : IAuthManager
         return user != null && !await _resourceAccess.IsUserDeactivated(user.Id);
     }
 
-    public async Task<bool> CanListOrganizations()
-    {
-        return await CanListOrganizations(await GetCurrentUser());
-    }
-
     public async Task<bool> CanRefreshToken(User user)
     {
         // Read the identity store, not the snapshot: a refresh extends the token's life
         return user != null && !await _usersManager.IsInRoleAsync(user, ApplicationDbContext.DeactivatedRoleName);
     }
-
-    public async Task<bool> CanRefreshToken()
-    {
-        return await CanRefreshToken(await GetCurrentUser());
-    }
-
-    public Task<bool> RequestAccess<T>(T obj, AccessType access, User user) where T : IRequestAccess
-        => RequestAccessById(obj, access, user?.Id);
 
     private async Task<bool> RequestAccessById<T>(T obj, AccessType access, string userId) where T : IRequestAccess
     {

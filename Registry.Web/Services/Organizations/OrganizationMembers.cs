@@ -24,9 +24,6 @@ namespace Registry.Web.Services.Organizations;
 /// <summary>The members of an organization (RQ-12, out of <c>OrganizationsManager</c>).</summary>
 public interface IOrganizationMembers
 {
-    /// <summary>Whether the member management feature is on.</summary>
-    bool IsMemberManagementEnabled { get; }
-
     /// <summary>The members of an organization, for an administrator, its owner or one of its members.</summary>
     Task<IEnumerable<OrganizationMemberDto>> GetMembers(string orgSlug, CancellationToken ct = default);
 

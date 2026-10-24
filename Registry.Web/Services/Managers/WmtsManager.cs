@@ -203,7 +203,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
 
         try
         {
-            return await GetTileAsyncCore(orgSlug, dsSlug, layerName, tileMatrixSet, z, x, y, format, ct);
+            return await GetTileAsyncCore(orgSlug, dsSlug, layerName, z, x, y, format, ct);
         }
         catch (OgcException)
         {
@@ -221,9 +221,9 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
     }
 
     private async Task<byte[]> GetTileAsyncCore(string orgSlug, string dsSlug, string layerName,
-        string tileMatrixSet, int z, int x, int y, string format, CancellationToken ct)
+        int z, int x, int y, string format, CancellationToken ct)
     {
-        var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
+        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
         var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, layerName, ct: ct)
                     ?? throw new OgcException("InvalidParameterValue",
                         $"Layer '{layerName}' is not defined", 400, "layer");

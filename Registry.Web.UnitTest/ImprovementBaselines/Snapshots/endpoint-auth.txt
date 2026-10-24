@@ -1,7 +1,7 @@
 # RQ-04 endpoint authorization snapshot (Rq04ControllerSmokeTests).
 # METHOD /template -> declared authorization [gate] @ handler
 #   declared: [AllowAnonymous], [Authorize(...)], inline policies (RequireAuthorization),
-#             MVC access filters (BasicAuthFilter, OgcAuthorizationFilter, RestrictToLocalhost); none = no HTTP gate
+#             MVC access filters (BasicAuthFilter, OgcAuthorizationFilter); none = no HTTP gate
 #   gate: who passes the HTTP gate: open (manager checks), anonymous, authenticated, admin
 # Regenerate on purpose: REGISTRY_UPDATE_SNAPSHOTS=1 dotnet test Registry.Web.UnitTest --filter
 #   "FullyQualifiedName~Rq04ControllerSmokeTests.EndpointAuthorization_MatchesSnapshot"

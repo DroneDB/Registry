@@ -72,7 +72,7 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
 
         sourcePath = paths.Normalize(sourcePath, "source path");
         referencePath = paths.Normalize(referencePath, "reference path");
-        outputPath = paths.Normalize(outputPath, "output path");
+        _ = paths.Normalize(outputPath, "output path");
 
         // Native validation (CRS, overlap, type compatibility)
         var validationJson = ctx.Ddb.ValidateAlignRaster(sourcePath, referencePath);

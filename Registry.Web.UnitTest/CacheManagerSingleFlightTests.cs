@@ -174,7 +174,13 @@ public class CacheManagerSingleFlightTests
     public async Task GetAsync_GenerationThrows_AllWaitersFail_NextCallRetries()
     {
         var gate = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
-        RegisterGated(gate.Task);
+        _sut.Register(Seed, async _ =>
+        {
+            // The first generation fails (when the gate is released), the next one succeeds
+            if (Interlocked.Increment(ref _invocations) == 1)
+                return await gate.Task;
+            return Payload;
+        });
 
         var callers = Enumerable.Range(0, 5).Select(_ => _sut.GetAsync(Seed, Category, "a")).ToArray();
         gate.SetException(new InvalidOperationException("render failed"));
@@ -184,9 +190,8 @@ public class CacheManagerSingleFlightTests
         _invocations.ShouldBe(1);
 
         // The failed flight is gone: the next call generates again.
-        _sut.Unregister(Seed);
-        _sut.Register(Seed, _ => Task.FromResult(Payload));
         (await _sut.GetAsync(Seed, Category, "a")).ShouldBe(Payload);
+        _invocations.ShouldBe(2);
     }
 
     [Test]

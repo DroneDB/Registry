@@ -32,9 +32,6 @@ public static class RequestOperations
     /// <summary>The request id of the running operation <paramref name="id"/>, or null.</summary>
     public static string? Find(ulong id) => id != 0 && Running.TryGetValue(id, out var requestId) ? requestId : null;
 
-    /// <summary>The request id of the operation of the current flow, or null.</summary>
-    public static string? Current => Find(DdbOperation.Current);
-
     /// <summary>Ends the request's operation and restores the previous current one when disposed.</summary>
     public readonly struct Scope : IDisposable
     {
@@ -46,9 +43,6 @@ public static class RequestOperations
             _id = id;
             _scope = scope;
         }
-
-        /// <summary>The operation id libddb was given for the request.</summary>
-        public ulong Id => _id;
 
         public void Dispose()
         {

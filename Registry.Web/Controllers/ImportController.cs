@@ -24,17 +24,14 @@ namespace Registry.Web.Controllers;
 public class ImportController : ControllerBaseEx
 {
     private readonly IImportManager _importManager;
-    private readonly ILogger<ImportController> _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ImportController"/> class.
     /// </summary>
     /// <param name="importManager">The import manager.</param>
-    /// <param name="logger">The logger.</param>
-    public ImportController(IImportManager importManager, ILogger<ImportController> logger)
+    public ImportController(IImportManager importManager)
     {
         _importManager = importManager;
-        _logger = logger;
     }
 
     /// <summary>

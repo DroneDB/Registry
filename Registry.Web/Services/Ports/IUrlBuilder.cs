@@ -23,9 +23,6 @@ public interface IUrlBuilder
     /// </summary>
     string GenerateDatasetUrl(Dataset dataset, bool useDdbScheme = false);
 
-    /// <summary>A file of a build: <c>{host}/orgs/{org}/ds/{ds}/build/{hash}/{path}</c>.</summary>
-    string BuildFileUrl(string orgSlug, string dsSlug, string hash, string path);
-
     /// <summary>
     /// The artifacts of <paramref name="build"/> as links (XI-04): the role as libddb names it, the build-file URL
     /// (a directory artifact's descriptor), the served media type. Empty for a build with no artifact or a build

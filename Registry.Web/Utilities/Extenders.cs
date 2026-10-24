@@ -23,7 +23,6 @@ namespace Registry.Web.Utilities;
 
 public static class Extenders
 {
-
     /// <summary>The organization a request creates, owned by <paramref name="ownerId"/> and created at <paramref name="creationDate"/>.</summary>
     public static Organization ToEntity(this OrganizationRequestDto organization, string ownerId, DateTime creationDate)
     {
@@ -246,7 +245,6 @@ public static class Extenders
     /// <returns>A TagDto containing the organization and dataset slugs, or null if the tag string is null, empty, or whitespace.</returns>
     public static TagDto ToTag(this string tag)
     {
-
         if (string.IsNullOrWhiteSpace(tag))
             return null;
 
@@ -266,12 +264,6 @@ public static class Extenders
             throw new FormatException($"Dataset slug is not valid: '{ds}'");
 
         return new TagDto(org, ds);
-
-    }
-
-    public static T ToObject<T>(this JsonElement obj)
-    {
-        return obj.Deserialize<T>(ApiJson.Options);
     }
 
     public static T ToObject<T>(this Dictionary<string, object> obj)
@@ -286,31 +278,9 @@ public static class Extenders
         return string.Join(", ", results.Select(item => $"[{item.Code}: '{item.Description}']"));
     }
 
-    public static string ToPrintableList(this IEnumerable<string> arr)
-    {
-        return arr == null ? "[]" : $"[{string.Join(", ", arr)}]";
-    }
-
-    public static byte[] ComputeHash(this HashAlgorithm hashAlgorithm, string inputFile)
-    {
-        using var stream = File.OpenRead(inputFile);
-        return hashAlgorithm.ComputeHash(stream);
-    }
-
-    public static async Task<byte[]> ComputeHashAsync(this HashAlgorithm hashAlgorithm, string inputFile)
-    {
-        await using var stream = File.OpenRead(inputFile);
-        return await hashAlgorithm.ComputeHashAsync(stream);
-    }
-
     public static SafeMetaManager GetSafe(this IMetaManager manager)
     {
         return new SafeMetaManager(manager);
-    }
-
-    public static bool IsPublicOrUnlisted(this SafeMetaManager meta)
-    {
-        return meta.Visibility is Visibility.Public or Visibility.Unlisted;
     }
 
     /// <summary>
@@ -337,5 +307,4 @@ public static class Extenders
 
         return data.ToArray();
     }
-
 }

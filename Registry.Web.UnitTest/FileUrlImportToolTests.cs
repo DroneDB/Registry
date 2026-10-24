@@ -37,8 +37,7 @@ public class FileUrlImportToolTests
 
         var guard = new SsrfGuard(settings);
         var downloader = new GuardedHttpDownloader(guard, new SimpleFactory(),
-            TestHeadroom.Default,
-            NullLogger<GuardedHttpDownloader>.Instance);
+            TestHeadroom.Default);
         var options = Microsoft.Extensions.Options.Options.Create(new AppSettings
         {
             Import = settings,
@@ -56,7 +55,6 @@ public class FileUrlImportToolTests
 
         var ctx = new Mock<IHeavyToolValidationContext>();
         ctx.Setup(c => c.Ddb).Returns(ddb.Object);
-        ctx.Setup(c => c.Logger).Returns(NullLogger.Instance);
         return ctx.Object;
     }
 

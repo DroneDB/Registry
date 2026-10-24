@@ -24,18 +24,14 @@ namespace Registry.Web.Controllers;
 public class DatasetImportController : ControllerBaseEx
 {
     private readonly IFileUrlImportManager _importManager;
-    private readonly ILogger<DatasetImportController> _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DatasetImportController"/> class.
     /// </summary>
     /// <param name="importManager">The single-file URL import manager.</param>
-    /// <param name="logger">The logger.</param>
-    public DatasetImportController(IFileUrlImportManager importManager,
-        ILogger<DatasetImportController> logger)
+    public DatasetImportController(IFileUrlImportManager importManager)
     {
         _importManager = importManager;
-        _logger = logger;
     }
 
     /// <summary>

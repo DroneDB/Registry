@@ -196,8 +196,7 @@ public static class EndpointAuthCatalog
 
     /// <summary>
     /// The MVC filters on the action that gate access: authorization filters (also when declared
-    /// through <see cref="ServiceFilterAttribute"/> or <see cref="TypeFilterAttribute"/>) and
-    /// <see cref="RestrictToLocalhostAttribute"/>, an action filter that answers 401.
+    /// through <see cref="ServiceFilterAttribute"/> or <see cref="TypeFilterAttribute"/>).
     /// </summary>
     private static IEnumerable<string> AuthorizationFilterNames(ControllerActionDescriptor action) =>
         action.FilterDescriptors
@@ -214,8 +213,7 @@ public static class EndpointAuthCatalog
 
     private static bool IsAccessFilter(Type type) =>
         typeof(IAuthorizationFilter).IsAssignableFrom(type) ||
-        typeof(IAsyncAuthorizationFilter).IsAssignableFrom(type) ||
-        typeof(RestrictToLocalhostAttribute).IsAssignableFrom(type);
+        typeof(IAsyncAuthorizationFilter).IsAssignableFrom(type);
 
     private static async Task<EndpointGate> EvaluateGateAsync(Endpoint endpoint,
         IAuthorizationPolicyProvider policyProvider, IAuthorizationService authorization,

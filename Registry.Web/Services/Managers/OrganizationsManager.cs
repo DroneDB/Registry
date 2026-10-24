@@ -52,8 +52,6 @@ public class OrganizationsManager : IOrganizationsManager
         bool deleteSourceOrganization = true, CancellationToken ct = default) =>
         _merger.Merge(sourceOrgSlug, destOrgSlug, conflictResolution, deleteSourceOrganization, ct);
 
-    public bool IsMemberManagementEnabled => _members.IsMemberManagementEnabled;
-
     public Task<IEnumerable<OrganizationMemberDto>> GetMembers(string orgSlug, CancellationToken ct = default) =>
         _members.GetMembers(orgSlug, ct);
 

@@ -275,7 +275,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         // --- Phase 3: Extract archive into target dataset ---
         await ExtractArchiveIntoDataset(
             tempZipPath, destPath, targetDdb, targetDataset, targetRoot, targetOrgSlug, targetDsSlug,
-            request, ctx, progress, ct);
+            ctx, progress, ct);
 
         progress.Report(new HeavyToolProgress(1, "done",
             LogChunk: $"Photogrammetry complete. Results extracted to '{destPath}' in dataset '{targetDsSlug}'."));
@@ -290,7 +290,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
     private async Task ExtractArchiveIntoDataset(
         string archivePath, string destPath, IDDB ddb, DatasetKey dataset, string root,
         string orgSlug, string dsSlug,
-        HeavyToolRequest request, IHeavyToolExecutionContext ctx,
+        IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress, CancellationToken ct)
     {
         // The shared extractor: the path rule decides every entry, the budget every chunk, existing

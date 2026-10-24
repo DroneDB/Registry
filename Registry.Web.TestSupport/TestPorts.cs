@@ -48,10 +48,6 @@ public static class TestPorts
         public Task<Dataset?> GetOrLoadAsync(string orgSlug, string dsSlug,
             Func<CancellationToken, Task<Dataset?>> load, CancellationToken ct = default) => load(ct);
 
-        public void InvalidateDataset(string orgSlug, string dsSlug)
-        {
-        }
-
         public void InvalidateOrganization(string orgSlug)
         {
         }

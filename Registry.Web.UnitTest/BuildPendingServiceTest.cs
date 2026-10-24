@@ -548,7 +548,7 @@ public class BuildPendingServiceTest : TestBase
 
         var service = new BuildPendingService(new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
-        await service.ScheduleRetryIfPending(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+        await service.ScheduleRetryIfPending(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, null, null, null);
 
         _backgroundJobMock.Verify(x => x.ScheduleIndexed(
             It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()),
@@ -573,7 +573,7 @@ public class BuildPendingServiceTest : TestBase
 
         var service = new BuildPendingService(new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
-        await service.ScheduleRetryIfPending(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+        await service.ScheduleRetryIfPending(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, null, null, null);
 
         // First attempt -> 1 minute backoff
         _backgroundJobMock.Verify(x => x.ScheduleIndexed(
@@ -608,7 +608,7 @@ public class BuildPendingServiceTest : TestBase
 
         var service = new BuildPendingService(new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
-        await service.ScheduleRetryIfPending(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+        await service.ScheduleRetryIfPending(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, null, null, null);
 
         // RetryBackoffMinutes = [1, 2, 5, ...]; attempt index 2 -> 5 minutes.
         // Note: BuildPendingWrapper now only enqueues per-entry BuildWrapper jobs, so every
@@ -644,7 +644,7 @@ public class BuildPendingServiceTest : TestBase
 
         var service = new BuildPendingService(new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
-        await service.ScheduleRetryIfPending(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+        await service.ScheduleRetryIfPending(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, null, null, null);
 
         _backgroundJobMock.Verify(x => x.ScheduleIndexed(
             It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()),
@@ -674,7 +674,7 @@ public class BuildPendingServiceTest : TestBase
 
         var service = new BuildPendingService(new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
-        await service.ScheduleRetryIfPending(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+        await service.ScheduleRetryIfPending(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, null, null, null);
 
         _backgroundJobMock.Verify(x => x.ScheduleIndexed(
             It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()),
@@ -688,7 +688,7 @@ public class BuildPendingServiceTest : TestBase
 
         var service = new BuildPendingService(new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
-        await service.ScheduleRetryIfPending("nonexistent-org", "nonexistent-ds");
+        await service.ScheduleRetryIfPending("nonexistent-org", "nonexistent-ds", null, null, null);
 
         _backgroundJobMock.Verify(x => x.ScheduleIndexed(
             It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()),

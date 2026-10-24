@@ -127,7 +127,7 @@ public class ApiExceptionClassifierTests
     [Test]
     public void ExtensionBlocked_Single_Is400NoRetryAndNamesTheFile()
     {
-        var ex = new ExtensionBlockedException("virus.exe", new ImportSettings(), allowListMode: false);
+        var ex = new ExtensionBlockedException("virus.exe", allowListMode: false);
         var d = ApiExceptionClassifier.Classify(ex, authenticated: true);
 
         d.StatusCode.ShouldBe(StatusCodes.Status400BadRequest);
@@ -312,7 +312,7 @@ public class ApiExceptionClassifierTests
             new BadRequestException("a"), new UnauthorizedException("b"), new ForbiddenException("c"),
             new NotFoundException("d"), new ConflictException("e"), new PayloadTooLargeException("f"),
             new TooManyRequestsException("g", 1), new TransientException("h"), new QuotaExceededException("i"),
-            new ExtensionBlockedException("x.exe", new ImportSettings(), allowListMode: false),
+            new ExtensionBlockedException("x.exe", allowListMode: false),
             new HeavyTaskQuotaException(HeavyTaskQuotaCode.TooLarge, "j"), new HeavyToolNotFoundException("k")
         ];
 

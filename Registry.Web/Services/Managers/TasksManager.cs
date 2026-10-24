@@ -40,10 +40,6 @@ public sealed class TasksManager : ITasksManager
     public Task<SubmitTaskResponseDto> SubmitAsync(string orgSlug, string dsSlug, SubmitTaskRequestDto body,
         CancellationToken ct = default) => _submission.SubmitAsync(orgSlug, dsSlug, body, ct);
 
-    public async Task<TaskSummaryDto[]> ListAsync(string orgSlug, string dsSlug, string? toolId, string? state,
-        int skip, int take, CancellationToken ct = default) =>
-        (await ListPageAsync(orgSlug, dsSlug, toolId, state, skip, take, ct)).Items;
-
     public Task<TaskListPage> ListPageAsync(string orgSlug, string dsSlug, string? toolId, string? state,
         int skip, int take, CancellationToken ct = default) =>
         _history.ListPageAsync(orgSlug, dsSlug, toolId, state, skip, take, ct);

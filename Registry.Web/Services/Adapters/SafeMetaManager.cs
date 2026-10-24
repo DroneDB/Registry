@@ -51,8 +51,6 @@ public class SafeMetaManager
         }
     }
 
-    public int? Entries => Read(() => (int?)_manager.Get<int>(ObjectsCountField));
-
     public Visibility? Visibility
     {
         get => Read(() => (Visibility?)_manager.Get<int>(VisibilityField));
@@ -71,20 +69,6 @@ public class SafeMetaManager
         {
             if (value == null) throw new InvalidOperationException("Cannot set null value");
             _manager.Set(PublicField, value.Value ? "1" : "0");
-        }
-    }
-
-    public DateTime? LastUpdate
-    {
-        get => Read(() => (DateTime?)DateTimeOffset.FromUnixTimeSeconds(_manager.Get<int>(LastUpdateField)).LocalDateTime);
-        // Maybe this is not needed
-        set
-        {
-            if (value == null)
-                throw new ArgumentException("LastUpdate cannot be null");
-
-            var val = ((DateTimeOffset)value.Value).ToUnixTimeSeconds().ToString();
-            _manager.Set(LastUpdateField, val);
         }
     }
 

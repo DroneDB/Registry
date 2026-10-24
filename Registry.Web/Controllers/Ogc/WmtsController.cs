@@ -28,11 +28,10 @@ namespace Registry.Web.Controllers.Ogc;
 public class WmtsController : ControllerBaseEx
 {
     private readonly IWmtsManager _mgr;
-    private readonly ILogger<WmtsController> _logger;
 
-    public WmtsController(IWmtsManager mgr, ILogger<WmtsController> logger)
+    public WmtsController(IWmtsManager mgr)
     {
-        _mgr = mgr; _logger = logger;
+        _mgr = mgr;
     }
 
     /// <summary>WMTS 1.0.0 KVP request: GetCapabilities (XML), GetTile (an image or a vector tile) or GetFeatureInfo.</summary>

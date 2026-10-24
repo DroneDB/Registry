@@ -29,9 +29,6 @@ public sealed record NormalizedEntryPath
     [JsonPropertyName("rejected")]
     public string? Rejected { get; }
 
-    [JsonIgnore]
-    public bool IsRejected => Rejected != null;
-
     public static NormalizedEntryPath Accepted(string path) =>
         new(path ?? throw new System.ArgumentNullException(nameof(path)), null);
 

@@ -60,7 +60,7 @@ public class DatasetIndexQueueUploadTests
         var outcomes = await queue.EnqueueAsync(key, [Hinted("a.jpg")], ticket);
 
         outcomes.Single().Entry!.Path.ShouldBe("a.jpg");
-        ticket.Ended.ShouldBeTrue();
+        ticket.End().ShouldBeFalse("the commit ended the upload");
     }
 
     [Test]

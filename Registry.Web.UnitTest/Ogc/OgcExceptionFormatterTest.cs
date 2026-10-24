@@ -34,13 +34,4 @@ public class OgcExceptionFormatterTest
         ex.Attribute("locator")!.Value.ShouldBe("CRS");
         ex.Element(ows + "ExceptionText")!.Value.ShouldBe("Bad CRS");
     }
-
-    [Test]
-    public void Format_DispatchesByVersion()
-    {
-        var ex = new OgcException("LayerNotDefined", "layer x", 400, "LAYERS");
-        OgcExceptionFormatter.Format(ex, "1.1.1").ShouldContain("ServiceExceptionReport");
-        OgcExceptionFormatter.Format(ex, "1.3.0").ShouldContain("ExceptionReport");
-        OgcExceptionFormatter.Format(ex, "2.0.0").ShouldContain("ExceptionReport");
-    }
 }

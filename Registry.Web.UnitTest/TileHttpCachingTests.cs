@@ -175,7 +175,7 @@ public class TileHttpCachingTests
     public void Policy_IfNoneMatch_HandlesListsWeakTagsAndWildcard()
     {
         var policy = HashedContentCachePolicy.For(Hash, null, "tile", 1, 2, 3);
-        var etag = policy.ETag.ToString();
+        var etag = ETagOf(policy);
 
         bool Check(string header)
         {
@@ -196,9 +196,17 @@ public class TileHttpCachingTests
     [Test]
     public void Policy_EtagChangesWithHashAndVariant()
     {
-        var a = HashedContentCachePolicy.For("h1", null, "tile", 1, 2, 3).ETag;
-        HashedContentCachePolicy.For("h2", null, "tile", 1, 2, 3).ETag.ShouldNotBe(a);
-        HashedContentCachePolicy.For("h1", null, "tile", 1, 2, 4).ETag.ShouldNotBe(a);
-        HashedContentCachePolicy.For("h1", "h1", "tile", 1, 2, 3).ETag.ShouldBe(a, "v only affects freshness");
+        var a = ETagOf(HashedContentCachePolicy.For("h1", null, "tile", 1, 2, 3));
+        ETagOf(HashedContentCachePolicy.For("h2", null, "tile", 1, 2, 3)).ShouldNotBe(a);
+        ETagOf(HashedContentCachePolicy.For("h1", null, "tile", 1, 2, 4)).ShouldNotBe(a);
+        ETagOf(HashedContentCachePolicy.For("h1", "h1", "tile", 1, 2, 3)).ShouldBe(a, "v only affects freshness");
+    }
+
+    // The validator the policy puts on a response
+    private static string ETagOf(HashedContentCachePolicy policy)
+    {
+        var response = new DefaultHttpContext().Response;
+        policy.Apply(response);
+        return response.Headers.ETag.ToString();
     }
 }

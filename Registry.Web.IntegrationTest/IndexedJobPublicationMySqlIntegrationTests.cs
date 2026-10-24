@@ -179,8 +179,6 @@ public class IndexedJobPublicationMySqlIntegrationTests
         rows.Count.ShouldBe(1);
         rows[0].Value.ShouldBe(id);
         rows[0].Score.ShouldBe(expected); // exact, no tolerance
-        IndexingStateHandler.FromScore(rows[0].Score).ShouldBe(
-            IndexingStateHandler.FromScore(expected));
 
         // Provider read path agrees with the bounds.
         using var conn = _storage.GetConnection();
@@ -964,7 +962,7 @@ public class IndexedJobPublicationWorkerIntegrationTests
 
         using var scope = _provider.CreateScope();
         var writer = scope.ServiceProvider.GetRequiredService<IJobIndexWriter>();
-        await writer.UpsertOnEnqueueAsync(id, Payload(), DateTime.UtcNow.AddMinutes(-9), "m");
+        await writer.PrepareForPublicationAsync(id, Payload(), DateTime.UtcNow.AddMinutes(-9), "m");
 
         StartServer();
         var summary = await NewService(writer, TimeAt(TimeSpan.FromMinutes(5))).RunPassAsync(_storage, Client, default);

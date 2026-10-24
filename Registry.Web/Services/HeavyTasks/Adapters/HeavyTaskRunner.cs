@@ -47,7 +47,6 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
 
     public async Task<HeavyTaskSubmitResult> SubmitAsync(HeavyTaskSubmitRequest request, CancellationToken ct = default)
     {
-
         var tool = _registry.Resolve(request.ToolId, request.Version)
                    ?? throw new HeavyToolNotFoundException($"Tool '{request.ToolId}' is not available.");
 
@@ -82,13 +81,5 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
             request.ParentJobId, request.WorkflowExecutionId);
 
         return new HeavyTaskSubmitResult(jobId, tool.Id, tool.Version, false, plan.EstimatedOutputBytes);
-    }
-
-    public string SubmitSystemBuild(string orgSlug, string dsSlug, string? path, bool force, string? hash = null)
-    {
-        var prms = JsonSerializer.SerializeToElement(new { path, force });
-        var toolRequest = new HeavyToolRequest(HeavyToolIds.Build, "1", orgSlug, dsSlug, path, prms);
-
-        return _processor.EnqueueHeavyTask(toolRequest, userId: null, entryHash: hash);
     }
 }

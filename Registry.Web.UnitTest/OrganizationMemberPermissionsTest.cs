@@ -166,15 +166,6 @@ public class OrganizationMemberPermissionsTest : TestBase
         permission.CanManageMembers().ShouldBeTrue();
     }
 
-    [Test]
-    public void OrganizationPermission_GetDisplayName_ReturnsCorrectNames()
-    {
-        OrganizationPermissions.ReadOnly.GetDisplayName().ShouldBe("Read Only");
-        OrganizationPermissions.ReadWrite.GetDisplayName().ShouldBe("Read/Write");
-        OrganizationPermissions.ReadWriteDelete.GetDisplayName().ShouldBe("Read/Write/Delete");
-        OrganizationPermissions.Admin.GetDisplayName().ShouldBe("Admin");
-    }
-
     #endregion
 
     #region GetMembers Tests
@@ -377,28 +368,6 @@ public class OrganizationMemberPermissionsTest : TestBase
         await Should.ThrowAsync<ForbiddenException>(
             manager.RemoveMember(_testOrg.Slug, _memberUser.UserName)
         );
-    }
-
-    #endregion
-
-    #region IsMemberManagementEnabled Tests
-
-    [Test]
-    public void IsMemberManagementEnabled_WhenEnabled_ReturnsTrue()
-    {
-        _appSettings.EnableOrganizationMemberManagement = true;
-        var manager = CreateManager();
-
-        manager.IsMemberManagementEnabled.ShouldBeTrue();
-    }
-
-    [Test]
-    public void IsMemberManagementEnabled_WhenDisabled_ReturnsFalse()
-    {
-        _appSettings.EnableOrganizationMemberManagement = false;
-        var manager = CreateManager();
-
-        manager.IsMemberManagementEnabled.ShouldBeFalse();
     }
 
     #endregion

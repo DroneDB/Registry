@@ -57,9 +57,6 @@ public sealed class IndexingStateHandler : IStateHandler
     public static double ScoreForNow(DateTime nowUtc) =>
         Math.Max(0, Math.Floor((ToUtc(nowUtc) - ScoreEpochUtc).TotalMinutes));
 
-    /// <summary>UTC time represented by a score.</summary>
-    public static DateTime FromScore(double score) => ScoreEpochUtc.AddMinutes(score);
-
     /// <summary>True when the handler is registered in <see cref="GlobalStateHandlers"/>.</summary>
     public static bool IsRegistered()
     {

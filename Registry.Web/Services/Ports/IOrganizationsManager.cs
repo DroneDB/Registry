@@ -75,10 +75,5 @@ public interface IOrganizationsManager
     /// <param name="userName">Username to remove</param>
     Task RemoveMember(string orgSlug, string userName, CancellationToken ct = default);
 
-    /// <summary>
-    /// Checks if organization member management feature is enabled
-    /// </summary>
-    bool IsMemberManagementEnabled { get; }
-
     #endregion
 }

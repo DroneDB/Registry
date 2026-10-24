@@ -422,7 +422,7 @@ public class PendingRecoveryIntegrationTests
         ddb.GetStamp().Checksum.ShouldBe(checksum);
         var count = (await Rows("budget")).Length;
         using (var scope = _provider.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<BuildPendingService>().ScheduleRetryIfPending(Org, "budget");
+            await scope.ServiceProvider.GetRequiredService<BuildPendingService>().ScheduleRetryIfPending(Org, "budget", null, null, null);
         (await Rows("budget")).Length.ShouldBe(count);
 
         // Hold the restarted entry until the sweep has published its epoch;
@@ -554,8 +554,8 @@ public class PendingRecoveryIntegrationTests
         // The first invalidation migrates the still-populated legacy cache
         // before evicting it, even though the empty host initialized the hash.
         await InvalidateFirstHost();
-        await first.ScheduleRetryIfPending(Org, ds);
-        await second.ScheduleRetryIfPending(Org, ds);
+        await first.ScheduleRetryIfPending(Org, ds, null, null, null);
+        await second.ScheduleRetryIfPending(Org, ds, null, null, null);
         var coordinator = (await Rows(ds)).Single();
         ScheduledDelay(coordinator.JobId).ShouldBe(TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(2));
         (await CacheState(ds)).GetProperty("RetryAttempt").GetInt32().ShouldBe(4);
@@ -568,12 +568,12 @@ public class PendingRecoveryIntegrationTests
         using (var empty = JsonDocument.Parse(await Cache.GetAsync(MagicStrings.BuildPendingTrackerCacheSeed,
                    CacheCategories.ForDataset(Org, ds))))
             empty.RootElement.TryGetProperty("RetryAttempt", out _).ShouldBeFalse();
-        await first.ScheduleRetryIfPending(Org, ds);
+        await first.ScheduleRetryIfPending(Org, ds, null, null, null);
         (await Rows(ds)).Length.ShouldBe(1);
         (await CacheState(ds)).GetProperty("RetryAttempt").GetInt32().ShouldBe(4);
         Client.ChangeState(coordinator.JobId, new DeletedState { Reason = "Test completed coordinator" }, "Scheduled").ShouldBeTrue();
-        await second.ScheduleRetryIfPending(Org, ds);
-        await first.ScheduleRetryIfPending(Org, ds);
+        await second.ScheduleRetryIfPending(Org, ds, null, null, null);
+        await first.ScheduleRetryIfPending(Org, ds, null, null, null);
         (await Rows(ds)).Length.ShouldBe(2);
         (await CacheState(ds)).GetProperty("RetryAttempt").GetInt32().ShouldBe(5);
         using var connection = _storage.GetConnection();

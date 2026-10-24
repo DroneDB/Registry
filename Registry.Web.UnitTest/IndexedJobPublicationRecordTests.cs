@@ -213,7 +213,6 @@ public class IndexedJobPublicationRecordTests
         IndexingStateHandler.ScoreForNow(epoch.AddMinutes(10).AddSeconds(59)).ShouldBe(10);
         IndexingStateHandler.ToScore(epoch.AddDays(-3)).ShouldBe(0, "before the epoch clamps to 0");
         IndexingStateHandler.ScoreForNow(epoch.AddDays(-3)).ShouldBe(0);
-        IndexingStateHandler.FromScore(15).ShouldBe(epoch.AddMinutes(15));
     }
 
     [Test]

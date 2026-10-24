@@ -26,7 +26,4 @@ public interface IEntryCommandService
     /// <summary>Deletes each path on its own and reports which were deleted and why the others were not.</summary>
     Task<DeleteBatchResponse> DeleteBatchAsync(string orgSlug, string dsSlug, string[] paths,
         CancellationToken ct = default);
-
-    /// <summary>Deletes the whole dataset folder and index.</summary>
-    Task DeleteAllAsync(string orgSlug, string dsSlug, CancellationToken ct = default);
 }

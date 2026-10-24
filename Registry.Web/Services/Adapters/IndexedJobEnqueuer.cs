@@ -32,35 +32,20 @@ public class IndexedJobEnqueuer(IBackgroundJobClient client, IServiceScopeFactor
     ILogger<IndexedJobEnqueuer> log, JobStorage storage)
     : IIndexedJobEnqueuer
 {
-    public string Enqueue(Expression<Action> methodCall, IndexPayload meta) =>
-        EnqueueCore(Job.FromExpression(methodCall), meta);
-
     public string Enqueue<T>(Expression<Action<T>> methodCall, IndexPayload meta) =>
-        EnqueueCore(Job.FromExpression(methodCall), meta);
-
-    public string Enqueue(Expression<Func<Task>> methodCall, IndexPayload meta) =>
         EnqueueCore(Job.FromExpression(methodCall), meta);
 
     public string Enqueue<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta) =>
         EnqueueCore(Job.FromExpression(methodCall), meta);
 
-    public string Schedule(Expression<Action> methodCall, IndexPayload meta, TimeSpan delay) =>
-        ScheduleCore(Job.FromExpression(methodCall), meta, delay);
-
     public string Schedule<T>(Expression<Action<T>> methodCall, IndexPayload meta, TimeSpan delay) =>
         ScheduleCore(Job.FromExpression(methodCall), meta, delay);
 
-    public string Schedule(Expression<Func<Task>> methodCall, IndexPayload meta, TimeSpan delay) =>
-        ScheduleCore(Job.FromExpression(methodCall), meta, delay);
-
-    public string Schedule<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta, TimeSpan delay) =>
-        ScheduleCore(Job.FromExpression(methodCall), meta, delay);
-
-    private string EnqueueCore(Job job, IndexPayload meta) =>
+    internal string EnqueueCore(Job job, IndexPayload meta) =>
         CreateCore(job, meta, createdAt => IndexedJobPublicationRecord.ForImmediate(meta, createdAt,
             meta.Queue ?? EnqueuedState.DefaultQueue));
 
-    private string ScheduleCore(Job job, IndexPayload meta, TimeSpan delay) =>
+    internal string ScheduleCore(Job job, IndexPayload meta, TimeSpan delay) =>
         CreateCore(job, meta, createdAt => IndexedJobPublicationRecord.ForScheduled(meta, createdAt, delay));
 
     internal const string PreparationStateName = IndexingState.StateName;

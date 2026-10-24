@@ -26,21 +26,9 @@ public class BackgroundJobsProcessor : IBackgroundJobsProcessor
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
     }
 
-    public string Enqueue(Expression<Action> methodCall) => _client.Enqueue(methodCall);
-
-    public string Enqueue(Expression<Func<Task>> methodCall) => _client.Enqueue(methodCall);
-
-    public string Enqueue<T>(Expression<Action<T>> methodCall) => _client.Enqueue(methodCall);
-
     public string Enqueue<T>(Expression<Func<T, Task>> methodCall) => _client.Enqueue(methodCall);
 
-    public string Schedule(Expression<Action> methodCall, TimeSpan delay) => _client.Schedule(methodCall, delay);
-
-    public string Schedule(Expression<Func<Task>> methodCall, TimeSpan delay) => _client.Schedule(methodCall, delay);
-
     public string Schedule<T>(Expression<Action<T>> methodCall, TimeSpan delay) => _client.Schedule(methodCall, delay);
-
-    public string Schedule<T>(Expression<Func<T, Task>> methodCall, TimeSpan delay) => _client.Schedule(methodCall, delay);
 
     public bool Delete(string jobId) => _client.Delete(jobId);
 
@@ -71,35 +59,12 @@ public class BackgroundJobsProcessor : IBackgroundJobsProcessor
         return Enum.TryParse(stateName, out JobStatus state) ? state : JobStatus.Unknown;
     }
 
-    public string ContinueJobWith(string parentId, Expression<Action> methodCall,
-        BackgroundJobContinuationOptions options = BackgroundJobContinuationOptions.OnlyOnSucceededState) => _client.ContinueJobWith(parentId, methodCall, (JobContinuationOptions)options);
-
-    public string ContinueJobWith<T>(string parentId, Expression<Action<T>> methodCall,
-        BackgroundJobContinuationOptions options = BackgroundJobContinuationOptions.OnlyOnSucceededState) => _client.ContinueJobWith(parentId, methodCall, (JobContinuationOptions)options);
-
-    // Indexed job methods - delegate to IIndexedJobEnqueuer
-    public string EnqueueIndexed(Expression<Action> methodCall, IndexPayload meta) =>
-        _indexedEnqueuer.Enqueue(methodCall, meta);
-
-    public string EnqueueIndexed(Expression<Func<Task>> methodCall, IndexPayload meta) =>
-        _indexedEnqueuer.Enqueue(methodCall, meta);
-
     public string EnqueueIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta) =>
         _indexedEnqueuer.Enqueue(methodCall, meta);
 
     public string EnqueueIndexed<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta) =>
         _indexedEnqueuer.Enqueue(methodCall, meta);
 
-    // Indexed scheduled (delayed) job methods - delegate to IIndexedJobEnqueuer
-    public string ScheduleIndexed(Expression<Action> methodCall, IndexPayload meta, TimeSpan delay) =>
-        _indexedEnqueuer.Schedule(methodCall, meta, delay);
-
-    public string ScheduleIndexed(Expression<Func<Task>> methodCall, IndexPayload meta, TimeSpan delay) =>
-        _indexedEnqueuer.Schedule(methodCall, meta, delay);
-
     public string ScheduleIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta, TimeSpan delay) =>
-        _indexedEnqueuer.Schedule(methodCall, meta, delay);
-
-    public string ScheduleIndexed<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta, TimeSpan delay) =>
         _indexedEnqueuer.Schedule(methodCall, meta, delay);
 }

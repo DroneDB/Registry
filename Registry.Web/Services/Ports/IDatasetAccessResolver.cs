@@ -51,10 +51,6 @@ public interface IDatasetAccessResolver
     /// <exception cref="Exceptions.ForbiddenException">The current user may not access it.</exception>
     Task<Organization> ResolveOrganizationAsync(string orgSlug, AccessType access, bool withTracking = false,
         bool withDatasets = false, CancellationToken ct = default);
-
-    /// <summary>Checks that the current user has <paramref name="access"/> to an organization the caller holds.</summary>
-    /// <exception cref="Exceptions.ForbiddenException">The current user may not access it.</exception>
-    Task EnsureAccessAsync(Organization organization, AccessType access);
 }
 
 /// <summary>

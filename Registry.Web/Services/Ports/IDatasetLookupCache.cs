@@ -21,9 +21,6 @@ public interface IDatasetLookupCache
     Task<Dataset?> GetOrLoadAsync(string orgSlug, string dsSlug, Func<CancellationToken, Task<Dataset?>> load,
         CancellationToken ct = default);
 
-    /// <summary>Drops the cached lookup of one dataset.</summary>
-    void InvalidateDataset(string orgSlug, string dsSlug);
-
     /// <summary>Drops the cached lookups of every dataset of an organization.</summary>
     void InvalidateOrganization(string orgSlug);
 
