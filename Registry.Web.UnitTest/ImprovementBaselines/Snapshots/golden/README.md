@@ -117,6 +117,12 @@ The fixtures are stateless: `meta-set`/`meta-unset` do not change a later read, 
 | ds-list-folder | POST /orgs/{org}/ds/{ds}/list path=sub | owner | 200 |
 | ds-search | POST /orgs/{org}/ds/{ds}/search query=* | owner | 200 |
 | ds-builds-pending | GET /orgs/{org}/ds/{ds}/builds/pending | owner | 200 |
+| ds-ex, ds-stamp, ds-batches | GET /orgs/{org}/ds/{ds}/ex, …/stamp, …/batches (RQ-14: the other dataset answers that carry libddb values) | owner | 200 |
+| ds-chattr | POST …/chattr attrs={"public":true} (RQ-14) | owner | 200 |
+| meta-dump | POST …/meta/dump (RQ-14) | owner | 200 |
+| share-init | POST /share/init tag=org/ds (RQ-14) | owner | 200 |
+| users-meta, users-user-meta | GET /users/meta, /users/{user}/meta (RQ-14) | owner, admin | 200 |
+| orgs-public | GET /orgs/public (RQ-14) | anonymous | 200 |
 | meta-list, meta-list-entry | GET …/meta/list[?path=sub/img.jpg] | owner | 200 |
 | meta-get, meta-get-list | GET …/meta/get/annotation?path=sub/img.jpg, …/meta/get/tags | owner | 200 |
 | meta-set, meta-unset | POST …/meta/set, …/meta/unset (form) | owner | 200 |

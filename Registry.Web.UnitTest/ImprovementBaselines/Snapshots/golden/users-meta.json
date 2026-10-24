@@ -1,0 +1,8 @@
+{
+  "request": "GET /users/meta",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {}
+}

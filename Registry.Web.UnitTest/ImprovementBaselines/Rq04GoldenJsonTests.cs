@@ -197,6 +197,27 @@ public sealed class Rq04GoldenJsonTests : IDisposable
             Form = new Dictionary<string, string> { ["query"] = "*" }
         };
         yield return new("ds-builds-pending", Caller.Owner, get, DsApi + "/builds/pending", 200);
+        // RQ-14: the other dataset answers that carry libddb values (stamp, attributes, meta dump) or lists (batches)
+        yield return new("ds-ex", Caller.Owner, get, DsApi + "/ex", 200);
+        yield return new("ds-stamp", Caller.Owner, get, DsApi + "/stamp", 200);
+        yield return new("ds-batches", Caller.Owner, get, DsApi + "/batches", 200);
+        yield return new("ds-chattr", Caller.Owner, post, DsApi + "/chattr", 200)
+        {
+            Form = new Dictionary<string, string> { ["attrs"] = """{"public":true}""" },
+            Isolated = true
+        };
+        yield return new("meta-dump", Caller.Owner, post, DsApi + "/meta/dump", 200)
+        {
+            Form = new Dictionary<string, string>()
+        };
+        yield return new("share-init", Caller.Owner, post, "/share/init", 200)
+        {
+            Form = new Dictionary<string, string> { ["tag"] = $"{Org}/{Ds}" },
+            Isolated = true
+        };
+        yield return new("users-meta", Caller.Owner, get, "/users/meta", 200);
+        yield return new("users-user-meta", Caller.Admin, get, $"/users/{OwnerUser}/meta", 200);
+        yield return new("orgs-public", Caller.Anonymous, get, "/orgs/public", 200);
 
         // ---- meta (dataset.js meta/set, meta/unset; MetaController reads). The fixtures are
         // stateless: set/unset do not change what a later read returns
@@ -542,6 +563,18 @@ public sealed class Rq04GoldenJsonTests : IDisposable
 
             ddb.Setup(d => d.GetEntry(It.IsAny<string>(), It.IsAny<string>()))
                 .Returns((string ddbPath, string path) => GetEntry(ddbPath, path));
+
+            // The stamp libddb returns: the checksum of the dataset, the (path, hash) pairs and the meta ids
+            ddb.Setup(d => d.GetStamp(It.IsAny<string>())).Returns(new Stamp
+            {
+                Checksum = "4c9f05cb1d7e8a2f6b3d0e91a7c5f2d84b6e0a39",
+                Entries =
+                [
+                    new Dictionary<string, string> { ["path"] = "ortho.tif", ["hash"] = "8f4e2a1c" },
+                    new Dictionary<string, string> { ["path"] = "sub/img.jpg", ["hash"] = "1b7d3e90" }
+                ],
+                Meta = ["0a223495-84a0-4c15-b425-c7ef88110e75"]
+            });
         }
 
         /// <summary>libddb <c>listEntries</c> over the whole contract dataset.</summary>
