@@ -1,18 +1,18 @@
 using System.Collections.Generic;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
 // Let's duplicate StampDto for no apparent reason
 public class Stamp
 {
-    [JsonProperty("checksum")]
+    [JsonPropertyName("checksum")]
     public string Checksum { get; set; }
 
-    [JsonProperty("entries")]
+    [JsonPropertyName("entries")]
     public List<Dictionary<string, string>> Entries { get; set; }
 
-    [JsonProperty("meta")]
+    [JsonPropertyName("meta")]
     public List<string> Meta { get; set; }
 
 

@@ -82,7 +82,7 @@ public interface IOgcApiFeaturesManager
 
 public interface IOgcApiTilesManager
 {
-    Task<object> GetTileSetsAsync(string orgSlug, string dsSlug, string collectionId, string baseUrl,
+    Task<OgcApiTileSetsDto> GetTileSetsAsync(string orgSlug, string dsSlug, string collectionId, string baseUrl,
         CancellationToken ct = default);
     Task<byte[]?> GetTileAsync(string orgSlug, string dsSlug, string collectionId,
         string tileMatrixSet, int z, int x, int y, CancellationToken ct = default);

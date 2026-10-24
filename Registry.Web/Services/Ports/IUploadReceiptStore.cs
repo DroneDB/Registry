@@ -1,13 +1,14 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Ports;
 
 /// <summary>Where an upload identified by its <c>X-Upload-Id</c> is.</summary>
-[Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum UploadReceiptState
 {
     /// <summary>The body is being received.</summary>

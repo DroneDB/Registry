@@ -1,8 +1,9 @@
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 
@@ -20,7 +21,7 @@ namespace Registry.Adapters.Testing;
 /// caller's.</item>
 /// <item>A call is answered only when a fixture records it (or, for the per-path build status,
 /// records each of its paths); the outputs are deserialized exactly like the native adapter's
-/// (Json.NET defaults), so a test sees what libddb returned to Registry.</item>
+/// (<c>NativeJson</c>), so a test sees what libddb returned to Registry.</item>
 /// <item>Anything else throws <see cref="NotSupportedException"/>: no default values. Configure a
 /// <c>Mock&lt;FakeDdbWrapper&gt; { CallBase = true }</c> (every member is virtual) or record a new
 /// fixture in DroneDB for it.</item>
@@ -69,16 +70,16 @@ public class FakeDdbWrapper : IDdbWrapper
     };
 
     private const string RasterFile = "ortho.tif";
-    private static readonly JToken SurveyTag = "survey";
-    private static readonly JToken Annotation = JObject.Parse("""{"note":"tree","level":2}""");
+    private static readonly JsonNode SurveyTag = JsonValue.Create("survey");
+    private static readonly JsonNode Annotation = JsonNode.Parse("""{"note":"tree","level":2}""")!;
     private static readonly HashSet<EntryType> FilteredTypes = [EntryType.GeoRaster, EntryType.Image];
 
     // The paths indexed in the contract dataset (list fixture), for GetEntry's not-found answer
     private static readonly Lazy<HashSet<string>> IndexedPaths = new(() =>
-        ContractFixture.Load("list").Output.Select(e => (string)e["path"]!).ToHashSet(StringComparer.Ordinal));
+        ContractFixture.Load("list").Output.AsArray().Select(e => (string)e!["path"]!).ToHashSet(StringComparer.Ordinal));
 
     // The build-artifacts fixture, one element per recorded path (<root> still in place)
-    private static readonly Lazy<JArray> BuildArtifacts = new(() => (JArray)ContractFixture.Load("build-artifacts").Output);
+    private static readonly Lazy<JsonArray> BuildArtifacts = new(() => ContractFixture.Load("build-artifacts").Output.AsArray());
 
     // The recorded DDBResolveBuildFile and DDBCopyBuildArtifacts calls: the built ortho.tif
     private const string BuiltHash = "d0d2b869615dca09ef0055f2014401bab298503e3e1f10e339f14f5788ea702f";
@@ -118,7 +119,7 @@ public class FakeDdbWrapper : IDdbWrapper
 
         var root = path[..^(file.Length + 1)];
         var output = WithRoot(ContractFixture.Load(fixture).Output, root);
-        foreach (var entry in output.Children<JObject>())
+        foreach (var entry in output.AsArray().OfType<JsonObject>())
             entry["depth"] = PathDepth(((string)entry["path"]!)[FilePrefix.Length..]);
 
         return Deserialize<List<Entry>>(output);
@@ -178,10 +179,10 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual EntryBuildArtifacts[] GetBuildArtifacts(string ddbPath, string[] paths)
     {
         var root = Generic(ddbPath);
-        var answers = new JArray();
+        var answers = new JsonArray();
         foreach (var path in paths)
         {
-            var recorded = BuildArtifacts.Value.FirstOrDefault(e => (string?)e["path"] == Generic(path))
+            var recorded = BuildArtifacts.Value.FirstOrDefault(e => (string?)e!["path"] == Generic(path))
                            ?? throw NoFixture($"GetBuildArtifacts({ddbPath}, [{string.Join(", ", paths)}])");
             answers.Add(WithRoot(recorded.DeepClone(), root));
         }
@@ -198,7 +199,7 @@ public class FakeDdbWrapper : IDdbWrapper
         if (hash == BuiltHash && Generic(path) == BuiltFile)
             return (string)WithRoot(ContractFixture.Load("resolve-build-file").Output, Generic(ddbPath))!;
 
-        if (!BuildArtifacts.Value.Any(e => (string?)e["build"]?["hash"] == hash))
+        if (!BuildArtifacts.Value.Any(e => (string?)e!["build"]?["hash"] == hash))
             return null;
 
         throw NoFixture($"ResolveBuildFile({ddbPath}, {hash}, {path})");
@@ -255,7 +256,7 @@ public class FakeDdbWrapper : IDdbWrapper
             ("tags", "") => "meta-get-list",
             _ => null
         };
-        return MetaOutput(fixture, path, key, $"MetaGet({ddbPath}, {key}, {path})").ToString(Formatting.None);
+        return Compact(MetaOutput(fixture, path, key, $"MetaGet({ddbPath}, {key}, {path})"));
     }
 
     public virtual int MetaUnset(string ddbPath, string key, string? path = null) =>
@@ -279,11 +280,11 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual List<MetaDump> MetaDump(string ddbPath, string? ids = null)
     {
         var call = $"MetaDump({ddbPath}, {ids})";
-        if (!string.IsNullOrWhiteSpace(ids) && !JsonEquals(ids, new JArray()))
+        if (!string.IsNullOrWhiteSpace(ids) && !JsonEquals(ids, new JsonArray()))
             throw NoFixture(call);
 
         var output = ContractFixture.Load("meta-dump").Output;
-        foreach (var item in output.Children<JObject>())
+        foreach (var item in output.AsArray().OfType<JsonObject>())
             item["id"] = MetaId((string)item["path"]!, (string)item["key"]!, ParseJson((string)item["data"]!));
 
         return Deserialize<List<MetaDump>>(output);
@@ -293,15 +294,15 @@ public class FakeDdbWrapper : IDdbWrapper
     /// The id the fake gives a meta item in place of the normalised <c>"&lt;volatile&gt;"</c>: a UUID
     /// derived from its path, key and data, so the same item has the same id in every output.
     /// </summary>
-    public static string MetaId(string path, string key, JToken data)
+    public static string MetaId(string path, string key, JsonNode? data)
     {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{path}\n{key}\n{data.ToString(Formatting.None)}"));
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{path}\n{key}\n{Compact(data)}"));
         return new Guid(bytes.AsSpan(0, 16)).ToString();
     }
 
     // ---------------------------------------------------------------- STAC
 
-    public virtual JToken StacData(string ddbPath, string? entry)
+    public virtual JsonElement StacData(string ddbPath, string? entry)
     {
         var relative = Generic(entry);
         var call = $"StacData({ddbPath}, {entry})";
@@ -313,21 +314,22 @@ public class FakeDdbWrapper : IDdbWrapper
         if (relative.Length == 0)
             WithDatasetFolder(output, ddbPath);
 
-        return Deserialize<JToken>(output);
+        return Deserialize<JsonElement>(output);
     }
 
     /// <summary>The recorded item collection (every entry with a geometry), paged as libddb pages it.</summary>
-    public virtual JToken StacItemCollectionData(string ddbPath, string? bbox, string? datetime, int limit, int offset)
+    public virtual JsonElement StacItemCollectionData(string ddbPath, string? bbox, string? datetime, int limit, int offset)
     {
         var call = $"StacItemCollectionData({ddbPath}, {bbox}, {datetime}, {limit}, {offset})";
         if (!string.IsNullOrEmpty(bbox) || !string.IsNullOrEmpty(datetime))
             throw NoFixture(call);
 
-        var output = (JObject)ContractFixture.Load("stac-data-item-collection").Output;
-        var page = new JArray(output["features"]!.Skip(Math.Max(offset, 0)).Take(limit <= 0 ? 10 : limit));
+        var output = ContractFixture.Load("stac-data-item-collection").Output.AsObject();
+        var page = new JsonArray(output["features"]!.AsArray().Skip(Math.Max(offset, 0)).Take(limit <= 0 ? 10 : limit)
+            .Select(f => f!.DeepClone()).ToArray());
         output["features"] = page;
         output["numberReturned"] = page.Count;
-        return Deserialize<JToken>(output);
+        return Deserialize<JsonElement>(output);
     }
 
     // ---------------------------------------------------------------- raster
@@ -499,20 +501,22 @@ public class FakeDdbWrapper : IDdbWrapper
     private static T Serve<T>(string? fixture, string call) =>
         fixture == null ? throw NoFixture(call) : Deserialize<T>(ContractFixture.Load(fixture).Output);
 
-    /// <summary>Same as the native adapter (<c>NativeJson</c>): Json.NET defaults over the JSON text.</summary>
-    private static T Deserialize<T>(JToken output) =>
-        JsonConvert.DeserializeObject<T>(output.ToString(Formatting.None))
+    /// <summary>Same as the native adapter: <see cref="NativeJson"/>'s contract and options over the JSON.</summary>
+    private static T Deserialize<T>(JsonNode output) =>
+        output.Deserialize<T>(NativeJson.Options)
         ?? throw new InvalidOperationException($"The fixture output is not a {typeof(T).Name}");
 
-    private static JToken MetaOutput(string? fixture, string? path, string key, string call)
+    private static string Compact(JsonNode? node) => node?.ToJsonString(NativeJson.Options) ?? "null";
+
+    private static JsonNode MetaOutput(string? fixture, string? path, string key, string call)
     {
         if (fixture == null)
             throw NoFixture(call);
 
         var output = ContractFixture.Load(fixture).Output;
-        IEnumerable<JObject> items = output is JArray array ? array.Children<JObject>() : [(JObject)output];
+        IEnumerable<JsonObject> items = output is JsonArray array ? array.OfType<JsonObject>() : [output.AsObject()];
         foreach (var item in items)
-            item["id"] = MetaId(Generic(path), key, item["data"]!);
+            item["id"] = MetaId(Generic(path), key, item["data"]);
 
         return output;
     }
@@ -521,7 +525,7 @@ public class FakeDdbWrapper : IDdbWrapper
         fixture == null ? throw NoFixture(call) : (int)ContractFixture.Load(fixture).Output["removed"]!;
 
     private static string RasterText(string? fixture, string call) =>
-        fixture == null ? throw NoFixture(call) : ContractFixture.Load(fixture).Output.ToString(Formatting.None);
+        fixture == null ? throw NoFixture(call) : Compact(ContractFixture.Load(fixture).Output);
 
     private static bool IsRasterFile(string path)
     {
@@ -548,29 +552,25 @@ public class FakeDdbWrapper : IDdbWrapper
         return generic.StartsWith(root + "/", StringComparison.Ordinal) ? generic[(root.Length + 1)..] : generic;
     }
 
-    private static JToken ParseJson(string json)
-    {
-        using var reader = new JsonTextReader(new StringReader(json)) { DateParseHandling = DateParseHandling.None };
-        return JToken.Load(reader);
-    }
+    private static JsonNode? ParseJson(string json) => JsonNode.Parse(json);
 
-    private static bool JsonEquals(string json, JToken expected)
+    private static bool JsonEquals(string json, JsonNode expected)
     {
         try
         {
-            return JToken.DeepEquals(ParseJson(json), expected);
+            return JsonNode.DeepEquals(ParseJson(json), expected);
         }
-        catch (JsonReaderException)
+        catch (JsonException)
         {
             return false;
         }
     }
 
-    private static JToken WithRoot(JToken output, string root) =>
-        MapStrings(output, s => s.Replace(ContractFixture.RootPlaceholder, root, StringComparison.Ordinal));
+    private static JsonNode WithRoot(JsonNode output, string root) =>
+        MapStrings(output, s => s.Replace(ContractFixture.RootPlaceholder, root, StringComparison.Ordinal))!;
 
     /// <summary>libddb names an unnamed Collection after its dataset folder: the folder of the dataset asked about.</summary>
-    private static void WithDatasetFolder(JToken collection, string ddbPath)
+    private static void WithDatasetFolder(JsonNode collection, string ddbPath)
     {
         var folder = Path.GetFileName(Path.TrimEndingDirectorySeparator(ddbPath));
         foreach (var key in new[] { "title", "description" })
@@ -578,11 +578,12 @@ public class FakeDdbWrapper : IDdbWrapper
                 collection[key] = folder;
     }
 
-    private static JToken MapStrings(JToken token, Func<string, string> map)
+    /// <summary>A copy of <paramref name="node"/> with every string value (not the member names) mapped.</summary>
+    private static JsonNode? MapStrings(JsonNode? node, Func<string, string> map) => node switch
     {
-        var tokens = token is JContainer container ? container.DescendantsAndSelf() : [token];
-        foreach (var value in tokens.OfType<JValue>().Where(v => v.Type == JTokenType.String).ToList())
-            value.Value = map((string)value.Value!);
-        return token;
-    }
+        JsonObject o => new JsonObject(o.Select(p => KeyValuePair.Create(p.Key, MapStrings(p.Value, map)))),
+        JsonArray a => new JsonArray(a.Select(e => MapStrings(e, map)).ToArray()),
+        JsonValue v when v.TryGetValue<string>(out var text) => JsonValue.Create(map(text)),
+        _ => node?.DeepClone()
+    };
 }

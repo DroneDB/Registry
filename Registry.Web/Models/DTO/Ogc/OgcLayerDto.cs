@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Models.DTO.Ogc;

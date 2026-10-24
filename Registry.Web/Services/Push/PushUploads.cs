@@ -6,7 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json;
+using System.Text.Json;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
@@ -141,7 +141,7 @@ public sealed class PushUploads : IPushUploads
         var metaFile = PushFolders.Meta(baseTempFolder);
 
         // Validate
-        JsonConvert.DeserializeObject<List<MetaDump>>(meta);
+        ApiJson.Deserialize<List<MetaDump>>(meta);
 
         // Save file
         await _fileSystem.WriteAllTextAsync(metaFile, meta, CancellationToken.None);

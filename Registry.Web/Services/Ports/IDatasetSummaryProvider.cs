@@ -1,13 +1,14 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 
 namespace Registry.Web.Services.Ports;
 
 /// <summary>
 /// Size and properties of a dataset's index root (what <c>IDDB.GetInfo()</c> returns).
 /// </summary>
-public sealed record DatasetSummary(long Size, Dictionary<string, object> Properties);
+public sealed record DatasetSummary(long Size, Dictionary<string, JsonElement> Properties);
 
 /// <summary>
 /// Dataset summaries for code that needs them for many datasets at once (storage quota,

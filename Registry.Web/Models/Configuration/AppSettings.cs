@@ -1,6 +1,5 @@
 using System;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
+using System.Text.Json.Serialization;
 using Registry.Common;
 
 namespace Registry.Web.Models.Configuration;
@@ -36,13 +35,13 @@ public class AppSettings
     /// <summary>
     /// Provider for authentication database
     /// </summary>
-    [JsonConverter(typeof(StringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public DbProvider AuthProvider { get; set; }
 
     /// <summary>
     /// Provider for registry database
     /// </summary>
-    [JsonConverter(typeof(StringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public DbProvider RegistryProvider { get; set; }
 
     /// <summary>
@@ -55,7 +54,7 @@ public class AppSettings
     /// <summary>
     /// Provider for hangfire
     /// </summary>
-    [JsonConverter(typeof(StringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public HangfireProvider HangfireProvider { get; set; }
 
     /// <summary>

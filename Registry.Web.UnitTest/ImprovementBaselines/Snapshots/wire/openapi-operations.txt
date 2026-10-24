@@ -56,7 +56,7 @@ PUT /orgs/{orgSlug}/ds/{dsSlug}
   401 application/json ProblemDetails
   404 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/align/validate
-  body application/*+json AlignRasterRequestDto; application/json AlignRasterRequestDto; application/json-patch+json AlignRasterRequestDto; text/json AlignRasterRequestDto
+  body application/*+json AlignRasterRequestDto; application/json AlignRasterRequestDto; text/json AlignRasterRequestDto
   200
   400 application/json ProblemDetails
 GET /orgs/{orgSlug}/ds/{dsSlug}/batches
@@ -112,7 +112,7 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/chattr
   401 application/json ProblemDetails
   404 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/contours
-  body application/*+json ContourRequestDto; application/json ContourRequestDto; application/json-patch+json ContourRequestDto; text/json ContourRequestDto
+  body application/*+json ContourRequestDto; application/json ContourRequestDto; text/json ContourRequestDto
   200
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -147,12 +147,12 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/export
   400 application/json ProblemDetails
   401 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/import/url
-  body application/*+json UrlImportRequestDto; application/json UrlImportRequestDto; application/json-patch+json UrlImportRequestDto; text/json UrlImportRequestDto
+  body application/*+json UrlImportRequestDto; application/json UrlImportRequestDto; text/json UrlImportRequestDto
   200 application/json UrlImportResultDto
   400 application/json ProblemDetails
   401 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/import/verify-url
-  body application/*+json UrlImportVerifyRequestDto; application/json UrlImportVerifyRequestDto; application/json-patch+json UrlImportVerifyRequestDto; text/json UrlImportVerifyRequestDto
+  body application/*+json UrlImportVerifyRequestDto; application/json UrlImportVerifyRequestDto; text/json UrlImportVerifyRequestDto
   200 application/json UrlImportVerifyResultDto
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -168,23 +168,23 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/list
   401 application/json ProblemDetails
   404 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/mask-borders
-  body application/*+json MaskBordersRequestDto; application/json MaskBordersRequestDto; application/json-patch+json MaskBordersRequestDto; text/json MaskBordersRequestDto
+  body application/*+json MaskBordersRequestDto; application/json MaskBordersRequestDto; text/json MaskBordersRequestDto
   200 application/json OkDto
   400 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/mask-borders/check
-  body application/*+json MaskBordersRequestDto; application/json MaskBordersRequestDto; application/json-patch+json MaskBordersRequestDto; text/json MaskBordersRequestDto
+  body application/*+json MaskBordersRequestDto; application/json MaskBordersRequestDto; text/json MaskBordersRequestDto
   200 application/json MaskBordersCheckResponseDto
   400 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/merge-multispectral
-  body application/*+json MergeMultispectralRequestDto; application/json MergeMultispectralRequestDto; application/json-patch+json MergeMultispectralRequestDto; text/json MergeMultispectralRequestDto
+  body application/*+json MergeMultispectralRequestDto; application/json MergeMultispectralRequestDto; text/json MergeMultispectralRequestDto
   200 application/json OkDto
   400 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/merge-multispectral/preview
-  body application/*+json MergeMultispectralRequestDto; application/json MergeMultispectralRequestDto; application/json-patch+json MergeMultispectralRequestDto; text/json MergeMultispectralRequestDto
+  body application/*+json MergeMultispectralRequestDto; application/json MergeMultispectralRequestDto; text/json MergeMultispectralRequestDto
   200 application/json string(binary)
   400 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/merge-multispectral/validate
-  body application/*+json MergeMultispectralRequestDto; application/json MergeMultispectralRequestDto; application/json-patch+json MergeMultispectralRequestDto; text/json MergeMultispectralRequestDto
+  body application/*+json MergeMultispectralRequestDto; application/json MergeMultispectralRequestDto; text/json MergeMultispectralRequestDto
   200
   400 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/meta/add
@@ -194,7 +194,7 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/meta/add
   401 application/json ProblemDetails
   404 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/meta/add/{key}
-  body application/*+json string; application/json string; application/json-patch+json string; text/json string
+  body application/*+json string; application/json string; text/json string
   200 application/json MetaDto
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -233,7 +233,7 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/meta/set
   401 application/json ProblemDetails
   404 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/meta/set/{key}
-  body application/*+json string; application/json string; application/json-patch+json string; text/json string
+  body application/*+json string; application/json string; text/json string
   200 application/json MetaDto
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -348,7 +348,7 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/items/{feature
   404 application/xml string; text/xml string
   503 application/xml string; text/xml string
 GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/tiles
-  200
+  200 application/json OgcApiTileSetsDto; text/json OgcApiTileSetsDto; text/plain OgcApiTileSetsDto
   400 application/xml string; text/xml string
   401 application/xml string; text/xml string
   403 application/xml string; text/xml string
@@ -408,7 +408,7 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/raster-point-value
   400 application/json ProblemDetails
   401 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/raster-profile
-  body application/*+json RasterProfileRequestDto; application/json RasterProfileRequestDto; application/json-patch+json RasterProfileRequestDto; text/json RasterProfileRequestDto
+  body application/*+json RasterProfileRequestDto; application/json RasterProfileRequestDto; text/json RasterProfileRequestDto
   200
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -446,17 +446,17 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/stamp
   401 application/json ProblemDetails
   404 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/stockpile/calculate
-  body application/*+json VolumeCalculationRequestDto; application/json VolumeCalculationRequestDto; application/json-patch+json VolumeCalculationRequestDto; text/json VolumeCalculationRequestDto
+  body application/*+json VolumeCalculationRequestDto; application/json VolumeCalculationRequestDto; text/json VolumeCalculationRequestDto
   200
   400 application/json ProblemDetails
   401 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/stockpile/detect
-  body application/*+json StockpileDetectionRequestDto; application/json StockpileDetectionRequestDto; application/json-patch+json StockpileDetectionRequestDto; text/json StockpileDetectionRequestDto
+  body application/*+json StockpileDetectionRequestDto; application/json StockpileDetectionRequestDto; text/json StockpileDetectionRequestDto
   200
   400 application/json ProblemDetails
   401 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/stockpile/detect-all
-  body application/*+json StockpileBatchDetectionRequestDto; application/json StockpileBatchDetectionRequestDto; application/json-patch+json StockpileBatchDetectionRequestDto; text/json StockpileBatchDetectionRequestDto
+  body application/*+json StockpileBatchDetectionRequestDto; application/json StockpileBatchDetectionRequestDto; text/json StockpileBatchDetectionRequestDto
   200
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -464,7 +464,7 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/tasks
   200
   304
 POST /orgs/{orgSlug}/ds/{dsSlug}/tasks
-  body application/*+json SubmitTaskRequestDto; application/json SubmitTaskRequestDto; application/json-patch+json SubmitTaskRequestDto; text/json SubmitTaskRequestDto
+  body application/*+json SubmitTaskRequestDto; application/json SubmitTaskRequestDto; text/json SubmitTaskRequestDto
   200 application/json SubmitTaskResponseDto
   202
   400 application/json ProblemDetails
@@ -591,10 +591,10 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/wmts/p/{folder}
   404 application/xml string; text/xml string
   503 application/xml string; text/xml string
 POST /orgs/{orgSlug}/import
-  body application/*+json CreateImportRequestDto; application/json CreateImportRequestDto; application/json-patch+json CreateImportRequestDto; text/json CreateImportRequestDto
+  body application/*+json CreateImportRequestDto; application/json CreateImportRequestDto; text/json CreateImportRequestDto
   200 application/json ImportCreateResultDto
 POST /orgs/{orgSlug}/import/browse
-  body application/*+json BrowseImportRequestDto; application/json BrowseImportRequestDto; application/json-patch+json BrowseImportRequestDto; text/json BrowseImportRequestDto
+  body application/*+json BrowseImportRequestDto; application/json BrowseImportRequestDto; text/json BrowseImportRequestDto
   200 application/json ImportBrowseResultDto
   400 application/json ProblemDetails
 GET /orgs/{orgSlug}/import/sources
@@ -602,14 +602,14 @@ GET /orgs/{orgSlug}/import/sources
   401 application/json ProblemDetails
   403 application/json ProblemDetails
 POST /orgs/{orgSlug}/import/verify
-  body application/*+json VerifyImportRequestDto; application/json VerifyImportRequestDto; application/json-patch+json VerifyImportRequestDto; text/json VerifyImportRequestDto
+  body application/*+json VerifyImportRequestDto; application/json VerifyImportRequestDto; text/json VerifyImportRequestDto
   200 application/json ImportVerifyResultDto
 GET /orgs/{orgSlug}/members
   200 application/json array<OrganizationMemberDto>
   401 application/json ProblemDetails
   404 application/json ProblemDetails
 POST /orgs/{orgSlug}/members
-  body application/*+json AddOrganizationMemberDto; application/json AddOrganizationMemberDto; application/json-patch+json AddOrganizationMemberDto; text/json AddOrganizationMemberDto
+  body application/*+json AddOrganizationMemberDto; application/json AddOrganizationMemberDto; text/json AddOrganizationMemberDto
   204
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -620,7 +620,7 @@ DELETE /orgs/{orgSlug}/members/{userName}
   401 application/json ProblemDetails
   404 application/json ProblemDetails
 PUT /orgs/{orgSlug}/members/{userName}
-  body application/*+json UpdateMemberPermissionsDto; application/json UpdateMemberPermissionsDto; application/json-patch+json UpdateMemberPermissionsDto; text/json UpdateMemberPermissionsDto
+  body application/*+json UpdateMemberPermissionsDto; application/json UpdateMemberPermissionsDto; text/json UpdateMemberPermissionsDto
   204
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -689,7 +689,7 @@ GET /stac/search
   400 application/json ProblemDetails
   500 application/json ProblemDetails
 POST /stac/search
-  body application/*+json StacSearchRequestDto; application/json StacSearchRequestDto; application/json-patch+json StacSearchRequestDto; text/json StacSearchRequestDto
+  body application/*+json StacSearchRequestDto; application/json StacSearchRequestDto; text/json StacSearchRequestDto
   200 application/json any
   400 application/json ProblemDetails
   500 application/json ProblemDetails
@@ -702,7 +702,7 @@ POST /sys/check-artifact-completeness
   401 application/json ProblemDetails
   403 application/json ProblemDetails
 POST /sys/cleanup
-  body application/*+json CleanupBuildRequestDto; application/json CleanupBuildRequestDto; application/json-patch+json CleanupBuildRequestDto; text/json CleanupBuildRequestDto
+  body application/*+json CleanupBuildRequestDto; application/json CleanupBuildRequestDto; text/json CleanupBuildRequestDto
   200 application/json CleanupBuildResultDto
   202 application/json CleanupBuildResultDto
   400 application/json ProblemDetails
@@ -729,13 +729,13 @@ POST /sys/fix-invalid-slugs
   200 application/json FixInvalidSlugsResultDto
   401 application/json ProblemDetails
 POST /sys/import-dataset
-  body application/*+json ImportDatasetRequestDto; application/json ImportDatasetRequestDto; application/json-patch+json ImportDatasetRequestDto; text/json ImportDatasetRequestDto
+  body application/*+json ImportDatasetRequestDto; application/json ImportDatasetRequestDto; text/json ImportDatasetRequestDto
   202 application/json RemoteImportJobDto
   400 application/json ProblemDetails
   401 application/json ProblemDetails
   403 application/json ProblemDetails
 POST /sys/import-organization
-  body application/*+json ImportOrganizationRequestDto; application/json ImportOrganizationRequestDto; application/json-patch+json ImportOrganizationRequestDto; text/json ImportOrganizationRequestDto
+  body application/*+json ImportOrganizationRequestDto; application/json ImportOrganizationRequestDto; text/json ImportOrganizationRequestDto
   202 application/json RemoteImportJobDto
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -751,7 +751,7 @@ GET /sys/imports/{jobId}
   403 application/json ProblemDetails
   404 application/json ProblemDetails
 POST /sys/merge-organizations
-  body application/*+json MergeOrganizationDto; application/json MergeOrganizationDto; application/json-patch+json MergeOrganizationDto; text/json MergeOrganizationDto
+  body application/*+json MergeOrganizationDto; application/json MergeOrganizationDto; text/json MergeOrganizationDto
   200 application/json MergeOrganizationResultDto
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -762,7 +762,7 @@ POST /sys/migratevisibility
   400 application/json ProblemDetails
   401 application/json ProblemDetails
 POST /sys/move-datasets
-  body application/*+json MoveDatasetDto; application/json MoveDatasetDto; application/json-patch+json MoveDatasetDto; text/json MoveDatasetDto
+  body application/*+json MoveDatasetDto; application/json MoveDatasetDto; text/json MoveDatasetDto
   200 application/json array<MoveDatasetResultDto>
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -784,7 +784,7 @@ GET /sys/report
   400 application/json ProblemDetails
   401 application/json ProblemDetails
 POST /sys/rescan
-  body application/*+json RescanRequestDto; application/json RescanRequestDto; application/json-patch+json RescanRequestDto; text/json RescanRequestDto
+  body application/*+json RescanRequestDto; application/json RescanRequestDto; text/json RescanRequestDto
   202 application/json RescanJobDto
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -816,7 +816,7 @@ GET /users
   400 application/json ProblemDetails
   401 application/json ProblemDetails
 POST /users
-  body application/*+json CreateUserRequest; application/json CreateUserRequest; application/json-patch+json CreateUserRequest; text/json CreateUserRequest
+  body application/*+json CreateUserRequest; application/json CreateUserRequest; text/json CreateUserRequest
   200 application/json UserDto
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -848,7 +848,7 @@ GET /users/roles
   400 application/json ProblemDetails
   401 application/json ProblemDetails
 POST /users/roles
-  body application/*+json CreateRoleRequestDto; application/json CreateRoleRequestDto; application/json-patch+json CreateRoleRequestDto; text/json CreateRoleRequestDto
+  body application/*+json CreateRoleRequestDto; application/json CreateRoleRequestDto; text/json CreateRoleRequestDto
   200
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -865,12 +865,12 @@ DELETE /users/{userName}
   400 application/json ProblemDetails
   401 application/json ProblemDetails
 PUT /users/{userName}
-  body application/*+json EditUserRequestDto; application/json EditUserRequestDto; application/json-patch+json EditUserRequestDto; text/json EditUserRequestDto
+  body application/*+json EditUserRequestDto; application/json EditUserRequestDto; text/json EditUserRequestDto
   200
   400 application/json ProblemDetails
   401 application/json ProblemDetails
 PUT /users/{userName}/changepwd
-  body application/*+json ChangeUserPasswordRequestDto; application/json ChangeUserPasswordRequestDto; application/json-patch+json ChangeUserPasswordRequestDto; text/json ChangeUserPasswordRequestDto
+  body application/*+json ChangeUserPasswordRequestDto; application/json ChangeUserPasswordRequestDto; text/json ChangeUserPasswordRequestDto
   200
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -879,7 +879,7 @@ GET /users/{userName}/meta
   400 application/json ProblemDetails
   401 application/json ProblemDetails
 POST /users/{userName}/meta
-  body application/*+json map<any>; application/json map<any>; application/json-patch+json map<any>; text/json map<any>
+  body application/*+json map<any>; application/json map<any>; text/json map<any>
   200
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -888,7 +888,7 @@ GET /users/{userName}/orgs
   400 application/json ProblemDetails
   401 application/json ProblemDetails
 POST /users/{userName}/orgs
-  body application/*+json AddUserToOrganizationDto; application/json AddUserToOrganizationDto; application/json-patch+json AddUserToOrganizationDto; text/json AddUserToOrganizationDto
+  body application/*+json AddUserToOrganizationDto; application/json AddUserToOrganizationDto; text/json AddUserToOrganizationDto
   200
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -897,7 +897,7 @@ DELETE /users/{userName}/orgs/{orgSlug}
   400 application/json ProblemDetails
   401 application/json ProblemDetails
 PUT /users/{userName}/orgs/{orgSlug}
-  body application/*+json UpdateMemberPermissionsDto; application/json UpdateMemberPermissionsDto; application/json-patch+json UpdateMemberPermissionsDto; text/json UpdateMemberPermissionsDto
+  body application/*+json UpdateMemberPermissionsDto; application/json UpdateMemberPermissionsDto; text/json UpdateMemberPermissionsDto
   200
   400 application/json ProblemDetails
   401 application/json ProblemDetails
@@ -944,7 +944,7 @@ schema DeleteBatchResponse { deleted:array<string>, failed:map<string> }
 schema DeleteUserResultDto { userName:string, successor:string, organizationsTransferred:integer(int32), organizationsDeleted:integer(int32), datasetsTransferred:integer(int32), datasetsDeleted:integer(int32), batchesDeleted:integer(int32), datasetResults:array<MoveDatasetResultDto> }
 schema DeletedDto { deleted:boolean }
 schema EditUserRequestDto { email:string, roles:array<string> }
-schema EntryDto { path:string, hash:string, type:EntryType, properties:map<any>, modifiedTime:string(date-time), size:integer(int64), depth:integer(int32), pointGeometry:any, polygonGeometry:any, buildStatus:string, buildMissingDependencies:array<string>, artifacts:array<ArtifactLinkDto> }
+schema EntryDto { path:string, hash:string, type:EntryType, properties:map<any>, mtime:string(date-time), size:integer(int64), depth:integer(int32), point_geom:any, polygon_geom:any, buildStatus:string, buildMissingDependencies:array<string>, artifacts:array<ArtifactLinkDto> }
 schema EntryType {  }
 schema FaviconOptions { faviconIco:string, favicon16:string, favicon32:string, appleTouchIcon:string, manifest:string, themeColor:string }
 schema FeaturesDto { organizationMemberManagement:boolean, userManagement:boolean, storageLimiter:boolean, maxConcurrentDownloadsPerUser:integer(int32), disableAnonymousBulkDownloads:boolean, passwordPolicy:PasswordPolicyDto, datasetThumbnailCandidates:array<string>, maxExportSizeBytes:integer(int64), bulkDownloadAsyncThresholdBytes:integer(int64), taskTools:array<TaskToolInfoDto>, taskStates:array<TaskStateInfoDto>, hubOptions:HubOptions, hubVersion:string, registryVersion:string, ddbVersion:string }
@@ -970,8 +970,8 @@ schema MaskBordersRequestDto { path:string, near:integer(int32), white:boolean }
 schema MergeMultispectralRequestDto { paths:array<string>, previewBands:string, thumbSize:integer(int32), outputPath:string }
 schema MergeOrganizationDto { sourceOrgSlug:string, destinationOrgSlug:string, conflictResolution:ConflictResolutionStrategy, deleteSourceOrganization:boolean }
 schema MergeOrganizationResultDto { sourceOrgSlug:string, destinationOrgSlug:string, datasetResults:array<MoveDatasetResultDto>, sourceOrganizationDeleted:boolean, datasetsMovedCount:integer(int32), datasetsFailedCount:integer(int32) }
-schema MetaDto { id:string, data:any, modifiedTime:string(date-time) }
-schema MetaDumpDto { id:string, data:any, modifiedTime:string(date-time), path:string, key:string }
+schema MetaDto { id:string, data:any, mtime:string(date-time) }
+schema MetaDumpDto { id:string, data:any, mtime:string(date-time), path:string, key:string }
 schema MetaListItemDto { count:integer(int32), key:string, path:string }
 schema MigrateVisibilityEntryDTO { organizationSlug:string, datasetSlug:string, isPublic:any, visibility:Visibility }
 schema MoveDatasetDto { sourceOrgSlug:string, datasetSlugs:array<string>, destinationOrgSlug:string, conflictResolution:ConflictResolutionStrategy }
@@ -983,6 +983,9 @@ schema OgcApiExtentDto { spatial:OgcApiSpatialExtentDto }
 schema OgcApiLandingDto { title:string, description:string, links:array<OgcApiLinkDto> }
 schema OgcApiLinkDto { href:string, rel:string, type:string, title:string }
 schema OgcApiSpatialExtentDto { bbox:array<array<number(double)>>, crs:string }
+schema OgcApiTileLinkDto { href:string, rel:string, type:string }
+schema OgcApiTileSetDto { tileMatrixSetURI:string, links:array<OgcApiTileLinkDto> }
+schema OgcApiTileSetsDto { tilesets:array<OgcApiTileSetDto> }
 schema OgcConformanceDto { conformsTo:array<string> }
 schema OkDto { ok:boolean }
 schema OrganizationDto { slug:string, name:string, description:string, creationDate:string(date-time), owner:string, isPublic:boolean, permissions:OrganizationPermissionsDto }
@@ -1007,10 +1010,10 @@ schema RescanRequestDto { organizationSlug:string, datasetSlug:string, types:arr
 schema RescanResultDto { organizationSlug:string, datasetSlug:string, totalProcessed:integer(int32), successCount:integer(int32), errorCount:integer(int32), entries:array<RescanEntryResultDto> }
 schema ShareInitResultDto { token:string }
 schema SlugFixEntryDto { kind:string, organizationSlug:string, oldSlug:string, newSlug:string, status:string, reason:string }
-schema StacCatalogDto { type:string, stacVersion:string, id:string, description:string, links:array<StacLinkDto>, conformsTo:array<string> }
+schema StacCatalogDto { type:string, stac_version:string, id:string, description:string, links:array<StacLinkDto>, conformsTo:array<string> }
 schema StacCollectionsDto { collections:array<any>, links:array<StacLinkDto>, numberMatched:integer(int32), numberReturned:integer(int32) }
 schema StacConformanceDto { conformsTo:array<string> }
-schema StacLinkDto { href:string, relationship:string, type:string, title:string, method:string }
+schema StacLinkDto { href:string, rel:string, type:string, title:string, method:string }
 schema StacSearchRequestDto { bbox:array<number(double)>, intersects:any, datetime:string, limit:integer(int32), collections:array<string>, ids:array<string>, token:string }
 schema StampDto { checksum:string, entries:array<map<string>>, meta:array<string> }
 schema StockpileBatchDetectionRequestDto { path:string, sensitivity:number(float), minAreaM2:number(double), maxResults:integer(int32) }

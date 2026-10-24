@@ -30,7 +30,6 @@
         <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="$(DotNetPackagesVersion)" />
-        <PackageVersion Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="$(DotNetPackagesVersion)" />

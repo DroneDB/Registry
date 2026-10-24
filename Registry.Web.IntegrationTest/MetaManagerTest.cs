@@ -9,8 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
@@ -125,7 +124,7 @@ internal class MetaManagerTest : TestBase
         var a = await metaManager.Add(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
             "annotations", "{\"test\":123}");
 
-        ((JToken)a.Data)["test"].ToObject<int>().ShouldBe(123);
+        a.Data!.Value.GetProperty("test").GetInt32().ShouldBe(123);
 
         var res = await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
 
@@ -137,19 +136,19 @@ internal class MetaManagerTest : TestBase
             "annotations",
             "{\"test\":4124,\"pippo\":\"ciao\"}");
 
-        ((JToken)a2.Data)["test"].ToObject<int>().ShouldBe(4124);
-        ((JToken)a2.Data)["pippo"].ToObject<string>().ShouldBe("ciao");
+        a2.Data!.Value.GetProperty("test").GetInt32().ShouldBe(4124);
+        a2.Data!.Value.GetProperty("pippo").GetString().ShouldBe("ciao");
 
         (await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Count()
             .ShouldBe(1);
 
         (await metaManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations"))
-            .Count().ShouldBe(2);
+            .GetArrayLength().ShouldBe(2);
 
         (await metaManager.Remove(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, a.Id)).ShouldBe(1);
 
         (await metaManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations"))
-            .Count().ShouldBe(1);
+            .GetArrayLength().ShouldBe(1);
 
         (await metaManager.Unset(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations"))
             .ShouldBe(1);

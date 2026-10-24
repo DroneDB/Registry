@@ -9,7 +9,8 @@ using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
+using System.Text.Json;
+using Registry.Web.Utilities;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.Ports;
@@ -65,7 +66,7 @@ public sealed partial class ChunkStore : IChunkStore
 
         // Written last: an upload is resumable only once its data file exists
         var temp = manifestPath + ".tmp";
-        File.WriteAllText(temp, JsonConvert.SerializeObject(manifest));
+        File.WriteAllText(temp, ApiJson.Serialize(manifest));
         File.Move(temp, manifestPath, overwrite: true);
 
         // Nothing stored yet: the first chunk can be hashed as it streams in
@@ -258,7 +259,7 @@ public sealed partial class ChunkStore : IChunkStore
     }
 
     private static ChunkManifest ReadManifest(string folder) =>
-        JsonConvert.DeserializeObject<ChunkManifest>(File.ReadAllText(Path.Combine(folder, ManifestFileName)))
+        ApiJson.Deserialize<ChunkManifest>(File.ReadAllText(Path.Combine(folder, ManifestFileName)))
         ?? throw new InvalidOperationException($"Unreadable chunk manifest in '{folder}'");
 
     private static void Validate(ChunkManifest m)

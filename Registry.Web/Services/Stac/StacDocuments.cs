@@ -3,7 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
 
@@ -24,18 +25,28 @@ public static class StacDocuments
     public static string CollectionId(Dataset ds) => $"{ds.Organization.Slug}/{ds.Slug}";
 
     /// <summary>The path of the entry an Item describes: its title (libddb writes the path there).</summary>
-    public static string? ItemPath(JObject item)
+    public static string? ItemPath(JsonObject item)
     {
-        var path = item["properties"]?["title"]?.Value<string>();
-        if (string.IsNullOrEmpty(path) && item["assets"] is JObject assets)
-            path = assets.Properties().FirstOrDefault(p => p.Name != ThumbnailAsset)?.Name;
+        var path = Text((item["properties"] as JsonObject)?["title"]);
+        if (string.IsNullOrEmpty(path) && item["assets"] is JsonObject assets)
+            path = assets.Select(a => a.Key).FirstOrDefault(name => name != ThumbnailAsset);
         return string.IsNullOrEmpty(path) ? null : path;
     }
+
+    /// <summary>The document libddb returned as a mutable object (<see cref="JsonElement"/> is read-only).</summary>
+    public static JsonObject Mutable(JsonElement document, string what) =>
+        document.ValueKind == JsonValueKind.Object ? JsonObject.Create(document)! : throw new DdbException($"Invalid {what} result");
+
+    /// <summary>The text of a string node, else null.</summary>
+    public static string? Text(JsonNode? node) => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+
+    /// <summary>The whole number of a number node, else null.</summary>
+    public static long? Whole(JsonNode? node) => node is JsonValue value && value.TryGetValue<long>(out var number) ? number : null;
 
     // ---- STAC API 1.0.0 -----------------------------------------------------------------------------------
 
     /// <summary>A STAC API Item: its feature id, its collection, its links (root, parent, collection, self).</summary>
-    public static JObject ApiItem(JObject data, Dataset ds, StacUrls urls)
+    public static JsonObject ApiItem(JsonObject data, Dataset ds, StacUrls urls)
     {
         var path = ItemPath(data);
         if (path == null)
@@ -44,7 +55,7 @@ public static class StacDocuments
         var collection = urls.Collection(ds.Organization.Slug, ds.Slug);
         data["id"] = StacIds.FeatureId(path);
         data["collection"] = CollectionId(ds);
-        data["links"] = new JArray
+        data["links"] = new JsonArray
         {
             Link("root", urls.Root, Json),
             Link("parent", collection, Json),
@@ -55,10 +66,10 @@ public static class StacDocuments
     }
 
     /// <summary>A STAC API Collection: its id, its links (root, parent, self, items) and its asset links.</summary>
-    public static JObject ApiCollection(JObject data, Dataset ds, string datasetFolder, StacUrls urls)
+    public static JsonObject ApiCollection(JsonObject data, Dataset ds, string datasetFolder, StacUrls urls)
     {
         WithCollectionId(data, ds, datasetFolder);
-        data["links"] = new JArray
+        data["links"] = new JsonArray
         {
             Link("root", urls.Root, Json),
             Link("parent", urls.Collections, Json),
@@ -69,19 +80,34 @@ public static class StacDocuments
     }
 
     /// <summary>A STAC API ItemCollection: its features as <see cref="ApiItem"/>s, and <paramref name="links"/>.</summary>
-    public static JObject ApiItemCollection(JObject data, Dataset ds, JArray links, StacUrls urls)
+    public static JsonObject ApiItemCollection(JsonObject data, Dataset ds, JsonArray links, StacUrls urls)
     {
-        data["features"] = new JArray(Features(data).Select(f => ApiItem(f, ds, urls)));
+        // The features are rewritten where they are: an item keeps its place in the collection
+        foreach (var feature in Features(data).ToList())
+            ApiItem(feature, ds, urls);
         data["links"] = links;
         return Sorted(data);
     }
 
-    /// <summary>The features of a data-only ItemCollection.</summary>
-    public static IEnumerable<JObject> Features(JObject itemCollection) =>
-        (itemCollection["features"] as JArray ?? []).OfType<JObject>();
+    /// <summary>The features of a data-only ItemCollection (still members of it).</summary>
+    public static IEnumerable<JsonObject> Features(JsonObject itemCollection) =>
+        (itemCollection["features"] as JsonArray)?.OfType<JsonObject>() ?? [];
+
+    /// <summary>
+    /// The features of a data-only ItemCollection taken out of it, to be members of another document (a node has one parent).
+    /// </summary>
+    public static List<JsonObject> TakeFeatures(JsonObject itemCollection)
+    {
+        if (itemCollection["features"] is not JsonArray array)
+            return [];
+
+        var features = array.OfType<JsonObject>().ToList();
+        array.Clear();
+        return features;
+    }
 
     /// <summary>A link of a STAC API document (members in the order Registry has always written them).</summary>
-    public static JObject Link(string rel, string href, string type) => new()
+    public static JsonObject Link(string rel, string href, string type) => new()
     {
         ["rel"] = rel,
         ["href"] = href,
@@ -91,7 +117,7 @@ public static class StacDocuments
     // ---- Legacy per-dataset documents (/orgs/{org}/ds/{ds}/stac) -------------------------------------------
 
     /// <summary>A legacy Item: its slug id, its collection, its links (root, parent, collection, self).</summary>
-    public static JObject LegacyItem(JObject data, Dataset ds, StacUrls urls)
+    public static JsonObject LegacyItem(JsonObject data, Dataset ds, StacUrls urls)
     {
         var path = ItemPath(data);
         if (path == null)
@@ -100,7 +126,7 @@ public static class StacDocuments
         var collection = urls.LegacyCollection(ds);
         data["id"] = StacIds.LegacyItemId(path);
         data["collection"] = CollectionId(ds);
-        data["links"] = new JArray
+        data["links"] = new JsonArray
         {
             LegacyLink("root", urls.Root, Json),
             LegacyLink("parent", collection, Json),
@@ -114,18 +140,18 @@ public static class StacDocuments
     /// A legacy Collection: its id, its links (root, parent, self, then one item link per entry with a geometry,
     /// in path order) and its asset links.
     /// </summary>
-    public static JObject LegacyCollection(JObject data, Dataset ds, string datasetFolder,
+    public static JsonObject LegacyCollection(JsonObject data, Dataset ds, string datasetFolder,
         IEnumerable<string> itemPaths, StacUrls urls)
     {
         WithCollectionId(data, ds, datasetFolder);
-        var links = new JArray
+        var links = new JsonArray
         {
             LegacyLink("root", urls.Root, Json),
             LegacyLink("parent", urls.Root, Json),
             LegacyLink("self", urls.LegacyCollection(ds), Json)
         };
         foreach (var path in itemPaths)
-            links.Add(new JObject
+            links.Add(new JsonObject
             {
                 ["href"] = urls.LegacyItem(ds, path),
                 ["rel"] = "item",
@@ -137,7 +163,7 @@ public static class StacDocuments
     }
 
     // A legacy link: members sorted, as libddb wrote them
-    private static JObject LegacyLink(string rel, string href, string type) => new()
+    private static JsonObject LegacyLink(string rel, string href, string type) => new()
     {
         ["href"] = href,
         ["rel"] = rel,
@@ -148,46 +174,52 @@ public static class StacDocuments
 
     // libddb names an unnamed Collection after its dataset folder (the dataset's internal reference): Registry
     // names it after its id, as it always did, and so its description when there is no readme
-    private static void WithCollectionId(JObject data, Dataset ds, string datasetFolder)
+    private static void WithCollectionId(JsonObject data, Dataset ds, string datasetFolder)
     {
         var id = CollectionId(ds);
         data["id"] = id;
         foreach (var key in new[] { "title", "description" })
-            if (data[key]?.Value<string>() == datasetFolder)
+            if (Text(data[key]) == datasetFolder)
                 data[key] = id;
     }
 
     // The entry's file and its thumbnail
-    private static JObject WithItemAssetLinks(JObject item, Dataset ds, string path, StacUrls urls)
+    private static JsonObject WithItemAssetLinks(JsonObject item, Dataset ds, string path, StacUrls urls)
     {
-        if (item["assets"] is JObject assets)
-            foreach (var asset in assets.Properties().ToList())
-                if (asset.Value is JObject a)
+        if (item["assets"] is JsonObject assets)
+            foreach (var asset in assets.ToList())
+                if (asset.Value is JsonObject a)
                 {
-                    a["href"] = asset.Name == ThumbnailAsset ? urls.Thumbnail(ds, path) : urls.Download(ds, asset.Name);
-                    asset.Value = Sorted(a);
+                    a["href"] = asset.Key == ThumbnailAsset ? urls.Thumbnail(ds, path) : urls.Download(ds, asset.Key);
+                    Sorted(a);
                 }
 
         return Sorted(item);
     }
 
     // The dataset's files without a geometry
-    private static JObject WithCollectionAssetLinks(JObject collection, Dataset ds, StacUrls urls)
+    private static JsonObject WithCollectionAssetLinks(JsonObject collection, Dataset ds, StacUrls urls)
     {
-        if (collection["assets"] is JObject assets)
-            foreach (var asset in assets.Properties().ToList())
-                if (asset.Value is JObject a)
+        if (collection["assets"] is JsonObject assets)
+            foreach (var asset in assets.ToList())
+                if (asset.Value is JsonObject a)
                 {
-                    a["href"] = urls.Download(ds, asset.Name);
-                    asset.Value = Sorted(a);
+                    a["href"] = urls.Download(ds, asset.Key);
+                    Sorted(a);
                 }
 
         return Sorted(collection);
     }
 
-    /// <summary>The object with its members in ordinal order (libddb's).</summary>
-    private static JObject Sorted(JObject o) =>
-        new(o.Properties().OrderBy(p => p.Name, StringComparer.Ordinal).ToList());
+    /// <summary>The object with its members in ordinal order (libddb's), in place.</summary>
+    private static JsonObject Sorted(JsonObject o)
+    {
+        var members = o.OrderBy(p => p.Key, StringComparer.Ordinal).ToList();
+        o.Clear();
+        foreach (var (key, value) in members)
+            o[key] = value;
+        return o;
+    }
 
     /// <summary>The folder name of a dataset's index (libddb's fallback title of an unnamed Collection).</summary>
     public static string FolderOf(IDDB ddb) => Path.GetFileName(Path.TrimEndingDirectorySeparator(ddb.DatasetFolderPath));

@@ -2614,6 +2614,18 @@
       "crs": null
     }
   },
+  "Registry.Web.Models.DTO.Ogc.OgcApiTileLinkDto": {
+    "full": {
+      "href": "Href-text",
+      "rel": "Rel-text",
+      "type": "Type-text"
+    },
+    "sparse": {
+      "href": null,
+      "rel": null,
+      "type": null
+    }
+  },
   "Registry.Web.Models.DTO.Ogc.OgcApiTileSetDto": {
     "full": {
       "tileMatrixSetURI": "TileMatrixSetUri-text",
@@ -2621,14 +2633,32 @@
         {
           "href": "Href-text",
           "rel": "Rel-text",
-          "type": "Type-text",
-          "title": "Title-text"
+          "type": "Type-text"
         }
       ]
     },
     "sparse": {
       "tileMatrixSetURI": null,
       "links": null
+    }
+  },
+  "Registry.Web.Models.DTO.Ogc.OgcApiTileSetsDto": {
+    "full": {
+      "tilesets": [
+        {
+          "tileMatrixSetURI": "TileMatrixSetUri-text",
+          "links": [
+            {
+              "href": "Href-text",
+              "rel": "Rel-text",
+              "type": "Type-text"
+            }
+          ]
+        }
+      ]
+    },
+    "sparse": {
+      "tilesets": null
     }
   },
   "Registry.Web.Models.DTO.Ogc.OgcBoundingBoxDto": {

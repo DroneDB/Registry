@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Frozen;
 using System.Linq;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
 
 namespace Registry.Ports.DroneDB;
 
@@ -59,31 +59,44 @@ public sealed class DdbCapabilities
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(json);
 
-        JObject root;
+        JsonDocument document;
         try
         {
-            root = JObject.Parse(json);
+            document = JsonDocument.Parse(json);
         }
-        catch (Newtonsoft.Json.JsonException ex)
+        catch (JsonException ex)
         {
             throw new FormatException("DDBGetCapabilities() did not return a JSON object", ex);
         }
 
-        var abi = Required<JObject>(root, "abi");
-        return new DdbCapabilities(
-            Required<JValue>(abi, "major").Value<int>(),
-            Required<JValue>(abi, "minor").Value<int>(),
-            Required<JValue>(root, "version").Value<string>() ?? "",
-            Required<JObject>(root, "errorCodes").Properties()
-                .ToFrozenDictionary(p => p.Name, p => p.Value.Value<int>(), StringComparer.Ordinal),
-            Names(root, "errorReasons"),
-            Names(root, "cancellable"),
-            Names(root, "symbols"));
+        using (document)
+        {
+            var root = Required(document.RootElement, null, JsonValueKind.Object);
+            var abi = Required(root, "abi", JsonValueKind.Object);
+            return new DdbCapabilities(
+                Required(abi, "major", JsonValueKind.Number).GetInt32(),
+                Required(abi, "minor", JsonValueKind.Number).GetInt32(),
+                Required(root, "version", JsonValueKind.String).GetString() ?? "",
+                Required(root, "errorCodes", JsonValueKind.Object).EnumerateObject()
+                    .ToFrozenDictionary(p => p.Name, p => p.Value.GetInt32(), StringComparer.Ordinal),
+                Names(root, "errorReasons"),
+                Names(root, "cancellable"),
+                Names(root, "symbols"));
+        }
     }
 
-    private static FrozenSet<string> Names(JObject root, string field) =>
-        Required<JArray>(root, field).Values<string>().OfType<string>().ToFrozenSet(StringComparer.Ordinal);
+    private static FrozenSet<string> Names(JsonElement root, string field) =>
+        Required(root, field, JsonValueKind.Array).EnumerateArray()
+            .Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString()!)
+            .ToFrozenSet(StringComparer.Ordinal);
 
-    private static T Required<T>(JObject parent, string field) where T : JToken =>
-        parent[field] as T ?? throw new FormatException($"DDBGetCapabilities() has no valid \"{field}\"");
+    private static JsonElement Required(JsonElement parent, string? field, JsonValueKind kind)
+    {
+        if (field == null)
+            return parent.ValueKind == kind ? parent : throw new FormatException("DDBGetCapabilities() did not return a JSON object");
+
+        return parent.TryGetProperty(field, out var value) && value.ValueKind == kind
+            ? value
+            : throw new FormatException($"DDBGetCapabilities() has no valid \"{field}\"");
+    }
 }

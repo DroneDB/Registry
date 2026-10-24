@@ -16,7 +16,7 @@ Mock<IOptions<AppSettings>> in tests	0
 Test helpers in Registry.Common/Test	0
 Category string literals (use TestCategories)	0
 Controller log+rethrow catch blocks	0
-catch (Exception ...) total	167
+catch (Exception ...) total	166
 new ErrorResponse( in controllers	0
 ErrorResponse references (D1)	0
 Controller entry debug traces	0
@@ -24,7 +24,7 @@ Controller Content-Length pre-checks	0
 InvalidOperationException thrown by managers	4
 ArgumentException thrown by managers	3
 UnauthorizedException thrown by managers	3
-Web files importing Registry.Adapters	5
+Web files importing Registry.Adapters	6
 RequestAccess + throw blocks	0
 IsUserAdmin() guard + throw blocks	2
 Sync _utils.GetDataset/GetOrganization calls	0
@@ -118,8 +118,8 @@ Hand-built ETag code in controllers	0
 Cancellation answered 408	0
 Anonymous response objects	0
 Actions without [ProducesResponseType]	0
-Newtonsoft attributes in Models and Ports	203
-JToken/JObject/JArray/JValue in port signatures	23
-Production files using Newtonsoft outside the allow-list	100
-AddNewtonsoftJson / MvcNewtonsoftJsonOptions	2
+Newtonsoft attributes in Models and Ports	0
+JToken/JObject/JArray/JValue in port signatures	0
+Production files using Newtonsoft outside the allow-list	0
+AddNewtonsoftJson / MvcNewtonsoftJsonOptions	0
 Dataset route prefix copies in controllers	2

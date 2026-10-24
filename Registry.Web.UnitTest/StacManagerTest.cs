@@ -12,8 +12,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using NUnit.Framework;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
@@ -80,7 +79,7 @@ public class StacManagerTest : TestBase
 
         var result = await stacManager.GetCollections();
 
-        result.Collections.Cast<JObject>().Select(c => c["id"]!.Value<string>())
+        result.Collections.Cast<JsonObject>().Select(c => (string)c["id"]!)
             .ShouldBe(["public/listed"]);
         utilsMock.Verify(o => o.GetDatasetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(),
             It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -94,7 +93,7 @@ public class StacManagerTest : TestBase
 
         var result = await stacManager.GetCollections();
 
-        result.Collections.Cast<JObject>().Select(c => c["id"]!.Value<string>())
+        result.Collections.Cast<JsonObject>().Select(c => (string)c["id"]!)
             .ShouldBe(["public/good-1", "public/good-2"]);
     }
 
@@ -106,7 +105,7 @@ public class StacManagerTest : TestBase
 
         var first = await stacManager.GetCollections(limit: 2);
 
-        first.Collections.Cast<JObject>().Select(c => c["id"]!.Value<string>())
+        first.Collections.Cast<JsonObject>().Select(c => (string)c["id"]!)
             .ShouldBe(["public/ds-a", "public/ds-b"]);
         first.NumberMatched.ShouldBe(3);
         first.NumberReturned.ShouldBe(2);
@@ -116,7 +115,7 @@ public class StacManagerTest : TestBase
 
         var second = await stacManager.GetCollections(limit: 2, offset: 2);
 
-        second.Collections.Cast<JObject>().Select(c => c["id"]!.Value<string>())
+        second.Collections.Cast<JsonObject>().Select(c => (string)c["id"]!)
             .ShouldBe(["public/ds-c"]);
         second.Links.ShouldNotContain(l => l.Relationship == "next");
         second.Links.Single(l => l.Relationship == "prev").Href
@@ -171,7 +170,7 @@ public class StacManagerTest : TestBase
             if (slug == brokenSlug)
                 ddbMock.Setup(o => o.GetStacData(null)).Throws(new InvalidOperationException("corrupt index"));
             else
-                ddbMock.Setup(o => o.GetStacData(null)).Returns(() => new JObject { ["type"] = "Collection" });
+                ddbMock.Setup(o => o.GetStacData(null)).Returns(() => TestJson.Parse("""{"type":"Collection"}"""));
 
             _ddbManagerMock.Setup(o => o.Get(ds.Organization.Slug, ds.InternalRef)).Returns(ddbMock.Object);
         }

@@ -727,7 +727,7 @@ public unsafe class Abi11ContractTests : TestBase
 
         var delta = DdbWrapper.Delta(source, destination);
         delta.Adds.Select(a => (a.Path, a.Hash)).ToArray().ShouldBe(new[] { (TextName, TextHash) });
-        var deltaJson = JsonConvert.SerializeObject(delta);
+        var deltaJson = NativeJson.Serialize(delta);
 
         foreach (var invalid in new[]
                  {

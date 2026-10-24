@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -285,19 +286,17 @@ public class MetaController : ControllerBaseEx
     /// <param name="path">Optional path within the dataset.</param>
     /// <returns>The metadata values as JSON.</returns>
     [HttpGet("get/{key}", Name = nameof(MetaController) + "." + nameof(Get))]
-    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Get(
+    public async Task<ActionResult<JsonElement>> Get(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string key,
         [FromQuery] string path = null, CancellationToken ct = default)
     {
-        var res = await _metaManager.Get(orgSlug, dsSlug, key, path, ct: ct);
-
-        return Ok(res);
+        return await _metaManager.Get(orgSlug, dsSlug, key, path, ct: ct);
     }
 
     /// <summary>

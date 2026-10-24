@@ -1,4 +1,3 @@
-using Newtonsoft.Json;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Adapters.Testing;
@@ -13,7 +12,7 @@ namespace Registry.Adapters.Testing;
 public class FakeDdbRuntime : IDdbRuntime
 {
     private static readonly Lazy<DdbCapabilities> RecordedCapabilities = new(() =>
-        DdbCapabilities.Parse(ContractFixture.Load("capabilities").Output.ToString(Formatting.None)));
+        DdbCapabilities.Parse(ContractFixture.Load("capabilities").Output.ToJsonString()));
 
     private readonly List<string> _calls = [];
     private readonly Lock _lock = new();
@@ -64,7 +63,7 @@ public class FakeDdbRuntime : IDdbRuntime
     }
 
     public virtual string GetEffectiveConfig() =>
-        ContractFixture.Load("effective-config").Output.ToString(Formatting.None);
+        ContractFixture.Load("effective-config").Output.ToJsonString();
 
     public virtual void SetLogSink(IDdbLogSink? sink, DdbLogLevel minLevel)
     {

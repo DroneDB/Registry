@@ -6,13 +6,13 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Stac;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
 
@@ -172,12 +172,12 @@ public class StacController : ControllerBaseEx
         if (!IsValidDatetime(datetime))
             throw new BadRequestException(DatetimeError);
 
-        JToken parsedIntersects = null;
+        JsonElement? parsedIntersects = null;
         if (hasIntersects)
         {
             try
             {
-                parsedIntersects = JToken.Parse(intersects);
+                parsedIntersects = JsonDocument.Parse(intersects).RootElement.Clone();
             }
             catch (JsonException)
             {
@@ -325,7 +325,7 @@ public class StacController : ControllerBaseEx
     {
         return new ContentResult
         {
-            Content = JsonConvert.SerializeObject(value),
+            Content = ApiJson.Serialize(value),
             ContentType = contentType,
             StatusCode = StatusCodes.Status200OK
         };

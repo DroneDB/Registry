@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
-using Newtonsoft.Json;
+using System.Text.Json;
 
 namespace Registry.Web.Utilities;
 
@@ -18,13 +18,13 @@ public static class DistributedCacheExtensions
             SlidingExpiration = unusedExpireTime
         };
 
-        var jsonData = JsonConvert.SerializeObject(data);
+        var jsonData = ApiJson.Serialize(data);
         await cache.SetStringAsync(recordId, jsonData, options);
     }
 
     public static async Task<T> GetRecordAsync<T>(this IDistributedCache cache, string recordId)
     {
         var jsonData = await cache.GetStringAsync(recordId);
-        return jsonData is null ? default : JsonConvert.DeserializeObject<T>(jsonData);
+        return jsonData is null ? default : ApiJson.Deserialize<T>(jsonData);
     }
 }

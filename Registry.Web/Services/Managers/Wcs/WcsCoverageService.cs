@@ -5,7 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using Registry.Ports.Json;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
@@ -118,20 +119,24 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
     private static WcsRasterInfo ParseRasterInfo(string info)
     {
         if (string.IsNullOrEmpty(info)) return WcsRasterInfo.Empty;
-        var j = JObject.Parse(info);
-        var width = j.Value<int?>("width") ?? 0;
-        var height = j.Value<int?>("height") ?? 0;
-        var bandCount = j.Value<int?>("bandCount") ?? 0;
-        var nativeCrs = j.Value<string>("crs") ?? string.Empty;
+        using var document = JsonDocument.Parse(info);
+        var j = document.RootElement;
+        var width = Int(j, "width");
+        var height = Int(j, "height");
+        var bandCount = Int(j, "bandCount");
+        var nativeCrs = j.Member("crs").Text() ?? string.Empty;
         var bandNames = new List<string>();
 
-        if (j["bands"] is not JArray ba)
+        if (j.Member("bands") is not { ValueKind: JsonValueKind.Array } ba)
             return new WcsRasterInfo(width, height, bandCount, bandNames, nativeCrs);
 
-        foreach (var b in ba)
-            bandNames.Add(b.Value<string>("name") ?? $"band{bandNames.Count + 1}");
+        foreach (var b in ba.Items())
+            bandNames.Add(b.Member("name").Text() ?? $"band{bandNames.Count + 1}");
         return new WcsRasterInfo(width, height, bandCount, bandNames, nativeCrs);
     }
+
+    private static int Int(JsonElement parent, string name) =>
+        parent.Member(name) is { ValueKind: JsonValueKind.Number } value && value.TryGetInt32(out var number) ? number : 0;
 
     public Task<byte[]> RenderRegionAsync(IDDB ddb, OgcLayerDto layer, double[] bboxWgs84,
         int width, int height, string mime,

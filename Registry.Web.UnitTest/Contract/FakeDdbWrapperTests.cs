@@ -4,8 +4,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Moq;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Adapters.Testing;
@@ -125,8 +125,7 @@ public sealed class FakeDdbWrapperTests
     [TestCase("normalize-path-rejected")]
     public void NormalizePath_EqualsItsFixture(string fixture)
     {
-        var expected = Newtonsoft.Json.JsonConvert.DeserializeObject<NormalizedEntryPath>(
-            ContractFixture.Load(fixture).Output.ToString(Newtonsoft.Json.Formatting.None));
+        var expected = ContractFixture.Load(fixture).Output.Deserialize<NormalizedEntryPath>(NativeJson.Options);
 
         Calls[fixture](_ddb).ShouldBe(expected);
     }
@@ -155,7 +154,7 @@ public sealed class FakeDdbWrapperTests
     [TestCase("[\"\"]")]
     public void NormalizePath_InvalidReservedName_IsAnArgumentError(string reservedJson)
     {
-        var names = Newtonsoft.Json.JsonConvert.DeserializeObject<string[]>(reservedJson)!;
+        var names = JsonSerializer.Deserialize<string[]>(reservedJson)!;
         Should.Throw<ArgumentException>(() => _ddb.NormalizePath("a", names));
     }
 
@@ -170,8 +169,8 @@ public sealed class FakeDdbWrapperTests
         image.Depth.ShouldBe(1);
         image.Size.ShouldBe(1151);
         image.ModifiedTime.ShouldBe(DateTimeOffset.FromUnixTimeSeconds(1700000000).UtcDateTime);
-        image.Properties["make"].ShouldBe("Contract");
-        image.PointGeometry.ShouldBeOfType<JObject>();
+        image.Properties["make"].GetString().ShouldBe("Contract");
+        image.PointGeometry!.Value.ValueKind.ShouldBe(JsonValueKind.Object);
         entries.Single(e => e.Path == "sub").Type.ShouldBe(EntryType.Directory);
     }
 
@@ -209,8 +208,9 @@ public sealed class FakeDdbWrapperTests
         var added = _ddb.MetaAdd(Root, "tags", "\"survey\"");
         Guid.TryParse(added.Id, out _).ShouldBeTrue();
 
-        JArray.Parse(_ddb.MetaGet(Root, "tags")!).Select(i => (string?)i["id"]).ShouldContain(added.Id);
-        _ddb.MetaDump(Root).Single(m => m.Key == "tags" && (string?)JToken.Parse(m.Data.ToString()) == "survey")
+        JsonNode.Parse(_ddb.MetaGet(Root, "tags")!)!.AsArray().Select(i => (string?)i!["id"]).ShouldContain(added.Id);
+        // The dump carries each value as JSON text: "survey" is the string "\"survey\""
+        _ddb.MetaDump(Root).Single(m => m.Key == "tags" && (string?)JsonNode.Parse(m.Data!.Value.GetString()!) == "survey")
             .Id.ShouldBe(added.Id);
         _ddb.MetaRemove(Root, added.Id).ShouldBe(1);
         Should.Throw<NotSupportedException>(() => _ddb.MetaRemove(Root, Guid.NewGuid().ToString()));
@@ -221,7 +221,7 @@ public sealed class FakeDdbWrapperTests
     {
         var meta = _ddb.MetaSet(Root, "annotation", """{"note":"tree","level":2}""", "sub/img.jpg");
 
-        meta.Data["note"]!.ToString().ShouldBe("tree");
+        meta.Data!.Value.GetProperty("note").GetString().ShouldBe("tree");
         Should.Throw<NotSupportedException>(() => _ddb.MetaSet(Root, "annotation", """{"note":"bush"}""", "sub/img.jpg"));
     }
 
@@ -231,14 +231,14 @@ public sealed class FakeDdbWrapperTests
         var collection = _ddb.StacData(Path.Combine("/datasets", "org", "d1b2"), null);
         var item = _ddb.StacData(Root, "sub/img.jpg");
 
-        collection["title"]!.ToString().ShouldBe("d1b2");
-        collection["id"].ShouldBeNull();
-        collection["links"].ShouldBeNull();
-        item["id"].ShouldBeNull();
-        item["collection"].ShouldBeNull();
-        item["links"].ShouldBeNull();
-        item["assets"]!["sub/img.jpg"]!["href"].ShouldBeNull();
-        item["properties"]!["title"]!.ToString().ShouldBe("sub/img.jpg");
+        collection.GetProperty("title").GetString().ShouldBe("d1b2");
+        collection.TryGetProperty("id", out _).ShouldBeFalse();
+        collection.TryGetProperty("links", out _).ShouldBeFalse();
+        item.TryGetProperty("id", out _).ShouldBeFalse();
+        item.TryGetProperty("collection", out _).ShouldBeFalse();
+        item.TryGetProperty("links", out _).ShouldBeFalse();
+        item.GetProperty("assets").GetProperty("sub/img.jpg").TryGetProperty("href", out _).ShouldBeFalse();
+        item.GetProperty("properties").GetProperty("title").GetString().ShouldBe("sub/img.jpg");
     }
 
     [Test]
@@ -246,9 +246,10 @@ public sealed class FakeDdbWrapperTests
     {
         var page = _ddb.StacItemCollectionData(Root, null, null, 2, 1);
 
-        page["numberMatched"]!.Value<int>().ShouldBe(4);
-        page["numberReturned"]!.Value<int>().ShouldBe(2);
-        page["features"]!.Select(f => f["properties"]!["title"]!.ToString()).ShouldBe(["layer.geojson", "ortho.tif"]);
+        page.GetProperty("numberMatched").GetInt32().ShouldBe(4);
+        page.GetProperty("numberReturned").GetInt32().ShouldBe(2);
+        page.GetProperty("features").EnumerateArray().Select(f => f.GetProperty("properties").GetProperty("title").GetString())
+            .ShouldBe(["layer.geojson", "ortho.tif"]);
     }
 
     [Test]

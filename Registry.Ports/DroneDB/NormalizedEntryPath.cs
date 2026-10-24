@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
@@ -10,8 +10,9 @@ namespace Registry.Ports.DroneDB;
 /// </summary>
 public sealed record NormalizedEntryPath
 {
+    // Public: the generated contract (DdbJsonContext) lives in another assembly and cannot call a private constructor
     [JsonConstructor]
-    private NormalizedEntryPath(string? path, string? rejected)
+    public NormalizedEntryPath(string? path, string? rejected)
     {
         if ((path == null) == (rejected == null))
             throw new DdbException("DDBNormalizePath returned neither or both of 'path' and 'rejected'");
@@ -21,11 +22,11 @@ public sealed record NormalizedEntryPath
     }
 
     /// <summary>The normalized path; null when the path is rejected.</summary>
-    [JsonProperty("path")]
+    [JsonPropertyName("path")]
     public string? Path { get; }
 
     /// <summary>The rejection code (<see cref="EntryPathRejection"/>); null when the path is accepted.</summary>
-    [JsonProperty("rejected")]
+    [JsonPropertyName("rejected")]
     public string? Rejected { get; }
 
     [JsonIgnore]

@@ -1,5 +1,5 @@
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Registry.Adapters.Testing;
 
@@ -18,14 +18,14 @@ public sealed class ContractFixture
     /// <summary>The value of a normalised volatile string key (meta <c>id</c>).</summary>
     public const string VolatileValue = "<volatile>";
 
-    private readonly JToken _output;
+    private readonly JsonNode _output;
 
-    private ContractFixture(string name, JObject file)
+    private ContractFixture(string name, JsonObject file)
     {
         Name = name;
         Call = (string?)file["call"] ?? throw new FormatException($"Fixture '{name}' has no call");
         Schema = (string?)file["schema"] ?? throw new FormatException($"Fixture '{name}' has no schema");
-        VolatileKeys = file["normalisation"]?["volatileKeys"]?.Values<string>().OfType<string>().ToArray() ?? [];
+        VolatileKeys = file["normalisation"]?["volatileKeys"]?.AsArray().Select(k => (string?)k).OfType<string>().ToArray() ?? [];
         _output = file["output"] ?? throw new FormatException($"Fixture '{name}' has no output");
     }
 
@@ -42,7 +42,7 @@ public sealed class ContractFixture
     public IReadOnlyList<string> VolatileKeys { get; }
 
     /// <summary>A copy of the normalised output (callers may modify it).</summary>
-    public JToken Output => _output.DeepClone();
+    public JsonNode Output => _output.DeepClone();
 
     /// <summary>The names of every vendored fixture.</summary>
     public static IReadOnlyList<string> Names { get; } = ContractFiles.Paths
@@ -57,9 +57,6 @@ public sealed class ContractFixture
     /// Parses fixture JSON keeping every value as written: ISO dates stay strings (Json.NET would
     /// turn them into <see cref="DateTime"/> and write them back in another format).
     /// </summary>
-    public static JObject Parse(string json)
-    {
-        using var reader = new JsonTextReader(new StringReader(json)) { DateParseHandling = DateParseHandling.None };
-        return JObject.Load(reader);
-    }
+    public static JsonObject Parse(string json) =>
+        JsonNode.Parse(json)?.AsObject() ?? throw new FormatException("The fixture is not a JSON object");
 }

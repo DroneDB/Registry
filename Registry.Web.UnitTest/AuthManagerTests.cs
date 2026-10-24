@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
 using Registry.Ports;
+using Registry.Web.Test.Support;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Registry.Web.Data;
@@ -102,11 +103,11 @@ public class AuthManagerTests : TestBase
         _publicDdbMock = new Mock<IDDB>();
         _publicDdbMock.Setup(x => x.GetInfo(null)).Returns(new Entry
             {
-                Properties = new Dictionary<string, object>
+                Properties = TestJson.Props(new Dictionary<string, object>
                 {
                     { "public", true },
                     { "name", "public" }
-                },
+                }),
                 Size = 1000,
                 ModifiedTime = DateTime.Now
             }
@@ -120,11 +121,11 @@ public class AuthManagerTests : TestBase
         _privateDdbMock = new Mock<IDDB>();
         _privateDdbMock.Setup(x => x.GetInfo(null)).Returns(new Entry
             {
-                Properties = new Dictionary<string, object>
+                Properties = TestJson.Props(new Dictionary<string, object>
                 {
                     { "public", false },
                     { "name", "ds" }
-                },
+                }),
                 Size = 1000,
                 ModifiedTime = DateTime.Now
             }

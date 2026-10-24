@@ -1,19 +1,19 @@
 using System;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
 // Let's duplicate MetaDto for no apparent reason
 public class Meta
 {
-    [JsonProperty("id")]
+    [JsonPropertyName("id")]
     public string Id { get; set; }
 
-    [JsonProperty("data")]
-    public JToken Data { get; set; }
+    [JsonPropertyName("data")]
+    public JsonElement? Data { get; set; }
 
-    [JsonProperty("mtime")]
+    [JsonPropertyName("mtime")]
     [JsonConverter(typeof(SecondEpochConverter))]
     public DateTime ModifiedTime { get; set; }
 }

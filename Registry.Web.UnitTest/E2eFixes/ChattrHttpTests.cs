@@ -10,7 +10,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
@@ -36,7 +35,7 @@ public sealed class ChattrHttpTests : IDisposable
     private const string Org = "chattr-org";
     private const string Ds = "chattr-ds";
 
-    private readonly ConcurrentDictionary<string, JToken> _meta = new();
+    private readonly ConcurrentDictionary<string, JsonNode?> _meta = new();
     private readonly List<(string Key, string Data)> _writes = [];
     private RegistryWebFactory _factory = null!;
     private HttpClient _client = null!;
@@ -49,15 +48,15 @@ public sealed class ChattrHttpTests : IDisposable
         _factory.DdbWrapper.Setup(d => d.MetaGet(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
             .Returns((string _, string key, string? _) =>
                 _meta.TryGetValue(key, out var data)
-                    ? new JObject { ["id"] = key, ["data"] = data, ["mtime"] = 1700000000 }.ToString()
+                    ? new JsonObject { ["id"] = key, ["data"] = data?.DeepClone(), ["mtime"] = 1700000000 }.ToJsonString()
                     : throw new DdbException($"Key not found: {key}"));
         _factory.DdbWrapper.Setup(d => d.MetaSet(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
             .Returns((string _, string key, string data, string? _) =>
             {
                 lock (_writes)
                     _writes.Add((key, data));
-                _meta[key] = JToken.Parse(data);
-                return new Meta { Id = key, Data = _meta[key], ModifiedTime = DateTime.UtcNow };
+                _meta[key] = JsonNode.Parse(data);
+                return new Meta { Id = key, Data = TestJson.Parse(data), ModifiedTime = DateTime.UtcNow };
             });
         _client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
@@ -80,7 +79,7 @@ public sealed class ChattrHttpTests : IDisposable
     public void SetUp()
     {
         _meta.Clear();
-        _meta["name"] = "Chattr dataset";
+        _meta["name"] = JsonValue.Create("Chattr dataset");
         lock (_writes)
             _writes.Clear();
     }

@@ -53,7 +53,7 @@ public sealed class Rq12StacListingInvalidationTests : IDisposable
             .Returns((string ddbPath, string _, string data, string? _) =>
             {
                 _visibility[ddbPath] = int.Parse(data.Trim('"'), System.Globalization.CultureInfo.InvariantCulture);
-                return new Meta { Id = "v", Data = data, ModifiedTime = DateTime.UnixEpoch };
+                return new Meta { Id = "v", Data = TestJson.Parse(data), ModifiedTime = DateTime.UnixEpoch };
             });
         _client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 

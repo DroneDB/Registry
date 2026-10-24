@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
 using Registry.Ports;
+using Registry.Web.Test.Support;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
 using Registry.Web.Services.Adapters;
@@ -121,7 +122,7 @@ public class OgcLayerCatalogTests
     public async Task LocalEntryWithoutArtifact_FlaggedFromIndexProperties()
     {
         var entry = VectorEntry("site.dwg");
-        entry.Properties = new Dictionary<string, object> { ["georeferenced"] = false };
+        entry.Properties = TestJson.Props(new Dictionary<string, object> { ["georeferenced"] = false });
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
 
         (await _catalog.GetLayersAsync(Org, Ds)).ShouldBeEmpty();

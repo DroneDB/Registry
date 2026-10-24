@@ -10,9 +10,8 @@ using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Formatting = Newtonsoft.Json.Formatting;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using Registry.Ports.Json;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
@@ -113,7 +112,11 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
         var items = DdbWrapper.QueryVector(gpkg, new VectorQuery(layer.InnerLayerName, Fids: [fid], MaxFeatures: 1));
         try
         {
-            return (JObject.Parse(items)["features"] as JArray)?.FirstOrDefault()?.ToString(Formatting.None) ?? "{}";
+            using var collection = JsonDocument.Parse(items);
+            return collection.RootElement.Member("features") is { ValueKind: JsonValueKind.Array } features &&
+                   features.GetArrayLength() > 0
+                ? features[0].GetRawText()
+                : "{}";
         }
         catch (Exception ex)
         {

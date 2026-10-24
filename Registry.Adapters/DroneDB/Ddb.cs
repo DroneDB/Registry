@@ -6,8 +6,8 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.Json;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Ports;
@@ -112,10 +112,10 @@ public class DDB : IDDB
     {
         // The dataset root info counts the entries (SELECT COUNT)
         var properties = GetInfo().Properties;
-        if (properties == null || !properties.TryGetValue("entries", out var entries) || entries == null)
+        if (properties == null || !properties.TryGetValue("entries", out var entries) || !entries.TryGetInt64(out var count))
             throw new InvalidOperationException($"Cannot count the entries of ddb '{DatasetFolderPath}'");
 
-        return Convert.ToInt64(entries) == 0;
+        return count == 0;
     }
 
     public bool Checkpoint() => Wrapper.Checkpoint(DatasetFolderPath);
@@ -443,9 +443,9 @@ public class DDB : IDDB
         return Wrapper.GetStamp(DatasetFolderPath);
     }
 
-    public JToken GetStacData(string path = null) => Wrapper.StacData(DatasetFolderPath, path);
+    public JsonElement GetStacData(string path = null) => Wrapper.StacData(DatasetFolderPath, path);
 
-    public JToken GetStacItemCollectionData(string bbox = null, string datetime = null, int limit = 10,
+    public JsonElement GetStacItemCollectionData(string bbox = null, string datetime = null, int limit = 10,
         int offset = 0) =>
         Wrapper.StacItemCollectionData(DatasetFolderPath, bbox, datetime, limit, offset);
 

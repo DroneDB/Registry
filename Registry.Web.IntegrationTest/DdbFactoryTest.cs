@@ -6,8 +6,7 @@ using Shouldly;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
@@ -120,7 +119,7 @@ public class DdbFactoryTest : TestBase
         const EntryType expectedType = EntryType.GeoImage;
         const string expectedHash = "f27ddc96daf9aeff3c026de8292681296c3e9d952b647235878c50f2b7b39e94";
         var expectedModifiedTime = new DateTime(2020, 06, 10, 14, 44, 36);
-        var expectedMeta = JsonConvert.DeserializeObject<Dictionary<string, object>>(
+        var expectedMeta = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
             "{\"captureTime\":1591800276004.8,\"focalLength\":4.16,\"focalLength35\":26.0,\"height\":3024,\"make\":\"samsung\",\"model\":\"SM-G950F\",\"orientation\":1,\"sensor\":\"samsung sm-g950f\",\"sensorHeight\":4.32,\"sensorWidth\":5.76,\"width\":4032}");
         const double expectedLatitude = 45.50027;
         const double expectedLongitude = 10.60667;
@@ -143,11 +142,11 @@ public class DdbFactoryTest : TestBase
         res.Depth.ShouldBe(expectedDepth);
         res.Size.ShouldBe(expectedSize);
         res.Type.ShouldBe(expectedType);
-        res.Properties.ShouldBeEquivalentTo(expectedMeta);
+        NativeJson.Serialize(res.Properties).ShouldBe(NativeJson.Serialize(expectedMeta));
 
-        ((JObject)res.PointGeometry)["geometry"]["coordinates"][0].Value<double>().ShouldBe(expectedLongitude, 0.00001);
-        ((JObject)res.PointGeometry)["geometry"]["coordinates"][1].Value<double>().ShouldBe(expectedLatitude, 0.00001);
-        ((JObject)res.PointGeometry)["geometry"]["coordinates"][2].Value<double>().ShouldBe(expectedAltitude, 0.1);
+        res.PointGeometry!.Value.GetProperty("geometry").GetProperty("coordinates")[0].GetDouble().ShouldBe(expectedLongitude, 0.00001);
+        res.PointGeometry!.Value.GetProperty("geometry").GetProperty("coordinates")[1].GetDouble().ShouldBe(expectedLatitude, 0.00001);
+        res.PointGeometry!.Value.GetProperty("geometry").GetProperty("coordinates")[2].GetDouble().ShouldBe(expectedAltitude, 0.1);
 
     }
 
@@ -166,7 +165,7 @@ public class DdbFactoryTest : TestBase
         const EntryType expectedType = EntryType.GeoImage;
         const string expectedHash = "e6e57187a33951a27f51e3a86cc66c6ce43d555f0d51ba3c715fc7b707ce1477";
         var expectedModifiedTime = new DateTime(2017, 04, 2, 20, 01, 27);
-        var expectedMeta = JsonConvert.DeserializeObject<Dictionary<string, object>>(
+        var expectedMeta = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
             "{\"cameraPitch\":-90.0,\"cameraRoll\":0.0,\"cameraYaw\":45.29999923706055,\"captureTime\":1466699547000.0,\"focalLength\":3.4222222222222225,\"focalLength35\":20.0,\"height\":2250,\"make\":\"DJI\",\"model\":\"FC300S\",\"orientation\":1,\"sensor\":\"dji fc300s\",\"sensorHeight\":3.4650000000000003,\"sensorWidth\":6.16,\"width\":4000}");
         const double expectedLatitude = 46.842952;
         const double expectedLongitude = -91.994052;
@@ -198,19 +197,19 @@ public class DdbFactoryTest : TestBase
         res.Depth.ShouldBe(expectedDepth);
         res.Size.ShouldBe(expectedSize);
         res.Type.ShouldBe(expectedType);
-        res.Properties.ShouldBeEquivalentTo(expectedMeta);
-        ((JObject)res.PointGeometry)["geometry"]["coordinates"][0].Value<double>().ShouldBe(expectedLongitude, 0.00001);
-        ((JObject)res.PointGeometry)["geometry"]["coordinates"][1].Value<double>().ShouldBe(expectedLatitude, 0.00001);
-        ((JObject)res.PointGeometry)["geometry"]["coordinates"][2].Value<double>().ShouldBe(expectedAltitude, 0.1);
+        NativeJson.Serialize(res.Properties).ShouldBe(NativeJson.Serialize(expectedMeta));
+        res.PointGeometry!.Value.GetProperty("geometry").GetProperty("coordinates")[0].GetDouble().ShouldBe(expectedLongitude, 0.00001);
+        res.PointGeometry!.Value.GetProperty("geometry").GetProperty("coordinates")[1].GetDouble().ShouldBe(expectedLatitude, 0.00001);
+        res.PointGeometry!.Value.GetProperty("geometry").GetProperty("coordinates")[2].GetDouble().ShouldBe(expectedAltitude, 0.1);
 
-        var polygon = (JObject)res.PolygonGeometry;
+        var polygon = res.PolygonGeometry!.Value;
 
-        var coords = polygon["geometry"]["coordinates"][0];
+        var coords = polygon.GetProperty("geometry").GetProperty("coordinates")[0];
         for (int i = 0; i < expectedCoordinates.Count; i++)
         {
             for (int j = 0; j < expectedCoordinates[i].Count; j++)
             {
-                coords[i][j].Value<double>().ShouldBe(expectedCoordinates[i][j], 0.001);
+                coords[i][j].GetDouble().ShouldBe(expectedCoordinates[i][j], 0.001);
             }
         }
     }

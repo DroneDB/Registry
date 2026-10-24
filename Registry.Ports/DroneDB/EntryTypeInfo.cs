@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
@@ -9,18 +9,18 @@ namespace Registry.Ports.DroneDB;
 /// </summary>
 public sealed class EntryTypeInfo
 {
-    [JsonProperty("id")]
+    [JsonPropertyName("id")]
     public EntryType Id { get; set; }
 
     /// <summary>Its name, as DDBRescan takes it (case-insensitive).</summary>
-    [JsonProperty("name")]
+    [JsonPropertyName("name")]
     public string Name { get; set; } = "";
 
-    [JsonProperty("buildable")]
+    [JsonPropertyName("buildable")]
     public bool Buildable { get; set; }
 
     /// <summary>"file": rendered from the entry's file; "build": from an artifact once built; "none".</summary>
-    [JsonProperty("thumbnail")]
+    [JsonPropertyName("thumbnail")]
     public string Thumbnail { get; set; } = "";
 
     /// <summary>The type has a thumbnail, rendered from the entry's file or from a build artifact.</summary>
@@ -28,10 +28,10 @@ public sealed class EntryTypeInfo
     public bool HasThumbnail => Thumbnail is "file" or "build";
 
     /// <summary>Lowercase extensions, without the dot, of the files that belong to a main file of this type.</summary>
-    [JsonProperty("sidecarExtensions")]
+    [JsonPropertyName("sidecarExtensions")]
     public IReadOnlyList<string> SidecarExtensions { get; set; } = [];
 
     /// <summary>Every artifact role a build of this type can produce, legacy ones included.</summary>
-    [JsonProperty("roles")]
+    [JsonPropertyName("roles")]
     public IReadOnlyList<string> Roles { get; set; } = [];
 }

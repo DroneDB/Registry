@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
 
 namespace Registry.Ports.DroneDB;
 
@@ -88,7 +88,7 @@ public interface IDdbIndex
     /// The data-only STAC Item of <paramref name="path"/>, or the dataset's Collection when it is null
     /// (<see cref="IDdbWrapper.StacData"/>, XI-09): Registry adds every id, link and href.
     /// </summary>
-    JToken GetStacData(string path = null);
+    JsonElement GetStacData(string path = null);
 
     /// <summary>
     /// The data-only STAC ItemCollection of the dataset (<see cref="IDdbWrapper.StacItemCollectionData"/>, XI-09),
@@ -98,5 +98,5 @@ public interface IDdbIndex
     /// <param name="datetime">Optional single RFC3339 datetime or interval "start/end" (".." for open ends), or null</param>
     /// <param name="limit">Maximum number of items to return</param>
     /// <param name="offset">Number of items to skip (paging)</param>
-    JToken GetStacItemCollectionData(string bbox = null, string datetime = null, int limit = 10, int offset = 0);
+    JsonElement GetStacItemCollectionData(string bbox = null, string datetime = null, int limit = 10, int offset = 0);
 }

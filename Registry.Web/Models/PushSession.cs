@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Models;
@@ -16,11 +16,11 @@ public class PushSession
     /// Checksum of the dataset stamp when the push started: Commit applies <see cref="Delta"/>
     /// only if the dataset has not changed since.
     /// </summary>
-    [JsonProperty("ourChecksum")]
+    [JsonPropertyName("ourChecksum")]
     public required string OurChecksum { get; init; }
 
     /// <summary>Delta from the dataset to the client's stamp, computed once by Init.</summary>
-    [JsonProperty("delta")]
+    [JsonPropertyName("delta")]
     public required Delta Delta { get; init; }
 
     private IReadOnlyDictionary<string, string>? _addedFiles;

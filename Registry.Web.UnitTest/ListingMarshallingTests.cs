@@ -6,7 +6,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using Moq;
-using Newtonsoft.Json;
+using System.Text.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Ports;
@@ -99,14 +99,14 @@ public class ListingMarshallingTests : TestBase
 
         // What NativeDdbWrapper did before: UTF-16 copy of the whole payload, then parse
         var (stringMb, stringMs, stringCount) =
-            Measure(() => JsonConvert.DeserializeObject<List<Entry>>(Marshal.PtrToStringUTF8(full.Pointer)!)!);
+            Measure(() => JsonSerializer.Deserialize<List<Entry>>(Marshal.PtrToStringUTF8(full.Pointer)!, NativeJson.Options)!);
         var (fullMb, fullMs, fullCount) = Measure(() => NativeJson.Deserialize<List<Entry>>(full.Pointer)!);
         var (summaryMb, summaryMs, summaryCount) =
             Measure(() => NativeJson.Deserialize<List<EntrySummary>>(summary.Pointer)!);
 
         var payloadMb = full.Length / (1024.0 * 1024);
         TestContext.WriteLine($"full payload {payloadMb:F1} MB, summary payload {summary.Length / (1024.0 * 1024):F1} MB, {Entries} entries");
-        TestContext.WriteLine($"string + JsonConvert:   {stringMs,5:F0} ms {stringMb,6:F0} MB ({stringMb / payloadMb:F1}x full payload)");
+        TestContext.WriteLine($"string + parse:         {stringMs,5:F0} ms {stringMb,6:F0} MB ({stringMb / payloadMb:F1}x full payload)");
         TestContext.WriteLine($"NativeJson, Entry:      {fullMs,5:F0} ms {fullMb,6:F0} MB ({fullMb / payloadMb:F1}x)");
         TestContext.WriteLine($"NativeJson, summaries:  {summaryMs,5:F0} ms {summaryMb,6:F0} MB ({summaryMb / payloadMb:F1}x)");
 
@@ -118,17 +118,18 @@ public class ListingMarshallingTests : TestBase
     }
 
     [Test]
-    public void NativeJson_RoundTripsLikeJsonConvert()
+    public void NativeJson_RoundTripsLikeTheStringPath()
     {
         var bytes = FullListing();
         using var buffer = new NativeBuffer(bytes);
 
-        var expected = JsonConvert.DeserializeObject<List<Entry>>(Encoding.UTF8.GetString(bytes))!;
+        var expected = JsonSerializer.Deserialize<List<Entry>>(Encoding.UTF8.GetString(bytes), NativeJson.Options)!;
         var actual = NativeJson.Deserialize<List<Entry>>(buffer.Pointer)!;
 
         actual.Count.ShouldBe(expected.Count);
-        actual[123].ShouldBeEquivalentTo(expected[123]);
-        actual[^1].ShouldBeEquivalentTo(expected[^1]);
+        // Entries hold JSON documents: compare what they write
+        NativeJson.Serialize(actual[123]).ShouldBe(NativeJson.Serialize(expected[123]));
+        NativeJson.Serialize(actual[^1]).ShouldBe(NativeJson.Serialize(expected[^1]));
     }
 
     [Test]

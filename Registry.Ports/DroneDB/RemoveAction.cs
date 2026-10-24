@@ -1,13 +1,13 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
 public class RemoveAction
 {
-    [JsonProperty("path")]
+    [JsonPropertyName("path")]
     public string Path { get; }
 
-    [JsonProperty("hash")]
+    [JsonPropertyName("hash")]
     public string Hash { get; }
 
     public RemoveAction(string path, string hash)

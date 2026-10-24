@@ -72,7 +72,7 @@ public class DatasetSummaryTests : TestBase
             ddb.Setup(d => d.GetInfo()).Returns(() =>
             {
                 _infoCalls++;
-                return new Entry { Size = 1_000_000, Properties = new Dictionary<string, object> { ["entries"] = 10 } };
+                return new Entry { Size = 1_000_000, Properties = TestJson.Props(new Dictionary<string, object?> { ["entries"] = 10 }) };
             });
             return ddb.Object;
         });

@@ -174,10 +174,7 @@ class ShareManagerTest : TestBase
         _authManagerMock.Setup(o => o.UserExists(user.Id)).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
 
-        var attributes = new Dictionary<string, object>
-        {
-            { "public", true }
-        };
+        var attributes = TestJson.Props(("public", true));
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
@@ -281,10 +278,7 @@ class ShareManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        var attributes = new Dictionary<string, object>
-        {
-            { "public", true }
-        };
+        var attributes = TestJson.Props(("public", true));
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
@@ -398,10 +392,7 @@ class ShareManagerTest : TestBase
         }));
         _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
 
-        var attributes = new Dictionary<string, object>
-        {
-            { "public", true }
-        };
+        var attributes = TestJson.Props(("public", true));
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
@@ -537,10 +528,7 @@ class ShareManagerTest : TestBase
 
         _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
 
-        var attributes = new Dictionary<string, object>
-        {
-            { "public", true }
-        };
+        var attributes = TestJson.Props(("public", true));
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
@@ -691,10 +679,7 @@ class ShareManagerTest : TestBase
 
         _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
 
-        var attributes = new Dictionary<string, object>
-        {
-            { "public", true }
-        };
+        var attributes = TestJson.Props(("public", true));
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
@@ -819,10 +804,7 @@ class ShareManagerTest : TestBase
         }));
         _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
 
-        var attributes = new Dictionary<string, object>
-        {
-            { "public", true }
-        };
+        var attributes = TestJson.Props(("public", true));
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry

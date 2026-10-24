@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json.Linq;
 using Registry.Ports;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -99,7 +98,7 @@ public sealed class TasksManager : ITasksManager
         {
             var st = await _gating.EvaluateAsync(t.Id, orgSlug);
             return new TaskToolDto(t.Id, t.Version, t.Title,
-                t.RequiredAccess.ToString(), t.ProducesArtifact, JToken.Parse(t.InputSchema.RootElement.GetRawText()),
+                t.RequiredAccess.ToString(), t.ProducesArtifact, t.InputSchema.RootElement,
                 st.Hidden, st.Disabled, st.DisabledMessage);
         }));
     }
@@ -126,10 +125,8 @@ public sealed class TasksManager : ITasksManager
 
         var user = await _authManager.GetCurrentUser();
 
-        // Convert JToken? (Newtonsoft) → JsonElement (System.Text.Json).
-        // JsonElement is not bindable by Newtonsoft model binding; JToken? is.
-        var paramsJson = body.Params?.ToString(Newtonsoft.Json.Formatting.None) ?? "{}";
-        var paramsElement = JsonSerializer.Deserialize<JsonElement>(paramsJson);
+        // A task without parameters takes an empty object
+        var paramsElement = body.Params ?? JsonSerializer.SerializeToElement(new { });
 
         var req = new HeavyTaskSubmitRequest(
             orgSlug, dsSlug, tool.Id, tool.Version, body.Path, paramsElement, body.Force,

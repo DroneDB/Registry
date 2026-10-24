@@ -7,13 +7,14 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
+using System.Text.Json;
+using Registry.Ports.Json;
+using Registry.Web.Utilities;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.Import;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
-using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Import;
 
@@ -72,9 +73,9 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         }
 
         var result = await response.Content.ReadAsStringAsync(ct);
-        var authResponse = JsonConvert.DeserializeObject<Dictionary<string, object>>(result);
+        using var authResponse = JsonDocument.Parse(result);
 
-        return authResponse?.SafeGetValue("token") as string;
+        return authResponse.RootElement.Member("token").Text();
     }
 
     /// <inheritdoc />
@@ -101,7 +102,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         }
 
         var result = await response.Content.ReadAsStringAsync(ct);
-        var entries = JsonConvert.DeserializeObject<EntryDto[]>(result) ?? [];
+        var entries = ApiJson.Deserialize<EntryDto[]>(result) ?? [];
 
         return [.. entries.Where(e => e.Type != EntryType.Directory)];
     }
@@ -217,16 +218,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         }
 
         var json = await response.Content.ReadAsStringAsync(ct);
-        var orgs = JsonConvert.DeserializeObject<List<Dictionary<string, object?>>>(json) ?? [];
-
-        return
-        [
-            .. orgs
-                .Select(o => new RemoteBrowseItem(
-                    Slug: o.SafeGetValue("slug") as string ?? string.Empty,
-                    Name: o.SafeGetValue("name") as string ?? string.Empty))
-                .Where(o => !string.IsNullOrWhiteSpace(o.Slug))
-        ];
+        return BrowseItems(json);
     }
 
     /// <inheritdoc />
@@ -248,15 +240,20 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         }
 
         var json = await response.Content.ReadAsStringAsync(ct);
-        var datasets = JsonConvert.DeserializeObject<List<Dictionary<string, object?>>>(json) ?? [];
+        return BrowseItems(json);
+    }
 
+    // The slug and the name of each object of a remote listing (an organization, a dataset)
+    private static RemoteBrowseItem[] BrowseItems(string json)
+    {
+        using var listing = JsonDocument.Parse(json);
         return
         [
-            .. datasets
-                .Select(d => new RemoteBrowseItem(
-                    Slug: d.SafeGetValue("slug") as string ?? string.Empty,
-                    Name: d.SafeGetValue("name") as string ?? string.Empty))
-                .Where(d => !string.IsNullOrWhiteSpace(d.Slug))
+            .. listing.RootElement.Items()
+                .Select(o => new RemoteBrowseItem(
+                    Slug: o.Member("slug").Text() ?? string.Empty,
+                    Name: o.Member("name").Text() ?? string.Empty))
+                .Where(o => !string.IsNullOrWhiteSpace(o.Slug))
         ];
     }
 }

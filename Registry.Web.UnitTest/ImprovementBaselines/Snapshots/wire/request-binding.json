@@ -558,16 +558,7 @@
   "number-empty-string-for-nullable-int": {
     "type": "StacSearchRequestDto",
     "input": "{\"limit\":\"\"}",
-    "outcome": "bound",
-    "model": {
-      "bbox": null,
-      "intersects": null,
-      "datetime": null,
-      "limit": null,
-      "collections": null,
-      "ids": null,
-      "token": null
-    }
+    "outcome": "refused"
   },
   "number-null-for-int": {
     "type": "MaskBordersRequestDto",
@@ -686,13 +677,7 @@
   "string-single-quotes": {
     "type": "CreateUserRequest",
     "input": "{'userName':'a','password':'p'}",
-    "outcome": "bound",
-    "model": {
-      "userName": "a",
-      "password": "p",
-      "email": null,
-      "roles": null
-    }
+    "outcome": "refused"
   },
   "enum-name": {
     "type": "MoveDatasetDto",
@@ -876,12 +861,7 @@
   "syntax-unquoted-names": {
     "type": "MaskBordersRequestDto",
     "input": "{path:\"a.tif\",near:3}",
-    "outcome": "bound",
-    "model": {
-      "path": "a.tif",
-      "near": 3,
-      "white": false
-    }
+    "outcome": "refused"
   },
   "syntax-not-json": {
     "type": "MaskBordersRequestDto",
@@ -906,7 +886,7 @@
   "syntax-empty-body": {
     "type": "MaskBordersRequestDto",
     "input": "",
-    "outcome": "no model"
+    "outcome": "refused"
   },
   "syntax-bom": {
     "type": "MaskBordersRequestDto",
@@ -1021,7 +1001,7 @@
         1,
         2.0,
         3.5,
-        100.0,
+        1e2,
         "2026-01-01T00:00:00Z"
       ],
       "datetime": null,

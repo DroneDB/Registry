@@ -3,8 +3,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.Configuration;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Registry.Web.Hosting;
+using Registry.Web.Utilities;
 using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Configuration;
@@ -36,7 +38,8 @@ public interface IConfigurationView
 public sealed class ConfigurationView : IConfigurationView
 {
     private readonly IConfiguration _configuration;
-    private readonly Lazy<JObject> _defaults = new(() => JObject.Parse(SettingsFile.DefaultContent()));
+    private readonly Lazy<JsonNode?> _defaults =
+        new(() => JsonNode.Parse(SettingsFile.DefaultContent(), documentOptions: SettingsFile.DocumentOptions));
 
     public ConfigurationView(IConfiguration configuration) => _configuration = configuration;
 
@@ -52,7 +55,7 @@ public sealed class ConfigurationView : IConfigurationView
 
     public T? ShippedOrNull<T>() where T : class, new() =>
         RegistryOptions.SectionOf<T>().Split(':')
-            .Aggregate((JToken?)_defaults.Value, (token, key) => token?[key])?.ToObject<T>();
+            .Aggregate(_defaults.Value, (node, key) => node?[key])?.Deserialize<T>(ApiJson.Options);
 }
 
 /// <summary>Where a section goes in the admin configuration view: the order of the members is the page order.</summary>

@@ -1,4 +1,4 @@
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Adapters.Testing;
@@ -37,18 +37,18 @@ public static class PathVectors
     private static PathVector[] Load()
     {
         var file = ContractFixture.Parse(ContractFiles.ReadText(FileName));
-        var vectors = file["vectors"] as JArray ?? throw new FormatException($"{FileName} has no 'vectors' array");
+        var vectors = file["vectors"] as JsonArray ?? throw new FormatException($"{FileName} has no 'vectors' array");
 
-        return vectors.Children<JObject>().Select(v =>
+        return vectors.OfType<JsonObject>().Select(v =>
         {
             var input = (string?)v["input"] ?? throw new FormatException($"{FileName}: a vector has no input");
-            var expected = v["expected"] as JObject ?? throw new FormatException($"{FileName}: '{input}' has no expected");
+            var expected = v["expected"] as JsonObject ?? throw new FormatException($"{FileName}: '{input}' has no expected");
             var path = (string?)expected["path"];
             var rejected = (string?)expected["rejected"];
 
             return new PathVector(
                 input,
-                v["reserved"] is JArray reserved ? reserved.Values<string>().OfType<string>().ToArray() : null,
+                v["reserved"] is JsonArray reserved ? reserved.Select(r => (string?)r).OfType<string>().ToArray() : null,
                 (bool?)v["cString"] ?? true,
                 rejected != null ? NormalizedEntryPath.Rejection(rejected)
                     : NormalizedEntryPath.Accepted(path ?? throw new FormatException($"{FileName}: '{input}' expects nothing")),

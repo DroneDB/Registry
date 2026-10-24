@@ -6,8 +6,8 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using Microsoft.Extensions.Configuration;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using NUnit.Framework;
 using Registry.Test.Common;
 using Registry.Web.Hosting;
@@ -241,31 +241,34 @@ public class Rq07ConfigurationCompatibilityTests
     private static object Bind(IConfiguration configuration, Type options) =>
         configuration.GetSection(RegistryOptions.Sections[options]).Get(options) ?? Activator.CreateInstance(options)!;
 
-    private static string Json(object? value) => JsonConvert.SerializeObject(value);
+    private static string Json(object? value) => JsonSerializer.Serialize(value);
 
     /// <summary>The configuration a host reads: the file with the secrets a start generates (in memory).</summary>
-    private static IConfiguration Configuration(JObject settings)
+    private static IConfiguration Configuration(JsonObject settings)
     {
         SettingsFile.AddMissingSecrets(settings);
         return new ConfigurationBuilder().AddJsonStream(Stream(settings)).Build();
     }
 
-    private static JObject Load(string source, bool render = true)
+    private static JsonObject Load(string source, bool render = true)
     {
         if (source.StartsWith("embedded ", StringComparison.Ordinal))
-            return JObject.Parse(SettingsFile.DefaultContent());
+            return Parse(SettingsFile.DefaultContent());
 
         Assume.That(RepositoryFiles.Root, Is.Not.Null, "repository sources not available next to the test output");
         var text = File.ReadAllText(RepositoryFiles.PathOf(source));
         if (render)
             text = TemplateVariables.Aggregate(text, (current, variable) => current.Replace("$" + variable.Key, variable.Value));
-        return JObject.Parse(text);
+        return Parse(text);
     }
 
-    private static Dictionary<string, string?> Values(JObject settings) =>
+    private static JsonObject Parse(string text) =>
+        JsonNode.Parse(text, documentOptions: SettingsFile.DocumentOptions)!.AsObject();
+
+    private static Dictionary<string, string?> Values(JsonObject settings) =>
         new ConfigurationBuilder().AddJsonStream(Stream(settings)).Build()
             .AsEnumerable().Where(pair => pair.Value != null)
             .ToDictionary(pair => pair.Key, pair => pair.Value);
 
-    private static MemoryStream Stream(JObject settings) => new(Encoding.UTF8.GetBytes(settings.ToString()));
+    private static MemoryStream Stream(JsonObject settings) => new(Encoding.UTF8.GetBytes(settings.ToJsonString()));
 }

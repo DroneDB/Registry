@@ -6,8 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
 using System.Threading;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
@@ -215,7 +214,7 @@ public class NativeDdbWrapper : IDdbWrapper
     public Dictionary<string, object> ChangeAttributes(string ddbPath, Dictionary<string, object> attributes)
     {
         ArgumentNullException.ThrowIfNull(attributes);
-        var json = JsonConvert.SerializeObject(attributes);
+        var json = NativeJson.Serialize(attributes);
         return NativeCall.Invoke<Dictionary<string, object>>(nameof(NativeDdb.DDBChattr),
             (out IntPtr output) => NativeDdb.DDBChattr(ddbPath, json, out output));
     }
@@ -256,8 +255,8 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public Delta Delta(Stamp source, Stamp target)
     {
-        var sourceJson = JsonConvert.SerializeObject(source);
-        var targetJson = JsonConvert.SerializeObject(target);
+        var sourceJson = NativeJson.Serialize(source);
+        var targetJson = NativeJson.Serialize(target);
         return NativeCall.Invoke<Delta>(nameof(NativeDdb.DDBDelta),
             (out IntPtr output) => NativeDdb.DDBDelta(sourceJson, targetJson, out output, "json"));
     }
@@ -265,7 +264,7 @@ public class NativeDdbWrapper : IDdbWrapper
     public List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,
         string? sourceMetaDump = null)
     {
-        var deltaJson = JsonConvert.SerializeObject(delta);
+        var deltaJson = NativeJson.Serialize(delta);
         var metaDump = sourceMetaDump ?? "[]";
         return NativeCall.Invoke<List<string>>(nameof(NativeDdb.DDBApplyDelta),
             (out IntPtr output) => NativeDdb.DDBApplyDelta(deltaJson, sourcePath, ddbPath, (int)mergeStrategy,
@@ -276,9 +275,9 @@ public class NativeDdbWrapper : IDdbWrapper
         string? sourceMetaDump, IReadOnlyDictionary<string, string> verifiedHashes)
     {
         ArgumentNullException.ThrowIfNull(verifiedHashes);
-        var deltaJson = JsonConvert.SerializeObject(delta);
+        var deltaJson = NativeJson.Serialize(delta);
         var metaDump = sourceMetaDump ?? "[]";
-        var verifiedJson = JsonConvert.SerializeObject(verifiedHashes);
+        var verifiedJson = NativeJson.Serialize(verifiedHashes);
         return NativeCall.Invoke<List<string>>(nameof(NativeDdb.DDBApplyDeltaEx),
             (out IntPtr output) => NativeDdb.DDBApplyDeltaEx(deltaJson, sourcePath, ddbPath, (int)mergeStrategy,
                 metaDump, verifiedJson, out output));
@@ -286,7 +285,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public Dictionary<string, bool> ComputeDeltaLocals(Delta delta, string ddbPath, string hlDestFolder = "")
     {
-        var deltaJson = JsonConvert.SerializeObject(delta);
+        var deltaJson = NativeJson.Serialize(delta);
         return NativeCall.Invoke<Dictionary<string, bool>>(nameof(NativeDdb.DDBComputeDeltaLocals),
             (out IntPtr output) => NativeDdb.DDBComputeDeltaLocals(deltaJson, ddbPath, hlDestFolder, out output));
     }
@@ -418,7 +417,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public int MetaRemove(string ddbPath, string id) =>
         Removed(nameof(NativeDdb.DDBMetaRemove),
-            NativeCall.Invoke<JObject>(nameof(NativeDdb.DDBMetaRemove),
+            NativeCall.InvokeDocument(nameof(NativeDdb.DDBMetaRemove),
                 (out IntPtr output) => NativeDdb.DDBMetaRemove(ddbPath, id, out output)));
 
     public string? MetaGet(string ddbPath, string key, string? path = null) =>
@@ -427,7 +426,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
     public int MetaUnset(string ddbPath, string key, string? path = null) =>
         Removed(nameof(NativeDdb.DDBMetaUnset),
-            NativeCall.Invoke<JObject>(nameof(NativeDdb.DDBMetaUnset),
+            NativeCall.InvokeDocument(nameof(NativeDdb.DDBMetaUnset),
                 (out IntPtr output) => NativeDdb.DDBMetaUnset(ddbPath, path ?? string.Empty, key, out output)));
 
     public List<MetaListItem> MetaList(string ddbPath, string? path = null) =>
@@ -439,19 +438,19 @@ public class NativeDdbWrapper : IDdbWrapper
             (out IntPtr output) => NativeDdb.DDBMetaDump(ddbPath, ids ?? "[]", out output));
 
     // The meta-count output: {"removed": n}
-    private static int Removed(string operation, JObject output) =>
-        output.TryGetValue("removed", out var removed)
-            ? removed.ToObject<int>()
-            : throw new DdbException($"{operation} returned no 'removed' count: {output.ToString(Formatting.None)}");
+    private static int Removed(string operation, JsonElement output) =>
+        output.ValueKind == JsonValueKind.Object && output.TryGetProperty("removed", out var removed) && removed.TryGetInt32(out var count)
+            ? count
+            : throw new DdbException($"{operation} returned no 'removed' count: {output.GetRawText()}");
 
     // ---------------------------------------------------------------- STAC
 
-    public JToken StacData(string ddbPath, string? entry) =>
-        NativeCall.Invoke<JToken>(nameof(NativeDdb.DDBStacData),
+    public JsonElement StacData(string ddbPath, string? entry) =>
+        NativeCall.InvokeDocument(nameof(NativeDdb.DDBStacData),
             (out IntPtr output) => NativeDdb.DDBStacData(ddbPath, entry ?? string.Empty, out output));
 
-    public JToken StacItemCollectionData(string ddbPath, string? bbox, string? datetime, int limit, int offset) =>
-        NativeCall.Invoke<JToken>(nameof(NativeDdb.DDBStacItemCollectionData),
+    public JsonElement StacItemCollectionData(string ddbPath, string? bbox, string? datetime, int limit, int offset) =>
+        NativeCall.InvokeDocument(nameof(NativeDdb.DDBStacItemCollectionData),
             (out IntPtr output) => NativeDdb.DDBStacItemCollectionData(ddbPath, bbox ?? string.Empty,
                 datetime ?? string.Empty, limit, offset, out output));
 

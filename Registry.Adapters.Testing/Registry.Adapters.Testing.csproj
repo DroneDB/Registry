@@ -13,10 +13,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Newtonsoft.Json" />
-    </ItemGroup>
-
-    <ItemGroup>
+        <!-- NativeJson.Options: the fake deserializes the fixtures exactly like the native adapter reads libddb -->
+        <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
         <ProjectReference Include="..\Registry.Ports\Registry.Ports.csproj" />
     </ItemGroup>
 

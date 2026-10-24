@@ -1,5 +1,5 @@
 #nullable enable
-using Newtonsoft.Json;
+using System.Text.Json;
 using NUnit.Framework;
 using Registry.Web.Exceptions;
 using Registry.Web.Test.Support;
@@ -21,7 +21,12 @@ public class DatasetPathTests
     }
 
     private static Body? Read(string json) =>
-        JsonConvert.DeserializeObject<Body>(json, new DatasetPathJsonConverter(TestPaths.Policy));
+        JsonSerializer.Deserialize<Body>(json, Options);
+
+    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new DatasetPathJsonConverter(TestPaths.Policy) }
+    };
 
     [TestCase(null)]
     [TestCase("")]
@@ -61,6 +66,6 @@ public class DatasetPathTests
     public void Json_RefusedPath_ThrowsTheRulesException_AndAnObjectIsAJsonError()
     {
         Should.Throw<InvalidDatasetPathException>(() => Read("""{ "path": "../a.tif" }"""));
-        Should.Throw<JsonSerializationException>(() => Read("""{ "path": { "a": 1 } }"""));
+        Should.Throw<JsonException>(() => Read("""{ "path": { "a": 1 } }"""));
     }
 }

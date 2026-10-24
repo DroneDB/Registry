@@ -1,10 +1,12 @@
 #nullable enable
 using System;
 using System.Globalization;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Binders;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Web.Utilities;
 
@@ -67,16 +69,22 @@ public sealed class DatasetPathJsonConverter : JsonConverter<DatasetPath>
         _paths = paths;
     }
 
-    public override DatasetPath? ReadJson(JsonReader reader, Type objectType, DatasetPath? existingValue,
-        bool hasExistingValue, JsonSerializer serializer) =>
+    public override DatasetPath? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
         reader.TokenType switch
         {
-            JsonToken.Null or JsonToken.Undefined => null,
-            JsonToken.String or JsonToken.Integer or JsonToken.Float or JsonToken.Boolean =>
-                _paths.Parse(Convert.ToString(reader.Value, CultureInfo.InvariantCulture)),
-            _ => throw new JsonSerializationException($"A dataset path is a string, not {reader.TokenType}.")
+            JsonTokenType.Null => null,
+            JsonTokenType.String => _paths.Parse(reader.GetString()),
+            JsonTokenType.Number => _paths.Parse(Encoding.UTF8.GetString(reader.ValueSpan)),
+            JsonTokenType.True => _paths.Parse("True"),
+            JsonTokenType.False => _paths.Parse("False"),
+            _ => throw new JsonException($"A dataset path is a string, not {reader.TokenType}.")
         };
 
-    public override void WriteJson(JsonWriter writer, DatasetPath? value, JsonSerializer serializer) =>
-        writer.WriteValue(value?.ToString());
+    public override void Write(Utf8JsonWriter writer, DatasetPath? value, JsonSerializerOptions options)
+    {
+        if (value is null)
+            writer.WriteNullValue();
+        else
+            writer.WriteStringValue(value.ToString());
+    }
 }

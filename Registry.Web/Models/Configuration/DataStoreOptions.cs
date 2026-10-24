@@ -1,6 +1,5 @@
 #nullable enable
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
+using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.Configuration;
 
@@ -8,15 +7,15 @@ namespace Registry.Web.Models.Configuration;
 public sealed class DataStoreOptions
 {
     /// <summary>Provider of the identity database.</summary>
-    [JsonConverter(typeof(StringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public DbProvider AuthProvider { get; set; }
 
     /// <summary>Provider of the registry database.</summary>
-    [JsonConverter(typeof(StringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public DbProvider RegistryProvider { get; set; }
 
     /// <summary>Provider of the Hangfire job storage.</summary>
-    [JsonConverter(typeof(StringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public HangfireProvider HangfireProvider { get; set; }
 
     /// <summary>

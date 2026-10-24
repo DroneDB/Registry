@@ -1,5 +1,5 @@
 using System;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
@@ -10,22 +10,22 @@ namespace Registry.Ports.DroneDB;
 /// </summary>
 public class EntrySummary
 {
-    [JsonProperty("path")]
+    [JsonPropertyName("path")]
     public string Path { get; set; }
 
-    [JsonProperty("hash")]
+    [JsonPropertyName("hash")]
     public string Hash { get; set; }
 
-    [JsonProperty("type")]
+    [JsonPropertyName("type")]
     public EntryType Type { get; set; }
 
-    [JsonProperty("mtime")]
+    [JsonPropertyName("mtime")]
     [JsonConverter(typeof(SecondEpochConverter))]
     public DateTime ModifiedTime { get; set; }
 
-    [JsonProperty("size")]
+    [JsonPropertyName("size")]
     public long Size { get; set; }
 
-    [JsonProperty("depth")]
+    [JsonPropertyName("depth")]
     public int Depth { get; set; }
 }

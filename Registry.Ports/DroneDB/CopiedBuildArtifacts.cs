@@ -1,19 +1,19 @@
 using System.Collections.Generic;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
 /// <summary>The result of <c>DDBCopyBuildArtifacts</c> (XI-04): the destination's artifacts after the copy.</summary>
 public sealed class CopiedBuildArtifacts
 {
-    [JsonProperty("hash")]
+    [JsonPropertyName("hash")]
     public string Hash { get; set; } = "";
 
     /// <summary>The artifacts of the destination after the copy (as in a build object).</summary>
-    [JsonProperty("artifacts")]
+    [JsonPropertyName("artifacts")]
     public IReadOnlyList<BuildArtifact> Artifacts { get; set; } = [];
 
     /// <summary>The destination has a pending marker (a deferred build stays deferred).</summary>
-    [JsonProperty("pending")]
+    [JsonPropertyName("pending")]
     public bool Pending { get; set; }
 }

@@ -1,5 +1,5 @@
 #nullable enable
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.DTO;
 
@@ -10,12 +10,12 @@ namespace Registry.Web.Models.DTO;
 /// </summary>
 public sealed class ArtifactLinkDto
 {
-    [JsonProperty("role")]
+    [JsonPropertyName("role")]
     public string Role { get; init; } = "";
 
-    [JsonProperty("url")]
+    [JsonPropertyName("url")]
     public string Url { get; init; } = "";
 
-    [JsonProperty("mediaType")]
+    [JsonPropertyName("mediaType")]
     public string MediaType { get; init; } = "";
 }

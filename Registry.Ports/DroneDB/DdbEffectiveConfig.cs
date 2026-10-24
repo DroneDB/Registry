@@ -1,5 +1,5 @@
 using System;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
 
 namespace Registry.Ports.DroneDB;
 
@@ -20,13 +20,20 @@ public sealed record DdbEffectiveConfig(long MinFreeDiskMb, int CpuPoolSize, int
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(json);
 
-        var settings = JObject.Parse(json)["settings"] as JObject
-                       ?? throw new FormatException("DDBGetEffectiveConfig: no 'settings' object");
+        using var document = JsonDocument.Parse(json);
+        var settings = document.RootElement.TryGetProperty("settings", out var value) && value.ValueKind == JsonValueKind.Object
+            ? value
+            : throw new FormatException("DDBGetEffectiveConfig: no 'settings' object");
 
         return new DdbEffectiveConfig(
-            (long?)settings["minFreeDiskMb"] ?? throw new FormatException("DDBGetEffectiveConfig: no 'minFreeDiskMb'"),
-            (int?)settings["cpuPoolSize"] ?? 0,
-            (int?)settings["ioThreads"] ?? 0,
-            (string?)settings["cacheDir"]);
+            Number<long>(settings, "minFreeDiskMb") ?? throw new FormatException("DDBGetEffectiveConfig: no 'minFreeDiskMb'"),
+            (int?)Number<long>(settings, "cpuPoolSize") ?? 0,
+            (int?)Number<long>(settings, "ioThreads") ?? 0,
+            settings.TryGetProperty("cacheDir", out var cacheDir) && cacheDir.ValueKind == JsonValueKind.String ? cacheDir.GetString() : null);
     }
+
+    private static T? Number<T>(JsonElement parent, string field) where T : struct, System.Numerics.INumber<T> =>
+        parent.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.Number
+            ? T.CreateChecked(value.GetInt64())
+            : null;
 }

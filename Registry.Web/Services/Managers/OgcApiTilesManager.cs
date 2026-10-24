@@ -10,8 +10,6 @@ using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
@@ -38,7 +36,7 @@ public class OgcApiTilesManager : OgcManagerBase, IOgcApiTilesManager
         _rasterTiles = rasterTiles;
     }
 
-    public async Task<object> GetTileSetsAsync(string orgSlug, string dsSlug, string collectionId, string baseUrl,
+    public async Task<OgcApiTileSetsDto> GetTileSetsAsync(string orgSlug, string dsSlug, string collectionId, string baseUrl,
         CancellationToken ct = default)
     {
         var name = Uri.UnescapeDataString(collectionId);
@@ -48,24 +46,14 @@ public class OgcApiTilesManager : OgcManagerBase, IOgcApiTilesManager
                         $"Unknown collection '{collectionId}'", 404);
 
         var b = baseUrl.TrimEnd('/');
-        return new
-        {
-            tilesets = new[]
-            {
-                new
-                {
-                    tileMatrixSetURI = "http://www.opengis.net/def/tilematrixset/OGC/1.0/WebMercatorQuad",
-                    links = new[]
-                    {
-                        new { href = $"{b}/collections/{collectionId}/tiles/WebMercatorQuad/{{z}}/{{y}}/{{x}}",
-                              rel = "item",
-                              type = layer.EntryType == EntryType.Vector
-                                  ? "application/vnd.mapbox-vector-tile"
-                                  : "image/png" }
-                    }
-                }
-            }
-        };
+        return new OgcApiTileSetsDto(
+        [
+            new OgcApiTileSetDto("http://www.opengis.net/def/tilematrixset/OGC/1.0/WebMercatorQuad",
+            [
+                new OgcApiTileLinkDto($"{b}/collections/{collectionId}/tiles/WebMercatorQuad/{{z}}/{{y}}/{{x}}", "item",
+                    layer.EntryType == EntryType.Vector ? "application/vnd.mapbox-vector-tile" : "image/png")
+            ])
+        ]);
     }
 
     public async Task<byte[]?> GetTileAsync(string orgSlug, string dsSlug, string collectionId,

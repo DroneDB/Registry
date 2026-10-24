@@ -51,7 +51,6 @@
         <PackageReference Include="Hangfire.InMemory" />
         <PackageReference Include="Hangfire.MySqlStorage" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
-        <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" />
         <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" />
         <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
         <PackageReference Include="Microsoft.EntityFrameworkCore" />
@@ -69,7 +68,6 @@
         <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
         <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
         <PackageReference Include="MimeMapping" />
-        <PackageReference Include="Newtonsoft.Json" />
         <PackageReference Include="System.DirectoryServices.Protocols" />
         <PackageReference Include="Serilog.AspNetCore" />
         <PackageReference Include="Serilog.Enrichers.Environment" />

@@ -2,7 +2,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;
-using Newtonsoft.Json;
+using System.Text.Json;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Adapters.DroneDB;
@@ -78,6 +78,28 @@ internal static class NativeCall
             using var cancellation = Begin(operation);
             Check(call(out output), operation, null, cancellation.Token);
             return Deserialize<T>(operation, output) ?? throw new DdbException($"{operation} returned no output");
+        }
+        finally
+        {
+            FreeString(output);
+        }
+    }
+
+    /// <summary>
+    /// A call whose output is a JSON document of any shape (STAC data, a meta count): copied out of the native buffer
+    /// as a <see cref="JsonElement"/>; a missing output fails.
+    /// </summary>
+    internal static JsonElement InvokeDocument(string operation, OutputCall call)
+    {
+        var output = IntPtr.Zero;
+        try
+        {
+            using var cancellation = Begin(operation);
+            Check(call(out output), operation, null, cancellation.Token);
+            var document = Deserialize<JsonElement>(operation, output);
+            return document.ValueKind == JsonValueKind.Undefined
+                ? throw new DdbException($"{operation} returned no output")
+                : document;
         }
         finally
         {

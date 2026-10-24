@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -162,15 +163,10 @@ public sealed class DatasetQueries : IDatasetQueries
 
         // Add permissions to properties
         if (dto.Properties == null)
-            dto.Properties = new Dictionary<string, object>();
+            dto.Properties = new Dictionary<string, JsonElement>();
 
         var permissions = await _authManager.GetDatasetPermissions(dataset);
-        dto.Properties["permissions"] = new
-        {
-            canRead = permissions.CanRead,
-            canWrite = permissions.CanWrite,
-            canDelete = permissions.CanDelete
-        };
+        dto.Properties["permissions"] = JsonSerializer.SerializeToElement(permissions, ApiJson.Options);
 
         return [dto];
     }

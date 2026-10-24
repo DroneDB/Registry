@@ -1,5 +1,5 @@
 using System;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
@@ -13,12 +13,12 @@ public class DdbCleanupResult
     /// Paths of entries removed from the database because their underlying
     /// file no longer existed on the filesystem.
     /// </summary>
-    [JsonProperty("entries")]
+    [JsonPropertyName("entries")]
     public string[] Entries { get; set; } = [];
 
     /// <summary>
     /// Hashes of orphaned build artifacts that were removed.
     /// </summary>
-    [JsonProperty("builds")]
+    [JsonPropertyName("builds")]
     public string[] Builds { get; set; } = [];
 }

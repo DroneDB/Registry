@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json;
+using System.Text.Json;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -208,7 +208,7 @@ public class DatasetsController : ControllerBaseEx
 
         var attributes = string.IsNullOrWhiteSpace(rawAttributes) ?
             new AttributesDto() :
-            JsonConvert.DeserializeObject<AttributesDto>(rawAttributes);
+            ApiJson.Deserialize<AttributesDto>(rawAttributes);
 
 
         var res = await _datasetsManager.ChangeAttributes(orgSlug, dsSlug, attributes, ct: ct);

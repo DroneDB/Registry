@@ -16,9 +16,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using NUnit.Framework;
+using Registry.Adapters.DroneDB;
 using Registry.Adapters.Testing;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
@@ -529,7 +528,7 @@ public sealed class Rq04GoldenJsonTests : IDisposable
         /// <summary>Plain fixture replay, for the derived answers (not the mock: no recursion).</summary>
         private readonly FakeDdbWrapper _fixtures = new();
 
-        private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, JToken>> _rootMeta =
+        private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, JsonNode?>> _rootMeta =
             new(StringComparer.Ordinal);
 
         private readonly ConcurrentDictionary<Guid, byte> _contractDatasets = new();
@@ -635,14 +634,14 @@ public sealed class Rq04GoldenJsonTests : IDisposable
             }
         }
 
-        private ConcurrentDictionary<string, JToken> MetaOf(string ddbPath) =>
+        private ConcurrentDictionary<string, JsonNode?> MetaOf(string ddbPath) =>
             _rootMeta.GetOrAdd(Generic(ddbPath), _ =>
             {
-                var meta = new ConcurrentDictionary<string, JToken>(StringComparer.Ordinal);
+                var meta = new ConcurrentDictionary<string, JsonNode?>(StringComparer.Ordinal);
                 if (IsContractDataset(ddbPath))
                 {
-                    meta["name"] = "Golden dataset";
-                    meta["visibility"] = (int)Visibility.Private;
+                    meta["name"] = JsonValue.Create("Golden dataset");
+                    meta["visibility"] = JsonValue.Create((int)Visibility.Private);
                 }
 
                 return meta;
@@ -653,32 +652,32 @@ public sealed class Rq04GoldenJsonTests : IDisposable
             if (!string.IsNullOrEmpty(path) || !MetaOf(ddbPath).TryGetValue(key, out var data))
                 throw new DdbException($"Key not found: {key}");
 
-            return MetaItem(key, data).ToString(Formatting.None);
+            return MetaItem(key, data).ToJsonString(NativeJson.Options);
         }
 
         private Meta SetRootMeta(string ddbPath, string key, string data)
         {
             var value = ParseMetaData(data);
             MetaOf(ddbPath)[key] = value;
-            return MetaItem(key, value).ToObject<Meta>()!;
+            return MetaItem(key, value).Deserialize<Meta>(NativeJson.Options)!;
         }
 
         /// <summary>libddb <c>MetaManager::validateData</c>: JSON as is, any other text is a JSON string.</summary>
-        private static JToken ParseMetaData(string data)
+        private static JsonNode? ParseMetaData(string data)
         {
             try
             {
-                return JToken.Parse(data);
+                return JsonNode.Parse(data);
             }
-            catch (JsonReaderException)
+            catch (JsonException)
             {
-                return new JValue(data);
+                return JsonValue.Create(data);
             }
         }
 
-        private static JObject MetaItem(string key, JToken data) => new()
+        private static JsonObject MetaItem(string key, JsonNode? data) => new()
         {
-            ["data"] = data.DeepClone(),
+            ["data"] = data?.DeepClone(),
             ["id"] = FakeDdbWrapper.MetaId("", key, data),
             ["mtime"] = FixtureMtime
         };
@@ -686,25 +685,25 @@ public sealed class Rq04GoldenJsonTests : IDisposable
         private Entry RootInfo(string folder)
         {
             var indexed = IsContractDataset(folder)
-                ? ContractFixture.Load("list").Output.Children<JObject>().ToList()
+                ? ContractFixture.Load("list").Output.AsArray().OfType<JsonObject>().ToList()
                 : [];
 
-            var meta = new JObject();
+            var meta = new JsonObject();
             foreach (var (key, data) in MetaOf(folder).OrderBy(m => m.Key, StringComparer.Ordinal))
                 meta[key] = MetaItem(key, data);
 
-            var entry = new JObject
+            var entry = new JsonObject
             {
                 ["depth"] = FakeDdbWrapper.PathDepth(folder),
                 ["mtime"] = FixtureMtime,
                 ["path"] = "file://" + Generic(folder),
-                ["properties"] = new JObject { ["entries"] = indexed.Count, ["meta"] = meta },
+                ["properties"] = new JsonObject { ["entries"] = indexed.Count, ["meta"] = meta },
                 ["size"] = indexed.Sum(e => (long?)e["size"] ?? 0),
                 ["type"] = (int)EntryType.DroneDB
             };
 
-            // Same as the native adapter: Json.NET defaults over the JSON text
-            return JsonConvert.DeserializeObject<Entry>(entry.ToString(Formatting.None))!;
+            // Same as the native adapter: NativeJson's contract and options
+            return entry.Deserialize<Entry>(NativeJson.Options)!;
         }
 
         private bool IsContractDataset(string folder) =>

@@ -4,7 +4,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
@@ -63,7 +64,7 @@ public class StacManager : IStacManager
         _logger = logger;
     }
 
-    public async Task<JToken> GetStacChild(string orgSlug, string dsSlug, string path = null,
+    public async Task<JsonNode> GetStacChild(string orgSlug, string dsSlug, string path = null,
         CancellationToken ct = default)
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
@@ -147,7 +148,7 @@ public class StacManager : IStacManager
     {
         var datasets = await _catalog.ReadableDatasetsAsync(ct);
 
-        var collections = new List<JToken>();
+        var collections = new List<JsonNode>();
         foreach (var ds in datasets.Skip(off).Take(lim))
         {
             // One native read per dataset: nobody waits for the listing any more, stop
@@ -195,13 +196,13 @@ public class StacManager : IStacManager
         };
     }
 
-    public async Task<JToken> GetCollection(string orgSlug, string dsSlug, CancellationToken ct = default)
+    public async Task<JsonNode> GetCollection(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
         return Collection(access.Dataset, access.Ddb);
     }
 
-    public async Task<JToken> GetCollectionItems(string orgSlug, string dsSlug, double[] bbox = null,
+    public async Task<JsonNode> GetCollectionItems(string orgSlug, string dsSlug, double[] bbox = null,
         string datetime = null, int? limit = null, int? offset = null, CancellationToken ct = default)
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
@@ -212,12 +213,12 @@ public class StacManager : IStacManager
 
         var data = ItemCollectionData(access.Ddb, StacQueries.BboxToString(bbox), datetime, lim, off);
         var returned = StacDocuments.Features(data).Count();
-        var numberMatched = data["numberMatched"]?.Value<long>() ?? returned;
+        var numberMatched = StacDocuments.Whole(data["numberMatched"]) ?? returned;
         var items = _urls.Items(orgSlug, dsSlug);
 
         // The self link must match the requested URL exactly, so only echo back the
         // query parameters the client actually provided (STAC API conformance).
-        var links = new JArray
+        var links = new JsonArray
         {
             StacDocuments.Link("self", items + StacQueries.BuildItemsSelfQuery(bbox, datetime, limit, offset), GeoJson),
             StacDocuments.Link("root", _urls.Root, Json),
@@ -231,7 +232,7 @@ public class StacManager : IStacManager
         return StacDocuments.ApiItemCollection(data, ds, links, _urls);
     }
 
-    public async Task<JToken> GetCollectionItem(string orgSlug, string dsSlug, string featureId,
+    public async Task<JsonNode> GetCollectionItem(string orgSlug, string dsSlug, string featureId,
         CancellationToken ct = default)
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
@@ -244,7 +245,7 @@ public class StacManager : IStacManager
         return StacDocuments.ApiItem(ItemData(access.Ddb, path), access.Dataset, _urls);
     }
 
-    public async Task<JToken> Search(StacSearchRequestDto request, CancellationToken ct = default)
+    public async Task<JsonNode> Search(StacSearchRequestDto request, CancellationToken ct = default)
     {
         request ??= new StacSearchRequestDto();
 
@@ -265,7 +266,7 @@ public class StacManager : IStacManager
 
         StacQueries.DecodeToken(request.Token, out var startDs, out var startOffset);
 
-        var features = new JArray();
+        var features = new JsonArray();
         var resumeDs = -1;
         var resumeOffset = 0;
 
@@ -278,8 +279,8 @@ public class StacManager : IStacManager
             var need = lim - features.Count;
 
             var data = ItemCollectionData(Ddb(ds), bboxStr, datetime, need, off);
-            var page = StacDocuments.Features(data).ToList();
-            var matched = data["numberMatched"]?.Value<long>() ?? page.Count;
+            var page = StacDocuments.TakeFeatures(data);
+            var matched = StacDocuments.Whole(data["numberMatched"]) ?? page.Count;
 
             foreach (var feature in page)
                 features.Add(StacDocuments.ApiItem(feature, ds, _urls));
@@ -303,7 +304,7 @@ public class StacManager : IStacManager
             }
         }
 
-        var links = new JArray
+        var links = new JsonArray
         {
             StacDocuments.Link("self", _urls.Search, GeoJson),
             StacDocuments.Link("root", _urls.Root, Json)
@@ -318,11 +319,11 @@ public class StacManager : IStacManager
         return FeatureCollection(features, links);
     }
 
-    private JObject SearchByIds(List<Dataset> datasets, string[] ids, string bboxStr, string datetime,
+    private JsonObject SearchByIds(List<Dataset> datasets, string[] ids, string bboxStr, string datetime,
         CancellationToken ct)
     {
         var wantedIds = new HashSet<string>(ids);
-        var features = new JArray();
+        var features = new JsonArray();
 
         foreach (var ds in datasets)
         {
@@ -331,15 +332,15 @@ public class StacManager : IStacManager
                 break;
 
             var data = ItemCollectionData(Ddb(ds), bboxStr, datetime, MaxLimit, 0);
-            foreach (var feature in StacDocuments.Features(data))
+            foreach (var feature in StacDocuments.TakeFeatures(data))
             {
                 var item = StacDocuments.ApiItem(feature, ds, _urls);
-                if (wantedIds.Contains(item["id"]?.ToString()))
+                if (wantedIds.Contains(StacDocuments.Text(item["id"]) ?? ""))
                     features.Add(item);
             }
         }
 
-        return FeatureCollection(features, new JArray
+        return FeatureCollection(features, new JsonArray
         {
             StacDocuments.Link("self", _urls.Search, GeoJson),
             StacDocuments.Link("root", _urls.Root, Json)
@@ -348,7 +349,7 @@ public class StacManager : IStacManager
 
     #endregion
 
-    private static JObject FeatureCollection(JArray features, JArray links) => new()
+    private static JsonObject FeatureCollection(JsonArray features, JsonArray links) => new()
     {
         ["type"] = "FeatureCollection",
         ["features"] = features,
@@ -358,16 +359,15 @@ public class StacManager : IStacManager
 
     private IDDB Ddb(Dataset ds) => _ddbManager.Get(ds.Organization.Slug, ds.InternalRef);
 
-    private JObject Collection(Dataset ds, IDDB ddb) =>
+    private JsonObject Collection(Dataset ds, IDDB ddb) =>
         StacDocuments.ApiCollection(CollectionData(ddb), ds, StacDocuments.FolderOf(ddb), _urls);
 
-    private static JObject CollectionData(IDDB ddb) =>
-        ddb.GetStacData() as JObject ?? throw new DdbException("Invalid STAC collection result");
+    private static JsonObject CollectionData(IDDB ddb) =>
+        StacDocuments.Mutable(ddb.GetStacData(), "STAC collection");
 
-    private static JObject ItemData(IDDB ddb, string path) =>
-        ddb.GetStacData(path) as JObject ?? throw new DdbException("Invalid STAC item result");
+    private static JsonObject ItemData(IDDB ddb, string path) =>
+        StacDocuments.Mutable(ddb.GetStacData(path), "STAC item");
 
-    private static JObject ItemCollectionData(IDDB ddb, string bbox, string datetime, int limit, int offset) =>
-        ddb.GetStacItemCollectionData(bbox, datetime, limit, offset) as JObject
-        ?? throw new DdbException("Invalid STAC item collection result");
+    private static JsonObject ItemCollectionData(IDDB ddb, string bbox, string datetime, int limit, int offset) =>
+        StacDocuments.Mutable(ddb.GetStacItemCollectionData(bbox, datetime, limit, offset), "STAC item collection");
 }

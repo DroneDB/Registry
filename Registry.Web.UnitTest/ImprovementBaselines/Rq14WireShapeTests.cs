@@ -8,7 +8,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Registry.Test.Common;
 using Registry.Web.Models;
@@ -44,7 +43,7 @@ public sealed class Rq14WireShapeTests : IDisposable
         "Registry.Web.Models.JwtDescriptor", "Registry.Web.Models.DatasetScope", "Registry.Web.Models.ReadableObject",
         "Registry.Web.Models.DatasetListQuery", "Registry.Web.Models.IndexPayload", "Registry.Web.Models.RescanFilter",
         "Registry.Ports.DroneDB.DdbProcessSettings", "Registry.Ports.DroneDB.EntryQuery",
-        "Registry.Ports.DroneDB.RescanOptions", "Registry.Ports.DroneDB.FileHashHint",
+        "Registry.Ports.DroneDB.RescanOptions", "Registry.Ports.DroneDB.FileHashHint", "Registry.Ports.DroneDB.NormalizedEntryPath",
         "Registry.Web.Services.Adapters.BuildPendingService", "Registry.Web.Utilities.DatasetPath"
     ];
 
@@ -62,7 +61,7 @@ public sealed class Rq14WireShapeTests : IDisposable
     public void Dispose() => _factory.Dispose();
 
     /// <summary>What a JSON document member holds on the stack under test (the one place that differs by stack).</summary>
-    private static JToken Literal(Type type, string json) => JToken.Parse(json);
+    private static readonly Func<Type, string, object?> Literal = (_, json) => TestJson.Parse(json);
 
     public static IEnumerable<Type> Types() => WireTypes.Discover().Where(t => !NotWireTypes.Contains(t.FullName!));
 

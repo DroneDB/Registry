@@ -1,5 +1,6 @@
 using System;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Models.DTO;
@@ -24,16 +25,13 @@ public class TagDto
 
 public class TagConverter : JsonConverter<TagDto>
 {
-    public override void WriteJson(JsonWriter writer, TagDto value, JsonSerializer serializer)
-    {
-        writer.WriteValue(value.ToString());
-    }
+    public override void Write(Utf8JsonWriter writer, TagDto value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(value.ToString());
 
-    public override TagDto ReadJson(JsonReader reader, Type objectType, TagDto existingValue, bool hasExistingValue,
-        JsonSerializer serializer)
+    public override TagDto Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        if (!(reader.Value is string val))
+        if (reader.TokenType != JsonTokenType.String)
             throw new FormatException("Expected 'tag' to be a string");
-        return val.ToTag();
+        return reader.GetString()!.ToTag();
     }
 }

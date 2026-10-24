@@ -3,7 +3,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Adapters.DroneDB;
@@ -32,7 +32,7 @@ public sealed unsafe class NativeDdbRuntime : IDdbRuntime
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        var json = new JObject();
+        var json = new JsonObject();
         if (settings.CpuPoolSize is { } cpuPoolSize)
             json["cpuPoolSize"] = cpuPoolSize;
         if (settings.IoThreads is { } ioThreads)
@@ -41,7 +41,7 @@ public sealed unsafe class NativeDdbRuntime : IDdbRuntime
             json["minFreeDiskMb"] = minFreeDiskMb;
         if (!string.IsNullOrEmpty(settings.CacheDir))
             json["cacheDir"] = settings.CacheDir;
-        return json.ToString(Newtonsoft.Json.Formatting.None);
+        return json.ToJsonString(NativeJson.Options);
     }
 
     public string SetEnvironmentDefault(string name, string value) =>

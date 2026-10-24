@@ -1,5 +1,5 @@
 using System;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
@@ -11,19 +11,19 @@ namespace Registry.Ports.DroneDB;
 public class PendingBuildInfo
 {
     /// <summary>Entry hash (matches the ".pending" marker file on disk).</summary>
-    [JsonProperty("hash")]
+    [JsonPropertyName("hash")]
     public string Hash { get; set; }
 
     /// <summary>Dataset-relative path of the entry whose build is pending.</summary>
-    [JsonProperty("path")]
+    [JsonPropertyName("path")]
     public string Path { get; set; }
 
     /// <summary>Dependency names still missing at the time of the last attempt.</summary>
-    [JsonProperty("missingDependencies")]
+    [JsonPropertyName("missingDependencies")]
     public string[] MissingDependencies { get; set; } = [];
 
     /// <summary>Unix timestamp of the last build attempt.</summary>
-    [JsonProperty("lastAttempt")]
+    [JsonPropertyName("lastAttempt")]
     public long LastAttempt { get; set; }
 
     /// <summary>
@@ -32,6 +32,7 @@ public class PendingBuildInfo
     /// keeps no copy of the backoff. Required: a libddb without the field fails deserialization
     /// instead of making every entry due at once (a missing long would read as 0).
     /// </summary>
-    [JsonProperty("retryAfter", Required = Required.Always)]
+    [JsonPropertyName("retryAfter")]
+    [JsonRequired]
     public long RetryAfter { get; set; }
 }

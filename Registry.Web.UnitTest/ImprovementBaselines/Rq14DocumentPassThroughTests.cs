@@ -8,7 +8,6 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Ports.DroneDB;
@@ -38,7 +37,7 @@ public sealed class Rq14DocumentPassThroughTests : IDisposable
     private const string SnapshotName = "wire/passthrough.json";
 
     /// <summary>The type of a JSON document the ports return (the stack under test).</summary>
-    private static readonly Type Document = typeof(JToken);
+    private static readonly Type Document = typeof(JsonElement);
 
     private static readonly JsonSerializerOptions Indented = new()
     {

@@ -2,10 +2,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
+using Registry.Web.Test.Support;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -20,16 +20,14 @@ public class DatasetListQueryTests
         Slug = slug,
         Size = size,
         CreationDate = new DateTime(2026, 1, day),
-        Properties = new Dictionary<string, object>
-        {
-            ["entries"] = entries,
-            ["meta"] = JObject.FromObject(new Dictionary<string, object?>
+        Properties = TestJson.Props(
+            ("entries", entries),
+            ("meta", new Dictionary<string, object?>
             {
                 ["name"] = name == null ? null : new { data = name },
                 ["tagline"] = tagline == null ? null : new { data = tagline },
                 ["visibility"] = new { data = visibility }
-            })
-        }
+            }))
     };
 
     private static readonly DatasetDto[] Datasets =

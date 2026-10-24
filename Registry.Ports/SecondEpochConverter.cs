@@ -1,33 +1,27 @@
 using System;
 using System.Globalization;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports;
 
 /// <summary>
-/// JSON converter for Unix epoch timestamp (seconds) to DateTime: libddb writes times as epoch seconds.
+/// JSON converter for Unix epoch timestamp (seconds) to DateTime: libddb writes times as epoch seconds, and so does the
+/// Registry API (<c>mtime</c>, <c>captureTime</c>: <c>1700000000</c>, or <c>1700000000.5</c> with a fraction).
 /// </summary>
-public class SecondEpochConverter : DateTimeConverterBase
+public class SecondEpochConverter : JsonConverter<DateTime>
 {
     private static readonly DateTime Epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-    public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
+    public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options) =>
+        writer.WriteRawValue(((value - Epoch).TotalMilliseconds / 1000.0).ToString(CultureInfo.InvariantCulture),
+            skipInputValidation: true);
+
+    public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        writer.WriteRawValue((((DateTime)value! - Epoch).TotalMilliseconds / 1000.0).ToString(CultureInfo.InvariantCulture));
-    }
+        if (reader.TokenType != JsonTokenType.Number)
+            throw new JsonException($"Epoch seconds are a number, not {reader.TokenType}");
 
-    public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
-    {
-        if (reader.Value == null) { return null; }
-
-        double val;
-
-        if (reader.ValueType == typeof(int)) val = (int)reader.Value;
-        else if (reader.ValueType == typeof(long)) val = (long)reader.Value;
-        else if (reader.ValueType == typeof(double)) val = (double)reader.Value;
-        else throw new InvalidCastException();
-
-        return Epoch.AddSeconds(val);
+        return Epoch.AddSeconds(reader.TryGetInt64(out var whole) ? whole : reader.GetDouble());
     }
 }

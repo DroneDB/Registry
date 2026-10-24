@@ -11,7 +11,6 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using Newtonsoft.Json;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
@@ -272,13 +271,13 @@ public static class Extenders
 
     public static T ToObject<T>(this JsonElement obj)
     {
-        return JsonConvert.DeserializeObject<T>(obj.GetRawText());
+        return obj.Deserialize<T>(ApiJson.Options);
     }
 
     public static T ToObject<T>(this Dictionary<string, object> obj)
     {
-        // Just don't ask please
-        return JsonConvert.DeserializeObject<T>(JsonConvert.SerializeObject(obj));
+        // The dictionary the configuration binder made (strings, numbers): as the type it describes
+        return JsonSerializer.SerializeToElement(obj, ApiJson.Options).Deserialize<T>(ApiJson.Options);
     }
 
     public static string ToErrorString(this IEnumerable<IdentityError> results)

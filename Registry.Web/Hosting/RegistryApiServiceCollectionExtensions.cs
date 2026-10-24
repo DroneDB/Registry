@@ -12,7 +12,8 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Registry.Web.Filters;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Utilities;
@@ -76,10 +77,9 @@ public static class RegistryApiServiceCollectionExtensions
             c.DocumentFilter<BasePathDocumentFilter>();
             c.OperationFilter<DownloadPathsParameterFilter>();
 
-            // Newtonsoft's JToken serializes to a self-referential schema (an array of JToken) that
-            // makes the Scalar/OpenAPI viewer recurse infinitely ("Maximum call stack size exceeded").
-            // STAC and metadata endpoints return arbitrary JSON, so represent JToken as an open schema.
-            c.MapType<JToken>(() => new OpenApiSchema { Description = "Arbitrary JSON value." });
+            // STAC and metadata endpoints return arbitrary JSON: a JsonElement or JsonNode is an open schema
+            c.MapType<JsonElement>(() => new OpenApiSchema { Description = "Arbitrary JSON value." });
+            c.MapType<JsonNode>(() => new OpenApiSchema { Description = "Arbitrary JSON value." });
             c.MapType<DatasetPath>(() => new OpenApiSchema
             {
                 Type = JsonSchemaType.String,
@@ -94,15 +94,14 @@ public static class RegistryApiServiceCollectionExtensions
         });
 
         services.AddMvcCore()
-            .AddApiExplorer()
-            .AddNewtonsoftJson(options =>
-            {
-                options.SerializerSettings.DateTimeZoneHandling = Newtonsoft.Json.DateTimeZoneHandling.Utc;
-                options.SerializerSettings.DateFormatHandling = Newtonsoft.Json.DateFormatHandling.IsoDateFormat;
-            });
-        // Dataset paths in JSON bodies: the same rule as in the query (RQ-11)
-        services.AddOptions<MvcNewtonsoftJsonOptions>().Configure<DatasetPathPolicy>((options, paths) =>
-            options.SerializerSettings.Converters.Add(new DatasetPathJsonConverter(paths)));
+            .AddApiExplorer();
+
+        // One JSON configuration for the controllers and for the RFC 9457 writers (RQ-14, D3); the dataset path rule
+        // applies to JSON bodies as it does to the query, the route and the form (RQ-11)
+        services.AddOptions<Microsoft.AspNetCore.Mvc.JsonOptions>().Configure<DatasetPathPolicy>((options, paths) =>
+            ApiJson.Configure(options.JsonSerializerOptions, paths));
+        services.AddOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>().Configure<DatasetPathPolicy>((options, paths) =>
+            ApiJson.Configure(options.SerializerOptions, paths));
 
         services.AddResponseCaching(options =>
         {

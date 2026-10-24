@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json.Linq;
 using Registry.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -95,7 +94,12 @@ public sealed class UserProvisioning : IUserProvisioning
     public async Task SyncRolesAsync(User user)
     {
         var tmp = user.Metadata?.SafeGetValue("roles");
-        var roles = tmp as string[] ?? (tmp as JArray)?.ToObject<string[]>();
+        var roles = tmp switch
+        {
+            string[] names => names,
+            IEnumerable<object> values => values.OfType<string>().ToArray(),
+            _ => null
+        };
         if (roles == null)
             return;
 

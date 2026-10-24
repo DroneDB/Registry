@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.DTO;
 
@@ -6,6 +6,6 @@ namespace Registry.Web.Models.DTO;
 public class AttributesDto
 {
     /// <summary>The dataset is public (its visibility is Public) or not (Private); null: unchanged.</summary>
-    [JsonProperty("public")]
+    [JsonPropertyName("public")]
     public bool? IsPublic { get; set; }
 }

@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.DTO;
 
@@ -63,20 +63,22 @@ public sealed record DatasetListQuery(int Skip = 0, int? Take = null, string? Qu
     public static string NameOf(DatasetDto d) => Meta(d, "name") is { Length: > 0 } name ? name : d.Slug;
 
     private static long Entries(DatasetDto d) =>
-        d.Properties != null && d.Properties.TryGetValue("entries", out var v) && v != null
-            ? Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture)
+        d.Properties != null && d.Properties.TryGetValue("entries", out var v) && v.ValueKind == JsonValueKind.Number
+            ? v.GetInt64()
             : 0;
 
     private static Visibility VisibilityOf(DatasetDto d) =>
-        MetaToken(d, "visibility") is { Type: JTokenType.Integer } v ? (Visibility)v.Value<int>() : Visibility.Private;
+        MetaToken(d, "visibility") is { ValueKind: JsonValueKind.Number } v && v.TryGetInt32(out var visibility)
+            ? (Visibility)visibility
+            : Visibility.Private;
 
-    private static string? Meta(DatasetDto d, string key) => MetaToken(d, key)?.ToString();
+    private static string? Meta(DatasetDto d, string key) =>
+        MetaToken(d, key) is { } token ? token.ValueKind == JsonValueKind.String ? token.GetString() : token.GetRawText() : null;
 
-    private static JToken? MetaToken(DatasetDto d, string key)
-    {
-        if (d.Properties == null || !d.Properties.TryGetValue("meta", out var meta) || meta == null)
-            return null;
-        var token = meta as JToken ?? JToken.FromObject(meta);
-        return ((token as JObject)?[key] as JObject)?["data"];
-    }
+    private static JsonElement? MetaToken(DatasetDto d, string key) =>
+        d.Properties != null && d.Properties.TryGetValue("meta", out var meta) && meta.ValueKind == JsonValueKind.Object &&
+        meta.TryGetProperty(key, out var entry) && entry.ValueKind == JsonValueKind.Object &&
+        entry.TryGetProperty("data", out var data)
+            ? data
+            : null;
 }

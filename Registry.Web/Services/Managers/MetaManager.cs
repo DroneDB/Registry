@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
 using Registry.Ports;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
@@ -106,7 +106,7 @@ public class MetaManager : IMetaManager
         return ddb.Meta.Remove(id);
     }
 
-    public async Task<JToken> Get(string orgSlug, string dsSlug, string key, string path = null, CancellationToken ct = default)
+    public async Task<JsonElement> Get(string orgSlug, string dsSlug, string key, string path = null, CancellationToken ct = default)
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
 

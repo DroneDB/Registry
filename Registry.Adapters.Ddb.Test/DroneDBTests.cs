@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Shouldly;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Text.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
@@ -207,9 +208,9 @@ public class NativeDdbWrapperTests : TestBase
 
         info.Properties.ShouldNotBeEmpty();
         info.Properties.Count.ShouldBe(15);
-        info.Properties["make"].ShouldBe("DJI");
-        info.Properties["model"].ShouldBe("FC300S");
-        info.Properties["sensor"].ShouldBe("dji fc300s");
+        info.Properties["make"].GetString().ShouldBe("DJI");
+        info.Properties["model"].GetString().ShouldBe("FC300S");
+        info.Properties["sensor"].GetString().ShouldBe("dji fc300s");
         info.Hash.ShouldBe("246fed68dec31b17dc6d885cee10a2c08f2f1c68901a8efa132c60bdb770e5ff");
         info.Type.ShouldBe(EntryType.GeoImage);
         info.Size.ShouldBe(3876862);
@@ -248,7 +249,7 @@ public class NativeDdbWrapperTests : TestBase
         var expectedType = EntryType.GeoImage;
         const string expectedHash = "f27ddc96daf9aeff3c026de8292681296c3e9d952b647235878c50f2b7b39e94";
         var expectedModifiedTime = new DateTime(2020, 06, 10, 14, 44, 36);
-        var expectedMeta = JsonConvert.DeserializeObject<Dictionary<string, object>>(
+        var expectedMeta = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
             "{\"captureTime\":1591800276004.8,\"focalLength\":4.16,\"focalLength35\":26.0,\"height\":3024,\"make\":\"samsung\",\"model\":\"SM-G950F\",\"orientation\":1,\"sensor\":\"samsung sm-g950f\",\"sensorHeight\":4.32,\"sensorWidth\":5.76,\"width\":4032}");
         //const double expectedLatitude = 45.50027;
         //const double expectedLongitude = 10.60667;
@@ -290,8 +291,8 @@ public class NativeDdbWrapperTests : TestBase
         res.Count.ShouldBe(1);
         var entry = res.First();
 
-        Entry expectedEntry = JsonConvert.DeserializeObject<Entry>(
-            "{\"depth\":0,\"hash\":\"3157958dd4f2562c8681867dfd6ee5bf70b6e9595b3e3b4b76bbda28342569ed\",\"properties\":{\"cameraPitch\":-89.9000015258789,\"cameraRoll\":0.0,\"cameraYaw\":-131.3000030517578,\"captureTime\":1466699584000.0,\"focalLength\":3.4222222222222225,\"focalLength35\":20.0,\"height\":2250,\"make\":\"DJI\",\"model\":\"FC300S\",\"orientation\":1,\"sensor\":\"dji fc300s\",\"sensorHeight\":3.4650000000000003,\"sensorWidth\":6.16,\"width\":4000},\"mtime\":1491156087,\"path\":\"DJI_0027.JPG\",\"point_geom\":{\"crs\":{\"properties\":{\"name\":\"EPSG:4326\"},\"type\":\"name\"},\"geometry\":{\"coordinates\":[-91.99408299999999,46.84260499999999,198.5099999999999],\"type\":\"Point\"},\"properties\":{},\"type\":\"Feature\"},\"polygon_geom\":{\"crs\":{\"properties\":{\"name\":\"EPSG:4326\"},\"type\":\"name\"},\"geometry\":{\"coordinates\":[[[-91.99397836402999,46.8422402913,158.5099999999999],[-91.99357489543,46.84247729175999,158.5099999999999],[-91.99418894036,46.84296945989999,158.5099999999999],[-91.99459241001999,46.8427324573,158.5099999999999],[-91.99397836402999,46.8422402913,158.5099999999999]]],\"type\":\"Polygon\"},\"properties\":{},\"type\":\"Feature\"},\"size\":3185449,\"type\":3}");
+        Entry expectedEntry = System.Text.Json.JsonSerializer.Deserialize<Entry>(
+            "{\"depth\":0,\"hash\":\"3157958dd4f2562c8681867dfd6ee5bf70b6e9595b3e3b4b76bbda28342569ed\",\"properties\":{\"cameraPitch\":-89.9000015258789,\"cameraRoll\":0.0,\"cameraYaw\":-131.3000030517578,\"captureTime\":1466699584000.0,\"focalLength\":3.4222222222222225,\"focalLength35\":20.0,\"height\":2250,\"make\":\"DJI\",\"model\":\"FC300S\",\"orientation\":1,\"sensor\":\"dji fc300s\",\"sensorHeight\":3.4650000000000003,\"sensorWidth\":6.16,\"width\":4000},\"mtime\":1491156087,\"path\":\"DJI_0027.JPG\",\"point_geom\":{\"crs\":{\"properties\":{\"name\":\"EPSG:4326\"},\"type\":\"name\"},\"geometry\":{\"coordinates\":[-91.99408299999999,46.84260499999999,198.5099999999999],\"type\":\"Point\"},\"properties\":{},\"type\":\"Feature\"},\"polygon_geom\":{\"crs\":{\"properties\":{\"name\":\"EPSG:4326\"},\"type\":\"name\"},\"geometry\":{\"coordinates\":[[[-91.99397836402999,46.8422402913,158.5099999999999],[-91.99357489543,46.84247729175999,158.5099999999999],[-91.99418894036,46.84296945989999,158.5099999999999],[-91.99459241001999,46.8427324573,158.5099999999999],[-91.99397836402999,46.8422402913,158.5099999999999]]],\"type\":\"Polygon\"},\"properties\":{},\"type\":\"Feature\"},\"size\":3185449,\"type\":3}", NativeJson.Options)!;
 
         entry.ShouldBeEquivalentTo(expectedEntry);
 
@@ -501,8 +502,8 @@ public class NativeDdbWrapperTests : TestBase
     [Test]
     public void Entry_Deserialization_Ok()
     {
-        var json = "{'hash': 'abc', 'mtime': 5}";
-        var e = JsonConvert.DeserializeObject<Entry>(json);
+        var json = "{\"hash\": \"abc\", \"mtime\": 5}";
+        var e = System.Text.Json.JsonSerializer.Deserialize<Entry>(json, NativeJson.Options)!;
         e.ModifiedTime.Year.ShouldBe(1970);
     }
 
@@ -1037,7 +1038,7 @@ public class NativeDdbWrapperTests : TestBase
         DdbWrapper.Init(area.TestFolder);
 
         var res = DdbWrapper.MetaAdd(area.TestFolder, "tests", "{\"test\": true}");
-        JsonConvert.SerializeObject(res.Data).ShouldBe("{\"test\":true}");
+        res.Data!.Value.GetRawText().ShouldBe("{\"test\":true}");
         res.Id.ShouldNotBeNull();
         res.ModifiedTime.ShouldBeInRange(DateTime.UtcNow.AddSeconds(-3), DateTime.UtcNow.AddSeconds(3));
     }
@@ -1056,8 +1057,8 @@ public class NativeDdbWrapperTests : TestBase
         var act = () => DdbWrapper.MetaSet(area.TestFolder, "tests", "123", f);
         Should.Throw<DdbException>(act); // Needs singular key
 
-        DdbWrapper.MetaSet(area.TestFolder, "test", "abc", f).Data.ToObject<string>().ShouldBe("abc");
-        DdbWrapper.MetaSet(area.TestFolder, "test", "efg", f).Data.ToObject<string>().ShouldBe("efg");
+        DdbWrapper.MetaSet(area.TestFolder, "test", "abc", f).Data!.Value.GetString().ShouldBe("abc");
+        DdbWrapper.MetaSet(area.TestFolder, "test", "efg", f).Data!.Value.GetString().ShouldBe("efg");
     }
 
     [Test]
@@ -1086,8 +1087,8 @@ public class NativeDdbWrapperTests : TestBase
         var act2 = () => DdbWrapper.MetaGet(area.TestFolder, "abc", "123");
         Should.Throw<DdbException>(act2);
 
-        JsonConvert.DeserializeObject<Meta>(DdbWrapper.MetaGet(area.TestFolder, "abc")).Data.ToObject<bool>()
-            .ShouldBeTrue();
+        System.Text.Json.JsonSerializer.Deserialize<Meta>(DdbWrapper.MetaGet(area.TestFolder, "abc")!, NativeJson.Options)!.Data!.Value
+            .GetBoolean().ShouldBeTrue();
     }
 
     [Test]
@@ -1100,7 +1101,7 @@ public class NativeDdbWrapperTests : TestBase
         DdbWrapper.MetaAdd(area.TestFolder, "tests", "{\"test\":false}");
         DdbWrapper.MetaAdd(area.TestFolder, "tests", "{\"test\":null}");
 
-        var res = JsonConvert.DeserializeObject<Meta[]>(DdbWrapper.MetaGet(area.TestFolder, "tests"));
+        var res = System.Text.Json.JsonSerializer.Deserialize<Meta[]>(DdbWrapper.MetaGet(area.TestFolder, "tests")!, NativeJson.Options)!;
 
         res.Length.ShouldBe(3);
 
@@ -1144,7 +1145,7 @@ public class NativeDdbWrapperTests : TestBase
 
         var res = DdbWrapper.StacData(ddbPath, "DJI_0025.JPG");
 
-        res.ShouldNotBeNull();
+        res.ValueKind.ShouldBe(JsonValueKind.Object);
 
         TestContext.WriteLine(res);
     }
@@ -1159,7 +1160,7 @@ public class NativeDdbWrapperTests : TestBase
 
         var res = DdbWrapper.StacData(ddbPath, null);
 
-        res.ShouldNotBeNull();
+        res.ValueKind.ShouldBe(JsonValueKind.Object);
 
         TestContext.WriteLine(res);
 

@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Test.Adapters;
@@ -23,7 +22,7 @@ public class MockMeta : IMetaManager
 
         return new Meta
         {
-            Data = JToken.FromObject(data),
+            Data = JsonSerializer.SerializeToElement(data),
             Id = Guid.NewGuid().ToString(),
             ModifiedTime = DateTime.Now
         };
@@ -34,10 +33,10 @@ public class MockMeta : IMetaManager
         throw new NotImplementedException();
     }
 
-    public JToken Get(string key, string path = null)
+    public JsonElement Get(string key, string path = null)
     {
         var fullKey = path != null ? $"{path}:{key}" : key;
-        return _data.TryGetValue(fullKey, out var value) ? JToken.FromObject(value) : null;
+        return JsonSerializer.SerializeToElement(_data.TryGetValue(fullKey, out var value) ? value : null);
     }
 
     public int Unset(string key, string path = null)
@@ -73,6 +72,6 @@ public class MockMeta : IMetaManager
             return int.TryParse(value, out var intValue) ? (T)(object)intValue : default;
         }
 
-        return JsonConvert.DeserializeObject<T>(value);
+        return JsonSerializer.Deserialize<T>(value);
     }
 }

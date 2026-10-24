@@ -5,7 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
+using System.Text.Json;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Caching;
 
@@ -34,7 +35,7 @@ public sealed class RecordCache : IRecordCache
             async token =>
             {
                 var computed = await create(token);
-                return (computed, computed is null ? null : Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(computed)));
+                return (computed, computed is null ? null : Encoding.UTF8.GetBytes(ApiJson.Serialize(computed)));
             }, ct);
 
         return value is T typed ? typed : default!;
@@ -117,7 +118,7 @@ public sealed class RecordCache : IRecordCache
     {
         try
         {
-            var value = JsonConvert.DeserializeObject<T>(Encoding.UTF8.GetString(bytes));
+            var value = ApiJson.Deserialize<T>(Encoding.UTF8.GetString(bytes));
             return value is null ? (false, null) : (true, value);
         }
         catch (JsonException ex)

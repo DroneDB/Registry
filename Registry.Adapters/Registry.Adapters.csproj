@@ -21,6 +21,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <!-- Only DDB (Ddb.cs): Hangfire reads jobs stored before RQ-09 with Json.NET (D4) -->
       <PackageReference Include="Newtonsoft.Json" />
       <PackageReference Include="SharpCompress" />
     </ItemGroup>

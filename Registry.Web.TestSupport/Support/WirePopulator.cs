@@ -48,7 +48,13 @@ public sealed class WirePopulator(Func<Type, string, object?> jsonLiteral)
             return full ? Populate(nullable, full, member, depth) : null;
 
         if (IsDocument(type))
-            return full ? jsonLiteral(type, DocumentJson) : null;
+        {
+            if (full)
+                return jsonLiteral(type, DocumentJson);
+
+            // A JsonElement that is not nullable has no "absent": its default is not a value, JSON null is
+            return type.FullName is "System.Text.Json.JsonElement" ? jsonLiteral(type, "null") : null;
+        }
 
         if (type == typeof(string))
             return full ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{member}-text") : null;

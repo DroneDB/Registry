@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json;
+using System.Text.Json;
 using Registry.Web.Exceptions;
 using Registry.Web.Attributes;
 using Registry.Web.Models;
@@ -63,7 +63,7 @@ public class PushController : ControllerBaseEx
         [FromForm, Required] string checksum,
         [FromForm(Name="stamp"), Required] string stampJson, CancellationToken ct)
     {
-        var stamp = JsonConvert.DeserializeObject<StampDto>(stampJson);
+        var stamp = ApiJson.Deserialize<StampDto>(stampJson);
 
         var res = await _pushManager.Init(orgSlug, dsSlug, checksum, stamp, ct: ct);
 

@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
-using Newtonsoft.Json;
+using System.Text.Json;
 using NUnit.Framework;
 using Registry.Adapters;
 using Registry.Adapters.DroneDB;
@@ -89,11 +89,11 @@ public class DatasetManagerTest : TestBase
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry{
-                Properties = new Dictionary<string, object>
+                Properties = TestJson.Props(new Dictionary<string, object>
                 {
                     {"public", true },
                     {"name", expectedName}
-                },
+                }),
                 Size = 1000,
                 ModifiedTime = DateTime.Now
             }
@@ -112,8 +112,8 @@ public class DatasetManagerTest : TestBase
         pub.Slug.ShouldBe(expectedSlug);
 
         // TODO: Check test data: this should be true
-        pub.Properties["public"].ShouldBe(true);
-        pub.Properties["name"].ShouldBe(expectedName);
+        pub.Properties["public"].GetBoolean().ShouldBeTrue();
+        pub.Properties["name"].GetString().ShouldBe(expectedName);
 
 
     }
@@ -130,7 +130,7 @@ public class DatasetManagerTest : TestBase
         var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.Meta).Returns(new Mock<Registry.Ports.DroneDB.IMetaManager>().Object);
-        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry { Properties = new Dictionary<string, object>() });
+        ddbMock.Setup(x => x.GetInfo()).Returns(new Entry { Properties = TestJson.Props() });
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
         var datasetsManager = CreateManager(context, utils);
 
@@ -168,11 +168,11 @@ public class DatasetManagerTest : TestBase
         ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([]);
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
-            Properties = new Dictionary<string, object>
+            Properties = TestJson.Props(new Dictionary<string, object>
             {
                 {"public", true},
                 {"name", "Default"}
-            },
+            }),
             Size = 1000,
             ModifiedTime = DateTime.Now
         });
@@ -223,11 +223,11 @@ public class DatasetManagerTest : TestBase
         ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([]);
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
-            Properties = new Dictionary<string, object>
+            Properties = TestJson.Props(new Dictionary<string, object>
             {
                 {"public", true},
                 {"name", "Default"}
-            },
+            }),
             Size = 1000,
             ModifiedTime = DateTime.Now
         });
@@ -274,11 +274,11 @@ public class DatasetManagerTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
-            Properties = new Dictionary<string, object>
+            Properties = TestJson.Props(new Dictionary<string, object>
             {
                 {"public", true},
                 {"name", "Default"}
-            },
+            }),
             Size = 1000,
             ModifiedTime = DateTime.Now,
             Path = "."
@@ -301,11 +301,9 @@ public class DatasetManagerTest : TestBase
         entry.Properties.ShouldContainKey("permissions");
 
         var permissions = entry.Properties["permissions"];
-        permissions.ShouldNotBeNull();
 
-        // Check permissions using reflection (since it's an anonymous object)
-        var permissionsDict = JsonConvert.DeserializeObject<Dictionary<string, bool>>(
-            JsonConvert.SerializeObject(permissions));
+        var permissionsDict = permissions.Deserialize<Dictionary<string, bool>>();
+        permissionsDict.ShouldNotBeNull();
 
         permissionsDict.ShouldContainKey("canRead");
         permissionsDict.ShouldContainKey("canWrite");
@@ -344,11 +342,11 @@ public class DatasetManagerTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
-            Properties = new Dictionary<string, object>
+            Properties = TestJson.Props(new Dictionary<string, object>
             {
                 {"public", true},
                 {"name", "Default"}
-            },
+            }),
             Size = 1000,
             ModifiedTime = DateTime.Now,
             Path = "."
@@ -367,8 +365,7 @@ public class DatasetManagerTest : TestBase
         result.Count().ShouldBe(1);
 
         var entry = result.First();
-        var permissionsDict = JsonConvert.DeserializeObject<Dictionary<string, bool>>(
-            JsonConvert.SerializeObject(entry.Properties["permissions"]));
+        var permissionsDict = entry.Properties["permissions"].Deserialize<Dictionary<string, bool>>()!;
 
         permissionsDict["canRead"].ShouldBeTrue();
         permissionsDict["canWrite"].ShouldBeFalse();
@@ -400,11 +397,11 @@ public class DatasetManagerTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
-            Properties = new Dictionary<string, object>
+            Properties = TestJson.Props(new Dictionary<string, object>
             {
                 {"public", true},
                 {"name", "Default"}
-            },
+            }),
             Size = 1000,
             ModifiedTime = DateTime.Now,
             Path = "."
@@ -458,11 +455,11 @@ public class DatasetManagerTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
-            Properties = new Dictionary<string, object>
+            Properties = TestJson.Props(new Dictionary<string, object>
             {
                 {"public", true},
                 {"name", "Default"}
-            },
+            }),
             Size = 1000,
             ModifiedTime = DateTime.Now,
             Path = "."
@@ -518,11 +515,11 @@ public class DatasetManagerTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
-            Properties = new Dictionary<string, object>
+            Properties = TestJson.Props(new Dictionary<string, object>
             {
                 {"public", true},
                 {"name", "Test"}
-            },
+            }),
             Size = 1000,
             ModifiedTime = DateTime.Now,
             Path = "."

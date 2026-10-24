@@ -3,7 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using Newtonsoft.Json;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Configuration;
@@ -168,6 +170,15 @@ public static class ConfigurationFields
             currentValue, defaultValue, enumOptions: enumOptions);
     }
 
+    // The admin view shows a section as the JSON of appsettings.json: member names as written in the file (no policy),
+    // enums by name, indented
+    private static readonly JsonSerializerOptions DisplayOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        Converters = { new JsonStringEnumConverter() }
+    };
+
     // ---------------------------------------------------------------------------
     // Helper: build a JSON field (complex object serialized as indented JSON text)
     // ---------------------------------------------------------------------------
@@ -178,13 +189,8 @@ public static class ConfigurationFields
     {
         // Serialize enums by name (e.g. "Disabled") so the generated JSON is human-readable
         // and round-trips cleanly back into appsettings.json.
-        var enumConverter = new Newtonsoft.Json.Converters.StringEnumConverter();
-        var curr = currentValue != null
-            ? JsonConvert.SerializeObject(currentValue, Formatting.Indented, enumConverter)
-            : null;
-        var def = defaultValue != null
-            ? JsonConvert.SerializeObject(defaultValue, Formatting.Indented, enumConverter)
-            : null;
+        var curr = currentValue != null ? JsonSerializer.Serialize(currentValue, DisplayOptions) : null;
+        var def = defaultValue != null ? JsonSerializer.Serialize(defaultValue, DisplayOptions) : null;
         return Field(key, displayName, "json", description,
             curr, def, isSet: currentValue != null);
     }

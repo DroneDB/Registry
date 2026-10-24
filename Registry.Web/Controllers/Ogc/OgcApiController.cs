@@ -97,9 +97,9 @@ public class OgcApiController : ControllerBaseEx
     /// <summary>The tile sets of a collection.</summary>
     [HttpGet("collections/{collectionId}/tiles")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> TileSets([FromRoute] string orgSlug, [FromRoute] string dsSlug,
+    public async Task<ActionResult<OgcApiTileSetsDto>> TileSets([FromRoute] string orgSlug, [FromRoute] string dsSlug,
         [FromRoute] string collectionId, CancellationToken ct)
-        => Ok(await _tiles.GetTileSetsAsync(orgSlug, dsSlug, collectionId, BaseUrl(orgSlug, dsSlug), ct: ct));
+        => await _tiles.GetTileSetsAsync(orgSlug, dsSlug, collectionId, BaseUrl(orgSlug, dsSlug), ct: ct);
 
     /// <summary>One tile of a collection: a vector tile for vector layers, a PNG for rasters.</summary>
     [HttpGet("collections/{collectionId}/tiles/{tileMatrixSet}/{z:int}/{y:int}/{x:int}")]

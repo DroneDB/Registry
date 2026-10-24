@@ -1,6 +1,5 @@
 using System.Collections.Generic;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
@@ -12,31 +11,30 @@ namespace Registry.Ports.DroneDB;
 public sealed class EntryBuild
 {
     /// <summary>The entry is built, by itself or as a sidecar of its main file.</summary>
-    [JsonProperty("buildable")]
+    [JsonPropertyName("buildable")]
     public bool Buildable { get; set; }
 
     /// <summary>Dataset-relative path of the entry the artifacts belong to (the main file of a sidecar).</summary>
-    [JsonProperty("source")]
+    [JsonPropertyName("source")]
     public string? Source { get; set; }
 
     /// <summary>The hash of <see cref="Source"/>, which names its build (<c>.../build/{hash}/{path}</c>).</summary>
-    [JsonProperty("hash")]
+    [JsonPropertyName("hash")]
     public string? Hash { get; set; }
 
     /// <summary>The absolute build root of <see cref="Source"/>; it may not exist yet.</summary>
-    [JsonProperty("root")]
+    [JsonPropertyName("root")]
     public string? Root { get; set; }
 
-    [JsonProperty("state")]
-    [JsonConverter(typeof(StringEnumConverter))]
+    [JsonPropertyName("state")]
     public BuildState State { get; set; }
 
     /// <summary>From the pending marker (a pending or building entry), dataset-relative names.</summary>
-    [JsonProperty("missingDependencies")]
+    [JsonPropertyName("missingDependencies")]
     public IReadOnlyList<string> MissingDependencies { get; set; } = [];
 
     /// <summary>Unix seconds of the last attempt, from the pending marker; null without one.</summary>
-    [JsonProperty("lastAttempt")]
+    [JsonPropertyName("lastAttempt")]
     public long? LastAttempt { get; set; }
 
     /// <summary>
@@ -44,10 +42,11 @@ public sealed class EntryBuild
     /// backoff; due when the current time is at or past it); null exactly when <see cref="LastAttempt"/>
     /// is. Required (it may be null): a libddb without the field fails deserialization.
     /// </summary>
-    [JsonProperty("retryAfter", Required = Required.AllowNull)]
+    [JsonPropertyName("retryAfter")]
+    [JsonRequired]
     public long? RetryAfter { get; set; }
 
     /// <summary>The artifacts that exist, the primary output first.</summary>
-    [JsonProperty("artifacts")]
+    [JsonPropertyName("artifacts")]
     public IReadOnlyList<BuildArtifact> Artifacts { get; set; } = [];
 }

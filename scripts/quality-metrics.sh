@@ -405,7 +405,9 @@ metrics() {
     m "Actions without [ProducesResponseType]"       "$(prod Registry.Web/Controllers | actions_without_produces)"
     m "Newtonsoft attributes in Models and Ports"    "$(prod Registry.Web/Models Registry.Ports | newtonsoft_attributes)"
     m "JToken/JObject/JArray/JValue in port signatures" "$(prod Registry.Ports Registry.Web/Services/Ports | lines '\bJ(Token|Object|Array|Value)\b')"
-    m "Production files using Newtonsoft outside the allow-list" "$({ prod ""; paths ':(exclude,glob)Registry.Web.Identity/ApplicationDbContext.cs'; } | list_files_matching 'Newtonsoft')"
+    # The allow-list (RQ-14): UserMetadataJson (the User.Metadata column is stored by Json.NET until RQ-15) and DDB (Hangfire
+    # reads the jobs stored before RQ-09 with Json.NET). Nothing else may use it.
+    m "Production files using Newtonsoft outside the allow-list" "$({ prod ""; paths ':(exclude,glob)Registry.Web.Identity/UserMetadataJson.cs' ':(exclude,glob)Registry.Adapters/DroneDB/Ddb.cs'; } | list_files_matching 'Newtonsoft')"
     m "AddNewtonsoftJson / MvcNewtonsoftJsonOptions" "$(prod "" | lines 'AddNewtonsoftJson|MvcNewtonsoftJsonOptions')"
     m "Dataset route prefix copies in controllers"   "$(prod Registry.Web/Controllers | lines 'RoutesHelper\.DatasetRadix|/ds/\{dsSlug\}')"
 }

@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Ports;
@@ -220,14 +220,14 @@ public interface IDdbWrapper
     /// "collection", "links", asset "href"s), which Registry owns. Keys in libddb's (sorted) order.
     /// </summary>
     /// <exception cref="DdbNotFoundException">No entry has this path.</exception>
-    public JToken StacData(string ddbPath, string? entry);
+    public JsonElement StacData(string ddbPath, string? entry);
 
     /// <summary>
     /// The data-only STAC ItemCollection (<c>DDBStacItemCollectionData</c>, XI-09): the entries with a geometry,
     /// in path order, filtered by <paramref name="bbox"/> ("minX,minY,maxX,maxY", EPSG:4326) and
     /// <paramref name="datetime"/> (RFC 3339 instant or interval), paged; <c>numberMatched</c> counts every match.
     /// </summary>
-    public JToken StacItemCollectionData(string ddbPath, string? bbox, string? datetime, int limit, int offset);
+    public JsonElement StacItemCollectionData(string ddbPath, string? bbox, string? datetime, int limit, int offset);
 
     /// <summary>
     /// Rescans all files in the index to update metadata

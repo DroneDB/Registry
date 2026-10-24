@@ -10,7 +10,8 @@ using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using Registry.Ports.Json;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
@@ -279,7 +280,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
         foreach (var layer in targetLayers)
         {
             var safe = OgcNames.ToNcName(layer.Name);
-            JArray? fields = null;
+            IReadOnlyList<LayerField> fields = null;
             try
             {
                 fields = LayerFields(ResolveVectorArtifact(ddb, layer), layer);
@@ -322,10 +323,10 @@ public class WfsManager : OgcManagerBase, IWfsManager
 
             if (fields != null)
             {
-                foreach (var f in fields.OfType<JObject>())
+                foreach (var f in fields)
                 {
-                    var fname = f["name"]?.Value<string>() ?? "field";
-                    var ftype = (f["type"]?.Value<string>() ?? "String").ToLowerInvariant();
+                    var fname = f.Name ?? "field";
+                    var ftype = (f.Type ?? "String").ToLowerInvariant();
                     var xsdType = ftype switch
                     {
                         "integer" => "xsd:int",
@@ -437,8 +438,7 @@ public class WfsManager : OgcManagerBase, IWfsManager
     {
         ValidateValueReferences(filter);
         var fieldNames = (LayerFields(gpkg, layer) ?? [])
-            .OfType<JObject>()
-            .Select(f => f["name"]?.Value<string>())
+            .Select(f => f.Name)
             .OfType<string>()
             .ToHashSet(StringComparer.Ordinal);
         var sql = FesSqlTranslator.Translate(filter, fieldNames);
@@ -472,11 +472,19 @@ public class WfsManager : OgcManagerBase, IWfsManager
     }
 
     /// <summary>The fields of the layer from DroneDB's description, or null when it lists none.</summary>
-    private JArray? LayerFields(string gpkg, OgcLayerDto layer)
+    private IReadOnlyList<LayerField> LayerFields(string gpkg, OgcLayerDto layer)
     {
-        var describe = JObject.Parse(DdbWrapper.DescribeVector(gpkg, layer.InnerLayerName));
-        return describe["layers"] is JArray layers && layers.Count > 0 ? layers[0]["fields"] as JArray : null;
+        using var describe = JsonDocument.Parse(DdbWrapper.DescribeVector(gpkg, layer.InnerLayerName));
+        return describe.RootElement.Member("layers") is { ValueKind: JsonValueKind.Array } layers &&
+               layers.GetArrayLength() > 0 &&
+               layers[0].Member("fields") is { ValueKind: JsonValueKind.Array } fields
+            ? [.. fields.Items().Where(f => f.ValueKind == JsonValueKind.Object)
+                .Select(f => new LayerField(f.Member("name").Text(), f.Member("type").Text()))]
+            : null;
     }
+
+    /// <summary>A field of a vector layer as DroneDB describes it (the document is gone once it is read).</summary>
+    private sealed record LayerField(string Name, string Type);
 
     /// <summary>An OGR GML response without features.</summary>
     private const string EmptyOgrCollection =

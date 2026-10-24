@@ -4,7 +4,8 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json;
+using System.Text.Json;
+using Registry.Ports.Json;
 using Registry.Common;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
@@ -53,7 +54,7 @@ public class RemoteLoginManager : ILoginManager
 
             var result = await res.Content.ReadAsStringAsync();
 
-            var obj = JsonConvert.DeserializeObject<Dictionary<string, object>>(result);
+            var obj = JsonDocument.Parse(result).RootElement.ToPlainDictionary();
 
             _logger.LogInformation("CheckAccess (token): {Result}", result);
 
@@ -106,7 +107,7 @@ public class RemoteLoginManager : ILoginManager
             var result = await res.Content.ReadAsStringAsync();
             _logger.LogInformation("CheckAccess for user {User}: {Result}", userName, result);
 
-            var obj = JsonConvert.DeserializeObject<Dictionary<string, object>>(result);
+            var obj = JsonDocument.Parse(result).RootElement.ToPlainDictionary();
 
             return new LoginResultDto
             {

@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.Configuration;
 
@@ -18,21 +18,21 @@ public class HubOptions
     /// URL of the navbar logo. Use a path under <c>/branding/...</c> to point to a
     /// file dropped in <c>{StoragePath}/branding/</c>, or any absolute URL.
     /// </summary>
-    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string AppLogo { get; set; }
 
     /// <summary>
     /// Display name used as the document title and as fallback when no logo is set.
     /// When null, the frontend defaults to <c>DroneDB</c>.
     /// </summary>
-    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string AppName { get; set; }
 
     /// <summary>
     /// Optional CSS icon class shown next to the app name when no logo is configured.
     /// When null, the frontend defaults to <c>icon-dronedb</c>.
     /// </summary>
-    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string AppIcon { get; set; }
 
     /// <summary>
@@ -59,7 +59,7 @@ public class HubOptions
     /// When set, the UI is locked to a single organization slug
     /// (typical of self-hosted single-tenant deployments).
     /// </summary>
-    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string SingleOrganization { get; set; }
 
     /// <summary>
@@ -71,6 +71,6 @@ public class HubOptions
     /// Optional favicon / web-manifest configuration. When null, the Hub falls
     /// back to whatever default favicon ships with the embedded ClientApp.
     /// </summary>
-    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public FaviconOptions Favicon { get; set; }
 }

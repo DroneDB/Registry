@@ -5,7 +5,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using Registry.Ports.Json;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.DTO.Ogc;
@@ -141,7 +142,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
 
     // Index-time flag set by DroneDB for drawings without a coordinate system.
     private static bool IsLocalEntry(Entry e) =>
-        e.Properties != null && e.Properties.TryGetValue("georeferenced", out var g) && g is bool b && !b;
+        e.Properties != null && e.Properties.TryGetValue("georeferenced", out var g) && g.ValueKind == JsonValueKind.False;
 
     /// <summary>
     /// Expand a vector entry into one <see cref="OgcLayerDto"/> per inner GPKG layer
@@ -166,10 +167,10 @@ public class OgcLayerCatalog : IOgcLayerCatalog
             return null;
         }
 
-        JToken root;
+        JsonDocument document;
         try
         {
-            root = JToken.Parse(json);
+            document = JsonDocument.Parse(json);
         }
         catch (Exception ex)
         {
@@ -177,20 +178,21 @@ public class OgcLayerCatalog : IOgcLayerCatalog
             return null;
         }
 
-        var layers = root["layers"] as JArray;
-        if (layers == null || layers.Count == 0) return null;
+        using var _ = document;
+        var layers = document.RootElement.Member("layers") is { ValueKind: JsonValueKind.Array } array ? array : (JsonElement?)null;
+        if (layers is not { } layerArray || layerArray.GetArrayLength() == 0) return null;
 
-        var list = new List<OgcLayerDto>(layers.Count);
-        foreach (var l in layers)
+        var list = new List<OgcLayerDto>(layerArray.GetArrayLength());
+        foreach (var l in layerArray.Items())
         {
-            var name = l["name"]?.Value<string>();
+            var name = l.Member("name").Text();
             if (string.IsNullOrWhiteSpace(name)) continue;
 
-            var geomType = l["geometryType"]?.Value<string>();
+            var geomType = l.Member("geometryType").Text();
 
             // A GPKG layer without an SRS (DescribeVector reports "srs": "") is a local CAD
             // drawing: its extent is in drawing units, not WGS84.
-            if (l["srs"] is JValue { Type: JTokenType.String } srs && string.IsNullOrEmpty(srs.Value<string>()))
+            if (l.Member("srs") is { ValueKind: JsonValueKind.String } srs && string.IsNullOrEmpty(srs.GetString()))
             {
                 list.Add(new OgcLayerDto
                 {
@@ -208,18 +210,18 @@ public class OgcLayerCatalog : IOgcLayerCatalog
                 continue;
             }
 
-            var extent = l["extent"] as JArray;
+            var extent = l.Member("extent") is { ValueKind: JsonValueKind.Array } e4 ? e4 : (JsonElement?)null;
             var bbox = entryBbox;
-            if (extent != null && extent.Count >= 4)
+            if (extent is { } extentArray && extentArray.GetArrayLength() >= 4)
             {
                 try
                 {
                     bbox =
                     [
-                        extent[0].Value<double>(),
-                        extent[1].Value<double>(),
-                        extent[2].Value<double>(),
-                        extent[3].Value<double>()
+                        extentArray[0].ToDouble(),
+                        extentArray[1].ToDouble(),
+                        extentArray[2].ToDouble(),
+                        extentArray[3].ToDouble()
                     ];
                 }
                 catch (Exception ex)
@@ -285,33 +287,29 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     }
 
 
-    private static double[]? ExtractBboxFromPolygon(object? polygonGeom)
+    private static double[]? ExtractBboxFromPolygon(JsonElement? polygonGeom)
     {
-        if (polygonGeom == null) return null;
+        if (polygonGeom is not { } token) return null;
         try
         {
-            var token = polygonGeom as JToken ?? JToken.FromObject(polygonGeom);
             // Support GeoJSON Feature: unwrap to geometry
-            var typeStr = token["type"]?.Value<string>();
+            var typeStr = token.Member("type").Text();
             if (string.Equals(typeStr, "Feature", StringComparison.OrdinalIgnoreCase))
-            {
-                token = token["geometry"] ?? token;
-            }
+                token = token.Member("geometry") ?? token;
 
-            var coords = token["coordinates"];
-            if (coords == null || coords.Type != JTokenType.Array) return null;
+            if (token.Member("coordinates") is not { ValueKind: JsonValueKind.Array } coords) return null;
             // GeoJSON Polygon coordinates: [ [ [lon,lat], [lon,lat], ... ] ]
-            var ring = coords.First as JArray;
-            if (ring == null || ring.Count == 0) return null;
+            if (coords.GetArrayLength() == 0 || coords[0].ValueKind != JsonValueKind.Array || coords[0].GetArrayLength() == 0)
+                return null;
             double minLon = double.MaxValue,
                 minLat = double.MaxValue,
                 maxLon = double.MinValue,
                 maxLat = double.MinValue;
-            foreach (var pt in ring)
+            foreach (var pt in coords[0].Items())
             {
-                if (pt is not JArray pa || pa.Count < 2) continue;
-                var lon = pa[0].Value<double>();
-                var lat = pa[1].Value<double>();
+                if (pt.ValueKind != JsonValueKind.Array || pt.GetArrayLength() < 2) continue;
+                var lon = pt[0].ToDouble();
+                var lat = pt[1].ToDouble();
                 if (lon < minLon) minLon = lon;
                 if (lat < minLat) minLat = lat;
                 if (lon > maxLon) maxLon = lon;
@@ -332,12 +330,9 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     private static string? ExtractVectorGeometryType(Entry e)
     {
         if (e.Properties == null) return null;
-        if (e.Properties.TryGetValue("vector", out var v) && v is JToken token)
-        {
-            return token["geometryType"]?.Value<string>();
-        }
-
-        return null;
+        return e.Properties.TryGetValue("vector", out var v) && v.ValueKind == JsonValueKind.Object
+            ? v.Member("geometryType").Text()
+            : null;
     }
 
     /// <summary>
@@ -352,35 +347,28 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         if (e.Properties == null || !e.Properties.TryGetValue("bands", out var raw))
             return (0, false);
 
-        JArray? bands;
-        switch (raw)
+        JsonElement bands;
+        switch (raw.ValueKind)
         {
-            case JArray arr: bands = arr; break;
-            case string s when !string.IsNullOrWhiteSpace(s):
+            case JsonValueKind.Array: bands = raw; break;
+            case JsonValueKind.String when !string.IsNullOrWhiteSpace(raw.GetString()):
                 try
                 {
-                    bands = JArray.Parse(s);
+                    // The bands as text: a JSON array the index stored as a string
+                    bands = JsonDocument.Parse(raw.GetString()!).RootElement.Clone();
                 }
-                catch (Newtonsoft.Json.JsonException)
+                catch (JsonException)
                 {
                     return (0, false);
                 }
 
+                if (bands.ValueKind != JsonValueKind.Array) return (0, false);
                 break;
             default:
-                try
-                {
-                    bands = JArray.FromObject(raw);
-                }
-                catch (Exception)
-                {
-                    return (0, false);
-                }
-
-                break;
+                return (0, false);
         }
 
-        if (bands == null || bands.Count == 0) return (0, false);
+        if (bands.GetArrayLength() == 0) return (0, false);
 
         var rgbaLike = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -388,15 +376,15 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         };
         var nonAlpha = 0;
         var hasNonRgba = false;
-        foreach (var b in bands)
+        foreach (var b in bands.Items())
         {
-            var interp = b["colorInterp"]?.Value<string>() ?? string.Empty;
+            var interp = b.Member("colorInterp").Text() ?? string.Empty;
             if (string.Equals(interp, "Alpha", StringComparison.OrdinalIgnoreCase)) continue;
             nonAlpha++;
             if (!rgbaLike.Contains(interp)) hasNonRgba = true;
         }
 
-        var multispectral = nonAlpha > 3 || (bands.Count >= 4 && hasNonRgba);
-        return (bands.Count, multispectral);
+        var multispectral = nonAlpha > 3 || (bands.GetArrayLength() >= 4 && hasNonRgba);
+        return (bands.GetArrayLength(), multispectral);
     }
 }

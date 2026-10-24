@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
@@ -6,21 +6,21 @@ namespace Registry.Ports.DroneDB;
 public sealed class EntryBuildArtifacts
 {
     /// <summary>Dataset-relative entry path, as requested.</summary>
-    [JsonProperty("path")]
+    [JsonPropertyName("path")]
     public string Path { get; set; } = "";
 
     /// <summary>The index has an entry with this path (when false, the other members are empty).</summary>
-    [JsonProperty("exists")]
+    [JsonPropertyName("exists")]
     public bool Exists { get; set; }
 
     /// <summary>The entry's hash; null for a folder or a path that is not indexed.</summary>
-    [JsonProperty("hash")]
+    [JsonPropertyName("hash")]
     public string? Hash { get; set; }
 
-    [JsonProperty("type")]
+    [JsonPropertyName("type")]
     public EntryType Type { get; set; }
 
     /// <summary>The build object; null for a path that is not indexed.</summary>
-    [JsonProperty("build")]
+    [JsonPropertyName("build")]
     public EntryBuild? Build { get; set; }
 }

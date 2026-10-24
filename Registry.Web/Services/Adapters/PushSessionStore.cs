@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
-using Newtonsoft.Json;
+using System.Text.Json;
 using Registry.Ports;
 using Registry.Web.Models;
 using Registry.Web.Services.Ports;
@@ -34,7 +34,7 @@ public class PushSessionStore : IPushSessionStore
     }
 
     public Task SaveAsync(string pushFolder, PushSession session) =>
-        _fileSystem.WriteAllTextAsync(SessionPath(pushFolder), JsonConvert.SerializeObject(session));
+        _fileSystem.WriteAllTextAsync(SessionPath(pushFolder), ApiJson.Serialize(session));
 
     public async Task<PushSession?> LoadAsync(string pushFolder)
     {
@@ -48,7 +48,7 @@ public class PushSessionStore : IPushSessionStore
         if (_cache != null && _cache.TryGetValue(key, out CachedSession? cached) && cached!.Version == version)
             return cached.Session;
 
-        var session = JsonConvert.DeserializeObject<PushSession>(await _fileSystem.ReadAllTextAsync(path));
+        var session = ApiJson.Deserialize<PushSession>(await _fileSystem.ReadAllTextAsync(path));
         if (session != null)
             _cache?.Set(key, new CachedSession(version, session), new MemoryCacheEntryOptions { SlidingExpiration = CacheFor });
         return session;
@@ -62,7 +62,7 @@ public class PushSessionStore : IPushSessionStore
             _fileSystem.GetLastWriteTime(localFile).ToUniversalTime().Ticks);
         var marker = MarkerPath(pushFolder, path);
         _fileSystem.EnsureParentFolderExists(marker);
-        await _fileSystem.WriteAllTextAsync(marker, JsonConvert.SerializeObject(record));
+        await _fileSystem.WriteAllTextAsync(marker, ApiJson.Serialize(record));
     }
 
     public async Task<IReadOnlyDictionary<string, string>> VerifiedHashesAsync(string pushFolder, string addFolder,
@@ -83,7 +83,7 @@ public class PushSessionStore : IPushSessionStore
             Verification? record;
             try
             {
-                record = JsonConvert.DeserializeObject<Verification>(await _fileSystem.ReadAllTextAsync(marker));
+                record = ApiJson.Deserialize<Verification>(await _fileSystem.ReadAllTextAsync(marker));
             }
             catch (JsonException)
             {

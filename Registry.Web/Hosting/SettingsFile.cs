@@ -5,8 +5,9 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using Microsoft.Extensions.Configuration;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Registry.Common;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Models.Configuration;
@@ -25,6 +26,16 @@ public static class SettingsFile
 {
     /// <summary>Length of a generated secret.</summary>
     public const int SecretLength = 64;
+
+    // What the configuration system reads (comments and trailing commas are fine in appsettings.json)
+    private static readonly JsonDocumentOptions ReadOptions =
+        new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
+
+    private static readonly JsonSerializerOptions WriteOptions =
+        new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+    /// <summary>The document options the settings JSON is read with.</summary>
+    public static JsonDocumentOptions DocumentOptions => ReadOptions;
 
     /// <summary>
     /// The <c>AppSettings</c> keys generated when empty: the JWT signing secret, and the token shared by
@@ -68,37 +79,36 @@ public static class SettingsFile
         var atomic = true;
 
         if (generated.Count > 0)
-            atomic = AtomicFile.WriteAllText(path, settings.ToString(Formatting.Indented));
+            atomic = AtomicFile.WriteAllText(path, settings.ToJsonString(WriteOptions));
 
         return new SettingsFileChanges(path, created, generated, atomic);
     }
 
     /// <summary>The file's JSON.</summary>
     /// <exception cref="JsonException">The file is not valid JSON or not an object.</exception>
-    public static JObject Read(string path) =>
-        JsonConvert.DeserializeObject<JObject>(File.ReadAllText(path),
-            new JsonSerializerSettings { DateParseHandling = DateParseHandling.None }) ??
-        throw new JsonSerializationException($"{path} is empty");
+    public static JsonObject Read(string path) =>
+        JsonNode.Parse(File.ReadAllText(path), documentOptions: ReadOptions)?.AsObject() ??
+        throw new JsonException($"{path} is empty");
 
     /// <summary>
     /// Sets each of <see cref="GeneratedSecrets"/> that is missing or blank in the <c>AppSettings</c>
     /// object of <paramref name="settings"/> to a new random value; leaves everything else as it is.
     /// </summary>
     /// <returns>The keys that were generated.</returns>
-    public static IReadOnlyList<string> AddMissingSecrets(JObject settings)
+    public static IReadOnlyList<string> AddMissingSecrets(JsonObject settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (settings[AppSettings.SectionName] is not JObject section)
+        if (settings[AppSettings.SectionName] is not JsonObject section)
         {
-            section = new JObject();
+            section = new JsonObject();
             settings[AppSettings.SectionName] = section;
         }
 
         var generated = new List<string>();
         foreach (var key in GeneratedSecrets)
         {
-            if (!string.IsNullOrWhiteSpace(section.Value<string>(key)))
+            if (!string.IsNullOrWhiteSpace(Text(section[key])))
                 continue;
 
             section[key] = CommonUtils.RandomString(SecretLength);
@@ -107,6 +117,8 @@ public static class SettingsFile
 
         return generated;
     }
+
+    private static string? Text(JsonNode? node) => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
     /// <summary>
     /// The configuration a host of <paramref name="storageFolder"/> would read for the options: the file
@@ -125,7 +137,7 @@ public static class SettingsFile
         AddMissingSecrets(settings);
 
         return new ConfigurationBuilder()
-            .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(settings.ToString(Formatting.None))))
+            .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(settings.ToJsonString(WriteOptions))))
             .AddEnvironmentVariables()
             .Build();
     }
