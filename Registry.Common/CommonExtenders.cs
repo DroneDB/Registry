@@ -29,9 +29,11 @@ public static class CommonExtenders
             stream.Seek(0, SeekOrigin.Begin);
     }
 
-    public static bool IsSameAs(this Dictionary<string, object> a, Dictionary<string, object> b)
-    {
-        return a.Count == b.Count && !a.Except(b).Any();
-    }
+    /// <summary>
+    /// True when both dictionaries hold the same values (<see cref="PlainValue"/>): the lists and dictionaries inside are
+    /// compared by content, not by reference.
+    /// </summary>
+    public static bool IsSameAs(this Dictionary<string, object> a, Dictionary<string, object> b) =>
+        PlainValue.AreEqual(a, b);
 
 }

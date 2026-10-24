@@ -7,7 +7,6 @@
 
     <ItemGroup>
       <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
-      <PackageReference Include="Newtonsoft.Json" />
     </ItemGroup>
 
     <ItemGroup>
