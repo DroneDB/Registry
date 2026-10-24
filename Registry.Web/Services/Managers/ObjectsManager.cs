@@ -102,7 +102,7 @@ public class ObjectsManager : IObjectsManager
             var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, safe: true);
             if (ds == null || string.IsNullOrWhiteSpace(tempFilePath)) return;
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            if (UploadManager.IsInUploadsFolder(ddb, tempFilePath))
+            if (UploadFiles.IsInUploadsFolder(ddb, tempFilePath))
                 _fs.TryDelete(tempFilePath, ex => _logger.LogDebug(ex, "Cannot delete the temp upload '{TempFile}'", tempFilePath));
         }
         catch (Exception ex)

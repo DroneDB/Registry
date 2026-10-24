@@ -134,12 +134,12 @@ public sealed class ObjectServicesBuilder
         services.AddSingleton<IUrlBuilder>(new UrlBuilder(TestSettings.Options<HttpHostOptions>(settings),
             new Microsoft.AspNetCore.Http.HttpContextAccessor()));
         services.AddSingleton(_jobIndexWriter ?? Mock.Of<IJobIndexWriter>());
-        services.AddSingleton<IUploadManager>(new UploadManager(NullLogger<UploadManager>.Instance, authManager, access,
-            ddbManager, fileSystem, thumbnails, TestSettings.Options<ImportSettings>(settings), scheduler,
+        services.AddSingleton<IUploadManager>(TestUploads.Create(authManager, access, fileSystem, thumbnails,
+            TestSettings.Options<ImportSettings>(settings), scheduler,
             new UploadQuotaGuard(new UploadQuotaLedger(TestSettings.Options<UploadSettings>(settings)), quota),
             new DatasetChangeCoalescer(TestJobs.OgcCacheKeys(), cacheManager, thumbnails.Value.Candidates,
                 TimeSpan.Zero, NullLogger<DatasetChangeCoalescer>.Instance),
-            TestPaths.Policy, TestScratch.Provider, indexQueue: _indexQueue));
+            indexQueue: _indexQueue));
 
         services.AddObjectsSlice();
         services.AddSingleton(artifacts);

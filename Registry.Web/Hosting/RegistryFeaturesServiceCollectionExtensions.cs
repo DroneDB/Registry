@@ -24,6 +24,7 @@ using Registry.Web.Services.Processing;
 using Registry.Web.Services.Push;
 using Registry.Web.Services.RemoteImport;
 using Registry.Web.Services.Shares;
+using Registry.Web.Services.Uploads;
 using Registry.Web.Services.Users;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
@@ -213,6 +214,11 @@ public static class RegistryFeaturesServiceCollectionExtensions
     public static IServiceCollection AddUploadPipeline(this IServiceCollection services)
     {
         services.AddScoped<IUploadManager, UploadManager>();
+        services.AddScoped<IUploadFiles, UploadFiles>();
+        services.AddScoped<IUploadReceiptTracker, UploadReceiptTracker>();
+        services.AddScoped<IUploadIndexer, UploadIndexer>();
+        services.AddScoped<IUploadFinalizer, UploadFinalizer>();
+        services.AddScoped<IUploadCommitter, UploadCommitter>();
         services.AddScoped<IChunkedUploadManager, ChunkedUploadManager>();
         services.AddSingleton<IChunkStore, ChunkStore>();
         services.AddSingleton<UploadQuotaLedger>();
