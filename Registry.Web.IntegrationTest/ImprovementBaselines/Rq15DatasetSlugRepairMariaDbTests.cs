@@ -94,7 +94,7 @@ public class Rq15DatasetSlugRepairMariaDbTests
 
     // "a--b" has "x--y" (becomes "x-y_1": "x-y" is taken) and "kept"; "Plot" is renamed in case only; "stable" is valid
     // and has a dataset "x-y" of its own, which is not the one renamed to "x-y_1": its jobs stay where they are
-    private async Task SeedAsync(RegistryContext context)
+    private static async Task SeedAsync(RegistryContext context)
     {
         var now = DateTime.UtcNow;
         context.Organizations.AddRange(

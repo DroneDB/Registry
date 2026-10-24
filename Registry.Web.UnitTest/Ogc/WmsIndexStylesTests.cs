@@ -238,7 +238,7 @@ public class WmsIndexStylesTests
         var response = Answer(thrown);
         response.Result.StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
         response.Result.ContentType.ShouldBe(OgcExceptionFormatter.ContentType);
-        response.Result.Content.ShouldContain("ServiceUnavailable");
+        response.Result.Content.ShouldNotBeNull().ShouldContain("ServiceUnavailable");
         response.Http.Response.Headers.RetryAfter.ToString().ShouldBe(retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture));
         IndexRenders().ShouldBe(0);
 
