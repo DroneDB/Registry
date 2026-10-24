@@ -103,42 +103,65 @@ public sealed class Rq11NativeGateTests : IDisposable
 
     private static IEnumerable<TestCaseData> AnalysisCalls()
     {
-        TestCaseData Case(string name, Expression<Func<IDDB, string>> native, Func<IRasterAnalysisService, Task> call) =>
+        TestCaseData Case(string name, Expression<Func<IDDB, string>> native, Func<IRasterAnalysisService, CancellationToken, Task> call) =>
             new TestCaseData(native, call).SetName(name);
 
         yield return Case("GetRasterInfo", d => d.GetRasterInfo(It.IsAny<string>()),
-            r => r.GetRasterInfoAsync(OrgSlug, DsSlug, "ortho.tif"));
+            (r, ct) => r.GetRasterInfoAsync(OrgSlug, DsSlug, "ortho.tif", ct: ct));
         yield return Case("GetRasterMetadata", d => d.GetRasterMetadata(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>()),
-            r => r.GetRasterMetadataAsync(OrgSlug, DsSlug, "ortho.tif"));
+            (r, ct) => r.GetRasterMetadataAsync(OrgSlug, DsSlug, "ortho.tif", ct: ct));
         yield return Case("GetRasterValueInfo", d => d.GetRasterValueInfo(It.IsAny<string>()),
-            r => r.GetRasterValueInfoAsync(OrgSlug, DsSlug, "ortho.tif"));
+            (r, ct) => r.GetRasterValueInfoAsync(OrgSlug, DsSlug, "ortho.tif", ct: ct));
         yield return Case("GetRasterPointValue", d => d.GetRasterPointValue(It.IsAny<string>(), 1, 2),
-            r => r.GetRasterPointValueAsync(OrgSlug, DsSlug, "ortho.tif", 1, 2));
+            (r, ct) => r.GetRasterPointValueAsync(OrgSlug, DsSlug, "ortho.tif", 1, 2, ct: ct));
         yield return Case("GetRasterAreaStats", d => d.GetRasterAreaStats(It.IsAny<string>(), 0, 0, 5, 5),
-            r => r.GetRasterAreaStatsAsync(OrgSlug, DsSlug, "ortho.tif", 0, 0, 5, 5));
+            (r, ct) => r.GetRasterAreaStatsAsync(OrgSlug, DsSlug, "ortho.tif", 0, 0, 5, 5, ct: ct));
         yield return Case("GetRasterProfile", d => d.GetRasterProfile(It.IsAny<string>(), It.IsAny<string>(), 10),
-            r => r.GetRasterProfileAsync(OrgSlug, DsSlug, "ortho.tif", "{}", 10));
+            (r, ct) => r.GetRasterProfileAsync(OrgSlug, DsSlug, "ortho.tif", "{}", 10, ct: ct));
         yield return Case("CalculateVolume", d => d.CalculateVolume(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), 0),
-            r => r.CalculateVolumeAsync(OrgSlug, DsSlug, "ortho.tif", "{}", null, 0));
+            (r, ct) => r.CalculateVolumeAsync(OrgSlug, DsSlug, "ortho.tif", "{}", null, 0, ct: ct));
         yield return Case("DetectStockpile", d => d.DetectStockpile(It.IsAny<string>(), 1, 2, 5, 0.5f),
-            r => r.DetectStockpileAsync(OrgSlug, DsSlug, "ortho.tif", 1, 2, 5, 0.5f));
+            (r, ct) => r.DetectStockpileAsync(OrgSlug, DsSlug, "ortho.tif", 1, 2, 5, 0.5f, ct: ct));
         yield return Case("DetectAllStockpiles", d => d.DetectAllStockpiles(It.IsAny<string>(), 0.5f, 5, 50),
-            r => r.DetectAllStockpilesAsync(OrgSlug, DsSlug, "ortho.tif", 0.5f, 5, 50));
+            (r, ct) => r.DetectAllStockpilesAsync(OrgSlug, DsSlug, "ortho.tif", 0.5f, 5, 50, ct: ct));
         yield return Case("GenerateContours", d => d.GenerateContours(It.IsAny<string>(), 1.0, null, 0, null, null, 0, 1),
-            r => r.GenerateContoursAsync(OrgSlug, DsSlug, "ortho.tif", new ContourOptions(1.0, null, 0, null, null, 0, 1)));
+            (r, ct) => r.GenerateContoursAsync(OrgSlug, DsSlug, "ortho.tif", new ContourOptions(1.0, null, 0, null, null, 0, 1), ct: ct));
         yield return Case("EstimateExportSize", d => d.GetRasterInfo(It.IsAny<string>()),
-            r => r.EstimateExportSizeAsync(OrgSlug, DsSlug, "ortho.tif"));
+            (r, ct) => r.EstimateExportSizeAsync(OrgSlug, DsSlug, "ortho.tif", ct: ct));
     }
 
     [TestCaseSource(nameof(AnalysisCalls))]
     public async Task Analysis_RunsInTheHeavyLane(Expression<Func<IDDB, string>> native,
-        Func<IRasterAnalysisService, Task> call)
+        Func<IRasterAnalysisService, CancellationToken, Task> call)
     {
         Native(native, Info);
 
-        await call(_services.Raster);
+        await call(_services.Raster, CancellationToken.None);
 
         ShouldHaveRunInTheHeavyLane();
+    }
+
+    /// <summary>
+    /// XI-07 steps 3 and 4: the raster analysis exports, which libddb now lists as cancellable, run under the request's token
+    /// (the gate makes it the current <see cref="DdbCancellation"/> of the native call, and the adapter hands it to libddb),
+    /// so a request that goes away stops the analysis at its next checkpoint instead of finishing it for nobody.
+    /// </summary>
+    [TestCaseSource(nameof(AnalysisCalls))]
+    public async Task Analysis_RunsUnderTheRequestsToken(Expression<Func<IDDB, string>> native,
+        Func<IRasterAnalysisService, CancellationToken, Task> call)
+    {
+        var seen = new List<CancellationToken>();
+        _ddb.Setup(native).Returns(() =>
+        {
+            seen.Add(DdbCancellation.Current);
+            return Info;
+        });
+        using var request = new CancellationTokenSource();
+
+        await call(_services.Raster, request.Token);
+
+        seen.ShouldNotBeEmpty();
+        seen.ShouldAllBe(token => token == request.Token);
     }
 
     [Test]

@@ -50,7 +50,7 @@ public sealed class PushCommit : IPushCommit
 
     public async Task Commit(string orgSlug, string dsSlug, string token, CancellationToken ct = default)
     {
-        // Honoured while the dataset is resolved; the commit then runs to completion (RQ-13)
+        // Honoured while the dataset is resolved, and by the two native calls that read the pushed files below (XI-07)
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
 
         var ddb = access.Ddb;
@@ -78,8 +78,9 @@ public sealed class PushCommit : IPushCommit
         // files are linked in: libddb hashes the linked ones, and nothing it was not told about
         var verifiedHashes = await _sessionStore.VerifiedHashesAsync(baseTempFolder, addTempFolder, session);
 
-        // Create hard links for local files
-        _ddbWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath, addTempFolder);
+        // Create hard links for local files: stops, nothing applied, when the request goes away
+        using (DdbCancellation.Enter(ct))
+            _ddbWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath, addTempFolder);
 
         foreach (var add in delta.Adds.Where(item => item.Hash.Length > 0))
             if (!_fileSystem.Exists(Path.Combine(addTempFolder, add.Path)))
@@ -101,9 +102,14 @@ public sealed class PushCommit : IPushCommit
             metaDump = await _fileSystem.ReadAllTextAsync(metaFile, ct);
         }
 
-        // Applies delta
+        // Applies delta. Atomic to a cancel (libddb, XI-07): a request that goes away while it reads and hashes the
+        // added files stops it with the dataset and the pushed files as they were (DdbCanceledException, the session
+        // stays: the client commits again); once it starts to change the dataset it finishes whole, returns normally
+        // and the commit goes on whatever the token says now, the builds below queueing with no token
         var target = ddb.DatasetFolderPath;
-        var conflicts = _ddbWrapper.ApplyDelta(delta, addTempFolder, target, MergeStrategy.KeepTheirs, metaDump, verifiedHashes);
+        List<string> conflicts;
+        using (DdbCancellation.Enter(ct))
+            conflicts = _ddbWrapper.ApplyDelta(delta, addTempFolder, target, MergeStrategy.KeepTheirs, metaDump, verifiedHashes);
 
         if (conflicts.Count > 0)
         {

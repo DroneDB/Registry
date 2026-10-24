@@ -108,8 +108,10 @@ public sealed class PushSessions : IPushSessions
             Meta = stamp.Meta
         }, ourStamp);
 
-        // Compute locals
-        var locals = _ddbWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath);
+        // Compute locals (stops when the request goes away, before the session is written: XI-07)
+        Dictionary<string, bool> locals;
+        using (DdbCancellation.Enter(ct))
+            locals = _ddbWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath);
 
         // Generate UUID
         var uuid = Guid.NewGuid().ToString();

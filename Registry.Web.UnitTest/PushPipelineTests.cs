@@ -219,6 +219,98 @@ public class PushPipelineTests : TestBase
         Directory.Exists(Path.GetDirectoryName(AddFolder(token))).ShouldBeFalse("the push folder is deleted after commit");
     }
 
+    /// <summary>
+    /// XI-07 (steps 3 and 4): the request's token is the cancellation of the two native calls that read the pushed files, so
+    /// a request that goes away stops them: <c>DDBComputeDeltaLocals</c> and <c>DDBApplyDelta</c> are cancellable and the
+    /// apply is atomic to a cancel (red before: no token was current, the commit ran to completion with nobody waiting).
+    /// </summary>
+    [Test]
+    public async Task Commit_GivesTheRequestsToken_ToTheNativeCallsThatReadThePushedFiles()
+    {
+        var seen = new Dictionary<string, CancellationToken>();
+        _wrapper.Setup(w => w.ComputeDeltaLocals(It.IsAny<Delta>(), _root, It.IsAny<string>()))
+            .Callback(() => seen["ComputeDeltaLocals"] = DdbCancellation.Current).Returns(new Dictionary<string, bool>());
+        _wrapper.Setup(w => w.ApplyDelta(It.IsAny<Delta>(), It.IsAny<string>(), _root, It.IsAny<MergeStrategy>(),
+                It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, string>>()))
+            .Callback(() => seen["ApplyDelta"] = DdbCancellation.Current).Returns([]);
+        var mgr = CreateManager();
+        var token = await InitAndStage(mgr);
+        seen.Clear();
+        using var request = new CancellationTokenSource();
+
+        await mgr.Commit("org", "ds", token, request.Token);
+
+        seen.Keys.ShouldBe(["ComputeDeltaLocals", "ApplyDelta"], ignoreOrder: true);
+        seen.Values.ShouldAllBe(t => t == request.Token);
+        DdbCancellation.Current.CanBeCanceled.ShouldBeFalse("the scope ends with the call");
+    }
+
+    [Test]
+    public async Task Init_GivesTheRequestsToken_ToComputeDeltaLocals()
+    {
+        CancellationToken seen = default;
+        _wrapper.Setup(w => w.ComputeDeltaLocals(It.IsAny<Delta>(), _root, It.IsAny<string>()))
+            .Callback(() => seen = DdbCancellation.Current).Returns(new Dictionary<string, bool>());
+        using var request = new CancellationTokenSource();
+
+        await CreateManager().Init("org", "ds", "c1", ClientStamp(), request.Token);
+
+        seen.ShouldBe(request.Token);
+    }
+
+    /// <summary>
+    /// The apply stopped by a cancel before it changed anything (<c>DDBERR_CANCELED</c>): the commit is a cancel, not a
+    /// failure, and leaves the push as it was: the session and the pushed files stay for the client's next commit, and
+    /// nothing is queued to build.
+    /// </summary>
+    [Test]
+    public async Task Commit_ApplyCanceledBeforeItChangesAnything_LeavesThePushForTheNextCommit()
+    {
+        var mgr = CreateManager();
+        var token = await InitAndStage(mgr);
+        using var request = new CancellationTokenSource();
+        _wrapper.Setup(w => w.ApplyDelta(It.IsAny<Delta>(), It.IsAny<string>(), _root, It.IsAny<MergeStrategy>(),
+                It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, string>>()))
+            .Callback(request.Cancel)
+            .Throws(new DdbCanceledException("Canceled by the cancel token"));
+
+        await Should.ThrowAsync<OperationCanceledException>(() => mgr.Commit("org", "ds", token, request.Token));
+
+        Directory.Exists(Path.GetDirectoryName(AddFolder(token))).ShouldBeTrue("the push folder is kept");
+        _jobs.Verify(j => j.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
+            It.IsAny<IndexPayload>()), Times.Never);
+
+        // The next commit finds the session and applies the delta
+        _wrapper.Setup(w => w.ApplyDelta(It.IsAny<Delta>(), It.IsAny<string>(), _root, It.IsAny<MergeStrategy>(),
+            It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, string>>())).Returns([]);
+        await mgr.Commit("org", "ds", token);
+
+        Directory.Exists(Path.GetDirectoryName(AddFolder(token))).ShouldBeFalse("the push folder is deleted after commit");
+    }
+
+    /// <summary>
+    /// A cancel that comes after the apply passed its point of no return: libddb finishes it and returns normally, so the
+    /// commit is a success whose request token is canceled: the push folder is deleted and the builds are queued
+    /// (red before the apply was cancellable only by accident, and a half-applied delta could follow a cancel).
+    /// </summary>
+    [Test]
+    public async Task Commit_ApplyThatFinishedAfterALateCancel_IsASuccess()
+    {
+        var mgr = CreateManager();
+        var token = await InitAndStage(mgr);
+        using var request = new CancellationTokenSource();
+        _wrapper.Setup(w => w.ApplyDelta(It.IsAny<Delta>(), It.IsAny<string>(), _root, It.IsAny<MergeStrategy>(),
+                It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, string>>()))
+            .Callback(request.Cancel).Returns([]);
+
+        await mgr.Commit("org", "ds", token, request.Token);
+
+        request.IsCancellationRequested.ShouldBeTrue();
+        Directory.Exists(Path.GetDirectoryName(AddFolder(token))).ShouldBeFalse("the push folder is deleted after commit");
+        _jobs.Verify(j => j.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
+            It.IsAny<IndexPayload>()), Times.Exactly(Adds / 10));
+    }
+
     [Test]
     public async Task Commit_AsksBuildabilityWithOneBatch()
     {
