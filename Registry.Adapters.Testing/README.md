@@ -88,3 +88,9 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   render panoramas again. The commits since the last vendoring (`6b9daee`) that touch `tests/contract` are that
   one and a README-only one (the CI note: DroneDB no longer runs Registry's contract tests); no other fixture or
   schema changed.
+* 2026-10-24: DroneDB `c5633bbe5e2ac474d86f580a9b42f9bbc366c137` (DroneDB 2.0.0 is ONE version: the library, its
+  C ABI and the release share it, so libddb is ABI 2.0). The commits since the last vendoring (`77f088e`) change
+  only `fixtures/capabilities.json` (`abi` is `{"major": 2, "minor": 0}`) and the descriptions of seven schemas
+  (`capabilities`, `entry-types`, `build-artifacts`, `build-file`, `copy-build-artifacts`, `effective-config`,
+  `list-entries-ex`: "new in 2.0" instead of "ABI 1.1"); `capabilities.schema.json` requires `abi.major >= 2`.
+  The raster, colormap and index fixtures did not change. `DdbAbi` requires libddb 2.x.

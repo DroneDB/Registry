@@ -40,7 +40,7 @@
             MSBuild; ci: fetch-windows-zip) and fails the build when its SHA256 differs.
         scripts/ddb-release.sh check (CI) fails when the pin is malformed or written elsewhere, or
         when anything downloads releases/latest. Startup checks the ABI of the loaded library
-        (DdbAbi: major 1, minor >= 1), not this version number.
+        (DdbAbi: libddb 2.x, ABI major 2, minor >= 0), not this version number.
 
         DdbSource:
           release  a published release: DdbVersion, and the SHA256 of ddb_<DdbVersion>_amd64.deb and
@@ -60,23 +60,25 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-10-23): DroneDB 2.0.0 (libddb ABI 1.1) is not tagged until Registry is proven
-        on it, so Registry pins the CI build of DroneDB fixes-and-optimizations commit 9092885, run
-        40015265825 (a pull request run of DroneDB#472, built from the merge with master), every job
-        green (Linux and Windows builds and tests, ASan + UBSan, the Docker image). It has the
-        end-to-end fixes (Nexus exit crash, GDAL data shipped, panorama thumbnails). Next: the
-        v2.0.0 release (DdbSource release) once it is tagged.
+        Pinned now (2026-10-24): DroneDB has ONE version, 2.0.0 (package.json); the libddb ABI follows
+        it (ABI 2.0, semver: a removed export is a new major, an added one a new minor) and so does
+        the handshake (libddb 2.x). It is not tagged until Registry is proven on it, so Registry pins
+        the CI build of DroneDB fixes-and-optimizations commit c5633bb, run 40063806251 (a pull
+        request run of DroneDB#472, built from the merge with master; the .deb is named after that
+        merge commit, 2.0.0~git71040192), every job green (Linux and Windows builds and tests,
+        ASan + UBSan, the Docker image). Next: the v2.0.0 release (DdbSource release) once it is
+        tagged.
     -->
     <PropertyGroup>
         <DdbSource>ci</DdbSource>
         <DdbVersion>2.0.0</DdbVersion>
-        <DdbDebFileVersion>2.0.0~git908f582</DdbDebFileVersion>
-        <DdbCiCommit>90928856e1d3248663e7b0c3d6bc4994ce8f6325</DdbCiCommit>
-        <DdbCiRunId>40015265825</DdbCiRunId>
-        <DdbDebArtifactId>12529683969</DdbDebArtifactId>
-        <DdbWindowsArtifactId>12529697982</DdbWindowsArtifactId>
-        <DdbDebSha256>0e62b17b5834f9a4a94c2c198b71811b9e857039b0bce9a91ab7d3a1ac2ab469</DdbDebSha256>
-        <DdbWindowsZipSha256>8bfbde1017ef3e845a084fcb2e695b788c6d80dfcad9c954fa2451d3dabcafc1</DdbWindowsZipSha256>
+        <DdbDebFileVersion>2.0.0~git71040192</DdbDebFileVersion>
+        <DdbCiCommit>c5633bbe5e2ac474d86f580a9b42f9bbc366c137</DdbCiCommit>
+        <DdbCiRunId>40063806251</DdbCiRunId>
+        <DdbDebArtifactId>12549595747</DdbDebArtifactId>
+        <DdbWindowsArtifactId>12549560654</DdbWindowsArtifactId>
+        <DdbDebSha256>bffd58ce494c59b97ad43b2f69f5054eab44b90ecfa045ea213553cc590f3191</DdbDebSha256>
+        <DdbWindowsZipSha256>c4f1b09602f3a8e98a75342cf420bd957888fb0e321b1bf58a981da423bf443a</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
