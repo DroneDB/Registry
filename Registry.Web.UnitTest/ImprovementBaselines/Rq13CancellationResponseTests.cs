@@ -147,7 +147,7 @@ public sealed class Rq13CancellationResponseTests
                 It.IsAny<object[]>()))
             .ThrowsAsync(new DdbCanceledException("Canceled by the cancel token"));
         var wms = new WmsManager(Access(), Mock.Of<IBuildArtifactResolver>(), Mock.Of<IDdbWrapper>(), Catalog(),
-            TestCaches.Records(), new HttpContextAccessor(), log, cache.Object);
+            TestCaches.Records(), new HttpContextAccessor(), log, cache.Object, Mock.Of<IRasterIndexCatalog>());
 
         await Should.ThrowAsync<OperationCanceledException>(() => wms.GetMapAsync(Org, Ds, ["ortho"], [""],
             [0, 0, 10, 10], "EPSG:3857", 256, 256, "image/png", null, true));

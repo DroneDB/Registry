@@ -241,7 +241,8 @@ public interface IDdbWrapper
     string ThumbnailMimeType { get; }
 
     /// <summary>
-    /// Get raster info including bands, detected sensor, and presets
+    /// Get raster info including bands, detected sensor, and presets, and <c>indexLayer</c>: the spectral
+    /// indices the raster can render as a map layer (<see cref="Registry.Ports.DroneDB.RasterIndexLayer"/>)
     /// </summary>
     public string GetRasterInfo(string path);
 
@@ -418,7 +419,8 @@ public interface IDdbWrapper
     /// region and apply a red-yellow-green color ramp. Used by WMS STYLES.
     /// </summary>
     /// <param name="inputPath">Path to the multi-band source raster.</param>
-    /// <param name="indexName">One of NDVI / NDRE / NDWI / EVI / SAVI (case-insensitive).</param>
+    /// <param name="indexName">One of NDVI / NDRE / NDWI / SAVI / EVI (case-insensitive), as listed by the raster's
+    /// <c>indexLayer</c> (<see cref="GetRasterInfo"/>): libddb refuses the others.</param>
     /// <param name="bbox">[minX, minY, maxX, maxY] in <paramref name="bboxSrs"/>.</param>
     /// <param name="bboxSrs">CRS authority code; null/empty defaults to "EPSG:4326".</param>
     /// <param name="width">Output width (1..4096).</param>

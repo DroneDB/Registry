@@ -553,6 +553,49 @@ public unsafe class LibddbContractTests : TestBase
 
     #endregion
 
+    #region Raster info: DDBGetRasterInfo "indexLayer"
+
+    // The five single-band UInt16 captures of a MicaSense RedEdge shot (test_data multispectral/IMG_0180_1..5.tif)
+    private static readonly string[] MultispectralBandUrls =
+        [.. Enumerable.Range(1, 5).Select(i => TestData.Url($"multispectral/IMG_0180_{i}.tif"))];
+
+    // fixtures/raster-info.json (the RGB contract raster: "indexLayer": []), tests/contract/schemas/raster-info.schema.json
+    [Test]
+    public void GetRasterInfo_IndexLayer_IsAnEmptyList_ForASingleBandRaster()
+    {
+        var info = JObject.Parse(DdbWrapper.GetRasterInfo(_geoRaster!));
+
+        info["indexLayer"].ShouldBeOfType<JArray>("libddb always writes the list: [] is its 'none'");
+        ((JArray)info["indexLayer"]!).ShouldBeEmpty();
+        RasterIndexLayer.Parse(DdbWrapper.GetRasterInfo(_geoRaster!))!.ShouldBeEmpty();
+    }
+
+    // ddb.h DDBGetRasterInfo: five or more unnamed data bands are read as R, G, B, RedEdge, NIR; SAVI and EVI need
+    // floating-point data, and these bands are UInt16: libddb lists the three ratio indices, in its order, upper-case
+    [Test]
+    public void GetRasterInfo_IndexLayer_IsTheListLibddbRenders_ForAFiveBandIntegerRaster()
+    {
+        using var area = new TestArea(nameof(GetRasterInfo_IndexLayer_IsTheListLibddbRenders_ForAFiveBandIntegerRaster));
+        var cache = Path.Combine(Path.GetTempPath(), BaseTestFolder);
+        var bands = MultispectralBandUrls.Select(u => TestDownloadCache.GetOrDownload(u, cache)).ToArray();
+        try
+        {
+            var merged = Path.Combine(area.TestFolder, "merged.tif");
+            DdbWrapper.MergeMultispectral(bands, merged);
+
+            var json = DdbWrapper.GetRasterInfo(merged);
+            ((string?)JObject.Parse(json)["dataType"]).ShouldBe("UInt16");
+            RasterIndexLayer.Parse(json).ShouldBe(["NDVI", "NDRE", "NDWI"]);
+        }
+        finally
+        {
+            foreach (var band in bands)
+                TestDownloadCache.Evict(band);
+        }
+    }
+
+    #endregion
+
     #region Process: DDBConfigure, DDBGetEffectiveConfig, cancel tokens, DDBSetLogCallback, DDBSetThreadOperation
 
     // fixtures/effective-config.json

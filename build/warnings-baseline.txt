@@ -180,7 +180,7 @@ Registry.Web/Services/Managers/WcsManager.cs CS8632 1
 Registry.Web/Services/Managers/WfsManager.cs CA1310 1
 Registry.Web/Services/Managers/WfsManager.cs CA1866 1
 Registry.Web/Services/Managers/WfsManager.cs CS8632 16
-Registry.Web/Services/Managers/WmsManager.cs CS8632 11
+Registry.Web/Services/Managers/WmsManager.cs CS8632 10
 Registry.Web/Services/Ports/IDatasetIndexQueue.cs CA1711 1
 Registry.Web/Services/Ports/IDatasetIndexQueue.cs CS0419 1
 Registry.Web/Services/Ports/IDatasetSummaryProvider.cs CA1716 1
@@ -203,6 +203,6 @@ Registry.Web/Utilities/Ogc/WcsRangeSubsetParser.cs CS1574 1
 Registry.Web/Utilities/Ogc/WcsRangeSubsetParser.cs CS8632 8
 Registry.Web/Utilities/Ogc/WcsSubsetParser.cs CS8632 1
 Registry.Web/Utilities/Ogc/WcsVersionNegotiator.cs CS8632 3
-Registry.Web/Utilities/Ogc/WmsValidator.cs CS8632 7
+Registry.Web/Utilities/Ogc/WmsValidator.cs CS8632 5
 Registry.Web/Utilities/Ogc/WmtsConformance.cs CS8632 5
 Registry.Web/Utilities/SyncWriteBufferingStream.cs CA1725 3

@@ -1,7 +1,7 @@
 # libddb contract fixtures vendored from DroneDB (XI-09). Do not edit the vendored files:
 # run Registry.Adapters.Testing/update-contract.sh <DroneDB clone> <commit> instead.
 repository: https://github.com/DroneDB/DroneDB
-commit: c5633bbe5e2ac474d86f580a9b42f9bbc366c137
+commit: d3b4945db9069b90da5ba1a9f3a707bec8a94121
 path: tests/contract
 # sha256 and path relative to Contract/ (sha256sum format), one line per vendored file
 62453001d98b54a655ced6423f2523d5e17d82f98dbff8f457db7608d43fc003  README.md
@@ -41,7 +41,7 @@ eb49dccf5a95822336edfeef6d762571c3f23472b1d60bb008d0d54c1999a04f  fixtures/meta-
 0d84464fdac83b683144441ab45ee7a6bb2572cb94cdfc405768c0d7c1546ee2  fixtures/normalize-path.json
 e193bd2732b7a59155b447f66f06e9a409c97a4fe5f62b941562f153628064b8  fixtures/pending-build-info-none.json
 cff257eb9728ed0c777646c15102563877b4e15489da71daee0c8774c75fb66b  fixtures/pending-build-info.json
-4b285b20dd9fa068c304d4396d86858a7bc007a5639ce8eaa6d8173e93b9dc31  fixtures/raster-info.json
+8272f29c87296f1d20caf54cfa21cc80171a6f3f564044588eff64c767108f97  fixtures/raster-info.json
 72b9aba400917ec7b4501e5fb7e974d21b9d250a46a78af6c1c7a8c8c530c92f  fixtures/raster-metadata-formula.json
 2788265277480b32436371b72a500b813394c9fadf134a8c33d459de85e4ace9  fixtures/raster-metadata.json
 89f9b2bd340834937f1aeaac8912572d15d0272e4df143adeddc945cd6193c83  fixtures/resolve-build-file.json
@@ -72,7 +72,7 @@ dca22daacc5ce7869a48ac6b1fc0364c269504ef476b813b2e76c0585231d7f8  schemas/meta-d
 4be3c777300fa38d16e9af5e8c71471eec263f469bb1f86cb7adaaf7aa823a23  schemas/meta-list.schema.json
 0cf96e38320d856f7774942e8f7a70ee3796f3f62e9de65a1fa5ddd3a9560efc  schemas/normalize-path.schema.json
 fdffde04e42f8ac86337427180cf482cc7506b10b9a2cab2639e02e2c7f8f819  schemas/pending-build-info.schema.json
-e9a8d22a12c9988e437573002722a3e93d4ae3125924de69bc6063c09be840c0  schemas/raster-info.schema.json
+aebcee7eb92f61313ddd7d9a8e9b792912cea35e3fd3d3987b6d188b1c1fab69  schemas/raster-info.schema.json
 305c502dd86aeb9a548ecce14b95b447edf273a3baf750dc4daa2e55d81f42b5  schemas/raster-metadata.schema.json
 943182a161018547b8c905d585b7ad6f79af908325381b057761a7f6f0295a21  schemas/stac-collection.schema.json
 eea483e6f4198d9bf9f12ff6902ffac81b9c21e44bdd87094630e420fe782c2b  schemas/stac-data-collection.schema.json

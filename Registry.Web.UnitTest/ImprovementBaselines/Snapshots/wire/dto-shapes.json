@@ -2703,7 +2703,6 @@
         "SupportedCrs-text"
       ],
       "geometryType": "GeometryType-text",
-      "isMultispectral": true,
       "bandCount": 42,
       "hasBuiltArtifact": true,
       "isLocal": true
@@ -2719,7 +2718,6 @@
       "bboxWgs84": null,
       "supportedCrs": null,
       "geometryType": null,
-      "isMultispectral": false,
       "bandCount": 0,
       "hasBuiltArtifact": false,
       "isLocal": false

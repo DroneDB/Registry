@@ -16,7 +16,8 @@ public interface IDdbRaster
     byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash, string outputFormat);
 
     /// <summary>
-    /// Get raster info including bands, detected sensor, and presets
+    /// Get raster info including bands, detected sensor, and presets, and <c>indexLayer</c>: the spectral
+    /// indices the raster can render as a map layer (<see cref="RasterIndexLayer"/>)
     /// </summary>
     string GetRasterInfo(string path);
 

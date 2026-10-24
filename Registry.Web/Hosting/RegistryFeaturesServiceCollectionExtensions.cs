@@ -168,6 +168,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
     {
         services.AddScoped<IOgcLayerCatalog, OgcLayerCatalog>();
         services.AddScoped<IOgcRasterTileSource, OgcRasterTileSource>();
+        services.AddScoped<IRasterIndexCatalog, RasterIndexCatalog>();
         services.AddScoped<IWmtsManager, WmtsManager>();
         services.AddScoped<IWmsManager, WmsManager>();
         services.AddScoped<IWfsManager, WfsManager>();

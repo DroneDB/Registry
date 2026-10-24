@@ -33,14 +33,16 @@ public class WmsManager : OgcManagerBase, IWmsManager
     private readonly ILogger<WmsManager> _logger;
     private readonly ICacheManager _cacheManager;
     private readonly INativeWorkGate _gate;
+    private readonly IRasterIndexCatalog _indexes;
 
     public WmsManager(IDatasetAccessResolver access, IBuildArtifactResolver ar,
         IDdbWrapper w, IOgcLayerCatalog c, IRecordCache cache, IHttpContextAccessor ctx, ILogger<WmsManager> logger,
-        ICacheManager cacheManager, INativeWorkGate? gate = null)
+        ICacheManager cacheManager, IRasterIndexCatalog indexes, INativeWorkGate? gate = null)
         : base(access, ar, w, c, cache, ctx)
     {
         _logger = logger;
         _cacheManager = cacheManager;
+        _indexes = indexes;
         _gate = gate ?? Services.Adapters.NativeWorkGate.Default;
     }
 
@@ -51,7 +53,7 @@ public class WmsManager : OgcManagerBase, IWmsManager
         return await Records.GetOrCreateRecordAsync(key, async token =>
         {
 
-            await ResolveAsync(orgSlug, dsSlug, token);
+            var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, token);
             var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath, ct: token);
             var rasterLayers = layers.Where(l => l.EntryType == EntryType.GeoRaster).ToList();
             var totalBbox = AggregateBbox(rasterLayers);
@@ -114,24 +116,21 @@ public class WmsManager : OgcManagerBase, IWmsManager
                     if (layer.BboxWgs84 != null)
                         WriteBbox(w, version, layer.BboxWgs84);
 
-                    // Always advertise the default style. Spectral-index styles (NDVI/NDRE/NDWI/EVI/SAVI)
-                    // are advertised per-layer only when the underlying raster is multispectral, so the
-                    // advertised contract matches what the server enforces in GetMap (CITE "each-style"
-                    // tests would otherwise fail on RGB orthophotos).
+                    // Always advertise the default style. A spectral-index style is advertised per layer only when
+                    // libddb lists it for the raster (IRasterIndexCatalog: the same list GetMap enforces), so the
+                    // advertised contract matches what the server accepts (CITE "each-style" tests would
+                    // otherwise fail on RGB orthophotos).
                     w.WriteStartElement("Style");
                     w.WriteElementString("Name", "default");
                     w.WriteElementString("Title", "Default natural color");
                     await w.WriteEndElementAsync();
 
-                    if (layer.IsMultispectral)
+                    foreach (var idx in await GetIndexesAsync(ddb, layer, token))
                     {
-                        foreach (var idx in WmsValidator.SpectralIndexes)
-                        {
-                            w.WriteStartElement("Style");
-                            w.WriteElementString("Name", idx);
-                            w.WriteElementString("Title", $"{idx} spectral index");
-                            await w.WriteEndElementAsync();
-                        }
+                        w.WriteStartElement("Style");
+                        w.WriteElementString("Name", idx);
+                        w.WriteElementString("Title", $"{idx} spectral index");
+                        await w.WriteEndElementAsync();
                     }
                     await w.WriteEndElementAsync();
                 }
@@ -218,7 +217,7 @@ public class WmsManager : OgcManagerBase, IWmsManager
         CancellationToken ct)
     {
         var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
-        var rasters = await ResolveRasterLayersAsync(orgSlug, dsSlug, layers, styles, ct);
+        var rasters = await ResolveRasterLayersAsync(orgSlug, dsSlug, ddb, layers, styles, ct);
 
         // Identical (and sub-pixel jittered) requests share one render; the render uses the
         // snapped BBOX so that a cached image is what a fresh render returns
@@ -239,12 +238,17 @@ public class WmsManager : OgcManagerBase, IWmsManager
         }
     }
 
+    /// <summary>The spectral indices libddb renders from a raster layer (the source it reads), empty when none.</summary>
+    private Task<IReadOnlyList<string>> GetIndexesAsync(IDDB ddb, OgcLayerDto layer, CancellationToken ct) =>
+        _indexes.GetAsync(layer.EntryHash, ResolveRasterSource(ddb, layer), ct);
+
     /// <summary>
-    /// The raster layers of LAYERS in drawing order with their style. Unknown layers and styles are
-    /// protocol errors (raised before any render or cache lookup); non-raster layers are skipped.
+    /// The raster layers of LAYERS in drawing order with their style: empty for the natural render, else the
+    /// spectral index as libddb names it. Unknown layers and styles are protocol errors (raised before any render
+    /// or cache lookup); non-raster layers are skipped.
     /// </summary>
     private async Task<List<(OgcLayerDto Layer, string Style)>> ResolveRasterLayersAsync(string orgSlug,
-        string dsSlug, string[] layers, string[] styles, CancellationToken ct)
+        string dsSlug, IDDB ddb, string[] layers, string[] styles, CancellationToken ct)
     {
         var rasters = new List<(OgcLayerDto Layer, string Style)>();
         for (var idx = 0; idx < layers.Length; idx++)
@@ -256,28 +260,12 @@ public class WmsManager : OgcManagerBase, IWmsManager
             if (layer.EntryType != EntryType.GeoRaster)
                 continue;
 
-            var style = (styles != null && idx < styles.Length) ? styles[idx] : "";
-
-            // STYLES contract: "" / "default" → natural render. Spectral indexes
-            // (NDVI/NDRE/NDWI/EVI/SAVI) are server-defined styles that are only
-            // meaningful on multispectral rasters; reject them otherwise so the
-            // accepted contract matches what GetCapabilities advertises per-layer.
-            if (!string.IsNullOrEmpty(style)
-                && !string.Equals(style, "default", StringComparison.OrdinalIgnoreCase))
-            {
-                if (IsSpectralIndex(style))
-                {
-                    if (!layer.IsMultispectral)
-                        throw new OgcException("StyleNotDefined",
-                            $"Spectral style '{style}' is not defined for layer '{name}' (not multispectral)",
-                            400, "STYLES");
-                }
-                else
-                {
-                    throw new OgcException("StyleNotDefined",
-                        $"Style '{style}' is not defined", 400, "STYLES");
-                }
-            }
+            // STYLES contract: "" / "default" are the natural render; any other style must be a spectral index
+            // libddb lists for this raster, the list GetCapabilities advertises for the layer
+            var requested = (styles != null && idx < styles.Length) ? styles[idx] : "";
+            var style = WmsValidator.IsDefaultStyle(requested)
+                ? string.Empty
+                : WmsValidator.ResolveIndexStyle(requested, name, await GetIndexesAsync(ddb, layer, ct));
 
             rasters.Add((layer, style));
         }
@@ -328,8 +316,8 @@ public class WmsManager : OgcManagerBase, IWmsManager
         int width, int height, string mime)
     {
         var src = ResolveRasterArtifact(ddb, raster.Layer);
-        return IsSpectralIndex(raster.Style)
-            ? DdbWrapper.RenderRasterIndex(src, raster.Style.ToUpperInvariant(), bbox, crs, width, height, mime)
+        return raster.Style.Length > 0
+            ? DdbWrapper.RenderRasterIndex(src, raster.Style, bbox, crs, width, height, mime)
             : DdbWrapper.RenderRasterRegion(src, bbox, crs, width, height, mime);
     }
 
@@ -390,13 +378,6 @@ public class WmsManager : OgcManagerBase, IWmsManager
     private sealed class DegradedRenderException(byte[] image) : Exception("A WMS layer failed to render")
     {
         public byte[] Image { get; } = image;
-    }
-
-    private static bool IsSpectralIndex(string? style)
-    {
-        if (string.IsNullOrWhiteSpace(style)) return false;
-        var s = style.ToUpperInvariant();
-        return s is "NDVI" or "NDRE" or "NDWI" or "EVI" or "SAVI";
     }
 
     private static SKColor ParseBackground(string? bg)

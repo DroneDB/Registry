@@ -59,4 +59,13 @@ public class CacheCategoriesTest
         CacheCategories.TasksList("o", "d").ShouldBe("tasks-list:o/d");
         CacheCategories.PushSession("/p/session.json").ShouldBe("push-session:/p/session.json");
     }
+
+    /// <summary>XI-04: libddb's spectral-index list of a raster depends on its content, its source and libddb's rule.</summary>
+    [Test]
+    public void OgcRasterIndexLayer_NamesTheVersionTheHashAndTheSource()
+    {
+        CacheCategories.OgcRasterIndexLayer("h", "raster.cog", "2.0.0").ShouldBe("ogc-wms-index-layer-2.0.0-h-raster.cog");
+        CacheCategories.OgcRasterIndexLayer("h", "raster.cog", "2.1.0")
+            .ShouldNotBe(CacheCategories.OgcRasterIndexLayer("h", "raster.cog", "2.0.0"));
+    }
 }

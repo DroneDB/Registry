@@ -122,7 +122,6 @@ public class OgcLayerCatalog : IOgcLayerCatalog
             }
             else
             {
-                var (bandCount, multispectral) = ExtractRasterBandInfo(e);
                 result.Add(new OgcLayerDto
                 {
                     Name = e.Path,
@@ -131,8 +130,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
                     EntryPath = e.Path,
                     EntryHash = e.Hash ?? string.Empty,
                     BboxWgs84 = entryBbox,
-                    BandCount = bandCount,
-                    IsMultispectral = multispectral
+                    BandCount = ExtractBandCount(e)
                 });
             }
         }
@@ -336,55 +334,32 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     }
 
     /// <summary>
-    /// Extract (bandCount, isMultispectral) from a GeoRaster entry. Multispectral is detected when:
-    ///   - the dataset has more than 3 effective (non-alpha) bands, OR
-    ///   - any band carries a colour interpretation outside the RGBA / Gray / Palette set,
-    ///     which is typical of agricultural cameras (Undefined / NIR / Red Edge).
-    /// Returns (0, false) when bands metadata is missing or unparseable.
+    /// The number of bands of a GeoRaster entry, read from its indexed <c>bands</c> property (0 when it is missing or
+    /// unparseable). WCS describes a coverage with it when the raster probe fails. Which spectral indices a raster can
+    /// render is not decided from the bands: libddb lists them (<see cref="IRasterIndexCatalog"/>).
     /// </summary>
-    internal static (int bandCount, bool multispectral) ExtractRasterBandInfo(Entry e)
+    internal static int ExtractBandCount(Entry e)
     {
         if (e.Properties == null || !e.Properties.TryGetValue("bands", out var raw))
-            return (0, false);
+            return 0;
 
-        JsonElement bands;
         switch (raw.ValueKind)
         {
-            case JsonValueKind.Array: bands = raw; break;
+            case JsonValueKind.Array:
+                return raw.GetArrayLength();
             case JsonValueKind.String when !string.IsNullOrWhiteSpace(raw.GetString()):
                 try
                 {
                     // The bands as text: a JSON array the index stored as a string
-                    bands = JsonDocument.Parse(raw.GetString()!).RootElement.Clone();
+                    using var document = JsonDocument.Parse(raw.GetString()!);
+                    return document.RootElement.ValueKind == JsonValueKind.Array ? document.RootElement.GetArrayLength() : 0;
                 }
                 catch (JsonException)
                 {
-                    return (0, false);
+                    return 0;
                 }
-
-                if (bands.ValueKind != JsonValueKind.Array) return (0, false);
-                break;
             default:
-                return (0, false);
+                return 0;
         }
-
-        if (bands.GetArrayLength() == 0) return (0, false);
-
-        var rgbaLike = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "Red", "Green", "Blue", "Alpha", "Gray Index", "Palette Index", "Undefined Gray"
-        };
-        var nonAlpha = 0;
-        var hasNonRgba = false;
-        foreach (var b in bands.Items())
-        {
-            var interp = b.Member("colorInterp").Text() ?? string.Empty;
-            if (string.Equals(interp, "Alpha", StringComparison.OrdinalIgnoreCase)) continue;
-            nonAlpha++;
-            if (!rgbaLike.Contains(interp)) hasNonRgba = true;
-        }
-
-        var multispectral = nonAlpha > 3 || (bands.GetArrayLength() >= 4 && hasNonRgba);
-        return (bands.GetArrayLength(), multispectral);
     }
 }

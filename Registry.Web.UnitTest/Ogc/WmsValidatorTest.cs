@@ -1,7 +1,6 @@
+#nullable enable
 using NUnit.Framework;
-using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
-using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Utilities.Ogc;
 using Shouldly;
 
@@ -93,70 +92,49 @@ public class WmsValidatorTest
             .Code.ShouldBe("MissingParameterValue");
     }
 
-    [Test]
-    public void IsSpectralIndex_RecognizesFiveIndexes()
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("default")]
+    [TestCase("DEFAULT")]
+    public void IsDefaultStyle_IsTheNaturalColourStyle(string? style)
     {
-        WmsValidator.IsSpectralIndex("NDVI").ShouldBeTrue();
-        WmsValidator.IsSpectralIndex("ndvi").ShouldBeTrue();
-        WmsValidator.IsSpectralIndex(" NDRE ").ShouldBeTrue();
-        WmsValidator.IsSpectralIndex("NDWI").ShouldBeTrue();
-        WmsValidator.IsSpectralIndex("EVI").ShouldBeTrue();
-        WmsValidator.IsSpectralIndex("SAVI").ShouldBeTrue();
-        WmsValidator.IsSpectralIndex("default").ShouldBeFalse();
-        WmsValidator.IsSpectralIndex(null).ShouldBeFalse();
-        WmsValidator.IsSpectralIndex("").ShouldBeFalse();
+        WmsValidator.IsDefaultStyle(style).ShouldBeTrue();
     }
 
-    [Test]
-    public void ValidateStyles_AllowsEmptyAndDefault()
+    [TestCase("NDVI")]
+    [TestCase(" ")]
+    [TestCase("thermal")]
+    public void IsDefaultStyle_AnyOtherStyleIsNot(string style)
     {
-        Should.NotThrow(() => WmsValidator.ValidateStyles(
-            ["", "default"], ["a", "b"], _ => null));
+        WmsValidator.IsDefaultStyle(style).ShouldBeFalse();
     }
 
-    [Test]
-    public void ValidateStyles_RejectsSpectralIndexOnNonMultispectralLayer()
+    [TestCase("NDVI", "NDVI")]
+    [TestCase("ndvi", "NDVI")]
+    [TestCase("Savi", "SAVI")]
+    public void ResolveIndexStyle_AcceptsAnIndexOfTheList_AsLibddbNamesIt(string style, string expected)
     {
-        var layer = new OgcLayerDto
-        {
-            Name = "ortho",
-            EntryType = EntryType.GeoRaster,
-            IsMultispectral = false,
-            BandCount = 3
-        };
-        var ex = Should.Throw<OgcException>(() => WmsValidator.ValidateStyles(
-            ["NDVI"], ["ortho"], name => layer));
+        WmsValidator.ResolveIndexStyle(style, "msi", ["NDVI", "NDRE", "NDWI", "SAVI"]).ShouldBe(expected);
+    }
+
+    [TestCase("EVI")]
+    [TestCase("NDVI")]
+    [TestCase("thermal")]
+    [TestCase(" NDVI ")]
+    public void ResolveIndexStyle_RejectsAnythingNotInTheList(string style)
+    {
+        var ex = Should.Throw<OgcException>(() => WmsValidator.ResolveIndexStyle(style, "ortho", ["NDRE", "NDWI"]));
+
         ex.Code.ShouldBe("StyleNotDefined");
         ex.Locator.ShouldBe("STYLES");
+        ex.HttpStatusCode.ShouldBe(400);
+        ex.Message.ShouldBe($"Style '{style}' is not defined for layer 'ortho'");
     }
 
     [Test]
-    public void ValidateStyles_AcceptsSpectralIndexOnMultispectralLayer()
+    public void ResolveIndexStyle_ARasterWithNoIndex_HasNoStyleButDefault()
     {
-        var layer = new OgcLayerDto
-        {
-            Name = "msi",
-            EntryType = EntryType.GeoRaster,
-            IsMultispectral = true,
-            BandCount = 5
-        };
-        Should.NotThrow(() => WmsValidator.ValidateStyles(
-            ["NDVI"], ["msi"], name => layer));
-    }
-
-    [Test]
-    public void ValidateStyles_RejectsUnknownStyle()
-    {
-        var ex = Should.Throw<OgcException>(() => WmsValidator.ValidateStyles(
-            ["thermal"], ["any"], _ => null));
-        ex.Code.ShouldBe("StyleNotDefined");
-    }
-
-    [Test]
-    public void ValidateStyles_RejectsSpectralIndexOnUnknownLayer()
-    {
-        var ex = Should.Throw<OgcException>(() => WmsValidator.ValidateStyles(
-            ["NDVI"], ["missing"], _ => null));
-        ex.Code.ShouldBe("StyleNotDefined");
+        Should.Throw<OgcException>(() => WmsValidator.ResolveIndexStyle("NDVI", "rgb", []))
+            .Code.ShouldBe("StyleNotDefined");
     }
 }

@@ -104,7 +104,7 @@ public class OgcRenderCachingTests
 
     private WmsManager CreateWms() => new(Resolver, _artifacts.Object,
         _wrapper.Object, _catalog.Object, TestCaches.Records(_cache), new HttpContextAccessor { HttpContext = _http },
-        NullLogger<WmsManager>.Instance, _cacheManager);
+        NullLogger<WmsManager>.Instance, _cacheManager, Mock.Of<IRasterIndexCatalog>());
 
     private Task<byte[]> GetMap(WmsManager wms, double[] bbox, string format = "image/png", bool transparent = true) =>
         wms.GetMapAsync(Org, Ds, ["ortho"], [""], bbox, "EPSG:3857", 1024, 768, format, null, transparent);

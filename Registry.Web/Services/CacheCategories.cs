@@ -39,6 +39,14 @@ public static class CacheCategories
     /// </summary>
     public static string OgcRasterProbe(string entryHash, string source) => $"ogc-wcs-probe-{entryHash}-{source}";
 
+    /// <summary>
+    /// The spectral indices libddb can render from the file a WMS layer reads (<paramref name="source"/> names which:
+    /// the build's artifact or the entry's own file). They depend on the content (the hash) and on libddb's rule, so
+    /// the libddb version is part of the key: a libddb that changes the rule never reads a list its predecessor kept.
+    /// </summary>
+    public static string OgcRasterIndexLayer(string entryHash, string source, string ddbVersion) =>
+        $"ogc-wms-index-layer-{ddbVersion}-{entryHash}-{source}";
+
     /// <summary>The generation of every STAC listing (landing page, collections): one for the whole catalog.</summary>
     public const string StacGeneration = "stac-gen";
 

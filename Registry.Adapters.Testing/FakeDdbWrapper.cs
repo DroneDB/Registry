@@ -337,6 +337,18 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual string GetRasterInfo(string path) =>
         RasterText(IsRasterFile(path) ? "raster-info" : null, $"GetRasterInfo({path})");
 
+    /// <summary>
+    /// The <c>raster-info</c> fixture (the RGB contract raster, whose <c>indexLayer</c> is empty) with
+    /// <paramref name="indexLayer"/> as the spectral indices libddb lists for the raster: for a test that
+    /// overrides <see cref="GetRasterInfo"/> to answer for a raster the fixtures do not record (a multispectral one).
+    /// </summary>
+    public static string RasterInfo(params string[] indexLayer)
+    {
+        var output = ContractFixture.Load("raster-info").Output.AsObject();
+        output[RasterIndexLayer.Member] = new JsonArray(indexLayer.Select(i => (JsonNode?)JsonValue.Create(i)).ToArray());
+        return Compact(output);
+    }
+
     public virtual string GetRasterMetadata(string path, string? formula = null, string? bandFilter = null)
     {
         var fixture = !IsRasterFile(path)

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Registry.Web.Exceptions;
-using Registry.Web.Models.DTO.Ogc;
 
 namespace Registry.Web.Utilities.Ogc;
 
@@ -14,7 +13,8 @@ namespace Registry.Web.Utilities.Ogc;
 ///
 /// Centralizing these checks here lets the controller fail fast (before BBOX parsing)
 /// and lets the manager assert post-conditions defensively. The same whitelist is
-/// surfaced by GetCapabilities so the advertised contract matches enforcement.
+/// surfaced by GetCapabilities so the advertised contract matches enforcement (the styles of a
+/// raster come from libddb, see <see cref="ResolveIndexStyle"/>).
 /// </summary>
 public static class WmsValidator
 {
@@ -22,7 +22,6 @@ public static class WmsValidator
     public static readonly string[] SupportedMapFormats = ["image/png", "image/jpeg", "image/webp"];
     public static readonly string[] SupportedInfoFormats =
         ["application/json", "text/xml", "application/xml", "text/html", "text/plain"];
-    public static readonly string[] SpectralIndexes = ["NDVI", "NDRE", "NDWI", "EVI", "SAVI"];
 
     public const int MinDim = 1;
     public const int MaxDim = 4096;
@@ -67,39 +66,21 @@ public static class WmsValidator
             throw new OgcException("MissingParameterValue", "LAYERS is required", 400, "LAYERS");
     }
 
+    /// <summary>The natural-colour style: an empty STYLES entry or <c>default</c>.</summary>
+    public static bool IsDefaultStyle(string? style) =>
+        string.IsNullOrEmpty(style) || string.Equals(style, "default", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
-    /// STYLES validation. Empty entries and "default" are always allowed.
-    /// Spectral index styles (NDVI/NDRE/NDWI/EVI/SAVI) are only allowed when
-    /// the corresponding layer is multispectral.
+    /// A non-default STYLES entry of a raster layer: one of the spectral indices libddb lists for that raster
+    /// (<paramref name="supportedIndexes"/>, <see cref="Registry.Ports.DroneDB.RasterIndexLayer"/>), the same
+    /// list GetCapabilities advertises. libddb owns which indices a raster can render; nothing here knows their names.
     /// </summary>
-    public static void ValidateStyles(string[]? styles, string[] layers,
-        Func<string, OgcLayerDto?> layerResolver)
+    /// <returns>The index as libddb names it (the case of the request does not matter).</returns>
+    /// <exception cref="OgcException">StyleNotDefined: the raster has no such style.</exception>
+    public static string ResolveIndexStyle(string style, string layerName, IReadOnlyCollection<string> supportedIndexes)
     {
-        if (styles == null) return;
-        for (var i = 0; i < styles.Length; i++)
-        {
-            var s = styles[i];
-            if (string.IsNullOrEmpty(s)) continue;
-            if (string.Equals(s, "default", StringComparison.OrdinalIgnoreCase)) continue;
-
-            if (!IsSpectralIndex(s))
-                throw new OgcException("StyleNotDefined", $"Style '{s}' is not defined", 400, "STYLES");
-            
-            var layerName = i < layers.Length ? layers[i] : null;
-            var layer = string.IsNullOrEmpty(layerName) ? null : layerResolver(layerName);
-            if (layer == null || layer.EntryType != Ports.DroneDB.EntryType.GeoRaster
-                              || !layer.IsMultispectral)
-            {
-                throw new OgcException("StyleNotDefined",
-                    $"Spectral style '{s}' is only defined for multispectral raster layers", 400, "STYLES");
-            }
-        }
-    }
-
-    public static bool IsSpectralIndex(string? style)
-    {
-        if (string.IsNullOrWhiteSpace(style)) return false;
-        var s = style.Trim().ToUpperInvariant();
-        return Array.IndexOf(SpectralIndexes, s) >= 0;
+        var index = supportedIndexes.FirstOrDefault(i => string.Equals(i, style, StringComparison.OrdinalIgnoreCase));
+        return index ?? throw new OgcException("StyleNotDefined",
+            $"Style '{style}' is not defined for layer '{layerName}'", 400, "STYLES");
     }
 }
