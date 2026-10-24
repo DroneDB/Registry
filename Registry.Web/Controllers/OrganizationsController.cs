@@ -88,7 +88,7 @@ public class OrganizationsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Create([FromForm, Required] OrganizationDto organization, CancellationToken ct)
+    public async Task<IActionResult> Create([FromForm, Required] OrganizationRequestDto organization, CancellationToken ct)
     {
 
         var newOrg = await _organizationsManager.AddNew(organization, ct: ct);
@@ -110,7 +110,7 @@ public class OrganizationsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(
         [FromRoute, Required] string orgSlug,
-        [FromForm, Required] OrganizationDto organization, CancellationToken ct)
+        [FromForm, Required] OrganizationRequestDto organization, CancellationToken ct)
     {
 
         await _organizationsManager.Edit(orgSlug, organization, ct: ct);

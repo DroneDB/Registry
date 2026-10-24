@@ -25,15 +25,16 @@ namespace Registry.Web.Utilities;
 public static class Extenders
 {
 
-    public static Organization ToEntity(this OrganizationDto organization)
+    /// <summary>The organization a request creates, owned by <paramref name="ownerId"/> and created at <paramref name="creationDate"/>.</summary>
+    public static Organization ToEntity(this OrganizationRequestDto organization, string ownerId, DateTime creationDate)
     {
         return new Organization
         {
             Slug = organization.Slug,
             Name = string.IsNullOrEmpty(organization.Name) ? organization.Slug : organization.Name,
             Description = organization.Description,
-            CreationDate = organization.CreationDate,
-            OwnerId = organization.Owner,
+            CreationDate = creationDate,
+            OwnerId = ownerId,
             IsPublic = organization.IsPublic
         };
     }

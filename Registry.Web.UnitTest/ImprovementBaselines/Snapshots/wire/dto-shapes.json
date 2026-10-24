@@ -2844,6 +2844,22 @@
       "canManageMembers": false
     }
   },
+  "Registry.Web.Models.DTO.OrganizationRequestDto": {
+    "full": {
+      "slug": "Slug-text",
+      "name": "Name-text",
+      "description": "Description-text",
+      "owner": "Owner-text",
+      "isPublic": true
+    },
+    "sparse": {
+      "slug": null,
+      "name": null,
+      "description": null,
+      "owner": null,
+      "isPublic": false
+    }
+  },
   "Registry.Web.Models.DTO.PasswordPolicyDto": {
     "full": {
       "minLength": 42,

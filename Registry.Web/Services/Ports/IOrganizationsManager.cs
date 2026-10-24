@@ -17,14 +17,14 @@ public interface IOrganizationsManager
     public Task<IEnumerable<OrganizationDto>> List(bool ownedOnly = false, CancellationToken ct = default);
     public Task<IEnumerable<OrganizationDto>> ListPublic(CancellationToken ct = default);
     public Task<OrganizationDto> Get(string orgSlug, CancellationToken ct = default);
-    public Task<OrganizationDto> AddNew(OrganizationDto organization, bool skipAuthCheck = false, CancellationToken ct = default);
+    public Task<OrganizationDto> AddNew(OrganizationRequestDto organization, bool skipAuthCheck = false, CancellationToken ct = default);
 
     /// <summary>
     /// The personal organization of a new user (AccountOptions.EnableDefaultUserOrganization): private, named
     /// after the user, under the first free slug from the user name.
     /// </summary>
     public Task<OrganizationDto> AddUserDefaultAsync(string userId, string userName);
-    public Task Edit(string orgSlug, OrganizationDto organization, CancellationToken ct = default);
+    public Task Edit(string orgSlug, OrganizationRequestDto organization, CancellationToken ct = default);
     public Task Delete(string orgSlug, CancellationToken ct = default);
 
     /// <summary>

@@ -140,8 +140,7 @@ public class OrganizationManagerTest : TestBase
     {
         SetupAdminUser();
         await AddUser("other-user-id", "other-name");
-        var newOrg = CreateTestOrganizationDto("other-org");
-        newOrg.Owner = "other-user-id";
+        var newOrg = CreateTestOrganizationDto("other-org", owner: "other-user-id");
 
         var created = await _organizationsManager.AddNew(newOrg);
 
@@ -176,7 +175,7 @@ public class OrganizationManagerTest : TestBase
     {
         // Arrange
         SetupAdminUser();
-        var updateDto = new OrganizationDto
+        var updateDto = new OrganizationRequestDto
         {
             Name = "Updated Public Org",
             Description = "Updated description",
@@ -242,8 +241,8 @@ public class OrganizationManagerTest : TestBase
     {
         // Arrange
         var standardUser = SetupStandardUser("standard-user");
-        var newOrg = CreateTestOrganizationDto("test-org");
-        newOrg.Owner = "different-user"; // Trying to create org for different user
+        // Trying to create org for different user
+        var newOrg = CreateTestOrganizationDto("test-org", owner: "different-user");
 
         // Act & Assert
         var action = () => _organizationsManager.AddNew(newOrg);
@@ -268,7 +267,7 @@ public class OrganizationManagerTest : TestBase
         // Arrange
         var standardUser = SetupStandardUser("standard-user");
         var ownedOrg = await CreateOrganizationForUser(standardUser.Id);
-        var updateDto = new OrganizationDto
+        var updateDto = new OrganizationRequestDto
         {
             Name = "Updated Org",
             Description = "Updated description",
@@ -290,7 +289,7 @@ public class OrganizationManagerTest : TestBase
     {
         // Arrange
         SetupStandardUser("standard-user");
-        var updateDto = new OrganizationDto
+        var updateDto = new OrganizationRequestDto
         {
             Name = "Updated Public Org",
             Description = "Updated description",
@@ -1342,15 +1341,15 @@ public class OrganizationManagerTest : TestBase
             .ReturnsAsync(true);
     }
 
-    private static OrganizationDto CreateTestOrganizationDto(string slug)
+    private static OrganizationRequestDto CreateTestOrganizationDto(string slug, string owner = null)
     {
-        return new OrganizationDto
+        return new OrganizationRequestDto
         {
             Slug = slug,
             Name = "Test Organization",
             Description = "Test Description",
             IsPublic = false,
-            CreationDate = DateTime.Now
+            Owner = owner
         };
     }
 

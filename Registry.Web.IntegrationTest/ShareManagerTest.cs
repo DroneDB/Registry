@@ -454,7 +454,7 @@ class ShareManagerTest : TestBase
             .ToArray();
         batches.ShouldBeEmpty();
 
-        var res = await organizationsManager.AddNew(new OrganizationDto
+        var res = await organizationsManager.AddNew(new OrganizationRequestDto
         {
             Name = organizationTestName,
             IsPublic = true,
@@ -596,7 +596,7 @@ class ShareManagerTest : TestBase
             .ToArray();
         batches.ShouldBeEmpty();
 
-        var res = await organizationsManager.AddNew(new OrganizationDto
+        var res = await organizationsManager.AddNew(new OrganizationRequestDto
         {
             Name = organizationTestName,
             IsPublic = true,
@@ -736,7 +736,7 @@ class ShareManagerTest : TestBase
         const string datasetTestSlug = "first";
         var newFileUrl = TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName);
 
-        await organizationsManager.AddNew(new OrganizationDto
+        await organizationsManager.AddNew(new OrganizationRequestDto
         {
             Name = organizationTestName,
             IsPublic = true,
@@ -875,7 +875,7 @@ class ShareManagerTest : TestBase
             .ToArray();
         batches.ShouldBeEmpty();
 
-        await organizationsManager.AddNew(new OrganizationDto
+        await organizationsManager.AddNew(new OrganizationRequestDto
         {
             Name = organizationTestName,
             IsPublic = true,

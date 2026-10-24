@@ -264,18 +264,19 @@ public class OrganizationsManager : IOrganizationsManager
     }
 
     public Task<OrganizationDto> AddUserDefaultAsync(string userId, string userName) =>
-        AddNew(new OrganizationDto
+        AddNew(new OrganizationRequestDto
         {
             Name = userName,
             IsPublic = false,
-            CreationDate = DateTime.UtcNow,
             Owner = userId,
             Slug = _datasets.GetFreeOrganizationSlug(userName)
         }, skipAuthCheck: true);
 
-    public async Task<OrganizationDto> AddNew(OrganizationDto organization, bool skipAuthCheck = false,
+    public async Task<OrganizationDto> AddNew(OrganizationRequestDto organization, bool skipAuthCheck = false,
         CancellationToken ct = default)
     {
+        string ownerId;
+
         if (!skipAuthCheck)
         {
             var currentUser = await _authManager.GetCurrentUser();
@@ -299,29 +300,31 @@ public class OrganizationsManager : IOrganizationsManager
                         "Cannot create a new organization that belongs to a different user");
 
                 // The current user is the owner
-                organization.Owner = currentUser.Id;
+                ownerId = currentUser.Id;
+            }
+            else if (organization.Owner == null)
+            {
+                // If no owner specified, the owner is the current user
+                ownerId = currentUser.Id;
             }
             else
             {
-                // If no owner specified, the owner is the current user
-                if (organization.Owner == null)
-                    organization.Owner = currentUser.Id;
-                else
-                {
-                    // Otherwise check if user exists
-                    if (!await _authManager.UserExists(organization.Owner))
-                        throw new BadRequestException($"Cannot find user with name '{organization.Owner}'");
-                }
+                // Otherwise check if user exists
+                if (!await _authManager.UserExists(organization.Owner))
+                    throw new BadRequestException($"Cannot find user with name '{organization.Owner}'");
+
+                ownerId = organization.Owner;
             }
         }
         else
         {
             if (!organization.Slug.IsValidSlug())
                 throw new BadRequestException(SlugRules.InvalidMessage("Organization"));
+
+            ownerId = organization.Owner;
         }
 
-        var org = organization.ToEntity();
-        org.CreationDate = DateTime.UtcNow;
+        var org = organization.ToEntity(ownerId, DateTime.UtcNow);
 
         // Honoured until the organization is written (RQ-13)
         ct.ThrowIfCancellationRequested();
@@ -331,7 +334,7 @@ public class OrganizationsManager : IOrganizationsManager
         return await ToDtoWithOwnerNameAsync(org);
     }
 
-    public async Task Edit(string orgSlug, OrganizationDto organization, CancellationToken ct = default)
+    public async Task Edit(string orgSlug, OrganizationRequestDto organization, CancellationToken ct = default)
     {
         var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Write, withTracking: true, ct: ct);
 
