@@ -116,3 +116,10 @@ Async actions without a CancellationToken	0
 Cancellable libddb export calls outside the call envelope	0
 Hand-built ETag code in controllers	0
 Cancellation answered 408	0
+Anonymous response objects	8
+Actions without [ProducesResponseType]	18
+Newtonsoft attributes in Models and Ports	203
+JToken/JObject/JArray/JValue in port signatures	23
+Production files using Newtonsoft outside the allow-list	100
+AddNewtonsoftJson / MvcNewtonsoftJsonOptions	2
+Dataset route prefix copies in controllers	20

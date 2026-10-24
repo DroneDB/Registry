@@ -127,6 +127,31 @@ async_actions_without_token() {
         awk '{ s += $1 } END { print s + 0 }'
 }
 
+# Controller actions (the method after an [Http*] attribute) with no [ProducesResponseType] among the
+# attributes between the previous action's signature and its own, in the given pathspecs (read
+# NUL-separated from stdin). Whole signatures are parsed (RQ-14).
+actions_without_produces() {
+    list_files | xargs -0 -r perl -0777 -ne '
+        BEGIN { $c = 0 }
+        my $prev = 0;
+        while (/\[Http(?:Get|Post|Put|Delete|Patch|Head)\b.*?\n\s*public\s+[^(]*?\s\w+\s*(\((?:[^()]++|(?1))*\))/sg) {
+            my $region = substr($_, $prev, $+[0] - $prev); $prev = $+[0];
+            $c++ unless $region =~ /ProducesResponseType/;
+        }
+        END { print $c + 0, "\n" }' |
+        awk '{ s += $1 } END { print s + 0 }'
+}
+
+# Newtonsoft attributes (RQ-14): attribute uses in the files that import Newtonsoft.Json, plus fully qualified ones.
+newtonsoft_attributes() {
+    list_files | xargs -0 -r perl -0777 -ne '
+        my $c = 0;
+        $c += () = /\[Json(?:Property|Converter|Ignore|Constructor|Object|Required|ExtensionData)\b/g if /^using Newtonsoft\.Json/m;
+        $c += () = /\[Newtonsoft\.Json\.\w+/g;
+        print "$c\n"' |
+        awk '{ s += $1 } END { print s + 0 }'
+}
+
 # The libddb exports that honour a cancel token (DDBGetCapabilities().cancellable) and Registry calls (RQ-13).
 CANCELLABLE_EXPORTS='NativeDdb\.(DDBBuild|DDBExportRaster2?|DDBGenerateMemoryThumbnail(Ex)?|DDBGenerateThumbnail|DDBMemoryTile(Ex|Fmt)?|DDBRenderRasterIndex|DDBRenderRasterRegion(Ex)?|DDBTile)\('
 
@@ -374,6 +399,15 @@ metrics() {
     m "Cancellable libddb export calls outside the call envelope" "$(prod Registry.Adapters | lines "= $CANCELLABLE_EXPORTS")"
     m "Hand-built ETag code in controllers"          "$(prod Registry.Web/Controllers | lines 'Headers\.ETag\s*=|Headers\.IfNoneMatch')"
     m "Cancellation answered 408"                    "$(prod Registry.Web | lines 'Status408RequestTimeout')"
+
+    # API contracts and serialization (RQ-14)
+    m "Anonymous response objects"                   "$(prod Registry.Web/Controllers | lines '\b(Ok|Accepted|Created|CreatedAtRoute|CreatedAtAction|Json)\((?!.*\bnew \{ (orgSlug|dsSlug))[^;]*\bnew \{')"
+    m "Actions without [ProducesResponseType]"       "$(prod Registry.Web/Controllers | actions_without_produces)"
+    m "Newtonsoft attributes in Models and Ports"    "$(prod Registry.Web/Models Registry.Ports | newtonsoft_attributes)"
+    m "JToken/JObject/JArray/JValue in port signatures" "$(prod Registry.Ports Registry.Web/Services/Ports | lines '\bJ(Token|Object|Array|Value)\b')"
+    m "Production files using Newtonsoft outside the allow-list" "$({ prod ""; paths ':(exclude,glob)Registry.Web.Identity/ApplicationDbContext.cs'; } | list_files_matching 'Newtonsoft')"
+    m "AddNewtonsoftJson / MvcNewtonsoftJsonOptions" "$(prod "" | lines 'AddNewtonsoftJson|MvcNewtonsoftJsonOptions')"
+    m "Dataset route prefix copies in controllers"   "$(prod Registry.Web/Controllers | lines 'RoutesHelper\.DatasetRadix|/ds/\{dsSlug\}')"
 }
 
 current="$(metrics)"
