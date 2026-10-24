@@ -140,7 +140,7 @@ public class UploadPerFileOverheadBaselineTests : TestBase
         var ctx = TestDb.CreateContext<RegistryContext>();
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings { DatasetsPath = _root, DefaultThumbnailSize = 512 });
         var jobs = new Mock<IBackgroundJobsProcessor>();
-        var buildPending = new BuildPendingService(ctx, new DatasetSweep(ctx), _ddbManager.Object, jobs.Object, _cache.Object, TestJobs.NewStorage(), Mock.Of<Microsoft.Extensions.Logging.ILogger<BuildPendingService>>());
+        var buildPending = new BuildPendingService(new DatasetSweep(ctx), _ddbManager.Object, jobs.Object, _cache.Object, TestJobs.NewStorage(), Mock.Of<Microsoft.Extensions.Logging.ILogger<BuildPendingService>>());
 
         var changes = new DatasetChangeCoalescer(_ogcKeys.Object, _cache.Object, [], TimeSpan.FromMinutes(1),
             NullLogger<DatasetChangeCoalescer>.Instance);

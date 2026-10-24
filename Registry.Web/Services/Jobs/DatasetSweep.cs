@@ -35,6 +35,14 @@ public sealed class DatasetSweep
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
+    /// <summary>
+    /// One dataset with its organization, as the sweeps see the datasets (untracked), or null when there is none:
+    /// for the per-dataset work that runs next to a sweep (the pending-build flag, retry and refresh).
+    /// </summary>
+    public Task<Data.Models.Dataset?> FindAsync(string orgSlug, string dsSlug) =>
+        _context.Datasets.AsNoTracking().Include(d => d.Organization)
+            .FirstOrDefaultAsync(d => d.Organization.Slug == orgSlug && d.Slug == dsSlug);
+
     /// <param name="console">Where a failed visit is reported.</param>
     /// <param name="operation">What the sweep does, for the failure line ("Cleanup").</param>
     /// <param name="visit">The work on one dataset.</param>

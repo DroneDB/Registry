@@ -37,7 +37,6 @@ namespace Registry.Web.Services.Adapters;
 [DisableConcurrentExecution(timeoutInSeconds: 0)]
 public class BuildPendingService : Builds.IPendingBuildFlag
 {
-    private readonly RegistryContext _context;
     private readonly DatasetSweep _sweep;
     private readonly IDdbManager _ddbManager;
     private readonly IBackgroundJobsProcessor _backgroundJob;
@@ -53,7 +52,6 @@ public class BuildPendingService : Builds.IPendingBuildFlag
     private readonly Lock _statsLock = new();
 
     public BuildPendingService(
-        RegistryContext context,
         DatasetSweep sweep,
         IDdbManager ddbManager,
         IBackgroundJobsProcessor backgroundJob,
@@ -62,7 +60,6 @@ public class BuildPendingService : Builds.IPendingBuildFlag
         ILogger<BuildPendingService> logger,
         IConfiguration? configuration = null)
     {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
         _sweep = sweep ?? throw new ArgumentNullException(nameof(sweep));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _backgroundJob = backgroundJob ?? throw new ArgumentNullException(nameof(backgroundJob));
@@ -208,7 +205,7 @@ public class BuildPendingService : Builds.IPendingBuildFlag
         using var coordination = DatasetBuildCoordinator.Acquire(orgSlug, dsSlug, storage ?? _storage,
             mysqlConnectionString: _mysqlConnectionString);
         var state = await ReadState(orgSlug, dsSlug, storage);
-        var ds = await FindDataset(orgSlug, dsSlug);
+        var ds = await _sweep.FindAsync(orgSlug, dsSlug);
         if (ds?.Organization == null) return;
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
         try
@@ -225,10 +222,6 @@ public class BuildPendingService : Builds.IPendingBuildFlag
         }
         await SaveState(orgSlug, dsSlug, state, storage);
     }
-
-    private Task<Data.Models.Dataset?> FindDataset(string orgSlug, string dsSlug) =>
-        _context.Datasets.AsNoTracking().Include(d => d.Organization)
-            .FirstOrDefaultAsync(d => d.Organization.Slug == orgSlug && d.Slug == dsSlug);
 
     // Keep the existing bounded policy; exhausted chains await the low-frequency sweep.
     private static readonly int[] RetryBackoffMinutes = [1, 2, 5, 10, 20, 40, 60];
@@ -251,7 +244,7 @@ public class BuildPendingService : Builds.IPendingBuildFlag
         {
             using var coordination = DatasetBuildCoordinator.Acquire(orgSlug, dsSlug, storage ?? _storage,
             mysqlConnectionString: _mysqlConnectionString);
-            var ds = await FindDataset(orgSlug, dsSlug);
+            var ds = await _sweep.FindAsync(orgSlug, dsSlug);
             if (ds?.Organization == null) return;
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             if (requiredPendingPath != null &&

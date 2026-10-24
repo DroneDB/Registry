@@ -100,7 +100,7 @@ class ShareManagerTest : TestBase
         _listingsMock = new Mock<IDatasetListingInvalidator>();
 
         var bpsContext = TestDb.CreateContext<RegistryContext>();
-        _buildPendingService = new BuildPendingService(bpsContext, new DatasetSweep(bpsContext), _ddbFactoryMock.Object, _backgroundJobsProcessor, _cacheManager, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
+        _buildPendingService = new BuildPendingService(new DatasetSweep(bpsContext), _ddbFactoryMock.Object, _backgroundJobsProcessor, _cacheManager, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
 
         _objectManagerLogger = CreateTestLogger<ObjectsManager>();
         _ddbFactoryLogger = CreateTestLogger<DdbManager>();

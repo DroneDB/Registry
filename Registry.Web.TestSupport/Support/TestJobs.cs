@@ -27,7 +27,7 @@ public static class TestJobs
     /// <summary>The pending-build service over the test's collaborators.</summary>
     public static BuildPendingService BuildPendingService(RegistryContext context, IDdbManager ddbManager,
         IBackgroundJobsProcessor jobs, ICacheManager cache, JobStorage? storage = null) =>
-        new(context, new DatasetSweep(context), ddbManager, jobs, cache, storage ?? NewStorage(),
+        new(new DatasetSweep(context), ddbManager, jobs, cache, storage ?? NewStorage(),
             NullLogger<BuildPendingService>.Instance);
 
     /// <summary>

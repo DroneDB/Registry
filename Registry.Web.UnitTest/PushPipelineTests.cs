@@ -147,7 +147,7 @@ public class PushPipelineTests : TestBase
         var cache = _pendingCache;
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings { DatasetsPath = _root });
         var fileSystem = new FileSystem();
-        var buildPending = new BuildPendingService(_ctx, new DatasetSweep(_ctx), ddbManager.Object, _jobs.Object, cache.Object, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
+        var buildPending = new BuildPendingService(new DatasetSweep(_ctx), ddbManager.Object, _jobs.Object, cache.Object, TestJobs.NewStorage(), Mock.Of<ILogger<BuildPendingService>>());
         return TestPush.Manager(_utils.Object, ddbManager.Object, Mock.Of<IDatasetsManager>(),
             auth.Object, new DatasetAccessResolver(_utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper.Object,
             TestJobs.Scheduler(_jobs.Object, buildPending, userId: "u"), TestSettings.Options<ImportSettings>(settings), fileSystem,
