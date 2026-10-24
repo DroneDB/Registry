@@ -18,6 +18,7 @@ using Registry.Web.Services.Initialization;
 using Registry.Web.Services.Maintenance;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Managers.Wcs;
+using Registry.Web.Services.Managers.Wfs;
 using Registry.Web.Services.Objects;
 using Registry.Web.Services.Organizations;
 using Registry.Web.Services.PlatformTasks;
@@ -187,6 +188,9 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IWmtsManager, WmtsManager>();
         services.AddScoped<IWmsManager, WmsManager>();
         services.AddScoped<IWfsManager, WfsManager>();
+        services.AddScoped<IWfsCapabilities, WfsCapabilities>();
+        services.AddScoped<IWfsSchema, WfsSchema>();
+        services.AddScoped<IWfsFeatureQuery, WfsFeatureQuery>();
         services.AddScoped<IWcsCoverageService, WcsCoverageService>();
         services.AddScoped<IWcsProtocolHandler, WcsProtocol10Handler>();
         services.AddScoped<IWcsProtocolHandler, WcsProtocol11Handler>();
