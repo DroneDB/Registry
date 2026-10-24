@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
@@ -26,6 +27,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.PlatformTasks;
 using Registry.Web.Test.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
@@ -93,23 +95,21 @@ public class RetryEndpointTest : IDisposable
 
         var appSettings = TestSettings.Options(new AppSettings { TempPath = Path.GetTempPath() });
 
+        var access = new DatasetAccessResolver(_utils.Object, authManager.Object, ddbManager.Object, TestPaths.Policy);
+        var authorizer = new TaskAuthorizer(access, new JobIndexQuery(_db), authManager.Object);
+        var processor = new BackgroundJobsProcessor(_client.Object, NullIndexedEnqueuer.Create(), _storage.Object);
+        var artifacts = new TaskArtifactStore(new Registry.Adapters.FileSystem(), TestScratch.Provider,
+            NullLogger<TaskArtifactStore>.Instance);
+
         _manager = new TasksManager(
-            new Mock<IHeavyTaskRunner>().Object,
-            new Mock<IHeavyToolRegistry>().Object,
-            new Mock<IHeavyToolGating>().Object,
-            new JobIndexQuery(_db),
-            writer,
-            authManager.Object,
-            new DatasetAccessResolver(_utils.Object, authManager.Object, ddbManager.Object, TestPaths.Policy),
-            _utils.Object,
-            new BackgroundJobsProcessor(_client.Object, NullIndexedEnqueuer.Create(), _storage.Object),
-            ddbManager.Object,
-            new Mock<IRecordCache>().Object,
-            new Mock<IHttpContextAccessor>().Object,
-            TestSettings.Options<ProcessingPlatformSettings>(appSettings),
-            TestScratch.Provider,
-            new Registry.Adapters.FileSystem(),
-            new Mock<ILogger<TasksManager>>().Object);
+            new TaskSubmission(new Mock<IHeavyTaskRunner>().Object, new Mock<IHeavyToolRegistry>().Object,
+                new Mock<IHeavyToolGating>().Object, access, authManager.Object, new Mock<IHttpContextAccessor>().Object),
+            new TaskHistory(access, new JobIndexQuery(_db), new Mock<IRecordCache>().Object, authorizer, artifacts,
+                TestSettings.Options<ProcessingPlatformSettings>(appSettings)),
+            new TaskLifecycle(access, authorizer, processor, writer, artifacts, NullLogger<TaskLifecycle>.Instance),
+            new TaskRetry(authorizer, processor, writer, _utils.Object, ddbManager.Object,
+                NullLogger<TaskRetry>.Instance),
+            access);
     }
 
     [TearDown]

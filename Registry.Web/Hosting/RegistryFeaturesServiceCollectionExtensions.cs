@@ -18,6 +18,7 @@ using Registry.Web.Services.Maintenance;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Managers.Wcs;
 using Registry.Web.Services.Objects;
+using Registry.Web.Services.PlatformTasks;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Processing;
 using Registry.Web.Services.Push;
@@ -83,6 +84,12 @@ public static class RegistryFeaturesServiceCollectionExtensions
         // Admin global tasks dashboard and the per-dataset Processing Platform tasks (TasksController)
         services.AddScoped<IAdminTasksManager, AdminTasksManager>();
         services.AddScoped<ITasksManager, TasksManager>();
+        services.AddScoped<ITaskSubmission, TaskSubmission>();
+        services.AddScoped<ITaskHistory, TaskHistory>();
+        services.AddScoped<ITaskLifecycle, TaskLifecycle>();
+        services.AddScoped<ITaskRetry, TaskRetry>();
+        services.AddScoped<ITaskAuthorizer, TaskAuthorizer>();
+        services.AddScoped<ITaskArtifactStore, TaskArtifactStore>();
 
         // Web-only submission side of the task substrate (gating, quota, runner)
         services.AddProcessingPlatformSubmission();
