@@ -178,10 +178,10 @@ public sealed class ProcessingSections : IConfigurationSectionBuilder
 
     private ConfigurationSectionDataDto BuildProcessingBudgetSection()
     {
-        var host = _view.Configured<HostResourceOptions>();
-        var hostDefault = _view.Shipped<HostResourceOptions>();
-        var pb = host.ProcessingBudget ?? new ProcessingBudgetSettings();
-        var db = hostDefault.ProcessingBudget ?? new ProcessingBudgetSettings();
+        var host = _view.Configured<HostResourceOptions>().WithDefaults();
+        var hostDefault = _view.Shipped<HostResourceOptions>().WithDefaults();
+        var pb = host.ProcessingBudget;
+        var db = hostDefault.ProcessingBudget;
         // A job host shows its own budget; the web server shows a processing node's on this machine
         var effective = (_budget.Processing ?? _budget.For(InstanceType.ProcessingNode).Processing)!;
 
@@ -212,10 +212,10 @@ public sealed class ProcessingSections : IConfigurationSectionBuilder
 
     private ConfigurationSectionDataDto BuildHostBudgetSection()
     {
-        var host = _view.Configured<HostResourceOptions>();
-        var hostDefault = _view.Shipped<HostResourceOptions>();
-        var hb = host.HostBudget ?? new HostBudgetSettings();
-        var db = hostDefault.HostBudget ?? new HostBudgetSettings();
+        var host = _view.Configured<HostResourceOptions>().WithDefaults();
+        var hostDefault = _view.Shipped<HostResourceOptions>().WithDefaults();
+        var hb = host.HostBudget;
+        var db = hostDefault.HostBudget;
 
         return Section("HostBudget", "Host Budget",
             "The machine and the Registry processes that share it: each process takes its weight's share of " +

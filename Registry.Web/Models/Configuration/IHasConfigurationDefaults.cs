@@ -11,3 +11,14 @@ public interface IHasConfigurationDefaults
 {
     void ApplyDefaults();
 }
+
+/// <summary>Reads of options whose nested sections the view may find missing or written as <c>null</c>.</summary>
+public static class ConfigurationDefaultsExtensions
+{
+    /// <summary><paramref name="options"/> after <see cref="IHasConfigurationDefaults.ApplyDefaults"/>, so a missing nested section is its defaults.</summary>
+    public static T WithDefaults<T>(this T options) where T : class, IHasConfigurationDefaults
+    {
+        options.ApplyDefaults();
+        return options;
+    }
+}
