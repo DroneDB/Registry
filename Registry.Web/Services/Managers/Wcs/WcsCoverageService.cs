@@ -29,12 +29,15 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
 {
     private readonly ILogger<WcsCoverageService> _logger;
     private readonly INativeWorkGate _gate;
+    private readonly IRasterInfoCache _rasterInfo;
 
     public WcsCoverageService(IDatasetAccessResolver access, IBuildArtifactResolver ar,
         IDdbWrapper w, IOgcLayerCatalog c, IRecordCache cache, IHttpContextAccessor ctx,
-        ILogger<WcsCoverageService> logger, INativeWorkGate? gate = null) : base(access, ar, w, c, cache, ctx)
+        IRasterInfoCache rasterInfo, ILogger<WcsCoverageService> logger, INativeWorkGate? gate = null)
+        : base(access, ar, w, c, cache, ctx)
     {
         _logger = logger;
+        _rasterInfo = rasterInfo;
         _gate = gate ?? Services.Adapters.NativeWorkGate.Default;
     }
 
@@ -89,25 +92,13 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
         return (ddb, resolved);
     }
 
-    /// <summary>Probes do not change for a given raster content: kept a day after their last use.</summary>
-    private static readonly TimeSpan ProbeCacheExpiration = TimeSpan.FromDays(1);
-
-    // A probe without a size is not kept: the next request probes again
-    private static readonly RecordCacheOptions ProbeCache = new(ProbeCacheExpiration, ProbeCacheExpiration)
-    {
-        CacheWhen = info => info is WcsRasterInfo { Width: > 0, Height: > 0 }
-    };
-
     public async Task<WcsRasterInfo> ProbeRasterAsync(IDDB ddb, OgcLayerDto layer, CancellationToken ct = default)
     {
         try
         {
-            // The build COG and the source it falls back to are probed separately
-            var src = ResolveRasterSource(ddb, layer);
-            var key = CacheCategories.OgcRasterProbe(layer.EntryHash, src.Source);
-
-            return await Records.GetOrCreateRecordAsync(key,
-                _ => Task.FromResult(ParseRasterInfo(DdbWrapper.GetRasterInfo(src.Path))), ProbeCache, ct);
+            // The build COG and the source it falls back to are probed separately; the read is the one WMS shares
+            var info = await _rasterInfo.GetAsync(layer.EntryHash, ResolveRasterSource(ddb, layer), ct);
+            return ParseRasterInfo(info);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

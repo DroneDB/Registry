@@ -6,6 +6,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -21,6 +25,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Registry.Web.Utilities;
+using Registry.Web.Utilities.Ogc;
 using Shouldly;
 
 namespace Registry.Web.Test.Ogc;
@@ -103,7 +108,7 @@ public class WmsIndexStylesTests
         _wms = new WmsManager(new DatasetAccessResolver(utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy),
             _artifacts.Object, _wrapper.Object, _catalog.Object, records,
             new HttpContextAccessor { HttpContext = new DefaultHttpContext() }, NullLogger<WmsManager>.Instance,
-            cacheManager, new RasterIndexCatalog(_wrapper.Object, records, NullLogger<RasterIndexCatalog>.Instance));
+            cacheManager, new RasterIndexCatalog(new RasterInfoCache(_wrapper.Object, records), NullLogger<RasterIndexCatalog>.Instance));
     }
 
     private Task<byte[]> GetMap(string layer, string? style, double[]? bbox = null) =>
@@ -199,15 +204,107 @@ public class WmsIndexStylesTests
         IndexRenders().ShouldBe(0);
     }
 
-    [Test]
-    public async Task GetMap_AFailedRead_IsStyleNotDefined_NotAnImage()
+    // libddb says the raster cannot be read, and asking again cannot change that: the style is not one it lists
+    [TestCase(typeof(DdbException))]
+    [TestCase(typeof(DdbInvalidArgumentsException))]
+    [TestCase(typeof(DdbNotFoundException))]
+    public async Task GetMap_AnUnreadableRaster_IsStyleNotDefined_NotAnImage(Type failure)
     {
-        _wrapper.Setup(w => w.GetRasterInfo(Path("micasense"))).Throws(new DdbException("GDAL cannot open the file"));
+        _wrapper.Setup(w => w.GetRasterInfo(Path("micasense")))
+            .Throws((Exception)Activator.CreateInstance(failure, "GDAL cannot open the file")!);
 
         var ex = await Should.ThrowAsync<OgcException>(() => GetMap("micasense", "NDVI"));
 
         ex.Code.ShouldBe("StyleNotDefined");
+        ex.HttpStatusCode.ShouldBe(400);
         IndexRenders().ShouldBe(0);
+    }
+
+    // libddb could not answer now (busy, disk full, shutting down): the style may be fine, so the request is not
+    // refused for it and is not given a blank map either; the client is told to retry
+    [TestCase(typeof(DdbRetryableException), 60)]
+    [TestCase(typeof(DdbBusyException), 2)]
+    [TestCase(typeof(DdbBuildInProgressException), 2)]
+    [TestCase(typeof(DdbShutdownException), 5)]
+    public async Task GetMap_AReadThatCanBeRetried_Is503WithRetryAfter_InTheOgcFormat(Type failure, int retryAfter)
+    {
+        var fail = true;
+        _wrapper.Setup(w => w.GetRasterInfo(Path("micasense"))).Returns(() =>
+            fail ? throw (Exception)Activator.CreateInstance(failure, "the disk is full")! : FakeDdbWrapper.RasterInfo("NDVI"));
+
+        var thrown = await Should.ThrowAsync<Exception>(() => GetMap("micasense", "NDVI"));
+
+        thrown.ShouldBeOfType(failure);
+        var response = Answer(thrown);
+        response.Result.StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        response.Result.ContentType.ShouldBe(OgcExceptionFormatter.ContentType);
+        response.Result.Content.ShouldNotBeNull().ShouldContain("ServiceUnavailable");
+        response.Http.Response.Headers.RetryAfter.ToString().ShouldBe(retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        IndexRenders().ShouldBe(0);
+
+        // Not kept: the retry reads again and is served
+        fail = false;
+        (await GetMap("micasense", "NDVI")).ShouldBe(IndexPng);
+        Reads().ShouldBe(2);
+    }
+
+    [Test]
+    public async Task GetMap_ARead_CanceledByTheServer_IsNotStyleNotDefinedNorAnImage()
+    {
+        _wrapper.Setup(w => w.GetRasterInfo(Path("micasense"))).Throws(new DdbCanceledException("Canceled by the cancel token"));
+
+        var thrown = await Should.ThrowAsync<OperationCanceledException>(() => GetMap("micasense", "NDVI"));
+
+        var response = Answer(thrown);
+        response.Result.StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        response.Http.Response.Headers.RetryAfter.ToString().ShouldNotBeNullOrEmpty();
+    }
+
+    [Test]
+    public async Task GetMap_TheDefaultStyle_NeedsNoRead_SoABusyLibddbDoesNotStopIt()
+    {
+        _wrapper.Setup(w => w.GetRasterInfo(It.IsAny<string>())).Throws(new DdbBusyException("busy"));
+
+        (await GetMap("micasense", "")).ShouldBe(RegionPng);
+    }
+
+    [Test]
+    public async Task Capabilities_AReadThatCanBeRetried_Is503_AndTheDocumentWithoutStylesIsNotKept()
+    {
+        var fail = true;
+        _wrapper.Setup(w => w.GetRasterInfo(Path("micasense"))).Returns(() =>
+            fail ? throw new DdbRetryableException("the disk is full") : FakeDdbWrapper.RasterInfo("NDVI", "NDRE"));
+
+        var thrown = await Should.ThrowAsync<DdbRetryableException>(() => AdvertisedStyles());
+        Answer(thrown).Result.StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+
+        fail = false;
+        (await AdvertisedStyles())["micasense"].ShouldBe(["default", "NDVI", "NDRE"]);
+    }
+
+    [Test]
+    public async Task Capabilities_AnUnreadableRaster_AdvertisesTheDefaultStyleOnly_AndTheOthersTheirOwn()
+    {
+        _wrapper.Setup(w => w.GetRasterInfo(Path("micasense"))).Throws(new DdbException("GDAL cannot open the file"));
+
+        var styles = await AdvertisedStyles();
+
+        styles["micasense"].ShouldBe(["default"]);
+        styles["fourband"].ShouldBe(["default", "NDVI", "NDRE", "NDWI", "SAVI"]);
+    }
+
+    // What the OGC pipeline answers for an exception that left the manager
+    private static (DefaultHttpContext Http, ContentResult Result) Answer(Exception exception)
+    {
+        var http = new DefaultHttpContext();
+        http.Request.Path = "/orgs/org/ds/ds/wms";
+        var context = new ExceptionContext(new ActionContext(http, new RouteData(), new ActionDescriptor()),
+            new List<IFilterMetadata>()) { Exception = exception };
+
+        new OgcExceptionFilter(NullLogger<OgcExceptionFilter>.Instance).OnException(context);
+
+        context.ExceptionHandled.ShouldBeTrue();
+        return (http, context.Result.ShouldBeOfType<ContentResult>());
     }
 
     [Test]

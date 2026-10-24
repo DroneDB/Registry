@@ -17,7 +17,6 @@ namespace Registry.Web.Services.Jobs;
 public static class JobOperations
 {
     private static readonly ConcurrentDictionary<ulong, JobOperation> Running = new();
-    private static long _lastId;
 
     /// <summary>
     /// Starts the operation of job <paramref name="jobId"/> and makes it the current one
@@ -29,7 +28,7 @@ public static class JobOperations
     /// <param name="cancellation">The job's token (<see cref="JobCancellation.Of"/>).</param>
     public static JobOperation Begin(string jobId, string? dataset, CancellationToken cancellation = default)
     {
-        var id = (ulong)Interlocked.Increment(ref _lastId);
+        var id = DdbOperation.NewId();
         var operation = new JobOperation(id, jobId, dataset, DdbOperation.Enter(id), DdbCancellation.Enter(cancellation));
         Running[id] = operation;
         return operation;

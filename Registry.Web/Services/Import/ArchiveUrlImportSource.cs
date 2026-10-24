@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -28,9 +29,6 @@ namespace Registry.Web.Services.Import;
 /// </summary>
 public sealed class ArchiveUrlImportSource : IImportSource
 {
-    private static readonly string[] ArchiveExtensions =
-        [".zip", ".tar.gz", ".tgz", ".tar", ".7z", ".rar"];
-
     private readonly IArchiveExtractor _extractor;
     private readonly SsrfGuard _ssrfGuard;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -123,7 +121,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
         // The archive goes to the configured temp folder, OUTSIDE the dataset folder, so it is never
         // indexed, and is deleted when the import ends. Keep the original archive extension so the
         // extractor can pick the right format.
-        using var scratch = _scratch.Create("ddb-import-", ArchiveExt(p.Url));
+        using var scratch = _scratch.Create("ddb-import-", ArchiveExt(p.Url, _extractor.SupportedExtensions));
 
         await DownloadToFileAsync(p, scratch.Path, progress, ct);
 
@@ -207,38 +205,37 @@ public sealed class ArchiveUrlImportSource : IImportSource
             (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             throw new ArgumentException($"The archive URL is not a valid http/https URL: {url}");
 
-        return new ArchiveParams(url, uri.Host, SuggestName(uri), username, password);
+        return new ArchiveParams(url, uri.Host, SuggestName(uri, _extractor.SupportedExtensions), username, password);
     }
 
     private static string GuessArchiveName(string url)
         => Uri.TryCreate(url, UriKind.Absolute, out var uri) ? Path.GetFileName(uri.AbsolutePath) : url;
 
-    // Returns the recognized multi-part archive extension (e.g. ".tar.gz") or the plain extension.
-    private static string ArchiveExt(string url)
+    // The longest of the extractor's own suffixes that the name ends with (".tar.gz", not ".gz"), or null
+    private static string? KnownSuffix(string name, IReadOnlyList<string> supportedExtensions) => supportedExtensions
+        .Where(ext => name.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(ext => ext.Length)
+        .FirstOrDefault();
+
+    // The extension of the archive named by the URL: its known suffix, else the plain extension (".zip" when it has none)
+    internal static string ArchiveExt(string url, IReadOnlyList<string> supportedExtensions)
     {
         var name = GuessArchiveName(url);
-        foreach (var ext in ArchiveExtensions)
-        {
-            if (name.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
-                return ext;
-        }
+        if (KnownSuffix(name, supportedExtensions) is { } known)
+            return known;
 
         var plain = Path.GetExtension(name);
         return string.IsNullOrEmpty(plain) ? ".zip" : plain;
     }
 
-    private static string SuggestName(Uri uri)
+    internal static string SuggestName(Uri uri, IReadOnlyList<string> supportedExtensions)
     {
         var fileName = Path.GetFileName(uri.AbsolutePath);
         if (string.IsNullOrWhiteSpace(fileName)) return "imported-dataset";
 
-        foreach (var ext in ArchiveExtensions)
-        {
-            if (fileName.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
-                return fileName[..^ext.Length];
-        }
-
-        return Path.GetFileNameWithoutExtension(fileName);
+        return KnownSuffix(fileName, supportedExtensions) is { } known
+            ? fileName[..^known.Length]
+            : Path.GetFileNameWithoutExtension(fileName);
     }
 
     private static string? GetString(JsonElement obj, string name)

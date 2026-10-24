@@ -137,6 +137,8 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IFeatureSection, DownloadFeatures>();
         services.AddScoped<IFeatureSection, TaskFeatures>();
         services.AddScoped<IFeatureSection, HubFeatures>();
+        services.AddScoped<IFeatureSection, EntryTypeFeatures>();
+        services.AddScoped<IFeatureSection, ArchiveFeatures>();
         return services;
     }
 
@@ -168,6 +170,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
     {
         services.AddScoped<IOgcLayerCatalog, OgcLayerCatalog>();
         services.AddScoped<IOgcRasterTileSource, OgcRasterTileSource>();
+        services.AddScoped<IRasterInfoCache, RasterInfoCache>();
         services.AddScoped<IRasterIndexCatalog, RasterIndexCatalog>();
         services.AddScoped<IWmtsManager, WmtsManager>();
         services.AddScoped<IWmsManager, WmsManager>();

@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Registry.Adapters.DroneDB;
 using Registry.Ports;
+using Registry.Web.Middlewares;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Utilities;
 using Serilog;
@@ -80,6 +81,7 @@ public static class RegistryHost
             })
             .ConfigureWebHostDefaults(web => web.Configure(app =>
             {
+                app.UseDdbRequestOperation();
                 app.UseRouting();
                 app.UseEndpoints(endpoints => MapThumbnailGeneratorEndpoints(endpoints,
                     app.ApplicationServices.GetRequiredService<ThumbnailRequestHandler>()));

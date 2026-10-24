@@ -71,6 +71,9 @@ public class Startup
         // address and scheme, taken from the headers of a known proxy only
         app.UseForwardedHeaders();
 
+        // Every native call made while a request is served logs with that request's id (XI-08)
+        app.UseDdbRequestOperation();
+
         // Every error below answers ProblemDetails (ApiExceptionHandler), in every environment: the
         // developer exception page would give the Hub an HTML body in Development only
         app.UseExceptionHandler();

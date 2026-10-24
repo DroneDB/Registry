@@ -50,7 +50,18 @@ public static class DuplicateDatasetSlugs
         foreach (var (id, org, slug) in Rows)
             await Execute(context,
                 $"INSERT INTO Datasets (Id, CreationDate, InternalRef, OrganizationSlug, Slug) VALUES ({id}, '2024-01-0{id % 9 + 1} 00:00:00', '00000000-0000-0000-0000-{id:D12}', '{org}', '{slug}')");
+
+        foreach (var (jobId, org, slug) in Jobs)
+            await Execute(context,
+                $"INSERT INTO JobIndices (JobId, OrgSlug, DsSlug, CurrentState, CreatedAtUtc, ToolId, ToolVersion) VALUES ('{jobId}', '{org}', '{slug}', 'Succeeded', '2024-01-05 00:00:00', 'build', '1')");
     }
+
+    // The jobs name their dataset by slug, so those of a slug that three datasets shared (alpha/survey) cannot say which
+    // one they ran on
+    private static readonly (string JobId, string Org, string Slug)[] Jobs =
+    [
+        ("job-alpha-survey", Alpha, Survey), ("job-beta-survey", Beta, Survey), ("job-gamma-x", Gamma, "x")
+    ];
 
     private static readonly (int Id, string Org, string Slug)[] Rows =
     [
@@ -90,6 +101,13 @@ public static class DuplicateDatasetSlugs
         rows.ToDictionary(r => r.Id, r => r.Slug).ShouldBe(Expected(caseInsensitive));
         rows.ToDictionary(r => r.Id, r => r.OrganizationSlug)
             .ShouldBe(Rows.ToDictionary(r => r.Id, r => r.Org), "only slugs change");
+
+        // Not rewritten: nothing in a job row or in the database tells which of the copies it ran on (the duplicates
+        // were as ambiguous for every lookup before the migration), so the jobs stay with the slug, which the first
+        // dataset keeps. The slug repair of /sys/fix-invalid-slugs, which renames one known dataset, does rewrite them.
+        (await context.Database.SqlQueryRaw<JobRow>("SELECT JobId AS JobId, OrgSlug AS OrgSlug, DsSlug AS DsSlug FROM JobIndices ORDER BY JobId")
+                .ToListAsync())
+            .Select(j => (j.JobId, j.OrgSlug, j.DsSlug)).ShouldBe(Jobs.OrderBy(j => j.JobId, StringComparer.Ordinal));
     }
 
     public static async Task<List<string>> IndexNamesAsync(RegistryContext context, string table) =>
@@ -118,4 +136,6 @@ public static class DuplicateDatasetSlugs
     public static Task Execute(DbContext context, string sql) => context.Database.ExecuteSqlRawAsync(sql);
 
     public sealed record SlugRow(int Id, string Slug, string OrganizationSlug);
+
+    public sealed record JobRow(string JobId, string OrgSlug, string DsSlug);
 }

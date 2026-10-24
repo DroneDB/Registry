@@ -49,7 +49,7 @@ public class RasterIndexCatalogTests
     // One store for the catalogs of a test: what a catalog caches, another instance reads (the distributed cache)
     private IDistributedCache _store = null!;
 
-    private RasterIndexCatalog Create() => new(_ddb.Object, TestCaches.Records(_store), _log);
+    private RasterIndexCatalog Create() => new(new RasterInfoCache(_ddb.Object, TestCaches.Records(_store)), _log);
 
     private int Reads() => _ddb.Invocations.Count(i => i.Method.Name == nameof(IDdbWrapper.GetRasterInfo));
 
@@ -153,16 +153,59 @@ public class RasterIndexCatalogTests
     }
 
     [Test]
-    public async Task Get_AnInfoWithoutIndexLayer_IsNoIndexAndIsNotRemembered()
+    public async Task Get_AnInfoWithoutIndexLayer_IsNoIndex_AndTheDocumentIsLibddbsAnswerForTheContent()
     {
         _info = """{"width":1,"height":1,"bandCount":1}""";
         var catalog = Create();
 
         (await catalog.GetAsync(Hash, Cog)).ShouldBeEmpty();
-        _log.Count(LogLevel.Warning).ShouldBe(1, "libddb always writes indexLayer: its absence is not 'no index'");
+        (await catalog.GetAsync(Hash, Cog)).ShouldBeEmpty();
 
+        // libddb always writes indexLayer: its absence is not 'no index', and each request says so; the document is
+        // the one record WCS reads too, kept like any answer of libddb for given content and version
+        _log.Count(LogLevel.Warning).ShouldBe(2);
+        Reads().ShouldBe(1);
+    }
+
+    [Test]
+    public async Task Get_AnInfoThatIsNotJson_IsNotRemembered()
+    {
+        _info = "not json";
+        var catalog = Create();
+
+        await catalog.GetAsync(Hash, Cog);
         _info = FakeDdbWrapper.RasterInfo("NDVI");
+
         (await catalog.GetAsync(Hash, Cog)).ShouldBe(["NDVI"]);
+    }
+
+    [TestCase(typeof(DdbRetryableException))]
+    [TestCase(typeof(DdbBusyException))]
+    [TestCase(typeof(DdbBuildInProgressException))]
+    [TestCase(typeof(DdbShutdownException))]
+    public async Task Get_AFailureThatCanPass_IsNotNoIndex_AndIsNotRemembered(Type failure)
+    {
+        var fail = true;
+        _ddb.Setup(d => d.GetRasterInfo(It.IsAny<string>()))
+            .Returns(() => fail ? throw (Exception)Activator.CreateInstance(failure, "the disk is full")! : _info);
+        var catalog = Create();
+
+        await Should.ThrowAsync(() => catalog.GetAsync(Hash, Cog), failure);
+        _log.Count(LogLevel.Warning).ShouldBe(0, "the caller answers it: nothing says the raster has no index");
+
+        fail = false;
+        (await catalog.GetAsync(Hash, Cog)).Count.ShouldBe(5, "the next request asks libddb again");
+    }
+
+    [TestCase(typeof(DdbInvalidArgumentsException))]
+    [TestCase(typeof(DdbNotFoundException))]
+    public async Task Get_ARasterLibddbSaysIsUnreadable_IsNoIndex(Type failure)
+    {
+        _ddb.Setup(d => d.GetRasterInfo(It.IsAny<string>()))
+            .Throws((Exception)Activator.CreateInstance(failure, "not a raster")!);
+
+        (await Create().GetAsync(Hash, Cog)).ShouldBeEmpty();
+        _log.Count(LogLevel.Warning).ShouldBe(1);
     }
 
     [Test]
@@ -183,7 +226,7 @@ public class RasterIndexCatalogTests
         var gate = new Mock<INativeWorkGate>();
         gate.Setup(g => g.RunAsync(NativeLane.Tiles, It.IsAny<Func<string>>(), It.IsAny<CancellationToken>()))
             .Returns((NativeLane _, Func<string> work, CancellationToken _) => Task.FromResult(work()));
-        var catalog = new RasterIndexCatalog(_ddb.Object, TestCaches.Records(), _log, gate.Object);
+        var catalog = new RasterIndexCatalog(new RasterInfoCache(_ddb.Object, TestCaches.Records(), gate.Object), _log);
 
         await catalog.GetAsync(Hash, Cog);
 

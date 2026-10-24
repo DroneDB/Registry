@@ -15,8 +15,11 @@ public interface IRasterIndexCatalog
 {
     /// <summary>
     /// The indices libddb lists for the file <paramref name="source"/> of the entry with content hash
-    /// <paramref name="entryHash"/>: upper-case, in libddb's order, empty when none (also when the raster cannot be
-    /// read: the failure is logged and not remembered). Read once per content and libddb version, then cached.
+    /// <paramref name="entryHash"/>: upper-case, in libddb's order, empty when none (also when libddb says the raster
+    /// cannot be read: logged, and not remembered). Read once per content and libddb version
+    /// (<see cref="IRasterInfoCache"/>). A failure that can pass, so that asking again can answer
+    /// (<see cref="Registry.Ports.DroneDB.DdbErrors.IsTransient"/>), is not "no index": it propagates, for the caller to
+    /// answer 503; so does a cancellation.
     /// </summary>
     Task<IReadOnlyList<string>> GetAsync(string entryHash, RasterSource source, CancellationToken ct = default);
 }

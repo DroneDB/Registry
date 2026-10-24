@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Ports;
+using Registry.Ports.Archives;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.HeavyTasks;
@@ -179,5 +180,37 @@ public sealed class HubFeatures : IFeatureSection
             _logger.LogWarning(ex, "Cannot read the libddb version");
             return null;
         }
+    }
+}
+
+/// <summary>The entry types: what libddb reports (<c>DDBGetEntryTypes</c>), passed through (plan decision D8).</summary>
+public sealed class EntryTypeFeatures : IFeatureSection
+{
+    private readonly IBuildArtifactResolver _builds;
+
+    public EntryTypeFeatures(IBuildArtifactResolver builds) => _builds = builds;
+
+    public Task FillAsync(FeaturesDto features)
+    {
+        features.EntryTypes =
+        [
+            .. _builds.EntryTypes.Select(t => new EntryTypeDto((int)t.Id, t.Name, t.Buildable, t.Thumbnail,
+                [.. t.SidecarExtensions], [.. t.Roles]))
+        ];
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>The archives Registry extracts into a dataset: the extractor's own rule, not a copy of it.</summary>
+public sealed class ArchiveFeatures : IFeatureSection
+{
+    private readonly IArchiveExtractor _archives;
+
+    public ArchiveFeatures(IArchiveExtractor archives) => _archives = archives;
+
+    public Task FillAsync(FeaturesDto features)
+    {
+        features.ArchiveExtensions = [.. _archives.SupportedExtensions.Select(e => e.TrimStart('.'))];
+        return Task.CompletedTask;
     }
 }

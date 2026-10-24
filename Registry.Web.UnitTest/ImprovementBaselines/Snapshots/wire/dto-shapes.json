@@ -1656,6 +1656,28 @@
       "polygon_geom": null
     }
   },
+  "Registry.Web.Models.DTO.EntryTypeDto": {
+    "full": {
+      "id": 42,
+      "name": "Name-text",
+      "buildable": true,
+      "thumbnail": "Thumbnail-text",
+      "sidecarExtensions": [
+        "SidecarExtensions-text"
+      ],
+      "roles": [
+        "Roles-text"
+      ]
+    },
+    "sparse": {
+      "id": 0,
+      "name": null,
+      "buildable": false,
+      "thumbnail": null,
+      "sidecarExtensions": null,
+      "roles": null
+    }
+  },
   "Registry.Web.Models.DTO.FeaturesDto": {
     "full": {
       "organizationMemberManagement": true,
@@ -1694,6 +1716,23 @@
           "terminal": true
         }
       ],
+      "entryTypes": [
+        {
+          "id": 42,
+          "name": "Name-text",
+          "buildable": true,
+          "thumbnail": "Thumbnail-text",
+          "sidecarExtensions": [
+            "SidecarExtensions-text"
+          ],
+          "roles": [
+            "Roles-text"
+          ]
+        }
+      ],
+      "archiveExtensions": [
+        "ArchiveExtensions-text"
+      ],
       "hubOptions": {
         "appLogo": "AppLogo-text",
         "appName": "AppName-text",
@@ -1729,6 +1768,8 @@
       "bulkDownloadAsyncThresholdBytes": 0,
       "taskTools": null,
       "taskStates": null,
+      "entryTypes": null,
+      "archiveExtensions": null,
       "hubOptions": null,
       "hubVersion": null,
       "registryVersion": null,
