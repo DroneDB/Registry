@@ -75,7 +75,7 @@ public class MetaManager : IMetaManager
 
         _logger.LogInformation("In Set('{OrgSlug}/{DsSlug}', {Key}, {Path})", orgSlug, dsSlug, key, path);
 
-        RequireWritableKey(key, data, MetaKeyKind.Single);
+        RequireWritableKey(key, data, MetaKeyKind.Item);
 
         var ddb = access.Ddb;
 

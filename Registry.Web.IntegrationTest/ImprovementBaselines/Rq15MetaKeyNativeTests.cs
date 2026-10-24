@@ -38,7 +38,7 @@ public sealed class Rq15MetaKeyNativeTests : IDisposable
     private const string Ds = "rq15-meta-ds";
     private const string Api = $"/orgs/{Org}/ds/{Ds}/meta";
 
-    private static readonly IDdbWrapper Native = new NativeDdbWrapper();
+    private static readonly NativeDdbWrapper Native = new();
 
     private RegistryWebFactory _factory = null!;
     private HttpClient _client = null!;
@@ -50,7 +50,7 @@ public sealed class Rq15MetaKeyNativeTests : IDisposable
         _factory = new RegistryWebFactory(configureServices: services =>
         {
             services.RemoveAll<IDdbWrapper>();
-            services.AddSingleton(Native);
+            services.AddSingleton<IDdbWrapper>(Native);
         });
         _client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 

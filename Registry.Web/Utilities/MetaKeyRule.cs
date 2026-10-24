@@ -7,7 +7,7 @@ namespace Registry.Web.Utilities;
 public enum MetaKeyKind
 {
     /// <summary>One item per path and key: written by <c>set</c>.</summary>
-    Single,
+    Item,
 
     /// <summary>Several items per path and key: written by <c>add</c>.</summary>
     List
@@ -51,7 +51,7 @@ public static class MetaKeyRule
         return (kind, IsList(key)) switch
         {
             (MetaKeyKind.List, false) => $"Invalid metadata key (must be plural, for example: {key}s)",
-            (MetaKeyKind.Single, true) => $"Invalid metadata key (must be singular, for example: {key[..^1]})",
+            (MetaKeyKind.Item, true) => $"Invalid metadata key (must be singular, for example: {key[..^1]})",
             _ => null
         };
     }
