@@ -3,7 +3,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
 using Registry.Web.Services.Managers;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
@@ -27,22 +26,18 @@ public interface ITaskSubmission
 /// <summary>Default <see cref="ITaskSubmission"/>.</summary>
 public sealed class TaskSubmission : ITaskSubmission
 {
-    private readonly IHeavyTaskRunner _runner;
     private readonly IHeavyToolRegistry _registry;
     private readonly IHeavyToolGating _gating;
     private readonly IDatasetAccessResolver _access;
-    private readonly IAuthManager _authManager;
-    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly ICurrentUserTaskSubmitter _submitter;
 
-    public TaskSubmission(IHeavyTaskRunner runner, IHeavyToolRegistry registry, IHeavyToolGating gating,
-        IDatasetAccessResolver access, IAuthManager authManager, IHttpContextAccessor httpContextAccessor)
+    public TaskSubmission(IHeavyToolRegistry registry, IHeavyToolGating gating, IDatasetAccessResolver access,
+        ICurrentUserTaskSubmitter submitter)
     {
-        _runner = runner;
         _registry = registry;
         _gating = gating;
         _access = access;
-        _authManager = authManager;
-        _httpContextAccessor = httpContextAccessor;
+        _submitter = submitter;
     }
 
     public async Task<TaskToolDto[]> GetToolsAsync(string orgSlug, string dsSlug, CancellationToken ct = default)
@@ -78,16 +73,11 @@ public sealed class TaskSubmission : ITaskSubmission
         var requiredAccess = tool.RequiredAccess == HeavyToolPermission.Write ? AccessType.Write : AccessType.Read;
         await _access.ResolveAsync(orgSlug, dsSlug, requiredAccess, ct: ct);
 
-        var user = await _authManager.GetCurrentUser();
-
         // A task without parameters takes an empty object
         var paramsElement = body.Params ?? JsonSerializer.SerializeToElement(new { });
 
-        var req = new HeavyTaskSubmitRequest(
-            orgSlug, dsSlug, tool.Id, tool.Version, body.Path, paramsElement, body.Force,
-            user?.Id, _httpContextAccessor.HttpContext?.User);
-
-        var result = await _runner.SubmitAsync(req, ct);
+        var result = await _submitter.SubmitAsync(orgSlug, dsSlug, tool.Id, tool.Version, body.Path, paramsElement,
+            body.Force, ct);
 
         var baseUrl = $"/orgs/{orgSlug}/ds/{dsSlug}/tasks/{result.TaskId}";
         return new SubmitTaskResponseDto(

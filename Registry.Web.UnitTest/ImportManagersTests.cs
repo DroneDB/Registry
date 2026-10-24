@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
 using Registry.Ports.DroneDB;
@@ -19,6 +20,7 @@ using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Import;
 using Registry.Web.Services.Managers;
@@ -104,23 +106,19 @@ public class ImportManagersTests
         _factory.Setup(f => f.Resolve(It.IsAny<string>())).Returns(_source.Object);
     }
 
-    private ImportManager CreateImportManager() => ImportManagerFactory.Create(this);
+    private static IOptions<ImportSettings> Options(ImportSettings settings) => Microsoft.Extensions.Options.Options.Create(settings);
 
-    private IHttpContextAccessor HttpContext() =>
-        new HttpContextAccessor { HttpContext = new DefaultHttpContext { User = _caller } };
+    private ICurrentUserTaskSubmitter Submitter() => new CurrentUserTaskSubmitter(_runner.Object, _auth.Object,
+        new HttpContextAccessor { HttpContext = new DefaultHttpContext { User = _caller } });
 
-    // The construction in one place: the managers take what they were split into since RQ-12
-    private static class ImportManagerFactory
-    {
-        public static ImportManager Create(ImportManagersTests t) => new(
-            t._datasets.Object, t._urls.Object, t._quota.Object, t._auth.Object, t._access.Object,
-            t._datasetsManager.Object, t._factory.Object, new ReversingProtector(), t._runner.Object,
-            t.HttpContext(), Microsoft.Extensions.Options.Options.Create(t._settings), NullLogger<ImportManager>.Instance);
-    }
+    private ImportManager CreateImportManager() => new(_access.Object,
+        new ImportSourceCatalog(_factory.Object, Options(_settings)),
+        new ImportQuotaGate(_auth.Object, _quota.Object),
+        new ImportTargetDatasets(_datasetsManager.Object, _datasets.Object, _urls.Object, NullLogger<ImportTargetDatasets>.Instance),
+        Submitter(), new ImportCredentials(new ReversingProtector()));
 
-    private FileUrlImportManager CreateFileUrlManager() => new(
-        _auth.Object, _access.Object, _runner.Object, new ReversingProtector(), null!, HttpContext(),
-        Microsoft.Extensions.Options.Options.Create(_settings), TestPaths.Policy, NullLogger<FileUrlImportManager>.Instance);
+    private FileUrlImportManager CreateFileUrlManager() => new(_access.Object, Submitter(),
+        new ImportCredentials(new ReversingProtector()), null!, Options(_settings), TestPaths.Policy);
 
     [Test]
     public async Task SourceTypes_AreTheAllowedOnes_AndNeedWriteAccessToTheOrganization()

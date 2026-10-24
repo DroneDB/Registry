@@ -68,47 +68,39 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
         """);
 
     private readonly GuardedHttpDownloader _downloader;
-    private readonly SsrfGuard _ssrfGuard;
-    private readonly IImportCredentialProtector _protector;
+    private readonly ImportCredentials _credentials;
     private readonly TaskFileIndexer _indexer;
     private readonly ImportSettings _importSettings;
     private readonly long _diskSafetyMarginBytes;
     private readonly DatasetPathPolicy _paths;
     private readonly IScratchFileProvider _scratch;
-    private readonly ILogger<FileUrlImportTool> _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="FileUrlImportTool"/> class.
     /// </summary>
-    /// <param name="downloader">The SSRF-hardened, budget-guarded downloader.</param>
-    /// <param name="ssrfGuard">The SSRF guard (fast pre-validation at submit time).</param>
-    /// <param name="protector">The credential protector used to decrypt the basic-auth password.</param>
+    /// <param name="downloader">The SSRF-hardened, budget-guarded downloader (it also pre-validates the host at submit time).</param>
+    /// <param name="credentials">Decrypts the basic-auth password.</param>
     /// <param name="indexer">Indexes the imported file, queues its build and invalidates the dataset's caches.</param>
     /// <param name="importSettings">The import settings.</param>
     /// <param name="platformSettings">The processing platform settings (size cap, disk safety margin).</param>
     /// <param name="paths">The dataset path rule (destination folder and file).</param>
     /// <param name="scratch">Where the download is written: the dataset's volume, so the move into place is a rename.</param>
-    /// <param name="logger">The logger.</param>
     public FileUrlImportTool(
         GuardedHttpDownloader downloader,
-        SsrfGuard ssrfGuard,
-        IImportCredentialProtector protector,
+        ImportCredentials credentials,
         TaskFileIndexer indexer,
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
         DatasetPathPolicy paths,
-        IScratchFileProvider scratch,
-        ILogger<FileUrlImportTool> logger)
+        IScratchFileProvider scratch)
     {
         _scratch = scratch;
         _downloader = downloader;
         _paths = paths;
-        _ssrfGuard = ssrfGuard;
-        _protector = protector;
+        _credentials = credentials;
         _indexer = indexer;
         _importSettings = importSettings.Value;
         _diskSafetyMarginBytes =
             platformSettings.Value.DiskSafetyMarginBytes;
-        _logger = logger;
     }
 
     /// <inheritdoc />
@@ -136,7 +128,7 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
         var uri = FileImportPolicy.ParseHttpUrl(args.Url);
 
         // Fast SSRF rejection at submit time (re-validated at connect time during download).
-        await _ssrfGuard.AssertAllowedAsync(uri.Host, ct);
+        await _downloader.AssertHostAllowedAsync(uri.Host, ct);
 
         var fileName = FileImportPolicy.SanitizeFileName(args.FileName);
         if (!_importSettings.IsExtensionAllowed(fileName))
@@ -244,11 +236,8 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
         return _paths.Normalize(f.Length == 0 ? fileName : $"{f}/{fileName}", "destination path");
     }
 
-    private string DecryptPassword(string? raw)
-    {
-        if (string.IsNullOrEmpty(raw)) return string.Empty;
-        return raw.StartsWith("ENC:", StringComparison.Ordinal) ? _protector.Unprotect(raw[4..]) : raw;
-    }
+    private string DecryptPassword(string? raw) =>
+        string.IsNullOrEmpty(raw) ? string.Empty : _credentials.Open(raw);
 
 
 

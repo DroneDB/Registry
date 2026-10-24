@@ -25,19 +25,25 @@ public sealed class HeavyToolValidationContext : IHeavyToolValidationContext
     public ILogger Logger { get; }
 }
 
-/// <summary>Concrete execution context handed to a tool during <c>ExecuteAsync</c>.</summary>
+/// <summary>The task being executed: its id and its work folder (null when the tool produces no artifact).</summary>
+public sealed record TaskRun(string TaskId, string? WorkDir);
+
+/// <summary>
+/// Concrete execution context handed to a tool during <c>ExecuteAsync</c>. A job host has no HTTP caller:
+/// <see cref="Caller"/> is always null.
+/// </summary>
 public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
 {
+    private readonly TaskRun _run;
+
     public HeavyToolExecutionContext(
-        IDDB ddb, DatasetKey dataset, ClaimsPrincipal? caller, ILogger logger,
-        string taskId, string? workDir, PerformContext hangfire, IBuildScheduler buildQueue, IDatasetBuilds builds)
+        IDDB ddb, DatasetKey dataset, ILogger logger, TaskRun run, PerformContext hangfire,
+        IBuildScheduler buildQueue, IDatasetBuilds builds)
     {
         Ddb = ddb;
         Dataset = dataset;
-        Caller = caller;
         Logger = logger;
-        TaskId = taskId;
-        WorkDir = workDir;
+        _run = run;
         Hangfire = hangfire;
         BuildQueue = buildQueue;
         Builds = builds;
@@ -48,9 +54,9 @@ public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
     public IDatasetBuilds Builds { get; }
 
     public IDDB Ddb { get; }
-    public ClaimsPrincipal? Caller { get; }
+    public ClaimsPrincipal? Caller => null;
     public ILogger Logger { get; }
-    public string TaskId { get; }
-    public string? WorkDir { get; }
+    public string TaskId => _run.TaskId;
+    public string? WorkDir => _run.WorkDir;
     public PerformContext Hangfire { get; }
 }

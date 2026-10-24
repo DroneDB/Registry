@@ -26,6 +26,7 @@ using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.PlatformTasks;
 using Registry.Web.Test.Adapters;
@@ -102,8 +103,9 @@ public class RetryEndpointTest : IDisposable
             NullLogger<TaskArtifactStore>.Instance);
 
         _manager = new TasksManager(
-            new TaskSubmission(new Mock<IHeavyTaskRunner>().Object, new Mock<IHeavyToolRegistry>().Object,
-                new Mock<IHeavyToolGating>().Object, access, authManager.Object, new Mock<IHttpContextAccessor>().Object),
+            new TaskSubmission(new Mock<IHeavyToolRegistry>().Object, new Mock<IHeavyToolGating>().Object, access,
+                new CurrentUserTaskSubmitter(new Mock<IHeavyTaskRunner>().Object, authManager.Object,
+                    new Mock<IHttpContextAccessor>().Object)),
             new TaskHistory(access, new JobIndexQuery(_db), new Mock<IRecordCache>().Object, authorizer, artifacts,
                 TestSettings.Options<ProcessingPlatformSettings>(appSettings)),
             new TaskLifecycle(access, authorizer, processor, writer, artifacts, NullLogger<TaskLifecycle>.Instance),

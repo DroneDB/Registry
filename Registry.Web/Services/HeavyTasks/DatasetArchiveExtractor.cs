@@ -81,6 +81,23 @@ public sealed class DatasetArchiveExtractor
         _logger = logger;
     }
 
+    /// <summary>Whether the file name has a supported archive format.</summary>
+    public bool IsSupported(string fileName) => _archives.IsSupported(fileName);
+
+    /// <summary>Whether the file really is a supported archive, by its content (a non-archive served under an archive name is not).</summary>
+    public bool IsValidArchive(string filePath) => _archives.IsValidArchive(filePath);
+
+    /// <summary>
+    /// The size the archive has once extracted, when it is known without decompressing (random-access formats:
+    /// zip, rar, 7z, tar; not compressed tarballs), else null.
+    /// </summary>
+    /// <exception cref="Exception">The archive cannot be opened.</exception>
+    public long? FastUncompressedBytes(string archivePath)
+    {
+        using var session = _archives.Open(archivePath);
+        return session.FastUncompressedBytes;
+    }
+
     /// <summary>Extracts the archive of <paramref name="request"/> into its dataset; on failure the dataset is left as it was.</summary>
     /// <exception cref="Exceptions.InvalidDatasetPathException">An entry name is unsafe (zip-slip).</exception>
     /// <exception cref="Exceptions.QuotaExceededException">The cap or the disk head-room was reached.</exception>

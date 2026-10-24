@@ -61,45 +61,40 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
         }
         """);
 
-    private readonly IImportSourceFactory _factory;
-    private readonly IImportCredentialProtector _protector;
+    private readonly IImportSourceCatalog _sources;
+    private readonly ImportCredentials _credentials;
     private readonly TaskFileIndexer _indexer;
     private readonly ImportSettings _settings;
     private readonly long _diskSafetyMarginBytes;
-    private readonly IFileSystem _fs;
-    private readonly DatasetPathPolicy _paths;
     private readonly VolumeHeadroom _headroom;
-    private readonly ILogger<ImportDatasetTool> _logger;
+    private readonly DatasetFolderFiles _files;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ImportDatasetTool"/> class.
     /// </summary>
-    /// <param name="factory">The import source factory.</param>
-    /// <param name="protector">The credential protector used to decrypt stored secrets.</param>
+    /// <param name="sources">The import sources the server offers (registered, narrowed by the allow-list).</param>
+    /// <param name="credentials">Decrypts the stored secrets of the source parameters.</param>
     /// <param name="indexer">Indexes the imported files and queues their builds.</param>
     /// <param name="importSettings">The import settings.</param>
     /// <param name="platformSettings">The processing platform settings (size cap, disk safety margin).</param>
-    /// <param name="logger">The logger.</param>
+    /// <param name="headroom">The disk head-room of the dataset volume.</param>
+    /// <param name="files">The files of the dataset folder: what was there, what the import added, the rollback.</param>
     public ImportDatasetTool(
-        IImportSourceFactory factory,
-        IImportCredentialProtector protector,
+        IImportSourceCatalog sources,
+        ImportCredentials credentials,
         TaskFileIndexer indexer,
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
-        IFileSystem fs,
-        DatasetPathPolicy paths,
         VolumeHeadroom headroom,
-        ILogger<ImportDatasetTool> logger)
+        DatasetFolderFiles files)
     {
         _headroom = headroom;
-        _factory = factory;
-        _fs = fs;
-        _paths = paths;
-        _protector = protector;
+        _sources = sources;
+        _credentials = credentials;
         _indexer = indexer;
         _settings = importSettings.Value;
         _diskSafetyMarginBytes =
             platformSettings.Value.DiskSafetyMarginBytes;
-        _logger = logger;
+        _files = files;
     }
 
     /// <inheritdoc />
@@ -124,15 +119,8 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
     protected override Task ValidateAsync(HeavyToolRequest request, Parameters args,
         IHeavyToolValidationContext ctx, CancellationToken ct)
     {
-        var sourceType = args.SourceType;
-        if (string.IsNullOrWhiteSpace(sourceType))
-            throw new ArgumentException("A source type is required.");
-
-        if (!_factory.AvailableTypes.Contains(sourceType, StringComparer.OrdinalIgnoreCase))
-            throw new ArgumentException($"Unknown import source type '{sourceType}'.");
-
-        if (!_settings.IsSourceTypeAllowed(sourceType))
-            throw new ArgumentException($"The import source type '{sourceType}' is disabled on this server.");
+        if (_sources.Refusal(args.SourceType) is { } refusal)
+            throw new ArgumentException(refusal);
 
         if (args.SourceParams is null)
             throw new ArgumentException("Source parameters are required.");
@@ -158,23 +146,21 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
 
         // Defense in depth: re-check the allow-list on the worker, so a job enqueued before the
         // allow-list was tightened (or a crafted job) cannot run a now-disabled source type.
-        if (!_settings.IsSourceTypeAllowed(sourceType))
-            throw new InvalidOperationException(
-                $"The import source type '{sourceType}' is disabled on this server.");
+        if (!_sources.IsAllowed(sourceType))
+            throw new InvalidOperationException(ImportSourceCatalog.DisabledMessage(sourceType));
 
         var budgetBytes = args.BudgetBytes;
 
         var rawParams = args.SourceParams ?? throw new InvalidOperationException("Source parameters are required.");
 
-        var sourceParams = DecryptParams(sourceType, rawParams, _protector);
-        var source = _factory.Resolve(sourceType);
+        var sourceParams = _credentials.OpenParameters(sourceType, rawParams);
+        var source = _sources.Resolve(sourceType);
 
         var root = ctx.Ddb.DatasetFolderPath;
-        _fs.FolderCreate(root);
 
         // Resumability: files already present from a previous partial run are kept; only the files
         // written during THIS run are rolled back on a budget breach.
-        var before = EnumerateRelativeFiles(root).ToHashSet(StringComparer.Ordinal);
+        var before = _files.Prepare(root);
 
         // Effective cap = the tightest of: per-user remaining quota (budgetBytes), the absolute
         // MaxImportSizeBytes ceiling, and the free disk space minus the head-room (the safety
@@ -236,11 +222,11 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
 
         if (breached || timedOut)
         {
-            var added = EnumerateRelativeFiles(root).Where(f => !before.Contains(f)).ToList();
+            var added = _files.AddedSince(root, before);
             var reason = breached ? "Storage budget exceeded" : "Transfer timed out";
             progress.Report(new HeavyToolProgress(-1, "cleanup",
                 LogChunk: $"{reason} - rolling back {added.Count} file(s)"));
-            CleanupFiles(root, added);
+            _files.Delete(root, added);
 
             if (breached)
                 throw new QuotaExceededException(
@@ -256,7 +242,7 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
 
         // Index everything now in the dataset folder, queue the builds of the buildable files (children
         // of this task), invalidate the caches
-        var allFiles = EnumerateRelativeFiles(root).ToList();
+        var allFiles = _files.All(root).ToList();
         await _indexer.IndexAsync(new TaskFiles(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug, allFiles,
             ctx.BuildQueue, ctx.TaskId, "imported files"), progress, ct);
 
@@ -264,59 +250,6 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
             LogChunk: $"Import complete: {allFiles.Count} file(s) indexed"));
         return null;
     }
-
-    // The dataset walker (DatasetPathPolicy.EnumerateFiles): '/' separated relative paths, without
-    // any ".ddb" folder, which libddb never indexes, and the root ".uploads" staging/quarantine
-    // folder, whose in-flight files must not be indexed or rolled back.
-    private IEnumerable<string> EnumerateRelativeFiles(string root) => _paths.EnumerateFiles(_fs, root);
-
-    private void CleanupFiles(string root, IEnumerable<string> relativePaths)
-    {
-        foreach (var rel in relativePaths)
-        {
-            try
-            {
-                var local = DatasetPathPolicy.ToLocalPath(root, rel);
-                if (_fs.Exists(local))
-                    _fs.Delete(local);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not delete partially imported file '{Path}'", rel);
-            }
-        }
-    }
-
-    // Returns a copy of the source params with known sensitive fields decrypted in place.
-    // Only fields listed in ImportSourceDefinitions.SensitiveFields for the given sourceType are
-    // treated as ciphertext, so arbitrary user-supplied values cannot trigger Unprotect.
-    private static JsonElement DecryptParams(string sourceType, JsonElement paramsEl, IImportCredentialProtector protector)
-    {
-        var sensitive = ImportSourceDefinitions.SensitiveFields.TryGetValue(sourceType, out var fields)
-            ? fields
-            : (IReadOnlySet<string>)new HashSet<string>();
-
-        var obj = new JsonObject();
-        foreach (var prop in paramsEl.EnumerateObject())
-        {
-            if (prop.Value.ValueKind == JsonValueKind.String)
-            {
-                var s = prop.Value.GetString() ?? string.Empty;
-                obj[prop.Name] = sensitive.Contains(prop.Name) && s.StartsWith("ENC:", StringComparison.Ordinal)
-                    ? protector.Unprotect(s[4..])
-                    : s;
-            }
-            else
-            {
-                obj[prop.Name] = JsonNode.Parse(prop.Value.GetRawText());
-            }
-        }
-
-        using var doc = JsonDocument.Parse(obj.ToJsonString());
-        return doc.RootElement.Clone();
-    }
-
-
 
     private sealed class CallbackProgress<T>(Action<T> callback) : IProgress<T>
     {

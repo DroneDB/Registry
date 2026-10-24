@@ -13,6 +13,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Configuration;
 using Registry.Web.Services.Datasets;
 using Registry.Web.Services.Features;
+using Registry.Web.Services.Import;
 using Registry.Web.Services.Initialization;
 using Registry.Web.Services.Maintenance;
 using Registry.Web.Services.Managers;
@@ -97,6 +98,8 @@ public static class RegistryFeaturesServiceCollectionExtensions
 
         // Import orchestration (the import heavy tools are registered by AddImportSources for every job host)
         services.AddScoped<IImportManager, ImportManager>();
+        services.AddScoped<IImportQuotaGate, ImportQuotaGate>();
+        services.AddScoped<IImportTargetDatasets, ImportTargetDatasets>();
         services.AddScoped<IFileUrlImportManager, FileUrlImportManager>();
 
 

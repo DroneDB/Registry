@@ -62,7 +62,6 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
         }
         """);
 
-    private readonly IArchiveExtractor _extractor;
     private readonly DatasetArchiveExtractor _archives;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ProcessingPlatformSettings _settings;
@@ -72,7 +71,6 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
     private readonly TaskFileIndexer _indexer;
 
     public ArchiveExtractTool(
-        IArchiveExtractor extractor,
         DatasetArchiveExtractor archives,
         IServiceScopeFactory scopeFactory,
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
@@ -82,7 +80,6 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
     {
         _headroom = headroom;
         _indexer = indexer;
-        _extractor = extractor;
         _archives = archives;
         _paths = paths;
         _scopeFactory = scopeFactory;
@@ -113,7 +110,7 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
                     ?? throw new ArgumentException($"Archive '{sourcePath}' was not found in the dataset.");
         if (entry.Type == EntryType.Directory)
             throw new ArgumentException("The source path is a folder, not an archive.");
-        if (!_extractor.IsSupported(sourcePath))
+        if (!_archives.IsSupported(sourcePath))
             throw new ArgumentException($"'{sourcePath}' is not a supported archive format.");
 
         // The destination may not be an existing non-folder entry
@@ -138,8 +135,7 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
         long? uncompressed;
         try
         {
-            using var session = _extractor.Open(localArchive);
-            uncompressed = session.FastUncompressedBytes;
+            uncompressed = _archives.FastUncompressedBytes(localArchive);
         }
         catch (Exception ex)
         {
@@ -175,9 +171,7 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
             var sourcePath = args.SourcePath;
             if (!string.IsNullOrWhiteSpace(sourcePath))
             {
-                var localArchive = ctx.Ddb.GetLocalPath(sourcePath);
-                using var session = _extractor.Open(localArchive);
-                estimate = session.FastUncompressedBytes;
+                estimate = _archives.FastUncompressedBytes(ctx.Ddb.GetLocalPath(sourcePath));
             }
         }
         catch

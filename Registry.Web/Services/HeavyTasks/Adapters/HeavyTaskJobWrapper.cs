@@ -36,8 +36,7 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IHeavyToolRegistry _registry;
     private readonly ProcessingPlatformSettings _settings;
-    private readonly string _tempPath;
-    private readonly IFileSystem _fs;
+    private readonly TaskWorkDirectories _workDirs;
     private readonly FileJobs _files;
     private readonly ILogger<HeavyTaskJobWrapper> _log;
     private readonly ILogger<HangfireProgressSink> _sinkLog;
@@ -46,8 +45,7 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         IServiceScopeFactory scopeFactory,
         IHeavyToolRegistry registry,
         IOptions<ProcessingPlatformSettings> platformSettings,
-        IScratchFileProvider scratch,
-        IFileSystem fs,
+        TaskWorkDirectories workDirs,
         FileJobs files,
         ILogger<HeavyTaskJobWrapper> log,
         ILogger<HangfireProgressSink>? sinkLog = null)
@@ -55,8 +53,7 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         _scopeFactory = scopeFactory;
         _registry = registry;
         _settings = platformSettings.Value;
-        _tempPath = scratch.Root;
-        _fs = fs;
+        _workDirs = workDirs;
         _files = files;
         _log = log;
         _sinkLog = sinkLog ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<HangfireProgressSink>.Instance;
@@ -76,10 +73,7 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         var request = JsonSerializer.Deserialize<HeavyToolRequest>(requestJson)
                       ?? throw new InvalidOperationException("Invalid heavy task request payload.");
 
-        var workDir = tool.ProducesArtifact
-            ? TaskJobHelpers.ArtifactDirectory(taskId, _tempPath)
-              ?? throw new InvalidOperationException($"Invalid task id '{taskId}'.")
-            : null;
+        var workDir = _workDirs.PathFor(taskId, tool.ProducesArtifact);
 
         using var scope = _scopeFactory.CreateScope();
         var sp = scope.ServiceProvider;
@@ -98,8 +92,8 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
                      $"Dataset '{request.OrgSlug}/{request.DsSlug}' not found for task {taskId}.");
         var ddb = ddbManager.Get(request.OrgSlug, ds.InternalRef);
 
-        var execCtx = new HeavyToolExecutionContext(ddb, new DatasetKey(request.OrgSlug, ds.InternalRef), null, _log,
-            taskId, workDir, ctx, sp.GetRequiredService<IBuildScheduler>(), builds);
+        var execCtx = new HeavyToolExecutionContext(ddb, new DatasetKey(request.OrgSlug, ds.InternalRef), _log,
+            new TaskRun(taskId, workDir), ctx, sp.GetRequiredService<IBuildScheduler>(), builds);
         var logBuffer = new LogRingBuffer(_settings.LogTailMaxLines, _settings.LogTailMaxBytes);
         await using var progress = new HangfireProgressSink(ctx, _scopeFactory, logBuffer, taskId,
             _settings.ProgressUpdateThrottleSeconds, _sinkLog);
@@ -110,7 +104,7 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         try
         {
             if (workDir is not null)
-                _fs.FolderCreate(workDir);
+                _workDirs.Create(workDir);
 
             await tool.ValidateAsync(request, execCtx, cancellationToken);
             var artifact = await tool.ExecuteAsync(request, execCtx, progress, cancellationToken);
@@ -143,7 +137,7 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         finally
         {
             if (!keepWorkDir)
-                DeleteWorkDir(workDir);
+                _workDirs.Delete(workDir);
         }
     }
 
@@ -171,7 +165,4 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
     /// </summary>
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
     public void DeleteWorkDirJob(string workDir) => _files.Delete(workDir, null);
-
-    private void DeleteWorkDir(string? workDir) =>
-        _fs.TryDelete(workDir, ex => _log.LogWarning(ex, "Failed to delete task work directory '{Dir}'", workDir));
 }

@@ -96,9 +96,8 @@ public sealed class Rq10FileUrlImportVolumeTests
             ProcessingPlatform = new ProcessingPlatformSettings { DiskSafetyMarginBytes = 0 }
         });
 
-        return new FileUrlImportTool(downloader, guard, Mock.Of<IImportCredentialProtector>(),
-            Support.TestJobs.FileIndexer(), TestSettings.Options<ImportSettings>(options), TestSettings.Options<ProcessingPlatformSettings>(options), TestPaths.Policy, TestScratch.Provider,
-            NullLogger<FileUrlImportTool>.Instance);
+        return new FileUrlImportTool(downloader, new ImportCredentials(Mock.Of<IImportCredentialProtector>()),
+            Support.TestJobs.FileIndexer(), TestSettings.Options<ImportSettings>(options), TestSettings.Options<ProcessingPlatformSettings>(options), TestPaths.Policy, TestScratch.Provider);
     }
 
     private IHeavyToolExecutionContext Ctx(out Mock<IDDB> ddb)

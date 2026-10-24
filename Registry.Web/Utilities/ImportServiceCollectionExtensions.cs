@@ -7,6 +7,7 @@ using Registry.Web.Hosting;
 using Registry.Ports.Import;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.Import;
 using Registry.Web.Services.RemoteImport;
@@ -54,12 +55,14 @@ public static class ImportServiceCollectionExtensions
                     importSettings.MaxRedirects,
                     TimeSpan.FromSeconds(importSettings.ConnectTimeoutSeconds)));
         services.AddSingleton<IImportCredentialProtector, ImportCredentialProtector>();
+        services.AddSingleton<ImportCredentials>();
         services.AddSingleton<IRemoteRegistryClient, RemoteRegistryClient>();
 
         // One source per type (open-closed: add a new source = one line here).
         services.AddSingleton<IImportSource, RegistryImportSource>();
         services.AddSingleton<IImportSource, ArchiveUrlImportSource>();
         services.AddSingleton<IImportSourceFactory, ImportSourceFactory>();
+        services.AddSingleton<IImportSourceCatalog, ImportSourceCatalog>();
 
         // SSRF-hardened single-file downloader shared by the verify path and the import-file tool.
         services.AddSingleton<GuardedHttpDownloader>();
@@ -70,6 +73,9 @@ public static class ImportServiceCollectionExtensions
         services.AddScoped<IRemoteImportStrategy, ParallelFilesImportStrategy>();
         services.AddScoped<RemoteRegistryImporter>();
         services.AddScoped<RemoteImportJob>();
+
+        // The files of a dataset folder as the dataset import sees them (before, added, rollback)
+        services.AddSingleton<DatasetFolderFiles>();
 
         // The import heavy tools must run on every host that executes heavy tasks.
         services.AddSingleton<IHeavyTool, ImportDatasetTool>();

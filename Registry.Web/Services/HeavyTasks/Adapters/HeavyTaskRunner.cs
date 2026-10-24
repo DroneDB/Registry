@@ -4,9 +4,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Registry.Ports;
-using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
@@ -25,9 +23,8 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
     private readonly IDatasetResolver _datasets;
     private readonly IDdbManager _ddbManager;
     private readonly IHeavyTaskQuota _quota;
-    private readonly IJobIndexQuery _query;
+    private readonly IHeavyTaskDedup _dedup;
     private readonly IBackgroundJobsProcessor _processor;
-    private readonly ProcessingPlatformSettings _settings;
     private readonly ILogger<HeavyTaskRunner> _log;
 
     public HeavyTaskRunner(
@@ -35,18 +32,16 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         IDatasetResolver datasets,
         IDdbManager ddbManager,
         IHeavyTaskQuota quota,
-        IJobIndexQuery query,
+        IHeavyTaskDedup dedup,
         IBackgroundJobsProcessor processor,
-        IOptions<ProcessingPlatformSettings> settings,
         ILogger<HeavyTaskRunner> log)
     {
         _registry = registry;
         _datasets = datasets;
         _ddbManager = ddbManager;
         _quota = quota;
-        _query = query;
+        _dedup = dedup;
         _processor = processor;
-        _settings = settings.Value;
         _log = log;
     }
 
@@ -72,16 +67,11 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         var requestHash = HeavyTaskRequestHash.Compute(tool.Id, tool.Version, request.Hash, request.Params);
 
         // Dedup: workflow sub-tasks always force (never reuse a pre-existing terminal task).
-        if (_settings.DedupEnabled && !request.Force)
+        if (!request.Force &&
+            await _dedup.FindAsync(request.OrgSlug, request.DsSlug, tool.Id, requestHash, ct) is { } candidateId)
         {
-            var candidate = await _query.FindDedupCandidateAsync(
-                request.OrgSlug, request.DsSlug, tool.Id, requestHash, _settings.DedupLookbackHours, ct);
-
-            if (candidate is not null)
-            {
-                _log.LogInformation("Deduplicated task submit for tool {ToolId} -> {JobId}", tool.Id, candidate.JobId);
-                return new HeavyTaskSubmitResult(candidate.JobId, tool.Id, tool.Version, true, plan.EstimatedOutputBytes);
-            }
+            _log.LogInformation("Deduplicated task submit for tool {ToolId} -> {JobId}", tool.Id, candidateId);
+            return new HeavyTaskSubmitResult(candidateId, tool.Id, tool.Version, true, plan.EstimatedOutputBytes);
         }
 
         var quotaResult = await _quota.EvaluateAsync(request, plan, ct);
