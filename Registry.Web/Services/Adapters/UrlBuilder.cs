@@ -16,13 +16,11 @@ public class UrlBuilder : IUrlBuilder
 {
     private readonly HttpHostOptions _http;
     private readonly IHttpContextAccessor _accessor;
-    private readonly IBuildArtifactResolver _artifacts;
 
-    public UrlBuilder(IOptions<HttpHostOptions> http, IHttpContextAccessor accessor, IBuildArtifactResolver artifacts)
+    public UrlBuilder(IOptions<HttpHostOptions> http, IHttpContextAccessor accessor)
     {
         _http = http.Value;
         _accessor = accessor;
-        _artifacts = artifacts;
     }
 
     public string BuildFileUrl(string orgSlug, string dsSlug, string hash, string path) =>
@@ -42,7 +40,7 @@ public class UrlBuilder : IUrlBuilder
             {
                 Role = a.Role,
                 Url = BuildFileUrl(orgSlug, dsSlug, own.Hash!, a.Index is { Length: > 0 } index ? $"{a.Path}/{index}" : a.Path),
-                MediaType = _artifacts.ServedMediaType(a)
+                MediaType = a.MediaType
             })
         ];
     }

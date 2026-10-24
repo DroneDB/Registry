@@ -292,7 +292,7 @@
         {
           "role": "raster.cog",
           "url": "http://localhost/orgs/golden-org/ds/golden-ds/build/d0d2b869615dca09ef0055f2014401bab298503e3e1f10e339f14f5788ea702f/cog/cog.tif",
-          "mediaType": "image/tiff"
+          "mediaType": "image/tiff; application=geotiff; profile=cloud-optimized"
         }
       ]
     },

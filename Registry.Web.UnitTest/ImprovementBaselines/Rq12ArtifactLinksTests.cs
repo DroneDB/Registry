@@ -45,7 +45,7 @@ public sealed class Rq12ArtifactLinksTests
 
         links.Select(l => (l.Role, l.Url, l.MediaType)).ShouldBe(
         [
-            ("vector.gpkg", $"https://hub.example/orgs/org/ds/ds/build/{Hash}/vec/source.gpkg", "application/geopackage+sqlite"),
+            ("vector.gpkg", $"https://hub.example/orgs/org/ds/ds/build/{Hash}/vec/source.gpkg", "application/geopackage+sqlite3"),
             ("vector.mvt", $"https://hub.example/orgs/org/ds/ds/build/{Hash}/mvt/metadata.json", "application/json"),
             ("vector.future", $"https://hub.example/orgs/org/ds/ds/build/{Hash}/future/data.bin", "application/x-future")
         ]);
@@ -89,7 +89,7 @@ public sealed class Rq12ArtifactLinksTests
         entries[0].Artifacts!.Single().ShouldSatisfyAllConditions(
             a => a.Role.ShouldBe("raster.cog"),
             a => a.Url.ShouldBe($"https://hub.example/orgs/org/ds/ds/build/{Hash}/cog/cog.tif"),
-            a => a.MediaType.ShouldBe("image/tiff"));
+            a => a.MediaType.ShouldBe("image/tiff; application=geotiff; profile=cloud-optimized"));
         entries[1].Artifacts.ShouldBeNull("nothing built yet: the field is absent");
         entries[2].Artifacts.ShouldBeNull("not a buildable type");
     }

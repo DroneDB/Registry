@@ -152,17 +152,17 @@ public sealed class Rq11BuildFilesHttpTests : IDisposable
     private static IEnumerable<TestCaseData> Downloads()
     {
         yield return new TestCaseData("ortho.tif", EntryType.GeoRaster, ArtifactRoles.RasterCog, "cog/cog.tif",
-            "image/tiff; application=geotiff; profile=cloud-optimized", "cog.tif", "image/tiff").SetName("{m}(cog)");
+            "image/tiff; application=geotiff; profile=cloud-optimized", "cog.tif").SetName("{m}(cog)");
         yield return new TestCaseData("cloud.laz", EntryType.PointCloud, ArtifactRoles.PointCloudCopc,
-            "copc/cloud.copc.laz", "application/vnd.laszip+copc", "cloud.copc.laz", "application/octet-stream")
+            "copc/cloud.copc.laz", "application/vnd.laszip+copc", "cloud.copc.laz")
             .SetName("{m}(copc)");
         yield return new TestCaseData("roads.geojson", EntryType.Vector, ArtifactRoles.VectorGpkg, "vec/source.gpkg",
-            "application/geopackage+sqlite3", "source.gpkg", "application/geopackage+sqlite").SetName("{m}(gpkg)");
+            "application/geopackage+sqlite3", "source.gpkg").SetName("{m}(gpkg)");
     }
 
     [TestCaseSource(nameof(Downloads))]
-    public async Task BuildArtifact_IsTheManifestsDownload_WithTodaysMediaType(string path, EntryType type,
-        string role, string artifactPath, string manifestType, string downloadName, string servedType)
+    public async Task BuildArtifact_IsTheManifestsDownload_WithTheManifestsMediaType(string path, EntryType type,
+        string role, string artifactPath, string manifestType, string downloadName)
     {
         BuildFile(artifactPath, "artifact bytes");
         SetupEntry(path, type, BuildState.Complete,
@@ -171,7 +171,7 @@ public sealed class Rq11BuildFilesHttpTests : IDisposable
         using var response = await SendAsync(HttpMethod.Get, $"/orgs/{Org}/ds/{Ds}/build-artifact?path={path}");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        response.Content.Headers.ContentType!.ToString().ShouldBe(servedType);
+        response.Content.Headers.ContentType!.ToString().ShouldBe(manifestType);
         response.Content.Headers.ContentDisposition!.FileName.ShouldBe(downloadName);
         (await response.Content.ReadAsStringAsync()).ShouldBe("artifact bytes");
     }

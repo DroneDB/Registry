@@ -106,18 +106,18 @@ public class BuildArtifactResolverTests
 
     private static IEnumerable<TestCaseData> ServedTypes()
     {
-        yield return new TestCaseData(Cog, "image/tiff").SetName("{m}(cog)");
+        yield return new TestCaseData(Cog, "image/tiff; application=geotiff; profile=cloud-optimized").SetName("{m}(cog)");
         yield return new TestCaseData(TestBuilds.File(ArtifactRoles.PointCloudCopc, "copc/cloud.copc.laz",
-            "application/vnd.laszip+copc", "cloud.copc.laz"), "application/octet-stream").SetName("{m}(copc)");
+            "application/vnd.laszip+copc", "cloud.copc.laz"), "application/vnd.laszip+copc").SetName("{m}(copc)");
         yield return new TestCaseData(TestBuilds.File(ArtifactRoles.VectorGpkg, "vec/source.gpkg",
-            "application/geopackage+sqlite3", "source.gpkg"), "application/geopackage+sqlite").SetName("{m}(gpkg)");
-        // A role Registry does not know is served as libddb describes it (a new format needs no change)
+            "application/geopackage+sqlite3", "source.gpkg"), "application/geopackage+sqlite3").SetName("{m}(gpkg)");
+        // Every role is served as libddb describes it (a new format needs no change)
         yield return new TestCaseData(TestBuilds.File("future.role", "future/data.bin", "application/x-future",
             "data.bin"), "application/x-future").SetName("{m}(unknown role)");
     }
 
     [TestCaseSource(nameof(ServedTypes))]
-    public void Download_IsTheArtifactWithADownloadName_ServedWithTodaysMediaType(BuildArtifact artifact,
+    public void Download_IsTheArtifactWithADownloadName_ServedWithTheManifestsMediaType(BuildArtifact artifact,
         string served)
     {
         var download = _resolver.GetDownload(Built("entry", EntryType.GeoRaster,

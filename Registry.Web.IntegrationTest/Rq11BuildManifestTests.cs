@@ -110,7 +110,7 @@ public class Rq11BuildManifestTests
     }
 
     [Test]
-    public void Download_OfABuiltGeoRaster_IsItsCog_WithTodaysMediaType()
+    public void Download_OfABuiltGeoRaster_IsItsCog_WithTheManifestsMediaType()
     {
         var ddb = DatasetWithGeoRaster();
         ddb.Build("ortho.tif");
@@ -120,7 +120,7 @@ public class Rq11BuildManifestTests
         File.Exists(download.LocalPath).ShouldBeTrue(download.LocalPath);
         Path.IsPathRooted(download.LocalPath).ShouldBeTrue();
         download.FileName.ShouldBe("cog.tif");
-        download.MediaType.ShouldBe("image/tiff");
+        download.MediaType.ShouldBe("image/tiff; application=geotiff; profile=cloud-optimized");
     }
 
     [Test]

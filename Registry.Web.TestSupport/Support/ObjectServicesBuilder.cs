@@ -132,7 +132,7 @@ public sealed class ObjectServicesBuilder
             new CurrentUserBuildRequester(authManager), NullLogger<BuildScheduler>.Instance);
         services.AddSingleton<IBuildScheduler>(scheduler);
         services.AddSingleton<IUrlBuilder>(new UrlBuilder(TestSettings.Options<HttpHostOptions>(settings),
-            new Microsoft.AspNetCore.Http.HttpContextAccessor(), artifacts));
+            new Microsoft.AspNetCore.Http.HttpContextAccessor()));
         services.AddSingleton(_jobIndexWriter ?? Mock.Of<IJobIndexWriter>());
         services.AddSingleton<IUploadManager>(new UploadManager(NullLogger<UploadManager>.Instance, authManager, access,
             ddbManager, fileSystem, thumbnails, TestSettings.Options<ImportSettings>(settings), scheduler,
