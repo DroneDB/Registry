@@ -123,7 +123,7 @@ public sealed class HostResourceBudget
 
         return new HostResourceBudget(role, share, machine, process, processing,
             lanes.TilesFor(process.Cores), lanes.HeavyFor(process.Cores),
-            new DdbProcessSettings(cpuPool, ioThreads, ddb.MinFreeDiskMb, ddb.CacheDir), declared,
+            new DdbProcessSettings(cpuPool, ioThreads, ddb.MinFreeDiskMb, ddb.CacheDir, ddb.GdalCacheMb), declared,
             options, ddb, environment);
     }
 
@@ -168,7 +168,7 @@ public sealed class HostResourceBudget
         $"{Role}: {Share:P0} of {Machine.Cores} core(s) and {Machine.MemoryBytes / BytesPerMiB} MiB" +
         $"{(Declared ? "" : " (no host budget declared: the whole machine)")} = {Process.Cores} core(s), " +
         $"{Process.MemoryBytes / BytesPerMiB} MiB; render lanes {RenderTiles} tiles / {RenderHeavy} heavy; " +
-        $"libddb cpuPoolSize {Describe(Ddb.CpuPoolSize)}, ioThreads {Describe(Ddb.IoThreads)}" +
+        $"libddb cpuPoolSize {Describe(Ddb.CpuPoolSize)}, ioThreads {Describe(Ddb.IoThreads)}, gdalCacheMb {Describe(Ddb.GdalCacheMb)}" +
         (Processing is { } p ? $"; jobs {p}" : "");
 
     private static int Count(InstanceType role, InstanceType counted, int declared) =>

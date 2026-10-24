@@ -621,7 +621,7 @@ public unsafe class LibddbContractTests : TestBase
 
         Ok(NativeDdb.DDBConfigure(new JObject
         {
-            ["cacheDir"] = cache, ["cpuPoolSize"] = 3, ["ioThreads"] = 2, ["minFreeDiskMb"] = 256
+            ["cacheDir"] = cache, ["cpuPoolSize"] = 3, ["gdalCacheMb"] = 256, ["ioThreads"] = 2, ["minFreeDiskMb"] = 256
         }.ToString(Formatting.None)), "DDBConfigure");
         try
         {
@@ -634,9 +634,10 @@ public unsafe class LibddbContractTests : TestBase
             ShouldEqualJson(config, ParseJson("""
                 {
                   "hardwareThreads": 0,
-                  "settings": {"cacheDir": "<cache>", "cpuPoolSize": 3, "ioThreads": 2, "minFreeDiskMb": 256},
-                  "sources": {"cacheDir": "configure", "cpuPoolSize": "configure", "ioThreads": "configure",
-                              "minFreeDiskMb": "configure"}
+                  "settings": {"cacheDir": "<cache>", "cpuPoolSize": 3, "gdalCacheMb": 256, "ioThreads": 2,
+                               "minFreeDiskMb": 256},
+                  "sources": {"cacheDir": "configure", "cpuPoolSize": "configure", "gdalCacheMb": "configure",
+                              "ioThreads": "configure", "minFreeDiskMb": "configure"}
                 }
                 """));
 
@@ -644,7 +645,8 @@ public unsafe class LibddbContractTests : TestBase
             foreach (var invalid in new[]
                      {
                          null, "[]", "not json", """{"cpuPoolSizee": 1}""", """{"ioThreads": 0}""",
-                         """{"cpuPoolSize": 1, "minFreeDiskMb": -1}""", """{"cacheDir": "relative/folder"}"""
+                         """{"cpuPoolSize": 1, "minFreeDiskMb": -1}""", """{"cacheDir": "relative/folder"}""",
+                         """{"gdalCacheMb": 15}""", """{"gdalCacheMb": 1048577}""", """{"gdalCacheMb": "256"}"""
                      })
                 Fails(NativeDdb.DDBConfigure(invalid), DdbResult.InvalidArgs, $"DDBConfigure({invalid ?? "NULL"})");
             ShouldEqualJson(EffectiveConfig(), before, "an invalid DDBConfigure changes nothing");
@@ -652,7 +654,7 @@ public unsafe class LibddbContractTests : TestBase
         finally
         {
             Ok(NativeDdb.DDBConfigure(
-                """{"cacheDir": null, "cpuPoolSize": null, "ioThreads": null, "minFreeDiskMb": null}"""),
+                """{"cacheDir": null, "cpuPoolSize": null, "gdalCacheMb": null, "ioThreads": null, "minFreeDiskMb": null}"""),
                 "DDBConfigure(reset)");
         }
 

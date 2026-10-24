@@ -108,9 +108,12 @@ public class Rq07HostBudgetTests
     public void ExplicitLibddbSettings_Win()
     {
         var budget = Budget(InstanceType.ProcessingNode, Production,
-            new DdbRuntimeOptions { CpuPoolSize = 12, IoThreads = 7, MinFreeDiskMb = 2048, CacheDir = "/data/temp/ddb-cache" });
+            new DdbRuntimeOptions
+            {
+                CpuPoolSize = 12, IoThreads = 7, MinFreeDiskMb = 2048, CacheDir = "/data/temp/ddb-cache", GdalCacheMb = 384
+            });
 
-        budget.Ddb.ShouldBe(new DdbProcessSettings(12, 7, 2048, "/data/temp/ddb-cache"));
+        budget.Ddb.ShouldBe(new DdbProcessSettings(12, 7, 2048, "/data/temp/ddb-cache", 384));
     }
 
     [Test]

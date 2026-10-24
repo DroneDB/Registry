@@ -99,6 +99,8 @@ public class NativeDdbDeclarationTests
         NativeDdbRuntime.ToConfigureJson(new Ports.DroneDB.DdbProcessSettings()).ShouldBe("{}");
         NativeDdbRuntime.ToConfigureJson(new Ports.DroneDB.DdbProcessSettings(3, 2, 256, "/data/temp/ddb-cache"))
             .ShouldBe("""{"cpuPoolSize":3,"ioThreads":2,"minFreeDiskMb":256,"cacheDir":"/data/temp/ddb-cache"}""");
+        NativeDdbRuntime.ToConfigureJson(new Ports.DroneDB.DdbProcessSettings(GdalCacheMb: 512))
+            .ShouldBe("""{"gdalCacheMb":512}""");
         NativeDdbRuntime.ToConfigureJson(new Ports.DroneDB.DdbProcessSettings(IoThreads: 8)).ShouldBe("""{"ioThreads":8}""");
     }
 }

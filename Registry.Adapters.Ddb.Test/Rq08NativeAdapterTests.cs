@@ -123,6 +123,28 @@ public class Rq08NativeAdapterTests : TestBase
         }
     }
 
+    /// <summary>XI-06: the GDAL cache budget of the host is what libddb reports as its effective setting, and what null puts back.</summary>
+    [Test]
+    public void Configure_GdalCacheMb_IsLibddbsEffectiveSetting_UntilItIsPutBack()
+    {
+        var before = DdbEffectiveConfig.Parse(Runtime.GetEffectiveConfig()).GdalCacheMb;
+        before.ShouldBeGreaterThanOrEqualTo(16, "libddb reports its default or the bound from DDB_GDAL_CACHE_MB");
+
+        Runtime.Configure(new DdbProcessSettings(GdalCacheMb: 96));
+        try
+        {
+            DdbEffectiveConfig.Parse(Runtime.GetEffectiveConfig()).GdalCacheMb.ShouldBe(96);
+            Should.Throw<DdbInvalidArgumentsException>(() => Runtime.Configure(new DdbProcessSettings(GdalCacheMb: 15)));
+            DdbEffectiveConfig.Parse(Runtime.GetEffectiveConfig()).GdalCacheMb.ShouldBe(96, "a refused value changes nothing");
+        }
+        finally
+        {
+            Ok(NativeDdb.DDBConfigure("""{"gdalCacheMb": null}"""), "DDBConfigure(reset)");
+        }
+
+        DdbEffectiveConfig.Parse(Runtime.GetEffectiveConfig()).GdalCacheMb.ShouldBe(before);
+    }
+
     [Test]
     public void EntryTypes_AreLibddbs()
     {

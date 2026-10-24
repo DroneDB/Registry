@@ -288,13 +288,15 @@
       "minFreeDiskMb": 1234567890123,
       "cpuPoolSize": 42,
       "ioThreads": 42,
-      "cacheDir": "CacheDir-text"
+      "cacheDir": "CacheDir-text",
+      "gdalCacheMb": 42
     },
     "sparse": {
       "minFreeDiskMb": 0,
       "cpuPoolSize": 0,
       "ioThreads": 0,
-      "cacheDir": null
+      "cacheDir": null,
+      "gdalCacheMb": 0
     }
   },
   "Registry.Ports.DroneDB.Delta": {

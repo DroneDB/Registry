@@ -12,7 +12,9 @@ namespace Registry.Ports.DroneDB;
 /// <param name="CpuPoolSize">Worker threads libddb runs beside the calling threads.</param>
 /// <param name="IoThreads">Threads of one disk-bound section.</param>
 /// <param name="CacheDir">libddb's cache folder.</param>
-public sealed record DdbEffectiveConfig(long MinFreeDiskMb, int CpuPoolSize, int IoThreads, string? CacheDir)
+/// <param name="GdalCacheMb">Size in MiB of GDAL's block cache (0: a libddb that does not report it).</param>
+public sealed record DdbEffectiveConfig(long MinFreeDiskMb, int CpuPoolSize, int IoThreads, string? CacheDir,
+    int GdalCacheMb = 0)
 {
     /// <summary>Parses the <c>DDBGetEffectiveConfig()</c> JSON (unknown fields are ignored).</summary>
     /// <exception cref="FormatException">The JSON has no <c>settings</c> object or no <c>minFreeDiskMb</c>.</exception>
@@ -29,7 +31,8 @@ public sealed record DdbEffectiveConfig(long MinFreeDiskMb, int CpuPoolSize, int
             Number<long>(settings, "minFreeDiskMb") ?? throw new FormatException("DDBGetEffectiveConfig: no 'minFreeDiskMb'"),
             (int?)Number<long>(settings, "cpuPoolSize") ?? 0,
             (int?)Number<long>(settings, "ioThreads") ?? 0,
-            settings.TryGetProperty("cacheDir", out var cacheDir) && cacheDir.ValueKind == JsonValueKind.String ? cacheDir.GetString() : null);
+            settings.TryGetProperty("cacheDir", out var cacheDir) && cacheDir.ValueKind == JsonValueKind.String ? cacheDir.GetString() : null,
+            (int?)Number<long>(settings, "gdalCacheMb") ?? 0);
     }
 
     private static T? Number<T>(JsonElement parent, string field) where T : struct, System.Numerics.INumber<T> =>

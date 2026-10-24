@@ -45,12 +45,15 @@ public class Rq08DdbRuntimeTests
     public async Task Starting_SetsTheLogSinkAndTheConfiguration_BeforeRegisterProcess()
     {
         var runtime = new FakeDdbRuntime();
-        var options = new DdbRuntimeOptions { CpuPoolSize = 6, IoThreads = 2, MinFreeDiskMb = 1024, CacheDir = "/data/temp/ddb-cache" };
+        var options = new DdbRuntimeOptions
+        {
+            CpuPoolSize = 6, IoThreads = 2, MinFreeDiskMb = 1024, CacheDir = "/data/temp/ddb-cache", GdalCacheMb = 256
+        };
 
         await Service(runtime, options).StartingAsync(CancellationToken.None);
 
         runtime.Calls.ShouldBe(["SetLogSink", "Configure", "RegisterProcess"]);
-        runtime.Settings.ShouldBe(new DdbProcessSettings(6, 2, 1024, "/data/temp/ddb-cache"));
+        runtime.Settings.ShouldBe(new DdbProcessSettings(6, 2, 1024, "/data/temp/ddb-cache", 256));
         runtime.LogSink.ShouldBeOfType<DdbLogSink>();
     }
 
@@ -104,6 +107,50 @@ public class Rq08DdbRuntimeTests
         });
 
         Should.Throw<OptionsValidationException>(() => factory.CreateClient()).Message.ShouldContain("IoThreads");
+    }
+
+    /// <summary>XI-06: the GDAL cache size is validated against libddb's range at the start, not by libddb's refusal of it.</summary>
+    [TestCase("8")]
+    [TestCase("15")]
+    [TestCase("1048577")]
+    public void GdalCacheMb_OutsideLibddbsRange_FailsTheStart(string megabytes)
+    {
+        using var factory = new RegistryWebFactory(new System.Collections.Generic.Dictionary<string, string>
+        {
+            ["Ddb:GdalCacheMb"] = megabytes
+        });
+
+        Should.Throw<OptionsValidationException>(() => factory.CreateClient()).Message.ShouldContain("GdalCacheMb");
+    }
+
+    [TestCase("16")]
+    [TestCase("1048576")]
+    public async Task GdalCacheMb_InsideTheRange_ReachesLibddbConfigure(string megabytes)
+    {
+        var factory = new RegistryWebFactory(new System.Collections.Generic.Dictionary<string, string>
+        {
+            ["Ddb:GdalCacheMb"] = megabytes
+        });
+        try
+        {
+            using var client = factory.CreateClient();
+
+            factory.DdbRuntime.Settings!.GdalCacheMb.ShouldBe(int.Parse(megabytes, CultureInfo.InvariantCulture));
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [Test]
+    public async Task GdalCacheMb_LeftOut_IsNotSent_SoLibddbKeepsItsDefault()
+    {
+        var runtime = new FakeDdbRuntime();
+
+        await Service(runtime).StartingAsync(CancellationToken.None);
+
+        runtime.Settings!.GdalCacheMb.ShouldBeNull();
     }
 
     [TestCase(null, "/data/temp", "/data/temp/ddb-cache")]
