@@ -232,6 +232,17 @@ constructors() {
             printf "%s %d\n", $name, ($p eq "" ? 0 : (() = $p =~ /,/g) + 1) }'
 }
 
+# "<class> <parameters>" for every public or internal constructor of the classes declared in the given files (NUL-separated on
+# stdin), calls such as ": this(a, b(c))" included in what the parameter list may be followed by (a plain
+# [^)]* stops at the first nested parenthesis and reads two constructors as one).
+all_constructors() {
+    list_files | xargs -0 -r perl -0777 -ne 'my %cls; while (/\bclass (\w+)/g) { $cls{$1} = 1 } pos($_) = 0;
+        while (/\b(?:public|internal) (\w+)\(([^{;]*?)\)\s*(?::\s*(?:base|this)\((?:[^()]|\([^()]*\))*\)\s*)?\{/gs) {
+            my ($name, $p) = ($1, $2); next unless $cls{$name};
+            $p =~ s/<[^<>]*>//g while $p =~ /<[^<>]*>/; $p =~ s/\s+//g;
+            printf "%s %d\n", $name, ($p eq "" ? 0 : (() = $p =~ /,/g) + 1) }'
+}
+
 metrics() {
     m() { printf '%s\t%s\n' "$1" "$2"; }
 
@@ -256,7 +267,8 @@ metrics() {
     m "Category string literals (use TestCategories)" "$(tests | lines '\[(assembly: )?Category\("')"
 
     # Error model (RQ-05). "Managers" includes the services of the objects slice (Services/Objects, RQ-11),
-    # which took over ObjectsManager's code
+    # which took over ObjectsManager's code, and the folders RQ-12 moved the code of the organizations, tasks and
+    # upload managers to (Services/Organizations, PlatformTasks, Uploads)
     m "Controller log+rethrow catch blocks"          "$(paths ':(glob)Registry.Web/Controllers/**/*.cs' |
         multiline 'catch \(Exception \w+\)\s*\{\s*_logger\.Log\w+\([^;]*;\s*throw;')"
     m "catch (Exception ...) total"                  "$(prod '' | lines 'catch \(Exception\b')"
@@ -265,9 +277,12 @@ metrics() {
     m "Controller entry debug traces"                "$(paths ':(glob)Registry.Web/Controllers/**/*.cs' |
         multiline '_logger\.LogDebug\(\s*"[^"]*[Cc]ontroller')"
     m "Controller Content-Length pre-checks"         "$(prod Registry.Web/Controllers | lines 'Request\.ContentLength is \{ \} \w+ && \w+ >')"
-    m "InvalidOperationException thrown by managers" "$(prod Registry.Web/Services/Managers Registry.Web/Services/Objects | lines 'throw new InvalidOperationException')"
-    m "ArgumentException thrown by managers"         "$(prod Registry.Web/Services/Managers Registry.Web/Services/Objects | lines 'throw new ArgumentException\(')"
-    m "UnauthorizedException thrown by managers"     "$(prod Registry.Web/Services/Managers Registry.Web/Services/Objects | lines 'throw new UnauthorizedException')"
+    m "InvalidOperationException thrown by managers" "$(prod Registry.Web/Services/Managers Registry.Web/Services/Objects Registry.Web/Services/Organizations \
+        Registry.Web/Services/PlatformTasks Registry.Web/Services/Uploads | lines 'throw new InvalidOperationException')"
+    m "ArgumentException thrown by managers"         "$(prod Registry.Web/Services/Managers Registry.Web/Services/Objects Registry.Web/Services/Organizations \
+        Registry.Web/Services/PlatformTasks Registry.Web/Services/Uploads | lines 'throw new ArgumentException\(')"
+    m "UnauthorizedException thrown by managers"     "$(prod Registry.Web/Services/Managers Registry.Web/Services/Objects Registry.Web/Services/Organizations \
+        Registry.Web/Services/PlatformTasks Registry.Web/Services/Uploads | lines 'throw new UnauthorizedException')"
     m "Web files importing Registry.Adapters"        "$(prod Registry.Web | list_files_matching '^using Registry\.Adapters')"
 
     # Access and authorization (RQ-06)
@@ -387,6 +402,9 @@ metrics() {
     # Registry.Web (XI-04, D8)
     m "RQ-12 files over 800 lines"                   "$(rq12 | list_files | xargs -0 -r wc -l | awk '$2 != "total" && $1 > 800' | wc -l | tr -d ' ')"
     m "RQ-12 constructors over 7 parameters"         "$(rq12 | constructors | awk '$2 > 7' | wc -l | tr -d ' ')"
+    m "Registry.Web constructors over 7 parameters"  "$(prod Registry.Web | all_constructors | awk '$2 > 7' | wc -l | tr -d ' ')"
+    m "Registry.Web files over 800 lines"            "$(prod Registry.Web | list_files | xargs -0 -r wc -l | awk '$2 != "total" && $1 > 800' | wc -l | tr -d ' ')"
+    m "Whole-section AppSettings in the container"   "$(prod '' | lines '(AddOptions|IOptions|IOptionsMonitor|IOptionsSnapshot)<AppSettings>')"
     m "Files injecting IUtils"                       "$(prod Registry.Web | list_files_matching '\bIUtils\b')"
     m "Build enqueue call sites outside the build scheduler" "$({ prod Registry.Web; paths ':(exclude,glob)**/QueueDdbJobs.cs' \
         ':(exclude,glob)**/BuildScheduler.cs'; } | lines '\.(EnqueueBuild|EnqueueBuildPending|ScheduleBuildPending)\(')"

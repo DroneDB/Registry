@@ -24,7 +24,7 @@ Controller Content-Length pre-checks	0
 InvalidOperationException thrown by managers	4
 ArgumentException thrown by managers	3
 UnauthorizedException thrown by managers	3
-Web files importing Registry.Adapters	6
+Web files importing Registry.Adapters	3
 RequestAccess + throw blocks	0
 IsUserAdmin() guard + throw blocks	2
 Sync _utils.GetDataset/GetOrganization calls	0
@@ -45,7 +45,7 @@ HttpContextAccessor registrations	1
 Hangfire dashboard registrations	1
 IOptions<AppSettings> uses	0
 Files consuming IOptions<AppSettings>	0
-Inline ?? new XSettings() defaults	6
+Inline ?? new XSettings() defaults	0
 Service-locator calls in Services/Initialization	0
 .Wait() / Task.Delay in startup code	0
 Console helper calls in Program+Startup	0
@@ -97,6 +97,9 @@ Build-layout literals in production C#	12
 Per-entry build probe calls	0
 RQ-12 files over 800 lines	0
 RQ-12 constructors over 7 parameters	0
+Registry.Web constructors over 7 parameters	5
+Registry.Web files over 800 lines	0
+Whole-section AppSettings in the container	0
 Files injecting IUtils	0
 Build enqueue call sites outside the build scheduler	2
 Pending-flag writes outside the build scheduler	0
