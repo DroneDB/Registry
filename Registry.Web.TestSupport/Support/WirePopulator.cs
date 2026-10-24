@@ -179,7 +179,7 @@ public sealed class WirePopulator(Func<Type, string, object?> jsonLiteral)
             }
             catch (TargetInvocationException) when (!full)
             {
-                // A constructor that dereferences its arguments (AuthenticateResponse(User, ...)): sparse members, full arguments
+                // A constructor that dereferences its arguments: sparse members, full arguments
                 instance = ctor.Invoke(parameters.Select(p => Populate(p.ParameterType, true, p.Name ?? "arg", depth + 1)).ToArray());
             }
         }

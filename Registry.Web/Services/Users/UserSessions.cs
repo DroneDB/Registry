@@ -88,7 +88,7 @@ public sealed class UserSessions : IUserSessions
         // authentication successful so generate jwt token
         var tokenDescriptor = await _tokens.IssueAsync(user);
 
-        return new AuthenticateResponse(user, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
+        return new AuthenticateResponse(user.UserName, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
     }
 
     public async Task<AuthenticateResponse> Authenticate(string token)
@@ -119,7 +119,7 @@ public sealed class UserSessions : IUserSessions
         // Authentication successful so generate jwt token
         var tokenDescriptor = await _tokens.IssueAsync(user);
 
-        return new AuthenticateResponse(user, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
+        return new AuthenticateResponse(user.UserName, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
     }
 
     public async Task<AuthenticateResponse> Refresh()
@@ -131,6 +131,6 @@ public sealed class UserSessions : IUserSessions
 
         var tokenDescriptor = await _tokens.IssueAsync(user);
 
-        return new AuthenticateResponse(user, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
+        return new AuthenticateResponse(user.UserName, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
     }
 }

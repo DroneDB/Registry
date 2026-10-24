@@ -671,14 +671,14 @@
   },
   "Registry.Web.Models.AuthenticateResponse": {
     "full": {
-      "username": "UserName-text",
+      "username": "username-text",
       "token": "token-text",
       "expires": 1792567877
     },
     "sparse": {
-      "username": "UserName-text",
-      "token": "token-text",
-      "expires": 1792567877
+      "username": null,
+      "token": null,
+      "expires": -62135596800
     }
   },
   "Registry.Web.Models.ChangePasswordResult": {

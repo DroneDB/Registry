@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Text.Json.Serialization;
 using Registry.Ports.Json;
-using Registry.Web.Identity.Models;
 
 namespace Registry.Web.Models;
 
@@ -16,9 +15,9 @@ public class AuthenticateResponse
     [JsonConverter(typeof(UnixSecondsConverter))]
     public DateTime Expires { get; }
         
-    public AuthenticateResponse(User user, string token, DateTime expires)
+    public AuthenticateResponse(string username, string token, DateTime expires)
     {
-        Username = user.UserName;
+        Username = username;
         Token = token;
         Expires = expires;
     }
