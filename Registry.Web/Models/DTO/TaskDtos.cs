@@ -3,11 +3,11 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Newtonsoft.Json.Linq;
 
 namespace Registry.Web.Models.DTO;
 
 /// <summary>Catalog entry describing an available tool (GET /tasks/tools).</summary>
+/// <remarks><c>InputSchema</c> is the tool's JSON Schema, written as the document it is.</remarks>
 public sealed record TaskToolDto(
     string Id,
     string Version,
@@ -25,9 +25,7 @@ public sealed class SubmitTaskRequestDto
     [JsonPropertyName("toolId")] public string ToolId { get; set; } = null!;
     [JsonPropertyName("version")] public string? Version { get; set; }
     [JsonPropertyName("path")] public string? Path { get; set; }
-    // JsonElement (System.Text.Json struct) is not bindable by Newtonsoft.Json model binding.
-    // JToken? is the Newtonsoft equivalent: correctly receives any JSON value.
-    [Newtonsoft.Json.JsonProperty("params")] public JToken? Params { get; set; }
+    [JsonPropertyName("params")] public JsonElement? Params { get; set; }
     [JsonPropertyName("force")] public bool Force { get; set; }
 }
 

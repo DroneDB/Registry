@@ -1,8 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.CodeAnalysis.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Common;
@@ -21,7 +20,7 @@ public class BatchTokenGenerator : IBatchTokenGenerator
 
     public const int MinTokenLength = 8;
 
-    public BatchTokenGenerator(IOptions<AppSettings> settings, ILogger<BatchTokenGenerator> logger)
+    public BatchTokenGenerator(IOptions<ShareOptions> settings, ILogger<BatchTokenGenerator> logger)
     {
         _tokenLength = settings.Value.BatchTokenLength;
 

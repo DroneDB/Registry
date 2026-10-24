@@ -6,7 +6,6 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
-using Hangfire.Console;
 using Hangfire.Server;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -16,6 +15,7 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Attributes;
 using Registry.Web.Data;
 using Registry.Web.Models;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using static Registry.Web.Services.CacheCategories;
@@ -26,14 +26,23 @@ namespace Registry.Web.Services.Adapters;
 /// Service for processing pending builds across all datasets.
 /// Uses cache optimization to reduce unnecessary filesystem scans.
 /// </summary>
-public class BuildPendingService
+/// <remarks>
+/// The recurring sweep (<see cref="ProcessPendingBuilds(PerformContext, CancellationToken)"/>) is not
+/// retried: it runs again later. Its success records are noise and expire quickly. One sweep at a
+/// time across the hosts: the per-dataset coordinator lock keeps two from enqueueing twice, but
+/// both would scan every dataset. Timeout 0: the sweep in progress does the work.
+/// </remarks>
+[AutomaticRetry(Attempts = 0)]
+[JobExpiration(ExpirationTimeoutInMinutes = 60)]
+[DisableConcurrentExecution(timeoutInSeconds: 0)]
+public class BuildPendingService : Builds.IPendingBuildFlag
 {
-    private readonly RegistryContext _context;
+    private readonly DatasetSweep _sweep;
     private readonly IDdbManager _ddbManager;
     private readonly IBackgroundJobsProcessor _backgroundJob;
     private readonly ICacheManager _cacheManager;
     private readonly ILogger<BuildPendingService> _logger;
-    private readonly JobStorage? _storage;
+    private readonly JobStorage _storage;
     private readonly string? _mysqlConnectionString;
 
     // Statistics tracking
@@ -43,20 +52,20 @@ public class BuildPendingService
     private readonly Lock _statsLock = new();
 
     public BuildPendingService(
-        RegistryContext context,
+        DatasetSweep sweep,
         IDdbManager ddbManager,
         IBackgroundJobsProcessor backgroundJob,
         ICacheManager cacheManager,
+        JobStorage storage,
         ILogger<BuildPendingService> logger,
-        JobStorage? storage = null,
         IConfiguration? configuration = null)
     {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _sweep = sweep ?? throw new ArgumentNullException(nameof(sweep));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _backgroundJob = backgroundJob ?? throw new ArgumentNullException(nameof(backgroundJob));
         _cacheManager = cacheManager ?? throw new ArgumentNullException(nameof(cacheManager));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _storage = storage;
+        _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _mysqlConnectionString = configuration?.GetConnectionString(MagicStrings.HangfireConnectionName);
     }
 
@@ -86,7 +95,7 @@ public class BuildPendingService
             }
         }
 
-        using var connection = (storage ?? _storage ?? JobStorage.Current).GetConnection();
+        using var connection = (storage ?? _storage).GetConnection();
         var controls = PendingBuildRetryControlStore.Load(connection,
             DatasetBuildCoordinator.RetryStateKey(orgSlug, dsSlug), cached, _logger);
         state.RetryAttempt = controls.RetryAttempt;
@@ -99,7 +108,7 @@ public class BuildPendingService
 
     private async Task SaveState(string orgSlug, string dsSlug, CacheState state, JobStorage? storage = null)
     {
-        using (var connection = (storage ?? _storage ?? JobStorage.Current).GetConnection())
+        using (var connection = (storage ?? _storage).GetConnection())
             PendingBuildRetryControlStore.Save(connection, DatasetBuildCoordinator.RetryStateKey(orgSlug, dsSlug),
                 new PendingBuildRetryControlStore.Controls
                 {
@@ -196,7 +205,7 @@ public class BuildPendingService
         using var coordination = DatasetBuildCoordinator.Acquire(orgSlug, dsSlug, storage ?? _storage,
             mysqlConnectionString: _mysqlConnectionString);
         var state = await ReadState(orgSlug, dsSlug, storage);
-        var ds = await FindDataset(orgSlug, dsSlug);
+        var ds = await _sweep.FindAsync(orgSlug, dsSlug);
         if (ds?.Organization == null) return;
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
         try
@@ -213,10 +222,6 @@ public class BuildPendingService
         }
         await SaveState(orgSlug, dsSlug, state, storage);
     }
-
-    private Task<Data.Models.Dataset?> FindDataset(string orgSlug, string dsSlug) =>
-        _context.Datasets.AsNoTracking().Include(d => d.Organization)
-            .FirstOrDefaultAsync(d => d.Organization.Slug == orgSlug && d.Slug == dsSlug);
 
     // Keep the existing bounded policy; exhausted chains await the low-frequency sweep.
     private static readonly int[] RetryBackoffMinutes = [1, 2, 5, 10, 20, 40, 60];
@@ -239,7 +244,7 @@ public class BuildPendingService
         {
             using var coordination = DatasetBuildCoordinator.Acquire(orgSlug, dsSlug, storage ?? _storage,
             mysqlConnectionString: _mysqlConnectionString);
-            var ds = await FindDataset(orgSlug, dsSlug);
+            var ds = await _sweep.FindAsync(orgSlug, dsSlug);
             if (ds?.Organization == null) return;
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             if (requiredPendingPath != null &&
@@ -275,8 +280,8 @@ public class BuildPendingService
 
             var delayMinutes = RetryBackoffMinutes[Math.Min(state.RetryAttempt, RetryBackoffMinutes.Length - 1)];
             var meta = new IndexPayload(orgSlug, dsSlug, null, MagicStrings.AutoBuildServiceUserId);
-            var jobId = _backgroundJob.ScheduleIndexed(
-                () => HangfireUtils.BuildPendingWrapper(ddb, null), meta, TimeSpan.FromMinutes(delayMinutes));
+            var jobId = _backgroundJob.ScheduleBuildPending(new DatasetKey(orgSlug, ds.InternalRef), meta,
+                TimeSpan.FromMinutes(delayMinutes));
             if (string.IsNullOrWhiteSpace(jobId))
                 throw new InvalidOperationException("Pending retry schedule returned no job ID");
             state.RetryEpoch ??= Guid.NewGuid().ToString("N");
@@ -314,143 +319,100 @@ public class BuildPendingService
         }
     }
 
+    /// <summary>The job as stored before RQ-09 (D4): runs with the context's shutdown token.</summary>
+    public Task ProcessPendingBuilds(PerformContext? context) => ProcessPendingBuilds(context, JobCancellation.Of(context));
+
     /// <summary>
     /// Low-frequency safety-net sweep that scans every dataset for pending builds.
     /// Day-to-day retries are event-driven (see <see cref="ScheduleRetryIfPending"/>);
     /// this recurring job only backstops retries lost to restarts or left over from
     /// before the event-driven mechanism existed.
     /// </summary>
-    [AutomaticRetry(Attempts = 0)] // Don't retry on failure - the safety-net sweep runs again later
-    [JobExpiration(ExpirationTimeoutInMinutes = 60)] // Success records are noise; expire quickly to curb churn
-    public async Task ProcessPendingBuilds(PerformContext? context = null)
+    public async Task ProcessPendingBuilds(PerformContext? context, CancellationToken cancellationToken)
     {
         var startTime = DateTime.UtcNow;
         var sw = System.Diagnostics.Stopwatch.StartNew();
+        var console = JobConsole.For(_logger, context);
 
-        Action<string> writeLine = context != null ? context.WriteLine : (msg => _logger.LogInformation(msg));
+        console.Info("Starting ProcessPendingBuilds job");
 
-        writeLine("Starting ProcessPendingBuilds job");
-
+        var stats = new ProcessingStats();
         try
         {
-            // Query all datasets with their organizations
-            // Use AsNoTracking for read-only performance
-            var datasets = await _context.Datasets
-                .AsNoTracking()
-                .Include(ds => ds.Organization)
-                .ToArrayAsync();
-
-            var stats = new ProcessingStats();
-
-            writeLine($"Found {datasets.Length} total datasets to process");
-
-            foreach (var ds in datasets)
+            var result = await _sweep.ForEachAsync(console, "Pending build check", async (ds, _) =>
             {
-                try
+                var ddb = _ddbManager.Get(ds.OrgSlug, ds.InternalRef);
+
+                using var coordination = DatasetBuildCoordinator.Acquire(ds.OrgSlug, ds.DsSlug, _storage,
+                    mysqlConnectionString: _mysqlConnectionString);
+                var state = await ReadState(ds.OrgSlug, ds.DsSlug);
+                var stampChecksum = GetStampChecksum(ddb, ds.OrgSlug, ds.DsSlug);
+                if (!ShouldCheckDataset(state, stampChecksum))
                 {
-                    stats.TotalProcessed++;
-
-                    // Skip if organization is null (safety check)
-                    if (ds.Organization == null)
-                    {
-                        _logger.LogWarning("Dataset {DsSlug} has null organization, skipping", ds.Slug);
-                        stats.Errors++;
-                        continue;
-                    }
-
-                    // Get DDB instance for this dataset
-                    IDDB ddb;
-                    try
-                    {
-                        ddb = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex,
-                            "Failed to get DDB for {Org}/{Ds}, skipping",
-                            ds.Organization.Slug, ds.Slug);
-                        stats.Errors++;
-                        continue;
-                    }
-
-                    using var coordination = DatasetBuildCoordinator.Acquire(ds.Organization.Slug, ds.Slug, _storage,
-                        mysqlConnectionString: _mysqlConnectionString);
-                    var state = await ReadState(ds.Organization.Slug, ds.Slug);
-                    var stampChecksum = GetStampChecksum(ddb, ds.Organization.Slug, ds.Slug);
-                    if (!ShouldCheckDataset(state, stampChecksum))
-                    {
-                        stats.Skipped++;
-                        continue;
-                    }
-                    stats.Checked++;
-
-                    bool hasPending;
-                    try { hasPending = ddb.IsBuildPending(); }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Cannot check pending for {Org}/{Ds}; attempting bounded recovery",
-                            ds.Organization.Slug, ds.Slug);
-                        hasPending = true;
-                        stampChecksum = null;
-                    }
-                    Observe(state, hasPending, stampChecksum);
-                    if (!hasPending)
-                    {
-                        ClearRetryControls(state);
-                        await SaveState(ds.Organization.Slug, ds.Slug, state);
-                        continue;
-                    }
-                    stats.PendingFound++;
-
-                    if (HasLiveCoordinator(state))
-                    {
-                        await SaveState(ds.Organization.Slug, ds.Slug, state);
-                        continue;
-                    }
-
-                    // Restart one bounded epoch only after the previous coordinator
-                    // is missing/terminal, irrespective of an unchanged database stamp.
-                    var meta = new IndexPayload(ds.Organization.Slug, ds.Slug, null,
-                        MagicStrings.AutoBuildServiceUserId);
-                    var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildPendingWrapper(ddb, null), meta);
-                    if (string.IsNullOrWhiteSpace(jobId))
-                        throw new InvalidOperationException("Pending coordinator enqueue returned no job ID");
-                    state.RetryAttempt = 0;
-                    state.RetryEpoch = Guid.NewGuid().ToString("N");
-                    state.ScheduledRetryJobId = jobId;
-                    await SaveState(ds.Organization.Slug, ds.Slug, state);
-                    stats.JobsEnqueued++;
-                    _logger.LogInformation("Started pending recovery epoch for {Org}/{Ds}: {JobId}",
-                        ds.Organization.Slug, ds.Slug, jobId);
+                    stats.Skipped++;
+                    return;
                 }
+                stats.Checked++;
+
+                bool hasPending;
+                try { hasPending = ddb.IsBuildPending(); }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex,
-                        "Error processing dataset {Org}/{Ds}",
-                        ds.Organization?.Slug ?? "unknown", ds.Slug);
-                    stats.Errors++;
+                    _logger.LogWarning(ex, "Cannot check pending for {Org}/{Ds}; attempting bounded recovery",
+                        ds.OrgSlug, ds.DsSlug);
+                    hasPending = true;
+                    stampChecksum = null;
                 }
-            }
+                Observe(state, hasPending, stampChecksum);
+                if (!hasPending)
+                {
+                    ClearRetryControls(state);
+                    await SaveState(ds.OrgSlug, ds.DsSlug, state);
+                    return;
+                }
+                stats.PendingFound++;
 
-            // Log summary statistics
-            var summaryMessage =
-                $"ProcessPendingBuilds completed: " +
-                $"Total={stats.TotalProcessed}, " +
-                $"Checked={stats.Checked}, " +
-                $"Skipped={stats.Skipped}, " +
-                $"PendingFound={stats.PendingFound}, " +
-                $"JobsEnqueued={stats.JobsEnqueued}, " +
-                $"Errors={stats.Errors}";
+                if (HasLiveCoordinator(state))
+                {
+                    await SaveState(ds.OrgSlug, ds.DsSlug, state);
+                    return;
+                }
 
-            writeLine(summaryMessage);
+                // Restart one bounded epoch only after the previous coordinator
+                // is missing/terminal, irrespective of an unchanged database stamp.
+                var meta = new IndexPayload(ds.OrgSlug, ds.DsSlug, null, MagicStrings.AutoBuildServiceUserId);
+                var jobId = _backgroundJob.EnqueueBuildPending(new DatasetKey(ds.OrgSlug, ds.InternalRef), meta);
+                if (string.IsNullOrWhiteSpace(jobId))
+                    throw new InvalidOperationException("Pending coordinator enqueue returned no job ID");
+                state.RetryAttempt = 0;
+                state.RetryEpoch = Guid.NewGuid().ToString("N");
+                state.ScheduledRetryJobId = jobId;
+                await SaveState(ds.OrgSlug, ds.DsSlug, state);
+                stats.JobsEnqueued++;
+                _logger.LogInformation("Started pending recovery epoch for {Org}/{Ds}: {JobId}",
+                    ds.OrgSlug, ds.DsSlug, jobId);
+            }, cancellationToken);
 
-            // Only log to standard logger if we found pending or had errors
+            stats.TotalProcessed = result.Datasets;
+            stats.Errors = result.Failed;
+
+            // The server log gets the summary at information level only when something was found
+            var summary = "ProcessPendingBuilds completed: Total={Total}, Checked={Checked}, Skipped={Skipped}, " +
+                          "PendingFound={PendingFound}, JobsEnqueued={JobsEnqueued}, Errors={Errors}";
+            object?[] values = [stats.TotalProcessed, stats.Checked, stats.Skipped, stats.PendingFound,
+                stats.JobsEnqueued, stats.Errors];
             if (stats.PendingFound > 0 || stats.Errors > 0)
-            {
-                _logger.LogInformation(summaryMessage);
-            }
-
-            // Update statistics
+                console.Info(summary, values);
+            else
+                console.Debug(summary, values);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Fatal error in ProcessPendingBuilds job");
+            throw; // Re-throw to let Hangfire handle it
+        }
+        finally
+        {
             sw.Stop();
             lock (_statsLock)
             {
@@ -458,20 +420,6 @@ public class BuildPendingService
                 _lastStats = stats;
                 _lastDurationMs = sw.ElapsedMilliseconds;
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Fatal error in ProcessPendingBuilds job");
-
-            // Update statistics even on failure
-            sw.Stop();
-            lock (_statsLock)
-            {
-                _lastRun = startTime;
-                _lastDurationMs = sw.ElapsedMilliseconds;
-            }
-
-            throw; // Re-throw to let Hangfire handle it
         }
     }
 

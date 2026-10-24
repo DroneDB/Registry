@@ -1,0 +1,200 @@
+# RQ-04 endpoint authorization snapshot (Rq04ControllerSmokeTests).
+# METHOD /template -> declared authorization [gate] @ handler
+#   declared: [AllowAnonymous], [Authorize(...)], inline policies (RequireAuthorization),
+#             MVC access filters (BasicAuthFilter, OgcAuthorizationFilter, RestrictToLocalhost); none = no HTTP gate
+#   gate: who passes the HTTP gate: open (manager checks), anonymous, authenticated, admin
+# Regenerate on purpose: REGISTRY_UPDATE_SNAPSHOTS=1 dotnet test Registry.Web.UnitTest --filter
+#   "FullyQualifiedName~Rq04ControllerSmokeTests.EndpointAuthorization_MatchesSnapshot"
+ANY /hangfire/{**path} -> Authorize [authenticated] @ /hangfire/{**path}
+ANY /health -> Authorize + Policy(inline: AdminOrMonitorTokenRequirement) [admin] @ Health checks
+GET /health/live -> AllowAnonymous [anonymous] @ HTTP: GET /health/live
+GET /orgs -> none [open] @ OrganizationsController.GetAll
+POST /orgs -> none [open] @ OrganizationsController.Create
+GET /orgs/public -> AllowAnonymous [anonymous] @ OrganizationsController.GetAllPublic
+DELETE /orgs/{orgSlug} -> none [open] @ OrganizationsController.Delete
+GET /orgs/{orgSlug} -> none [open] @ OrganizationsController.Get
+PUT /orgs/{orgSlug} -> none [open] @ OrganizationsController.Update
+GET /orgs/{orgSlug}/ds -> none [open] @ DatasetsController.GetAll
+POST /orgs/{orgSlug}/ds -> none [open] @ DatasetsController.Create
+DELETE /orgs/{orgSlug}/ds/{dsSlug} -> none [open] @ DatasetsController.Delete
+GET /orgs/{orgSlug}/ds/{dsSlug} -> none [open] @ DatasetsController.Get
+PUT /orgs/{orgSlug}/ds/{dsSlug} -> none [open] @ DatasetsController.Update
+POST /orgs/{orgSlug}/ds/{dsSlug}/align/validate -> none [open] @ RasterAnalysisController.ValidateAlignRaster
+GET /orgs/{orgSlug}/ds/{dsSlug}/batches -> none [open] @ DatasetsController.GetBatches
+POST /orgs/{orgSlug}/ds/{dsSlug}/build -> none [open] @ ObjectBuildsController.Build
+GET /orgs/{orgSlug}/ds/{dsSlug}/build-artifact -> none [open] @ ObjectBuildsController.DownloadBuildArtifact
+GET /orgs/{orgSlug}/ds/{dsSlug}/build/{hash}/{*path} -> Filter(BasicAuthFilter) [open] @ ObjectBuildsController.GetBuildFile
+HEAD /orgs/{orgSlug}/ds/{dsSlug}/build/{hash}/{*path} -> Filter(BasicAuthFilter) [open] @ ObjectBuildsController.CheckBuildFile
+GET /orgs/{orgSlug}/ds/{dsSlug}/builds -> none [open] @ ObjectBuildsController.GetPendingBuilds
+POST /orgs/{orgSlug}/ds/{dsSlug}/builds/clear -> none [open] @ ObjectBuildsController.ClearCompletedBuilds
+GET /orgs/{orgSlug}/ds/{dsSlug}/builds/pending -> none [open] @ ObjectBuildsController.GetPendingBuilds
+POST /orgs/{orgSlug}/ds/{dsSlug}/cad/crs -> none [open] @ CadController.SetCrs
+POST /orgs/{orgSlug}/ds/{dsSlug}/chattr -> none [open] @ DatasetsController.ChangeAttributes
+POST /orgs/{orgSlug}/ds/{dsSlug}/contours -> none [open] @ RasterAnalysisController.GenerateContours
+GET /orgs/{orgSlug}/ds/{dsSlug}/ddb -> none [open] @ ObjectDownloadsController.GetDdb
+GET /orgs/{orgSlug}/ds/{dsSlug}/download -> none [open] @ ObjectDownloadsController.Download
+POST /orgs/{orgSlug}/ds/{dsSlug}/download -> none [open] @ ObjectDownloadsController.DownloadPost
+GET /orgs/{orgSlug}/ds/{dsSlug}/download/{*path} -> none [open] @ ObjectDownloadsController.DownloadExact
+GET /orgs/{orgSlug}/ds/{dsSlug}/ex -> none [open] @ DatasetsController.GetEx
+GET /orgs/{orgSlug}/ds/{dsSlug}/export -> none [open] @ RasterAnalysisController.ExportRaster
+POST /orgs/{orgSlug}/ds/{dsSlug}/import/url -> none [open] @ DatasetImportController.ImportUrl
+POST /orgs/{orgSlug}/ds/{dsSlug}/import/verify-url -> none [open] @ DatasetImportController.VerifyUrlImport
+GET /orgs/{orgSlug}/ds/{dsSlug}/list -> none [open] @ ObjectsController.GetInfo
+POST /orgs/{orgSlug}/ds/{dsSlug}/list -> none [open] @ ObjectsController.GetInfoEx
+POST /orgs/{orgSlug}/ds/{dsSlug}/mask-borders -> none [open] @ RasterAnalysisController.MaskBorders
+POST /orgs/{orgSlug}/ds/{dsSlug}/mask-borders/check -> none [open] @ RasterAnalysisController.CheckMaskBorders
+POST /orgs/{orgSlug}/ds/{dsSlug}/merge-multispectral -> none [open] @ RasterAnalysisController.MergeMultispectral
+POST /orgs/{orgSlug}/ds/{dsSlug}/merge-multispectral/preview -> none [open] @ RasterAnalysisController.PreviewMergeMultispectral
+POST /orgs/{orgSlug}/ds/{dsSlug}/merge-multispectral/validate -> none [open] @ RasterAnalysisController.ValidateMergeMultispectral
+POST /orgs/{orgSlug}/ds/{dsSlug}/meta/add -> none [open] @ MetaController.AddAlt
+POST /orgs/{orgSlug}/ds/{dsSlug}/meta/add/{key} -> none [open] @ MetaController.Add
+POST /orgs/{orgSlug}/ds/{dsSlug}/meta/dump -> none [open] @ MetaController.Dump
+GET /orgs/{orgSlug}/ds/{dsSlug}/meta/get/{key} -> none [open] @ MetaController.Get
+GET /orgs/{orgSlug}/ds/{dsSlug}/meta/list -> none [open] @ MetaController.List
+POST /orgs/{orgSlug}/ds/{dsSlug}/meta/remove -> none [open] @ MetaController.RemoveAlt
+DELETE /orgs/{orgSlug}/ds/{dsSlug}/meta/remove/{id} -> none [open] @ MetaController.Remove
+POST /orgs/{orgSlug}/ds/{dsSlug}/meta/set -> none [open] @ MetaController.SetAlt
+POST /orgs/{orgSlug}/ds/{dsSlug}/meta/set/{key} -> none [open] @ MetaController.Set
+POST /orgs/{orgSlug}/ds/{dsSlug}/meta/unset -> none [open] @ MetaController.UnsetAlt
+DELETE /orgs/{orgSlug}/ds/{dsSlug}/meta/unset/{key} -> none [open] @ MetaController.Unset
+GET /orgs/{orgSlug}/ds/{dsSlug}/mvt/{hash}/metadata.json -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ MvtController.GetMetadata
+GET /orgs/{orgSlug}/ds/{dsSlug}/mvt/{hash}/{z:int}/{x:int}/{y:int}.pbf -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ MvtController.GetTile
+DELETE /orgs/{orgSlug}/ds/{dsSlug}/obj -> none [open] @ ObjectsController.Delete
+GET /orgs/{orgSlug}/ds/{dsSlug}/obj -> none [open] @ ObjectsController.Get
+POST /orgs/{orgSlug}/ds/{dsSlug}/obj -> none [open] @ ObjectUploadsController.Post
+PUT /orgs/{orgSlug}/ds/{dsSlug}/obj -> none [open] @ ObjectsController.Move
+DELETE /orgs/{orgSlug}/ds/{dsSlug}/obj/batch -> none [open] @ ObjectsController.DeleteBatch
+POST /orgs/{orgSlug}/ds/{dsSlug}/obj/chunk -> none [open] @ ObjectUploadsController.PostChunk
+GET /orgs/{orgSlug}/ds/{dsSlug}/obj/chunk/{fileId} -> none [open] @ ObjectUploadsController.GetChunks
+POST /orgs/{orgSlug}/ds/{dsSlug}/obj/chunk/{fileId}/commit -> none [open] @ ObjectUploadsController.CommitChunks
+POST /orgs/{orgSlug}/ds/{dsSlug}/obj/copy -> none [open] @ ObjectsController.Copy
+GET /orgs/{orgSlug}/ds/{dsSlug}/obj/uploads/{uploadId} -> none [open] @ ObjectUploadsController.GetUpload
+GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ OgcApiController.Landing
+GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ OgcApiController.Collections
+GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId} -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ OgcApiController.Collection
+GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/items -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ OgcApiController.Items
+GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/items/{featureId} -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ OgcApiController.Item
+GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/tiles -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ OgcApiController.TileSets
+GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/tiles/{tileMatrixSet}/{z:int}/{y:int}/{x:int} -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ OgcApiController.Tile
+GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/conformance -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ OgcApiController.Conformance
+POST /orgs/{orgSlug}/ds/{dsSlug}/push/commit -> none [open] @ PushController.Commit
+POST /orgs/{orgSlug}/ds/{dsSlug}/push/init -> none [open] @ PushController.Init
+POST /orgs/{orgSlug}/ds/{dsSlug}/push/meta -> none [open] @ PushController.Meta
+POST /orgs/{orgSlug}/ds/{dsSlug}/push/upload -> none [open] @ PushController.Upload
+GET /orgs/{orgSlug}/ds/{dsSlug}/raster-area-stats -> none [open] @ RasterAnalysisController.GetRasterAreaStats
+GET /orgs/{orgSlug}/ds/{dsSlug}/raster-info -> none [open] @ RasterAnalysisController.GetRasterInfo
+GET /orgs/{orgSlug}/ds/{dsSlug}/raster-metadata -> none [open] @ RasterAnalysisController.GetRasterMetadata
+GET /orgs/{orgSlug}/ds/{dsSlug}/raster-point-value -> none [open] @ RasterAnalysisController.GetRasterPointValue
+POST /orgs/{orgSlug}/ds/{dsSlug}/raster-profile -> none [open] @ RasterAnalysisController.GetRasterProfile
+GET /orgs/{orgSlug}/ds/{dsSlug}/raster-value-info -> none [open] @ RasterAnalysisController.GetRasterValueInfo
+POST /orgs/{orgSlug}/ds/{dsSlug}/rename -> none [open] @ DatasetsController.Rename
+POST /orgs/{orgSlug}/ds/{dsSlug}/rescan -> none [open] @ DatasetsController.RescanIndex
+POST /orgs/{orgSlug}/ds/{dsSlug}/search -> none [open] @ ObjectsController.Search
+GET /orgs/{orgSlug}/ds/{dsSlug}/stac/{pathBase64?} -> none [open] @ StacController.GetStacChild
+GET /orgs/{orgSlug}/ds/{dsSlug}/stamp -> none [open] @ DatasetsController.GetStamp
+POST /orgs/{orgSlug}/ds/{dsSlug}/stockpile/calculate -> none [open] @ StockpileController.CalculateStockpileVolume
+POST /orgs/{orgSlug}/ds/{dsSlug}/stockpile/detect -> none [open] @ StockpileController.DetectStockpile
+POST /orgs/{orgSlug}/ds/{dsSlug}/stockpile/detect-all -> none [open] @ StockpileController.DetectAllStockpiles
+GET /orgs/{orgSlug}/ds/{dsSlug}/tasks -> none [open] @ TasksController.List
+POST /orgs/{orgSlug}/ds/{dsSlug}/tasks -> none [open] @ TasksController.Submit
+POST /orgs/{orgSlug}/ds/{dsSlug}/tasks/clear -> none [open] @ TasksController.Clear
+GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/events -> none [open] @ TasksController.Events
+GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/tools -> none [open] @ TasksController.GetTools
+DELETE /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id} -> none [open] @ TasksController.Cancel
+GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id} -> none [open] @ TasksController.GetStatus
+POST /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}/delete -> none [open] @ TasksController.Delete
+GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}/log -> none [open] @ TasksController.GetLog
+GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}/result -> none [open] @ TasksController.GetResult
+POST /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}/retry -> none [open] @ TasksController.Retry
+GET /orgs/{orgSlug}/ds/{dsSlug}/thumb -> none [open] @ ObjectsController.GenerateThumbnail
+GET /orgs/{orgSlug}/ds/{dsSlug}/thumb-ex -> none [open] @ RasterAnalysisController.GenerateThumbnailEx
+GET /orgs/{orgSlug}/ds/{dsSlug}/tiles-ex/{tz:int}/{tx:int}/{tyRaw}.{ext} -> none [open] @ RasterAnalysisController.GenerateTileEx
+GET /orgs/{orgSlug}/ds/{dsSlug}/tiles/{tz:int}/{tx:int}/{tyRaw}.{ext} -> none [open] @ ObjectsController.GenerateTile
+POST /orgs/{orgSlug}/ds/{dsSlug}/transfer -> none [open] @ ObjectsController.Transfer
+GET /orgs/{orgSlug}/ds/{dsSlug}/wcs -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ WcsController.Kvp
+GET /orgs/{orgSlug}/ds/{dsSlug}/wcs/p/{*folder} -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ WcsController.KvpFolder
+GET /orgs/{orgSlug}/ds/{dsSlug}/wfs -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ WfsController.Kvp
+POST /orgs/{orgSlug}/ds/{dsSlug}/wfs -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ WfsController.PostXml
+GET /orgs/{orgSlug}/ds/{dsSlug}/wfs/p/{*folder} -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ WfsController.KvpFolder
+GET /orgs/{orgSlug}/ds/{dsSlug}/wms -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ WmsController.Kvp
+GET /orgs/{orgSlug}/ds/{dsSlug}/wms/p/{*folder} -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ WmsController.KvpFolder
+GET /orgs/{orgSlug}/ds/{dsSlug}/wmts -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ WmtsController.Kvp
+GET /orgs/{orgSlug}/ds/{dsSlug}/wmts/1.0.0/{layer}/{style}/{tms}/{z:int}/{y:int}/{x:int}.{ext} -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ WmtsController.Restful
+GET /orgs/{orgSlug}/ds/{dsSlug}/wmts/p/{*folder} -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ WmtsController.KvpFolder
+POST /orgs/{orgSlug}/import -> none [open] @ ImportController.CreateImport
+POST /orgs/{orgSlug}/import/browse -> none [open] @ ImportController.BrowseImport
+GET /orgs/{orgSlug}/import/sources -> none [open] @ ImportController.GetImportSources
+POST /orgs/{orgSlug}/import/verify -> none [open] @ ImportController.VerifyImport
+GET /orgs/{orgSlug}/members -> none [open] @ OrganizationsController.GetMembers
+POST /orgs/{orgSlug}/members -> none [open] @ OrganizationsController.AddMember
+DELETE /orgs/{orgSlug}/members/{userName} -> none [open] @ OrganizationsController.RemoveMember
+PUT /orgs/{orgSlug}/members/{userName} -> none [open] @ OrganizationsController.UpdateMemberPermission
+ANY /quickhealth -> Authorize + Policy(inline: AdminOrMonitorTokenRequirement) [admin] @ Health checks
+GET /scalar/favicon.svg -> AllowAnonymous [anonymous] @ HTTP: GET /scalar/favicon.svg
+GET /scalar/scalar.aspnetcore.js -> AllowAnonymous [anonymous] @ HTTP: GET /scalar/scalar.aspnetcore.js
+GET /scalar/scalar.js -> AllowAnonymous [anonymous] @ HTTP: GET /scalar/scalar.js
+GET /scalar/{documentName?} -> none [open] @ HTTP: GET /scalar/{documentName?}
+POST /share/commit/{token} -> Authorize [authenticated] @ ShareController.Commit
+GET /share/info/{token} -> Authorize [authenticated] @ ShareController.Info
+POST /share/init -> Authorize [authenticated] @ ShareController.Init
+POST /share/rollback/{token} -> Authorize [authenticated] @ ShareController.Rollback
+POST /share/upload-chunk/{token} -> Authorize [authenticated] @ ShareController.UploadChunked
+POST /share/upload/{token} -> Authorize [authenticated] @ ShareController.Upload
+GET /stac -> none [open] @ StacController.GetCatalog
+GET /stac/collections -> none [open] @ StacController.GetCollections
+GET /stac/collections/{collectionId} -> none [open] @ StacController.GetCollectionNotFound
+GET /stac/collections/{orgSlug}/{dsSlug} -> none [open] @ StacController.GetCollection
+GET /stac/collections/{orgSlug}/{dsSlug}/items -> none [open] @ StacController.GetCollectionItems
+GET /stac/collections/{orgSlug}/{dsSlug}/items/{featureId} -> none [open] @ StacController.GetCollectionItem
+GET /stac/conformance -> none [open] @ StacController.GetConformance
+GET /stac/search -> none [open] @ StacController.SearchGet
+POST /stac/search -> none [open] @ StacController.SearchPost
+GET /sys/build-pending-status -> Authorize + Authorize(Policy=Admin) [admin] @ BuildMaintenanceController.GetBuildPendingStatus
+POST /sys/check-artifact-completeness -> Authorize + Authorize(Policy=Admin) [admin] @ BuildMaintenanceController.CheckArtifactCompleteness
+POST /sys/cleanup -> Authorize + Authorize(Policy=Admin) [admin] @ BuildMaintenanceController.Cleanup
+POST /sys/cleanup-jobindices -> Authorize + Authorize(Policy=Admin) [admin] @ BuildMaintenanceController.CleanupJobIndices
+POST /sys/cleanupbatches -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.CleanupBatches
+POST /sys/cleanupdatasets -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.CleanupDatasets
+GET /sys/config -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.GetConfig
+GET /sys/features -> AllowAnonymous + Authorize [anonymous] @ FeaturesController.GetFeatures
+POST /sys/fix-invalid-slugs -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.FixInvalidSlugs
+POST /sys/import-dataset -> Authorize + Authorize(Policy=Admin) [admin] @ RemoteImportController.ImportDataset
+POST /sys/import-organization -> Authorize + Authorize(Policy=Admin) [admin] @ RemoteImportController.ImportOrganization
+DELETE /sys/imports/{jobId} -> Authorize + Authorize(Policy=Admin) [admin] @ RemoteImportController.CancelImport
+GET /sys/imports/{jobId} -> Authorize + Authorize(Policy=Admin) [admin] @ RemoteImportController.GetImportStatus
+POST /sys/merge-organizations -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.MergeOrganizations
+POST /sys/migratevisibility -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.MigrateVisibility
+POST /sys/move-datasets -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.MoveDatasets
+GET /sys/processingNodes -> Authorize [authenticated] @ ProcessingNodesController.GetProcessingNodes
+GET /sys/processingNodes/{nodeId}/options -> Authorize [authenticated] @ ProcessingNodesController.GetProcessingNodeOptions
+GET /sys/processingNodes/{nodeId}/status -> Authorize [authenticated] @ ProcessingNodesController.GetProcessingNodeStatus
+GET /sys/report -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.GetGlobalReport
+POST /sys/rescan -> Authorize + Authorize(Policy=Admin) [admin] @ BuildMaintenanceController.Rescan
+GET /sys/tasks -> Authorize + Authorize(Policy=Admin) [admin] @ AdminTasksController.List
+POST /sys/tasks/{id}/delete -> Authorize + Authorize(Policy=Admin) [admin] @ AdminTasksController.Delete
+POST /sys/upload-probe -> Authorize [authenticated] @ UploadProbeController.Probe
+GET /sys/version -> Authorize [authenticated] @ SystemController.GetVersion
+DELETE /users -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.DeleteUser
+GET /users -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.GetAll
+POST /users -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.CreateUser
+POST /users/authenticate -> AllowAnonymous + Authorize [anonymous] @ UsersController.Authenticate
+POST /users/authenticate/refresh -> Authorize [authenticated] @ UsersController.Refresh
+POST /users/changepwd -> Authorize [authenticated] @ UsersController.ChangePasswordPost
+GET /users/detailed -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.GetAllDetailed
+POST /users/logout -> AllowAnonymous + Authorize [anonymous] @ UsersController.Logout
+GET /users/meta -> Authorize [authenticated] @ UsersController.GetCurrentUserMeta
+GET /users/roles -> Authorize [authenticated] @ UsersController.GetRoles
+POST /users/roles -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.CreateRole
+DELETE /users/roles/{roleName} -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.DeleteRole
+GET /users/storage -> Authorize [authenticated] @ UsersController.GetCurrentUserStorageInfo
+DELETE /users/{userName} -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.DeleteUserRoute
+PUT /users/{userName} -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.UpdateUser
+PUT /users/{userName}/changepwd -> Authorize [authenticated] @ UsersController.ChangePassword
+GET /users/{userName}/meta -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.GetUserMeta
+POST /users/{userName}/meta -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.SetUserMeta
+GET /users/{userName}/orgs -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.GetOrganizations
+POST /users/{userName}/orgs -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.AddUserToOrganization
+DELETE /users/{userName}/orgs/{orgSlug} -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.RemoveUserFromOrganization
+PUT /users/{userName}/orgs/{orgSlug} -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.UpdateUserOrganizationPermissions
+GET /users/{userName}/storage -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.GetUserStorageInfo
+GET /version -> none [open] @ HTTP: GET /version

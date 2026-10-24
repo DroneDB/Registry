@@ -1,17 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using Registry.Ports.Json;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using Registry.Web.Services.Caching;
 
 #nullable enable
 
@@ -26,30 +28,34 @@ namespace Registry.Web.Services.Managers.Wcs;
 public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
 {
     private readonly ILogger<WcsCoverageService> _logger;
+    private readonly INativeWorkGate _gate;
+    private readonly IRasterInfoCache _rasterInfo;
 
-    public WcsCoverageService(IUtils u, IAuthManager a, IDdbManager d, IBuildArtifactResolver ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx,
-        ILogger<WcsCoverageService> logger) : base(u, a, d, ar, w, c, cache, ctx)
+    public WcsCoverageService(OgcManagerDependencies dependencies, IRasterInfoCache rasterInfo,
+        ILogger<WcsCoverageService> logger, INativeWorkGate? gate = null)
+        : base(dependencies)
     {
         _logger = logger;
+        _rasterInfo = rasterInfo;
+        _gate = gate ?? Services.Adapters.NativeWorkGate.Default;
     }
 
     public async Task<(IDDB Ddb, IReadOnlyList<OgcLayerDto> Layers)> GetCoveragesAsync(
-        string orgSlug, string dsSlug, string? folderPath)
+        string orgSlug, string dsSlug, string? folderPath, CancellationToken ct = default)
     {
-        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug);
-        var layers = (await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath))
+        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
+        var layers = (await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath, ct: ct))
             .Where(l => l.EntryType == EntryType.GeoRaster && l.BboxWgs84 != null)
             .ToList();
         return (ddb, layers);
     }
 
     public async Task<(IDDB Ddb, OgcLayerDto Layer)> ResolveCoverageAsync(
-        string orgSlug, string dsSlug, string coverageId)
+        string orgSlug, string dsSlug, string coverageId, CancellationToken ct = default)
     {
         var name = Uri.UnescapeDataString(coverageId);
-        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug);
-        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name)
+        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
+        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, ct: ct)
                     ?? throw new OgcException("NoSuchCoverage",
                         $"Coverage '{coverageId}' not found", 404);
         if (layer.EntryType != EntryType.GeoRaster)
@@ -59,7 +65,7 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
     }
 
     public async Task<(IDDB Ddb, IReadOnlyList<(string Id, OgcLayerDto Layer)> Coverages)> ResolveCoveragesAsync(
-        string orgSlug, string dsSlug, IEnumerable<string> coverageIds)
+        string orgSlug, string dsSlug, IEnumerable<string> coverageIds, CancellationToken ct = default)
     {
         var ids = coverageIds
             .Select(s => Uri.UnescapeDataString(s ?? string.Empty).Trim())
@@ -68,12 +74,12 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
         if (ids.Length == 0)
             throw new OgcException("MissingParameterValue", "CoverageId is required", 400, "CoverageId");
 
-        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug);
+        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
         var resolved = new List<(string Id, OgcLayerDto Layer)>(ids.Length);
         var missing = new List<string>();
         foreach (var id in ids)
         {
-            var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, id);
+            var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, id, ct: ct);
             if (layer == null) missing.Add(id);
             else resolved.Add((id, layer));
         }
@@ -85,37 +91,46 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
         return (ddb, resolved);
     }
 
-    public WcsRasterInfo ProbeRaster(IDDB ddb, OgcLayerDto layer)
+    public async Task<WcsRasterInfo> ProbeRasterAsync(IDDB ddb, OgcLayerDto layer, CancellationToken ct = default)
     {
         try
         {
-            var src = ResolveRasterArtifact(ddb, layer);
-            var info = DdbWrapper.GetRasterInfo(src);
-            if (string.IsNullOrEmpty(info)) return WcsRasterInfo.Empty;
-            var j = JObject.Parse(info);
-            var width = j.Value<int?>("width") ?? 0;
-            var height = j.Value<int?>("height") ?? 0;
-            var bandCount = j.Value<int?>("bandCount") ?? 0;
-            var nativeCrs = j.Value<string>("crs") ?? string.Empty;
-            var bandNames = new List<string>();
-
-            if (j["bands"] is not JArray ba)
-                return new WcsRasterInfo(width, height, bandCount, bandNames, nativeCrs);
-
-            foreach (var b in ba)
-                bandNames.Add(b.Value<string>("name") ?? $"band{bandNames.Count + 1}");
-            return new WcsRasterInfo(width, height, bandCount, bandNames, nativeCrs);
+            // The build COG and the source it falls back to are probed separately; the read is the one WMS shares
+            var info = await _rasterInfo.GetAsync(layer.EntryHash, ResolveRasterSource(ddb, layer), ct);
+            return ParseRasterInfo(info);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning(ex, "WCS: probing raster info failed");
             return WcsRasterInfo.Empty;
         }
     }
 
-    public byte[] RenderRegion(IDDB ddb, OgcLayerDto layer, double[] bboxWgs84,
+    private static WcsRasterInfo ParseRasterInfo(string info)
+    {
+        if (string.IsNullOrEmpty(info)) return WcsRasterInfo.Empty;
+        using var document = JsonDocument.Parse(info);
+        var j = document.RootElement;
+        var width = Int(j, "width");
+        var height = Int(j, "height");
+        var bandCount = Int(j, "bandCount");
+        var nativeCrs = j.Member("crs").Text() ?? string.Empty;
+        var bandNames = new List<string>();
+
+        if (j.Member("bands") is not { ValueKind: JsonValueKind.Array } ba)
+            return new WcsRasterInfo(width, height, bandCount, bandNames, nativeCrs);
+
+        foreach (var b in ba.Items())
+            bandNames.Add(b.Member("name").Text() ?? $"band{bandNames.Count + 1}");
+        return new WcsRasterInfo(width, height, bandCount, bandNames, nativeCrs);
+    }
+
+    private static int Int(JsonElement parent, string name) =>
+        parent.Member(name) is { ValueKind: JsonValueKind.Number } value && value.TryGetInt32(out var number) ? number : 0;
+
+    public Task<byte[]> RenderRegionAsync(IDDB ddb, OgcLayerDto layer, double[] bboxWgs84,
         int width, int height, string mime,
-        int[]? bands = null, string? outputCrs = null)
+        int[]? bands = null, string? outputCrs = null, CancellationToken ct = default)
     {
         if (bboxWgs84 == null || bboxWgs84.Length < 4)
             throw new OgcException("InvalidParameterValue", "Invalid bbox", 400);
@@ -133,9 +148,14 @@ public class WcsCoverageService : OgcManagerBase, IWcsCoverageService
         height = Math.Clamp(height, targetMin, targetMax);
         var src = ResolveRasterArtifact(ddb, layer);
         var mimeNorm = string.IsNullOrWhiteSpace(mime) ? "image/tiff" : mime;
-        return DdbWrapper.RenderRasterRegion(src, bboxWgs84, "EPSG:4326",
-            width, height, mimeNorm, bands, outputCrs);
+        // Coverages can be large: they share the Heavy lane with thumbnails
+        return _gate.RunAsync(NativeLane.Heavy, () => DdbWrapper.RenderRasterRegion(src, bboxWgs84, "EPSG:4326",
+            width, height, mimeNorm, bands, outputCrs), ct);
     }
+
+    public Task<string> CacheKeyAsync(string orgSlug, string dsSlug, string kind, string? detail,
+        CancellationToken ct = default) =>
+        LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, kind, detail, ct);
 
     public string GetBaseUrl(string orgSlug, string dsSlug, string? folderPath)
         => GetServiceUrl(orgSlug, dsSlug, "wcs", folderPath);

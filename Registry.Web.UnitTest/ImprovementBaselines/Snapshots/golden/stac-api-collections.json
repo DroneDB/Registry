@@ -1,0 +1,86 @@
+{
+  "request": "GET /stac/collections",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json",
+  "bodyKind": "json",
+  "body": {
+    "collections": [
+      {
+        "assets": {
+          "a.txt": {
+            "href": "http://localhost/orgs/golden-org/ds/golden-ds/download?path=a.txt",
+            "title": "a.txt"
+          }
+        },
+        "description": "golden-org/golden-ds",
+        "extent": {
+          "spatial": {
+            "bbox": [
+              [
+                8.25,
+                45.15347718317,
+                9.000203550941,
+                46.841
+              ]
+            ]
+          },
+          "temporal": {
+            "interval": [
+              [
+                "<datetime:Z>",
+                "<datetime:Z>"
+              ]
+            ]
+          }
+        },
+        "id": "golden-org/golden-ds",
+        "license": "proprietary",
+        "links": [
+          {
+            "rel": "root",
+            "href": "http://localhost/stac",
+            "type": "application/json"
+          },
+          {
+            "rel": "parent",
+            "href": "http://localhost/stac/collections",
+            "type": "application/json"
+          },
+          {
+            "rel": "self",
+            "href": "http://localhost/stac/collections/golden-org/golden-ds",
+            "type": "application/json"
+          },
+          {
+            "rel": "items",
+            "href": "http://localhost/stac/collections/golden-org/golden-ds/items",
+            "type": "application/geo+json"
+          }
+        ],
+        "stac_version": "1.1.0",
+        "title": "golden-org/golden-ds",
+        "type": "Collection"
+      }
+    ],
+    "links": [
+      {
+        "href": "http://localhost/stac/collections",
+        "rel": "self",
+        "type": "application/json"
+      },
+      {
+        "href": "http://localhost/stac",
+        "rel": "root",
+        "type": "application/json"
+      },
+      {
+        "href": "http://localhost/stac",
+        "rel": "parent",
+        "type": "application/json"
+      }
+    ],
+    "numberMatched": 1,
+    "numberReturned": 1
+  }
+}

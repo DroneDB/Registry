@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
+using System.Text.Json;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Ports;
@@ -23,6 +23,13 @@ public interface IDdbWrapper
     /// </summary>
     public BatchAddResult AddWithOptions(string ddbPath, string[] paths, bool stopOnError = false);
 
+    /// <summary>
+    /// <see cref="AddWithOptions"/> for files with the hash their writer computed
+    /// (DDBAddWithHints): DroneDB uses a hint only while the file still has its size and write
+    /// time, so a stale hint is never indexed. Paths are absolute; folders are not expanded.
+    /// </summary>
+    public BatchAddResult AddWithHints(string ddbPath, IReadOnlyList<AddItem> files, bool stopOnError = false);
+
     public void Remove(string ddbPath, string path);
 
     public void Remove(string ddbPath, string[] paths);
@@ -31,8 +38,42 @@ public interface IDdbWrapper
 
     public List<Entry> Info(string[] paths, bool recursive = false, int maxRecursionDepth = 0, bool withHash = false);
 
+    /// <summary>
+    /// Closes the idle pooled index connections of the datasets under a folder
+    /// (DDBReleaseConnections). Returns how many were closed.
+    /// </summary>
+    public int ReleaseConnections(string path);
+
+    /// <summary>
+    /// Moves the committed changes of the index of a dataset folder from its WAL into the database
+    /// file (DDBCheckpoint). False when another connection kept it from completing.
+    /// </summary>
+    public bool Checkpoint(string ddbPath);
+
+    /// <summary>
+    /// Exact lookup of one entry (file or folder), including its metadata.
+    /// </summary>
+    /// <param name="ddbPath">Dataset folder (parent of .ddb)</param>
+    /// <param name="path">Dataset-relative path with forward slashes, no wildcards</param>
+    /// <returns>The entry, or null if the index has no entry with this path</returns>
+    public Entry? GetEntry(string ddbPath, string path);
+
     public List<Entry> List(string ddbPath, string path, bool recursive = false, int maxRecursionDepth = 0);
     public List<Entry> List(string ddbPath, string[] paths, bool recursive = false, int maxRecursionDepth = 0);
+
+    /// <summary>
+    /// The entries selected by <paramref name="query"/> (filtered natively), sorted by path,
+    /// with properties, geometries and meta.
+    /// </summary>
+    /// <param name="ddbPath">Dataset folder (parent of .ddb)</param>
+    /// <param name="query">Dataset-relative folder with forward slashes, and filters</param>
+    public List<Entry> ListEntries(string ddbPath, EntryQuery query);
+
+    /// <summary>
+    /// <see cref="ListEntries"/> without properties, geometries and meta: a fraction of the
+    /// native work, payload and managed allocations.
+    /// </summary>
+    public List<EntrySummary> ListEntrySummaries(string ddbPath, EntryQuery query);
 
     public void AppendPassword(string ddbPath, string password);
 
@@ -63,10 +104,27 @@ public interface IDdbWrapper
 
     public Stamp GetStamp(string ddbPath);
 
+    /// <summary>
+    /// The checksum of the dataset's stamp (<see cref="Stamp.Checksum"/>) without building the
+    /// stamp (DDBGetStampChecksum).
+    /// </summary>
+    public string GetStampChecksum(string ddbPath);
+
     public Delta Delta(string ddbPath, string ddbTarget);
 
     public List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,
         string? sourceMetaDump = null);
+
+    /// <summary>
+    /// <see cref="ApplyDelta(Delta, string, string, MergeStrategy, string?)"/> for files whose hashes
+    /// the caller checked against the delta while it received them (<c>DDBApplyDeltaEx</c>, ABI 2.0,
+    /// XI-05): libddb does not read those files again. <paramref name="verifiedHashes"/> maps a delta
+    /// path (its exact spelling) to the lowercase hex SHA-256 the delta gives it; every other added file
+    /// is hashed by libddb. An entry that is not a file the delta adds, or has another hash, fails the
+    /// call (<see cref="DroneDB.DdbInvalidArgumentsException"/>) before anything changes.
+    /// </summary>
+    public List<string> ApplyDelta(Delta delta, string sourcePath, string ddbPath, MergeStrategy mergeStrategy,
+        string? sourceMetaDump, IReadOnlyDictionary<string, string> verifiedHashes);
 
     public Delta Delta(Stamp source, Stamp target);
     public Dictionary<string, bool> ComputeDeltaLocals(Delta delta, string ddbPath, string hlDestFolder = "");
@@ -76,27 +134,61 @@ public interface IDdbWrapper
     public void Build(string ddbPath, string? source = null, string? dest = null, bool force = false,
         bool pendingOnly = false);
 
-    public bool IsBuildable(string ddbPath, string path);
-
-    public bool IsBuildActive(string ddbPath, string path);
+    /// <summary>
+    /// The build state and the existing artifacts of several entries with one index open
+    /// (DDBGetBuildArtifacts, XI-04): one element per path, in input order. libddb owns the build
+    /// layout, the states and the type rules; Registry serves the paths it returns.
+    /// </summary>
+    /// <param name="ddbPath">Dataset folder (parent of .ddb)</param>
+    /// <param name="paths">Dataset-relative entry paths (exact match)</param>
+    public EntryBuildArtifacts[] GetBuildArtifacts(string ddbPath, string[] paths);
 
     /// <summary>
-    /// Checks whether the build output for an entry is complete (artifacts
-    /// exist on disk AND contain non-empty content). For Vector entries it
-    /// requires BOTH <c>vec/source.gpkg</c> AND <c>mvt/metadata.json</c> to be
-    /// present and non-empty. For PointCloud / GeoRaster / Model it requires
-    /// the <c>copc/</c> / <c>cog/</c> / <c>nxs/</c> folder to exist and contain
-    /// at least one non-empty file (recursively). Returns false for entries
-    /// that are not buildable.
+    /// The absolute path of a file of a build, checked by libddb (DDBResolveBuildFile, XI-04): it
+    /// serves <c>.../build/{hash}/{path}</c>, tiles included.
     /// </summary>
-    public bool IsBuildComplete(string ddbPath, string path);
+    /// <param name="ddbPath">Dataset folder (parent of .ddb)</param>
+    /// <param name="hash">The hash of the build (<see cref="EntryBuild.Hash"/>)</param>
+    /// <param name="path">The file, relative to the build root (an artifact path or a file below a directory artifact)</param>
+    /// <returns>The absolute path, or null when no build has this hash or the file is not one of its artifacts</returns>
+    /// <exception cref="DdbInvalidArgumentsException">The hash is malformed or the path breaks the dataset path rules.</exception>
+    public string? ResolveBuildFile(string ddbPath, string hash, string path);
 
+    /// <summary>The entry types of libddb and what it does with them (DDBGetEntryTypes, XI-04).</summary>
+    public IReadOnlyList<EntryTypeInfo> GetEntryTypes();
+
+    /// <summary>
+    /// libddb's dataset path rule (DDBNormalizePath, XI-09): the normalized form of
+    /// <paramref name="path"/> or the first rule it breaks. No dataset is opened.
+    /// </summary>
+    /// <param name="path">A dataset-relative path, '/' or '\' separated. A NUL byte or a lone
+    /// surrogate, which the C API cannot receive, is rejected by the adapter itself
+    /// (<see cref="NormalizedEntryPath.RejectUnmarshallable"/>).</param>
+    /// <param name="reservedFirstSegments">Names reserved as the first segment only (Registry's
+    /// ".uploads"); null or empty reserves none. ".ddb" is always reserved, at any depth.</param>
+    /// <exception cref="System.ArgumentException">A reserved name is not a single segment.</exception>
+    public NormalizedEntryPath NormalizePath(string path, IReadOnlyCollection<string>? reservedFirstSegments = null);
+
+    /// <summary>
+    /// Copies the build of an entry (its artifacts and pending marker) to another dataset
+    /// (DDBCopyBuildArtifacts, XI-04), so a copied or moved file needs no rebuild.
+    /// </summary>
+    /// <exception cref="DdbNotFoundException">No buildable entry of the source has this hash.</exception>
+    /// <exception cref="DdbBuildInProgressException">A build of it runs in either dataset (nothing copied).</exception>
+    /// <exception cref="DdbRetryableException">The destination's disk is (nearly) full.</exception>
+    public CopiedBuildArtifacts CopyBuildArtifacts(string sourceDdbPath, string destinationDdbPath, string hash);
+
+    /// <summary>
+    /// Whether the dataset has pending (deferred) builds (DDBIsBuildPending, deprecated in libddb
+    /// 2.x). Kept for the pending-build scheduling until RQ-11/RQ-12 hand it to libddb
+    /// (DDBBuild pendingOnly, XI-04): libddb 2.x has no other dataset-wide pending query.
+    /// </summary>
     public bool IsBuildPending(string ddbPath);
 
     /// <summary>
-    /// Gets information about pending (deferred) builds, i.e. builds skipped
-    /// because one or more dependencies were missing at the time of the
-    /// attempt. Read-only: does not consume pending markers or trigger builds.
+    /// The pending (deferred) builds of the dataset: builds skipped because a dependency was
+    /// missing at the last attempt (DDBGetPendingBuildInfo, deprecated in libddb 2.x).
+    /// Read-only. Kept until RQ-11/RQ-12, like <see cref="IsBuildPending"/>.
     /// </summary>
     public PendingBuildInfo[] GetPendingBuildInfo(string ddbPath);
 
@@ -122,28 +214,35 @@ public interface IDdbWrapper
 
     public List<MetaDump> MetaDump(string ddbPath, string? ids = null);
 
-    public JToken Stac(string ddbPath, string? entry, string stacCollectionRoot, string id,
-        string stacCatalogRoot);
+    /// <summary>
+    /// The data-only STAC document (<c>DDBStacData</c>, XI-09): the Item of <paramref name="entry"/>, or the
+    /// Collection of the dataset when it is null or empty, without any member made from a URL or an ID ("id",
+    /// "collection", "links", asset "href"s), which Registry owns. Keys in libddb's (sorted) order.
+    /// </summary>
+    /// <exception cref="DdbNotFoundException">No entry has this path.</exception>
+    public JsonElement StacData(string ddbPath, string? entry);
 
-    public JToken StacItemCollection(string ddbPath, string stacCollectionRoot, string id,
-        string stacCatalogRoot, string? bbox, string? datetime, int limit, int offset);
+    /// <summary>
+    /// The data-only STAC ItemCollection (<c>DDBStacItemCollectionData</c>, XI-09): the entries with a geometry,
+    /// in path order, filtered by <paramref name="bbox"/> ("minX,minY,maxX,maxY", EPSG:4326) and
+    /// <paramref name="datetime"/> (RFC 3339 instant or interval), paged; <c>numberMatched</c> counts every match.
+    /// </summary>
+    public JsonElement StacItemCollectionData(string ddbPath, string? bbox, string? datetime, int limit, int offset);
 
     /// <summary>
     /// Rescans all files in the index to update metadata
     /// </summary>
     /// <param name="ddbPath">Path to the DroneDB database</param>
-    /// <param name="types">Comma-separated list of entry types to rescan (e.g., "image,geoimage,pointcloud"), or null/empty for all</param>
-    /// <param name="stopOnError">Whether to stop processing on first error</param>
+    /// <param name="options">What to rescan; null rescans every entry and stops on the first error</param>
     /// <returns>List of rescan results for each processed entry</returns>
-    public List<RescanResult> RescanIndex(string ddbPath, string? types = null, bool stopOnError = true);
-
-    void RegisterProcess(bool verbose = false);
+    public List<RescanResult> RescanIndex(string ddbPath, RescanOptions? options = null);
 
     string TileMimeType { get; }
     string ThumbnailMimeType { get; }
 
     /// <summary>
-    /// Get raster info including bands, detected sensor, and presets
+    /// Get raster info including bands, detected sensor, and presets, and <c>indexLayer</c>: the spectral
+    /// indices the raster can render as a map layer (<see cref="Registry.Ports.DroneDB.RasterIndexLayer"/>)
     /// </summary>
     public string GetRasterInfo(string path);
 
@@ -320,7 +419,8 @@ public interface IDdbWrapper
     /// region and apply a red-yellow-green color ramp. Used by WMS STYLES.
     /// </summary>
     /// <param name="inputPath">Path to the multi-band source raster.</param>
-    /// <param name="indexName">One of NDVI / NDRE / NDWI / EVI / SAVI (case-insensitive).</param>
+    /// <param name="indexName">One of NDVI / NDRE / NDWI / SAVI / EVI (case-insensitive), as listed by the raster's
+    /// <c>indexLayer</c> (<see cref="GetRasterInfo"/>): libddb refuses the others.</param>
     /// <param name="bbox">[minX, minY, maxX, maxY] in <paramref name="bboxSrs"/>.</param>
     /// <param name="bboxSrs">CRS authority code; null/empty defaults to "EPSG:4326".</param>
     /// <param name="width">Output width (1..4096).</param>
@@ -344,17 +444,16 @@ public interface IDdbWrapper
     /// Query features from a vector dataset (WFS GetFeature / OGC API Items).
     /// </summary>
     /// <param name="vectorPath">Path to the vector source (typically vec/source.gpkg).</param>
-    /// <param name="layerName">Layer to query; null uses the first layer.</param>
-    /// <param name="bbox">[minX,minY,maxX,maxY] spatial filter in <paramref name="bboxSrs"/>, or null.</param>
-    /// <param name="bboxSrs">CRS of <paramref name="bbox"/> (e.g. "EPSG:4326"); null when bbox is null.</param>
-    /// <param name="maxFeatures">Maximum features to return (clamped to [1,10000]; 0 → default 1000).</param>
-    /// <param name="startIndex">0-based feature offset for pagination.</param>
-    /// <param name="outputFormat">"application/json" (RFC7946 GeoJSON, default) or "application/gml+xml".</param>
+    /// <param name="query">Layer, filters, paging and output format.</param>
     /// <returns>Encoded features as a string.</returns>
-    public string QueryVector(string vectorPath, string? layerName = null,
-                              double[]? bbox = null, string? bboxSrs = null,
-                              int maxFeatures = 1000, int startIndex = 0,
-                              string outputFormat = "application/json");
+    public string QueryVector(string vectorPath, VectorQuery query);
+
+    /// <summary>
+    /// Number of features of <paramref name="query"/>'s layer that match its bbox and feature ids
+    /// (paging and format are ignored): WFS numberMatched. A GeoPackage counts with its R-tree
+    /// and primary key, without reading features.
+    /// </summary>
+    public long CountVector(string vectorPath, VectorQuery query);
 
     /// <summary>
     /// Describe a vector dataset (WFS DescribeFeatureType / OGC API collection).
@@ -363,4 +462,11 @@ public interface IDdbWrapper
     /// <param name="layerName">Layer to describe; null = all layers.</param>
     /// <returns>JSON describing driver, layers, fields, geometryType, srs, extent and feature count.</returns>
     public string DescribeVector(string vectorPath, string? layerName = null);
+
+    /// <summary>
+    /// Content of a .prj that gives a CAD drawing the coordinate system <paramref name="crs"/>
+    /// (DDBMakeCadPrj): ESRI WKT for an authority code, WKT or PROJ string; LOCAL_CS for "local".
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="crs"/> is not a coordinate system.</exception>
+    public string MakeCadPrj(string crs);
 }

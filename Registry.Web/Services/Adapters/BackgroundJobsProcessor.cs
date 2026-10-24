@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -19,11 +19,11 @@ public class BackgroundJobsProcessor : IBackgroundJobsProcessor
     private readonly IIndexedJobEnqueuer _indexedEnqueuer;
     private readonly JobStorage _storage;
 
-    public BackgroundJobsProcessor(IBackgroundJobClient client, IIndexedJobEnqueuer indexedEnqueuer, JobStorage storage = null)
+    public BackgroundJobsProcessor(IBackgroundJobClient client, IIndexedJobEnqueuer indexedEnqueuer, JobStorage storage)
     {
-        _client = client;
-        _indexedEnqueuer = indexedEnqueuer;
-        _storage = storage;
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+        _indexedEnqueuer = indexedEnqueuer ?? throw new ArgumentNullException(nameof(indexedEnqueuer));
+        _storage = storage ?? throw new ArgumentNullException(nameof(storage));
     }
 
     public string Enqueue(Expression<Action> methodCall) => _client.Enqueue(methodCall);
@@ -55,7 +55,7 @@ public class BackgroundJobsProcessor : IBackgroundJobsProcessor
     /// <returns>True when the job was re-queued; false when it no longer exists in Hangfire or is not in <c>Failed</c>.</returns>
     public bool Requeue(string jobId)
     {
-        using var connection = (_storage ?? JobStorage.Current).GetConnection();
+        using var connection = _storage.GetConnection();
         var stateName = connection.GetStateData(jobId)?.Name;
 
         if (stateName == null) return false; // no such job in Hangfire (expired/purged)
@@ -66,7 +66,7 @@ public class BackgroundJobsProcessor : IBackgroundJobsProcessor
 
     public JobStatus GetJobStatus(string jobId)
     {
-        using var connection = (_storage ?? JobStorage.Current).GetConnection();
+        using var connection = _storage.GetConnection();
         var stateName = connection.GetStateData(jobId)?.Name;
         return Enum.TryParse(stateName, out JobStatus state) ? state : JobStatus.Unknown;
     }

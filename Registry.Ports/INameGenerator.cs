@@ -1,4 +1,4 @@
-﻿namespace Registry.Ports;
+namespace Registry.Ports;
 
 public interface INameGenerator
 {

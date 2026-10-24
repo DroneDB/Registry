@@ -1,6 +1,5 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using Registry.Common.Model;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
 

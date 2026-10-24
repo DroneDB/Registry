@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.DTO.Ogc;
@@ -17,20 +18,24 @@ public interface IWcsCoverageService
     /// <summary>List all raster coverages exposed by the dataset (already filtered to
     /// <see cref="Registry.Ports.DroneDB.EntryType.GeoRaster"/> with a valid WGS84 bbox).</summary>
     Task<(IDDB Ddb, IReadOnlyList<OgcLayerDto> Layers)> GetCoveragesAsync(
-        string orgSlug, string dsSlug, string? folderPath);
+        string orgSlug, string dsSlug, string? folderPath, CancellationToken ct = default);
+
+    /// <summary>Cache key of a WCS document of the dataset (see <c>IOgcLayerCatalog.CacheKeyAsync</c>).</summary>
+    Task<string> CacheKeyAsync(string orgSlug, string dsSlug, string kind, string? detail, CancellationToken ct = default);
 
     /// <summary>Resolve a single coverage by id. Throws <see cref="Registry.Web.Exceptions.OgcException"/>
     /// with code <c>NoSuchCoverage</c> when the id is unknown.</summary>
     Task<(IDDB Ddb, OgcLayerDto Layer)> ResolveCoverageAsync(
-        string orgSlug, string dsSlug, string coverageId);
+        string orgSlug, string dsSlug, string coverageId, CancellationToken ct = default);
 
     /// <summary>Resolve multiple coverages at once. Missing ids are reported in one go.</summary>
     Task<(IDDB Ddb, IReadOnlyList<(string Id, OgcLayerDto Layer)> Coverages)> ResolveCoveragesAsync(
-        string orgSlug, string dsSlug, IEnumerable<string> coverageIds);
+        string orgSlug, string dsSlug, IEnumerable<string> coverageIds, CancellationToken ct = default);
 
-    /// <summary>Probe raster width/height/band metadata for a coverage. Failures are caught
-    /// and reported as zeros so callers can fall back to defaults.</summary>
-    WcsRasterInfo ProbeRaster(IDDB ddb, OgcLayerDto layer);
+    /// <summary>Probe raster width/height/band metadata for a coverage, cached per raster content
+    /// (entry hash). Failures are caught and reported as zeros so callers can fall back to
+    /// defaults (and are not cached).</summary>
+    Task<WcsRasterInfo> ProbeRasterAsync(IDDB ddb, OgcLayerDto layer, CancellationToken ct = default);
 
     /// <summary>Render the requested region of a coverage to the chosen MIME format.</summary>
     /// <param name="ddb">Resolved DDB handle for the dataset.</param>
@@ -44,8 +49,9 @@ public interface IWcsCoverageService
     /// preserves exactly these bands in the requested order.</param>
     /// <param name="outputCrs">Optional target CRS authority code (WCS 2.0 OUTPUTCRS /
     /// WCS 1.0 RESPONSE_CRS). Null/empty = EPSG:4326 (current behaviour).</param>
-    byte[] RenderRegion(IDDB ddb, OgcLayerDto layer, double[] bboxWgs84, int width, int height,
-        string mime, int[]? bands = null, string? outputCrs = null);
+    /// <param name="ct">Cancels waiting for a native render slot (not a running render).</param>
+    Task<byte[]> RenderRegionAsync(IDDB ddb, OgcLayerDto layer, double[] bboxWgs84, int width, int height,
+        string mime, int[]? bands = null, string? outputCrs = null, CancellationToken ct = default);
 
     /// <summary>Absolute base URL of the WCS endpoint for the current request (no trailing '?').</summary>
     string GetBaseUrl(string orgSlug, string dsSlug, string? folderPath);

@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+        Test support shared by Registry.Web.UnitTest and Registry.Web.IntegrationTest (RQ-04, D5):
+        the in-process web host (RegistryWebFactory), SQLite test databases (TestDb), builders and
+        seeds (ObjectsManagerBuilder, Seed, TestSettings), FakeTime, snapshots and the command line
+        harness. Not a test project. Nothing here loads native libddb: RegistryWebFactory serves
+        IDdbWrapper with FakeDdbWrapper (Registry.Adapters.Testing).
+        RootNamespace keeps the namespaces the files had in Registry.Web.Test (Registry.Web.Test.*).
+    -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>Registry.Web.Test</RootNamespace>
+        <IsPackable>false</IsPackable>
+        <IsTestProject>false</IsTestProject>
+        <Platforms>AnyCPU;x64</Platforms>
+        <Configurations>Debug;Release</Configurations>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Hangfire.Core" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+        <PackageReference Include="Microsoft.Extensions.Options" />
+        <PackageReference Include="Moq" />
+        <PackageReference Include="NUnit" />
+        <PackageReference Include="Serilog.Extensions.Logging" />
+        <PackageReference Include="Shouldly" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
+        <ProjectReference Include="..\Registry.Adapters.Testing\Registry.Adapters.Testing.csproj" />
+        <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
+        <ProjectReference Include="..\Registry.Test.Common\Registry.Test.Common.csproj" />
+        <ProjectReference Include="..\Registry.Web.Data\Registry.Web.Data.csproj" />
+        <ProjectReference Include="..\Registry.Web\Registry.Web.csproj" />
+    </ItemGroup>
+
+</Project>

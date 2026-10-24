@@ -40,13 +40,30 @@ services:
             db:
                 condition: service_healthy
         image: dronedb/registry:latest
+        # Graceful stop (Registry.Web/Utilities/ShutdownTimeouts.cs): Hangfire drains (15 s), libddb
+        # checkpoints its indexes (DDBShutdown, 10 s), the host allows 30 s; Docker must wait longer
+        stop_grace_period: 40s
+        # Anonymous liveness (GET /health/live; /quickhealth needs the monitor token). The image
+        # HEALTHCHECK runs the same script; it is repeated here for the longer start period: the
+        # first start after the switch to the non-root user hands ./data to it (see entrypoint.sh).
         healthcheck:
-            test: [ "CMD", "curl", "-f", "http://localhost:5000/quickhealth" ]
+            test: [ "CMD", "/healthcheck.sh" ]
             interval: 30s
             timeout: 10s
             retries: 5
+            start_period: 10m
         environment:
             - INSTANCE_TYPE=2
+            # The Registry processes sharing this machine (XI-06): each takes its share of the cores and
+            # memory (web 1/5, each node 2/5) instead of planning the whole machine. Keep these in step
+            # with the services below; an empty or removed value plans the whole machine, as before.
+            - AppSettings__HostBudget__WebServers=1
+            - AppSettings__HostBudget__ProcessingNodes=2
+            # The image runs in UTC; keep the local time these deployments always used
+            - TZ=Europe/Rome
+            # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
+            # altitude of images without one in their EXIF falls back to the GPS altitude
+            - DDB_OPENTOPOGRAPHY_KEY=${DDB_OPENTOPOGRAPHY_KEY:-}
             # Keep GDAL/Nexus build scratch on the data volume, off the container
             # root filesystem and off the /tmp tmpfs. /data is bind-mounted below;
             # /data/temp must exist on the host (created by the app on startup).
@@ -74,8 +91,22 @@ services:
             registry_webserver:
                 condition: service_healthy
         image: dronedb/registry:latest
+        # Graceful stop (Registry.Web/Utilities/ShutdownTimeouts.cs): Hangfire drains (15 s), libddb
+        # checkpoints its indexes (DDBShutdown, 10 s), the host allows 30 s; Docker must wait longer
+        stop_grace_period: 40s
+        # Fixed host name: the node's log file is logs/registry-node-<host name>.txt (the nodes share
+        # ./data), so it must not change when the container is recreated
+        hostname: node-a
+        # Healthcheck: the image HEALTHCHECK (docker/healthcheck.sh: the Registry process is alive)
         environment:
             - INSTANCE_TYPE=1
+            # The Registry processes sharing this machine (XI-06), see registry_webserver
+            - AppSettings__HostBudget__WebServers=1
+            - AppSettings__HostBudget__ProcessingNodes=2
+            - TZ=Europe/Rome
+            # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
+            # altitude of images without one in their EXIF falls back to the GPS altitude
+            - DDB_OPENTOPOGRAPHY_KEY=${DDB_OPENTOPOGRAPHY_KEY:-}
             # Keep GDAL/Nexus build scratch on the data volume (see webserver).
             - CPL_TMPDIR=/data/temp
             - TMPDIR=/data/temp
@@ -99,8 +130,22 @@ services:
             registry_webserver:
                 condition: service_healthy
         image: dronedb/registry:latest
+        # Graceful stop (Registry.Web/Utilities/ShutdownTimeouts.cs): Hangfire drains (15 s), libddb
+        # checkpoints its indexes (DDBShutdown, 10 s), the host allows 30 s; Docker must wait longer
+        stop_grace_period: 40s
+        # Fixed host name: the node's log file is logs/registry-node-<host name>.txt (the nodes share
+        # ./data), so it must not change when the container is recreated
+        hostname: node-b
+        # Healthcheck: the image HEALTHCHECK (docker/healthcheck.sh: the Registry process is alive)
         environment:
             - INSTANCE_TYPE=1
+            # The Registry processes sharing this machine (XI-06), see registry_webserver
+            - AppSettings__HostBudget__WebServers=1
+            - AppSettings__HostBudget__ProcessingNodes=2
+            - TZ=Europe/Rome
+            # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
+            # altitude of images without one in their EXIF falls back to the GPS altitude
+            - DDB_OPENTOPOGRAPHY_KEY=${DDB_OPENTOPOGRAPHY_KEY:-}
             # Keep GDAL/Nexus build scratch on the data volume (see webserver).
             - CPL_TMPDIR=/data/temp
             - TMPDIR=/data/temp

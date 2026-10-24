@@ -1,59 +1,92 @@
+#nullable enable
+using System.Collections.Generic;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Services.Ports;
 
 /// <summary>
-/// Resolves on-disk paths to build artifacts (COG, MVT, GPKG sidecar, ...) for a given dataset entry.
-/// DRY entry point used by all OGC services (WMS/WMTS/WFS/WCS/OGC API).
+/// The builds of dataset entries by role (plan decision D8, XI-04): libddb's build manifest
+/// (<see cref="IDdbBuild.GetBuildArtifacts"/>) says whether an entry is buildable, what state its build
+/// is in and which artifacts exist, each with a role (<see cref="ArtifactRoles"/>), a path relative to
+/// the build root, a media type and an optional download name. Registry chooses roles here and serves
+/// the paths libddb returns; it never names a build folder, an artifact file or a buildable type.
 /// </summary>
 public interface IBuildArtifactResolver
 {
-    /// <summary>Full path to the MVT root directory (build/{hash}/mvt/).</summary>
-    string GetMvtDir(IDDB ddb, string entryHash);
-
-    /// <summary>Full path to MVT metadata.json (build/{hash}/mvt/metadata.json).</summary>
-    string GetMvtMetadataPath(IDDB ddb, string entryHash);
-
-    /// <summary>Full path to a single MVT tile (build/{hash}/mvt/{z}/{x}/{y}.pbf).</summary>
-    string GetMvtTilePath(IDDB ddb, string entryHash, int z, int x, int y);
-
-    /// <summary>Full path to a raster COG (build/{hash}/cog/cog.tif).</summary>
-    string GetCogPath(IDDB ddb, string entryHash);
-
-    /// <summary>Full path to the GPKG vector sidecar (build/{hash}/vec/source.gpkg).</summary>
-    string GetVectorQueryPath(IDDB ddb, string entryHash);
-
-    /// <summary>Full path to the COPC point cloud (build/{hash}/copc/cloud.copc.laz).</summary>
-    string GetCopcPath(IDDB ddb, string entryHash);
+    /// <summary>
+    /// Whether libddb builds entries of <paramref name="type"/> at all (<c>DDBGetEntryTypes</c>, read once per
+    /// process): a listing asks the manifest only about the entries that may have a build.
+    /// </summary>
+    bool IsBuildableType(EntryType type);
 
     /// <summary>
-    /// Full path to the Gaussian Splat artifact (build/{hash}/gsplat/model.spz).
-    /// Reserved for future gsplat HTTP endpoints.
+    /// Whether entries of <paramref name="type"/> have a thumbnail at all (<c>DDBGetEntryTypes</c>: "file" or "build",
+    /// not "none"): the one rule of the thumbnail endpoints, read once per process. A type without one (models,
+    /// videos, panoramas, vectors, ...) has nothing a renderer could open.
     /// </summary>
-    string GetGsplatPath(IDDB ddb, string entryHash);
+    bool HasThumbnail(EntryType type);
 
     /// <summary>
-    /// Full path to the Gaussian Splat level-of-detail artifact (build/{hash}/gsplat/model.rad).
-    /// Reserved for future gsplat HTTP endpoints.
+    /// The entry types as libddb reports them (<c>DDBGetEntryTypes</c>: id, name, buildable, thumbnail, sidecar
+    /// extensions, artifact roles), in libddb's order, read once per process (so once per libddb version). Whoever
+    /// needs a type rule asks here; Registry holds none of its own.
     /// </summary>
-    string GetGsplatLodPath(IDDB ddb, string entryHash);
+    IReadOnlyList<EntryTypeInfo> EntryTypes { get; }
+
+    /// <summary>The build of one entry (one native call).</summary>
+    EntryBuildArtifacts GetBuild(IDDB ddb, string entryPath);
+
+    /// <summary>The builds of several entries with one native call, one element per path, in input order.</summary>
+    IReadOnlyList<EntryBuildArtifacts> GetBuilds(IDDB ddb, IReadOnlyList<string> entryPaths);
 
     /// <summary>
-    /// Full path to the Gaussian Splat georeferencing sidecar (build/{hash}/gsplat/georef.json).
-    /// Reserved for future gsplat HTTP endpoints.
+    /// The dataset path of the file a renderer (thumbnails, tiles, raster analysis) reads for
+    /// <paramref name="entry"/>: the artifact of its own build that a renderer reads, or the entry itself
+    /// when it is not built for rendering (not buildable, a sidecar, a type with no rendered role).
     /// </summary>
-    string GetGsplatGeorefPath(IDDB ddb, string entryHash);
-
-    /// <summary>Full path to the OGC 3D Tiles root directory (build/{hash}/3dtiles/).</summary>
-    string Get3DTilesDir(IDDB ddb, string entryHash);
+    /// <returns>The path, or null when the entry is rendered from an artifact that does not exist yet
+    /// (build pending, running or failed).</returns>
+    string? GetRenderSource(IDDB ddb, Entry entry);
 
     /// <summary>
-    /// Full path to the OGC 3D Tiles root tileset (build/{hash}/3dtiles/tileset.json).
-    /// Produced for MODEL entries alongside the legacy Nexus output; the b3dm tiles it
-    /// references are served from the same directory by the generic build-file endpoint.
+    /// The artifact of <paramref name="build"/> offered as a download (the first one with a download
+    /// name), with the local file, the name and the media type it is served with.
     /// </summary>
-    string Get3DTilesTilesetPath(IDDB ddb, string entryHash);
+    /// <returns>The download, or null when the entry's own build has no downloadable artifact.</returns>
+    BuildDownload? GetDownload(EntryBuildArtifacts build);
 
-    /// <summary>Returns true if the given artifact path exists on disk.</summary>
-    bool ArtifactExists(string fullPath);
+    /// <summary>
+    /// The artifact with <paramref name="role"/> of the build named by <paramref name="hash"/>, when it exists: what
+    /// the OGC services and the MVT tiles read. The entry is <paramref name="entryPath"/> when the caller knows it,
+    /// else the entry with that hash among the types whose builds produce the role (libddb's entry types). A request
+    /// pays the manifest once per build: the location is kept (process memory, bounded) while it exists, and a
+    /// role's location in a build does not change within a libddb version.
+    /// </summary>
+    /// <param name="ddb">The dataset.</param>
+    /// <param name="hash">The hash that names the build.</param>
+    /// <param name="role">The artifact's role (<see cref="ArtifactRoles"/>).</param>
+    /// <param name="relativePath">A file inside a directory artifact ('/'-separated, e.g. an MVT tile); null for the
+    /// artifact's own file: a file artifact itself, a directory artifact's descriptor.</param>
+    /// <param name="entryPath">The entry whose build it is, when the caller knows it.</param>
+    /// <returns>The local path of the file when it exists, else null.</returns>
+    string? FindArtifactFile(IDDB ddb, string hash, string role, string? relativePath = null, string? entryPath = null);
+
+    /// <summary>
+    /// The absolute path of a file of a build (an artifact or a file below a directory artifact),
+    /// containment-checked by libddb; null when the file is not one of the build's files.
+    /// </summary>
+    /// <exception cref="DdbInvalidArgumentsException">The hash is malformed or the path breaks the path rules.</exception>
+    string? ResolveFile(IDDB ddb, string hash, string path);
+
+    /// <summary>
+    /// Copies the builds of <paramref name="entryPaths"/> (artifacts and pending markers) from
+    /// <paramref name="source"/> to <paramref name="destination"/>, once per build: what a transfer
+    /// needs so the transferred files are not built again. Entries without a build of their own (not
+    /// buildable, sidecars) or with nothing built yet are skipped.
+    /// </summary>
+    /// <returns>The number of builds copied.</returns>
+    int CopyBuilds(IDDB source, IReadOnlyList<string> entryPaths, IDDB destination);
 }
+
+/// <summary>A build artifact served as a download: its local file, the file name offered and the media type sent.</summary>
+public sealed record BuildDownload(string LocalPath, string FileName, string MediaType);

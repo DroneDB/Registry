@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Registry.Common;
@@ -17,8 +18,8 @@ public interface IUsersManager
 {
     Task<AuthenticateResponse> Authenticate(string userName, string password);
     Task<AuthenticateResponse> Authenticate(string token);
-    Task<IEnumerable<UserDto>> GetAll();
-    Task<IEnumerable<UserDetailDto>> GetAllDetailed();
+    Task<IEnumerable<UserDto>> GetAll(CancellationToken ct = default);
+    Task<IEnumerable<UserDetailDto>> GetAllDetailed(CancellationToken ct = default);
     Task<UserDto> CreateUser(string userName, string email, string password, string[] roles);
 
     /// <summary>
@@ -38,12 +39,12 @@ public interface IUsersManager
     Task<UserStorageInfo> GetUserStorageInfo(string userName = null);
     Task<Dictionary<string, object>> GetUserMeta(string userName = null);
     Task SetUserMeta(string userId, Dictionary<string, object> meta);
-    Task<string[]> GetRoles();
+    Task<string[]> GetRoles(CancellationToken ct = default);
     Task CreateRole(string roleName);
     Task DeleteRole(string roleName);
     Task UpdateUserRoles(string userName, string[] roles);
     Task UpdateUser(string userName, string email);
-    Task<UserOrganizationMembershipDto[]> GetUserOrganizations(string userName);
+    Task<UserOrganizationMembershipDto[]> GetUserOrganizations(string userName, CancellationToken ct = default);
     Task AddUserToOrganization(string userName, string orgSlug, OrganizationPermissions permissions);
     Task RemoveUserFromOrganization(string userName, string orgSlug);
     Task UpdateUserOrganizationPermissions(string userName, string orgSlug, OrganizationPermissions permissions);

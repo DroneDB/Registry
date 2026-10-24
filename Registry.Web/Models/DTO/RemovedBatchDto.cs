@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Registry.Web.Data.Models;
 
 namespace Registry.Web.Models.DTO;

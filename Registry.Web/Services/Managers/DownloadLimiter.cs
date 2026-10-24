@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.Configuration;
@@ -17,7 +18,7 @@ public class DownloadLimiter : IDownloadLimiter
     private readonly ConcurrentDictionary<string, int> _activeDownloads = new();
     private readonly ILogger<DownloadLimiter> _logger;
 
-    public DownloadLimiter(IOptions<AppSettings> settings, ILogger<DownloadLimiter> logger)
+    public DownloadLimiter(IOptions<DownloadOptions> settings, ILogger<DownloadLimiter> logger)
     {
         _maxConcurrentDownloads = settings.Value.MaxConcurrentDownloadsPerUser;
         _logger = logger;
@@ -28,6 +29,12 @@ public class DownloadLimiter : IDownloadLimiter
         else
             _logger.LogInformation("Download limiter is disabled (MaxConcurrentDownloadsPerUser is null)");
     }
+
+    /// <summary>
+    /// Test seam: runs in <see cref="ReleaseSlot"/> after the counter reached 0 and before the empty
+    /// entry is removed, so a test can interleave a concurrent acquire there deterministically.
+    /// </summary>
+    internal Action<string> BeforeRemoveEmptyEntry { get; set; }
 
     /// <inheritdoc />
     public bool IsEnabled => _maxConcurrentDownloads is > 0;
@@ -65,10 +72,12 @@ public class DownloadLimiter : IDownloadLimiter
         _logger.LogDebug("Download slot released for '{Key}': {Count}/{Max}",
             key, newCount, _maxConcurrentDownloads);
 
-        // Clean up entries that reach 0 to avoid unbounded dictionary growth
+        // Clean up entries that reach 0 to avoid unbounded dictionary growth. Compare-and-remove:
+        // only an entry that is still 0 goes; a concurrent acquire in between keeps its slot.
         if (newCount <= 0)
         {
-            _activeDownloads.TryRemove(key, out _);
+            BeforeRemoveEmptyEntry?.Invoke(key);
+            _activeDownloads.TryRemove(new KeyValuePair<string, int>(key, 0));
         }
     }
 

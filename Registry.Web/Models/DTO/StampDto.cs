@@ -1,17 +1,17 @@
-﻿using System.Collections.Generic;
-using Newtonsoft.Json;
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.DTO;
 
 public class StampDto
 {
-    [JsonProperty("checksum")]
+    [JsonPropertyName("checksum")]
     public string Checksum { get; set; }
 
-    [JsonProperty("entries")]
+    [JsonPropertyName("entries")]
     public List<Dictionary<string,string>> Entries { get; set; }
 
-    [JsonProperty("meta")]
+    [JsonPropertyName("meta")]
     public List<string> Meta { get; set; }
 
 }

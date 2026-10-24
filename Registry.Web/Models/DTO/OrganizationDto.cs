@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
@@ -38,12 +38,14 @@ public class OrganizationPermissionsDto
     };
 }
 
+/// <summary>
+/// An organization as the API answers it (output only: what a client may send is
+/// <see cref="OrganizationRequestDto"/>).
+/// </summary>
 public class OrganizationDto
 {
-    [Required]
     public string Slug { get; set; }
 
-    [Required]
     public string Name { get; set; }
     public string Description { get; set; }
     public DateTime CreationDate { get; set; }
@@ -57,4 +59,26 @@ public class OrganizationDto
 #nullable enable
     public OrganizationPermissionsDto? Permissions { get; set; }
 #nullable restore
+}
+
+/// <summary>
+/// What a client sends to create (<c>POST /orgs</c>) or edit (<c>PUT /orgs/{org}</c>) an organization, as a form.
+/// The members of the answer that a client does not set (<c>CreationDate</c>, <c>Permissions</c>) are not here, so a
+/// request cannot bind them. <see cref="Owner"/> is a user id: only an administrator may name an owner other than
+/// the caller (<c>OrganizationsManager</c> refuses anybody else with 403). Members the client sends that are not
+/// listed are ignored.
+/// </summary>
+public class OrganizationRequestDto
+{
+    [Required]
+    public string Slug { get; init; }
+
+    [Required]
+    public string Name { get; init; }
+
+    public string Description { get; init; }
+
+    public string Owner { get; init; }
+
+    public bool IsPublic { get; init; }
 }

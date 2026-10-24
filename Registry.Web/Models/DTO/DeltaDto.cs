@@ -1,33 +1,33 @@
-﻿using Registry.Common;
+using Registry.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Models.DTO;
 
 public class DeltaDto
 {
-    [JsonProperty("adds")]
+    [JsonPropertyName("adds")]
     public AddActionDto[] Adds { get; set; }
 
-    [JsonProperty("removes")]
+    [JsonPropertyName("removes")]
     public RemoveAction[] Removes { get; set; }
 
     public string[] MetaAdds { get; set; }
 
-    [JsonProperty("metaRemoves")]
+    [JsonPropertyName("metaRemoves")]
     public string[] MetaRemoves { get; set; }
 }
 
 public class AddActionDto
 {
-    [JsonProperty("path")]
+    [JsonPropertyName("path")]
     public string Path { get;  }
 
-    [JsonProperty("hash")]
+    [JsonPropertyName("hash")]
     public string Hash { get;  }
 
     public AddActionDto(string path, string hash)
@@ -44,10 +44,10 @@ public class AddActionDto
 
 public class RemoveActionDto
 {
-    [JsonProperty("path")]
+    [JsonPropertyName("path")]
     public string Path { get; }
 
-    [JsonProperty("hash")]
+    [JsonPropertyName("hash")]
     public string Hash { get; }
 
     public RemoveActionDto(string path, string hash)

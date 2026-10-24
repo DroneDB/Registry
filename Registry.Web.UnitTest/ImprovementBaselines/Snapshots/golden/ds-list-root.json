@@ -1,0 +1,311 @@
+{
+  "request": "POST /orgs/golden-org/ds/golden-ds/list",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": [
+    {
+      "path": "a.txt",
+      "hash": "457ca8f0e0b21bbad706ae2c3f7bfaace967212b6c8cbf5cfeb478e388560ff7",
+      "type": 2,
+      "properties": null,
+      "mtime": 1700000000,
+      "size": 31,
+      "depth": 0,
+      "point_geom": null,
+      "polygon_geom": null
+    },
+    {
+      "path": "cloud.las",
+      "hash": "76d471dfd1b2dc1c5183969ba624e582422d900da9572b7873e450147123edfc",
+      "type": 5,
+      "properties": {
+        "dimensions": [
+          "X",
+          "Y",
+          "Z",
+          "Intensity",
+          "ReturnNumber",
+          "NumberOfReturns",
+          "ScanDirectionFlag",
+          "EdgeOfFlightLine",
+          "Classification",
+          "Synthetic",
+          "KeyPoint",
+          "Withheld",
+          "Overlap",
+          "ScanAngleRank",
+          "UserData",
+          "PointSourceId"
+        ],
+        "pointCount": 16,
+        "projection": "PROJCS[\"WGS 84 / UTM zone 32N\",GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563,AUTHORITY[\"EPSG\",\"7030\"]],AUTHORITY[\"EPSG\",\"6326\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4326\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",9],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH],AUTHORITY[\"EPSG\",\"32632\"]]"
+      },
+      "mtime": 1700000000,
+      "size": 749,
+      "depth": 0,
+      "point_geom": {
+        "crs": {
+          "properties": {
+            "name": "EPSG:4326"
+          },
+          "type": "name"
+        },
+        "geometry": {
+          "coordinates": [
+            9.000076,
+            45.153531,
+            100.0
+          ],
+          "type": "Point"
+        },
+        "properties": {},
+        "type": "Feature"
+      },
+      "polygon_geom": {
+        "crs": {
+          "properties": {
+            "name": "EPSG:4326"
+          },
+          "type": "name"
+        },
+        "geometry": {
+          "coordinates": [
+            [
+              [
+                9.0,
+                45.15347718336,
+                100.0
+              ],
+              [
+                9.00015266311,
+                45.15347718336,
+                100.0
+              ],
+              [
+                9.00015266311,
+                45.15358520346,
+                100.0
+              ],
+              [
+                9.0,
+                45.15358520346,
+                100.0
+              ],
+              [
+                9.0,
+                45.15347718336,
+                100.0
+              ]
+            ]
+          ],
+          "type": "Polygon"
+        },
+        "properties": {},
+        "type": "Feature"
+      },
+      "buildStatus": "queued"
+    },
+    {
+      "path": "layer.geojson",
+      "hash": "6ff9caf347f675d2b45a6d9aa600a0b337f23c193c971302e55bca4a2151bde4",
+      "type": 14,
+      "properties": {
+        "vector": {
+          "driver": "GeoJSON",
+          "layers": [
+            {
+              "extent": [
+                8.25,
+                46.84,
+                8.251,
+                46.841
+              ],
+              "featureCount": 2,
+              "geometryType": "Unknown (any)",
+              "name": "layer"
+            }
+          ]
+        }
+      },
+      "mtime": 1700000000,
+      "size": 336,
+      "depth": 0,
+      "point_geom": {
+        "crs": {
+          "properties": {
+            "name": "EPSG:4326"
+          },
+          "type": "name"
+        },
+        "geometry": {
+          "coordinates": [
+            8.2505,
+            46.8405,
+            0.0
+          ],
+          "type": "Point"
+        },
+        "properties": {},
+        "type": "Feature"
+      },
+      "polygon_geom": {
+        "crs": {
+          "properties": {
+            "name": "EPSG:4326"
+          },
+          "type": "name"
+        },
+        "geometry": {
+          "coordinates": [
+            [
+              [
+                8.25,
+                46.84,
+                0.0
+              ],
+              [
+                8.251,
+                46.84,
+                0.0
+              ],
+              [
+                8.251,
+                46.841,
+                0.0
+              ],
+              [
+                8.25,
+                46.841,
+                0.0
+              ],
+              [
+                8.25,
+                46.84,
+                0.0
+              ]
+            ]
+          ],
+          "type": "Polygon"
+        },
+        "properties": {},
+        "type": "Feature"
+      },
+      "buildStatus": "queued"
+    },
+    {
+      "path": "ortho.tif",
+      "hash": "d0d2b869615dca09ef0055f2014401bab298503e3e1f10e339f14f5788ea702f",
+      "type": 4,
+      "properties": {
+        "bands": [
+          {
+            "colorInterp": "Red",
+            "type": "Byte"
+          },
+          {
+            "colorInterp": "Green",
+            "type": "Byte"
+          },
+          {
+            "colorInterp": "Blue",
+            "type": "Byte"
+          }
+        ],
+        "geotransform": [
+          500000.0,
+          0.5,
+          0.0,
+          5000016.0,
+          0.0,
+          -0.5
+        ],
+        "height": 32,
+        "projection": "PROJCS[\"WGS 84 / UTM zone 32N\",GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563,AUTHORITY[\"EPSG\",\"7030\"]],AUTHORITY[\"EPSG\",\"6326\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4326\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",9],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH],AUTHORITY[\"EPSG\",\"32632\"]]",
+        "width": 32
+      },
+      "mtime": 1700000000,
+      "size": 3462,
+      "depth": 0,
+      "point_geom": {
+        "crs": {
+          "properties": {
+            "name": "EPSG:4326"
+          },
+          "type": "name"
+        },
+        "geometry": {
+          "coordinates": [
+            9.000102,
+            45.153549,
+            0.0
+          ],
+          "type": "Point"
+        },
+        "properties": {},
+        "type": "Feature"
+      },
+      "polygon_geom": {
+        "crs": {
+          "properties": {
+            "name": "EPSG:4326"
+          },
+          "type": "name"
+        },
+        "geometry": {
+          "coordinates": [
+            [
+              [
+                9.0,
+                45.1536212103,
+                0.0
+              ],
+              [
+                9.000203550941,
+                45.15362121012,
+                0.0
+              ],
+              [
+                9.000203550429,
+                45.15347718317,
+                0.0
+              ],
+              [
+                9.0,
+                45.15347718336,
+                0.0
+              ],
+              [
+                9.0,
+                45.1536212103,
+                0.0
+              ]
+            ]
+          ],
+          "type": "Polygon"
+        },
+        "properties": {},
+        "type": "Feature"
+      },
+      "artifacts": [
+        {
+          "role": "raster.cog",
+          "url": "http://localhost/orgs/golden-org/ds/golden-ds/build/d0d2b869615dca09ef0055f2014401bab298503e3e1f10e339f14f5788ea702f/cog/cog.tif",
+          "mediaType": "image/tiff; application=geotiff; profile=cloud-optimized"
+        }
+      ]
+    },
+    {
+      "path": "sub",
+      "hash": null,
+      "type": 1,
+      "properties": null,
+      "mtime": 1700000000,
+      "size": 0,
+      "depth": 0,
+      "point_geom": null,
+      "polygon_geom": null
+    }
+  ]
+}

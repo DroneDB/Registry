@@ -1,9 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json.Serialization;
-using Newtonsoft.Json;
 using Registry.Common;
 
 namespace Registry.Web.Data.Models;
@@ -16,7 +14,7 @@ public class Dataset : IRequestAccess
     /// <summary>Human-readable slug identifier (max 128 chars).</summary>
     [MaxLength(128)]
     [Required]
-    public string Slug { get; set; }
+    public string Slug { get; set; } = null!;
 
     /// <summary>Unique GUID reference for the dataset storage folder.</summary>
     public Guid InternalRef { get; set; }
@@ -30,13 +28,13 @@ public class Dataset : IRequestAccess
     public DateTime CreationDate { get; set; }
 
     /// <summary>Array of file types present in the dataset (e.g., "image", "ortho", "pointcloud").</summary>
-    public string[] FileTypes { get; set; }
+    public string[]? FileTypes { get; set; }
 
     /// <summary>Parent organization this dataset belongs to.</summary>
     [Required]
-    public Organization Organization { get; set; }
+    public Organization Organization { get; set; } = null!;
 
     /// <summary>Collection of upload batches associated with this dataset.</summary>
-    public virtual ICollection<Batch> Batches { get; set; }
+    public virtual ICollection<Batch> Batches { get; set; } = null!;
 
 }

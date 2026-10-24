@@ -2,13 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using Registry.Ports.Json;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.DTO.Ogc;
+using Registry.Web.Services.Caching;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -18,30 +20,30 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Enumerates entries via <see cref="IDdbManager"/> and projects them to OGC layer descriptors.
-/// Cached 5 minutes in Redis under "ogc-layers-{org}-{ds}[-{folder}]".
+/// Cached 5 minutes under a generation-scoped key (<see cref="IOgcCacheKeys"/>).
 /// </summary>
 public class OgcLayerCatalog : IOgcLayerCatalog
 {
     private readonly IDdbManager _ddbManager;
-    private readonly IUtils _utils;
-    private readonly IDistributedCache _cache;
+    private readonly IDatasetResolver _datasets;
+    private readonly IRecordCache _records;
     private readonly IBuildArtifactResolver _artifacts;
     private readonly IDdbWrapper _ddbWrapper;
-    private readonly ICacheKeyScanner _keyScanner;
+    private readonly IOgcCacheKeys _keys;
     private readonly ILogger<OgcLayerCatalog> _logger;
-    private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);
+    private static readonly RecordCacheOptions LayersCache = RecordCacheOptions.For(TimeSpan.FromMinutes(5));
 
-    public OgcLayerCatalog(IDdbManager ddbManager, IUtils utils, IDistributedCache cache,
+    public OgcLayerCatalog(IDdbManager ddbManager, IDatasetResolver datasets, IRecordCache records,
         IBuildArtifactResolver artifacts, IDdbWrapper ddbWrapper,
-        ICacheKeyScanner keyScanner,
+        IOgcCacheKeys keys,
         ILogger<OgcLayerCatalog> logger)
     {
         _ddbManager = ddbManager;
-        _utils = utils;
-        _cache = cache;
+        _datasets = datasets;
+        _records = records;
         _artifacts = artifacts;
         _ddbWrapper = ddbWrapper;
-        _keyScanner = keyScanner;
+        _keys = keys;
         _logger = logger;
     }
 
@@ -50,10 +52,8 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         if (string.IsNullOrWhiteSpace(orgSlug) || string.IsNullOrWhiteSpace(dsSlug)) return;
         try
         {
-            // Capabilities keys: ogc-caps-{service}-v2-{version}-{org}-{ds}-{folder}
-            await _keyScanner.RemoveByPatternAsync(CacheCategories.ForOgcCapabilitiesPattern(orgSlug, dsSlug));
-            // Layer enumeration keys: ogc-layers-{org}-{ds}-{folder}
-            await _keyScanner.RemoveByPatternAsync(CacheCategories.ForOgcLayersPattern(orgSlug, dsSlug));
+            // Layer lists and every capabilities document use CacheKeyAsync: one new generation
+            await _keys.InvalidateAsync(orgSlug, dsSlug);
         }
         catch (Exception ex)
         {
@@ -61,23 +61,37 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         }
     }
 
-    public async Task<IReadOnlyList<OgcLayerDto>> GetLayersAsync(string orgSlug, string dsSlug,
-        string? folderPath = null)
-    {
-        var key = $"ogc-layers-{orgSlug}-{dsSlug}-{folderPath ?? string.Empty}";
-        var cached = await _cache.GetRecordAsync<List<OgcLayerDto>>(key);
-        if (cached != null) return cached;
+    public Task<string> CacheKeyAsync(string orgSlug, string dsSlug, string kind, string? detail = null,
+        CancellationToken ct = default) =>
+        _keys.ForAsync(orgSlug, dsSlug, kind, detail, ct);
 
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+    public async Task<IReadOnlyList<OgcLayerDto>> GetLayersAsync(string orgSlug, string dsSlug,
+        string? folderPath = null, bool includeLocal = false, CancellationToken ct = default)
+    {
+        var all = await GetAllLayersAsync(orgSlug, dsSlug, folderPath, ct);
+        return includeLocal ? all : all.Where(l => !l.IsLocal).ToList();
+    }
+
+    private async Task<List<OgcLayerDto>> GetAllLayersAsync(string orgSlug, string dsSlug, string? folderPath,
+        CancellationToken ct)
+    {
+        var key = await _keys.ForAsync(orgSlug, dsSlug, "layers", folderPath, ct);
+        return await _records.GetOrCreateRecordAsync(key, token => ListLayersAsync(orgSlug, dsSlug, folderPath, token),
+            LayersCache, ct);
+    }
+
+    private async Task<List<OgcLayerDto>> ListLayersAsync(string orgSlug, string dsSlug, string folderPath,
+        CancellationToken ct)
+    {
+        // Callers are the OGC managers, after the request was authorized (OgcAuthorizationFilter)
+        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, ct: ct);
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
-        var entries = ddb.Search(folderPath ?? string.Empty, recursive: true) ?? [];
+        var entries = ddb.Find(EntryQuery.OfTypes(folderPath, EntryType.GeoRaster, EntryType.Vector));
         var result = new List<OgcLayerDto>();
 
         foreach (var e in entries)
         {
-            if (e == null) continue;
-            if (e.Type != EntryType.GeoRaster && e.Type != EntryType.Vector) continue;
 
             var entryBbox = ExtractBboxFromPolygon(e.PolygonGeometry);
 
@@ -102,12 +116,12 @@ public class OgcLayerCatalog : IOgcLayerCatalog
                     EntryHash = e.Hash ?? string.Empty,
                     BboxWgs84 = entryBbox,
                     GeometryType = ExtractVectorGeometryType(e),
-                    HasBuiltArtifact = false
+                    HasBuiltArtifact = false,
+                    IsLocal = IsLocalEntry(e)
                 });
             }
             else
             {
-                var (bandCount, multispectral) = ExtractRasterBandInfo(e);
                 result.Add(new OgcLayerDto
                 {
                     Name = e.Path,
@@ -116,15 +130,17 @@ public class OgcLayerCatalog : IOgcLayerCatalog
                     EntryPath = e.Path,
                     EntryHash = e.Hash ?? string.Empty,
                     BboxWgs84 = entryBbox,
-                    BandCount = bandCount,
-                    IsMultispectral = multispectral
+                    BandCount = ExtractBandCount(e)
                 });
             }
         }
 
-        await _cache.SetRecordAsync(key, result, Ttl);
         return result;
     }
+
+    // Index-time flag set by DroneDB for drawings without a coordinate system.
+    private static bool IsLocalEntry(Entry e) =>
+        e.Properties != null && e.Properties.TryGetValue("georeferenced", out var g) && g.ValueKind == JsonValueKind.False;
 
     /// <summary>
     /// Expand a vector entry into one <see cref="OgcLayerDto"/> per inner GPKG layer
@@ -134,8 +150,8 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     private List<OgcLayerDto>? TryExpandVectorLayers(IDDB ddb, Entry e, double[]? entryBbox)
     {
         if (string.IsNullOrEmpty(e.Hash)) return null;
-        var gpkgPath = _artifacts.GetVectorQueryPath(ddb, e.Hash);
-        if (!_artifacts.ArtifactExists(gpkgPath)) return null;
+        var gpkgPath = _artifacts.FindArtifactFile(ddb, e.Hash, ArtifactRoles.VectorGpkg, entryPath: e.Path);
+        if (gpkgPath == null) return null;
 
         string json;
         try
@@ -149,10 +165,10 @@ public class OgcLayerCatalog : IOgcLayerCatalog
             return null;
         }
 
-        JToken root;
+        JsonDocument document;
         try
         {
-            root = JToken.Parse(json);
+            document = JsonDocument.Parse(json);
         }
         catch (Exception ex)
         {
@@ -160,28 +176,50 @@ public class OgcLayerCatalog : IOgcLayerCatalog
             return null;
         }
 
-        var layers = root["layers"] as JArray;
-        if (layers == null || layers.Count == 0) return null;
+        using var _ = document;
+        var layers = document.RootElement.Member("layers") is { ValueKind: JsonValueKind.Array } array ? array : (JsonElement?)null;
+        if (layers is not { } layerArray || layerArray.GetArrayLength() == 0) return null;
 
-        var list = new List<OgcLayerDto>(layers.Count);
-        foreach (var l in layers)
+        var list = new List<OgcLayerDto>(layerArray.GetArrayLength());
+        foreach (var l in layerArray.Items())
         {
-            var name = l["name"]?.Value<string>();
+            var name = l.Member("name").Text();
             if (string.IsNullOrWhiteSpace(name)) continue;
 
-            var geomType = l["geometryType"]?.Value<string>();
-            var extent = l["extent"] as JArray;
+            var geomType = l.Member("geometryType").Text();
+
+            // A GPKG layer without an SRS (DescribeVector reports "srs": "") is a local CAD
+            // drawing: its extent is in drawing units, not WGS84.
+            if (l.Member("srs") is { ValueKind: JsonValueKind.String } srs && string.IsNullOrEmpty(srs.GetString()))
+            {
+                list.Add(new OgcLayerDto
+                {
+                    Name = $"{e.Path}:{name}",
+                    Title = $"{e.Path}:{name}",
+                    EntryType = EntryType.Vector,
+                    EntryPath = e.Path,
+                    EntryHash = e.Hash ?? string.Empty,
+                    InnerLayerName = name,
+                    BboxWgs84 = null,
+                    SupportedCrs = [],
+                    GeometryType = geomType,
+                    IsLocal = true
+                });
+                continue;
+            }
+
+            var extent = l.Member("extent") is { ValueKind: JsonValueKind.Array } e4 ? e4 : (JsonElement?)null;
             var bbox = entryBbox;
-            if (extent != null && extent.Count >= 4)
+            if (extent is { } extentArray && extentArray.GetArrayLength() >= 4)
             {
                 try
                 {
                     bbox =
                     [
-                        extent[0].Value<double>(),
-                        extent[1].Value<double>(),
-                        extent[2].Value<double>(),
-                        extent[3].Value<double>()
+                        extentArray[0].ToDouble(),
+                        extentArray[1].ToDouble(),
+                        extentArray[2].ToDouble(),
+                        extentArray[3].ToDouble()
                     ];
                 }
                 catch (Exception ex)
@@ -209,9 +247,9 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     }
 
     public async Task<OgcLayerDto?> ResolveAsync(string orgSlug, string dsSlug, string layerName,
-        string? folderPath = null)
+        string? folderPath = null, bool includeLocal = false, CancellationToken ct = default)
     {
-        var layers = await GetLayersAsync(orgSlug, dsSlug, folderPath);
+        var layers = await GetLayersAsync(orgSlug, dsSlug, folderPath, includeLocal, ct);
         // Strip optional namespace prefix (e.g. "ddb:foo" -> "foo")
         var localName = layerName;
         var colon = layerName.IndexOf(':');
@@ -247,33 +285,29 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     }
 
 
-    private static double[]? ExtractBboxFromPolygon(object? polygonGeom)
+    private static double[]? ExtractBboxFromPolygon(JsonElement? polygonGeom)
     {
-        if (polygonGeom == null) return null;
+        if (polygonGeom is not { } token) return null;
         try
         {
-            var token = polygonGeom as JToken ?? JToken.FromObject(polygonGeom);
             // Support GeoJSON Feature: unwrap to geometry
-            var typeStr = token["type"]?.Value<string>();
+            var typeStr = token.Member("type").Text();
             if (string.Equals(typeStr, "Feature", StringComparison.OrdinalIgnoreCase))
-            {
-                token = token["geometry"] ?? token;
-            }
+                token = token.Member("geometry") ?? token;
 
-            var coords = token["coordinates"];
-            if (coords == null || coords.Type != JTokenType.Array) return null;
+            if (token.Member("coordinates") is not { ValueKind: JsonValueKind.Array } coords) return null;
             // GeoJSON Polygon coordinates: [ [ [lon,lat], [lon,lat], ... ] ]
-            var ring = coords.First as JArray;
-            if (ring == null || ring.Count == 0) return null;
+            if (coords.GetArrayLength() == 0 || coords[0].ValueKind != JsonValueKind.Array || coords[0].GetArrayLength() == 0)
+                return null;
             double minLon = double.MaxValue,
                 minLat = double.MaxValue,
                 maxLon = double.MinValue,
                 maxLat = double.MinValue;
-            foreach (var pt in ring)
+            foreach (var pt in coords[0].Items())
             {
-                if (pt is not JArray pa || pa.Count < 2) continue;
-                var lon = pa[0].Value<double>();
-                var lat = pa[1].Value<double>();
+                if (pt.ValueKind != JsonValueKind.Array || pt.GetArrayLength() < 2) continue;
+                var lon = pt[0].ToDouble();
+                var lat = pt[1].ToDouble();
                 if (lon < minLon) minLon = lon;
                 if (lat < minLat) minLat = lat;
                 if (lon > maxLon) maxLon = lon;
@@ -294,71 +328,38 @@ public class OgcLayerCatalog : IOgcLayerCatalog
     private static string? ExtractVectorGeometryType(Entry e)
     {
         if (e.Properties == null) return null;
-        if (e.Properties.TryGetValue("vector", out var v) && v is JToken token)
-        {
-            return token["geometryType"]?.Value<string>();
-        }
-
-        return null;
+        return e.Properties.TryGetValue("vector", out var v) && v.ValueKind == JsonValueKind.Object
+            ? v.Member("geometryType").Text()
+            : null;
     }
 
     /// <summary>
-    /// Extract (bandCount, isMultispectral) from a GeoRaster entry. Multispectral is detected when:
-    ///   - the dataset has more than 3 effective (non-alpha) bands, OR
-    ///   - any band carries a colour interpretation outside the RGBA / Gray / Palette set,
-    ///     which is typical of agricultural cameras (Undefined / NIR / Red Edge).
-    /// Returns (0, false) when bands metadata is missing or unparseable.
+    /// The number of bands of a GeoRaster entry, read from its indexed <c>bands</c> property (0 when it is missing or
+    /// unparseable). WCS describes a coverage with it when the raster probe fails. Which spectral indices a raster can
+    /// render is not decided from the bands: libddb lists them (<see cref="IRasterIndexCatalog"/>).
     /// </summary>
-    internal static (int bandCount, bool multispectral) ExtractRasterBandInfo(Entry e)
+    internal static int ExtractBandCount(Entry e)
     {
         if (e.Properties == null || !e.Properties.TryGetValue("bands", out var raw))
-            return (0, false);
+            return 0;
 
-        JArray? bands;
-        switch (raw)
+        switch (raw.ValueKind)
         {
-            case JArray arr: bands = arr; break;
-            case string s when !string.IsNullOrWhiteSpace(s):
+            case JsonValueKind.Array:
+                return raw.GetArrayLength();
+            case JsonValueKind.String when !string.IsNullOrWhiteSpace(raw.GetString()):
                 try
                 {
-                    bands = JArray.Parse(s);
+                    // The bands as text: a JSON array the index stored as a string
+                    using var document = JsonDocument.Parse(raw.GetString()!);
+                    return document.RootElement.ValueKind == JsonValueKind.Array ? document.RootElement.GetArrayLength() : 0;
                 }
-                catch (Newtonsoft.Json.JsonException)
+                catch (JsonException)
                 {
-                    return (0, false);
+                    return 0;
                 }
-
-                break;
             default:
-                try
-                {
-                    bands = JArray.FromObject(raw);
-                }
-                catch (Exception)
-                {
-                    return (0, false);
-                }
-
-                break;
+                return 0;
         }
-
-        if (bands == null || bands.Count == 0) return (0, false);
-
-        var rgbaLike = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "Red", "Green", "Blue", "Alpha", "Gray Index", "Palette Index", "Undefined Gray"
-        };
-        var nonAlpha = 0;
-        var hasNonRgba = false;
-        foreach (var b in bands)
-        {
-            var interp = b["colorInterp"]?.Value<string>() ?? string.Empty;
-            if (string.Equals(interp, "Alpha", StringComparison.OrdinalIgnoreCase)) continue;
-            nonAlpha++;
-            if (!rgbaLike.Contains(interp)) hasNonRgba = true;
-        }
-
-        var multispectral = nonAlpha > 3 || (bands.Count >= 4 && hasNonRgba);
-        return (bands.Count, multispectral);
     }
 }

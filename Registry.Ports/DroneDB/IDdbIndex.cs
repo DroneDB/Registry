@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
 
 namespace Registry.Ports.DroneDB;
 
@@ -22,6 +22,19 @@ public interface IDdbIndex
     string DatasetFolderPath { get; }
 
     IEnumerable<Entry> Search(string path, bool recursive = false);
+
+    /// <summary>
+    /// The entries selected by <paramref name="query"/>, sorted by path. DroneDB filters by
+    /// folder, name and type in the index query, so prefer this to filtering
+    /// <see cref="Search"/> results.
+    /// </summary>
+    IReadOnlyList<Entry> Find(EntryQuery query);
+
+    /// <summary>
+    /// <see cref="Find"/> without properties, geometries and meta, for callers that only need
+    /// paths, hashes, types or sizes.
+    /// </summary>
+    IReadOnlyList<EntrySummary> FindSummaries(EntryQuery query);
     void Add(string path, byte[] data);
     void Add(string path, Stream? data = null);
     void AddRaw(string path);
@@ -43,6 +56,12 @@ public interface IDdbIndex
     /// </summary>
     BatchAddResult AddRawBatchWithOptions(IReadOnlyList<string> paths, bool stopOnError = false);
 
+    /// <summary>
+    /// <see cref="AddRawBatchWithOptions(IReadOnlyList{string},bool)"/> for files whose hash was
+    /// computed while they were written: a hint that still matches the file saves reading it again.
+    /// </summary>
+    BatchAddResult AddRawBatchWithOptions(IReadOnlyList<AddItem> items, bool stopOnError = false);
+
     void Remove(string path);
     void Move(string source, string dest);
     void Init();
@@ -61,24 +80,23 @@ public interface IDdbIndex
     /// <summary>
     /// Rescans all files in the index to update metadata
     /// </summary>
-    /// <param name="types">Comma-separated list of entry types to rescan (e.g., "image,geoimage,pointcloud"), or null/empty for all</param>
-    /// <param name="stopOnError">Whether to stop processing on first error</param>
+    /// <param name="options">What to rescan; null rescans every entry and stops on the first error</param>
     /// <returns>List of rescan results for each processed entry</returns>
-    List<RescanResult> RescanIndex(string? types = null, bool stopOnError = true);
-
-    JToken GetStac(string id, string stacCollectionRoot, string stacCatalogRoot, string path = null);
+    List<RescanResult> RescanIndex(RescanOptions? options = null);
 
     /// <summary>
-    /// Generates a STAC ItemCollection (GeoJSON FeatureCollection) for the dataset,
+    /// The data-only STAC Item of <paramref name="path"/>, or the dataset's Collection when it is null
+    /// (<see cref="IDdbWrapper.StacData"/>, XI-09): Registry adds every id, link and href.
+    /// </summary>
+    JsonElement GetStacData(string path = null);
+
+    /// <summary>
+    /// The data-only STAC ItemCollection of the dataset (<see cref="IDdbWrapper.StacItemCollectionData"/>, XI-09),
     /// optionally filtered by bbox and datetime, with paging.
     /// </summary>
-    /// <param name="id">Collection id (e.g. "org/ds")</param>
-    /// <param name="stacCollectionRoot">URL of the parent STAC collection</param>
-    /// <param name="stacCatalogRoot">URL of the root STAC catalog</param>
     /// <param name="bbox">Optional bounding box "minX,minY,maxX,maxY" (WGS84), or null</param>
     /// <param name="datetime">Optional single RFC3339 datetime or interval "start/end" (".." for open ends), or null</param>
     /// <param name="limit">Maximum number of items to return</param>
     /// <param name="offset">Number of items to skip (paging)</param>
-    JToken GetStacItemCollection(string id, string stacCollectionRoot, string stacCatalogRoot,
-        string bbox = null, string datetime = null, int limit = 10, int offset = 0);
+    JsonElement GetStacItemCollectionData(string bbox = null, string datetime = null, int limit = 10, int offset = 0);
 }

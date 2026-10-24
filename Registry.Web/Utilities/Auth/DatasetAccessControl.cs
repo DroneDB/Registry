@@ -1,7 +1,6 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Registry.Common;
 using Registry.Ports;
@@ -11,6 +10,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Managers;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Utilities.Auth;
 
@@ -22,8 +22,8 @@ public class DatasetAccessControl : AccessControlBase
     private readonly IDdbManager _ddbManager;
     private readonly ICacheManager _cacheManager;
 
-    public DatasetAccessControl(UserManager<User> usersManager, RegistryContext context, ILogger logger, IDdbManager ddbManager, ICacheManager cacheManager)
-        : base(usersManager, context, logger)
+    public DatasetAccessControl(IUserAuthSnapshotProvider snapshots, RegistryContext context, ILogger logger, IDdbManager ddbManager, ICacheManager cacheManager)
+        : base(snapshots, context, logger)
     {
         _ddbManager = ddbManager;
         _cacheManager = cacheManager;
@@ -39,25 +39,23 @@ public class DatasetAccessControl : AccessControlBase
         ArgumentNullException.ThrowIfNull(dataset);
         var org = dataset.Organization;
 
-        var visibilityBytes = await _cacheManager.GetAsync(
-            MagicStrings.DatasetVisibilityCacheSeed,
-            org.Slug,
-            org.Slug,
-            dataset.InternalRef,
-            _ddbManager
-        );
+        var visibility = await _cacheManager.GetDatasetVisibilityAsync(org.Slug, dataset.InternalRef, _ddbManager);
 
-        if (visibilityBytes.Length < sizeof(int))
+        if (visibility == null)
         {
             Logger.LogWarning("Invalid visibility cache data for dataset {OrgSlug}/{DatasetSlug}, defaulting to Private",
                 org.Slug, dataset.Slug);
             return Visibility.Private;
         }
 
-        return (Visibility)BitConverter.ToInt32(visibilityBytes, 0);
+        return visibility.Value;
     }
 
-    public async Task<bool> CanAccessDataset(Dataset dataset, AccessType access, User user)
+    public Task<bool> CanAccessDataset(Dataset dataset, AccessType access, User user)
+        => CanAccessDataset(dataset, access, user?.Id);
+
+    /// <param name="userId">Id of an existing user, or null for anonymous access</param>
+    public async Task<bool> CanAccessDataset(Dataset dataset, AccessType access, string userId)
     {
         ArgumentNullException.ThrowIfNull(dataset);
         var org = dataset.Organization;
@@ -70,30 +68,30 @@ public class DatasetAccessControl : AccessControlBase
             org.Slug, dataset.Slug, visibility);
 
         // Anonymous access check
-        if (user == null)
+        if (userId == null)
         {
-            // Anonymous users can access only public or unlisted datasets with Read access
+            // Anonymous users can access only public or unlisted datasets with Read access,
+            // and only while the owner is not deactivated
             if (access != AccessType.Read || !isPublicOrUnlisted) return false;
 
-            var owner = await UsersManager.FindByIdAsync(org.OwnerId);
-            // Check if the owner is not deactivated
-            return owner != null && !await IsUserDeactivated(owner);
+            return await IsOwnerActive(org.OwnerId);
         }
 
+        var user = await Snapshots.GetAsync(userId);
+
         // Deactivated user check
-        if (await IsUserDeactivated(user))
+        if (user.IsDeactivated)
             return false;
 
         // Admin privileges
-        var isAdmin = await IsUserAdmin(user);
-        if (isAdmin)
+        if (user.IsAdmin)
         {
             // Admin can access any dataset and perform any action
             return true;
         }
 
         // Owner privileges
-        if (org.OwnerId == user.Id)
+        if (org.OwnerId == userId)
         {
             // Owner can access and modify datasets
             return true;
@@ -103,24 +101,12 @@ public class DatasetAccessControl : AccessControlBase
             await _context.Entry(org).Collection(o => o.Users).LoadAsync();
 
         // Organization member access
-        var orgUser = org.Users?.FirstOrDefault(u => u.UserId == user.Id);
+        var orgUser = org.Users?.FirstOrDefault(u => u.UserId == userId);
         if (orgUser == null)
         {
             // Non-organization members can only read public or unlisted datasets
             return access == AccessType.Read && isPublicOrUnlisted;
         }
-
-        var orgUserDetails = await UsersManager.FindByIdAsync(orgUser.UserId);
-        if (orgUserDetails == null)
-        {
-            Logger.LogInformation("User {UserId} not found for organization {OrganizationSlug}",
-                orgUser.UserId, org.Slug);
-            return false;
-        }
-
-        // Check if user is deactivated
-        if (await IsUserDeactivated(orgUserDetails))
-            return false;
 
         // Check permission level against requested access
         return orgUser.Permissions.HasAccess(access);

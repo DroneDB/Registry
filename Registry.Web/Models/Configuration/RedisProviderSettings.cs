@@ -1,4 +1,4 @@
-﻿namespace Registry.Web.Models.Configuration;
+namespace Registry.Web.Models.Configuration;
 
 public class RedisProviderSettings : CacheProviderSettings
 {

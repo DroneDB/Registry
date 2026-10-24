@@ -1,0 +1,1050 @@
+GET /orgs
+  200 application/json array<OrganizationDto>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /orgs
+  body multipart/form-data object
+  201 application/json OrganizationDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  409 application/json ProblemDetails
+GET /orgs/public
+  200 application/json array<OrganizationDto>
+  400 application/json ProblemDetails
+DELETE /orgs/{orgSlug}
+  204
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}
+  200 application/json OrganizationDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+PUT /orgs/{orgSlug}
+  body multipart/form-data object
+  204
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds
+  200 application/json array<DatasetDto>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds
+  body multipart/form-data object
+  201 application/json DatasetDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+  409 application/json ProblemDetails
+DELETE /orgs/{orgSlug}/ds/{dsSlug}
+  204
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}
+  200 application/json array<EntryDto>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+PUT /orgs/{orgSlug}/ds/{dsSlug}
+  body multipart/form-data object
+  204
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/align/validate
+  body application/*+json AlignRasterRequestDto; application/json AlignRasterRequestDto; text/json AlignRasterRequestDto
+  200
+  400 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/batches
+  200 application/json array<BatchDto>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/build
+  body multipart/form-data object
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/build-artifact
+  200 application/json string(binary)
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/build/{hash}/{path}
+  200 application/json string(binary)
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+HEAD /orgs/{orgSlug}/ds/{dsSlug}/build/{hash}/{path}
+  200 application/json string(binary)
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/builds
+  200 application/json array<PendingBuildInfoDto>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/builds/clear
+  200 application/json ClearCompletedBuildsResponse
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/builds/pending
+  200 application/json array<PendingBuildInfoDto>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/cad/crs
+  body multipart/form-data object
+  200 application/json EntryDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/chattr
+  body multipart/form-data object
+  200 application/json map<any>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/contours
+  body application/*+json ContourRequestDto; application/json ContourRequestDto; text/json ContourRequestDto
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/ddb
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/download
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/download
+  body multipart/form-data object
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/download/{path}
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/ex
+  200 application/json DatasetDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/export
+  200 application/json string(binary)
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/import/url
+  body application/*+json UrlImportRequestDto; application/json UrlImportRequestDto; text/json UrlImportRequestDto
+  200 application/json UrlImportResultDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/import/verify-url
+  body application/*+json UrlImportVerifyRequestDto; application/json UrlImportVerifyRequestDto; text/json UrlImportVerifyRequestDto
+  200 application/json UrlImportVerifyResultDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/list
+  200 application/json array<EntryDto>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/list
+  body multipart/form-data object
+  200 application/json array<EntryDto>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/mask-borders
+  body application/*+json MaskBordersRequestDto; application/json MaskBordersRequestDto; text/json MaskBordersRequestDto
+  200 application/json OkDto
+  400 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/mask-borders/check
+  body application/*+json MaskBordersRequestDto; application/json MaskBordersRequestDto; text/json MaskBordersRequestDto
+  200 application/json MaskBordersCheckResponseDto
+  400 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/merge-multispectral
+  body application/*+json MergeMultispectralRequestDto; application/json MergeMultispectralRequestDto; text/json MergeMultispectralRequestDto
+  200 application/json OkDto
+  400 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/merge-multispectral/preview
+  body application/*+json MergeMultispectralRequestDto; application/json MergeMultispectralRequestDto; text/json MergeMultispectralRequestDto
+  200 application/json string(binary)
+  400 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/merge-multispectral/validate
+  body application/*+json MergeMultispectralRequestDto; application/json MergeMultispectralRequestDto; text/json MergeMultispectralRequestDto
+  200
+  400 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/meta/add
+  body application/x-www-form-urlencoded object; multipart/form-data object
+  200 application/json MetaDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/meta/add/{key}
+  body application/*+json string; application/json string; text/json string
+  200 application/json MetaDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/meta/dump
+  body application/x-www-form-urlencoded object; multipart/form-data object
+  200 application/json array<MetaDumpDto>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/meta/get/{key}
+  200 application/json any
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/meta/list
+  200 application/json array<MetaListItemDto>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/meta/remove
+  body application/x-www-form-urlencoded object; multipart/form-data object
+  200 application/json RemoveResponse
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+DELETE /orgs/{orgSlug}/ds/{dsSlug}/meta/remove/{id}
+  200 application/json RemoveResponse
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/meta/set
+  body application/x-www-form-urlencoded object; multipart/form-data object
+  200 application/json MetaDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/meta/set/{key}
+  body application/*+json string; application/json string; text/json string
+  200 application/json MetaDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/meta/unset
+  body application/x-www-form-urlencoded object; multipart/form-data object
+  200 application/json RemoveResponse
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+DELETE /orgs/{orgSlug}/ds/{dsSlug}/meta/unset/{key}
+  200 application/json RemoveResponse
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/mvt/{hash}/metadata.json
+  200
+  401 application/json ProblemDetails; text/json ProblemDetails; text/plain ProblemDetails
+  403 application/json ProblemDetails; text/json ProblemDetails; text/plain ProblemDetails
+  404 application/json ProblemDetails; text/json ProblemDetails; text/plain ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/mvt/{hash}/{z}/{x}/{y}.pbf
+  200
+  401 application/json ProblemDetails; text/json ProblemDetails; text/plain ProblemDetails
+  403 application/json ProblemDetails; text/json ProblemDetails; text/plain ProblemDetails
+  404 application/json ProblemDetails; text/json ProblemDetails; text/plain ProblemDetails
+DELETE /orgs/{orgSlug}/ds/{dsSlug}/obj
+  body multipart/form-data object
+  204
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/obj
+  body multipart/form-data object
+  200 application/json string(binary)
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/obj
+  200 application/json array<UploadPartResultDto>
+  201 application/json EntryDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+  409 application/json ProblemDetails
+  507 application/json ProblemDetails
+PUT /orgs/{orgSlug}/ds/{dsSlug}/obj
+  body multipart/form-data object
+  200 application/json EntryDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+DELETE /orgs/{orgSlug}/ds/{dsSlug}/obj/batch
+  body multipart/form-data object
+  200 application/json DeleteBatchResponse
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/obj/chunk
+  200 application/json ChunkStatusDto
+  400 application/json ProblemDetails
+  409 application/json ProblemDetails
+  507 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/obj/chunk/{fileId}
+  200 application/json ChunkStatusDto
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/obj/chunk/{fileId}/commit
+  201 application/json EntryDto
+  409 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/obj/copy
+  body multipart/form-data object
+  200 application/json EntryDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+  409 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/obj/uploads/{uploadId}
+  200 application/json UploadReceipt
+  202 application/json UploadReceipt
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi
+  200 application/json OgcApiLandingDto; text/json OgcApiLandingDto; text/plain OgcApiLandingDto
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections
+  200 application/json OgcApiCollectionsDto; text/json OgcApiCollectionsDto; text/plain OgcApiCollectionsDto
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}
+  200 application/json OgcApiCollectionDto; text/json OgcApiCollectionDto; text/plain OgcApiCollectionDto
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/items
+  200 application/geo+json string
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/items/{featureId}
+  200 application/geo+json string
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/tiles
+  200 application/json OgcApiTileSetsDto; text/json OgcApiTileSetsDto; text/plain OgcApiTileSetsDto
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/tiles/{tileMatrixSet}/{z}/{y}/{x}
+  200 application/vnd.mapbox-vector-tile string(binary); image/png string(binary)
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/conformance
+  200 application/json OgcConformanceDto; text/json OgcConformanceDto; text/plain OgcConformanceDto
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+POST /orgs/{orgSlug}/ds/{dsSlug}/push/commit
+  body multipart/form-data object
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/push/init
+  body multipart/form-data object
+  200 application/json PushInitResultDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/push/meta
+  body multipart/form-data object
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/push/upload
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/raster-area-stats
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/raster-info
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/raster-metadata
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/raster-point-value
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/raster-profile
+  body application/*+json RasterProfileRequestDto; application/json RasterProfileRequestDto; text/json RasterProfileRequestDto
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/raster-value-info
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/rename
+  body multipart/form-data object
+  200 application/json DatasetDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+  409 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/rescan
+  200 application/json RescanResultDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/search
+  body multipart/form-data object
+  200 application/json array<EntryDto>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/stac/{pathBase64}
+  200 application/json any
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+  500 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/stamp
+  200 application/json StampDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/stockpile/calculate
+  body application/*+json VolumeCalculationRequestDto; application/json VolumeCalculationRequestDto; text/json VolumeCalculationRequestDto
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/stockpile/detect
+  body application/*+json StockpileDetectionRequestDto; application/json StockpileDetectionRequestDto; text/json StockpileDetectionRequestDto
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/stockpile/detect-all
+  body application/*+json StockpileBatchDetectionRequestDto; application/json StockpileBatchDetectionRequestDto; text/json StockpileBatchDetectionRequestDto
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/tasks
+  200
+  304
+POST /orgs/{orgSlug}/ds/{dsSlug}/tasks
+  body application/*+json SubmitTaskRequestDto; application/json SubmitTaskRequestDto; text/json SubmitTaskRequestDto
+  200 application/json SubmitTaskResponseDto
+  202
+  400 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/tasks/clear
+  200 application/json TasksClearedDto
+GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/events
+  200
+GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/tools
+  200 application/json array<TaskToolDto>
+DELETE /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}
+  200 application/json DeletedDto
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}
+  200 application/json TaskStatusDto
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}/delete
+  200 application/json DeletedDto
+  400 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}/log
+  200 application/json TaskLogDto
+GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}/result
+  200
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}/retry
+  200 application/json TaskRequeuedDto
+  404 application/json ProblemDetails
+  409 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/thumb
+  200 application/json string(binary)
+  304
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/thumb-ex
+  200 application/json string(binary)
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/tiles-ex/{tz}/{tx}/{tyRaw}.{ext}
+  200 application/json string(binary)
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/tiles/{tz}/{tx}/{tyRaw}.{ext}
+  200 application/json string(binary)
+  304
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/transfer
+  body multipart/form-data object
+  204
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+  409 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/wcs
+  200 application/xml string(binary); image/jpeg string(binary); image/png string(binary); image/tiff string(binary); text/xml string(binary)
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+GET /orgs/{orgSlug}/ds/{dsSlug}/wcs/p/{folder}
+  200 application/xml string(binary); image/jpeg string(binary); image/png string(binary); image/tiff string(binary); text/xml string(binary)
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+GET /orgs/{orgSlug}/ds/{dsSlug}/wfs
+  200 application/geo+json string; application/gml+xml string; application/json string; application/xml string; text/xml string
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+POST /orgs/{orgSlug}/ds/{dsSlug}/wfs
+  200 application/geo+json string; application/gml+xml string; application/json string; application/xml string; text/xml string
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+GET /orgs/{orgSlug}/ds/{dsSlug}/wfs/p/{folder}
+  200 application/geo+json string; application/gml+xml string; application/json string; application/xml string; text/xml string
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+GET /orgs/{orgSlug}/ds/{dsSlug}/wms
+  200 application/json string(binary); application/xml string(binary); image/jpeg string(binary); image/png string(binary); image/webp string(binary); text/plain string(binary); text/xml string(binary)
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+GET /orgs/{orgSlug}/ds/{dsSlug}/wms/p/{folder}
+  200 application/json string(binary); application/xml string(binary); image/jpeg string(binary); image/png string(binary); image/webp string(binary); text/plain string(binary); text/xml string(binary)
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+GET /orgs/{orgSlug}/ds/{dsSlug}/wmts
+  200 application/vnd.mapbox-vector-tile string(binary); application/xml string(binary); image/jpeg string(binary); image/png string(binary); text/xml string(binary)
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+GET /orgs/{orgSlug}/ds/{dsSlug}/wmts/1.0.0/{layer}/{style}/{tms}/{z}/{y}/{x}.{ext}
+  200 application/vnd.mapbox-vector-tile string(binary); image/jpeg string(binary); image/png string(binary)
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+GET /orgs/{orgSlug}/ds/{dsSlug}/wmts/p/{folder}
+  200 application/vnd.mapbox-vector-tile string(binary); application/xml string(binary); image/jpeg string(binary); image/png string(binary); text/xml string(binary)
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
+POST /orgs/{orgSlug}/import
+  body application/*+json CreateImportRequestDto; application/json CreateImportRequestDto; text/json CreateImportRequestDto
+  200 application/json ImportCreateResultDto
+POST /orgs/{orgSlug}/import/browse
+  body application/*+json BrowseImportRequestDto; application/json BrowseImportRequestDto; text/json BrowseImportRequestDto
+  200 application/json ImportBrowseResultDto
+  400 application/json ProblemDetails
+GET /orgs/{orgSlug}/import/sources
+  200 application/json array<string>
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+POST /orgs/{orgSlug}/import/verify
+  body application/*+json VerifyImportRequestDto; application/json VerifyImportRequestDto; text/json VerifyImportRequestDto
+  200 application/json ImportVerifyResultDto
+GET /orgs/{orgSlug}/members
+  200 application/json array<OrganizationMemberDto>
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /orgs/{orgSlug}/members
+  body application/*+json AddOrganizationMemberDto; application/json AddOrganizationMemberDto; text/json AddOrganizationMemberDto
+  204
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+  409 application/json ProblemDetails
+DELETE /orgs/{orgSlug}/members/{userName}
+  204
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+PUT /orgs/{orgSlug}/members/{userName}
+  body application/*+json UpdateMemberPermissionsDto; application/json UpdateMemberPermissionsDto; text/json UpdateMemberPermissionsDto
+  204
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /share/commit/{token}
+  200 application/json CommitResultDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /share/info/{token}
+  200 application/json BatchDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /share/init
+  body multipart/form-data object
+  200 application/json ShareInitResultDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /share/rollback/{token}
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /share/upload-chunk/{token}
+  200 application/json UploadResultDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /share/upload/{token}
+  200 application/json UploadResultDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /stac
+  200 application/json StacCatalogDto
+  500 application/json ProblemDetails
+GET /stac/collections
+  200 application/json StacCollectionsDto
+  400 application/json ProblemDetails
+  500 application/json ProblemDetails
+GET /stac/collections/{collectionId}
+  404 application/json ProblemDetails
+GET /stac/collections/{orgSlug}/{dsSlug}
+  200 application/json any
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+  500 application/json ProblemDetails
+GET /stac/collections/{orgSlug}/{dsSlug}/items
+  200 application/json any
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+  500 application/json ProblemDetails
+GET /stac/collections/{orgSlug}/{dsSlug}/items/{featureId}
+  200 application/json any
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+  500 application/json ProblemDetails
+GET /stac/conformance
+  200 application/json StacConformanceDto
+  500 application/json ProblemDetails
+GET /stac/search
+  200 application/json any
+  400 application/json ProblemDetails
+  500 application/json ProblemDetails
+POST /stac/search
+  body application/*+json StacSearchRequestDto; application/json StacSearchRequestDto; text/json StacSearchRequestDto
+  200 application/json any
+  400 application/json ProblemDetails
+  500 application/json ProblemDetails
+GET /sys/build-pending-status
+  200 application/json BuildPendingStatusDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /sys/check-artifact-completeness
+  202
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+POST /sys/cleanup
+  body application/*+json CleanupBuildRequestDto; application/json CleanupBuildRequestDto; text/json CleanupBuildRequestDto
+  200 application/json CleanupBuildResultDto
+  202 application/json CleanupBuildResultDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /sys/cleanup-jobindices
+  200 application/json CleanupJobIndicesResultDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /sys/cleanupbatches
+  200 application/json CleanupBatchesResultDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /sys/cleanupdatasets
+  200 application/json CleanupDatasetResultDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /sys/config
+  200 application/json ConfigurationDataDto
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+GET /sys/features
+  200 application/json FeaturesDto
+POST /sys/fix-invalid-slugs
+  200 application/json FixInvalidSlugsResultDto
+  401 application/json ProblemDetails
+POST /sys/import-dataset
+  body application/*+json ImportDatasetRequestDto; application/json ImportDatasetRequestDto; text/json ImportDatasetRequestDto
+  202 application/json RemoteImportJobDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+POST /sys/import-organization
+  body application/*+json ImportOrganizationRequestDto; application/json ImportOrganizationRequestDto; text/json ImportOrganizationRequestDto
+  202 application/json RemoteImportJobDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+DELETE /sys/imports/{jobId}
+  204
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /sys/imports/{jobId}
+  200 application/json RemoteImportStatusDto
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /sys/merge-organizations
+  body application/*+json MergeOrganizationDto; application/json MergeOrganizationDto; text/json MergeOrganizationDto
+  200 application/json MergeOrganizationResultDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+  409 application/json ProblemDetails
+POST /sys/migratevisibility
+  200 application/json array<MigrateVisibilityEntryDTO>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /sys/move-datasets
+  body application/*+json MoveDatasetDto; application/json MoveDatasetDto; text/json MoveDatasetDto
+  200 application/json array<MoveDatasetResultDto>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+  409 application/json ProblemDetails
+GET /sys/processingNodes
+  200 application/json array<ProcessingNodeDto>
+  401 application/json ProblemDetails
+GET /sys/processingNodes/{nodeId}/options
+  200 application/json array<NodeOdxOptionDto>
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /sys/processingNodes/{nodeId}/status
+  200 application/json ProcessingNodeStatusDto
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /sys/report
+  200 application/json GlobalReportDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /sys/rescan
+  body application/*+json RescanRequestDto; application/json RescanRequestDto; text/json RescanRequestDto
+  202 application/json RescanJobDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /sys/tasks
+  200 application/json AdminTaskListDto
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+POST /sys/tasks/{id}/delete
+  200 application/json DeletedDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /sys/upload-probe
+  200 application/json UploadProbeResultDto
+  413 application/json ProblemDetails
+  429 application/json ProblemDetails
+GET /sys/version
+  200 application/json string
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+DELETE /users
+  body multipart/form-data object
+  200 application/json DeleteUserResultDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /users
+  200 application/json array<UserDto>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /users
+  body application/*+json CreateUserRequest; application/json CreateUserRequest; text/json CreateUserRequest
+  200 application/json UserDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /users/authenticate
+  body multipart/form-data object
+  200 application/json AuthenticateResponse
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /users/authenticate/refresh
+  200 application/json AuthenticateResponse
+  401 application/json ProblemDetails
+POST /users/changepwd
+  body multipart/form-data object
+  200 application/json AuthenticateResponse
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /users/detailed
+  200 application/json array<UserDetailDto>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /users/logout
+  200
+GET /users/meta
+  200 application/json map<any>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /users/roles
+  200 application/json array<string>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /users/roles
+  body application/*+json CreateRoleRequestDto; application/json CreateRoleRequestDto; text/json CreateRoleRequestDto
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+DELETE /users/roles/{roleName}
+  204
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /users/storage
+  200 application/json UserStorageInfo
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+DELETE /users/{userName}
+  200 application/json DeleteUserResultDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+PUT /users/{userName}
+  body application/*+json EditUserRequestDto; application/json EditUserRequestDto; text/json EditUserRequestDto
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+PUT /users/{userName}/changepwd
+  body application/*+json ChangeUserPasswordRequestDto; application/json ChangeUserPasswordRequestDto; text/json ChangeUserPasswordRequestDto
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /users/{userName}/meta
+  200 application/json map<any>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /users/{userName}/meta
+  body application/*+json map<any>; application/json map<any>; text/json map<any>
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /users/{userName}/orgs
+  200 application/json array<UserOrganizationMembershipDto>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+POST /users/{userName}/orgs
+  body application/*+json AddUserToOrganizationDto; application/json AddUserToOrganizationDto; text/json AddUserToOrganizationDto
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+DELETE /users/{userName}/orgs/{orgSlug}
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+PUT /users/{userName}/orgs/{orgSlug}
+  body application/*+json UpdateMemberPermissionsDto; application/json UpdateMemberPermissionsDto; text/json UpdateMemberPermissionsDto
+  200
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+GET /users/{userName}/storage
+  200 application/json UserStorageInfo
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+
+schema AddOrganizationMemberDto { userName:string, permissions:OrganizationPermissions }
+schema AddUserToOrganizationDto { orgSlug:string, permissions:OrganizationPermissions }
+schema AdminTaskListDto { items:array<AdminTaskSummaryDto>, total:integer(int64), skip:integer(int32), take:integer(int32) }
+schema AdminTaskSummaryDto { taskId:string, orgSlug:string, dsSlug:string, toolId:string, version:string, state:string, progressPercent:integer(int32), phaseMessage:string, createdAt:string(date-time), startedAt:string(date-time), finishedAt:string(date-time), path:string, userId:string, owner:string, errorType:string, artifactExpiresAt:string(date-time) }
+schema AlignRasterRequestDto { sourcePath:string, referencePath:string, outputPath:string, mode:string }
+schema ArtifactLinkDto { role:string, url:string, mediaType:string }
+schema AuthenticateResponse { username:string, token:string, expires:string(date-time) }
+schema BatchDto { token:string, userName:string, start:string(date-time), end:string(date-time), status:BatchStatus, entries:array<BatchEntryDto> }
+schema BatchEntryDto { path:string, hash:string, type:EntryType, size:integer(int64), addedOn:string(date-time) }
+schema BatchStatus {  }
+schema BrowseImportRequestDto { sourceType:string, params:map<string>, browseType:string }
+schema BrowseItemDto { slug:string, name:string }
+schema BuildPendingStatusDto { lastRun:string(date-time), totalDatasets:integer(int32), datasetsChecked:integer(int32), datasetsSkipped:integer(int32), pendingBuildsFound:integer(int32), jobsEnqueued:integer(int32), errors:integer(int32), durationMs:integer(int64), cacheHitRate:number(double), isEnabled:boolean, nextScheduledRun:string(date-time) }
+schema ChangeUserPasswordRequestDto { currentPassword:string, newPassword:string }
+schema ChunkStatusDto { fileId:string, path:string, totalFileSize:integer(int64), totalChunks:integer(int32), chunkSize:integer(int64), received:array<integer(int32)>, missing:array<integer(int32)>, complete:boolean }
+schema CleanupBatchesResultDto { removedBatches:array<RemovedBatchDto>, removeBatchErrors:array<RemoveBatchErrorDto> }
+schema CleanupBuildRequestDto { organizationSlug:string, datasetSlug:string }
+schema CleanupBuildResultDto { datasets:map<DatasetCleanupBuildDto>, errors:map<string>, jobId:string, jobIds:array<string>, async:boolean }
+schema CleanupDatasetErrorDto { dataset:string, organization:string, message:string }
+schema CleanupDatasetResultDto { removedDatasets:array<string>, removeDatasetErrors:array<CleanupDatasetErrorDto> }
+schema CleanupJobIndicesResultDto { deletedCount:integer(int32), retentionDays:integer(int32) }
+schema ClearCompletedBuildsResponse { deletedCount:integer(int32) }
+schema CommitResultDto { url:string, tag:TagDto }
+schema ConfigurationDataDto { sections:array<ConfigurationSectionDataDto> }
+schema ConfigurationFieldDataDto { key:string, displayName:string, currentValue:string, defaultValue:string, isSet:boolean, description:string, fieldType:string, enumOptions:array<string>, sensitive:boolean, minValue:integer(int32), maxValue:integer(int32), unit:string }
+schema ConfigurationSectionDataDto { name:string, title:string, description:string, isActive:boolean, fields:array<ConfigurationFieldDataDto> }
+schema ConflictResolutionStrategy {  }
+schema ContourRequestDto { path:string, interval:number(double), count:integer(int32), baseOffset:number(double), minElev:number(double), maxElev:number(double), simplifyTolerance:number(double), bandIndex:integer(int32) }
+schema CreateImportRequestDto { sourceType:string, params:map<string>, slug:string, name:string, visibility:Visibility }
+schema CreateRoleRequestDto { roleName:string }
+schema CreateUserRequest { userName:string, password:string, email:string, roles:array<string> }
+schema DatasetCleanupBuildDto { removedEntries:array<string>, removedBuilds:array<string> }
+schema DatasetDto { slug:string, creationDate:string(date-time), properties:map<any>, size:integer(int64), permissions:DatasetPermissionsDto, hasThumbnail:boolean }
+schema DatasetPermissionsDto { canRead:boolean, canWrite:boolean, canDelete:boolean }
+schema DeleteBatchResponse { deleted:array<string>, failed:map<string> }
+schema DeleteUserResultDto { userName:string, successor:string, organizationsTransferred:integer(int32), organizationsDeleted:integer(int32), datasetsTransferred:integer(int32), datasetsDeleted:integer(int32), batchesDeleted:integer(int32), datasetResults:array<MoveDatasetResultDto> }
+schema DeletedDto { deleted:boolean }
+schema EditUserRequestDto { email:string, roles:array<string> }
+schema EntryDto { path:string, hash:string, type:EntryType, properties:map<any>, mtime:string(date-time), size:integer(int64), depth:integer(int32), point_geom:any, polygon_geom:any, buildStatus:string, buildMissingDependencies:array<string>, artifacts:array<ArtifactLinkDto> }
+schema EntryType {  }
+schema EntryTypeDto { id:integer(int32), name:string, buildable:boolean, thumbnail:string, sidecarExtensions:array<string>, roles:array<string> }
+schema FaviconOptions { faviconIco:string, favicon16:string, favicon32:string, appleTouchIcon:string, manifest:string, themeColor:string }
+schema FeaturesDto { organizationMemberManagement:boolean, userManagement:boolean, storageLimiter:boolean, maxConcurrentDownloadsPerUser:integer(int32), disableAnonymousBulkDownloads:boolean, passwordPolicy:PasswordPolicyDto, datasetThumbnailCandidates:array<string>, maxExportSizeBytes:integer(int64), bulkDownloadAsyncThresholdBytes:integer(int64), taskTools:array<TaskToolInfoDto>, taskStates:array<TaskStateInfoDto>, entryTypes:array<EntryTypeDto>, archiveExtensions:array<string>, hubOptions:HubOptions, hubVersion:string, registryVersion:string, ddbVersion:string }
+schema FileImportErrorDto { organization:string, dataset:string, filePath:string, message:string, retryCount:integer(int32) }
+schema FixInvalidSlugsResultDto { dryRun:boolean, entries:array<SlugFixEntryDto> }
+schema GlobalReportContentDto { extension:string, files:integer(int32), size:integer(int64) }
+schema GlobalReportDatasetDto { name:string, slug:string, creationDate:string(date-time), description:string, isPublic:boolean, owner:string, size:integer(int64), contents:array<GlobalReportContentDto>, error:string }
+schema GlobalReportDto { userName:string, organizations:array<GlobalReportOrganizationDto> }
+schema GlobalReportOrganizationDto { name:string, slug:string, datasets:array<GlobalReportDatasetDto> }
+schema HubOptions { appLogo:string, appName:string, appIcon:string, showRegistrationLink:boolean, disableDatasetCreation:boolean, disableStorageInfo:boolean, disableAccountManagement:boolean, singleOrganization:string, readOnlyOrgs:boolean, favicon:FaviconOptions }
+schema ImportBrowseResultDto { items:array<BrowseItemDto> }
+schema ImportCreateResultDto { taskId:string, orgSlug:string, dsSlug:string, datasetUrl:string }
+schema ImportDatasetRequestDto { sourceRegistryUrl:string, username:string, password:string, sourceOrganization:string, sourceDataset:string, destinationOrganization:string, destinationDataset:string, mode:ImportMode }
+schema ImportErrorDto { organization:string, dataset:string, message:string, phase:ImportPhase }
+schema ImportMode {  }
+schema ImportOrganizationRequestDto { sourceRegistryUrl:string, username:string, password:string, sourceOrganization:string, destinationOrganization:string, mode:ImportMode }
+schema ImportPhase {  }
+schema ImportResultDto { importedItems:array<ImportedItemDto>, errors:array<ImportErrorDto>, fileErrors:array<FileImportErrorDto>, totalSize:integer(int64), totalFiles:integer(int32), skippedFiles:integer(int32), duration:string(date-span) }
+schema ImportVerifyResultDto { reachable:boolean, note:string, estimatedBytes:integer(int64), fileCount:integer(int32), suggestedName:string, suggestedSlug:string }
+schema ImportedItemDto { organization:string, dataset:string, size:integer(int64), fileCount:integer(int32), skippedFileCount:integer(int32), importedAt:string(date-time) }
+schema MaskBordersCheckResponseDto { exists:boolean, outputPath:string }
+schema MaskBordersRequestDto { path:string, near:integer(int32), white:boolean }
+schema MergeMultispectralRequestDto { paths:array<string>, previewBands:string, thumbSize:integer(int32), outputPath:string }
+schema MergeOrganizationDto { sourceOrgSlug:string, destinationOrgSlug:string, conflictResolution:ConflictResolutionStrategy, deleteSourceOrganization:boolean }
+schema MergeOrganizationResultDto { sourceOrgSlug:string, destinationOrgSlug:string, datasetResults:array<MoveDatasetResultDto>, sourceOrganizationDeleted:boolean, datasetsMovedCount:integer(int32), datasetsFailedCount:integer(int32) }
+schema MetaDto { id:string, data:any, mtime:string(date-time) }
+schema MetaDumpDto { id:string, data:any, mtime:string(date-time), path:string, key:string }
+schema MetaListItemDto { count:integer(int32), key:string, path:string }
+schema MigrateVisibilityEntryDTO { organizationSlug:string, datasetSlug:string, isPublic:any, visibility:Visibility }
+schema MoveDatasetDto { sourceOrgSlug:string, datasetSlugs:array<string>, destinationOrgSlug:string, conflictResolution:ConflictResolutionStrategy }
+schema MoveDatasetResultDto { originalSlug:string, newSlug:string, success:boolean, error:string }
+schema NodeOdxOptionDto { name:string, type:string, domain:any, help:string, value:any }
+schema OgcApiCollectionDto { id:string, title:string, description:string, itemType:string, crs:array<string>, extent:OgcApiExtentDto, links:array<OgcApiLinkDto> }
+schema OgcApiCollectionsDto { links:array<OgcApiLinkDto>, collections:array<OgcApiCollectionDto> }
+schema OgcApiExtentDto { spatial:OgcApiSpatialExtentDto }
+schema OgcApiLandingDto { title:string, description:string, links:array<OgcApiLinkDto> }
+schema OgcApiLinkDto { href:string, rel:string, type:string, title:string }
+schema OgcApiSpatialExtentDto { bbox:array<array<number(double)>>, crs:string }
+schema OgcApiTileLinkDto { href:string, rel:string, type:string }
+schema OgcApiTileSetDto { tileMatrixSetURI:string, links:array<OgcApiTileLinkDto> }
+schema OgcApiTileSetsDto { tilesets:array<OgcApiTileSetDto> }
+schema OgcConformanceDto { conformsTo:array<string> }
+schema OkDto { ok:boolean }
+schema OrganizationDto { slug:string, name:string, description:string, creationDate:string(date-time), owner:string, isPublic:boolean, permissions:OrganizationPermissionsDto }
+schema OrganizationMemberDto { userName:string, email:string, permissions:OrganizationPermissions, grantedAt:string(date-time), grantedBy:string }
+schema OrganizationPermissions {  }
+schema OrganizationPermissionsDto { canRead:boolean, canWrite:boolean, canDelete:boolean, canManageMembers:boolean }
+schema PasswordPolicyDto { minLength:integer(int32), requireDigit:boolean, requireUppercase:boolean, requireLowercase:boolean, requireNonAlphanumeric:boolean }
+schema PendingBuildInfoDto { path:string, hash:string, missingDependencies:array<string>, lastAttempt:string(date-time), artifacts:array<ArtifactLinkDto> }
+schema ProblemDetails { type:string, title:string, status:integer(int32), detail:string, instance:string }
+schema ProcessingNodeDto { id:string, title:string }
+schema ProcessingNodeStatusDto { id:string, reachable:boolean, version:string, engine:string, engineVersion:string, taskQueueCount:integer(int32), maxParallelTasks:integer(int32), errorMessage:string }
+schema PushInitResultDto { neededFiles:array<string>, neededMeta:array<string>, pullRequired:boolean, token:string }
+schema RasterProfileRequestDto { path:string, lineString:string, samples:integer(int32) }
+schema RemoteImportJobDto { jobId:string, statusUrl:string }
+schema RemoteImportStatusDto { jobId:string, state:string, result:ImportResultDto, error:string }
+schema RemoveBatchErrorDto { token:string, organization:string, dataset:string, message:string }
+schema RemoveResponse { removed:integer(int32) }
+schema RemovedBatchDto { token:string, userName:string, status:BatchStatus, start:string(date-time), end:string(date-time), organization:string, dataset:string }
+schema RescanEntryResultDto { path:string, hash:string, success:boolean, error:string }
+schema RescanJobDto { jobId:string }
+schema RescanRequestDto { organizationSlug:string, datasetSlug:string, types:array<string>, extensions:array<string>, stopOnError:boolean }
+schema RescanResultDto { organizationSlug:string, datasetSlug:string, totalProcessed:integer(int32), successCount:integer(int32), errorCount:integer(int32), entries:array<RescanEntryResultDto> }
+schema ShareInitResultDto { token:string }
+schema SlugFixEntryDto { kind:string, organizationSlug:string, oldSlug:string, newSlug:string, status:string, reason:string }
+schema StacCatalogDto { type:string, stac_version:string, id:string, description:string, links:array<StacLinkDto>, conformsTo:array<string> }
+schema StacCollectionsDto { collections:array<any>, links:array<StacLinkDto>, numberMatched:integer(int32), numberReturned:integer(int32) }
+schema StacConformanceDto { conformsTo:array<string> }
+schema StacLinkDto { href:string, rel:string, type:string, title:string, method:string }
+schema StacSearchRequestDto { bbox:array<number(double)>, intersects:any, datetime:string, limit:integer(int32), collections:array<string>, ids:array<string>, token:string }
+schema StampDto { checksum:string, entries:array<map<string>>, meta:array<string> }
+schema StockpileBatchDetectionRequestDto { path:string, sensitivity:number(float), minAreaM2:number(double), maxResults:integer(int32) }
+schema StockpileDetectionRequestDto { path:string, lat:number(double), lon:number(double), radius:number(double), sensitivity:number(float) }
+schema SubmitTaskRequestDto { toolId:string, version:string, path:string, params:any, force:boolean }
+schema SubmitTaskResponseDto { taskId:string, toolId:string, version:string, deduplicated:boolean, statusUrl:string, resultUrl:string, estimatedOutputBytes:integer(int64) }
+schema TagDto { organizationSlug:string, datasetSlug:string }
+schema TaskArtifactDto { sizeBytes:integer(int64), sha256:string, resultUrl:string, expiresAt:string(date-time) }
+schema TaskLogDto { cursor:integer(int64), lines:array<string>, truncatedFromTail:integer(int64) }
+schema TaskProgressDto { percent:integer(int32), phase:string, message:string }
+schema TaskRequeuedDto { requeued:boolean }
+schema TaskStateInfoDto { value:string, terminal:boolean }
+schema TaskStatusDto { taskId:string, toolId:string, version:string, state:string, progress:TaskProgressDto, createdAt:string(date-time), startedAt:string(date-time), finishedAt:string(date-time), parentJobId:string, workflowExecutionId:string, logCursor:integer(int64), logTail:array<string>, artifact:TaskArtifactDto, error:string }
+schema TaskToolDto { id:string, version:string, title:string, requiredAccess:string, producesArtifact:boolean, inputSchema:any, hidden:boolean, disabled:boolean, disabledMessage:string }
+schema TaskToolInfoDto { id:string, version:string, title:string, requiredAccess:string, producesArtifact:boolean, resultExtension:string, hidden:boolean, disabled:boolean, disabledMessage:string }
+schema TasksClearedDto { cleared:integer(int32) }
+schema UpdateMemberPermissionsDto { permissions:OrganizationPermissions }
+schema UploadPartResultDto { path:string, status:integer(int32), entry:EntryDto, error:string, retryable:boolean }
+schema UploadProbeResultDto { bytes:integer(int64), serverMs:number(double) }
+schema UploadReceipt { state:UploadReceiptState, results:array<UploadPartResultDto>, status:integer(int32), error:string, updatedUtc:string(date-time) }
+schema UploadReceiptState {  }
+schema UploadResultDto { path:string, hash:string, size:integer(int64) }
+schema UrlImportRequestDto { url:string, fileName:string, folder:string, overwrite:boolean, username:string, password:string, sizeBytes:integer(int64) }
+schema UrlImportResultDto { taskId:string }
+schema UrlImportVerifyRequestDto { url:string, username:string, password:string }
+schema UrlImportVerifyResultDto { reachable:boolean, sizeBytes:integer(int64), fileName:string, blocked:boolean, sizeExceedsLimit:boolean, note:string }
+schema UserDetailDto { id:string, userName:string, email:string, roles:array<string>, organizations:array<string>, storageQuota:integer(int64), storageUsed:integer(int64), organizationCount:integer(int32), datasetCount:integer(int32), createdDate:string(date-time) }
+schema UserDto { userName:string, email:string, roles:array<string>, organizations:array<string> }
+schema UserOrganizationMembershipDto { slug:string, name:string, description:string, isPublic:boolean, isOwner:boolean, permissions:OrganizationPermissions, grantedAt:string(date-time), grantedBy:string }
+schema UserStorageInfo { total:integer(int64), used:integer(int64) }
+schema VerifyImportRequestDto { sourceType:string, params:map<string> }
+schema Visibility {  }
+schema VolumeCalculationRequestDto { path:string, polygon:string, baseMethod:string, flatElevation:number(double) }

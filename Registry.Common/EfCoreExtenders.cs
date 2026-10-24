@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -13,7 +13,8 @@ namespace Registry.Common;
 public static class EfCoreExtenders
 {
     /// <summary>
-    /// This methos is used to perform a safe database migration. When the migrations table does not exist it creates it and assumes the database is in its initial migration.
+    /// This method is used to perform a safe database migration. When the migrations table does not exist it creates it,
+    /// assumes the database is in its initial migration and then applies the pending ones.
     /// </summary>
     /// <param name="databaseFacade"></param>
     /// <param name="cancellationToken"></param>
@@ -45,11 +46,10 @@ public static class EfCoreExtenders
 
         var migrationsTableExists = await historyRepository.ExistsAsync(cancellationToken);
 
+        // A legacy database (tables, no history) is assumed to be at the baseline migration: stamp it,
+        // then fall through so the migrations after the baseline are applied in this same run
         if (hasTables && !migrationsTableExists)
-        {
             await AddBaseMigration(databaseFacade, historyRepository, cancellationToken);
-            return;
-        }
 
         if ((await databaseFacade.GetPendingMigrationsAsync(cancellationToken: cancellationToken)).Any())
             await databaseFacade.MigrateAsync(cancellationToken);

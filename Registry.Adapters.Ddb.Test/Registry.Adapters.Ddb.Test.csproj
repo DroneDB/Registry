@@ -7,39 +7,37 @@
 
         <Platforms>AnyCPU;x64</Platforms>
 
-        <Configurations>Debug;Release;DebugEf</Configurations>
+        <Configurations>Debug;Release</Configurations>
+        <!-- Nullable allow-list (build/nullable-allowlist.txt): it may only shrink. -->
+        <Nullable>disable</Nullable>
+        <!-- The libddb contract tests pass a function pointer to DDBSetLogCallback (LibddbContractTests) -->
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <!-- Program.Main (LibddbShutdownProbe.cs) runs DDBShutdown in a child process -->
+        <GenerateProgramFile>false</GenerateProgramFile>
 
-        <LangVersion>13</LangVersion>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
         <WarningLevel>4</WarningLevel>
     </PropertyGroup>
 
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugEf|AnyCPU'">
-      <WarningLevel>4</WarningLevel>
-    </PropertyGroup>
-
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
         <WarningLevel>4</WarningLevel>
     </PropertyGroup>
 
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugEf|x64'">
-      <WarningLevel>4</WarningLevel>
-    </PropertyGroup>
-
     <ItemGroup>
-        <PackageReference Include="Shouldly" Version="4.3.0" />
-        <PackageReference Include="Moq" Version="4.20.72" />
-        <PackageReference Include="newtonsoft.json" Version="13.0.4" />
-        <PackageReference Include="NUnit3TestAdapter" Version="6.2.0" />
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
-        <PackageReference Include="NUnit" Version="4.6.0" />
-        <PackageReference Include="SharpZipLib" Version="1.4.2" />
+        <PackageReference Include="Shouldly" />
+        <PackageReference Include="Moq" />
+        <PackageReference Include="Newtonsoft.Json" />
+        <PackageReference Include="NUnit3TestAdapter" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" />
+        <PackageReference Include="NUnit" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
+      <!-- The vendored libddb contract (XI-09): the golden path vectors (Rq10PathVectorTests) -->
+      <ProjectReference Include="..\Registry.Adapters.Testing\Registry.Adapters.Testing.csproj" />
       <ProjectReference Include="..\Registry.Test.Common\Registry.Test.Common.csproj" />
     </ItemGroup>
 

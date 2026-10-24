@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
@@ -14,10 +14,10 @@ namespace Registry.Web.Services.Managers;
 public class TokenManager : ITokenManager
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
-    private readonly AppSettings _appSettings;
+    private readonly AuthTokenOptions _appSettings;
 
     public TokenManager(IHttpContextAccessor httpContextAccessor,
-        IOptions<AppSettings> settings
+        IOptions<AuthTokenOptions> settings
     )
     {
         _httpContextAccessor = httpContextAccessor;

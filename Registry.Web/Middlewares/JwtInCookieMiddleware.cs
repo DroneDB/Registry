@@ -1,4 +1,4 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.Configuration;
@@ -7,11 +7,11 @@ namespace Registry.Web.Middlewares;
 
 public class JwtInCookieMiddleware : IMiddleware
 {
-    private readonly AppSettings _settings;
+    private readonly AuthTokenOptions _settings;
 
     private const string AuthorizationHeaderKey = "Authorization";
         
-    public JwtInCookieMiddleware(IOptions<AppSettings> settings)
+    public JwtInCookieMiddleware(IOptions<AuthTokenOptions> settings)
     {
         _settings = settings.Value;
     }

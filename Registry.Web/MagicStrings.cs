@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -18,13 +18,12 @@ public static class MagicStrings
     public const string BuildPendingTrackerCacheSeed = "build-pending-tracker";
     public const string TasksListCacheSeed = "tasks-list";
     public const string DatasetVisibilityCacheSeed = "dataset-visibility";
+    public const string DatasetNameCacheSeed = "dataset-name";
     public const string OrganizationsListCacheSeed = "organizations-list";
     public const string DatasetsListCacheSeed = "datasets-list";
+    public const string OgcRenderCacheSeed = "ogc-render";
 
     public const string AutoBuildServiceUserId = "auto-build-service";
-
-    /// <summary>Single source of truth for the per-dataset tasks-list cache key (read and write-through invalidation sides).</summary>
-    public static string TasksListCacheKey(string orgSlug, string dsSlug) => $"{TasksListCacheSeed}:{orgSlug}/{dsSlug}";
 
     public const string IdentityConnectionName = "IdentityConnection";
     public const string RegistryConnectionName = "RegistryConnection";
@@ -35,6 +34,12 @@ public static class MagicStrings
     public const string ScalarUrl = "/scalar/v1";
     public const string QuickHealthUrl = "/quickhealth";
     public const string HealthUrl = "/health";
+
+    /// <summary>
+    /// Anonymous liveness probe (container HEALTHCHECK): the process serves HTTP, nothing more.
+    /// Mapped by every HTTP host (web server and thumbnail generator), see <c>LivenessEndpoint</c>.
+    /// </summary>
+    public const string LivenessUrl = "/health/live";
     public const string VersionUrl = "/version";
 
     public const string DefaultHost = "localhost";

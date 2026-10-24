@@ -1,29 +1,36 @@
+#nullable enable
 using System;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
-using Registry.Web.Services.Managers;
+using Microsoft.Extensions.Logging;
 using Registry.Web.Exceptions;
 using Registry.Web.Filters;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Utilities.Ogc;
 
 /// <summary>
-/// Common authorization for all OGC controllers. Resolves the dataset from {orgSlug}/{dsSlug}
-/// route values and enforces <see cref="AccessType.Read"/>. Re-uses the existing JWT cookie auth
-/// pipeline transparently and falls back to Basic auth (handled separately by BasicAuthFilter,
-/// which is layered before this filter on each controller).
+/// Common authorization for the OGC controllers and the MVT endpoint: resolves the dataset of the
+/// {orgSlug}/{dsSlug} route values through <see cref="IDatasetAccessResolver"/> with
+/// <see cref="AccessType.Read"/>, whose scoped grant the managers of the request then reuse. Re-uses the
+/// JWT cookie auth pipeline and accepts Basic auth (handled by BasicAuthFilter: each controller declares
+/// <see cref="Filters.BasicAuthenticationAttribute"/>, which runs before this filter, so the access check
+/// sees the Basic user). A refusal or a client error is written in the OGC exception envelope of the
+/// request; the status and message of every exception other than a refused access come from
+/// <see cref="ApiExceptionClassifier"/>, like the JSON API.
 /// </summary>
 public class OgcAuthorizationFilter : IAsyncAuthorizationFilter
 {
-    private readonly IUtils _utils;
-    private readonly IAuthManager _authManager;
+    private readonly IDatasetAccessResolver _access;
+    private readonly ILogger<OgcAuthorizationFilter> _logger;
 
-    public OgcAuthorizationFilter(IUtils utils, IAuthManager authManager)
+    public OgcAuthorizationFilter(IDatasetAccessResolver access, ILogger<OgcAuthorizationFilter> logger)
     {
-        _utils = utils;
-        _authManager = authManager;
+        _access = access;
+        _logger = logger;
     }
 
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
@@ -33,36 +40,54 @@ public class OgcAuthorizationFilter : IAsyncAuthorizationFilter
         var service = OgcServiceResolver.DetectService(context.HttpContext.Request.Path.Value);
         var version = OgcServiceResolver.NegotiateVersion(service, context.HttpContext.Request.Query);
 
+        var rv = context.RouteData.Values;
+        var orgSlug = rv.TryGetValue("orgSlug", out var os) ? os?.ToString() : null;
+        var dsSlug = rv.TryGetValue("dsSlug", out var ds) ? ds?.ToString() : null;
+
+        if (string.IsNullOrWhiteSpace(orgSlug) || string.IsNullOrWhiteSpace(dsSlug))
+        {
+            Fail(context, service, version, 400, "MissingParameterValue", "Missing organization or dataset slug");
+            return;
+        }
+
         try
         {
-            var rv = context.RouteData.Values;
-            var orgSlug = rv.TryGetValue("orgSlug", out var os) ? os?.ToString() : null;
-            var dsSlug  = rv.TryGetValue("dsSlug",  out var ds) ? ds?.ToString() : null;
-
-            if (string.IsNullOrWhiteSpace(orgSlug) || string.IsNullOrWhiteSpace(dsSlug))
-            {
-                Fail(context, service, version, 400, "MissingParameterValue", "Missing organization or dataset slug");
-                return;
-            }
-
-            var dataset = _utils.GetDataset(orgSlug, dsSlug, safe: true);
-            if (dataset == null)
-            {
-                Fail(context, service, version, 404, "NotFound", $"Dataset '{orgSlug}/{dsSlug}' not found");
-                return;
-            }
-
-            var allowed = await _authManager.RequestAccess(dataset, AccessType.Read);
-            if (!allowed)
-            {
+            await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: context.HttpContext.RequestAborted);
+        }
+        catch (ForbiddenException)
+        {
+            // D2: a signed-in caller who lacks access gets 403; an anonymous one 401 with the Basic
+            // challenge, so the OGC client asks for credentials
+            var status = ApiExceptionClassifier.AccessDeniedStatus(
+                context.HttpContext.User.Identity?.IsAuthenticated == true);
+            if (status == StatusCodes.Status401Unauthorized)
                 BasicAuthFilter.SendBasicAuthRequest(context.HttpContext.Response);
-                Fail(context, service, version, 401, "AuthenticationFailed",
-                    "Authentication required to access this dataset");
-            }
+            Fail(context, service, version, status, OgcExceptionFilter.OgcCodeFor(status),
+                status == StatusCodes.Status401Unauthorized
+                    ? "Authentication required to access this dataset"
+                    : "The current user cannot access this dataset");
+        }
+        catch (NotFoundException)
+        {
+            Fail(context, service, version, StatusCodes.Status404NotFound, "NotFound",
+                $"Dataset '{orgSlug}/{dsSlug}' not found");
         }
         catch (Exception ex)
         {
-            Fail(context, service, version, 500, "NoApplicableCode", ex.Message);
+            // Any other error (an invalid slug, a busy index): the API's status and message, logged once
+            var d = ApiExceptionClassifier.Classify(ex, context.HttpContext);
+            _logger.Log(d.Level, ex, "OGC authorization failed: {Path}", context.HttpContext.Request.Path);
+            if (ApiExceptionClassifier.IsClientGone(d))
+            {
+                // Nobody reads an exception report any more (RQ-13)
+                context.Result = new StatusCodeResult(d.StatusCode);
+                return;
+            }
+
+            if (d.RetryAfterSeconds is { } retryAfter)
+                context.HttpContext.Response.Headers.RetryAfter =
+                    retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            Fail(context, service, version, d.StatusCode, OgcExceptionFilter.OgcCodeFor(d.StatusCode), d.Message);
         }
     }
 

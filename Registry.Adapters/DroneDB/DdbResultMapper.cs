@@ -1,51 +1,79 @@
+#nullable enable
 using System;
 using System.Runtime.InteropServices;
+using System.Threading;
+using Registry.Ports.DroneDB;
 
 namespace Registry.Adapters.DroneDB;
 
 /// <summary>
-/// Stateless helpers for the native DroneDB C API error surface: reading the native
-/// last-error string and mapping final <see cref="DdbResult"/> codes to typed managed
-/// exceptions. Public static so it can be unit-tested without <c>InternalsVisibleTo</c>.
+/// The libddb error contract (XI-02): every non-success <see cref="DdbResult"/> maps to one typed
+/// exception, with the message and reason libddb set for that call. Public static so the mapping is
+/// unit-tested without native code (<see cref="Map"/>) and the native read with it
+/// (<see cref="ThrowForFinalResult"/>).
+/// <list type="table">
+/// <item><term>Busy</term><description><see cref="DdbBusyException"/> (transient contention: retried)</description></item>
+/// <item><term>BuildInProgress</term><description><see cref="DdbBuildInProgressException"/> (retried)</description></item>
+/// <item><term>Canceled</term><description><see cref="DdbCanceledException"/>, an <see cref="OperationCanceledException"/></description></item>
+/// <item><term>NotFound</term><description><see cref="DdbNotFoundException"/> (404) where the call has no "absent" answer</description></item>
+/// <item><term>InvalidArgs</term><description><see cref="DdbInvalidArgumentsException"/> (400, noRetry)</description></item>
+/// <item><term>Retryable</term><description><see cref="DdbRetryableException"/> with its reason (transient: retried, noRetry false)</description></item>
+/// <item><term>Exception with a retryable reason</term><description><see cref="DdbRetryableException"/>: the exports that predate the reason codes (DDBBuild) keep DDBERR_EXCEPTION but set the reason</description></item>
+/// <item><term>Shutdown</term><description><see cref="DdbShutdownException"/> (the process is stopping)</description></item>
+/// <item><term>anything else</term><description><see cref="DdbException"/></description></item>
+/// </list>
 /// </summary>
 public static class DdbResultMapper
 {
-    [DllImport("ddb", EntryPoint = "DDBGetLastError")]
-    private static extern IntPtr _GetLastError();
+    /// <summary>The message of the last failed libddb call on this thread ("" after a success).</summary>
+    public static string GetNativeLastError() => Marshal.PtrToStringUTF8(NativeDdb.DDBGetLastError()) ?? "";
 
-    /// <summary>The last error message set by the native library; <c>null</c> if no native call set one.</summary>
-    public static string? GetNativeLastError()
-    {
-        var ptr = _GetLastError();
-        return Marshal.PtrToStringUTF8(ptr);
-    }
+    /// <summary>The reason of the last failed libddb call on this thread ("" for none).</summary>
+    public static string GetNativeLastErrorReason() =>
+        Marshal.PtrToStringUTF8(NativeDdb.DDBGetLastErrorReason()) ?? "";
 
-    /// <summary>Native last-error text, with a fallback when the native library set none.</summary>
-    public static string SafeGetLastError(string? operation = null)
+    /// <summary>
+    /// Throws the exception of a final <paramref name="result"/> (nothing for
+    /// <see cref="DdbResult.Success"/>), with the native message and reason. Call it on the thread
+    /// of the failed call, right after it: libddb clears both when the next call on that thread
+    /// starts.
+    /// </summary>
+    public static void ThrowForFinalResult(DdbResult result, string operation) =>
+        NativeCall.Check(result, operation);
+
+    /// <summary>
+    /// The exception of a failed call: <paramref name="message"/> and <paramref name="reason"/> are
+    /// what libddb set ("" means none). Not for <see cref="DdbResult.Success"/>. A canceled call's
+    /// exception carries <paramref name="token"/>, the managed token its cancel token was for (RQ-13).
+    /// </summary>
+    public static Exception Map(DdbResult result, string operation, string? message, string? reason,
+        CancellationToken token = default)
     {
-        return GetNativeLastError() ?? (operation != null ? "Unknown error in " + operation : "Unknown error");
+        if (result == DdbResult.Success)
+            throw new ArgumentOutOfRangeException(nameof(result), result, "A successful call has no exception");
+
+        var text = string.IsNullOrEmpty(message) ? $"{operation} failed ({result})" : message;
+
+        return result switch
+        {
+            DdbResult.Busy => new DdbBusyException(text),
+            DdbResult.BuildInProgress => new DdbBuildInProgressException(text),
+            DdbResult.Canceled => new DdbCanceledException(text, null, token),
+            DdbResult.NotFound => new DdbNotFoundException(text),
+            DdbResult.InvalidArgs => new DdbInvalidArgumentsException(text),
+            DdbResult.Retryable => new DdbRetryableException(text, string.IsNullOrEmpty(reason) ? null : reason),
+            DdbResult.Shutdown => new DdbShutdownException(text),
+            DdbResult.Exception when IsRetryableReason(reason) => new DdbRetryableException(text, reason),
+            _ => new DdbException(text)
+        };
     }
 
     /// <summary>
-    /// Maps a native call's final <see cref="DdbResult"/> to typed exceptions (or returns for
-    /// <see cref="DdbResult.Success"/>). Central point where transient contention surfaces as
-    /// <see cref="DdbBusyException"/> so Hangfire retry policies (OnlyOn = DdbBusyException) and
-    /// the 503 + Retry-After client path actually trigger.
+    /// A reason ABI 2.0 defines for a transient failure. ddb.h: reasons are only ever added and an
+    /// unknown one is treated like none.
     /// </summary>
-    public static void ThrowForFinalResult(DdbResult result, string operation)
-    {
-        switch (result)
-        {
-            case DdbResult.Success:
-                return;
-            case DdbResult.Busy:
-                throw new DdbBusyException(SafeGetLastError(operation));
-            case DdbResult.BuildInProgress:
-                throw new DdbBuildInProgressException(SafeGetLastError(operation));
-            case DdbResult.Canceled:
-                throw new DdbCanceledException(SafeGetLastError(operation));
-            default:
-                throw new DdbException(SafeGetLastError(operation));
-        }
-    }
+    public static bool IsRetryableReason(string? reason) => reason is
+        DdbRetryableException.Reasons.LowDiskSpace or
+        DdbRetryableException.Reasons.NoSpaceOnDevice or
+        DdbRetryableException.Reasons.IdleTimeout;
 }

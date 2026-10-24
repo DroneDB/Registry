@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
-using Registry.Common.Model;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
@@ -16,6 +15,7 @@ using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Services.Managers;
 
@@ -24,25 +24,25 @@ namespace Registry.Web.Services.Managers;
 /// </summary>
 public abstract class OgcManagerBase
 {
-    // OGC / W3C namespace URIs - single source of truth for all derived managers.
-    protected const string NsWms   = "http://www.opengis.net/wms";
-    protected const string NsWfs   = "http://www.opengis.net/wfs/2.0";
-    protected const string NsWmts  = "http://www.opengis.net/wmts/1.0";
-    protected const string NsOws   = "http://www.opengis.net/ows/1.1";
-    protected const string NsGml   = "http://www.opengis.net/gml/3.2";
-    protected const string NsXlink = "http://www.w3.org/1999/xlink";
-    protected const string NsXsd   = "http://www.w3.org/2001/XMLSchema";
-    protected const string NsDdb   = "http://www.dronedb.app/wfs";
+    // OGC / W3C namespace URIs (single source of truth: OgcNamespaces)
+    protected const string NsWms   = OgcNamespaces.Wms;
+    protected const string NsWfs   = OgcNamespaces.Wfs;
+    protected const string NsWmts  = OgcNamespaces.Wmts;
+    protected const string NsOws   = OgcNamespaces.Ows;
+    protected const string NsGml   = OgcNamespaces.Gml;
+    protected const string NsXlink = OgcNamespaces.Xlink;
+    protected const string NsXsd   = OgcNamespaces.Xsd;
+    protected const string NsDdb   = OgcNamespaces.Ddb;
 
-    protected readonly IUtils Utils;
-    protected readonly IAuthManager AuthManager;
-    protected readonly IDdbManager DdbManager;
-    protected readonly IBuildArtifactResolver Artifacts;
+    protected readonly IDatasetAccessResolver Access;
+    protected readonly IBuildArtifactResolver Builds;
     protected readonly IDdbWrapper DdbWrapper;
     protected readonly IOgcLayerCatalog LayerCatalog;
-    protected readonly IDistributedCache Cache;
+    protected readonly IRecordCache Records;
     protected readonly IHttpContextAccessor HttpContext;
-    protected static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
+
+    /// <summary>Capabilities documents: kept 5 minutes, and dropped at once by a new OGC generation.</summary>
+    protected static readonly RecordCacheOptions CapabilitiesCache = RecordCacheOptions.For(TimeSpan.FromMinutes(5));
 
     /// <summary>XML declaration with explicit UTF-8 (matches the actual wire encoding produced by .NET strings).</summary>
     protected const string Utf8XmlDecl = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
@@ -53,13 +53,15 @@ public abstract class OgcManagerBase
     protected static XmlWriter CreateXmlWriter(StringBuilder sb) =>
         XmlWriter.Create(sb, new XmlWriterSettings { Indent = true, Async = true, OmitXmlDeclaration = true });
 
-    protected OgcManagerBase(IUtils utils, IAuthManager authManager, IDdbManager ddbManager,
-        IBuildArtifactResolver artifacts, IDdbWrapper ddbWrapper, IOgcLayerCatalog catalog,
-        IDistributedCache cache, IHttpContextAccessor httpContext)
+    protected OgcManagerBase(OgcManagerDependencies dependencies)
     {
-        Utils = utils; AuthManager = authManager; DdbManager = ddbManager;
-        Artifacts = artifacts; DdbWrapper = ddbWrapper; LayerCatalog = catalog; Cache = cache;
-        HttpContext = httpContext;
+        ArgumentNullException.ThrowIfNull(dependencies);
+        Access = dependencies.Access;
+        Builds = dependencies.Builds;
+        DdbWrapper = dependencies.DdbWrapper;
+        LayerCatalog = dependencies.LayerCatalog;
+        Records = dependencies.Records;
+        HttpContext = dependencies.HttpContext;
     }
 
     /// <summary>
@@ -88,16 +90,14 @@ public abstract class OgcManagerBase
         return baseUrl + path;
     }
 
-    protected async Task<(Registry.Web.Data.Models.Dataset ds, IDDB ddb)> ResolveAsync(string orgSlug, string dsSlug)
+    protected async Task<(Registry.Web.Data.Models.Dataset ds, IDDB ddb)> ResolveAsync(string orgSlug, string dsSlug,
+        CancellationToken ct = default)
     {
-        // Note: OgcAuthorizationFilter (applied at controller level) already enforces
-        // AccessType.Read and returns OGC XML on failure. The check below remains as
-        // defense-in-depth in case a manager is invoked outside the OGC controllers.
-        var ds = Utils.GetDataset(orgSlug, dsSlug);
-        if (!await AuthManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("Read access denied");
-        var ddb = DdbManager.Get(orgSlug, ds.InternalRef);
-        return (ds, ddb);
+        // OgcAuthorizationFilter (applied at controller level) granted read access to this request's
+        // dataset through the same scoped resolver, which reuses the grant. A manager invoked outside an
+        // authorized OGC request is checked here.
+        var access = await Access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
+        return (access.Dataset, access.Ddb);
     }
 
     protected static double[]? AggregateBbox(IReadOnlyList<OgcLayerDto> layers)
@@ -116,26 +116,28 @@ public abstract class OgcManagerBase
         return any ? [minLon, minLat, maxLon, maxLat] : null;
     }
 
-    protected string ResolveRasterArtifact(IDDB ddb, OgcLayerDto layer)
-    {
-        var cog = Artifacts.GetCogPath(ddb, layer.EntryHash);
-        return Artifacts.ArtifactExists(cog) ? cog :
-            // Fallback to source file via ddb local path.
-            ddb.GetLocalPath(layer.EntryPath);
-    }
+    /// <summary>The file a raster layer reads: its build's COG (<c>raster.cog</c>), else the entry's own file.</summary>
+    protected string ResolveRasterArtifact(IDDB ddb, OgcLayerDto layer) => ResolveRasterSource(ddb, layer).Path;
 
-    protected string ResolveVectorArtifact(IDDB ddb, OgcLayerDto layer)
-    {
-        var gpkg = Artifacts.GetVectorQueryPath(ddb, layer.EntryHash);
-        if (!Artifacts.ArtifactExists(gpkg))
-            // OWS Common 2.0: a referenced layer/typeName the server cannot serve is
-            // an invalid parameter value, not an unsupported operation. Returning 404
-            // here would violate the WFS 2.0 ATS (typeNames is a parameter, not a resource).
-            throw new OgcException("InvalidParameterValue",
-                $"Vector layer '{layer.Name}' has no built GPKG sidecar. Run dataset build first.",
-                400, "typeNames");
-        return gpkg;
-    }
+    /// <summary>The file a raster layer reads and which one it is (<see cref="ResolveRasterArtifact"/>).</summary>
+    protected RasterSource ResolveRasterSource(IDDB ddb, OgcLayerDto layer) =>
+        Builds.FindArtifactFile(ddb, layer.EntryHash, ArtifactRoles.RasterCog, entryPath: layer.EntryPath) is { } cog
+            ? new RasterSource(cog, ArtifactRoles.RasterCog)
+            : new RasterSource(ddb.GetLocalPath(layer.EntryPath), RasterSource.EntryFile);
+
+    /// <summary>The GeoPackage a vector layer is queried from (its build's <c>vector.gpkg</c>).</summary>
+    protected string ResolveVectorArtifact(IDDB ddb, OgcLayerDto layer) =>
+        Builds.FindArtifactFile(ddb, layer.EntryHash, ArtifactRoles.VectorGpkg, entryPath: layer.EntryPath)
+        // OWS Common 2.0: a referenced layer/typeName the server cannot serve is
+        // an invalid parameter value, not an unsupported operation. Returning 404
+        // here would violate the WFS 2.0 ATS (typeNames is a parameter, not a resource).
+        ?? throw new OgcException("InvalidParameterValue",
+            $"Vector layer '{layer.Name}' has no built GPKG sidecar. Run dataset build first.",
+            400, "typeNames");
+
+    /// <summary>The local file of an MVT tile of a vector layer, or null when it does not exist.</summary>
+    protected string MvtTile(IDDB ddb, OgcLayerDto layer, int z, int x, int y) =>
+        Builds.FindArtifactFile(ddb, layer.EntryHash, ArtifactRoles.VectorMvt, MvtTiles.Tile(z, x, y), layer.EntryPath);
 
     /// <summary>
     /// Emits a WMS <c>&lt;DCPType&gt;&lt;HTTP&gt;&lt;Get&gt;&lt;OnlineResource ... /&gt;&lt;/Get&gt;&lt;/HTTP&gt;&lt;/DCPType&gt;</c> block.
@@ -187,4 +189,11 @@ public abstract class OgcManagerBase
         await w.WriteEndElementAsync(); // DCP
         await w.WriteEndElementAsync(); // Operation
     }
+}
+
+/// <summary>The file a raster layer reads and what it is: a build artifact's role, or <see cref="EntryFile"/>.</summary>
+public sealed record RasterSource(string Path, string Source)
+{
+    /// <summary>The entry's own file (no build artifact).</summary>
+    public const string EntryFile = "file";
 }

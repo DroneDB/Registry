@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Registry.Ports;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Identity.Models;
@@ -30,34 +31,35 @@ public sealed class AdminTasksManager : IAdminTasksManager
     private readonly UserManager<User> _userManager;
     private readonly int _artifactTtlHours;
     private readonly string _tempPath;
+    private readonly IFileSystem _fs;
 
     public AdminTasksManager(
         IJobIndexQuery query,
         IJobIndexWriter writer,
         IAuthManager authManager,
         UserManager<User> userManager,
-        IOptions<AppSettings> appSettings)
+        IOptions<ProcessingPlatformSettings> platformSettings,
+        IScratchFileProvider scratch,
+        IFileSystem fs)
     {
         _query = query;
         _writer = writer;
         _authManager = authManager;
         _userManager = userManager;
-        _artifactTtlHours = (appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings()).ArtifactTtlHours;
-        _tempPath = appSettings.Value.TempPath ?? Path.Combine(Path.GetTempPath(), "registry");
+        _artifactTtlHours = platformSettings.Value.ArtifactTtlHours;
+        _tempPath = scratch.Root;
+        _fs = fs;
     }
 
     public async Task<bool> DeleteTaskAsync(string jobId, CancellationToken ct = default)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can delete tasks from the global list");
-
         // Writer performs the direct lookup and terminal-state check
         var (deleted, _, _) = await _writer.DeleteTerminalJobByIdAsync(jobId, ct);
         if (!deleted)
             return false;
 
         // Best-effort artifact cleanup
-        TaskJobHelpers.TryDeleteArtifacts(jobId, _tempPath);
+        TaskJobHelpers.DeleteArtifacts(_fs, jobId, _tempPath);
 
         return true;
     }
@@ -65,9 +67,6 @@ public sealed class AdminTasksManager : IAdminTasksManager
     public async Task<AdminTaskListDto> ListAsync(string? toolId, string? state, string? userId,
         int skip, int take, CancellationToken ct = default)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can list all tasks");
-
         take = Math.Clamp(take, 1, 200);
         skip = Math.Max(0, skip);
 

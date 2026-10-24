@@ -22,10 +22,10 @@ public class LdapLoginManager : ILoginManager
     private readonly ILogger<LdapLoginManager> _logger;
     private readonly LdapSettings _settings;
 
-    public LdapLoginManager(ILogger<LdapLoginManager> logger, IOptions<AppSettings> appSettings)
+    public LdapLoginManager(ILogger<LdapLoginManager> logger, IOptions<IdentityProviderOptions> identity)
     {
         _logger = logger;
-        _settings = appSettings.Value.LdapSettings
+        _settings = identity.Value.LdapSettings
             ?? throw new InvalidOperationException(
                 "LdapSettings must be configured in appsettings.json when LDAP authentication is enabled.");
     }

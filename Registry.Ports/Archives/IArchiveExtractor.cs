@@ -17,6 +17,13 @@ public interface IArchiveExtractor
     bool IsSupported(string fileName);
 
     /// <summary>
+    /// The file name suffixes <see cref="IsSupported"/> accepts: lowercase, with the leading dot, compound ones
+    /// (<c>.tar.gz</c>) before their own suffixes (<c>.gz</c>). The one rule of "what Registry extracts", for whoever
+    /// has to name it (the features the Hub reads).
+    /// </summary>
+    IReadOnlyList<string> SupportedExtensions { get; }
+
+    /// <summary>
     /// Content-based validation that the file at <paramref name="filePath"/> is an actual supported
     /// archive - it inspects the archive structure (magic bytes / first entry), not just the file
     /// name. Intended for files obtained from an untrusted source (e.g. a download URL) so that a

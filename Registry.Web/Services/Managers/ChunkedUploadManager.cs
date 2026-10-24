@@ -1,233 +1,108 @@
+#nullable enable
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Registry.Ports;
+using Registry.Ports.DroneDB;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Ports;
+using Registry.Web.Services.Uploads;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// Chunked upload support implementation
-/// to be integrated into ShareManager.cs
+/// Default <see cref="IChunkedUploadManager"/>: chunks are stored by <see cref="IChunkStore"/>
+/// under the dataset's uploads folder (<c>.uploads/chunks</c>, same volume as the dataset), and
+/// the finished file goes through the same commit as any upload (<see cref="IUploadManager"/>).
 /// </summary>
-public class ChunkedUploadManager
+public sealed class ChunkedUploadManager(IUploadManager uploads, IChunkStore store, IUploadQuotaGuard quota,
+    IScratchFileProvider scratch)
+    : IChunkedUploadManager
 {
-    private readonly ILogger _logger;
-    private readonly string _tempDirectory;
-    private readonly IFileSystem _fileSystem;
+    /// <summary>Folder of the chunked uploads of a dataset, under its uploads folder.</summary>
+    public static string ChunksRoot(IDDB ddb) =>
+        Path.Combine(ddb.DatasetFolderPath, IDDB.UploadsFolderName, DatasetUploads.ChunksFolderName);
 
-    // In-memory cache of ongoing chunks for each file
-    // Key: fileId, Value: dictionary with ChunkIndex and status (true = uploaded)
-    private readonly Dictionary<string, Dictionary<int, bool>> _chunkTracker = new();
-
-    // Cache of information about files being uploaded
-    private readonly Dictionary<string, ChunkUploadDto> _fileInfoCache = new();
-
-    // Semaphore to ensure thread-safe access to the cache
-    private readonly SemaphoreSlim _cacheLock = new SemaphoreSlim(1, 1);
-
-    public ChunkedUploadManager(ILogger logger, string tempDirectory, IFileSystem fileSystem)
+    public async Task<ChunkStatusDto> WriteChunkAsync(string orgSlug, string dsSlug, ChunkRequest chunk, Stream body,
+        CancellationToken ct = default)
     {
-        _logger = logger;
-        _tempDirectory = tempDirectory;
-        _fileSystem = fileSystem;
+        using var ctx = await uploads.BeginAsync(orgSlug, dsSlug, ct: ct);
+        var root = ChunksRoot(ctx.Ddb);
+        var manifest = new ChunkManifest(chunk.Path, chunk.TotalFileSize, chunk.TotalChunks, chunk.ChunkSize, ctx.User?.Id);
 
-        // Ensure the temporary directory exists
-        _fileSystem.FolderCreate(_tempDirectory);
+        var status = store.GetStatus(root, chunk.FileId);
+        if (status == null)
+        {
+            // A new upload: refuse it before its first byte if it cannot be stored
+            uploads.ValidatePath(ctx, chunk.Path);
+            using (await quota.ReserveAsync(ctx.User?.Id ?? string.Empty, chunk.TotalFileSize)) { }
+        }
+        else
+        {
+            EnsureOwner(ctx, status.Manifest, chunk.FileId);
+        }
+
+        store.Open(root, chunk.FileId, manifest);
+        return ToDto(chunk.FileId, await store.WriteAsync(root, chunk.FileId, chunk.ChunkIndex, body, ct));
     }
 
-    /// <summary>
-    /// Handles the upload of a single chunk
-    /// </summary>
-    public async Task<ChunkUploadResultDto> UploadChunk(ChunkUploadDto chunkInfo, Stream chunkStream)
+    public async Task<ChunkStatusDto> GetStatusAsync(string orgSlug, string dsSlug, string fileId,
+        CancellationToken ct = default)
     {
-        // Assicurati che i dati del chunk siano validi
-        if (chunkInfo.ChunkIndex < 0 || chunkInfo.ChunkIndex >= chunkInfo.TotalChunks)
-            throw new ArgumentException($"Invalid chunk index: {chunkInfo.ChunkIndex}");
-
-        if (chunkInfo.TotalFileSize <= 0)
-            throw new ArgumentException("Invalid file size");
-
-        if (string.IsNullOrEmpty(chunkInfo.FileId))
-            throw new ArgumentException("FileId is required");
-
-        // Create the specific directory for this file if it doesn't exist
-        var fileChunkDir = Path.Combine(_tempDirectory, chunkInfo.FileId);
-        _fileSystem.FolderCreate(fileChunkDir);
-
-        // Path of the file for this chunk
-        var chunkPath = Path.Combine(fileChunkDir, $"chunk_{chunkInfo.ChunkIndex}.bin");
-
-        // Verify the MD5 hash of the chunk (if provided)
-        if (!string.IsNullOrEmpty(chunkInfo.ChunkMd5))
-        {
-            var calculatedMd5 = await CalculateMd5Async(chunkStream);
-            if (!string.Equals(calculatedMd5, chunkInfo.ChunkMd5, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidDataException($"Chunk MD5 mismatch. Expected: {chunkInfo.ChunkMd5}, Got: {calculatedMd5}");
-            }
-
-            // Reset the stream position to the beginning after calculating the hash
-            chunkStream.Position = 0;
-        }
-
-        // Save the chunk to disk
-        await using (var fileStream = _fileSystem.OpenWrite(chunkPath))
-        {
-            await chunkStream.CopyToAsync(fileStream);
-        }
-
-        // Update tracking information
-        await _cacheLock.WaitAsync();
-        try
-        {
-            // Update file information
-            _fileInfoCache[chunkInfo.FileId] = chunkInfo;
-
-            // Initialize chunk tracking if necessary
-            if (!_chunkTracker.TryGetValue(chunkInfo.FileId, out var chunkStatus))
-            {
-                chunkStatus = new Dictionary<int, bool>();
-                _chunkTracker[chunkInfo.FileId] = chunkStatus;
-            }
-
-            // Mark this chunk as completed
-            chunkStatus[chunkInfo.ChunkIndex] = true;
-
-            // Check if all chunks have been uploaded
-            var isComplete = chunkStatus.Count == chunkInfo.TotalChunks &&
-                             chunkStatus.All(x => x.Value);
-
-            return new ChunkUploadResultDto
-            {
-                FileId = chunkInfo.FileId,
-                ReceivedChunk = chunkInfo.ChunkIndex,
-                Success = true,
-                IsComplete = isComplete
-            };
-        }
-        finally
-        {
-            _cacheLock.Release();
-        }
+        using var ctx = await uploads.BeginAsync(orgSlug, dsSlug, ct: ct);
+        var status = store.GetStatus(ChunksRoot(ctx.Ddb), fileId)
+                     ?? throw new NotFoundException($"Unknown upload '{fileId}'");
+        EnsureOwner(ctx, status.Manifest, fileId);
+        return ToDto(fileId, status);
     }
 
-    /// <summary>
-    /// Reassembles all chunks of a file and completes the upload
-    /// </summary>
-    public async Task<string> FinalizeChunkedUpload(string fileId)
+    public async Task<EntryDto> CommitAsync(string orgSlug, string dsSlug, string fileId,
+        CancellationToken ct = default)
     {
-        await _cacheLock.WaitAsync();
-        ChunkUploadDto fileInfo;
-        Dictionary<int, bool> chunkStatus;
+        // Keyed by the file id: committing again (the response was lost) answers from the receipt. Honoured
+        // while the upload is resolved; the commit then runs to completion (RQ-13)
+        using var ctx = await uploads.BeginAsync(orgSlug, dsSlug, uploadId: fileId, ct: ct);
+        if (ctx.Receipt?.Results is { Count: > 0 } done && done[0].Entry is { } entry)
+            return entry;
 
         try
         {
-            // Verify that all necessary information is available
-            if (!_fileInfoCache.TryGetValue(fileId, out fileInfo))
-                throw new ArgumentException($"No information found for file ID: {fileId}");
+            var root = ChunksRoot(ctx.Ddb);
+            var status = store.GetStatus(root, fileId) ?? throw new NotFoundException($"Unknown upload '{fileId}'");
+            EnsureOwner(ctx, status.Manifest, fileId);
 
-            if (!_chunkTracker.TryGetValue(fileId, out chunkStatus))
-                throw new ArgumentException($"No chunk tracking information for file ID: {fileId}");
+            // The chunks were written into one file: taking it is a rename onto the dataset volume
+            using var temp = scratch.CreateForDataset(ctx.Ddb.DatasetFolderPath, DatasetUploads.TempFileExtension);
+            var hint = await store.TakeAsync(root, fileId, temp.Path);
+            temp.Release(); // the commit moves it into place or deletes it
 
-            // Verify that all chunks have been uploaded successfully
-            if (chunkStatus.Count != fileInfo.TotalChunks || !chunkStatus.All(x => x.Value))
-                throw new InvalidOperationException("Not all chunks have been uploaded successfully");
-        }
-        finally
-        {
-            _cacheLock.Release();
-        }
-
-        // Directory containing the chunks
-        var fileChunkDir = Path.Combine(_tempDirectory, fileId);
-
-        // Final path of the temporary file
-        var outputFilePath = Path.Combine(_tempDirectory, $"{fileId}_complete");
-
-        // Reassemble the file from chunks
-        await using (var outputStream = _fileSystem.OpenWrite(outputFilePath))
-        {
-            for (int i = 0; i < fileInfo.TotalChunks; i++)
-            {
-                var chunkPath = Path.Combine(fileChunkDir, $"chunk_{i}.bin");
-
-                await using (var chunkStream = _fileSystem.OpenRead(chunkPath))
-                {
-                    await chunkStream.CopyToAsync(outputStream);
-                }
-            }
-        }
-
-        // Calculate the MD5 hash of the complete file
-        var fileHash = await CalculateFileMd5Async(outputFilePath);
-
-        // Remove tracking data
-        await _cacheLock.WaitAsync();
-        try
-        {
-            _fileInfoCache.Remove(fileId);
-            _chunkTracker.Remove(fileId);
-        }
-        finally
-        {
-            _cacheLock.Release();
-        }
-
-        return outputFilePath;
-    }
-
-    /// <summary>
-    /// Cleans up temporary files for a given fileId
-    /// </summary>
-    public void CleanupTempFiles(string fileId)
-    {
-        var fileChunkDir = Path.Combine(_tempDirectory, fileId);
-        var outputFilePath = Path.Combine(_tempDirectory, $"{fileId}_complete");
-
-        try
-        {
-            if (_fileSystem.FolderExists(fileChunkDir))
-                _fileSystem.FolderDelete(fileChunkDir);
-
-            if (_fileSystem.Exists(outputFilePath))
-                _fileSystem.Delete(outputFilePath);
+            return await uploads.CommitAsync(ctx, status.Manifest.Path, new StreamedFile(temp.Path, hint.Size, hint));
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error cleaning up temporary files for fileId {FileId}", fileId);
+            await uploads.FailAsync(ctx, ex);
+            throw;
         }
     }
 
-    /// <summary>
-    /// Calculates the MD5 hash of a stream
-    /// </summary>
-    private async Task<string> CalculateMd5Async(Stream stream)
+    private static void EnsureOwner(UploadRequestContext ctx, ChunkManifest manifest, string fileId)
     {
-        using (var md5 = MD5.Create())
-        {
-            var hash = await md5.ComputeHashAsync(stream);
-            return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-        }
+        if (manifest.UserId != ctx.User?.Id)
+            throw new ConflictException($"Upload '{fileId}' belongs to another user");
     }
 
-    /// <summary>
-    /// Calculates the MD5 hash of a file
-    /// </summary>
-    private async Task<string> CalculateFileMd5Async(string filePath)
+    private static ChunkStatusDto ToDto(string fileId, ChunkStatus status) => new()
     {
-        await using (var stream = _fileSystem.OpenRead(filePath))
-        {
-            using (var md5 = MD5.Create())
-            {
-                var hash = await md5.ComputeHashAsync(stream);
-                return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-            }
-        }
-    }
+        FileId = fileId,
+        Path = status.Manifest.Path,
+        TotalFileSize = status.Manifest.TotalSize,
+        TotalChunks = status.Manifest.TotalChunks,
+        ChunkSize = status.Manifest.ChunkSize,
+        Received = status.Received.ToArray(),
+        Missing = status.Missing.ToArray(),
+        Complete = status.Complete
+    };
 }

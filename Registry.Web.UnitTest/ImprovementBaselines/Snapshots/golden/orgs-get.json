@@ -1,0 +1,21 @@
+{
+  "request": "GET /orgs/golden-org/",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "slug": "golden-org",
+    "name": "Golden organization",
+    "description": "Golden JSON contract tests",
+    "creationDate": "<datetime:Z>",
+    "owner": "golden-owner",
+    "isPublic": false,
+    "permissions": {
+      "canRead": true,
+      "canWrite": true,
+      "canDelete": true,
+      "canManageMembers": true
+    }
+  }
+}

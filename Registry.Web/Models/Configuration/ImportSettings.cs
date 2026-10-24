@@ -39,9 +39,14 @@ public class ImportSettings
     /// File extensions (with or without the leading dot) rejected by ALL ingestion paths (single-file
     /// URL import, archive extraction and archive URL import) as a defense-in-depth deny-list against
     /// executables/scripts. Matching is case-insensitive. Ignored when <see cref="AllowedFileExtensions"/>
-    /// is non-empty (the allow-list takes precedence).
+    /// is non-empty (the allow-list takes precedence). When null or empty,
+    /// <see cref="DefaultBlockedFileExtensions"/> applies: read it through
+    /// <see cref="EffectiveBlockedFileExtensions"/>.
     /// </summary>
-    public string[] BlockedFileExtensions { get; set; } =
+    public string[]? BlockedFileExtensions { get; set; }
+
+    /// <summary>The extensions blocked when <see cref="BlockedFileExtensions"/> is not set.</summary>
+    public static readonly string[] DefaultBlockedFileExtensions =
     [
         ".exe", ".dll", ".so", ".dylib", ".bat", ".cmd", ".com", ".msi", ".msix", ".appx",
         ".ps1", ".psm1", ".psd1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".hta",
@@ -49,6 +54,10 @@ public class ImportSettings
         ".gadget", ".jar", ".apk", ".app", ".deb", ".rpm", ".py", ".pyc", ".pyo", ".rb",
         ".pl", ".php", ".lnk", ".reg", ".command", ".workflow"
     ];
+
+    /// <summary><see cref="BlockedFileExtensions"/>, or <see cref="DefaultBlockedFileExtensions"/> when not set.</summary>
+    public string[] EffectiveBlockedFileExtensions() =>
+        ConfigurationLists.ConfiguredOrDefault(BlockedFileExtensions, DefaultBlockedFileExtensions);
 
     /// <summary>
     /// File extensions (with or without the leading dot) that are the ONLY ones accepted by ALL
@@ -135,9 +144,8 @@ public class ImportSettings
         if (string.IsNullOrEmpty(ext)) return false;
 
         var normalized = ext.TrimStart('.');
-        return BlockedFileExtensions is { Length: > 0 }
-               && BlockedFileExtensions.Any(b =>
-                   string.Equals(b.TrimStart('.'), normalized, StringComparison.OrdinalIgnoreCase));
+        return EffectiveBlockedFileExtensions().Any(b =>
+            string.Equals(b.TrimStart('.'), normalized, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

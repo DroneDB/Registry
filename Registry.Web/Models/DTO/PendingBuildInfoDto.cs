@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.DTO;
 
@@ -21,4 +22,9 @@ public class PendingBuildInfoDto
 
     /// <summary>Timestamp of the last build attempt (UTC).</summary>
     public DateTime LastAttempt { get; set; }
+
+    /// <summary>The artifacts of the entry's build that exist (XI-04), absent when there are none.</summary>
+    [JsonPropertyName("artifacts")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ArtifactLinkDto[]? Artifacts { get; set; }
 }

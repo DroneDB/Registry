@@ -17,8 +17,9 @@ public interface IBuildStatusService
     /// <summary>
     /// Annotates <see cref="EntryDto.BuildStatus"/> (and, for pending builds,
     /// <see cref="EntryDto.BuildMissingDependencies"/>) on every buildable
-    /// entry in <paramref name="entries"/>. Entries that are not buildable, or
-    /// whose build is already complete, are left with a null status.
+    /// entry in <paramref name="entries"/>, and <see cref="EntryDto.Artifacts"/> on every entry whose own
+    /// build has artifacts. Entries that are not buildable, or whose build is already complete, are left with
+    /// a null status.
     /// </summary>
     /// <param name="orgSlug">Organization slug.</param>
     /// <param name="dsSlug">Dataset slug.</param>

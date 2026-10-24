@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.IO;
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,6 +8,7 @@ using Microsoft.Extensions.Options;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.HeavyTasks.Tools;
 
@@ -18,8 +18,15 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// block-windowed <c>DDBExportRaster2</c> path (bounded peak memory) with
 /// incremental progress and cooperative cancellation.
 /// </summary>
-public sealed class RasterExportTool : IHeavyTool
+public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters>
 {
+    /// <summary>The visualization parameters and the optional output file name.</summary>
+    public sealed record Parameters(string? Preset, string? Bands, string? Formula, string? BandFilter,
+        string? Colormap, string? Rescale, string? FileName);
+
+    protected override Parameters ReadParams(ToolParameters p) => new(p.Text("preset"), p.Text("bands"),
+        p.Text("formula"), p.Text("bandFilter"), p.Text("colormap"), p.Text("rescale"), p.Text("fileName"));
+
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -42,21 +49,23 @@ public sealed class RasterExportTool : IHeavyTool
 
     private readonly int _defaultTileSize;
 
-    public RasterExportTool(IOptions<AppSettings> appSettings)
+    public RasterExportTool(IOptions<ProcessingPlatformSettings> platformSettings)
     {
-        _defaultTileSize = appSettings.Value.ProcessingPlatform?.DefaultRasterTileSize ?? 512;
+        _defaultTileSize = platformSettings.Value.DefaultRasterTileSize;
         if (_defaultTileSize < 1) _defaultTileSize = 512;
     }
 
-    public string Id => "raster-export";
-    public string Version => "1";
-    public string Title => "Export raster (GeoTIFF)";
-    public HeavyToolPermission RequiredAccess => HeavyToolPermission.Read;
-    public bool ProducesArtifact => true;
-    public string? ResultExtension => "tif";
-    public JsonDocument InputSchema => Schema;
+    public override string Id => "raster-export";
+    public override string Version => "1";
+    public override string Title => "Export raster (GeoTIFF)";
+    public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Read;
+    public override bool ProducesArtifact => true;
+    public override bool RunsNativeBuild => true;
+    public override string? ResultExtension => "tif";
+    public override JsonDocument InputSchema => Schema;
 
-    public Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
+    protected override Task ValidateAsync(HeavyToolRequest request, Parameters p, IHeavyToolValidationContext ctx,
+        CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Path))
             throw new ArgumentException("A source raster 'path' is required.");
@@ -67,7 +76,7 @@ public sealed class RasterExportTool : IHeavyTool
         return Task.CompletedTask;
     }
 
-    public HeavyToolPlan Plan(HeavyToolRequest request, IHeavyToolValidationContext ctx)
+    protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters p, IHeavyToolValidationContext ctx)
     {
         // Cheap estimate: GeoTIFF output is roughly the size of the source entry.
         long? estimate = null;
@@ -82,14 +91,15 @@ public sealed class RasterExportTool : IHeavyTool
             // estimate is best-effort
         }
 
-        var fileName = SafeFileName(ReadString(request.Params, "fileName"),
+        var fileName = SafeFileName(p.FileName,
                            $"{Path.GetFileNameWithoutExtension(request.Path)}_export.tif");
 
         return new HeavyToolPlan(estimate, QuotaKey: "raster-export", DefaultFileName: fileName, ContentType: "image/tiff");
     }
 
-    public async Task<HeavyToolArtifact?> ExecuteAsync(
+    protected override async Task<HeavyToolArtifact?> ExecuteAsync(
         HeavyToolRequest request,
+        Parameters p,
         IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
@@ -97,16 +107,10 @@ public sealed class RasterExportTool : IHeavyTool
         if (ctx.WorkDir is null)
             throw new InvalidOperationException("RasterExportTool requires a work directory.");
 
-        var fileName = SafeFileName(ReadString(request.Params, "fileName"),
+        var fileName = SafeFileName(p.FileName,
                            $"{Path.GetFileNameWithoutExtension(request.Path)}_export.tif");
         var outputPath = Path.Combine(ctx.WorkDir, fileName);
 
-        var preset = ReadString(request.Params, "preset");
-        var bands = ReadString(request.Params, "bands");
-        var formula = ReadString(request.Params, "formula");
-        var bandFilter = ReadString(request.Params, "bandFilter");
-        var colormap = ReadString(request.Params, "colormap");
-        var rescale = ReadString(request.Params, "rescale");
 
         progress.Report(new HeavyToolProgress(0, "loading", LogChunk: $"Exporting '{request.Path}' to {fileName}"));
 
@@ -114,7 +118,7 @@ public sealed class RasterExportTool : IHeavyTool
         // Task History "View log" dialog shows meaningful progress for the export.
         var lastReportedPhase = "loading";
         await Task.Run(() => ctx.Ddb.ExportRaster(
-            request.Path!, outputPath, preset, bands, formula, bandFilter, colormap, rescale,
+            request.Path!, outputPath, p.Preset, p.Bands, p.Formula, p.BandFilter, p.Colormap, p.Rescale,
             _defaultTileSize,
             (fraction, phase) =>
             {
@@ -135,7 +139,8 @@ public sealed class RasterExportTool : IHeavyTool
         if (!info.Exists)
             throw new InvalidOperationException("Raster export produced no output file.");
 
-        var sha = await ComputeSha256Async(outputPath, ct);
+        // libddb writes the GeoTIFF (blocks at random offsets): read back for its hash
+        var sha = await FileHash.Sha256Async(outputPath, ct);
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: $"Export complete ({info.Length} bytes)"));
 
         return new HeavyToolArtifact(
@@ -144,13 +149,6 @@ public sealed class RasterExportTool : IHeavyTool
             FileName: fileName,
             SizeBytes: info.Length,
             Sha256: sha);
-    }
-
-    private static string? ReadString(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.String ? el.GetString() : null;
     }
 
     // Strips any directory components (path traversal / absolute path) from a
@@ -162,11 +160,4 @@ public sealed class RasterExportTool : IHeavyTool
         return string.IsNullOrWhiteSpace(safe) ? fallback : safe;
     }
 
-    private static async Task<string> ComputeSha256Async(string path, CancellationToken ct)
-    {
-        await using var stream = File.OpenRead(path);
-        using var sha = SHA256.Create();
-        var hash = await sha.ComputeHashAsync(stream, ct);
-        return Convert.ToHexString(hash).ToLowerInvariant();
-    }
 }

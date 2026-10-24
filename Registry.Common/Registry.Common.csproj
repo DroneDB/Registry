@@ -4,8 +4,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <Platforms>AnyCPU;x64</Platforms>
-    <Configurations>Debug;Release;DebugEf</Configurations>
-    <LangVersion>13</LangVersion>
+    <Configurations>Debug;Release</Configurations>
+    <!-- Nullable allow-list (build/nullable-allowlist.txt): it may only shrink. -->
+    <Nullable>disable</Nullable>
     <!-- The khellang/MimeTypes source generator (used by CommonUtils) does not emit its class when
          GenerateDocumentationFile is enabled, so opt this project out of the solution-wide doc generation.
          Registry.Common does not contribute XML to the API reference, so nothing is lost. -->
@@ -16,29 +17,19 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugEf|AnyCPU'">
-    <WarningLevel>4</WarningLevel>
-  </PropertyGroup>
-
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugEf|x64'">
-    <WarningLevel>4</WarningLevel>
-  </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
-    <PackageReference Include="MimeTypes" Version="2.5.2">
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="MimeTypes">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>compile; runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="Polly" Version="8.6.6" />
-    <PackageReference Include="SharpZipLib" Version="1.4.2" />
+    <PackageReference Include="Polly" />
   </ItemGroup>
 
 </Project>

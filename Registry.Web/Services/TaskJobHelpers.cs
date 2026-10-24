@@ -3,6 +3,8 @@ using System;
 using System.IO;
 using System.Linq;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
+using Registry.Ports;
 using Registry.Web.Data.Models;
 
 namespace Registry.Web.Services;
@@ -34,40 +36,32 @@ public static class TaskJobHelpers
     /// Resolves the single file a task produced under <c>{tempPath}/tasks/{taskId}</c>,
     /// or null when the directory is gone (expired or cleaned up).
     /// </summary>
-    public static string? ResolveArtifactFile(string taskId, string tempPath)
+    public static string? ResolveArtifactFile(IFileSystem fs, string taskId, string tempPath)
     {
         var dir = ArtifactDirectory(taskId, tempPath);
-        if (dir is null || !Directory.Exists(dir))
+        if (dir is null || !fs.FolderExists(dir))
             return null;
 
-        return Directory.EnumerateFiles(dir).FirstOrDefault();
+        return fs.EnumerateFiles(dir).FirstOrDefault();
     }
 
     /// <summary>
-    /// Best-effort removal of a task's produced-artifact working directory. Failures are
-    /// reported through <paramref name="logger"/> when supplied and otherwise ignored;
-    /// they must never abort the surrounding delete.
+    /// Best-effort removal of a task's produced-artifact working directory
+    /// (<see cref="FileSystemExtensions.TryDelete"/>). A failure is logged when a
+    /// <paramref name="logger"/> is given and never aborts the surrounding delete.
     /// </summary>
-    public static void TryDeleteArtifacts(string taskId, string tempPath, ILogger? logger = null)
-    {
-        try
-        {
-            var dir = ArtifactDirectory(taskId, tempPath);
-            if (dir is not null && Directory.Exists(dir))
-                Directory.Delete(dir, recursive: true);
-        }
-        catch (Exception ex)
-        {
-            logger?.LogWarning(ex, "Failed to delete artifacts for task {TaskId}", taskId);
-        }
-    }
+    public static void DeleteArtifacts(IFileSystem fs, string taskId, string tempPath, ILogger? logger = null) =>
+        fs.TryDelete(ArtifactDirectory(taskId, tempPath),
+            ex => logger?.LogWarning(ex, "Failed to delete artifacts for task {TaskId}", taskId));
 
-    /// <summary>Path-traversal-guarded <c>{tempPath}/tasks/{taskId}</c>, or null when the id escapes the root.</summary>
-    private static string? ArtifactDirectory(string taskId, string tempPath)
+    /// <summary>
+    /// <c>{tempPath}/tasks/{taskId}</c>, the work directory of a task that produces an artifact, or
+    /// null when the id escapes <c>{tempPath}/tasks</c> (<see cref="CommonUtils.IsUnder"/>).
+    /// </summary>
+    public static string? ArtifactDirectory(string taskId, string tempPath)
     {
-        var dir = Path.GetFullPath(Path.Combine(tempPath, ArtifactsFolder, taskId));
-        var root = Path.GetFullPath(Path.Combine(tempPath, ArtifactsFolder));
-        // Require a separator boundary so "tasks_evil" can't pass a bare prefix match
-        return dir.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal) ? dir : null;
+        var root = Path.Combine(tempPath, ArtifactsFolder);
+        var dir = Path.GetFullPath(Path.Combine(root, taskId));
+        return CommonUtils.IsUnder(root, dir) ? dir : null;
     }
 }

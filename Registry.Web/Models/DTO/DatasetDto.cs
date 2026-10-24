@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
@@ -22,7 +23,7 @@ public class DatasetDto
     public string Slug { get; set; }
     [Required]
     public DateTime CreationDate { get; set; }
-    public Dictionary<string, object> Properties { get; set; }
+    public Dictionary<string, JsonElement> Properties { get; set; }
 
     public long Size { get; set; }
 

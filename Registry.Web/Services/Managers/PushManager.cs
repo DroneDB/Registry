@@ -1,327 +1,41 @@
-﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Newtonsoft.Json;
-using Registry.Ports;
-using Registry.Ports.DroneDB;
-using Registry.Web.Exceptions;
 using Registry.Web.Models;
-using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
-using Stamp = Registry.Ports.DroneDB.Stamp;
+using Registry.Web.Services.Push;
 
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// Offline-first push workflow: init, upload files, save meta, commit.
+/// The offline-first push (<see cref="IPushManager"/>, what <c>PushController</c> calls) over the push services RQ-12
+/// split it into (14 parameters before): the session, the uploads, the commit.
 /// </summary>
 public class PushManager : IPushManager
 {
-    private const string AddsTempFolder = "add";
-    private const string StampFileName = "stamp.json";
-    private const string OurStampFileName = "our_stamp.json";
-    private const string MetaFile = "meta.json";
+    private readonly IPushSessions _sessions;
+    private readonly IPushUploads _uploads;
+    private readonly IPushCommit _commit;
 
-    private readonly IUtils _utils;
-    private readonly IDdbManager _ddbManager;
-    private readonly IObjectsManager _objectsManager;
-    private readonly IDatasetsManager _datasetsManager;
-    private readonly IAuthManager _authManager;
-    private readonly IDdbWrapper _ddbWrapper;
-    private readonly ILogger<PushManager> _logger;
-    private readonly AppSettings _settings;
-    private readonly IBackgroundJobsProcessor _backgroundJob;
-    private readonly ICacheManager _cacheManager;
-    private readonly IFileSystem _fileSystem;
-    private readonly BuildPendingService _buildPendingService;
-    private readonly ImportSettings _importSettings;
-
-    public PushManager(IUtils utils, IDdbManager ddbManager,
-        IObjectsManager objectsManager, ILogger<PushManager> logger, IDatasetsManager datasetsManager,
-        IAuthManager authManager, IDdbWrapper ddbWrapper,
-        IBackgroundJobsProcessor backgroundJob, IOptions<AppSettings> settings, ICacheManager cacheManager,
-        IFileSystem fileSystem, BuildPendingService buildPendingService)
+    public PushManager(IPushSessions sessions, IPushUploads uploads, IPushCommit commit)
     {
-        _utils = utils;
-        _ddbManager = ddbManager;
-        _objectsManager = objectsManager;
-        _logger = logger;
-        _datasetsManager = datasetsManager;
-        _authManager = authManager;
-        _ddbWrapper = ddbWrapper;
-        _backgroundJob = backgroundJob;
-        _settings = settings.Value;
-        _cacheManager = cacheManager;
-        _fileSystem = fileSystem;
-        _buildPendingService = buildPendingService;
-        _importSettings = settings.Value.Import ?? new ImportSettings();
+        _sessions = sessions;
+        _uploads = uploads;
+        _commit = commit;
     }
 
-    public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp)
-    {
-        var ds = _utils.GetDataset(orgSlug, dsSlug, true);
+    public Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp, CancellationToken ct = default) =>
+        _sessions.Init(orgSlug, dsSlug, checksum, stamp, ct: ct);
 
-        var validateChecksum = false;
+    public Task<PushUpload> StreamUploadAsync(string orgSlug, string dsSlug, Stream source, long? expectedBytes, CancellationToken ct = default) =>
+        _uploads.StreamUploadAsync(orgSlug, dsSlug, source, expectedBytes, ct: ct);
 
-        if (ds is null)
-        {
-            _logger.LogInformation("Dataset does not exist, creating it");
-            await _datasetsManager.AddNew(orgSlug, new DatasetNewDto
-            {
-                Name = dsSlug,
-                Slug = dsSlug
-            });
+    public Task UploadAsync(PushUpload upload, string filePath, string token, CancellationToken ct = default) =>
+        _uploads.UploadAsync(upload, filePath, token, ct: ct);
 
-            _logger.LogInformation("New dataset {OrgSlug}/{DsSlug} created", orgSlug, dsSlug);
-            ds = _utils.GetDataset(orgSlug, dsSlug);
+    public Task SaveMeta(string orgSlug, string dsSlug, string token, string meta, CancellationToken ct = default) =>
+        _uploads.SaveMeta(orgSlug, dsSlug, token, meta, ct: ct);
 
-        }
-        else
-        {
-            if (!await _authManager.RequestAccess(ds, AccessType.Write))
-                throw new UnauthorizedException("The current user is not allowed to init push");
-
-            validateChecksum = true;
-        }
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-        Stamp ourStamp = null;
-
-        if (validateChecksum)
-        {
-            if (string.IsNullOrEmpty(checksum))
-                throw new InvalidOperationException("Checksum parameter missing (dataset exists)");
-
-            // Is a pull required? The checksum passed by client is the checksum of the stamp
-            // of the last sync. If it's different, the client should pull first.
-            ourStamp = _ddbWrapper.GetStamp(ddb.DatasetFolderPath);
-            if (ourStamp.Checksum != checksum)
-            {
-                return new PushInitResultDto
-                {
-                    PullRequired = true
-                };
-            }
-        }
-
-        ourStamp ??= _ddbWrapper.GetStamp(ddb.DatasetFolderPath);
-
-        // Perform delta with our ddb
-        var delta = _ddbWrapper.Delta(new Stamp
-        {
-            Checksum = stamp.Checksum,
-            Entries = stamp.Entries,
-            Meta = stamp.Meta
-        }, ourStamp);
-
-        // Compute locals
-        var locals = _ddbWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath);
-
-        // Generate UUID
-        var uuid = Guid.NewGuid().ToString();
-
-        // Create tmp folder
-        var baseTempFolder = ddb.GetTmpFolder("push-" + uuid);
-
-        // Save incoming stamp as well as our stamp in temp folder
-        await _fileSystem.WriteAllTextAsync(Path.Combine(baseTempFolder, StampFileName),
-            JsonConvert.SerializeObject(stamp));
-        await _fileSystem.WriteAllTextAsync(Path.Combine(baseTempFolder, OurStampFileName),
-            JsonConvert.SerializeObject(ourStamp));
-
-        // Return missing files list (excluding folders)
-        return new PushInitResultDto
-        {
-            Token = uuid,
-            NeededFiles =
-            [
-                .. delta.Adds
-                    .Where(item => item.Hash.Length > 0 && !locals.ContainsKey(item.Hash))
-                    .Select(item => item.Path)
-            ],
-            NeededMeta = [.. delta.MetaAdds],
-            PullRequired = false
-        };
-    }
-
-    public async Task Upload(string orgSlug, string dsSlug, string path, string token, Stream stream)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("Path cannot be empty");
-
-        if (!stream.CanRead)
-            throw new ArgumentException("Stream is null or is not readable");
-
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
-
-        // Check if user has enough space to upload this
-        await _utils.CheckCurrentUserStorage(stream.Length);
-
-        if (path.Contains(".."))
-            throw new InvalidOperationException("Path cannot contain dot notation");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
-        var baseTempFolder = ddb.GetTmpFolder("push-" + token);
-
-        if (!_fileSystem.FolderExists(baseTempFolder))
-            throw new InvalidOperationException("Cannot upload file before initializing push");
-
-        var addTempFolder = Path.Combine(baseTempFolder, AddsTempFolder);
-        _fileSystem.FolderCreate(addTempFolder);
-
-        // Calculate new file path
-        var filePath = Path.Combine(addTempFolder, path);
-
-        // Ensure subfolder exists
-        var parentPath = Path.GetDirectoryName(filePath);
-        if (parentPath != null) _fileSystem.FolderCreate(parentPath);
-
-        // Save file in temp folder
-        await using var file = _fileSystem.OpenWrite(filePath);
-        await stream.CopyToAsync(file);
-    }
-
-    public async Task SaveMeta(string orgSlug, string dsSlug, string token, string meta)
-    {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to upload to this dataset");
-
-        // Check if user has enough space to upload this
-        await _utils.CheckCurrentUserStorage(meta.Length);
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
-        var baseTempFolder = ddb.GetTmpFolder("push-" + token);
-
-        if (!_fileSystem.FolderExists(baseTempFolder))
-            throw new InvalidOperationException("Cannot save meta before initializing push");
-
-        var metaFile = Path.Combine(baseTempFolder, MetaFile);
-
-        // Validate
-        JsonConvert.DeserializeObject<List<MetaDump>>(meta);
-
-        // Save file
-        await _fileSystem.WriteAllTextAsync(metaFile, meta);
-    }
-
-    public async Task Commit(string orgSlug, string dsSlug, string token)
-    {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Write))
-            throw new UnauthorizedException("The current user is not allowed to commit to this dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
-        var baseTempFolder = ddb.GetTmpFolder("push-" + token);
-        var stampFilePath = Path.Combine(baseTempFolder, StampFileName);
-        var ourStampFilePath = Path.Combine(baseTempFolder, OurStampFileName);
-        var addTempFolder = Path.Combine(baseTempFolder, AddsTempFolder);
-        var metaFile = Path.Combine(baseTempFolder, MetaFile);
-
-        // Check push folder integrity
-        if (!_fileSystem.Exists(stampFilePath))
-            throw new InvalidOperationException("Stamp not found");
-
-        if (!_fileSystem.Exists(ourStampFilePath))
-            throw new InvalidOperationException("Our stamp not found");
-
-        var stamp = JsonConvert.DeserializeObject<Stamp>(await _fileSystem.ReadAllTextAsync(stampFilePath));
-        var ourStamp = JsonConvert.DeserializeObject<Stamp>(await _fileSystem.ReadAllTextAsync(ourStampFilePath));
-
-        if (ourStamp == null)
-            throw new InvalidOperationException("Our stamp is invalid (cannot deserialize)");
-
-        // Check that our stamp has not changed! If it has, another client
-        // might have performed changes that could conflict with our operation
-        // TODO: we could check for conflicts rather than failing and continue
-        // the operation if no conflicts are detected.
-
-        var currentStamp = _ddbWrapper.GetStamp(ddb.DatasetFolderPath);
-        if (currentStamp.Checksum != ourStamp.Checksum)
-        {
-            throw new InvalidOperationException("The dataset has been changed by another user while pushing. Please try again!");
-        }
-
-        // Recompute delta
-        var delta = _ddbWrapper.Delta(stamp, currentStamp);
-
-        // Create hard links for local files
-        var _ = _ddbWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath, addTempFolder);
-
-        foreach (var add in delta.Adds.Where(item => item.Hash.Length > 0))
-            if (!_fileSystem.Exists(Path.Combine(addTempFolder, add.Path)))
-                throw new InvalidOperationException($"Cannot commit: missing '{add.Path}'");
-
-        // Extension policy gate - check all files being committed
-        var blockedFiles = delta.Adds
-            .Where(add => !_importSettings.IsExtensionAllowed(add.Path))
-            .Select(add => add.Path)
-            .ToArray();
-
-        if (blockedFiles.Length > 0)
-            throw new ExtensionBlockedException(blockedFiles, _importSettings);
-
-        // Read meta dump
-        string metaDump = null;
-        if (_fileSystem.Exists(metaFile))
-        {
-            metaDump = await _fileSystem.ReadAllTextAsync(metaFile);
-        }
-
-        // Applies delta
-        var conflicts = _ddbWrapper.ApplyDelta(delta, addTempFolder, ddb.DatasetFolderPath, MergeStrategy.KeepTheirs, metaDump);
-
-        if (conflicts.Count > 0)
-        {
-            // This should never happen, since we merge conflicts using keep theirs
-            throw new InvalidOperationException("Merge conflicts detected, try pulling first.");
-        }
-
-        // Delete temp folder
-        _fileSystem.FolderDelete(baseTempFolder);
-
-        // Build items
-        var user = await _authManager.GetCurrentUser();
-        var hasBuildableFiles = false;
-
-        foreach (var item in delta.Adds)
-        {
-            if (!ddb.IsBuildable(item.Path)) continue;
-
-            hasBuildableFiles = true;
-            var meta = new IndexPayload(orgSlug, dsSlug, item.Hash, user.Id, null, item.Path);
-            _backgroundJob.EnqueueIndexed(() =>
-                HangfireUtils.BuildWrapper(ddb, item.Path, false, null), meta);
-        }
-
-        // If we enqueued any builds, mark dataset as having pending
-        if (hasBuildableFiles)
-            await _buildPendingService.SetDatasetHasPendingBuilds(orgSlug, dsSlug, true);
-
-        if (ddb.IsBuildPending())
-        {
-            _logger.LogInformation("Items are pending build, retriggering build");
-
-            var meta = new IndexPayload(orgSlug, dsSlug, null, user.Id);
-            var jobId = _backgroundJob.EnqueueIndexed(() => HangfireUtils.BuildPendingWrapper(ddb, null), meta);
-
-            _logger.LogInformation("Background job id is {JobId}", jobId);
-        }
-    }
-
+    public Task Commit(string orgSlug, string dsSlug, string token, CancellationToken ct = default) => _commit.Commit(orgSlug, dsSlug, token, ct: ct);
 }

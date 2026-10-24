@@ -6,10 +6,10 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
@@ -18,6 +18,7 @@ using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Services.Managers;
 
@@ -28,17 +29,20 @@ namespace Registry.Web.Services.Managers;
 /// </summary>
 public class WmtsManager : OgcManagerBase, IWmtsManager
 {
-    private readonly ILogger<WmtsManager> _logger;
+    private static readonly string[] Operations = ["GetCapabilities", "GetTile", "GetFeatureInfo"];
 
-    public WmtsManager(IUtils u, IAuthManager a, IDdbManager d, IBuildArtifactResolver ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx, ILogger<WmtsManager> logger)
-        : base(u, a, d, ar, w, c, cache, ctx)
+    private readonly ILogger<WmtsManager> _logger;
+    private readonly IOgcRasterTileSource _rasterTiles;
+
+    public WmtsManager(OgcManagerDependencies dependencies, ILogger<WmtsManager> logger, IOgcRasterTileSource rasterTiles)
+        : base(dependencies)
     {
         _logger = logger;
+        _rasterTiles = rasterTiles;
     }
 
     public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug,
-        IReadOnlyCollection<string>? sections = null, string? folderPath = null)
+        IReadOnlyCollection<string>? sections = null, string? folderPath = null, CancellationToken ct = default)
     {
         // Normalize the sections key: null = all; otherwise sort+dedupe so order doesn't fragment the cache.
         string sectionsKey;
@@ -53,117 +57,117 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
             sectionsKey = string.Join("+", sectionsSet.OrderBy(s => s, StringComparer.OrdinalIgnoreCase));
         }
 
-        var key = $"ogc-caps-wmts-v5-1.0.0-{orgSlug}-{dsSlug}-{folderPath ?? ""}-{sectionsKey}";
-        var cached = await Cache.GetRecordAsync<string>(key);
-        if (cached != null) return cached;
-
-        bool Include(string section) => sectionsSet == null || sectionsSet.Contains(section);
-
-        await ResolveAsync(orgSlug, dsSlug);
-        var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath);
-        var baseUrl = GetServiceUrl(orgSlug, dsSlug, "wmts", folderPath);
-
-        var sb = new StringBuilder();
-        await using (var w = CreateXmlWriter(sb))
+        var key = await LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, "caps-wmts-v5-1.0.0", $"{folderPath}-{sectionsKey}", ct);
+        return await Records.GetOrCreateRecordAsync(key, async token =>
         {
-            w.WriteStartElement("Capabilities", NsWmts);
-            await w.WriteAttributeStringAsync("xmlns", "ows", null, NsOws);
-            await w.WriteAttributeStringAsync("xmlns", "xlink", null, NsXlink);
-            await w.WriteAttributeStringAsync("xmlns", "xsi", null, "http://www.w3.org/2001/XMLSchema-instance");
-            await w.WriteAttributeStringAsync("xsi", "schemaLocation", "http://www.w3.org/2001/XMLSchema-instance",
-                "http://www.opengis.net/wmts/1.0 http://schemas.opengis.net/wmts/1.0/wmtsGetCapabilities_response.xsd");
-            w.WriteAttributeString("version", "1.0.0");
 
-            if (Include("ServiceIdentification"))
-            {
-                await w.WriteStartElementAsync("ows", "ServiceIdentification", null);
-                await w.WriteElementStringAsync("ows", "Title", null, $"DroneDB WMTS - {orgSlug}/{dsSlug}");
-                await w.WriteElementStringAsync("ows", "ServiceType", null, "OGC WMTS");
-                await w.WriteElementStringAsync("ows", "ServiceTypeVersion", null, "1.0.0");
-                await w.WriteEndElementAsync();
-            }
+            bool Include(string section) => sectionsSet == null || sectionsSet.Contains(section);
 
-            if (Include("ServiceProvider"))
-            {
-                await w.WriteStartElementAsync("ows", "ServiceProvider", null);
-                await w.WriteElementStringAsync("ows", "ProviderName", null, "DroneDB");
-                await w.WriteStartElementAsync("ows", "ProviderSite", null);
-                await w.WriteAttributeStringAsync("xlink", "href", NsXlink, "https://dronedb.app");
-                await w.WriteEndElementAsync();
-                await w.WriteStartElementAsync("ows", "ServiceContact", null);
-                await w.WriteElementStringAsync("ows", "IndividualName", null, "DroneDB Team");
-                await w.WriteEndElementAsync();
-                await w.WriteEndElementAsync();
-            }
+            await ResolveAsync(orgSlug, dsSlug, token);
+            var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath, ct: token);
+            var baseUrl = GetServiceUrl(orgSlug, dsSlug, "wmts", folderPath);
 
-            if (Include("OperationsMetadata"))
+            var sb = new StringBuilder();
+            await using (var w = CreateXmlWriter(sb))
             {
-                await w.WriteStartElementAsync("ows", "OperationsMetadata", null);
-                foreach (var op in new[] { "GetCapabilities", "GetTile", "GetFeatureInfo" })
-                    await WriteOwsOperationAsync(w, op, baseUrl, addGetEncodingKvpConstraint: true);
-                await w.WriteEndElementAsync();
-            }
+                w.WriteStartElement("Capabilities", NsWmts);
+                await w.WriteAttributeStringAsync("xmlns", "ows", null, NsOws);
+                await w.WriteAttributeStringAsync("xmlns", "xlink", null, NsXlink);
+                await w.WriteAttributeStringAsync("xmlns", "xsi", null, "http://www.w3.org/2001/XMLSchema-instance");
+                await w.WriteAttributeStringAsync("xsi", "schemaLocation", "http://www.w3.org/2001/XMLSchema-instance",
+                    "http://www.opengis.net/wmts/1.0 http://schemas.opengis.net/wmts/1.0/wmtsGetCapabilities_response.xsd");
+                w.WriteAttributeString("version", "1.0.0");
 
-            if (Include("Contents"))
-            {
-                w.WriteStartElement("Contents");
-                foreach (var layer in layers)
+                if (Include("ServiceIdentification"))
                 {
-                    // WMTS 1.0.0 core only standardizes raster image tiles. Vector layers
-                    // (served as Mapbox Vector Tiles) belong to a separate WMTS extension
-                    // (OGC 17-083r2) not supported by CITE - and TeamEngine has no MVT
-                    // parser, so advertising MVT here causes the "each-layer" suite to fail
-                    // regardless of response. Vector layers remain available via the
-                    // dedicated MVT endpoint; skip them in WMTS GetCapabilities.
-                    if (layer.EntryType == EntryType.Vector) continue;
-                    var isVector = false;
-                    w.WriteStartElement("Layer");
-                    await w.WriteElementStringAsync("ows", "Title", null, layer.Title);
-                    await w.WriteElementStringAsync("ows", "Identifier", null, OgcNames.ToNcName(layer.Name));
-                    if (layer.BboxWgs84 != null)
-                    {
-                        await w.WriteStartElementAsync("ows", "WGS84BoundingBox", null);
-                        await w.WriteElementStringAsync("ows", "LowerCorner", null,
-                            FormattableString.Invariant($"{layer.BboxWgs84[0]} {layer.BboxWgs84[1]}"));
-                        await w.WriteElementStringAsync("ows", "UpperCorner", null,
-                            FormattableString.Invariant($"{layer.BboxWgs84[2]} {layer.BboxWgs84[3]}"));
-                        await w.WriteEndElementAsync();
-                    }
-                    w.WriteStartElement("Style");
-                    w.WriteAttributeString("isDefault", "true");
-                    await w.WriteElementStringAsync("ows", "Identifier", null, WmtsConformance.DefaultStyle);
+                    await w.WriteStartElementAsync("ows", "ServiceIdentification", null);
+                    await w.WriteElementStringAsync("ows", "Title", null, $"DroneDB WMTS - {orgSlug}/{dsSlug}");
+                    await w.WriteElementStringAsync("ows", "ServiceType", null, "OGC WMTS");
+                    await w.WriteElementStringAsync("ows", "ServiceTypeVersion", null, "1.0.0");
                     await w.WriteEndElementAsync();
-                    if (isVector)
-                    {
-                        w.WriteElementString("Format", WmtsConformance.VectorFormat);
-                    }
-                    else
-                    {
-                        foreach (var f in WmtsConformance.SupportedRasterFormats)
-                            w.WriteElementString("Format", f);
-                    }
-                    w.WriteStartElement("TileMatrixSetLink");
-                    w.WriteElementString("TileMatrixSet", WmtsConformance.DefaultTileMatrixSet);
-                    await w.WriteEndElementAsync();
-                    await w.WriteEndElementAsync(); // Layer
                 }
 
-                WriteGoogleMapsCompatible(w);
-                await w.WriteEndElementAsync(); // Contents
+                if (Include("ServiceProvider"))
+                {
+                    await w.WriteStartElementAsync("ows", "ServiceProvider", null);
+                    await w.WriteElementStringAsync("ows", "ProviderName", null, "DroneDB");
+                    await w.WriteStartElementAsync("ows", "ProviderSite", null);
+                    await w.WriteAttributeStringAsync("xlink", "href", NsXlink, "https://dronedb.app");
+                    await w.WriteEndElementAsync();
+                    await w.WriteStartElementAsync("ows", "ServiceContact", null);
+                    await w.WriteElementStringAsync("ows", "IndividualName", null, "DroneDB Team");
+                    await w.WriteEndElementAsync();
+                    await w.WriteEndElementAsync();
+                }
+
+                if (Include("OperationsMetadata"))
+                {
+                    await w.WriteStartElementAsync("ows", "OperationsMetadata", null);
+                    foreach (var op in Operations)
+                        await WriteOwsOperationAsync(w, op, baseUrl, addGetEncodingKvpConstraint: true);
+                    await w.WriteEndElementAsync();
+                }
+
+                if (Include("Contents"))
+                {
+                    w.WriteStartElement("Contents");
+                    foreach (var layer in layers)
+                    {
+                        // WMTS 1.0.0 core only standardizes raster image tiles. Vector layers
+                        // (served as Mapbox Vector Tiles) belong to a separate WMTS extension
+                        // (OGC 17-083r2) not supported by CITE - and TeamEngine has no MVT
+                        // parser, so advertising MVT here causes the "each-layer" suite to fail
+                        // regardless of response. Vector layers remain available via the
+                        // dedicated MVT endpoint; skip them in WMTS GetCapabilities.
+                        if (layer.EntryType == EntryType.Vector) continue;
+                        var isVector = false;
+                        w.WriteStartElement("Layer");
+                        await w.WriteElementStringAsync("ows", "Title", null, layer.Title);
+                        await w.WriteElementStringAsync("ows", "Identifier", null, OgcNames.ToNcName(layer.Name));
+                        if (layer.BboxWgs84 != null)
+                        {
+                            await w.WriteStartElementAsync("ows", "WGS84BoundingBox", null);
+                            await w.WriteElementStringAsync("ows", "LowerCorner", null,
+                                FormattableString.Invariant($"{layer.BboxWgs84[0]} {layer.BboxWgs84[1]}"));
+                            await w.WriteElementStringAsync("ows", "UpperCorner", null,
+                                FormattableString.Invariant($"{layer.BboxWgs84[2]} {layer.BboxWgs84[3]}"));
+                            await w.WriteEndElementAsync();
+                        }
+                        w.WriteStartElement("Style");
+                        w.WriteAttributeString("isDefault", "true");
+                        await w.WriteElementStringAsync("ows", "Identifier", null, WmtsConformance.DefaultStyle);
+                        await w.WriteEndElementAsync();
+                        if (isVector)
+                        {
+                            w.WriteElementString("Format", WmtsConformance.VectorFormat);
+                        }
+                        else
+                        {
+                            foreach (var f in WmtsConformance.SupportedRasterFormats)
+                                w.WriteElementString("Format", f);
+                        }
+                        w.WriteStartElement("TileMatrixSetLink");
+                        w.WriteElementString("TileMatrixSet", WmtsConformance.DefaultTileMatrixSet);
+                        await w.WriteEndElementAsync();
+                        await w.WriteEndElementAsync(); // Layer
+                    }
+
+                    WriteGoogleMapsCompatible(w);
+                    await w.WriteEndElementAsync(); // Contents
+                }
+
+                // ServiceMetadataURL - required by some WMTS clients/tests
+                w.WriteStartElement("ServiceMetadataURL");
+                await w.WriteAttributeStringAsync("xlink", "href", NsXlink, baseUrl + "?service=WMTS&request=GetCapabilities&version=1.0.0");
+                await w.WriteEndElementAsync();
+
+                await w.WriteEndElementAsync(); // Capabilities
+                await w.WriteEndDocumentAsync();
             }
 
-            // ServiceMetadataURL - required by some WMTS clients/tests
-            w.WriteStartElement("ServiceMetadataURL");
-            await w.WriteAttributeStringAsync("xlink", "href", NsXlink, baseUrl + "?service=WMTS&request=GetCapabilities&version=1.0.0");
-            await w.WriteEndElementAsync();
-
-            await w.WriteEndElementAsync(); // Capabilities
-            await w.WriteEndDocumentAsync();
-        }
-
-        var xml = Utf8XmlDecl + Regex.Replace(sb.ToString(), @"^\s*<\?xml[^?]*\?>\s*", "");
-        await Cache.SetRecordAsync(key, xml, CacheTtl);
-        return xml;
+            var xml = Utf8XmlDecl + Regex.Replace(sb.ToString(), @"^\s*<\?xml[^?]*\?>\s*", "");
+            return xml;
+        }, CapabilitiesCache, ct);
     }
 
     private static void WriteGoogleMapsCompatible(XmlWriter w)
@@ -190,7 +194,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
     }
 
     public async Task<byte[]> GetTileAsync(string orgSlug, string dsSlug, string layerName,
-        string style, string tileMatrixSet, int z, int x, int y, string format)
+        string style, string tileMatrixSet, int z, int x, int y, string format, CancellationToken ct = default)
     {
         // Re-validate (defense-in-depth: callers other than the KVP controller may skip checks).
         // Validation/protocol errors MUST surface as proper OGC exceptions and run outside the safety net.
@@ -199,13 +203,13 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
 
         try
         {
-            return await GetTileAsyncCore(orgSlug, dsSlug, layerName, tileMatrixSet, z, x, y, format);
+            return await GetTileAsyncCore(orgSlug, dsSlug, layerName, tileMatrixSet, z, x, y, format, ct);
         }
         catch (OgcException)
         {
             throw;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // WMTS Annex A.2.3 / WMTS implementations are expected to return either a valid tile
             // or a ServiceExceptionReport. Under heavy concurrent load (CITE issues hundreds of
@@ -217,10 +221,10 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
     }
 
     private async Task<byte[]> GetTileAsyncCore(string orgSlug, string dsSlug, string layerName,
-        string tileMatrixSet, int z, int x, int y, string format)
+        string tileMatrixSet, int z, int x, int y, string format, CancellationToken ct)
     {
-        var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug);
-        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, layerName)
+        var (ds, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
+        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, layerName, ct: ct)
                     ?? throw new OgcException("InvalidParameterValue",
                         $"Layer '{layerName}' is not defined", 400, "layer");
 
@@ -228,8 +232,8 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
 
         if (layer.EntryType == EntryType.Vector)
         {
-            var path = Artifacts.GetMvtTilePath(ddb, layer.EntryHash, z, x, y);
-            if (!Artifacts.ArtifactExists(path))
+            var path = MvtTile(ddb, layer, z, x, y);
+            if (path == null)
             {
                 // WMTS allows servers to respond to out-of-coverage tiles with an empty
                 // resource of the requested format rather than a TileOutOfRange exception
@@ -241,7 +245,7 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
                     layerName, z, x, y);
                 return [];
             }
-            return await File.ReadAllBytesAsync(path);
+            return await File.ReadAllBytesAsync(path, ct);
         }
 
         // Raster: delegate to ddb.GenerateTile, passing the requested output format so the
@@ -252,10 +256,9 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
         var wantJpeg = string.Equals(format, "image/jpeg", StringComparison.OrdinalIgnoreCase);
         try
         {
-            return ddb.GenerateTile(layer.EntryPath, z, x, y, retina: false,
-                inputPathHash: layer.EntryHash, outputFormat: wantJpeg ? "jpeg" : "png");
+            return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer, z, x, y, wantJpeg ? "jpeg" : "png", ct);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogError(ex, "WMTS tile generation failed for {Layer} z={Z} x={X} y={Y}; returning fallback {Fmt}",
                 layerName, z, x, y, format);
@@ -281,8 +284,8 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
 
     /// <summary>1x1 → 256x256 transparent PNG used as a graceful fallback for out-of-range raster tiles.</summary>
     /// <remarks>Lazy so the Crc32 table (declared later) is initialized before first use.</remarks>
-    private static readonly Lazy<byte[]> _transparentPng256 = new(BuildTransparentPng);
-    private static byte[] TransparentPng256 => _transparentPng256.Value;
+    private static readonly Lazy<byte[]> LazyTransparentPng256 = new(BuildTransparentPng);
+    private static byte[] TransparentPng256 => LazyTransparentPng256.Value;
 
     private static byte[] BuildTransparentPng()
     {

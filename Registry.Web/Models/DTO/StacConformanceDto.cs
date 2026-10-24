@@ -1,10 +1,10 @@
 using System.Collections.Generic;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.DTO;
 
 public class StacConformanceDto
 {
-    [JsonProperty("conformsTo")]
+    [JsonPropertyName("conformsTo")]
     public IEnumerable<string> ConformsTo { get; set; }
 }

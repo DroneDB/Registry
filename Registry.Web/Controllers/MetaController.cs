@@ -1,6 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -17,21 +19,16 @@ namespace Registry.Web.Controllers;
 /// Controller for managing metadata within datasets.
 /// </summary>
 [ApiController]
-[Route(RoutesHelper.OrganizationsRadix + "/" +
-       RoutesHelper.OrganizationSlug + "/" +
-       RoutesHelper.DatasetRadix + "/" +
-       RoutesHelper.DatasetSlug + "/" +
+[Route(RoutesHelper.DatasetPrefix + "/" +
        RoutesHelper.MetaRadix)]
 [Produces("application/json")]
 public class MetaController : ControllerBaseEx
 {
     private readonly IMetaManager _metaManager;
-    private readonly ILogger<MetaController> _logger;
 
-    public MetaController(IMetaManager metaManager, ILogger<MetaController> logger)
+    public MetaController(IMetaManager metaManager)
     {
         _metaManager = metaManager;
-        _logger = logger;
     }
 
     /// <summary>
@@ -44,30 +41,20 @@ public class MetaController : ControllerBaseEx
     /// <param name="path">Optional path within the dataset.</param>
     /// <returns>The created metadata entry.</returns>
     [HttpPost("add/{key}", Name = nameof(MetaController) + "." + nameof(Add))]
-    [ProducesResponseType(typeof(MetaDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Add(
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<MetaDto>> Add(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string key,
         [FromBody] string data,
-        [FromQuery] string path = null)
+        [FromQuery] string path = null, CancellationToken ct = default)
     {
-        try
-        {
-            _logger.LogDebug("Meta Controller Add('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+        var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path, ct: ct);
 
-            var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path);
-
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Meta controller Add('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-            throw;
-        }
+        return res;
     }
 
     /// <summary>
@@ -82,37 +69,27 @@ public class MetaController : ControllerBaseEx
     /// <param name="keyFromQuery">Optional key from query.</param>
     /// <returns>The created metadata entry.</returns>
     [HttpPost("add", Name = nameof(MetaController) + "." + nameof(AddAlt))]
-    [ProducesResponseType(typeof(MetaDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
-    public async Task<IActionResult> AddAlt(
+    public async Task<ActionResult<MetaDto>> AddAlt(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm(Name = "key")] string keyFromForm,
         [FromForm] string data,
         [FromForm(Name = "path")] string pathFromForm = null,
         [FromQuery(Name = "path")] string pathFromQuery = null,
-        [FromQuery(Name = "key")] string keyFromQuery = null)
+        [FromQuery(Name = "key")] string keyFromQuery = null, CancellationToken ct = default)
     {
         // C# magics, precedence to form parameter
         var path = pathFromForm ?? pathFromQuery;
         var key = keyFromForm ?? keyFromQuery;
 
-        try
-        {
-            _logger.LogDebug("Meta Controller AddAlt('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+        var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path, ct: ct);
 
-            var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path);
-
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Meta controller Add('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-            throw;
-        }
+        return res;
     }
 
     /// <summary>
@@ -125,30 +102,20 @@ public class MetaController : ControllerBaseEx
     /// <param name="path">Optional path within the dataset.</param>
     /// <returns>The updated metadata entry.</returns>
     [HttpPost("set/{key}", Name = nameof(MetaController) + "." + nameof(Set))]
-    [ProducesResponseType(typeof(MetaDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Set(
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<MetaDto>> Set(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string key,
         [FromBody] string data,
-        [FromQuery] string path = null)
+        [FromQuery] string path = null, CancellationToken ct = default)
     {
-        try
-        {
-            _logger.LogDebug("Meta Controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+        var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path, ct: ct);
 
-            var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path);
-
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Meta controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-            throw;
-        }
+        return res;
     }
 
     /// <summary>
@@ -163,37 +130,27 @@ public class MetaController : ControllerBaseEx
     /// <param name="keyFromQuery">Optional key from query.</param>
     /// <returns>The updated metadata entry.</returns>
     [HttpPost("set", Name = nameof(MetaController) + "." + nameof(SetAlt))]
-    [ProducesResponseType(typeof(MetaDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
-    public async Task<IActionResult> SetAlt(
+    public async Task<ActionResult<MetaDto>> SetAlt(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm(Name = "key")] string keyFromForm,
         [FromForm] string data,
         [FromForm(Name = "path")] string pathFromForm = null,
         [FromQuery(Name = "path")] string pathFromQuery = null,
-        [FromQuery(Name = "key")] string keyFromQuery = null)
+        [FromQuery(Name = "key")] string keyFromQuery = null, CancellationToken ct = default)
     {
         // C# magics, precedence to form parameter
         var path = pathFromForm ?? pathFromQuery;
         var key = keyFromForm ?? keyFromQuery;
 
-        try
-        {
-            _logger.LogDebug("Meta Controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+        var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path, ct: ct);
 
-            var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path);
-
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Meta controller Set('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-            throw;
-        }
+        return res;
     }
 
     /// <summary>
@@ -204,28 +161,18 @@ public class MetaController : ControllerBaseEx
     /// <param name="id">The metadata entry ID to remove.</param>
     /// <returns>The count of removed entries.</returns>
     [HttpDelete("remove/{id}", Name = nameof(MetaController) + "." + nameof(Remove))]
-    [ProducesResponseType(typeof(RemoveResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Remove(
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<RemoveResponse>> Remove(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromRoute, Required] string id)
+        [FromRoute, Required] string id, CancellationToken ct)
     {
-        try
-        {
-            _logger.LogDebug("Meta Controller Remove('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
+        var res = await _metaManager.Remove(orgSlug, dsSlug, id, ct: ct);
 
-            var res = await _metaManager.Remove(orgSlug, dsSlug, id);
-
-            return Ok(new RemoveResponse(res));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Meta controller Remove('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
-            throw;
-        }
+        return new RemoveResponse(res);
     }
 
     /// <summary>
@@ -236,29 +183,19 @@ public class MetaController : ControllerBaseEx
     /// <param name="id">The metadata entry ID to remove.</param>
     /// <returns>The count of removed entries.</returns>
     [HttpPost("remove", Name = nameof(MetaController) + "." + nameof(RemoveAlt))]
-    [ProducesResponseType(typeof(RemoveResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
-    public async Task<IActionResult> RemoveAlt(
+    public async Task<ActionResult<RemoveResponse>> RemoveAlt(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromForm, Required] string id)
+        [FromForm, Required] string id, CancellationToken ct)
     {
-        try
-        {
-            _logger.LogDebug("Meta Controller RemoveAlt('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
+        var res = await _metaManager.Remove(orgSlug, dsSlug, id, ct: ct);
 
-            var res = await _metaManager.Remove(orgSlug, dsSlug, id);
-
-            return Ok(new RemoveResponse(res));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Meta controller RemoveAlt('{OrgSlug}', '{DsSlug}', '{Id}')", orgSlug, dsSlug, id);
-            throw;
-        }
+        return new RemoveResponse(res);
     }
 
     /// <summary>
@@ -270,30 +207,19 @@ public class MetaController : ControllerBaseEx
     /// <param name="path">Optional path within the dataset.</param>
     /// <returns>The count of removed entries.</returns>
     [HttpDelete("unset/{key}", Name = nameof(MetaController) + "." + nameof(Unset))]
-    [ProducesResponseType(typeof(RemoveResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Unset(
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<RemoveResponse>> Unset(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string key,
-        [FromQuery] string path = null)
+        [FromQuery] string path = null, CancellationToken ct = default)
     {
-        try
-        {
-            _logger.LogDebug("Meta Controller Unset('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+        var res = await _metaManager.Unset(orgSlug, dsSlug, key, path, ct: ct);
 
-            var res = await _metaManager.Unset(orgSlug, dsSlug, key, path);
-
-            return Ok(new RemoveResponse(res));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Exception in Meta controller Remove('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-            throw;
-        }
+        return new RemoveResponse(res);
     }
 
     /// <summary>
@@ -307,37 +233,26 @@ public class MetaController : ControllerBaseEx
     /// <param name="keyFromQuery">Optional key from query.</param>
     /// <returns>The count of removed entries.</returns>
     [HttpPost("unset", Name = nameof(MetaController) + "." + nameof(UnsetAlt))]
-    [ProducesResponseType(typeof(RemoveResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
-    public async Task<IActionResult> UnsetAlt(
+    public async Task<ActionResult<RemoveResponse>> UnsetAlt(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm(Name = "key")] string keyFromForm,
         [FromForm(Name = "path")] string pathFromForm = null,
         [FromQuery(Name = "path")] string pathFromQuery = null,
-        [FromQuery(Name = "key")] string keyFromQuery = null)
+        [FromQuery(Name = "key")] string keyFromQuery = null, CancellationToken ct = default)
     {
         // C# magics, precedence to form parameter
         var path = pathFromForm ?? pathFromQuery;
         var key = keyFromForm ?? keyFromQuery;
 
-        try
-        {
-            _logger.LogDebug("Meta Controller UnsetAlt('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
+        var res = await _metaManager.Unset(orgSlug, dsSlug, key, path, ct: ct);
 
-            var res = await _metaManager.Unset(orgSlug, dsSlug, key, path);
-
-            return Ok(new RemoveResponse(res));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Exception in Meta controller UnsetAlt('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-            throw;
-        }
+        return new RemoveResponse(res);
     }
 
     /// <summary>
@@ -348,28 +263,18 @@ public class MetaController : ControllerBaseEx
     /// <param name="path">Optional path within the dataset.</param>
     /// <returns>A list of metadata keys with their counts.</returns>
     [HttpGet("list", Name = nameof(MetaController) + "." + nameof(List))]
-    [ProducesResponseType(typeof(IEnumerable<MetaListItemDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> List(
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IEnumerable<MetaListItemDto>>> List(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromQuery] string path = null)
+        [FromQuery] string path = null, CancellationToken ct = default)
     {
-        try
-        {
-            _logger.LogDebug("Meta Controller List('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
+        var res = await _metaManager.List(orgSlug, dsSlug, path, ct: ct);
 
-            var res = await _metaManager.List(orgSlug, dsSlug, path);
-
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Meta controller List('{OrgSlug}', '{DsSlug}', '{Path}')", orgSlug, dsSlug, path);
-            throw;
-        }
+        return Answer(res);
     }
 
     /// <summary>
@@ -381,29 +286,17 @@ public class MetaController : ControllerBaseEx
     /// <param name="path">Optional path within the dataset.</param>
     /// <returns>The metadata values as JSON.</returns>
     [HttpGet("get/{key}", Name = nameof(MetaController) + "." + nameof(Get))]
-    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Get(
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<JsonElement>> Get(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string key,
-        [FromQuery] string path = null)
+        [FromQuery] string path = null, CancellationToken ct = default)
     {
-        try
-        {
-            _logger.LogDebug("Meta Controller Get('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-
-            var res = await _metaManager.Get(orgSlug, dsSlug, key, path);
-
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Meta controller Get('{OrgSlug}', '{DsSlug}', '{Key}', '{Path}')", orgSlug, dsSlug, key, path);
-            throw;
-        }
+        return await _metaManager.Get(orgSlug, dsSlug, key, path, ct: ct);
     }
 
     /// <summary>
@@ -414,28 +307,18 @@ public class MetaController : ControllerBaseEx
     /// <param name="ids">Optional comma-separated list of metadata IDs to include.</param>
     /// <returns>A list of all metadata entries.</returns>
     [HttpPost("dump", Name = nameof(MetaController) + "." + nameof(Dump))]
-    [ProducesResponseType(typeof(IEnumerable<MetaDumpDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
-    public async Task<IActionResult> Dump(
+    public async Task<ActionResult<IEnumerable<MetaDumpDto>>> Dump(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromForm] string ids = null)
+        [FromForm] string ids = null, CancellationToken ct = default)
     {
-        try
-        {
-            _logger.LogDebug("Meta Controller Dump('{OrgSlug}', '{DsSlug}', '{Ids}')", orgSlug, dsSlug, ids);
+        var res = await _metaManager.Dump(orgSlug, dsSlug, ids, ct: ct);
 
-            var res = await _metaManager.Dump(orgSlug, dsSlug, ids);
-
-            return Ok(res);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Meta controller Dump('{OrgSlug}', '{DsSlug}', '{Ids}')", orgSlug, dsSlug, ids);
-            throw;
-        }
+        return Answer(res);
     }
 }

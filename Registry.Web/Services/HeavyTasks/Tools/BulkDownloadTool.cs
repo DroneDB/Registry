@@ -2,13 +2,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.HeavyTasks.Tools;
 
@@ -19,8 +19,16 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// direct streaming path. Produces exactly one <c>.zip</c> in the work directory,
 /// which the generic <c>GET /tasks/{id}/result</c> endpoint serves as-is.
 /// </summary>
-public sealed class BulkDownloadTool : IHeavyTool
+public sealed class BulkDownloadTool : HeavyToolBase<BulkDownloadTool.Parameters>
 {
+    /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
+    public sealed record Parameters(string[]? Paths, string? ArchiveName);
+
+    protected override Parameters ReadParams(ToolParameters p) => new(
+        p.NonBlankStrings("paths"),
+        p.Text("archiveName"));
+
+
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -42,17 +50,18 @@ public sealed class BulkDownloadTool : IHeavyTool
 
     public BulkDownloadTool(IZipArchiveBuilder zip) => _zip = zip;
 
-    public string Id => "bulk-download";
-    public string Version => "1";
-    public string Title => "Download archive (ZIP)";
-    public HeavyToolPermission RequiredAccess => HeavyToolPermission.Read;
-    public bool ProducesArtifact => true;
-    public string? ResultExtension => "zip";
-    public JsonDocument InputSchema => Schema;
+    public override string Id => "bulk-download";
+    public override string Version => "1";
+    public override string Title => "Download archive (ZIP)";
+    public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Read;
+    public override bool ProducesArtifact => true;
+    public override string? ResultExtension => "zip";
+    public override JsonDocument InputSchema => Schema;
 
-    public Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
+    protected override Task ValidateAsync(HeavyToolRequest request, Parameters args,
+        IHeavyToolValidationContext ctx, CancellationToken ct)
     {
-        var paths = ReadPaths(request.Params);
+        var paths = args.Paths;
         if (paths != null)
         {
             foreach (var p in paths)
@@ -64,7 +73,7 @@ public sealed class BulkDownloadTool : IHeavyTool
             }
         }
 
-        var archiveName = ReadString(request.Params, "archiveName");
+        var archiveName = args.ArchiveName;
         if (!string.IsNullOrWhiteSpace(archiveName) &&
             (archiveName.Contains('/') || archiveName.Contains('\\')))
             throw new ArgumentException("archiveName must be a file name without path separators.");
@@ -72,9 +81,9 @@ public sealed class BulkDownloadTool : IHeavyTool
         return Task.CompletedTask;
     }
 
-    public HeavyToolPlan Plan(HeavyToolRequest request, IHeavyToolValidationContext ctx)
+    protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
     {
-        var paths = ReadPaths(request.Params);
+        var paths = args.Paths;
         long estimate = 0;
         try
         {
@@ -86,13 +95,14 @@ public sealed class BulkDownloadTool : IHeavyTool
             // estimate is best-effort
         }
 
-        var name = ResolveArchiveName(request);
+        var name = ResolveArchiveName(request, args);
         return new HeavyToolPlan(estimate > 0 ? estimate : null, QuotaKey: "bulk-download",
             DefaultFileName: name, ContentType: "application/zip");
     }
 
-    public async Task<HeavyToolArtifact?> ExecuteAsync(
+    protected override async Task<HeavyToolArtifact?> ExecuteAsync(
         HeavyToolRequest request,
+        Parameters args,
         IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
@@ -100,8 +110,8 @@ public sealed class BulkDownloadTool : IHeavyTool
         if (ctx.WorkDir is null)
             throw new InvalidOperationException("BulkDownloadTool requires a work directory.");
 
-        var paths = ReadPaths(request.Params);
-        var archiveName = ResolveArchiveName(request);
+        var paths = args.Paths;
+        var archiveName = ResolveArchiveName(request, args);
         var (files, folders, includeDdb) = _zip.ExpandPaths(ctx.Ddb, paths);
 
         var total = SumFileSizes(ctx, files);
@@ -121,9 +131,12 @@ public sealed class BulkDownloadTool : IHeavyTool
             progress.Report(new HeavyToolProgress(pct / 100.0, "archiving"));
         });
 
-        await using (var fs = File.Create(outputPath))
+        // Hashed while it is written (the zip writer never seeks): the archive is not read back
+        string sha;
+        await using (var archive = new HashingWriteStream(File.Create(outputPath)))
         {
-            await _zip.WriteZipAsync(ctx.Ddb, files, folders, includeDdb, fs, byteProgress, ct);
+            await _zip.WriteZipAsync(ctx.Ddb, files, folders, includeDdb, archive, byteProgress, ct);
+            sha = archive.GetHexDigest();
         }
 
         ct.ThrowIfCancellationRequested();
@@ -132,7 +145,6 @@ public sealed class BulkDownloadTool : IHeavyTool
         if (!info.Exists)
             throw new InvalidOperationException("Bulk download produced no archive file.");
 
-        var sha = await ComputeSha256Async(outputPath, ct);
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: $"Archive complete ({info.Length} bytes)"));
 
         return new HeavyToolArtifact(
@@ -161,9 +173,9 @@ public sealed class BulkDownloadTool : IHeavyTool
         return total;
     }
 
-    private string ResolveArchiveName(HeavyToolRequest request)
+    private static string ResolveArchiveName(HeavyToolRequest request, Parameters args)
     {
-        var name = ReadString(request.Params, "archiveName");
+        var name = args.ArchiveName;
         if (string.IsNullOrWhiteSpace(name))
             return $"{request.DsSlug}.zip";
 
@@ -177,36 +189,8 @@ public sealed class BulkDownloadTool : IHeavyTool
         return name;
     }
 
-    private static string[]? ReadPaths(JsonElement obj)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty("paths", out var el) || el.ValueKind != JsonValueKind.Array) return null;
 
-        var list = new List<string>();
-        foreach (var item in el.EnumerateArray())
-        {
-            if (item.ValueKind != JsonValueKind.String) continue;
-            var s = item.GetString();
-            if (!string.IsNullOrWhiteSpace(s)) list.Add(s!);
-        }
 
-        return list.Count > 0 ? [.. list] : null;
-    }
-
-    private static string? ReadString(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.String ? el.GetString() : null;
-    }
-
-    private static async Task<string> ComputeSha256Async(string path, CancellationToken ct)
-    {
-        await using var stream = File.OpenRead(path);
-        using var sha = SHA256.Create();
-        var hash = await sha.ComputeHashAsync(stream, ct);
-        return Convert.ToHexString(hash).ToLowerInvariant();
-    }
 
     /// <summary>
     /// Synchronous <see cref="IProgress{T}"/> that invokes the handler on the

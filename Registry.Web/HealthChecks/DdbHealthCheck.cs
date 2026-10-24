@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.HealthChecks;
@@ -43,9 +44,9 @@ public class DdbHealthCheck : IHealthCheck
 
             data.Add("DdbVersion", version);
 
-            var entries = ddb.Search(null, true);
+            var entries = ddb.FindSummaries(EntryQuery.All);
 
-            if (entries == null || entries.Any())
+            if (entries.Count != 0)
                 return Task.FromResult(HealthCheckResult.Unhealthy("Something wrong with ddb behaviour", null, data));
 
             return Task.FromResult(HealthCheckResult.Healthy("Ddb is working properly", data));

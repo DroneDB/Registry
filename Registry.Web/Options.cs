@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using CommandLine;
 using CommandLine.Text;
 using SQLitePCL;
@@ -18,8 +18,13 @@ public class Options
         Default = InstanceType.Default, Required = false)]
     public InstanceType InstanceType { get; set; }
 
-    [Option('c', "check", HelpText = "Check configuration and exit.", Required = false)]
+    [Option('c', "check", HelpText = "Verify the storage folder's appsettings.json without changing anything and exit (0 = valid).", Required = false)]
     public bool CheckConfig { get; set; }
+
+    [Option("reset-admin-password", HelpText = "Set a new password for the configured default admin and exit. " +
+        "The password is read from the " + Program.AdminPasswordEnvironmentVariable + " environment variable or from stdin, never from the command line.",
+        Required = false)]
+    public bool ResetAdminPassword { get; set; }
 
     [Option('r', "reset-hub", HelpText = "Reset the Hub folder by re-creating it.", Required = false)]
     public bool ResetHub { get; set; }
@@ -33,7 +38,9 @@ public class Options
         {
             new("\nRun Registry using local \"data\" folder as storage on default port 5000",
                 new Options { StorageFolder = "./data" }),
-            new("\nCheck Registry configuration", new Options { StorageFolder = "./data", CheckConfig = true })
+            new("\nCheck Registry configuration", new Options { StorageFolder = "./data", CheckConfig = true }),
+            new("\nReset the default admin password (read from " + Program.AdminPasswordEnvironmentVariable + " or stdin)",
+                new Options { StorageFolder = "./data", ResetAdminPassword = true })
         };
 }
 

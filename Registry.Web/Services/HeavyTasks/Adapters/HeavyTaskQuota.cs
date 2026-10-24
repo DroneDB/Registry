@@ -20,10 +20,10 @@ public sealed class HeavyTaskQuota : IHeavyTaskQuota
     private readonly IJobIndexQuery _query;
     private readonly ProcessingPlatformSettings _settings;
 
-    public HeavyTaskQuota(IJobIndexQuery query, IOptions<AppSettings> appSettings)
+    public HeavyTaskQuota(IJobIndexQuery query, IOptions<ProcessingPlatformSettings> settings)
     {
         _query = query;
-        _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
+        _settings = settings.Value;
     }
 
     public async Task<HeavyTaskQuotaResult> EvaluateAsync(

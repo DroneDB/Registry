@@ -1,27 +1,28 @@
-﻿using System.Threading;
-using System.Threading.Tasks;
-using Hangfire.Common;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Registry.Web.Utilities;
-
-namespace Registry.Web.HealthChecks;
-
-using Hangfire;
-using Hangfire.Server;
-using Hangfire.Storage;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Hangfire;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Registry.Web.Services.Jobs;
+
+namespace Registry.Web.HealthChecks;
 
 public class HangFireHealthCheck : IHealthCheck
 {
+    private readonly JobStorage _storage;
+    private readonly IBackgroundJobClient _jobs;
+
+    public HangFireHealthCheck(JobStorage storage, IBackgroundJobClient jobs)
+    {
+        _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+        _jobs = jobs ?? throw new ArgumentNullException(nameof(jobs));
+    }
+
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
         try
         {
-
-            var monitoringApi = JobStorage.Current.GetMonitoringApi();
+            var monitoringApi = _storage.GetMonitoringApi();
 
             // Check if any Hangfire servers are running
             var servers = monitoringApi.Servers();
@@ -29,7 +30,7 @@ public class HangFireHealthCheck : IHealthCheck
                 return HealthCheckResult.Unhealthy("No Hangfire servers are running.");
 
             // Schedule a dummy job and wait for its completion
-            var jobId = BackgroundJob.Enqueue(() => HangfireUtils.DummyJob(null));
+            var jobId = _jobs.Enqueue<HealthCheckJob>(job => job.Ping(null));
 
             // Poll the job status until it's completed or failed (10 seconds timeout)
             for (var i = 0; i < 20; i++)

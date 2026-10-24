@@ -1,0 +1,8 @@
+{
+  "request": "GET /users/golden-owner/meta",
+  "caller": "admin",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {}
+}

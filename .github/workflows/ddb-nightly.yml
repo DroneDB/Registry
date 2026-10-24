@@ -1,0 +1,116 @@
+name: DroneDB nightly drift
+
+# XI-09 cross-repository CI, Registry side: runs Registry's libddb adapter suite
+# (Registry.Adapters.Ddb.Test, which P/Invokes every export Registry uses and fails on a missing
+# one) against the newest .deb that DroneDB CI built (c-cpp.yml, job build_ubuntu, artifact
+# "Linux-Binaries"), so drift between libddb and Registry shows up before a DroneDB release, not
+# after. Any failing adapter test fails the run. DroneDB CI runs the same suite on the .deb of
+# every DroneDB change (job registry_contract, Registry pinned in DroneDB's ci/registry-ref).
+#
+# Required secret: DRONEDB_ARTIFACT_TOKEN, a token that can read the Actions artifacts of
+# DroneDB/DroneDB (fine-grained PAT: repository DroneDB/DroneDB, permission "Actions: read";
+# classic PAT: public_repo). The GITHUB_TOKEN of this repository cannot download artifacts of
+# another repository. Without the secret the drift job is skipped and the run shows a warning.
+#
+# GitHub runs scheduled workflows only from the default branch (master): the nightly run tests
+# Registry master. Run it by hand (workflow_dispatch) to test another Registry branch, or a
+# DroneDB branch other than master.
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dronedb-branch:
+        description: 'DroneDB branch whose newest Linux-Binaries artifact is tested'
+        type: choice
+        options:
+          - master
+          - fixes-and-optimizations
+        default: master
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.dronedb-branch || 'master' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Job-level "if" cannot read secrets: this job turns "is the secret set" into an output
+  preflight:
+    name: Check DRONEDB_ARTIFACT_TOKEN
+    runs-on: ubuntu-24.04
+    outputs:
+      has-token: ${{ steps.token.outputs.present }}
+    steps:
+      - id: token
+        env:
+          DRONEDB_ARTIFACT_TOKEN: ${{ secrets.DRONEDB_ARTIFACT_TOKEN }}
+        run: |
+          if [[ -n "$DRONEDB_ARTIFACT_TOKEN" ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            msg="Secret DRONEDB_ARTIFACT_TOKEN is not set: the DroneDB drift check is skipped. Add a token with Actions read access to DroneDB/DroneDB (see the header of .github/workflows/ddb-nightly.yml)."
+            echo "::warning title=DroneDB drift check skipped::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  drift:
+    name: Registry.Adapters.Ddb.Test on DroneDB ${{ inputs.dronedb-branch || 'master' }}
+    needs: preflight
+    if: needs.preflight.outputs.has-token == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      DRONEDB_BRANCH: ${{ inputs.dronedb-branch || 'master' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # The newest completed c-cpp.yml run of the branch that still has the artifact, whatever its
+      # conclusion: a run whose registry_contract job failed still carries a tested .deb (the
+      # artifact is uploaded only after build_ubuntu's own tests passed), and skipping it would
+      # hide the drift this job looks for. Runs from forks are never used: their .deb is installed
+      # with sudo below. The lookup and the download are scripts/ddb-release.sh's, the same code
+      # that downloads the pinned DroneDB CI build (Directory.Build.props).
+      - name: Download the newest DroneDB Linux-Binaries artifact
+        env:
+          DRONEDB_ARTIFACT_TOKEN: ${{ secrets.DRONEDB_ARTIFACT_TOKEN }}
+          DEST: ${{ runner.temp }}/ddb-package
+        run: |
+          set -euo pipefail
+          read -r artifact run sha conclusion < <(bash scripts/ddb-release.sh latest-ci-artifact "$DRONEDB_BRANCH" Linux-Binaries)
+          bash scripts/ddb-release.sh fetch-ci-artifact "$artifact" "$DEST"
+          echo "DroneDB ${DRONEDB_BRANCH} @ ${sha}: run ${run} (${conclusion})" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "DDB_RUN_URL=https://github.com/DroneDB/DroneDB/actions/runs/${run}" >> "$GITHUB_ENV"
+
+      - name: Install the DroneDB package
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq "$RUNNER_TEMP"/ddb-package/ddb_*.deb
+          ddb --version
+
+      - name: Setup .NET (global.json)
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # The suite downloads DroneDB/test_data files into the temp folder (TMPDIR below), pinned to
+      # the commit in Registry.Test.Common/TestData.cs
+      - name: Cache test data downloads
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/registry-tmp
+          key: registry-test-data-${{ hashFiles('Registry.Test.Common/TestData.cs') }}
+          restore-keys: registry-test-data-
+
+      # Only the adapter suite: it does not build Registry.Web, so neither the Hub nor npm is needed
+      - name: Run Registry.Adapters.Ddb.Test
+        env:
+          TMPDIR: ${{ runner.temp }}/registry-tmp
+        run: |
+          mkdir -p "$TMPDIR"
+          if ! dotnet test Registry.Adapters.Ddb.Test/Registry.Adapters.Ddb.Test.csproj -c Release; then
+            echo "::error title=libddb drift::Registry.Adapters.Ddb.Test fails on DroneDB ${DRONEDB_BRANCH} (${DDB_RUN_URL}). Fix Registry or libddb before the next DroneDB release."
+            exit 1
+          fi

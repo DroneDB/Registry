@@ -19,7 +19,7 @@ namespace Registry.Web.Controllers;
 /// into a newly created dataset. All routes live under <c>/orgs/{org}/import</c>.
 /// </summary>
 [ApiController]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/import")]
+[Route(RoutesHelper.OrganizationPrefix + "/import")]
 [Produces("application/json")]
 public class ImportController : ControllerBaseEx
 {
@@ -38,15 +38,18 @@ public class ImportController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Lists the import source types enabled on this server.
+    /// Lists the import source types enabled on this server, to a caller who may import into the
+    /// organization (write access).
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
     /// <returns>The available source type identifiers.</returns>
     [HttpGet("sources", Name = nameof(GetImportSources))]
-    [ProducesResponseType(typeof(IEnumerable<string>), StatusCodes.Status200OK)]
-    public IActionResult GetImportSources([FromRoute, Required] string orgSlug)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<IEnumerable<string>>> GetImportSources([FromRoute, Required] string orgSlug, CancellationToken ct)
     {
-        return Ok(_importManager.GetAvailableSourceTypes());
+        return Answer<IEnumerable<string>>(await _importManager.GetAvailableSourceTypes(orgSlug, ct: ct));
     }
 
     /// <summary>
@@ -57,13 +60,13 @@ public class ImportController : ControllerBaseEx
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The probe result.</returns>
     [HttpPost("verify", Name = nameof(VerifyImport))]
-    [ProducesResponseType(typeof(ImportVerifyResultDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> VerifyImport(
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<ImportVerifyResultDto>> VerifyImport(
         [FromRoute, Required] string orgSlug,
         [FromBody, Required] VerifyImportRequestDto body,
         CancellationToken ct)
     {
-        return Ok(await _importManager.VerifyAsync(orgSlug, body, ct));
+        return await _importManager.VerifyAsync(orgSlug, body, ct);
     }
 
     /// <summary>
@@ -74,13 +77,13 @@ public class ImportController : ControllerBaseEx
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The created dataset and the tracking task id.</returns>
     [HttpPost(Name = nameof(CreateImport))]
-    [ProducesResponseType(typeof(ImportCreateResultDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> CreateImport(
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<ImportCreateResultDto>> CreateImport(
         [FromRoute, Required] string orgSlug,
         [FromBody, Required] CreateImportRequestDto body,
         CancellationToken ct)
     {
-        return Ok(await _importManager.CreateAsync(orgSlug, body, ct));
+        return await _importManager.CreateAsync(orgSlug, body, ct);
     }
 
     /// <summary>
@@ -92,13 +95,13 @@ public class ImportController : ControllerBaseEx
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The list of organizations or datasets available at the remote source.</returns>
     [HttpPost("browse", Name = nameof(BrowseImport))]
-    [ProducesResponseType(typeof(ImportBrowseResultDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> BrowseImport(
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<ImportBrowseResultDto>> BrowseImport(
         [FromRoute, Required] string orgSlug,
         [FromBody, Required] BrowseImportRequestDto body,
         CancellationToken ct)
     {
-        return Ok(await _importManager.BrowseAsync(orgSlug, body, ct));
+        return await _importManager.BrowseAsync(orgSlug, body, ct);
     }
 }

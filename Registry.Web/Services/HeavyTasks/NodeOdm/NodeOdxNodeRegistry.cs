@@ -16,9 +16,9 @@ public sealed class NodeOdxNodeRegistry : INodeOdxNodeRegistry
     private readonly List<NodeOdxEndpoint> _nodes;
     private readonly Dictionary<string, NodeOdxEndpoint> _byId;
 
-    public NodeOdxNodeRegistry(IOptions<AppSettings> appSettings)
+    public NodeOdxNodeRegistry(IOptions<ProcessingPlatformSettings> settings)
     {
-        var configured = appSettings.Value.ProcessingPlatform?.NodeOdx ?? [];
+        var configured = settings.Value.NodeOdx ?? [];
 
         _nodes =
         [

@@ -1,0 +1,21 @@
+# Nullable allow-list (RQ-03, decision D7). It may only shrink.
+#
+# Directory.Build.props enables nullable reference types for every project.
+# Each entry opts one project or one file out:
+#   - a project directory name: its csproj sets <Nullable>disable</Nullable>
+#   - a .cs path from the repository root: the file has `#nullable disable`
+# EF Core migrations (*/Migrations/*.cs) are generated with `#nullable disable`
+# and are not listed.
+#
+# scripts/check-nullable-allowlist.sh fails if a project or file opts out without
+# an entry here, or if an entry no longer opts out (remove the entry).
+# Annotate a project, remove its <Nullable>disable</Nullable>, then remove it here.
+# A large project can leave the list in steps: put `#nullable disable` on the files
+# that are not annotated yet and list those files instead of the project.
+
+Registry.Adapters.Ddb.Test
+Registry.Adapters.Test
+Registry.Common
+Registry.Web
+Registry.Web.IntegrationTest
+Registry.Web.UnitTest

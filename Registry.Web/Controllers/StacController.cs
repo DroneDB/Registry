@@ -1,15 +1,18 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Services.Stac;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
 
@@ -23,16 +26,13 @@ namespace Registry.Web.Controllers;
 public class StacController : ControllerBaseEx
 {
     private readonly IStacManager _stacManager;
-    private readonly ILogger<StacController> _logger;
 
     private const string MediaTypeJson = "application/json";
     private const string MediaTypeGeoJson = "application/geo+json";
 
-    public StacController(IStacManager stacManager,
-        ILogger<StacController> logger)
+    public StacController(IStacManager stacManager)
     {
         _stacManager = stacManager;
-        _logger = logger;
     }
 
     /// <summary>
@@ -42,21 +42,10 @@ public class StacController : ControllerBaseEx
     /// <returns>The STAC API landing page.</returns>
     [HttpGet("/stac", Name = nameof(StacController) + "." + nameof(GetCatalog))]
     [ProducesResponseType(typeof(StacCatalogDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> GetCatalog()
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetCatalog(CancellationToken ct)
     {
-        try
-        {
-            _logger.LogDebug("Stac controller GetCatalog()");
-
-            return StacContent(await _stacManager.GetLandingPage(), MediaTypeJson);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Stac controller GetCatalog()");
-
-            throw;
-        }
+        return StacContent(await _stacManager.GetLandingPage(ct: ct), MediaTypeJson);
     }
 
     /// <summary>
@@ -64,21 +53,10 @@ public class StacController : ControllerBaseEx
     /// </summary>
     [HttpGet("/stac/conformance", Name = nameof(StacController) + "." + nameof(GetConformance))]
     [ProducesResponseType(typeof(StacConformanceDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public IActionResult GetConformance()
     {
-        try
-        {
-            _logger.LogDebug("Stac controller GetConformance()");
-
-            return StacContent(_stacManager.GetConformance(), MediaTypeJson);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Stac controller GetConformance()");
-
-            throw;
-        }
+        return StacContent(_stacManager.GetConformance(), MediaTypeJson);
     }
 
     /// <summary>
@@ -87,27 +65,16 @@ public class StacController : ControllerBaseEx
     /// </summary>
     [HttpGet("/stac/collections", Name = nameof(StacController) + "." + nameof(GetCollections))]
     [ProducesResponseType(typeof(StacCollectionsDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetCollections(
         [FromQuery] int? limit = null,
-        [FromQuery] int? offset = null)
+        [FromQuery] int? offset = null, CancellationToken ct = default)
     {
-        try
-        {
-            _logger.LogDebug("Stac controller GetCollections()");
+        if (limit is < 1)
+            throw new BadRequestException(LimitError);
 
-            if (limit is < 1)
-                return BadRequest(new ErrorResponse(LimitError));
-
-            return StacContent(await _stacManager.GetCollections(limit, offset), MediaTypeJson);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Stac controller GetCollections()");
-
-            throw;
-        }
+        return StacContent(await _stacManager.GetCollections(limit, offset, ct: ct), MediaTypeJson);
     }
 
     /// <summary>
@@ -115,25 +82,14 @@ public class StacController : ControllerBaseEx
     /// </summary>
     [HttpGet("/stac/collections/{orgSlug}/{dsSlug}", Name = nameof(StacController) + "." + nameof(GetCollection))]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetCollection(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string dsSlug)
+        [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
-        try
-        {
-            _logger.LogDebug("Stac controller GetCollection('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
-
-            return StacContent(await _stacManager.GetCollection(orgSlug, dsSlug), MediaTypeJson);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Stac controller GetCollection()");
-
-            throw;
-        }
+        return StacContent(await _stacManager.GetCollection(orgSlug, dsSlug, ct: ct), MediaTypeJson);
     }
 
     /// <summary>
@@ -142,41 +98,30 @@ public class StacController : ControllerBaseEx
     [HttpGet("/stac/collections/{orgSlug}/{dsSlug}/items",
         Name = nameof(StacController) + "." + nameof(GetCollectionItems))]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetCollectionItems(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery] string bbox = null,
         [FromQuery] string datetime = null,
         [FromQuery] int? limit = null,
-        [FromQuery] int? offset = null)
+        [FromQuery] int? offset = null, CancellationToken ct = default)
     {
-        try
-        {
-            _logger.LogDebug("Stac controller GetCollectionItems('{OrgSlug}/{DsSlug}')", orgSlug, dsSlug);
+        if (!TryParseBbox(bbox, out var parsedBbox))
+            throw new BadRequestException(BboxError);
 
-            if (!TryParseBbox(bbox, out var parsedBbox))
-                return BadRequest(new ErrorResponse(BboxError));
+        if (limit is < 1)
+            throw new BadRequestException(LimitError);
 
-            if (limit is < 1)
-                return BadRequest(new ErrorResponse(LimitError));
+        if (!IsValidDatetime(datetime))
+            throw new BadRequestException(DatetimeError);
 
-            if (!IsValidDatetime(datetime))
-                return BadRequest(new ErrorResponse(DatetimeError));
-
-            return StacContent(
-                await _stacManager.GetCollectionItems(orgSlug, dsSlug, parsedBbox, datetime, limit, offset),
-                MediaTypeGeoJson);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Stac controller GetCollectionItems()");
-
-            throw;
-        }
+        return StacContent(
+            await _stacManager.GetCollectionItems(orgSlug, dsSlug, parsedBbox, datetime, limit, offset, ct: ct),
+            MediaTypeGeoJson);
     }
 
     /// <summary>
@@ -185,27 +130,15 @@ public class StacController : ControllerBaseEx
     [HttpGet("/stac/collections/{orgSlug}/{dsSlug}/items/{featureId}",
         Name = nameof(StacController) + "." + nameof(GetCollectionItem))]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetCollectionItem(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromRoute, Required] string featureId)
+        [FromRoute, Required] string featureId, CancellationToken ct)
     {
-        try
-        {
-            _logger.LogDebug("Stac controller GetCollectionItem('{OrgSlug}/{DsSlug}', {FeatureId})",
-                orgSlug, dsSlug, featureId);
-
-            return StacContent(await _stacManager.GetCollectionItem(orgSlug, dsSlug, featureId), MediaTypeGeoJson);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Stac controller GetCollectionItem()");
-
-            throw;
-        }
+        return StacContent(await _stacManager.GetCollectionItem(orgSlug, dsSlug, featureId, ct: ct), MediaTypeGeoJson);
     }
 
     /// <summary>
@@ -213,8 +146,8 @@ public class StacController : ControllerBaseEx
     /// </summary>
     [HttpGet("/stac/search", Name = nameof(StacController) + "." + nameof(SearchGet))]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> SearchGet(
         [FromQuery] string bbox = null,
         [FromQuery] string intersects = null,
@@ -222,63 +155,52 @@ public class StacController : ControllerBaseEx
         [FromQuery] int? limit = null,
         [FromQuery] string collections = null,
         [FromQuery] string ids = null,
-        [FromQuery] string token = null)
+        [FromQuery] string token = null, CancellationToken ct = default)
     {
-        try
+        var hasBbox = !string.IsNullOrWhiteSpace(bbox);
+        var hasIntersects = !string.IsNullOrWhiteSpace(intersects);
+
+        if (hasBbox && hasIntersects)
+            throw new BadRequestException(BboxIntersectsError);
+
+        if (!TryParseBbox(bbox, out var parsedBbox))
+            throw new BadRequestException(BboxError);
+
+        if (limit is < 1)
+            throw new BadRequestException(LimitError);
+
+        if (!IsValidDatetime(datetime))
+            throw new BadRequestException(DatetimeError);
+
+        JsonElement? parsedIntersects = null;
+        if (hasIntersects)
         {
-            _logger.LogDebug("Stac controller SearchGet()");
-
-            var hasBbox = !string.IsNullOrWhiteSpace(bbox);
-            var hasIntersects = !string.IsNullOrWhiteSpace(intersects);
-
-            if (hasBbox && hasIntersects)
-                return BadRequest(new ErrorResponse(BboxIntersectsError));
-
-            if (!TryParseBbox(bbox, out var parsedBbox))
-                return BadRequest(new ErrorResponse(BboxError));
-
-            if (limit is < 1)
-                return BadRequest(new ErrorResponse(LimitError));
-
-            if (!IsValidDatetime(datetime))
-                return BadRequest(new ErrorResponse(DatetimeError));
-
-            JToken parsedIntersects = null;
-            if (hasIntersects)
+            try
             {
-                try
-                {
-                    parsedIntersects = JToken.Parse(intersects);
-                }
-                catch (JsonException)
-                {
-                    return BadRequest(new ErrorResponse("intersects must be a valid GeoJSON geometry"));
-                }
+                parsedIntersects = JsonDocument.Parse(intersects).RootElement.Clone();
             }
-
-            var request = new StacSearchRequestDto
+            catch (JsonException)
             {
-                Bbox = parsedBbox,
-                Intersects = parsedIntersects,
-                Datetime = datetime,
-                Limit = limit,
-                Token = token,
-                Collections = string.IsNullOrWhiteSpace(collections)
-                    ? null
-                    : collections.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-                Ids = string.IsNullOrWhiteSpace(ids)
-                    ? null
-                    : ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            };
-
-            return StacContent(await _stacManager.Search(request), MediaTypeGeoJson);
+                throw new BadRequestException("intersects must be a valid GeoJSON geometry");
+            }
         }
-        catch (Exception ex)
+
+        var request = new StacSearchRequestDto
         {
-            _logger.LogError(ex, "Exception in Stac controller SearchGet()");
+            Bbox = parsedBbox,
+            Intersects = parsedIntersects,
+            Datetime = datetime,
+            Limit = limit,
+            Token = token,
+            Collections = string.IsNullOrWhiteSpace(collections)
+                ? null
+                : collections.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            Ids = string.IsNullOrWhiteSpace(ids)
+                ? null
+                : ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        };
 
-            throw;
-        }
+        return StacContent(await _stacManager.Search(request, ct: ct), MediaTypeGeoJson);
     }
 
     /// <summary>
@@ -286,34 +208,23 @@ public class StacController : ControllerBaseEx
     /// </summary>
     [HttpPost("/stac/search", Name = nameof(StacController) + "." + nameof(SearchPost))]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> SearchPost([FromBody] StacSearchRequestDto request)
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> SearchPost([FromBody] StacSearchRequestDto request, CancellationToken ct)
     {
-        try
-        {
-            _logger.LogDebug("Stac controller SearchPost()");
+        if (request?.Bbox is { Length: > 0 } && request.Intersects is not null)
+            throw new BadRequestException(BboxIntersectsError);
 
-            if (request?.Bbox is { Length: > 0 } && request.Intersects is not null)
-                return BadRequest(new ErrorResponse(BboxIntersectsError));
+        if (request?.Bbox is { Length: > 0 } && !IsValidBboxArray(request.Bbox))
+            throw new BadRequestException(BboxError);
 
-            if (request?.Bbox is { Length: > 0 } && !IsValidBboxArray(request.Bbox))
-                return BadRequest(new ErrorResponse(BboxError));
+        if (request?.Limit is < 1)
+            throw new BadRequestException(LimitError);
 
-            if (request?.Limit is < 1)
-                return BadRequest(new ErrorResponse(LimitError));
+        if (!IsValidDatetime(request?.Datetime))
+            throw new BadRequestException(DatetimeError);
 
-            if (!IsValidDatetime(request?.Datetime))
-                return BadRequest(new ErrorResponse(DatetimeError));
-
-            return StacContent(await _stacManager.Search(request), MediaTypeGeoJson);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Stac controller SearchPost()");
-
-            throw;
-        }
+        return StacContent(await _stacManager.Search(request, ct: ct), MediaTypeGeoJson);
     }
 
     private const string BboxError =
@@ -414,7 +325,7 @@ public class StacController : ControllerBaseEx
     {
         return new ContentResult
         {
-            Content = JsonConvert.SerializeObject(value),
+            Content = ApiJson.Serialize(value),
             ContentType = contentType,
             StatusCode = StatusCodes.Status200OK
         };
@@ -462,10 +373,10 @@ public class StacController : ControllerBaseEx
     /// </summary>
     [HttpGet("/stac/collections/{collectionId}",
         Name = nameof(StacController) + "." + nameof(GetCollectionNotFound))]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public IActionResult GetCollectionNotFound([FromRoute, Required] string collectionId)
     {
-        return NotFound(new ErrorResponse($"Collection '{collectionId}' not found"));
+        throw new NotFoundException($"Collection '{collectionId}' not found");
     }
 
     /// <summary>
@@ -478,28 +389,29 @@ public class StacController : ControllerBaseEx
     [HttpGet("/orgs/{orgSlug}/ds/{dsSlug}/stac/{pathBase64?}",
         Name = nameof(StacController) + "." + nameof(GetStacChild))]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetStacChild(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromRoute] string pathBase64 = null)
+        [FromRoute] string pathBase64 = null, CancellationToken ct = default)
     {
-        try
-        {
-            _logger.LogDebug("Stac controller GetStacChild()");
+        return Ok(await _stacManager.GetStacChild(orgSlug, dsSlug, DecodePath(pathBase64), ct: ct));
+    }
 
-            var path = pathBase64 != null ? Encoding.UTF8.GetString(Convert.FromBase64String(pathBase64)) : null;
+    /// <summary>
+    /// The item path of a STAC child URL, Base64 in either alphabet (the links of paths whose standard Base64 holds
+    /// '/' or '+' are URL-safe); a segment that is not Base64 is the client's error.
+    /// </summary>
+    private static string DecodePath(string pathBase64)
+    {
+        if (pathBase64 == null)
+            return null;
 
-            return Ok(await _stacManager.GetStacChild(orgSlug, dsSlug, path));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Stac controller GetStacChild()");
-
-            throw;
-        }
+        return StacIds.TryDecodePath(pathBase64, out var path)
+            ? path
+            : throw new BadRequestException("The item path is not valid Base64");
     }
 }

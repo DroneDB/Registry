@@ -1,4 +1,4 @@
-﻿# DroneDB Registry
+# DroneDB Registry
 
 ![GitHub Release](https://img.shields.io/github/v/release/DroneDB/Registry) ![commits](https://img.shields.io/github/commit-activity/m/DroneDB/registry) ![languages](https://img.shields.io/github/languages/top/DroneDB/registry) ![.NET Core](https://github.com/DroneDB/Registry/actions/workflows/dotnet-core.yml/badge.svg) [![Discord](https://img.shields.io/discord/1491016144310767670?label=Discord&logo=discord&color=5865F2)](https://discord.gg/e9M3vBvzge)
 
@@ -98,13 +98,21 @@ Open [http://localhost:5000](http://localhost:5000) in your browser to start usi
 | [/hangfire](http://localhost:5000/hangfire)       | Background jobs dashboard (requires auth) |
 | [/stac](http://localhost:5000/stac)               | STAC Catalog root                         |
 
-The log file is located in `registry-data/logs/registry.txt`.
+The log files are in `registry-data/logs/` and roll daily: `registryYYYYMMDD.txt` for the default instance, `registry-webYYYYMMDD.txt`, `registry-node-<host>YYYYMMDD.txt` (one per node host name; the production compose names them `node-a` and `node-b`) and `registry-thumbsYYYYMMDD.txt` for the web server, processing node and thumbnail generator instance types.
 
 ### Processing Platform
 
 On-demand builds (thumbnails, tiles, COG, streaming formats) run automatically or can be triggered manually. Large downloads are offloaded to background tasks. Configuration options including per-user task limits, per-org output budgets, remote processing nodes (ODX/NodeODX), and feature gating are documented in the [Registry Guide](https://docs.dronedb.app/docs/registry).
 
 For production deployment with MySQL/MariaDB, see the [full documentation](https://docs.dronedb.app/docs/registry/admin/production#running-in-production).
+
+### DSM altitude key
+
+libddb looks up ground elevation (OpenTopography global DEM) to compute the relative altitude of images that carry none in their EXIF. The API key comes from the `DDB_OPENTOPOGRAPHY_KEY` environment variable of every Registry process (the production compose passes it through); without it the lookup is skipped, a warning is logged once, and the relative altitude falls back to the GPS altitude.
+
+### Reverse proxy
+
+Behind a reverse proxy (nginx), the proxy must send `X-Forwarded-For` and `X-Forwarded-Proto` (and pass the original `Host`): the Registry takes the client address (rate and download limits, logs) and the scheme (`Secure` cookies, HSTS) from them. They are trusted only when the peer the Registry sees is listed in `AppSettings:KnownProxies` (IP addresses, default loopback) or inside `AppSettings:KnownNetworks` (CIDR); from any other peer they are ignored. With a host nginx proxying to a port published by Docker (`docker/production`), the peer is the Docker bridge gateway (`172.x.0.1`), not loopback, so the production template sets `"KnownNetworks": [ "172.16.0.0/12" ]` (Docker's default bridge address pool); adjust it if your Docker networks use another range.
 
 ## 🌍 OGC Services
 

@@ -1,0 +1,15 @@
+{
+  "request": "GET /orgs/golden-org/ds/golden-missing",
+  "caller": "organization owner",
+  "status": 404,
+  "contentType": "application/problem+json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5",
+    "title": "Not Found",
+    "status": 404,
+    "detail": "Cannot find dataset golden-missing in organization golden-org",
+    "traceId": "<trace-id>",
+    "noRetry": false
+  }
+}

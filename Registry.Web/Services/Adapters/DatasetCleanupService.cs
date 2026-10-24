@@ -3,13 +3,14 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Hangfire;
-using Hangfire.Console;
 using Hangfire.Server;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Services.Ports;
+
+using Registry.Web.Services.Jobs;
 
 namespace Registry.Web.Services.Adapters;
 
@@ -52,35 +53,43 @@ public class DatasetCleanupService
     }
 
     /// <summary>
-    /// Cleans up a deleted dataset by cancelling active jobs, removing JobIndex entries,
-    /// and deleting the filesystem folder.
+    /// Cleans up a deleted dataset by cancelling its active jobs, removing its JobIndex entries and deleting the
+    /// filesystem folder. The dataset's job rows were moved to its tombstone slug
+    /// (<see cref="SlugKeyedRows.TombstoneSlug"/>) when it was deleted, so this acts on the rows and jobs of the dataset
+    /// that was deleted, never on those of another dataset that has taken its slug since.
     /// </summary>
     /// <param name="orgSlug">Organization slug</param>
-    /// <param name="dsSlug">Dataset slug</param>
     /// <param name="internalRef">Dataset internal reference (folder GUID)</param>
     /// <param name="context">Hangfire context for logging</param>
     [AutomaticRetry(Attempts = 3, DelaysInSeconds = [30, 120, 300])]
-    public async Task CleanupDeletedDatasetAsync(
-        string orgSlug,
-        string dsSlug,
-        Guid internalRef,
-        PerformContext? context = null)
-    {
-        void WriteLine(string message)
-        {
-            _logger.LogInformation(message);
-            context?.WriteLine(message);
-        }
+    public Task CleanupDeletedAsync(string orgSlug, Guid internalRef, PerformContext? context = null) =>
+        CleanupAsync(orgSlug, SlugKeyedRows.TombstoneSlug(internalRef), internalRef, context);
 
-        WriteLine($"Starting cleanup for deleted dataset {orgSlug}/{dsSlug} (InternalRef: {internalRef})");
+    /// <summary>
+    /// The job as it was queued before its rows moved to a tombstone: it names the dataset's slug, so it still runs
+    /// with the behaviour it was queued with (jobs already in Hangfire storage; remove after one release, like the
+    /// other stored shapes of <c>HangfireUtils</c>). It cannot tell the deleted dataset's rows from those of a dataset
+    /// that has taken the slug since.
+    /// </summary>
+    [AutomaticRetry(Attempts = 3, DelaysInSeconds = [30, 120, 300])]
+    public Task CleanupDeletedDatasetAsync(string orgSlug, string dsSlug, Guid internalRef,
+        PerformContext? context = null) =>
+        CleanupAsync(orgSlug, dsSlug, internalRef, context);
+
+    // The cleanup of the rows of (orgSlug, dsSlug): dsSlug is the dataset's slug for a job queued before the tombstone, its tombstone since
+    private async Task CleanupAsync(string orgSlug, string dsSlug, Guid internalRef, PerformContext? context)
+    {
+        var console = JobConsole.For(_logger, context);
+        console.Info("Starting cleanup for deleted dataset {OrgSlug}/{DsSlug} (InternalRef: {InternalRef})",
+            orgSlug, dsSlug, internalRef);
 
         // 1. Cancel all active jobs for this dataset
-        var cancelledCount = await CancelActiveJobsAsync(orgSlug, dsSlug, context);
-        WriteLine($"Cancelled {cancelledCount} active jobs");
+        var cancelledCount = await CancelActiveJobsAsync(orgSlug, dsSlug, console);
+        console.Info("Cancelled {Count} active jobs", cancelledCount);
 
         // 2. Remove all JobIndex entries for this dataset
         var removedCount = await RemoveJobIndexEntriesAsync(orgSlug, dsSlug);
-        WriteLine($"Removed {removedCount} JobIndex entries");
+        console.Info("Removed {Count} JobIndex entries", removedCount);
 
         // 2.5. Release the dataset's per-dataset index lane so it is not retained after the
         //      dataset ceases to exist (new enqueues transparently recreate a fresh lane for
@@ -88,31 +97,29 @@ public class DatasetCleanupService
         if (_indexQueue != null)
         {
             _indexQueue.Release(new DatasetKey(orgSlug, internalRef));
-            WriteLine("Released index lane for the removed dataset");
+            console.Info("Released index lane for the removed dataset");
         }
 
         // 3. Delete filesystem folder
         try
         {
             _ddbManager.Delete(orgSlug, internalRef);
-            WriteLine($"Deleted filesystem folder for {orgSlug}/{internalRef}");
+            console.Info("Deleted filesystem folder for {OrgSlug}/{InternalRef}", orgSlug, internalRef);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex,
-                "Failed to delete filesystem folder for {OrgSlug}/{InternalRef}. Will be cleaned up by orphaned folder cleanup job",
-                orgSlug, internalRef);
-            context?.WriteLine($"WARNING: Failed to delete filesystem folder: {ex.Message}");
             // Don't rethrow - the orphaned folder cleanup job will handle it
+            console.Warning(ex, "Failed to delete filesystem folder for {OrgSlug}/{InternalRef}: {Error}. " +
+                                "Will be cleaned up by orphaned folder cleanup job", orgSlug, internalRef, ex.Message);
         }
 
-        WriteLine($"Cleanup completed for {orgSlug}/{dsSlug}");
+        console.Info("Cleanup completed for {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
     }
 
     /// <summary>
     /// Cancels all active jobs for the specified dataset.
     /// </summary>
-    private async Task<int> CancelActiveJobsAsync(string orgSlug, string dsSlug, PerformContext? context)
+    private async Task<int> CancelActiveJobsAsync(string orgSlug, string dsSlug, JobConsole console)
     {
         var jobs = await _jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, take: int.MaxValue);
         var activeJobs = jobs.Where(j => ActiveJobStates.Contains(j.CurrentState)).ToList();
@@ -131,8 +138,7 @@ public class DatasetCleanupService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to cancel job {JobId}", job.JobId);
-                context?.WriteLine($"WARNING: Failed to cancel job {job.JobId}: {ex.Message}");
+                console.Warning(ex, "Failed to cancel job {JobId}: {Error}", job.JobId, ex.Message);
             }
         }
 

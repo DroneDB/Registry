@@ -5,35 +5,29 @@ using Hangfire.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Filters;
 
 /// <summary>
 /// Hangfire state filter that reacts to build jobs entering the Failed state.
-/// When a BuildWrapper / BuildPendingWrapper job exhausts its retries and is
+/// When a build job (<see cref="DdbJobDescriptor.IsBuild"/>) exhausts its retries and is
 /// marked as failed, observations are refreshed from native state while the
 /// affected dataset's bounded retry controls are preserved.
 /// </summary>
 public sealed class BuildJobFailureFilter(
-    IServiceProvider sp,
+    IServiceScopeFactory scopes,
     ILogger<BuildJobFailureFilter> log) : IApplyStateFilter
 {
-    private static readonly string[] BuildMethodNames =
-    [
-        nameof(Utilities.HangfireUtils.BuildWrapper),
-        nameof(Utilities.HangfireUtils.BuildPendingWrapper)
-    ];
-
     public void OnStateApplied(ApplyStateContext context, IWriteOnlyTransaction transaction)
     {
         try
         {
             if (context.NewState is not FailedState failedState) return;
 
-            var methodName = context.BackgroundJob?.Job?.Method?.Name;
-            if (string.IsNullOrEmpty(methodName)) return;
-            if (Array.IndexOf(BuildMethodNames, methodName) < 0) return;
+            if (DdbJobDescriptor.Of(context.BackgroundJob?.Job) is not { IsBuild: true }) return;
+            var methodName = context.BackgroundJob!.Job.Method.Name;
 
             var jobId = context.BackgroundJob!.Id;
             var conn = context.Connection;
@@ -52,7 +46,7 @@ public sealed class BuildJobFailureFilter(
                 "BuildJobFailureFilter: build job {JobId} ({Method}) for {Org}/{Ds} entered Failed state; refreshing build-pending observations",
                 jobId, methodName, orgSlug, dsSlug);
 
-            using var scope = sp.CreateScope();
+            using var scope = scopes.CreateScope();
             // Persist WHY the build failed: JobIndex.ErrorType = bare exception type name,
             // same convention as heavy tasks (HeavyTaskJobWrapper). The message itself lives
             // in the log tail persisted by BuildLogCaptureFilter; here we only record the

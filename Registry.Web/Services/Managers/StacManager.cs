@@ -1,44 +1,34 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
-using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
+using Registry.Web.Services.Stac;
 
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// STAC (SpatioTemporal Asset Catalog) API implementation for dataset and item listings.
+/// STAC: the STAC API 1.0.0 (landing page, collections, items, search) and the legacy per-dataset documents.
+/// libddb gives the data of each document (XI-09: <c>DDBStacData</c>, <c>DDBStacItemCollectionData</c>), and
+/// <see cref="StacDocuments"/> adds every id, link and href; the listings are <see cref="StacCatalog"/>'s.
 /// </summary>
 public class StacManager : IStacManager
 {
-    private readonly IAuthManager _authManager;
-    private readonly RegistryContext _context;
-    private readonly IUtils _utils;
-    private readonly IDdbManager _ddbManager;
-    private readonly IDistributedCache _cache;
-    private readonly ILogger<StacManager> _logger;
-
-    private const string CacheKey = "stac-catalog";
-
     // These could end up in the config
     private const string CatalogTitle = "DroneDB public datasets catalog";
     private const string CatalogId = "DroneDB Catalog";
     private const string StacVersion = "1.1.0";
-    private readonly TimeSpan _expiration = TimeSpan.FromMinutes(5);
+    private const string Json = "application/json";
+    private const string GeoJson = "application/geo+json";
 
     // STAC API 1.0.0 conformance classes implemented by this server
     private static readonly string[] ConformanceClasses =
@@ -57,155 +47,76 @@ public class StacManager : IStacManager
 
     private const int DefaultCollectionsLimit = 10;
     private const int MaxCollectionsLimit = 100;
-    private static readonly TimeSpan NameExpiration = TimeSpan.FromHours(1);
 
+    private readonly IDatasetAccessResolver _access;
+    private readonly IDdbManager _ddbManager;
+    private readonly StacCatalog _catalog;
+    private readonly StacUrls _urls;
+    private readonly ILogger<StacManager> _logger;
 
-    public StacManager(
-        IAuthManager authManager,
-        RegistryContext context,
-        IUtils utils,
-        IDdbManager ddbManager,
-        IDistributedCache cache,
+    public StacManager(IDatasetAccessResolver access, IDdbManager ddbManager, StacCatalog catalog, StacUrls urls,
         ILogger<StacManager> logger)
     {
-        _authManager = authManager;
-        _context = context;
-        _utils = utils;
+        _access = access;
         _ddbManager = ddbManager;
-        _cache = cache;
+        _catalog = catalog;
+        _urls = urls;
         _logger = logger;
     }
 
-
-    public async Task<StacCatalogDto> GetCatalog()
+    public async Task<JsonNode> GetStacChild(string orgSlug, string dsSlug, string path = null,
+        CancellationToken ct = default)
     {
-
-        var stacUrl = _utils.GenerateStacUrl();
-
-        var links = new List<StacLinkDto>
-        {
-            new()
-            {
-                Href = stacUrl,
-                Relationship = "self",
-                Title = CatalogTitle
-            },
-            new()
-            {
-                Href = stacUrl,
-                Relationship = "root",
-                Title = CatalogTitle
-            }
-        };
-
-        var datasets = _context.Datasets.Include(ds => ds.Organization).ToArray();
-
-        foreach (var ds in datasets)
-        {
-
-            var key = MakeCacheKey(ds);
-
-            var item = await _cache.GetRecordAsync<StacLinkDto>(key);
-
-            if (item != null)
-            {
-                links.Add(item);
-                await _cache.RefreshAsync(key);
-                continue;
-            }
-
-            var ddb = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef);
-            var meta = ddb.Meta.GetSafe();
-            if (meta.Visibility != Visibility.Public) continue;
-
-            item = new StacLinkDto
-            {
-                Href = _utils.GenerateDatasetStacUrl(ds.Organization.Slug, ds.Slug),
-                Relationship = "child",
-                Title = meta.Name
-            };
-
-            await _cache.SetRecordAsync(key, item, _expiration);
-
-            links.Add(item);
-        }
-
-        var catalog = new StacCatalogDto
-        {
-            Type = "Catalog",
-            StacVersion = StacVersion,
-            Id = CatalogId,
-            Description = CatalogTitle,
-            Links = links,
-        };
-
-        return catalog;
-
-    }
-
-    public async Task ClearCache(Dataset ds)
-    {
-        _logger.LogInformation("In ClearCache('{DsSlug}')", ds.Slug);
-
-        await _cache.RemoveAsync(MakeCacheKey(ds));
-        await _cache.RemoveAsync(MakeNameCacheKey(ds));
-    }
-
-    public async Task<JToken> GetStacChild(string orgSlug, string dsSlug, string path = null)
-    {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
+        var ds = access.Dataset;
+        var ddb = access.Ddb;
 
         _logger.LogInformation("In GetStacChild('{OrgSlug}/{DsSlug}', {Path})", orgSlug, dsSlug, path);
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to list this dataset");
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
         if (path != null && !ddb.EntryExists(path))
-            throw new ArgumentException("Entry does not exist");
+            throw new BadRequestException("Entry does not exist");
 
-        return ddb.GetStac($"{orgSlug}/{dsSlug}", _utils.GenerateDatasetUrl(ds),
-            _utils.GetLocalHost(), path);
+        if (path != null)
+            return StacDocuments.LegacyItem(ItemData(ddb, path), ds, _urls);
 
+        // The Collection links every entry with a geometry, in path order: the data-only item collection
+        // lists exactly those
+        var items = ItemCollectionData(ddb, null, null, int.MaxValue, 0);
+        var itemPaths = StacDocuments.Features(items).Select(StacDocuments.ItemPath).OfType<string>();
+        return StacDocuments.LegacyCollection(CollectionData(ddb), ds, StacDocuments.FolderOf(ddb), itemPaths, _urls);
     }
 
     #region STAC API 1.0.0
 
-    public async Task<StacCatalogDto> GetLandingPage()
+    public Task<StacCatalogDto> GetLandingPage(CancellationToken ct = default) =>
+        _catalog.ListingAsync(CacheCategories.StacLanding, BuildLandingPage, ct);
+
+    private async Task<StacCatalogDto> BuildLandingPage(CancellationToken ct)
     {
-        var cacheKey = $"stac-landing-{await _authManager.SafeGetCurrentUserName()}";
-        var cached = await _cache.GetRecordAsync<StacCatalogDto>(cacheKey);
-        if (cached != null)
-            return cached;
-
-        var root = StacRoot();
-        var host = _utils.GetLocalHost();
-
         var links = new List<StacLinkDto>
         {
-            new() { Href = root, Relationship = "self", Type = "application/json", Title = CatalogTitle },
-            new() { Href = root, Relationship = "root", Type = "application/json", Title = CatalogTitle },
-            new() { Href = root + "/conformance", Relationship = "conformance", Type = "application/json" },
-            new() { Href = root + "/collections", Relationship = "data", Type = "application/json" },
-            new() { Href = root + "/search", Relationship = "search", Type = "application/geo+json", Method = "GET" },
-            new() { Href = root + "/search", Relationship = "search", Type = "application/geo+json", Method = "POST" },
-            new() { Href = host + "/swagger/v1/swagger.json", Relationship = "service-desc", Type = "application/json" },
-            new() { Href = host + "/scalar/v1", Relationship = "service-doc", Type = "text/html" }
+            new() { Href = _urls.Root, Relationship = "self", Type = Json, Title = CatalogTitle },
+            new() { Href = _urls.Root, Relationship = "root", Type = Json, Title = CatalogTitle },
+            new() { Href = _urls.Conformance, Relationship = "conformance", Type = Json },
+            new() { Href = _urls.Collections, Relationship = "data", Type = Json },
+            new() { Href = _urls.Search, Relationship = "search", Type = GeoJson, Method = "GET" },
+            new() { Href = _urls.Search, Relationship = "search", Type = GeoJson, Method = "POST" },
+            new() { Href = _urls.ServiceDescription, Relationship = "service-desc", Type = Json },
+            new() { Href = _urls.ServiceDocumentation, Relationship = "service-doc", Type = "text/html" }
         };
 
-        foreach (var ds in await GetReadableDatasets())
+        foreach (var ds in await _catalog.ReadableDatasetsAsync(ct))
         {
             links.Add(new StacLinkDto
             {
-                Href = CollectionUrl(ds.Organization.Slug, ds.Slug),
+                Href = _urls.Collection(ds.Organization.Slug, ds.Slug),
                 Relationship = "child",
-                Type = "application/json",
-                Title = await GetDatasetName(ds)
+                Type = Json,
+                Title = await _catalog.NameAsync(ds, ct)
             });
         }
 
-        var result = new StacCatalogDto
+        return new StacCatalogDto
         {
             Type = "Catalog",
             StacVersion = StacVersion,
@@ -214,9 +125,6 @@ public class StacManager : IStacManager
             ConformsTo = ConformanceClasses,
             Links = links
         };
-
-        await _cache.SetRecordAsync(cacheKey, result, _expiration);
-        return result;
     }
 
     public StacConformanceDto GetConformance()
@@ -224,30 +132,34 @@ public class StacManager : IStacManager
         return new StacConformanceDto { ConformsTo = ConformanceClasses };
     }
 
-    public async Task<StacCollectionsDto> GetCollections(int? limit = null, int? offset = null)
+    public Task<StacCollectionsDto> GetCollections(int? limit = null, int? offset = null,
+        CancellationToken ct = default)
     {
         // Every collection embeds its asset list (tens of KB each), so the listing is paged
         var lim = Math.Clamp(limit ?? DefaultCollectionsLimit, 1, MaxCollectionsLimit);
         var off = Math.Max(offset ?? 0, 0);
 
-        var cacheKey = $"stac-collections-{await _authManager.SafeGetCurrentUserName()}-{lim}-{off}";
-        var cached = await _cache.GetRecordAsync<StacCollectionsDto>(cacheKey);
-        if (cached != null)
-            return cached;
+        return _catalog.ListingAsync((generation, user) => CacheCategories.StacCollections(generation, user, lim, off),
+            token => BuildCollections(limit, offset, lim, off, token), ct);
+    }
 
-        var datasets = await GetReadableDatasets();
+    private async Task<StacCollectionsDto> BuildCollections(int? limit, int? offset, int lim, int off,
+        CancellationToken ct)
+    {
+        var datasets = await _catalog.ReadableDatasetsAsync(ct);
 
-        var collections = new List<JToken>();
+        var collections = new List<JsonNode>();
         foreach (var ds in datasets.Skip(off).Take(lim))
         {
+            // One native read per dataset: nobody waits for the listing any more, stop
+            ct.ThrowIfCancellationRequested();
+
             // One unreadable dataset index must not take the whole listing down
             try
             {
-                var collection = GetCollectionInternal(ds);
-                if (collection != null)
-                    collections.Add(collection);
+                collections.Add(Collection(ds, _ddbManager.Get(ds.Organization.Slug, ds.InternalRef)));
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!DdbErrors.IsTransient(ex))
             {
                 _logger.LogWarning(ex, "Skipping STAC collection {OrgSlug}/{DsSlug}",
                     ds.Organization.Slug, ds.Slug);
@@ -256,167 +168,124 @@ public class StacManager : IStacManager
 
         var links = new List<StacLinkDto>
         {
-            new() { Href = CollectionsUrl() + BuildItemsSelfQuery(null, null, limit, offset), Relationship = "self", Type = "application/json" },
-            new() { Href = StacRoot(), Relationship = "root", Type = "application/json" },
-            new() { Href = StacRoot(), Relationship = "parent", Type = "application/json" }
+            new() { Href = _urls.Collections + StacQueries.BuildItemsSelfQuery(null, null, limit, offset), Relationship = "self", Type = Json },
+            new() { Href = _urls.Root, Relationship = "root", Type = Json },
+            new() { Href = _urls.Root, Relationship = "parent", Type = Json }
         };
 
         if (off + lim < datasets.Count)
             links.Add(new StacLinkDto
             {
-                Href = CollectionsUrl() + BuildItemsQuery(null, null, lim, off + lim),
-                Relationship = "next", Type = "application/json"
+                Href = _urls.Collections + StacQueries.BuildItemsQuery(null, null, lim, off + lim),
+                Relationship = "next", Type = Json
             });
 
         if (off > 0)
             links.Add(new StacLinkDto
             {
-                Href = CollectionsUrl() + BuildItemsQuery(null, null, lim, Math.Max(off - lim, 0)),
-                Relationship = "prev", Type = "application/json"
+                Href = _urls.Collections + StacQueries.BuildItemsQuery(null, null, lim, Math.Max(off - lim, 0)),
+                Relationship = "prev", Type = Json
             });
 
-        var result = new StacCollectionsDto
+        return new StacCollectionsDto
         {
             Collections = collections,
             Links = links,
             NumberMatched = datasets.Count,
             NumberReturned = collections.Count
         };
-        await _cache.SetRecordAsync(cacheKey, result, _expiration);
-        return result;
     }
 
-    public async Task<JToken> GetCollection(string orgSlug, string dsSlug)
+    public async Task<JsonNode> GetCollection(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to access this dataset");
-
-        return GetCollectionInternal(ds);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
+        return Collection(access.Dataset, access.Ddb);
     }
 
-    public async Task<JToken> GetCollectionItems(string orgSlug, string dsSlug, double[] bbox = null,
-        string datetime = null, int? limit = null, int? offset = null)
+    public async Task<JsonNode> GetCollectionItems(string orgSlug, string dsSlug, double[] bbox = null,
+        string datetime = null, int? limit = null, int? offset = null, CancellationToken ct = default)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
+        var ds = access.Dataset;
 
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to access this dataset");
-
-        var collectionId = $"{orgSlug}/{dsSlug}";
         var lim = Math.Clamp(limit ?? DefaultLimit, 1, MaxLimit);
         var off = Math.Max(offset ?? 0, 0);
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-        var bboxStr = BboxToString(bbox);
-
-        if (ddb.GetStacItemCollection(collectionId, _utils.GenerateDatasetUrl(ds), _utils.GetLocalHost(),
-                bboxStr, datetime, lim, off) is not JObject result)
-            throw new InvalidOperationException("Invalid STAC item collection result");
-
-        var features = result["features"] as JArray ?? [];
-        foreach (var feature in features.OfType<JObject>())
-            RewriteItem(feature, orgSlug, dsSlug, collectionId);
-
-        var numberMatched = result["numberMatched"]?.Value<long>() ?? features.Count;
+        var data = ItemCollectionData(access.Ddb, StacQueries.BboxToString(bbox), datetime, lim, off);
+        var returned = StacDocuments.Features(data).Count();
+        var numberMatched = StacDocuments.Whole(data["numberMatched"]) ?? returned;
+        var items = _urls.Items(orgSlug, dsSlug);
 
         // The self link must match the requested URL exactly, so only echo back the
         // query parameters the client actually provided (STAC API conformance).
-        var selfQuery = BuildItemsSelfQuery(bbox, datetime, limit, offset);
-        var links = new JArray
+        var links = new JsonArray
         {
-            Link("self", ItemsUrl(orgSlug, dsSlug) + selfQuery, "application/geo+json"),
-            Link("root", StacRoot(), "application/json"),
-            Link("collection", CollectionUrl(orgSlug, dsSlug), "application/json")
+            StacDocuments.Link("self", items + StacQueries.BuildItemsSelfQuery(bbox, datetime, limit, offset), GeoJson),
+            StacDocuments.Link("root", _urls.Root, Json),
+            StacDocuments.Link("collection", _urls.Collection(orgSlug, dsSlug), Json)
         };
 
-        if (off + features.Count < numberMatched)
-            links.Add(Link("next", ItemsUrl(orgSlug, dsSlug) + BuildItemsQuery(bbox, datetime, lim, off + lim),
-                "application/geo+json"));
+        if (off + returned < numberMatched)
+            links.Add(StacDocuments.Link("next", items + StacQueries.BuildItemsQuery(bbox, datetime, lim, off + lim),
+                GeoJson));
 
-        result["links"] = links;
-        return result;
+        return StacDocuments.ApiItemCollection(data, ds, links, _urls);
     }
 
-    public async Task<JToken> GetCollectionItem(string orgSlug, string dsSlug, string featureId)
+    public async Task<JsonNode> GetCollectionItem(string orgSlug, string dsSlug, string featureId,
+        CancellationToken ct = default)
     {
-        var ds = _utils.GetDataset(orgSlug, dsSlug);
-
-        if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            throw new UnauthorizedException("The current user is not allowed to access this dataset");
-
-        var collectionId = $"{orgSlug}/{dsSlug}";
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
 
         // An undecodable feature id simply identifies a feature that does not exist (404),
         // not a malformed request (400).
-        if (!TryDecodeFeatureId(featureId, out var path))
+        if (!StacIds.TryDecodePath(featureId, out var path) || !access.Ddb.EntryExists(path))
             throw new NotFoundException("Feature does not exist");
 
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-
-        if (!ddb.EntryExists(path))
-            throw new NotFoundException("Feature does not exist");
-
-        if (ddb.GetStac(collectionId, _utils.GenerateDatasetUrl(ds), _utils.GetLocalHost(), path) is not JObject item)
-            throw new InvalidOperationException("Invalid STAC item result");
-
-        RewriteItem(item, orgSlug, dsSlug, collectionId);
-        return item;
+        return StacDocuments.ApiItem(ItemData(access.Ddb, path), access.Dataset, _urls);
     }
 
-    public async Task<JToken> Search(StacSearchRequestDto request)
+    public async Task<JsonNode> Search(StacSearchRequestDto request, CancellationToken ct = default)
     {
         request ??= new StacSearchRequestDto();
 
         var lim = Math.Clamp(request.Limit ?? DefaultLimit, 1, MaxLimit);
-        var bboxStr = BboxToString(request.Bbox);
+        var bboxStr = StacQueries.BboxToString(request.Bbox);
         var datetime = request.Datetime;
 
-        var datasets = await GetReadableDatasets();
+        var datasets = await _catalog.ReadableDatasetsAsync(ct);
 
         if (request.Collections is { Length: > 0 })
         {
             var wanted = new HashSet<string>(request.Collections);
-            datasets =
-            [
-                .. datasets
-                    .Where(d => wanted.Contains($"{d.Organization.Slug}/{d.Slug}"))
-            ];
+            datasets = [.. datasets.Where(d => wanted.Contains(StacDocuments.CollectionId(d)))];
         }
 
         if (request.Ids is { Length: > 0 })
-            return SearchByIds(datasets, request.Ids, bboxStr, datetime);
+            return SearchByIds(datasets, request.Ids, bboxStr, datetime, ct);
 
-        DecodeToken(request.Token, out var startDs, out var startOffset);
+        StacQueries.DecodeToken(request.Token, out var startDs, out var startOffset);
 
-        var features = new JArray();
+        var features = new JsonArray();
         var resumeDs = -1;
         var resumeOffset = 0;
 
         for (var i = startDs; i < datasets.Count; i++)
         {
+            // One native query per dataset: a client that went away stops the search
+            ct.ThrowIfCancellationRequested();
             var ds = datasets[i];
-            var collectionId = $"{ds.Organization.Slug}/{ds.Slug}";
             var off = i == startDs ? startOffset : 0;
             var need = lim - features.Count;
 
-            var ddb = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef);
+            var data = ItemCollectionData(Ddb(ds), bboxStr, datetime, need, off);
+            var page = StacDocuments.TakeFeatures(data);
+            var matched = StacDocuments.Whole(data["numberMatched"]) ?? page.Count;
 
-            if (ddb.GetStacItemCollection(collectionId, _utils.GenerateDatasetUrl(ds), _utils.GetLocalHost(),
-                    bboxStr, datetime, need, off) is not JObject fc)
-                continue;
+            foreach (var feature in page)
+                features.Add(StacDocuments.ApiItem(feature, ds, _urls));
 
-            var feats = fc["features"] as JArray ?? [];
-            var matched = fc["numberMatched"]?.Value<long>() ?? feats.Count;
-
-            foreach (var feature in feats.OfType<JObject>())
-            {
-                RewriteItem(feature, ds.Organization.Slug, ds.Slug, collectionId);
-                features.Add(feature);
-            }
-
-            var consumed = off + feats.Count;
+            var consumed = off + page.Count;
 
             if (features.Count >= lim)
             {
@@ -435,324 +304,70 @@ public class StacManager : IStacManager
             }
         }
 
-        var links = new JArray
+        var links = new JsonArray
         {
-            Link("self", SearchUrl(), "application/geo+json"),
-            Link("root", StacRoot(), "application/json")
+            StacDocuments.Link("self", _urls.Search, GeoJson),
+            StacDocuments.Link("root", _urls.Root, Json)
         };
 
         if (resumeDs >= 0)
         {
-            var nextQuery = BuildSearchQuery(request, EncodeToken(resumeDs, resumeOffset), lim);
-            links.Add(Link("next", SearchUrl() + nextQuery, "application/geo+json"));
+            var nextQuery = StacQueries.BuildSearchQuery(request, StacQueries.EncodeToken(resumeDs, resumeOffset), lim);
+            links.Add(StacDocuments.Link("next", _urls.Search + nextQuery, GeoJson));
         }
 
-        return new JObject
-        {
-            ["type"] = "FeatureCollection",
-            ["features"] = features,
-            ["numberReturned"] = features.Count,
-            ["links"] = links
-        };
+        return FeatureCollection(features, links);
     }
 
-    private JObject SearchByIds(List<Dataset> datasets, string[] ids, string bboxStr, string datetime)
+    private JsonObject SearchByIds(List<Dataset> datasets, string[] ids, string bboxStr, string datetime,
+        CancellationToken ct)
     {
         var wantedIds = new HashSet<string>(ids);
-        var features = new JArray();
+        var features = new JsonArray();
 
         foreach (var ds in datasets)
         {
+            ct.ThrowIfCancellationRequested();
             if (features.Count >= wantedIds.Count)
                 break;
 
-            var collectionId = $"{ds.Organization.Slug}/{ds.Slug}";
-            var ddb = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef);
-
-            if (ddb.GetStacItemCollection(collectionId, _utils.GenerateDatasetUrl(ds), _utils.GetLocalHost(),
-                    bboxStr, datetime, MaxLimit, 0) is not JObject fc)
-                continue;
-
-            var feats = fc["features"] as JArray ?? [];
-            foreach (var feature in feats.OfType<JObject>())
+            var data = ItemCollectionData(Ddb(ds), bboxStr, datetime, MaxLimit, 0);
+            foreach (var feature in StacDocuments.TakeFeatures(data))
             {
-                RewriteItem(feature, ds.Organization.Slug, ds.Slug, collectionId);
-                if (wantedIds.Contains(feature["id"]?.ToString()))
-                    features.Add(feature);
+                var item = StacDocuments.ApiItem(feature, ds, _urls);
+                if (wantedIds.Contains(StacDocuments.Text(item["id"]) ?? ""))
+                    features.Add(item);
             }
         }
 
-        var links = new JArray
+        return FeatureCollection(features, new JsonArray
         {
-            Link("self", SearchUrl(), "application/geo+json"),
-            Link("root", StacRoot(), "application/json")
-        };
-
-        return new JObject
-        {
-            ["type"] = "FeatureCollection",
-            ["features"] = features,
-            ["numberReturned"] = features.Count,
-            ["links"] = links
-        };
+            StacDocuments.Link("self", _urls.Search, GeoJson),
+            StacDocuments.Link("root", _urls.Root, Json)
+        });
     }
 
     #endregion
 
-    #region STAC API helpers
-
-    private JToken GetCollectionInternal(Dataset ds)
+    private static JsonObject FeatureCollection(JsonArray features, JsonArray links) => new()
     {
-        var orgSlug = ds.Organization.Slug;
-        var collectionId = $"{orgSlug}/{ds.Slug}";
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
+        ["type"] = "FeatureCollection",
+        ["features"] = features,
+        ["numberReturned"] = features.Count,
+        ["links"] = links
+    };
 
-        if (ddb.GetStac(collectionId, _utils.GenerateDatasetUrl(ds), _utils.GetLocalHost(), null) is not JObject collection)
-            return null;
+    private IDDB Ddb(Dataset ds) => _ddbManager.Get(ds.Organization.Slug, ds.InternalRef);
 
-        RewriteCollection(collection, orgSlug, ds.Slug);
-        return collection;
-    }
+    private JsonObject Collection(Dataset ds, IDDB ddb) =>
+        StacDocuments.ApiCollection(CollectionData(ddb), ds, StacDocuments.FolderOf(ddb), _urls);
 
-    private void RewriteCollection(JObject collection, string orgSlug, string dsSlug)
-    {
-        var collectionUrl = CollectionUrl(orgSlug, dsSlug);
+    private static JsonObject CollectionData(IDDB ddb) =>
+        StacDocuments.Mutable(ddb.GetStacData(), "STAC collection");
 
-        collection["links"] = new JArray
-        {
-            Link("root", StacRoot(), "application/json"),
-            Link("parent", CollectionsUrl(), "application/json"),
-            Link("self", collectionUrl, "application/json"),
-            Link("items", ItemsUrl(orgSlug, dsSlug), "application/geo+json")
-        };
-    }
+    private static JsonObject ItemData(IDDB ddb, string path) =>
+        StacDocuments.Mutable(ddb.GetStacData(path), "STAC item");
 
-    private void RewriteItem(JObject feature, string orgSlug, string dsSlug, string collectionId)
-    {
-        var path = feature["properties"]?["title"]?.Value<string>();
-
-        if (string.IsNullOrEmpty(path) && feature["assets"] is JObject assets)
-            path = assets.Properties().FirstOrDefault(p => p.Name != "thumbnail")?.Name;
-
-        if (string.IsNullOrEmpty(path))
-            return;
-
-        var featureId = EncodeFeatureId(path);
-        var collectionUrl = CollectionUrl(orgSlug, dsSlug);
-        var itemUrl = collectionUrl + "/items/" + featureId;
-
-        feature["id"] = featureId;
-        feature["collection"] = collectionId;
-        feature["links"] = new JArray
-        {
-            Link("root", StacRoot(), "application/json"),
-            Link("parent", collectionUrl, "application/json"),
-            Link("collection", collectionUrl, "application/json"),
-            Link("self", itemUrl, "application/geo+json")
-        };
-    }
-
-    /// <summary>
-    /// Datasets the current user can read, ordered by id so that collection offsets and
-    /// search tokens stay stable across requests. No native index is opened here
-    /// (visibility comes from its own cache).
-    /// </summary>
-    private async Task<List<Dataset>> GetReadableDatasets()
-    {
-        var result = new List<Dataset>();
-        var datasets = _context.Datasets.Include(ds => ds.Organization).OrderBy(ds => ds.Id).ToArray();
-
-        foreach (var ds in datasets)
-        {
-            if (await _authManager.RequestAccess(ds, AccessType.Read))
-                result.Add(ds);
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Dataset display name, cached per dataset so that the landing page does not open
-    /// every native index (1–4 ms each, thousands of datasets). ClearCache drops it on
-    /// dataset updates; renames through the generic meta API show up within NameExpiration.
-    /// </summary>
-    private async Task<string> GetDatasetName(Dataset ds)
-    {
-        var key = MakeNameCacheKey(ds);
-        var cached = await _cache.GetRecordAsync<string>(key);
-        if (cached != null)
-            return cached.Length == 0 ? null : cached;
-
-        var name = _ddbManager.Get(ds.Organization.Slug, ds.InternalRef).Meta.GetSafe().Name;
-        await _cache.SetRecordAsync(key, name ?? string.Empty, NameExpiration);
-        return name;
-    }
-
-    private static JObject Link(string rel, string href, string type)
-    {
-        return new JObject
-        {
-            ["rel"] = rel,
-            ["href"] = href,
-            ["type"] = type
-        };
-    }
-
-    private string StacRoot() => _utils.GetLocalHost() + "/stac";
-    private string CollectionsUrl() => StacRoot() + "/collections";
-    private string CollectionUrl(string orgSlug, string dsSlug) => CollectionsUrl() + $"/{orgSlug}/{dsSlug}";
-    private string ItemsUrl(string orgSlug, string dsSlug) => CollectionUrl(orgSlug, dsSlug) + "/items";
-    private string SearchUrl() => StacRoot() + "/search";
-
-    private static string BboxToString(double[] bbox)
-    {
-        // Accept 2D ([minX,minY,maxX,maxY]) or 3D ([minX,minY,minZ,maxX,maxY,maxZ]) bboxes,
-        // projecting to the 2D footprint the C++ core understands.
-        double[] flat = bbox switch
-        {
-            { Length: 4 } => bbox,
-            { Length: 6 } => [bbox[0], bbox[1], bbox[3], bbox[4]],
-            _ => null
-        };
-
-        return flat is null
-            ? null
-            : string.Join(",", flat.Select(v => v.ToString("R", CultureInfo.InvariantCulture)));
-    }
-
-    private static string BuildItemsQuery(double[] bbox, string datetime, int limit, int offset)
-    {
-        var parts = new List<string> { $"limit={limit}", $"offset={offset}" };
-
-        if (bbox is { Length: 4 } or { Length: 6 })
-            parts.Add("bbox=" + Uri.EscapeDataString(
-                string.Join(",", bbox.Select(v => v.ToString("R", CultureInfo.InvariantCulture)))));
-
-        if (!string.IsNullOrEmpty(datetime))
-            parts.Add("datetime=" + Uri.EscapeDataString(datetime));
-
-        return "?" + string.Join("&", parts);
-    }
-
-    private static string BuildItemsSelfQuery(double[] bbox, string datetime, int? limit, int? offset)
-    {
-        var parts = new List<string>();
-
-        if (bbox is { Length: 4 } or { Length: 6 })
-            parts.Add("bbox=" + Uri.EscapeDataString(
-                string.Join(",", bbox.Select(v => v.ToString("R", CultureInfo.InvariantCulture)))));
-
-        if (!string.IsNullOrEmpty(datetime))
-            parts.Add("datetime=" + Uri.EscapeDataString(datetime));
-
-        if (limit.HasValue)
-            parts.Add($"limit={limit.Value}");
-
-        if (offset.HasValue)
-            parts.Add($"offset={offset.Value}");
-
-        return parts.Count == 0 ? string.Empty : "?" + string.Join("&", parts);
-    }
-
-    private static string BuildSearchQuery(StacSearchRequestDto request, string token, int limit)
-    {
-        var parts = new List<string> { $"limit={limit}", "token=" + Uri.EscapeDataString(token) };
-
-        if (request.Bbox is { Length: 4 } or { Length: 6 })
-            parts.Add("bbox=" + Uri.EscapeDataString(
-                string.Join(",", request.Bbox.Select(v => v.ToString("R", CultureInfo.InvariantCulture)))));
-
-        if (!string.IsNullOrEmpty(request.Datetime))
-            parts.Add("datetime=" + Uri.EscapeDataString(request.Datetime));
-
-        if (request.Collections is { Length: > 0 })
-            parts.Add("collections=" + Uri.EscapeDataString(string.Join(",", request.Collections)));
-
-        return "?" + string.Join("&", parts);
-    }
-
-    private static string EncodeFeatureId(string path)
-    {
-        var b = Convert.ToBase64String(Encoding.UTF8.GetBytes(path));
-        return b.TrimEnd('=').Replace('+', '-').Replace('/', '_');
-    }
-
-    private static bool TryDecodeFeatureId(string featureId, out string path)
-    {
-        path = null;
-
-        if (string.IsNullOrEmpty(featureId))
-            return false;
-
-        var s = featureId.Replace('-', '+').Replace('_', '/');
-        switch (s.Length % 4)
-        {
-            case 1: return false;
-            case 2: s += "=="; break;
-            case 3: s += "="; break;
-        }
-
-        try
-        {
-            path = Encoding.UTF8.GetString(Convert.FromBase64String(s));
-            return true;
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-    }
-
-    private static string EncodeToken(int datasetIndex, int offset)
-    {
-        var raw = $"{datasetIndex}:{offset}";
-        return Convert.ToBase64String(Encoding.UTF8.GetBytes(raw))
-            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
-    }
-
-    private static void DecodeToken(string token, out int datasetIndex, out int offset)
-    {
-        datasetIndex = 0;
-        offset = 0;
-
-        if (string.IsNullOrEmpty(token))
-            return;
-
-        try
-        {
-            var s = token.Replace('-', '+').Replace('_', '/');
-            switch (s.Length % 4)
-            {
-                case 2: s += "=="; break;
-                case 3: s += "="; break;
-            }
-
-            var raw = Encoding.UTF8.GetString(Convert.FromBase64String(s));
-            var split = raw.Split(':');
-            if (split.Length == 2 &&
-                int.TryParse(split[0], out var di) &&
-                int.TryParse(split[1], out var off))
-            {
-                datasetIndex = Math.Max(di, 0);
-                offset = Math.Max(off, 0);
-            }
-        }
-        catch (FormatException)
-        {
-            // Invalid token: start from the beginning
-        }
-    }
-
-    #endregion
-
-    private static string MakeCacheKey(Dataset ds)
-    {
-        return $"{CacheKey}-{ds.InternalRef}";
-    }
-
-    private static string MakeNameCacheKey(Dataset ds)
-    {
-        return $"stac-name-{ds.InternalRef}";
-    }
-
+    private static JsonObject ItemCollectionData(IDDB ddb, string bbox, string datetime, int limit, int offset) =>
+        StacDocuments.Mutable(ddb.GetStacItemCollectionData(bbox, datetime, limit, offset), "STAC item collection");
 }

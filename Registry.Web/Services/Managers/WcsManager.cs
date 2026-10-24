@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Registry.Web.Exceptions;
@@ -25,14 +26,17 @@ public class WcsManager : IWcsManager
 
     public IReadOnlyList<string> SupportedVersions => [.. _handlers.Keys];
 
-    public Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string version, string? folderPath = null)
-        => Resolve(version).GetCapabilitiesAsync(orgSlug, dsSlug, folderPath);
+    public Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string version, string? folderPath = null,
+        CancellationToken ct = default)
+        => Resolve(version).GetCapabilitiesAsync(orgSlug, dsSlug, folderPath, ct);
 
-    public Task<string> DescribeCoverageAsync(string orgSlug, string dsSlug, string version, string coverageId)
-        => Resolve(version).DescribeCoverageAsync(orgSlug, dsSlug, coverageId);
+    public Task<string> DescribeCoverageAsync(string orgSlug, string dsSlug, string version, string coverageId,
+        CancellationToken ct = default)
+        => Resolve(version).DescribeCoverageAsync(orgSlug, dsSlug, coverageId, ct);
 
-    public Task<WcsCoverageResult> GetCoverageAsync(string orgSlug, string dsSlug, string version, IQueryCollection query)
-        => Resolve(version).GetCoverageAsync(orgSlug, dsSlug, query);
+    public Task<WcsCoverageResult> GetCoverageAsync(string orgSlug, string dsSlug, string version, IQueryCollection query,
+        CancellationToken ct = default)
+        => Resolve(version).GetCoverageAsync(orgSlug, dsSlug, query, ct);
 
     private IWcsProtocolHandler Resolve(string version)
     {

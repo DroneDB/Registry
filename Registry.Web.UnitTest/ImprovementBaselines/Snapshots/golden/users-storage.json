@@ -1,0 +1,11 @@
+{
+  "request": "GET /users/storage",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "total": null,
+    "used": 5729
+  }
+}

@@ -6,34 +6,39 @@ on:
       - v*
 
 jobs:
+  # The same build + tests (Hub and Registry, against DroneDB) as every push and PR
+  test:
+    uses: ./.github/workflows/dotnet-core.yml
+
   build:
+    needs: test
     runs-on: ubuntu-24.04
     steps:
+      # The Hub is the commit this Registry pins, never Hub master: a release ships the
+      # Hub its API matches
       - uses: actions/checkout@v4
         with:
           path: registry
-      - name: Submodules
-        run: |
-          cd registry
-          git submodule update --force --recursive --init --remote
+          submodules: recursive
       - name: Setup .NET Core
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            10.0.x
+          global-json-file: registry/global.json
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Build
+      - name: Write the release commit
         run: echo ${{ github.sha }} > Release.txt
-      - name: Test
-        run: cat Release.txt
       - name: Build ClientApp
         run: |
           cd registry/Registry.Web/ClientApp
-          npm install && npm run build:prod
+          npm ci && npm run build:prod
+      # The win-* publishes embed the pinned DroneDB Windows build (Registry.Web.csproj); a pinned
+      # DroneDB CI build is downloaded with DRONEDB_ARTIFACT_TOKEN
       - name: Publish
+        env:
+          DRONEDB_ARTIFACT_TOKEN: ${{ secrets.DRONEDB_ARTIFACT_TOKEN }}
         run: |
           cd registry
           pwd
@@ -61,7 +66,7 @@ jobs:
         run: cd registry/Registry.Web/bin/Release/net10.0/publish/osx-x64/ && zip -r ../../../../../../../Registry-${{ env.VERSION }}-Osx64.zip *
 
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |

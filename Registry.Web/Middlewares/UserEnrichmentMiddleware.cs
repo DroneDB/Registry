@@ -1,20 +1,20 @@
-﻿using System.Linq;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
-using Registry.Web.Identity;
+using Registry.Web.Services.Ports;
+using Registry.Web.Utilities.Auth;
 using Serilog.Context;
 
 namespace Registry.Web.Middlewares;
 
 public class UserEnrichmentMiddleware : IMiddleware
 {
-    private readonly ApplicationDbContext _dbContext;
+    private readonly IUserAuthSnapshotProvider _snapshots;
 
-    public UserEnrichmentMiddleware(ApplicationDbContext dbContext)
+    public UserEnrichmentMiddleware(IUserAuthSnapshotProvider snapshots)
     {
-        _dbContext = dbContext;
+        _snapshots = snapshots;
     }
 
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)
@@ -28,15 +28,14 @@ public class UserEnrichmentMiddleware : IMiddleware
             LogContext.PushProperty("UserId", userIdClaim);
 
             // Get admin claim
-            var isAdmin = context.User.Claims.Any(c => c.Type == "admin" && c.Value == "true");
-
-            if (isAdmin)
+            if (Policies.IsAdmin(context.User))
             {
                 LogContext.PushProperty("IsAdmin", true);
             }
 
-            var user = await _dbContext.Users.FindAsync(userIdClaim);
-            if (user != null)
+            // Same snapshot the access checks of this request use: no query when it is cached
+            var user = await _snapshots.GetAsync(userIdClaim);
+            if (user.Exists)
             {
                 LogContext.PushProperty("UserName", user.UserName);
             }

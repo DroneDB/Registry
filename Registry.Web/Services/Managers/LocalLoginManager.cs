@@ -1,6 +1,5 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
@@ -17,18 +16,11 @@ public class LocalLoginManager : ILoginManager
 {
     private readonly UserManager<User> _userManager;
     private readonly SignInManager<User> _signInManager;
-    private readonly ILogger<LocalLoginManager> _logger;
-    private readonly AppSettings _settings;
 
-    public LocalLoginManager(UserManager<User> userManager,
-        SignInManager<User> signInManager,
-        ILogger<LocalLoginManager> logger,
-        IOptions<AppSettings> settings)
+    public LocalLoginManager(UserManager<User> userManager, SignInManager<User> signInManager)
     {
         _userManager = userManager;
-        _logger = logger;
         _signInManager = signInManager;
-        _settings = settings.Value;
     }
 
     public AuthProviderCapabilities Capabilities => AuthProviderCapabilities.Local;

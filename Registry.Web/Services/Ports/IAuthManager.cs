@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Registry.Common;
@@ -16,6 +16,10 @@ namespace Registry.Web.Services.Ports;
 public interface IAuthManager
 {
     public Task<User> GetCurrentUser();
+
+    /// <summary>Id of the current user (null when anonymous), from the token and the cached
+    /// authorization snapshot: no database query.</summary>
+    public Task<string> GetCurrentUserId();
     public Task<bool> IsUserAdmin();
     public Task<bool> IsUserInRole(string roleName);
 

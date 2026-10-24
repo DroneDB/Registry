@@ -1,0 +1,480 @@
+{
+  "request": "GET /orgs/golden-org/ds/golden-ds/tasks/tools",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": [
+    {
+      "id": "build",
+      "version": "1",
+      "title": "Build",
+      "requiredAccess": "Write",
+      "producesArtifact": false,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Entry path to build (optional; empty builds pending)."
+          },
+          "force": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    },
+    {
+      "id": "raster-export",
+      "version": "1",
+      "title": "Export raster (GeoTIFF)",
+      "requiredAccess": "Read",
+      "producesArtifact": true,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Entry path of the source raster."
+          },
+          "preset": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "bands": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "formula": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "bandFilter": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "colormap": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rescale": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fileName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional output file name."
+          }
+        },
+        "additionalProperties": false
+      },
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    },
+    {
+      "id": "photogrammetry",
+      "version": "2",
+      "title": "Photogrammetry (NodeODX)",
+      "requiredAccess": "Write",
+      "producesArtifact": false,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "folder": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Dataset folder to scan for images (default: whole dataset)."
+          },
+          "images": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Explicit list of image entry paths."
+          },
+          "nodeId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Target NodeODX node id (default: first configured)."
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Task name shown on the node."
+          },
+          "options": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "description": "NodeODX options array [{name,value}]."
+          },
+          "destPath": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Destination folder within the dataset for extracted results (required unless createNewDataset is true)."
+          },
+          "createNewDataset": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "If true, create a new dataset for the photogrammetry results instead of extracting into the current dataset."
+          },
+          "newDatasetName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Slug for the new dataset (kebab-case, max 128 chars). Auto-generated if not provided."
+          },
+          "newDatasetOrgSlug": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Organization slug for the new dataset (default: same as source dataset)."
+          },
+          "newDatasetVisibility": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Visibility for the new dataset: PRIVATE, UNLISTED, or PUBLIC (default: PRIVATE)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    },
+    {
+      "id": "bulk-download",
+      "version": "1",
+      "title": "Download archive (ZIP)",
+      "requiredAccess": "Read",
+      "producesArtifact": true,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Entry paths to include. Omit or leave empty to archive the whole dataset (includes the .ddb database folder)."
+          },
+          "archiveName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional output archive file name."
+          }
+        },
+        "additionalProperties": false
+      },
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    },
+    {
+      "id": "merge-multispectral",
+      "version": "1",
+      "title": "Merge multispectral bands",
+      "requiredAccess": "Write",
+      "producesArtifact": false,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "required": [
+          "paths",
+          "outputPath"
+        ],
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Single-band raster entry paths to merge, in band order."
+          },
+          "outputPath": {
+            "type": "string",
+            "description": "Output multi-band COG file name (dataset-relative)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    },
+    {
+      "id": "align-raster",
+      "version": "1",
+      "title": "Align GeoTIFF to reference",
+      "requiredAccess": "Write",
+      "producesArtifact": false,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "required": [
+          "sourcePath",
+          "referencePath",
+          "outputPath"
+        ],
+        "properties": {
+          "sourcePath": {
+            "type": "string",
+            "description": "Dataset-relative path of the GeoTIFF to align."
+          },
+          "referencePath": {
+            "type": "string",
+            "description": "Dataset-relative path of the reference GeoTIFF."
+          },
+          "outputPath": {
+            "type": "string",
+            "description": "Dataset-relative path for the aligned output COG."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "similarity",
+              "translation"
+            ],
+            "default": "similarity",
+            "description": "Alignment mode: similarity (4-DOF) or translation (2-DOF, fast)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    },
+    {
+      "id": "rescan-index",
+      "version": "1",
+      "title": "Rescan index",
+      "requiredAccess": "Write",
+      "producesArtifact": false,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "types": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Comma-separated entry types to rescan (e.g. \"image,geoimage\"). Omit for all."
+          },
+          "extensions": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Comma-separated file extensions to rescan (e.g. \"dwg,dxf\"). Omit for all. An entry must match both filters."
+          },
+          "stopOnError": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false,
+            "description": "Stop on the first entry error."
+          }
+        },
+        "additionalProperties": false
+      },
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    },
+    {
+      "id": "archive-extract",
+      "version": "1",
+      "title": "Extract archive",
+      "requiredAccess": "Write",
+      "producesArtifact": false,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "required": [
+          "sourcePath"
+        ],
+        "properties": {
+          "sourcePath": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Archive"
+          },
+          "destPath": {
+            "type": "string",
+            "default": "",
+            "title": "Extract to"
+          },
+          "deleteArchive": {
+            "type": "boolean",
+            "default": false,
+            "title": "Delete archive after extraction"
+          },
+          "overwrite": {
+            "type": "boolean",
+            "default": false,
+            "title": "Overwrite existing files"
+          }
+        },
+        "additionalProperties": false
+      },
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    },
+    {
+      "id": "import-dataset",
+      "version": "1",
+      "title": "Import dataset",
+      "requiredAccess": "Write",
+      "producesArtifact": false,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "required": [
+          "sourceType",
+          "params"
+        ],
+        "properties": {
+          "sourceType": {
+            "type": "string",
+            "enum": [
+              "registry",
+              "archive-url"
+            ],
+            "title": "Source"
+          },
+          "budgetBytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "title": "Storage budget (bytes)"
+          },
+          "params": {
+            "type": "object",
+            "title": "Source parameters"
+          }
+        },
+        "additionalProperties": false
+      },
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    },
+    {
+      "id": "import-file",
+      "version": "1",
+      "title": "Import file from URL",
+      "requiredAccess": "Write",
+      "producesArtifact": false,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "required": [
+          "url",
+          "fileName"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "File URL"
+          },
+          "fileName": {
+            "type": "string",
+            "title": "File name"
+          },
+          "folder": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "title": "Destination folder"
+          },
+          "overwrite": {
+            "type": "boolean",
+            "title": "Overwrite existing file"
+          },
+          "username": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "title": "Basic-auth user"
+          },
+          "password": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "title": "Basic-auth password (encrypted)"
+          },
+          "sizeBytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "title": "Advertised size (bytes)"
+          }
+        },
+        "additionalProperties": false
+      },
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    }
+  ]
+}

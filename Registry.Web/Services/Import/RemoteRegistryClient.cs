@@ -7,13 +7,14 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
+using System.Text.Json;
+using Registry.Ports.Json;
+using Registry.Web.Utilities;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.Import;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
-using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Import;
 
@@ -26,6 +27,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ImportSettings _settings;
+    private readonly DatasetPathPolicy _paths;
     private readonly ILogger<RemoteRegistryClient> _logger;
 
     /// <summary>
@@ -35,10 +37,11 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
     /// <param name="settings">The import settings (download concurrency / retry policy).</param>
     /// <param name="logger">The logger.</param>
     public RemoteRegistryClient(IHttpClientFactory httpClientFactory, ImportSettings settings,
-        ILogger<RemoteRegistryClient> logger)
+        DatasetPathPolicy paths, ILogger<RemoteRegistryClient> logger)
     {
         _httpClientFactory = httpClientFactory;
         _settings = settings;
+        _paths = paths;
         _logger = logger;
     }
 
@@ -70,9 +73,9 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         }
 
         var result = await response.Content.ReadAsStringAsync(ct);
-        var authResponse = JsonConvert.DeserializeObject<Dictionary<string, object>>(result);
+        using var authResponse = JsonDocument.Parse(result);
 
-        return authResponse?.SafeGetValue("token") as string;
+        return authResponse.RootElement.Member("token").Text();
     }
 
     /// <inheritdoc />
@@ -83,7 +86,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         if (!string.IsNullOrWhiteSpace(authToken))
             client.DefaultRequestHeaders.Add("Authorization", $"Bearer {authToken}");
 
-        var searchUrl = $"{registryUrl.TrimEnd('/')}/orgs/{orgSlug}/ds/{dsSlug}/search";
+        var searchUrl = $"{DatasetUrl(registryUrl, orgSlug, dsSlug)}/search";
 
         var content = new FormUrlEncodedContent([
             new KeyValuePair<string, string>("query", "*"),
@@ -99,7 +102,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         }
 
         var result = await response.Content.ReadAsStringAsync(ct);
-        var entries = JsonConvert.DeserializeObject<EntryDto[]>(result) ?? [];
+        var entries = ApiJson.Deserialize<EntryDto[]>(result) ?? [];
 
         return [.. entries.Where(e => e.Type != EntryType.Directory)];
     }
@@ -111,26 +114,23 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
     {
         Directory.CreateDirectory(destFolder);
 
-        // Exclude internal index files - those are rebuilt locally during indexing/build.
-        // Extension policy (allow-list / block-list): a remote registry is untrusted, so disallowed
-        // file types (e.g. executables/scripts) are skipped here too, mirroring every other ingestion
-        // path (ArchiveExtractTool, ArchiveUrlImportSource, PhotogrammetryTool, FileUrlImportTool).
-        var toDownload = files
-            .Where(e => !e.Path.StartsWith(".ddb/", StringComparison.Ordinal)
-                        && !e.Path.StartsWith(".ddb\\", StringComparison.Ordinal))
-            .Where(e =>
+        // The remote registry is untrusted: every path is validated up front (rooted/".." paths fail
+        // the import before anything is downloaded, so a malicious/compromised remote cannot write
+        // outside the dataset folder), and reserved paths are skipped: ".ddb" index files are rebuilt
+        // locally during indexing/build, and the ".uploads" staging folder is the Registry's own.
+        // Extension policy (allow-list / block-list): disallowed file types (e.g. executables/scripts)
+        // are skipped here too, mirroring every other ingestion path (ArchiveExtractTool,
+        // ArchiveUrlImportSource, PhotogrammetryTool, FileUrlImportTool).
+        var toDownload = _paths.ResolveUntrustedPaths(destFolder, files, e => e.Path)
+            .Where(t =>
             {
-                if (_settings.IsExtensionAllowed(e.Path)) return true;
-                _logger.LogWarning("Skipping disallowed file type during registry import: '{Path}'", e.Path);
+                if (_settings.IsExtensionAllowed(t.Item.Path)) return true;
+                _logger.LogWarning("Skipping disallowed file type during registry import: '{Path}'", t.Item.Path);
                 return false;
             })
             .ToArray();
 
         var totalFiles = toDownload.Length;
-        var headers = new Dictionary<string, string>();
-        if (!string.IsNullOrWhiteSpace(authToken))
-            headers.Add("Authorization", $"Bearer {authToken}");
-
         var filesDone = 0;
         long bytesSoFar = 0;
 
@@ -138,18 +138,13 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         // aggressively, so a low default avoids tripping HTTP 429. Per-file downloads retry with backoff
         // and honor Retry-After (see HttpHelper.DownloadFileWithRetryAsync).
         var maxParallel = Math.Max(1, _settings.RegistryDownloadConcurrency);
-        var maxRetries = Math.Max(1, _settings.RegistryDownloadMaxRetries);
 
         await Parallel.ForEachAsync(
             toDownload,
             new ParallelOptions { MaxDegreeOfParallelism = maxParallel, CancellationToken = ct },
-            async (entry, token) =>
+            async (target, token) =>
             {
-                // The remote registry is untrusted: reject rooted/".." paths before building a local
-                // path, so a malicious/compromised remote cannot write outside the dataset folder.
-                CommonUtils.ValidateRelativePath(entry.Path, destFolder);
-
-                var localPath = Path.Combine(destFolder, entry.Path.Replace('/', Path.DirectorySeparatorChar));
+                var (entry, localPath) = target;
 
                 // Resumability: a file already present at the expected size is treated as complete.
                 if (File.Exists(localPath) && new FileInfo(localPath).Length == entry.Size)
@@ -158,12 +153,8 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
                 }
                 else
                 {
-                    var downloadUrl =
-                        $"{registryUrl.TrimEnd('/')}/orgs/{sourceOrg}/ds/{sourceDs}/download" +
-                        $"?path={Uri.EscapeDataString(entry.Path)}&inline=1";
-
-                    var result = await HttpHelper.DownloadFileWithRetryAsync(
-                        downloadUrl, localPath, headers, maxRetries, token, CreateClient());
+                    var result = await DownloadFileAsync(registryUrl, authToken, sourceOrg, sourceDs, entry.Path,
+                        localPath, token);
 
                     if (!result.Success)
                         throw new IOException(
@@ -183,6 +174,27 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
                     FilesTotal: totalFiles));
             });
     }
+
+    /// <inheritdoc />
+    public Task<HttpHelper.DownloadResult> DownloadFileAsync(string registryUrl, string? authToken, string orgSlug,
+        string dsSlug, string entryPath, string localPath, CancellationToken ct) =>
+        HttpHelper.DownloadFileWithRetryAsync(
+            $"{DatasetUrl(registryUrl, orgSlug, dsSlug)}/download?path={Uri.EscapeDataString(entryPath)}&inline=1",
+            localPath, BearerHeaders(authToken), Math.Max(1, _settings.RegistryDownloadMaxRetries), ct, CreateClient());
+
+    /// <inheritdoc />
+    public Task DownloadArchiveAsync(string registryUrl, string? authToken, string orgSlug, string dsSlug,
+        string destFile, CancellationToken ct) =>
+        HttpHelper.DownloadFileAsync($"{DatasetUrl(registryUrl, orgSlug, dsSlug)}/download", destFile,
+            BearerHeaders(authToken), (downloaded, total) => _logger.LogDebug(
+                "Archive download progress: {Downloaded:N0} / {Total:N0} bytes", downloaded, total),
+            CreateClient(), ct);
+
+    private static string DatasetUrl(string registryUrl, string orgSlug, string dsSlug) =>
+        $"{registryUrl.TrimEnd('/')}/orgs/{orgSlug}/ds/{dsSlug}";
+
+    private static Dictionary<string, string> BearerHeaders(string? authToken) =>
+        string.IsNullOrWhiteSpace(authToken) ? [] : new() { ["Authorization"] = $"Bearer {authToken}" };
 
     /// <inheritdoc />
     public async Task<RemoteBrowseItem[]> ListOrganizationsAsync(string registryUrl, string? authToken,
@@ -206,16 +218,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         }
 
         var json = await response.Content.ReadAsStringAsync(ct);
-        var orgs = JsonConvert.DeserializeObject<List<Dictionary<string, object?>>>(json) ?? [];
-
-        return
-        [
-            .. orgs
-                .Select(o => new RemoteBrowseItem(
-                    Slug: o.SafeGetValue("slug") as string ?? string.Empty,
-                    Name: o.SafeGetValue("name") as string ?? string.Empty))
-                .Where(o => !string.IsNullOrWhiteSpace(o.Slug))
-        ];
+        return BrowseItems(json);
     }
 
     /// <inheritdoc />
@@ -237,15 +240,20 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         }
 
         var json = await response.Content.ReadAsStringAsync(ct);
-        var datasets = JsonConvert.DeserializeObject<List<Dictionary<string, object?>>>(json) ?? [];
+        return BrowseItems(json);
+    }
 
+    // The slug and the name of each object of a remote listing (an organization, a dataset)
+    private static RemoteBrowseItem[] BrowseItems(string json)
+    {
+        using var listing = JsonDocument.Parse(json);
         return
         [
-            .. datasets
-                .Select(d => new RemoteBrowseItem(
-                    Slug: d.SafeGetValue("slug") as string ?? string.Empty,
-                    Name: d.SafeGetValue("name") as string ?? string.Empty))
-                .Where(d => !string.IsNullOrWhiteSpace(d.Slug))
+            .. listing.RootElement.Items()
+                .Select(o => new RemoteBrowseItem(
+                    Slug: o.Member("slug").Text() ?? string.Empty,
+                    Name: o.Member("name").Text() ?? string.Empty))
+                .Where(o => !string.IsNullOrWhiteSpace(o.Slug))
         ];
     }
 }

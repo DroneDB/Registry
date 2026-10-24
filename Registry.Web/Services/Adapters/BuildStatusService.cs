@@ -14,116 +14,113 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Default <see cref="IBuildStatusService"/> implementation. Combines the
-/// Hangfire job index (for "building"/"failed") with the DroneDB C++
-/// library's pending-build view (for "pending", including the missing
-/// dependency names) and build-completeness check (for the default "ready"
-/// state) into a single per-entry status.
+/// Hangfire job index (for "building"/"failed") with libddb's build manifest
+/// (XI-04: buildability, the pending marker with the missing dependency names,
+/// and completeness for the default "ready" state) into a single per-entry status,
+/// and lists the artifacts that exist (<see cref="EntryDto.Artifacts"/>).
+/// A listing costs one native call (the manifest of the listed entries) and two
+/// job index queries scoped to the listed paths, whatever the number of entries.
 /// </summary>
 public class BuildStatusService : IBuildStatusService
 {
-    // Only entries of these types can ever be buildable (mirrors
-    // ddb::isBuildableInternal in DroneDB/src/library/build.cpp). Filtering on
-    // this first avoids an expensive native IsBuildable/IsBuildComplete
-    // round-trip for the common case of images, videos, markdown, etc.
-    private static readonly EntryType[] PotentiallyBuildableTypes =
-    [
-        EntryType.PointCloud, EntryType.GeoRaster, EntryType.Model,
-        EntryType.Vector, EntryType.GaussianSplat, EntryType.Tiles3D
-    ];
-
     private const string BuildToolId = HeavyToolIds.Build;
 
     private readonly IJobIndexQuery _jobIndexQuery;
+    private readonly IBuildArtifactResolver _artifacts;
+    private readonly IUrlBuilder _urls;
     private readonly ILogger<BuildStatusService> _logger;
 
-    public BuildStatusService(IJobIndexQuery jobIndexQuery, ILogger<BuildStatusService> logger)
+    public BuildStatusService(IJobIndexQuery jobIndexQuery, IBuildArtifactResolver artifacts, IUrlBuilder urls,
+        ILogger<BuildStatusService> logger)
     {
         _jobIndexQuery = jobIndexQuery;
+        _artifacts = artifacts;
+        _urls = urls;
         _logger = logger;
     }
 
     public async Task AnnotateAsync(string orgSlug, string dsSlug, IDDB ddb, IReadOnlyList<EntryDto> entries)
     {
-        var candidates = entries.Where(e => PotentiallyBuildableTypes.Contains(e.Type)).ToList();
+        // Only the types libddb builds (DDBGetEntryTypes) can have a build: images, videos, markdown, ... make
+        // no native call
+        var candidates = entries.Where(e => _artifacts.IsBuildableType(e.Type)).ToList();
         if (candidates.Count == 0)
             return;
 
-        var jobs = await _jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue);
-        var buildJobs = jobs.Where(j => j.ToolId == BuildToolId && j.Path != null).ToArray();
+        var buildByPath = GetBuildsSafe(ddb, candidates);
+        if (buildByPath == null)
+            return;
 
-        var activePaths = buildJobs
-            .Where(j => TaskStateCatalog.Active.Contains(j.CurrentState))
-            .Select(j => j.Path!)
-            .ToHashSet();
-
-        var latestJobByPath = buildJobs
-            .GroupBy(j => j.Path!)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(j => j.CreatedAtUtc).First());
-
-        var pendingByPath = ddb.GetPendingBuildInfo().ToDictionary(p => p.Path, p => p);
-
+        // The artifacts that exist, from the same manifest call (XI-04)
         foreach (var entry in candidates)
-            AnnotateEntry(ddb, entry, activePaths, latestJobByPath, pendingByPath);
-    }
+        {
+            if (buildByPath.TryGetValue(entry.Path, out var build) &&
+                _urls.ArtifactLinks(orgSlug, dsSlug, build) is { Count: > 0 } links)
+                entry.Artifacts = [.. links];
+        }
 
-    private void AnnotateEntry(
-        IDDB ddb,
-        EntryDto entry,
-        HashSet<string> activePaths,
-        IReadOnlyDictionary<string, JobIndex> latestJobByPath,
-        IReadOnlyDictionary<string, PendingBuildInfo> pendingByPath)
-    {
-        if (!IsBuildableSafe(ddb, entry.Path))
+        var buildable = candidates
+            .Where(e => buildByPath.TryGetValue(e.Path, out var build) && build.CanBeBuilt())
+            .ToList();
+        if (buildable.Count == 0)
             return;
 
-        if (activePaths.Contains(entry.Path))
-        {
+        var activePaths = await _jobIndexQuery.GetActivePathsAsync(orgSlug, dsSlug, BuildToolId,
+            buildable.Select(e => e.Path).ToArray());
+
+        var notBuilding = buildable.Where(e => !activePaths.Contains(e.Path)).ToList();
+        foreach (var entry in buildable.Except(notBuilding))
             entry.BuildStatus = "building";
-            return;
-        }
 
-        if (pendingByPath.TryGetValue(entry.Path, out var pending))
+        if (notBuilding.Count == 0)
+            return;
+
+        // "failed" or "queued": decided by the latest build job, read only for these entries
+        var unfinished = new List<EntryDto>();
+
+        foreach (var entry in notBuilding)
         {
-            entry.BuildStatus = "pending";
-            entry.BuildMissingDependencies = pending.MissingDependencies;
-            return;
+            var build = buildByPath[entry.Path].Build!;
+            if (HasPendingMarker(build))
+            {
+                entry.BuildStatus = "pending";
+                entry.BuildMissingDependencies = [.. build.MissingDependencies];
+            }
+            else if (build.State != BuildState.Complete)
+                unfinished.Add(entry);
+            // else ready: the default state, nothing to transmit
         }
 
-        if (IsBuildCompleteSafe(ddb, entry.Path))
-            return; // ready: the default state, nothing to transmit
-
-        if (latestJobByPath.TryGetValue(entry.Path, out var latestJob) && latestJob.CurrentState == "Failed")
-        {
-            entry.BuildStatus = "failed";
+        if (unfinished.Count == 0)
             return;
-        }
 
-        entry.BuildStatus = "queued";
+        var latestStateByPath = await _jobIndexQuery.GetLatestStatesByPathAsync(orgSlug, dsSlug, BuildToolId,
+            unfinished.Select(e => e.Path).ToArray());
+
+        foreach (var entry in unfinished)
+            entry.BuildStatus = latestStateByPath.TryGetValue(entry.Path, out var state) && state == "Failed"
+                ? "failed"
+                : "queued";
     }
 
-    private bool IsBuildableSafe(IDDB ddb, string path)
+    // A pending marker: libddb reports "pending", or "building" (the lock wins) with the marker's
+    // missing dependencies while a build that was deferred runs again outside a build job
+    private static bool HasPendingMarker(EntryBuild build) =>
+        build.State == BuildState.Pending ||
+        (build.State == BuildState.Building && build.MissingDependencies.Count > 0);
+
+    private Dictionary<string, EntryBuildArtifacts>? GetBuildsSafe(IDDB ddb, IReadOnlyList<EntryDto> candidates)
     {
         try
         {
-            return ddb.IsBuildable(path);
+            return _artifacts.GetBuilds(ddb, candidates.Select(e => e.Path).Distinct().ToArray())
+                .GroupBy(s => s.Path)
+                .ToDictionary(g => g.Key, g => g.First());
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Cannot determine buildability for '{Path}'", path);
-            return false;
-        }
-    }
-
-    private bool IsBuildCompleteSafe(IDDB ddb, string path)
-    {
-        try
-        {
-            return ddb.IsBuildComplete(path);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cannot determine build completeness for '{Path}'", path);
-            return false;
+            _logger.LogWarning(ex, "Cannot determine the build status of {Count} entries", candidates.Count);
+            return null;
         }
     }
 }

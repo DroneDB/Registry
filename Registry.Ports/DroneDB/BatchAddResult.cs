@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
@@ -11,21 +11,21 @@ namespace Registry.Ports.DroneDB;
 public class BatchAddedEntry : Entry
 {
     /// <summary>"added" or "updated".</summary>
-    [JsonProperty("status")]
+    [JsonPropertyName("status")]
     public string Status { get; set; }
 }
 
 /// <summary>A path that failed to be added, isolated from the rest of the batch.</summary>
 public class BatchAddItemError
 {
-    [JsonProperty("path")]
+    [JsonPropertyName("path")]
     public string Path { get; set; }
 
     /// <summary>"FS" | "GDAL" | "PDAL" | "JSON" | "INDEX" | "CONFLICT".</summary>
-    [JsonProperty("code")]
+    [JsonPropertyName("code")]
     public string Code { get; set; }
 
-    [JsonProperty("message")]
+    [JsonPropertyName("message")]
     public string Message { get; set; }
 }
 
@@ -36,19 +36,19 @@ public class BatchAddItemError
 /// </summary>
 public class BatchAddResult
 {
-    [JsonProperty("entries")]
+    [JsonPropertyName("entries")]
     public List<BatchAddedEntry> Entries { get; set; } = new();
 
-    [JsonProperty("unchanged")]
+    [JsonPropertyName("unchanged")]
     public List<BatchAddUnchangedItem> Unchanged { get; set; } = new();
 
-    [JsonProperty("errors")]
+    [JsonPropertyName("errors")]
     public List<BatchAddItemError> Errors { get; set; } = new();
 }
 
 /// <summary>A path that was already up to date and required no write.</summary>
 public class BatchAddUnchangedItem
 {
-    [JsonProperty("path")]
+    [JsonPropertyName("path")]
     public string Path { get; set; }
 }

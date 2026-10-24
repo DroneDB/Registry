@@ -1,4 +1,5 @@
 #nullable enable
+using Registry.Common;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -25,7 +26,7 @@ namespace Registry.Adapters.Archives;
 public sealed class SharpCompressArchiveExtractor : IArchiveExtractor
 {
     // Order matters: longer compound extensions must be tested before their suffixes.
-    private static readonly string[] SupportedExtensions =
+    private static readonly string[] SupportedSuffixes =
     [
         ".tar.gz", ".tar.bz2", ".tar.xz",
         ".tgz", ".tbz2", ".txz",
@@ -41,11 +42,13 @@ public sealed class SharpCompressArchiveExtractor : IArchiveExtractor
     // Single-stream formats that frequently carry no internal entry name.
     private static readonly string[] SingleFileExtensions = [".gz", ".bz2", ".xz"];
 
+    public IReadOnlyList<string> SupportedExtensions => SupportedSuffixes;
+
     public bool IsSupported(string fileName)
     {
         if (string.IsNullOrWhiteSpace(fileName)) return false;
         var lower = fileName.Trim().ToLowerInvariant();
-        return SupportedExtensions.Any(ext => lower.EndsWith(ext, StringComparison.Ordinal));
+        return SupportedSuffixes.Any(ext => lower.EndsWith(ext, StringComparison.Ordinal));
     }
 
     public bool IsValidArchive(string filePath)
@@ -223,7 +226,7 @@ public sealed class SharpCompressArchiveExtractor : IArchiveExtractor
         private string NormalizeKey(string? key, bool isDirectory, ref int emptyKeyIndex)
         {
             if (!string.IsNullOrWhiteSpace(key))
-                return key!.Replace('\\', '/').TrimStart('/');
+                return key!.ToDdbPath().TrimStart('/');
 
             if (isDirectory)
                 return string.Empty; // directories are skipped by the consumer

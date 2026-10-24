@@ -1,6 +1,8 @@
 #nullable enable
 using System;
+using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Exceptions;
@@ -14,11 +16,15 @@ namespace Registry.Web.Controllers.Ogc;
 
 /// <summary>WMTS 1.0.0 controller - KVP + RESTful tile retrieval.</summary>
 [ApiController]
-[ServiceFilter(typeof(BasicAuthFilter))]
+[BasicAuthentication]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]
 [TypeFilter(typeof(OgcExceptionFilter))]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" +
-       RoutesHelper.DatasetRadix + "/" + RoutesHelper.DatasetSlug)]
+[ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status401Unauthorized, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status404NotFound, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status503ServiceUnavailable, "text/xml", "application/xml")]
+[Route(RoutesHelper.DatasetPrefix)]
 public class WmtsController : ControllerBaseEx
 {
     private readonly IWmtsManager _mgr;
@@ -29,18 +35,22 @@ public class WmtsController : ControllerBaseEx
         _mgr = mgr; _logger = logger;
     }
 
+    /// <summary>WMTS 1.0.0 KVP request: GetCapabilities (XML), GetTile (an image or a vector tile) or GetFeatureInfo.</summary>
     [HttpGet("wmts")]
-    public async Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug)
-        => await Dispatch(orgSlug, dsSlug, folderPath: null);
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "text/xml", "application/xml", "image/png", "image/jpeg", "application/vnd.mapbox-vector-tile")]
+    public async Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)
+        => await Dispatch(orgSlug, dsSlug, folderPath: null, ct);
 
+    /// <summary>WMTS KVP request for the layers of a folder of the dataset.</summary>
     [HttpGet("wmts/p/{*folder}")]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "text/xml", "application/xml", "image/png", "image/jpeg", "application/vnd.mapbox-vector-tile")]
     public async Task<IActionResult> KvpFolder([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] string folder) => await Dispatch(orgSlug, dsSlug, folder);
+        [FromRoute] string folder, CancellationToken ct) => await Dispatch(orgSlug, dsSlug, folder, ct);
 
     private static readonly string[] SupportedRequests =
         ["GetCapabilities", "GetTile", "GetFeatureInfo"];
 
-    private async Task<IActionResult> Dispatch(string orgSlug, string dsSlug, string? folderPath)
+    private async Task<IActionResult> Dispatch(string orgSlug, string dsSlug, string? folderPath, CancellationToken ct)
     {
         var q = Request.Query;
         OgcKvpValidator.ValidateService(q, "WMTS");
@@ -52,7 +62,7 @@ public class WmtsController : ControllerBaseEx
                 var sections = WmtsConformance.ParseSections(OgcRequestParser.Get(q, "SECTIONS"));
                 var xml = await _mgr.GetCapabilitiesAsync(orgSlug, dsSlug,
                     sections?.Count > 0 ? (System.Collections.Generic.IReadOnlyCollection<string>)sections : null,
-                    folderPath);
+                    folderPath, ct: ct);
                 return Content(xml, "text/xml; charset=utf-8");
             }
             case "GetTile":
@@ -72,7 +82,7 @@ public class WmtsController : ControllerBaseEx
                 var row = ParseIntOrThrow(rowRaw, "tileRow");
                 var col = ParseIntOrThrow(colRaw, "tileCol");
 
-                var bytes = await _mgr.GetTileAsync(orgSlug, dsSlug, layer, style, tms, z, col, row, format);
+                var bytes = await _mgr.GetTileAsync(orgSlug, dsSlug, layer, style, tms, z, col, row, format, ct: ct);
                 return File(bytes, format);
             }
             default:
@@ -100,10 +110,12 @@ public class WmtsController : ControllerBaseEx
         return v;
     }
 
+    /// <summary>WMTS 1.0.0 RESTful tile.</summary>
     [HttpGet("wmts/1.0.0/{layer}/{style}/{tms}/{z:int}/{y:int}/{x:int}.{ext:regex(^(pbf|png|jpe?g)$)}")]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "image/png", "image/jpeg", "application/vnd.mapbox-vector-tile")]
     public async Task<IActionResult> Restful([FromRoute] string orgSlug, [FromRoute] string dsSlug,
         [FromRoute] string layer, [FromRoute] string style, [FromRoute] string tms,
-        [FromRoute] int z, [FromRoute] int y, [FromRoute] int x, [FromRoute] string ext)
+        [FromRoute] int z, [FromRoute] int y, [FromRoute] int x, [FromRoute] string ext, CancellationToken ct)
     {
         var format = ext.ToLowerInvariant() switch
         {
@@ -114,7 +126,7 @@ public class WmtsController : ControllerBaseEx
         };
         // Route values may arrive percent-encoded when the layer identifier contains '/' (e.g. "folder%2Ffile.shp").
         layer = Uri.UnescapeDataString(layer);
-        var bytes = await _mgr.GetTileAsync(orgSlug, dsSlug, layer, style, tms, z, x, y, format);
+        var bytes = await _mgr.GetTileAsync(orgSlug, dsSlug, layer, style, tms, z, x, y, format, ct: ct);
         return File(bytes, format);
     }
 }

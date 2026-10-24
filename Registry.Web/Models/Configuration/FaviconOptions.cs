@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.Configuration;
 
@@ -11,26 +11,26 @@ namespace Registry.Web.Models.Configuration;
 public class FaviconOptions
 {
     /// <summary>URL of the .ico fallback favicon.</summary>
-    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string FaviconIco { get; set; }
 
     /// <summary>URL of the 16×16 PNG favicon.</summary>
-    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string Favicon16 { get; set; }
 
     /// <summary>URL of the 32×32 PNG favicon.</summary>
-    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string Favicon32 { get; set; }
 
     /// <summary>URL of the 180×180 apple-touch-icon PNG.</summary>
-    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string AppleTouchIcon { get; set; }
 
     /// <summary>URL of the PWA web manifest (typically <c>site.webmanifest</c>).</summary>
-    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string Manifest { get; set; }
 
     /// <summary>Theme color emitted as <c>&lt;meta name="theme-color"&gt;</c>.</summary>
-    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string ThemeColor { get; set; }
 }
