@@ -3,7 +3,6 @@ using System;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Registry.Adapters.Thumbnail;
 using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.HealthChecks;
@@ -195,23 +194,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
 
         services.AddSingleton<INativeWorkGate, NativeWorkGate>();
 
-        if (!string.IsNullOrWhiteSpace(configuration.GetRegistryOptions<ThumbnailOptions>().RemoteThumbnailGeneratorUrl))
-        {
-            services.AddOptions<RemoteThumbnailGeneratorSettings>().Configure<IOptions<ThumbnailOptions>>((options, thumbnails) =>
-            {
-                options.Url = thumbnails.Value.RemoteThumbnailGeneratorUrl!;
-                options.Token = thumbnails.Value.ThumbnailGeneratorToken;
-            });
-            services.AddSingleton<RemoteThumbnailGenerator>();
-            services.AddSingleton<IThumbnailGenerator>(sp => new GatedThumbnailGenerator(
-                sp.GetRequiredService<RemoteThumbnailGenerator>(), sp.GetRequiredService<INativeWorkGate>()));
-        }
-        else
-        {
-            services.AddSingleton<LocalThumbnailGenerator>();
-            services.AddSingleton<IThumbnailGenerator>(sp => new GatedThumbnailGenerator(
-                sp.GetRequiredService<LocalThumbnailGenerator>(), sp.GetRequiredService<INativeWorkGate>()));
-        }
+        services.AddThumbnailGeneratorAdapter(configuration);
 
         return services;
     }

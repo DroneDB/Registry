@@ -10,7 +10,7 @@ namespace Registry.Ports.DroneDB;
 /// </summary>
 public sealed record NormalizedEntryPath
 {
-    // Public: the generated contract (DdbJsonContext) lives in another assembly and cannot call a private constructor
+    // Public: the generated contract (DdbJsonContext) is another class and cannot call a private constructor
     [JsonConstructor]
     public NormalizedEntryPath(string? path, string? rejected)
     {

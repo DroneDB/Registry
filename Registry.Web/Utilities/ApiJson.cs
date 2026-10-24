@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.Text.Json;
-using Registry.Adapters.DroneDB;
 using Registry.Ports.Json;
 
 namespace Registry.Web.Utilities;

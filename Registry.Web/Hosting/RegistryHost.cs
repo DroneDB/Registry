@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Utilities;
@@ -48,7 +47,7 @@ public static class RegistryHost
             .UseSerilog(ConfigureSerilog)
             .ConfigureServices((context, services) =>
             {
-                services.AddDdbRuntime<NativeDdbRuntime>();
+                services.AddNativeDdbRuntime();
                 services.AddStartupTaskRunner();
             });
 
@@ -75,7 +74,7 @@ public static class RegistryHost
             .ConfigureServices((context, services) =>
             {
                 services.AddRegistryOptions(context.Configuration, InstanceType.ThumbnailGenerator);
-                services.AddSingleton<IDdbWrapper, NativeDdbWrapper>();
+                services.AddNativeDdbWrapper();
                 services.AddSingleton<ThumbnailRequestHandler>();
             })
             .ConfigureWebHostDefaults(web => web.Configure(app =>
