@@ -18,17 +18,6 @@ public class RegistryContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(RegistryContext).Assembly);
 
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-    {
-#if DEBUG
-        optionsBuilder.EnableSensitiveDataLogging();
-#else
-            optionsBuilder.EnableSensitiveDataLogging(false);
-#endif
-
-        optionsBuilder.EnableDetailedErrors();
-    }
-
     public DbSet<Organization> Organizations { get; set; }
     public DbSet<OrganizationUser> OrganizationsUsers { get; set; }
     public DbSet<Dataset> Datasets { get; set; }

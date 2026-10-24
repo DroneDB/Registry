@@ -29,7 +29,7 @@ public static class DbProviderConfigurator
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(mySqlVersion);
 
-        return provider switch
+        _ = provider switch
         {
             DbProvider.Sqlite => options.UseSqlite(connectionString, x => x.MigrationsAssembly(migrationsAssembly)),
             DbProvider.Mysql => options.UseMySql(connectionString, mySqlVersion(connectionString), x =>
@@ -39,6 +39,13 @@ public static class DbProviderConfigurator
             }),
             _ => throw new ArgumentOutOfRangeException(nameof(provider), $"Unrecognised provider: '{provider}'")
         };
+
+        // Not in the contexts' OnConfiguring: a context that changes its options there cannot be pooled
+        options.EnableDetailedErrors();
+#if DEBUG
+        options.EnableSensitiveDataLogging();
+#endif
+        return options;
     }
 
     private static string ProviderName(DbProvider provider) => provider switch

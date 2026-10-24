@@ -20,17 +20,4 @@ public sealed class ApplicationDbContext : IdentityDbContext<User>
 
         builder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
     }
-
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-    {
-        base.OnConfiguring(optionsBuilder);
-
-#if DEBUG
-        optionsBuilder.EnableSensitiveDataLogging();
-#else
-            optionsBuilder.EnableSensitiveDataLogging(false);
-#endif
-
-        optionsBuilder.EnableDetailedErrors();
-    }
 }

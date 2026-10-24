@@ -16,6 +16,13 @@ namespace Registry.Web.Utilities;
 public static class StartupExtenders
 {
     /// <summary>
+    /// How many idle contexts the pool of each context type keeps (EF's default is 1024). A request, a job or a hosted
+    /// service holds one context per scope, so this is far above the concurrency of an instance; past it EF
+    /// creates a context that is not returned to the pool, nothing fails.
+    /// </summary>
+    public const int DbContextPoolSize = 128;
+
+    /// <summary>
     /// Configures a DbContext with the specified provider (Sqlite or MySql)
     /// </summary>
     /// <param name="mySqlVersions">MySQL server version source; defaults to one built from
@@ -33,12 +40,14 @@ public static class StartupExtenders
 
         var migrationsAssembly = DbProviderConfigurator.MigrationsAssemblyName(migrationsNamespace, provider);
 
-        services.AddDbContext<T>((sp, options) =>
+        // Pooled (RQ-15, numbers in its RESULTS): the options are built once, from the root provider, so what they
+        // hold must be singletons (the interceptors are) and the contexts must not change their options in OnConfiguring
+        services.AddDbContextPool<T>((sp, options) =>
         {
             // Hooks on saved changes (e.g. DatasetChangeInterceptor) registered by the host
             options.AddInterceptors(sp.GetServices<Microsoft.EntityFrameworkCore.Diagnostics.ISaveChangesInterceptor>());
             DbProviderConfigurator.Configure(options, provider, connectionString, migrationsAssembly, mySqlVersions.Resolve);
-        });
+        }, DbContextPoolSize);
     }
 
     public static void AddCacheProvider(this IServiceCollection services, CachingOptions appSettings)
