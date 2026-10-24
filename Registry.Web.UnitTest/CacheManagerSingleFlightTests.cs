@@ -195,21 +195,30 @@ public class CacheManagerSingleFlightTests
         var stale = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
         var fresh = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
         var gates = new[] { stale.Task, fresh.Task };
-        // Generations start on the pool (RQ-13): the second one is awaited, not counted synchronously
-        var secondStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Generations start on the pool (RQ-13), so the order in which they run is not the order of the
+        // calls: the first one must be running before the invalidation and the second call, or the
+        // second call's generation could take the first gate (stale) and the first call would wait on
+        // a gate nobody completes. Waiting for it is also the case under test: invalidation DURING a
+        // generation.
+        var started = new[]
+        {
+            new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously),
+            new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
         _sut.Register(Seed, async _ =>
         {
             var generation = Interlocked.Increment(ref _invocations);
-            if (generation == 2) secondStarted.SetResult();
+            started[generation - 1].SetResult();
             return await gates[generation - 1];
         });
 
         var before = _sut.GetAsync(Seed, Category, "a");
+        await started[0].Task.WaitAsync(TimeSpan.FromSeconds(30));
         await _sut.RemoveAsync(Seed, Category, "a");
         var after = _sut.GetAsync(Seed, Category, "a");
 
         // A caller arriving after the invalidation must start a new generation (the stale one is still running)
-        await secondStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await started[1].Task.WaitAsync(TimeSpan.FromSeconds(30));
         _invocations.ShouldBe(2);
 
         stale.SetResult([9]);
