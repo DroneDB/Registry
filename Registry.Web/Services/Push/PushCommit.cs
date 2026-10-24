@@ -23,22 +23,16 @@ using Stamp = Registry.Ports.DroneDB.Stamp;
 namespace Registry.Web.Services.Push;
 
 /// <summary>The end of a push: the delta applied if the dataset has not changed since its start, then the builds of the pushed files.</summary>
-public interface IPushCommit
-{
-    Task Commit(string orgSlug, string dsSlug, string token, CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IPushCommit"/> (RQ-12, out of <c>PushManager</c>).</summary>
-public sealed class PushCommit : IPushCommit
+public sealed class PushCommit
 {
     private readonly IDatasetAccessResolver _access;
-    private readonly IPushSessionStore _sessionStore;
+    private readonly PushSessionStore _sessionStore;
     private readonly IDdbWrapper _ddbWrapper;
     private readonly IFileSystem _fileSystem;
     private readonly ImportSettings _importSettings;
-    private readonly IBuildScheduler _builds;
+    private readonly BuildScheduler _builds;
 
-    public PushCommit(IDatasetAccessResolver access, IPushSessionStore sessionStore, IDdbWrapper ddbWrapper, IFileSystem fileSystem, IOptions<ImportSettings> importSettings, IBuildScheduler builds)
+    public PushCommit(IDatasetAccessResolver access, PushSessionStore sessionStore, IDdbWrapper ddbWrapper, IFileSystem fileSystem, IOptions<ImportSettings> importSettings, BuildScheduler builds)
     {
         _access = access;
         _sessionStore = sessionStore;

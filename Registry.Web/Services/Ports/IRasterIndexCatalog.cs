@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 
 namespace Registry.Web.Services.Ports;
@@ -17,7 +18,7 @@ public interface IRasterIndexCatalog
     /// The indices libddb lists for the file <paramref name="source"/> of the entry with content hash
     /// <paramref name="entryHash"/>: upper-case, in libddb's order, empty when none (also when libddb says the raster
     /// cannot be read: logged, and not remembered). Read once per content and libddb version
-    /// (<see cref="IRasterInfoCache"/>). A failure that can pass, so that asking again can answer
+    /// (<see cref="RasterInfoCache"/>). A failure that can pass, so that asking again can answer
     /// (<see cref="Registry.Ports.DroneDB.DdbErrors.IsTransient"/>), is not "no index": it propagates, for the caller to
     /// answer 503; so does a cancellation.
     /// </summary>

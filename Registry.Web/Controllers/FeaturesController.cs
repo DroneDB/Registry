@@ -26,9 +26,9 @@ namespace Registry.Web.Controllers;
 [Produces("application/json")]
 public class FeaturesController : ControllerBaseEx
 {
-    private readonly IFeaturesBuilder _features;
+    private readonly FeaturesBuilder _features;
 
-    public FeaturesController(IFeaturesBuilder features) => _features = features;
+    public FeaturesController(FeaturesBuilder features) => _features = features;
 
     /// <summary>
     /// Gets the status of all platform feature flags.

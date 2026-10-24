@@ -18,7 +18,7 @@ namespace Registry.Web.Test.ImprovementBaselines;
 
 /// <summary>
 /// RQ-12 item 2: <c>GET /sys/processingNodes[/{id}/options|status]</c> read the nodes from
-/// <see cref="INodeOdxNodeRegistry"/>, the ones the photogrammetry tool resolves, instead of their own copy of
+/// <see cref="NodeOdxNodeRegistry"/>, the ones the photogrammetry tool resolves, instead of their own copy of
 /// <c>ProcessingPlatform.NodeOdx</c>. Visible difference, misconfigured nodes only: a node without a URL is not
 /// listed (the tool could never use it) and its id is trimmed like the tool's.
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~Rq12ProcessingNodeCatalogTests"

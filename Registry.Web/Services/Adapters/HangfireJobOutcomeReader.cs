@@ -7,12 +7,8 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
 
-/// <summary>
-/// <see cref="IJobOutcomeReader"/> over Hangfire's storage: the job's current state, the value a succeeded job
-/// returned (its <see cref="SucceededState"/> data) and the message a failed one threw (its <see cref="FailedState"/>
-/// data).
-/// </summary>
-public sealed class HangfireJobOutcomeReader : IJobOutcomeReader
+/// <summary>Reads the outcome of the background jobs of one kind.</summary>
+public sealed class HangfireJobOutcomeReader
 {
     // The keys of Hangfire's state data
     private const string ResultKey = "Result";
@@ -22,6 +18,10 @@ public sealed class HangfireJobOutcomeReader : IJobOutcomeReader
 
     public HangfireJobOutcomeReader(JobStorage storage) => _storage = storage;
 
+    /// <summary>
+    /// The outcome of the job <paramref name="jobId"/> if it is a job of <typeparamref name="TJob"/>; null when there
+    /// is no such job, or it runs another class (a caller only sees the jobs it knows).
+    /// </summary>
     public JobOutcome<TResult>? Find<TJob, TResult>(string jobId) where TResult : class
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(jobId);

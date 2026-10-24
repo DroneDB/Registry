@@ -3,25 +3,23 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Ports;
 using Registry.Web.Services.Shares;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// The share/upload batch API (<see cref="IShareManager"/>, what <c>ShareController</c> calls) over the share services
-/// RQ-12 split it into (16 parameters, two optional, before): the batches, the uploads, the chunked uploads.
+/// Share/upload batch workflow interface (init, upload, commit, rollback, chunked uploads).
 /// </summary>
-public class ShareManager : IShareManager
+public class ShareManager
 {
-    private readonly IShareBatchStore _store;
-    private readonly IShareBatches _batches;
-    private readonly IShareUploads _uploads;
-    private readonly IShareChunkedUploads _chunked;
+    private readonly ShareBatchStore _store;
+    private readonly ShareBatches _batches;
+    private readonly ShareUploads _uploads;
+    private readonly ShareChunkedUploads _chunked;
 
-    public ShareManager(IShareBatchStore store, IShareBatches batches, IShareUploads uploads,
-        IShareChunkedUploads chunked)
+    public ShareManager(ShareBatchStore store, ShareBatches batches, ShareUploads uploads,
+        ShareChunkedUploads chunked)
     {
         _store = store;
         _batches = batches;
@@ -39,6 +37,12 @@ public class ShareManager : IShareManager
 
     public Task Rollback(string token, CancellationToken ct = default) => _batches.Rollback(token, ct: ct);
 
+    /// <summary>
+    /// Resolves the organization/dataset of a running batch so the caller can stream an upload
+    /// directly onto the dataset's storage volume.
+    /// </summary>
+    /// <param name="token">The share batch token.</param>
+    /// <returns>The organization and dataset slugs of the running batch.</returns>
     public Task<(string OrgSlug, string DsSlug)> GetUploadTarget(string token, CancellationToken ct = default) => _uploads.GetUploadTarget(token, ct: ct);
 
     public Task<UploadResultDto> UploadStreamed(string token, string path, StreamedFile file, CancellationToken ct = default) =>

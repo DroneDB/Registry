@@ -20,14 +20,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Users;
 
 /// <summary>Password changes: by the user (current password, policy), or a reset by an administrator.</summary>
-public interface IUserPasswords
-{
-    Task<ChangePasswordResult> ChangePassword(string userName, string currentPassword, string newPassword);
-    Task<ChangePasswordResult> ChangePassword(string currentPassword, string newPassword);
-}
-
-/// <summary>Default <see cref="IUserPasswords"/> (RQ-12, out of <c>UsersManager</c>).</summary>
-public sealed class UserPasswords : IUserPasswords
+public sealed class UserPasswords
 {
     private readonly ILoginManager _loginManager;
     private readonly UserManager<User> _userManager;

@@ -16,7 +16,7 @@ public static class BuildSchedulingServiceCollectionExtensions
     public static IServiceCollection AddBuildScheduling(this IServiceCollection services)
     {
         services.AddSingleton<IBuildArtifactResolver, BuildArtifactResolver>();
-        services.AddScoped<IBuildScheduler, BuildScheduler>();
+        services.AddScoped<BuildScheduler>();
         services.AddScoped<IPendingBuildFlag, BuildPendingService>();
         services.AddScoped<IBuildRequester, ServiceBuildRequester>();
         return services;

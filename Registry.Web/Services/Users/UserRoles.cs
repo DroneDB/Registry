@@ -21,16 +21,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Users;
 
 /// <summary>The roles and the role assignments an administrator manages.</summary>
-public interface IUserRoles
-{
-    Task<string[]> GetRoles(CancellationToken ct = default);
-    Task CreateRole(string roleName);
-    Task DeleteRole(string roleName);
-    Task UpdateUserRoles(string userName, string[] roles);
-}
-
-/// <summary>Default <see cref="IUserRoles"/> (RQ-12, out of <c>UsersManager</c>).</summary>
-public sealed class UserRoles : IUserRoles
+public sealed class UserRoles
 {
     private readonly ILoginManager _loginManager;
     private readonly UserManager<User> _userManager;

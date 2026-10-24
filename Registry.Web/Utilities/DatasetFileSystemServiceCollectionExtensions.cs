@@ -6,7 +6,6 @@ using Registry.Ports;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks;
-using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Utilities;
 
@@ -18,7 +17,7 @@ public static class DatasetFileSystemServiceCollectionExtensions
 {
     /// <summary>
     /// Registers <see cref="DatasetPathPolicy"/> (libddb's dataset path rule, through
-    /// <see cref="IDdbWrapper"/>), <see cref="IScratchFileProvider"/> (<see cref="StorageOptions"/>) and
+    /// <see cref="IDdbWrapper"/>), <see cref="ScratchFileProvider"/> (<see cref="StorageOptions"/>) and
     /// <see cref="VolumeHeadroom"/> (over <see cref="Registry.Ports.DroneDB.IDdbRuntime"/>) and
     /// <see cref="DatasetArchiveExtractor"/>.
     /// The host registers the adapters (<see cref="IFileSystem"/>, <see cref="IDdbWrapper"/>).
@@ -28,7 +27,7 @@ public static class DatasetFileSystemServiceCollectionExtensions
         services.TryAddSingleton<DatasetPathPolicy>();
 
         // The temp folder: StorageOptions.TempPath (AppSettings:TempPath, bound by RegistryOptions)
-        services.TryAddSingleton<IScratchFileProvider, ScratchFileProvider>();
+        services.TryAddSingleton<ScratchFileProvider>();
 
         // The disk-space API: the path's own volume plus libddb's free-disk floor (IDdbRuntime)
         services.TryAddSingleton<VolumeHeadroom>();

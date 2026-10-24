@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Exceptions;
 using Registry.Web.Filters;
 using Registry.Web.Models;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Managers;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 
@@ -28,8 +28,8 @@ namespace Registry.Web.Controllers.Ogc;
 [Route(RoutesHelper.DatasetPrefix)]
 public class WfsController : ControllerBaseEx
 {
-    private readonly IWfsManager _mgr;
-    public WfsController(IWfsManager mgr) { _mgr = mgr; }
+    private readonly WfsManager _mgr;
+    public WfsController(WfsManager mgr) { _mgr = mgr; }
 
     /// <summary>WFS 2.0.0 KVP request: capabilities, feature types, stored queries (XML) and features (GML or GeoJSON).</summary>
     [HttpGet("wfs")]

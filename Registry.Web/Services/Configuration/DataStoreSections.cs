@@ -11,9 +11,9 @@ namespace Registry.Web.Services.Configuration;
 /// <summary>The admin configuration sections of where Registry keeps its data: database and cache providers, storage paths, cache expirations, Redis.</summary>
 public sealed class DataStoreSections : IConfigurationSectionBuilder
 {
-    private readonly IConfigurationView _view;
+    private readonly ConfigurationView _view;
 
-    public DataStoreSections(IConfigurationView view)
+    public DataStoreSections(ConfigurationView view)
     {
         _view = view;
     }

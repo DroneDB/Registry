@@ -24,24 +24,17 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Datasets;
 
 /// <summary>Moves datasets between organizations (admin): folder, record, listings; a slug taken in the destination is resolved by the strategy.</summary>
-public interface IDatasetMover
-{
-    Task<IEnumerable<MoveDatasetResultDto>> MoveToOrganization(string sourceOrgSlug, string[] datasetSlugs,
-        string destOrgSlug, ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict, CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IDatasetMover"/> (RQ-12, out of <c>DatasetsManager</c>).</summary>
-public sealed class DatasetMover : IDatasetMover
+public sealed class DatasetMover
 {
     private readonly RegistryContext _context;
     private readonly IDatasetResolver _datasets;
-    private readonly IDatasetCommands _commands;
+    private readonly DatasetCommands _commands;
     private readonly IDdbManager _ddbManager;
     private readonly IFileSystem _fileSystem;
     private readonly IDatasetListingInvalidator _listings;
     private readonly ILogger<DatasetMover> _logger;
 
-    public DatasetMover(RegistryContext context, IDatasetResolver datasets, IDatasetCommands commands, IDdbManager ddbManager, IFileSystem fileSystem, IDatasetListingInvalidator listings, ILogger<DatasetMover> logger)
+    public DatasetMover(RegistryContext context, IDatasetResolver datasets, DatasetCommands commands, IDdbManager ddbManager, IFileSystem fileSystem, IDatasetListingInvalidator listings, ILogger<DatasetMover> logger)
     {
         _context = context;
         _datasets = datasets;

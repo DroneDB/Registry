@@ -103,7 +103,7 @@ public sealed class Rq11NativeGateTests : IDisposable
 
     private static IEnumerable<TestCaseData> AnalysisCalls()
     {
-        TestCaseData Case(string name, Expression<Func<IDDB, string>> native, Func<IRasterAnalysisService, CancellationToken, Task> call) =>
+        TestCaseData Case(string name, Expression<Func<IDDB, string>> native, Func<RasterAnalysisService, CancellationToken, Task> call) =>
             new TestCaseData(native, call).SetName(name);
 
         yield return Case("GetRasterInfo", d => d.GetRasterInfo(It.IsAny<string>()),
@@ -130,7 +130,7 @@ public sealed class Rq11NativeGateTests : IDisposable
 
     [TestCaseSource(nameof(AnalysisCalls))]
     public async Task Analysis_RunsInTheHeavyLane(Expression<Func<IDDB, string>> native,
-        Func<IRasterAnalysisService, CancellationToken, Task> call)
+        Func<RasterAnalysisService, CancellationToken, Task> call)
     {
         Native(native, Info);
 
@@ -146,7 +146,7 @@ public sealed class Rq11NativeGateTests : IDisposable
     /// </summary>
     [TestCaseSource(nameof(AnalysisCalls))]
     public async Task Analysis_RunsUnderTheRequestsToken(Expression<Func<IDDB, string>> native,
-        Func<IRasterAnalysisService, CancellationToken, Task> call)
+        Func<RasterAnalysisService, CancellationToken, Task> call)
     {
         var seen = new List<CancellationToken>();
         _ddb.Setup(native).Returns(() =>

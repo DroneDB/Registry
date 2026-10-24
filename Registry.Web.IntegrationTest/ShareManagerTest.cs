@@ -1,33 +1,25 @@
 using System;
 using Registry.Web.Services.Jobs;
-using System.Collections.Generic;
 using System.Dynamic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Shouldly;
-using Hangfire;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Moq;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using Registry.Adapters;
 using Registry.Adapters.DroneDB;
-using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
@@ -37,7 +29,6 @@ using Registry.Web.Test.Adapters;
 using Registry.Test.Common;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
-using Registry.Web.Services;
 using Entry = Registry.Ports.DroneDB.Entry;
 using IMetaManager = Registry.Ports.DroneDB.IMetaManager;
 using Registry.Web.Test.Support;
@@ -863,7 +854,6 @@ class ShareManagerTest : TestBase
 
         batches.Length.ShouldBe(1);
 
-
         // Upload
         await shareManager.Upload(objectManager, initRes.Token, fileName, TestDownloadCache.GetBytes(newFileUrl));
 
@@ -935,7 +925,6 @@ class ShareManagerTest : TestBase
         //batch.End.ShouldNotBeNull();
     }
 
-
     #region Test Data
 
     // The manager-test defaults plus the share/batch settings these tests exercise.
@@ -992,7 +981,6 @@ class ShareManagerTest : TestBase
         // Insert seed data into the database using one instance of the context
         return TestDb.CreateContext<ApplicationDbContext>(context =>
         {
-
             var adminRole = new IdentityRole
             {
                 Id = "1db5b539-6e54-4674-bb74-84732eb48204",
@@ -1032,7 +1020,6 @@ class ShareManagerTest : TestBase
             context.SaveChanges();
         });
     }
-
 
     #endregion
 }

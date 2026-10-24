@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Ports.Archives;
 using Registry.Ports.DroneDB;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -65,12 +66,12 @@ public sealed class DatasetArchiveExtractor
 {
     private readonly IArchiveExtractor _archives;
     private readonly DatasetPathPolicy _paths;
-    private readonly IScratchFileProvider _scratch;
+    private readonly ScratchFileProvider _scratch;
     private readonly IFileSystem _fs;
     private readonly VolumeHeadroom _headroom;
     private readonly ILogger<DatasetArchiveExtractor> _logger;
 
-    public DatasetArchiveExtractor(IArchiveExtractor archives, DatasetPathPolicy paths, IScratchFileProvider scratch,
+    public DatasetArchiveExtractor(IArchiveExtractor archives, DatasetPathPolicy paths, ScratchFileProvider scratch,
         IFileSystem fs, VolumeHeadroom headroom, ILogger<DatasetArchiveExtractor> logger)
     {
         _archives = archives;

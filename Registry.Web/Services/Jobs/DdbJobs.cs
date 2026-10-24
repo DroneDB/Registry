@@ -18,7 +18,7 @@ namespace Registry.Web.Services.Jobs;
 /// anonymous users on public datasets).
 /// </summary>
 /// <remarks>The retry policy is the class's (<see cref="DdbRetriedJob"/>); <see cref="Build"/> overrides it.</remarks>
-public class DdbJobs : DdbRetriedJob, IDatasetBuilds
+public class DdbJobs : DdbRetriedJob
 {
     private readonly IDdbManager _ddbManager;
     private readonly PendingBuildEnqueuer _pending;

@@ -11,9 +11,9 @@ namespace Registry.Web.Services.Configuration;
 /// <summary>The admin configuration sections of authentication and identity: tokens, the default administrator, the password policy, LDAP.</summary>
 public sealed class IdentitySections : IConfigurationSectionBuilder
 {
-    private readonly IConfigurationView _view;
+    private readonly ConfigurationView _view;
 
-    public IdentitySections(IConfigurationView view)
+    public IdentitySections(ConfigurationView view)
     {
         _view = view;
     }

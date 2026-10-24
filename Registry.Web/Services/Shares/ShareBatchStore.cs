@@ -23,19 +23,7 @@ using Entry = Registry.Web.Data.Models.Entry;
 namespace Registry.Web.Services.Shares;
 
 /// <summary>The share batches: the running batch of a token (its owner or an administrator only), its readiness for a path, the batches of a dataset, a new batch, its end, its entries.</summary>
-public interface IShareBatchStore
-{
-    Task<Batch> GetRunningAsync(string token, CancellationToken ct = default);
-    Task<bool> IsPathAllowedAsync(string token, string path, CancellationToken ct = default);
-    Task<BatchDto> GetBatchInfo(string token, CancellationToken ct = default);
-    Task<IEnumerable<BatchDto>> ListBatches(string orgSlug, string dsSlug, CancellationToken ct = default);
-    Task<Batch> StartAsync(Dataset dataset);
-    Task CloseAsync(Batch batch, BatchStatus status);
-    Task<UploadResultDto> AddEntryAsync(Batch batch, string path, EntryDto info);
-}
-
-/// <summary>Default <see cref="IShareBatchStore"/> (RQ-12, out of <c>ShareManager</c>).</summary>
-public sealed class ShareBatchStore : IShareBatchStore
+public sealed class ShareBatchStore
 {
     private readonly RegistryContext _context;
     private readonly IAuthManager _authManager;

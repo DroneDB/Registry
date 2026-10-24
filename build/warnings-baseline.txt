@@ -61,7 +61,7 @@ Registry.Web.UnitTest/BuildPendingServiceTest.cs CA1001 1
 Registry.Web.UnitTest/BuildPendingServiceTest.cs CA1822 1
 Registry.Web.UnitTest/BuildPendingServiceTest.cs CA2201 1
 Registry.Web.UnitTest/BuildToolTests.cs CS8625 2
-Registry.Web.UnitTest/ChunkStoreTests.cs CA1859 2
+Registry.Web.UnitTest/ChunkStoreTests.cs CA1859 1
 Registry.Web.UnitTest/DatasetCleanupServiceTest.cs CA1822 2
 Registry.Web.UnitTest/DatasetCleanupServiceTest.cs CA2201 1
 Registry.Web.UnitTest/DatasetIndexQueueTests.cs CA2201 1
@@ -113,7 +113,6 @@ Registry.Web.UnitTest/SsrfGuardTests.cs CS8632 1
 Registry.Web.UnitTest/Support/RegistryWebFactoryTests.cs CA1001 1
 Registry.Web.UnitTest/SystemManagerTest.cs CA1822 1
 Registry.Web.UnitTest/TaskStateCatalogTests.cs CA1001 1
-Registry.Web.UnitTest/UploadManagerTests.cs CA1859 1
 Registry.Web.UnitTest/UploadManagerTests.cs CS8601 1
 Registry.Web.UnitTest/UploadPipelineComponentTests.cs CS8632 10
 Registry.Web.UnitTest/UsersManagerTest.cs CA1304 1
@@ -161,7 +160,6 @@ Registry.Web/Services/Managers/OgcApiTilesManager.cs CS8632 1
 Registry.Web/Services/Managers/OgcManagerBase.cs CA1051 6
 Registry.Web/Services/Managers/OgcManagerBase.cs CS8632 2
 Registry.Web/Services/Managers/OrganizationsManager.cs CA1725 1
-Registry.Web/Services/Managers/Wcs/IWcsCoverageService.cs CS8632 5
 Registry.Web/Services/Managers/Wcs/IWcsProtocolHandler.cs CS8632 1
 Registry.Web/Services/Managers/Wcs/WcsProtocol10Handler.cs CA1725 1
 Registry.Web/Services/Managers/Wcs/WcsProtocol10Handler.cs CS8632 1
@@ -177,10 +175,7 @@ Registry.Web/Services/Ports/IDatasetSummaryProvider.cs CA1716 1
 Registry.Web/Services/Ports/IDatasetsManager.cs CA1716 1
 Registry.Web/Services/Ports/IMetaManager.cs CA1716 2
 Registry.Web/Services/Ports/IOgcLayerCatalog.cs CS8632 4
-Registry.Web/Services/Ports/IOgcServiceManagers.cs CS8632 15
 Registry.Web/Services/Ports/IOrganizationsManager.cs CA1716 1
-Registry.Web/Services/Ports/IThumbnailPrecomputeQueue.cs CA1711 1
-Registry.Web/Services/Ports/IUploadManager.cs CA1716 1
 Registry.Web/Utilities/Auth/AccessControlBase.cs CA1051 3
 Registry.Web/Utilities/Auth/AuthorizationExtensions.cs CA1310 1
 Registry.Web/Utilities/MultipartRequestHelper.cs CA2249 1

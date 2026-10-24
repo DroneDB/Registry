@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
@@ -13,26 +14,15 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.PlatformTasks;
 
 /// <summary>The tool catalog of a dataset and the submission of a tool run (RQ-12, out of <c>TasksManager</c>).</summary>
-public interface ITaskSubmission
-{
-    /// <summary>The tools available for the dataset, with the per-organization feature gating applied (read access).</summary>
-    Task<TaskToolDto[]> GetToolsAsync(string orgSlug, string dsSlug, CancellationToken ct = default);
-
-    /// <summary>Validates and enqueues a tool run, deduplicating against an equivalent in-flight task.</summary>
-    Task<SubmitTaskResponseDto> SubmitAsync(string orgSlug, string dsSlug, SubmitTaskRequestDto body,
-        CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="ITaskSubmission"/>.</summary>
-public sealed class TaskSubmission : ITaskSubmission
+public sealed class TaskSubmission
 {
     private readonly IHeavyToolRegistry _registry;
     private readonly IHeavyToolGating _gating;
     private readonly IDatasetAccessResolver _access;
-    private readonly ICurrentUserTaskSubmitter _submitter;
+    private readonly CurrentUserTaskSubmitter _submitter;
 
     public TaskSubmission(IHeavyToolRegistry registry, IHeavyToolGating gating, IDatasetAccessResolver access,
-        ICurrentUserTaskSubmitter submitter)
+        CurrentUserTaskSubmitter submitter)
     {
         _registry = registry;
         _gating = gating;
@@ -40,6 +30,7 @@ public sealed class TaskSubmission : ITaskSubmission
         _submitter = submitter;
     }
 
+    /// <summary>The tools available for the dataset, with the per-organization feature gating applied (read access).</summary>
     public async Task<TaskToolDto[]> GetToolsAsync(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
         await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
@@ -53,6 +44,7 @@ public sealed class TaskSubmission : ITaskSubmission
         }));
     }
 
+    /// <summary>Validates and enqueues a tool run, deduplicating against an equivalent in-flight task.</summary>
     public async Task<SubmitTaskResponseDto> SubmitAsync(string orgSlug, string dsSlug, SubmitTaskRequestDto body,
         CancellationToken ct = default)
     {

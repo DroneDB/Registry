@@ -25,7 +25,7 @@ namespace Registry.Web.Services.HeavyTasks;
 /// <remarks>
 /// Chunks bound the lock time of one index transaction and let progress be reported between them;
 /// each chunk is one native index call, and buildability is one manifest call per chunk
-/// (<see cref="IBuildScheduler.QueueBuildableAsync"/>), not one call per file. Builds are queued once every
+/// (<see cref="BuildScheduler.QueueBuildableAsync"/>), not one call per file. Builds are queued once every
 /// file is indexed, so they never run against a half-indexed dataset.
 /// </remarks>
 public sealed class TaskFileIndexer
@@ -112,5 +112,5 @@ public sealed class TaskFileIndexer
 /// <param name="ProgressTo">Task progress when the last file is indexed.</param>
 public sealed record TaskFiles(
     IDDB Ddb, DatasetKey Dataset, string OrgSlug, string DsSlug, IReadOnlyList<string> Paths,
-    IBuildScheduler Builds, string ParentJobId, string What,
+    BuildScheduler Builds, string ParentJobId, string What,
     double ProgressFrom = 0, double ProgressTo = 1);

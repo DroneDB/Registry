@@ -45,14 +45,14 @@ public class ArtifactCompletenessCheckerService
     private readonly RegistryContext _context;
     private readonly DatasetSweep _sweep;
     private readonly IDdbManager _ddbManager;
-    private readonly IBuildScheduler _builds;
+    private readonly BuildScheduler _builds;
     private readonly ILogger<ArtifactCompletenessCheckerService> _logger;
 
     public ArtifactCompletenessCheckerService(
         RegistryContext context,
         DatasetSweep sweep,
         IDdbManager ddbManager,
-        IBuildScheduler builds,
+        BuildScheduler builds,
         ILogger<ArtifactCompletenessCheckerService> logger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));

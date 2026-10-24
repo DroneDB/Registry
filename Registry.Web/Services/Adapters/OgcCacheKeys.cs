@@ -6,10 +6,10 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Default <see cref="IOgcCacheKeys"/>: one cache generation per dataset (<see cref="ICacheGenerations"/>, shared
+/// Default <see cref="IOgcCacheKeys"/>: one cache generation per dataset (<see cref="CacheGenerations"/>, shared
 /// by every instance); the key formats are <see cref="CacheCategories"/>'.
 /// </summary>
-public sealed class OgcCacheKeys(ICacheGenerations generations) : IOgcCacheKeys
+public sealed class OgcCacheKeys(CacheGenerations generations) : IOgcCacheKeys
 {
     public async Task<string> ForAsync(string orgSlug, string dsSlug, string kind, string? detail = null,
         System.Threading.CancellationToken ct = default) =>

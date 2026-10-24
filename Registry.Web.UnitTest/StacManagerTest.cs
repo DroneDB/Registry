@@ -1,6 +1,5 @@
 using System;
 using System.Threading;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Shouldly;
@@ -10,7 +9,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Moq;
 using System.Text.Json.Nodes;
 using NUnit.Framework;
@@ -26,7 +24,6 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
-using Registry.Web.Services.Caching;
 using Registry.Web.Services.Stac;
 
 namespace Registry.Web.Test;
@@ -195,7 +192,6 @@ public class StacManagerTest : TestBase
             context.SaveChanges();
         });
     }
-
 
     #region Test Data
 

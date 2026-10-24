@@ -178,7 +178,6 @@ public class RescanManagerTest : TestBase
         ex.Message.ShouldContain("Dataset slug");
     }
 
-
     [Test]
     public async Task RescanDatasetIndex_NoFilter_ClearsBuildCacheAndRebuildsDataset()
     {
@@ -204,7 +203,7 @@ public class RescanManagerTest : TestBase
     }
 
     /// <summary>
-    /// RQ-12: the pending-build job is queued when libddb reports deferred builds (IBuildScheduler), not after every
+    /// RQ-12: the pending-build job is queued when libddb reports deferred builds (BuildScheduler), not after every
     /// rescan; a rebuild that is deferred later is retried by the pending-build coordinator, which the scheduler
     /// flags before it queues the rebuild.
     /// </summary>

@@ -163,9 +163,17 @@ public sealed class UploadQuotaLedger
     }
 }
 
-/// <summary>Default <see cref="IUploadQuotaGuard"/>: the current user's limit from <see cref="IStorageQuota"/>.</summary>
-public sealed class UploadQuotaGuard(UploadQuotaLedger ledger, IStorageQuota quota) : IUploadQuotaGuard
+/// <summary>
+/// Storage-quota admission for uploads (UPL-01 E.2, C.6). The user's storage use is evaluated
+/// once per window and every upload reserves its size against it, so a burst of uploads costs one
+/// evaluation instead of one per file, and an upload over quota is refused before its first byte.
+/// </summary>
+public sealed class UploadQuotaGuard(UploadQuotaLedger ledger, IStorageQuota quota)
 {
+    /// <summary>
+    /// Reserves <paramref name="bytes"/> for an upload of the current user.
+    /// </summary>
+    /// <exception cref="Registry.Web.Exceptions.QuotaExceededException">The upload does not fit.</exception>
     public Task<IQuotaReservation> ReserveAsync(string userId, long bytes) =>
         ledger.ReserveAsync(userId, bytes, async () => await quota.GetCurrentUserStorageLimit());
 }

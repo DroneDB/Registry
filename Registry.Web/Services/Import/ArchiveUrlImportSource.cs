@@ -9,16 +9,13 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Adapters;
 using Registry.Common;
 using Registry.Ports.Archives;
-using Registry.Ports.DroneDB;
 using Registry.Ports.Import;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks;
-using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Import;
 
@@ -36,7 +33,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
     private readonly long _maxImportSizeBytes;
     private readonly long _diskSafetyMarginBytes;
     private readonly DatasetArchiveExtractor _archives;
-    private readonly IScratchFileProvider _scratch;
+    private readonly ScratchFileProvider _scratch;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ArchiveUrlImportSource"/> class.
@@ -50,7 +47,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
     /// <param name="scratch">Where the downloaded archive is written (the configured temp folder).</param>
     public ArchiveUrlImportSource(IArchiveExtractor extractor,
         IHttpClientFactory httpClientFactory, GuardedHttpDownloader downloader,
-        IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings, DatasetArchiveExtractor archives, IScratchFileProvider scratch)
+        IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings, DatasetArchiveExtractor archives, ScratchFileProvider scratch)
     {
         _archives = archives;
         _scratch = scratch;

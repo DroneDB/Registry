@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Registry.Ports;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Builds;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
@@ -19,9 +20,9 @@ namespace Registry.Web.Test.Support;
 public static class TestUploads
 {
     public static UploadManager Create(IAuthManager auth, IDatasetAccessResolver access, IFileSystem fs,
-        IOptions<ThumbnailOptions> thumbnailOptions, IOptions<ImportSettings> importSettings, IBuildScheduler builds,
-        IUploadQuotaGuard quota, IDatasetChangeCoalescer changes, IUploadReceiptStore? receipts = null,
-        IDatasetIndexQueue? indexQueue = null, IThumbnailPrecomputeQueue? thumbnails = null)
+        IOptions<ThumbnailOptions> thumbnailOptions, IOptions<ImportSettings> importSettings, BuildScheduler builds,
+        UploadQuotaGuard quota, IDatasetChangeCoalescer changes, DistributedUploadReceiptStore? receipts = null,
+        IDatasetIndexQueue? indexQueue = null, ThumbnailPrecomputeQueue? thumbnails = null)
     {
         var files = new UploadFiles(TestPaths.Policy, importSettings, TestScratch.Provider, fs,
             NullLogger<UploadFiles>.Instance);

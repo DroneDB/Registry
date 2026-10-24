@@ -2,7 +2,7 @@
 using System;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.Services.HeavyTasks.Adapters;
 
@@ -13,7 +13,7 @@ public sealed class TaskWorkDirectories
     private readonly IFileSystem _fs;
     private readonly ILogger<TaskWorkDirectories> _logger;
 
-    public TaskWorkDirectories(IScratchFileProvider scratch, IFileSystem fs, ILogger<TaskWorkDirectories> logger)
+    public TaskWorkDirectories(ScratchFileProvider scratch, IFileSystem fs, ILogger<TaskWorkDirectories> logger)
     {
         _tempPath = scratch.Root;
         _fs = fs;

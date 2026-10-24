@@ -23,18 +23,7 @@ namespace Registry.Web.Services.Maintenance;
 /// Repairs the organizations and datasets stored with a slug the slug rules (<see cref="SlugRules"/>) refuse: "--"
 /// from the pre-collapsing generator, or one character from before the validator agreed with the routes.
 /// </summary>
-public interface IDatasetSlugRepair
-{
-    /// <summary>
-    /// Renames organizations and datasets whose slug fails validation (e.g. "--" from the
-    /// pre-collapsing slug generator, or a single character) to their ToSlug form, moving organization folders.
-    /// With dryRun only the plan is returned. Entries with active jobs are skipped.
-    /// </summary>
-    Task<FixInvalidSlugsResultDto> FixInvalidSlugsAsync(bool dryRun = true, CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IDatasetSlugRepair"/> (RQ-12, out of <c>SystemManager</c>).</summary>
-public sealed class DatasetSlugRepair : IDatasetSlugRepair
+public sealed class DatasetSlugRepair
 {
     private readonly RegistryContext _context;
     private readonly IDdbManager _ddbManager;
@@ -54,6 +43,11 @@ public sealed class DatasetSlugRepair : IDatasetSlugRepair
         _logger = logger;
     }
 
+    /// <summary>
+    /// Renames organizations and datasets whose slug fails validation (e.g. "--" from the
+    /// pre-collapsing slug generator, or a single character) to their ToSlug form, moving organization folders.
+    /// With dryRun only the plan is returned. Entries with active jobs are skipped.
+    /// </summary>
     public async Task<FixInvalidSlugsResultDto> FixInvalidSlugsAsync(bool dryRun = true, CancellationToken ct = default)
     {
         var result = new FixInvalidSlugsResultDto { DryRun = dryRun };

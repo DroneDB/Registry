@@ -29,9 +29,9 @@ namespace Registry.Web.Controllers;
 [Produces("application/json")]
 public class BuildMaintenanceController : ControllerBaseEx
 {
-    private readonly IBuildMaintenance _maintenance;
+    private readonly BuildMaintenance _maintenance;
 
-    public BuildMaintenanceController(IBuildMaintenance maintenance) => _maintenance = maintenance;
+    public BuildMaintenanceController(BuildMaintenance maintenance) => _maintenance = maintenance;
 
     /// <summary>
     /// Cleans up build artifacts and stale entries on a single dataset, all datasets in

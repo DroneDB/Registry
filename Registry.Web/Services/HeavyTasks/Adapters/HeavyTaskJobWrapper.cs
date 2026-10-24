@@ -93,7 +93,7 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         var ddb = ddbManager.Get(request.OrgSlug, ds.InternalRef);
 
         var execCtx = new HeavyToolExecutionContext(ddb, new DatasetKey(request.OrgSlug, ds.InternalRef), _log,
-            new TaskRun(taskId, workDir), ctx, sp.GetRequiredService<IBuildScheduler>(), builds);
+            new TaskRun(taskId, workDir), ctx, sp.GetRequiredService<BuildScheduler>(), builds);
         var logBuffer = new LogRingBuffer(_settings.LogTailMaxLines, _settings.LogTailMaxBytes);
         await using var progress = new HangfireProgressSink(ctx, _scopeFactory, logBuffer, taskId,
             _settings.ProgressUpdateThrottleSeconds, _sinkLog);

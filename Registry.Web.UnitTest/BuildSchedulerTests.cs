@@ -17,7 +17,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// RQ-12: <see cref="IBuildScheduler"/> is the one place that queues builds: buildability and deferred builds come
+/// RQ-12: <see cref="BuildScheduler"/> is the one place that queues builds: buildability and deferred builds come
 /// from libddb (the build manifest, <see cref="IDdbBuild.IsBuildPending"/>), the dataset is flagged pending before
 /// the first job, and the user a build runs as is resolved once (no site writes <c>user.Id</c> any more).
 /// </summary>

@@ -15,13 +15,13 @@ namespace Registry.Web.Services.Managers;
 /// </summary>
 public class OrganizationsManager : IOrganizationsManager
 {
-    private readonly IOrganizationQueries _queries;
-    private readonly IOrganizationCommands _commands;
-    private readonly IOrganizationMerger _merger;
-    private readonly IOrganizationMembers _members;
+    private readonly OrganizationQueries _queries;
+    private readonly OrganizationCommands _commands;
+    private readonly OrganizationMerger _merger;
+    private readonly OrganizationMembers _members;
 
-    public OrganizationsManager(IOrganizationQueries queries, IOrganizationCommands commands,
-        IOrganizationMerger merger, IOrganizationMembers members)
+    public OrganizationsManager(OrganizationQueries queries, OrganizationCommands commands,
+        OrganizationMerger merger, OrganizationMembers members)
     {
         _queries = queries;
         _commands = commands;

@@ -26,7 +26,7 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
 {
     public string Version => "1.0.0";
 
-    private readonly IWcsCoverageService _svc;
+    private readonly WcsCoverageService _svc;
     private readonly IRecordCache _records;
 
     private const string NsWcs = "http://www.opengis.net/wcs";
@@ -36,7 +36,7 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
     private const string Utf8XmlDecl = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
     private static readonly RecordCacheOptions CapabilitiesCache = RecordCacheOptions.For(TimeSpan.FromMinutes(5));
 
-    public WcsProtocol10Handler(IWcsCoverageService svc, IRecordCache records)
+    public WcsProtocol10Handler(WcsCoverageService svc, IRecordCache records)
     {
         _svc = svc;
         _records = records;
@@ -48,7 +48,6 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
         var key = await _svc.CacheKeyAsync(orgSlug, dsSlug, "caps-wcs10-v1", folderPath, ct);
         return await _records.GetOrCreateRecordAsync(key, async token =>
         {
-
             var (_, layers) = await _svc.GetCoveragesAsync(orgSlug, dsSlug, folderPath, token);
             var baseUrl = _svc.GetBaseUrl(orgSlug, dsSlug, folderPath);
 

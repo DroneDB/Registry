@@ -11,9 +11,9 @@ namespace Registry.Web.Services.Configuration;
 /// <summary>The admin configuration sections of what the Hub shows: its options, the organization management, the thumbnails.</summary>
 public sealed class HubSections : IConfigurationSectionBuilder
 {
-    private readonly IConfigurationView _view;
+    private readonly ConfigurationView _view;
 
-    public HubSections(IConfigurationView view)
+    public HubSections(ConfigurationView view)
     {
         _view = view;
     }

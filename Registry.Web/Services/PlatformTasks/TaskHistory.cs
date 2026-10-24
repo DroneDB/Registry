@@ -20,24 +20,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.PlatformTasks;
 
 /// <summary>What a dataset's tasks did: the list, a task's status, its log and its result (RQ-12, out of <c>TasksManager</c>).</summary>
-public interface ITaskHistory
-{
-    /// <summary>The page of the dataset's task history, newest first, with the entity tag of the page.</summary>
-    Task<TaskListPage> ListPageAsync(string orgSlug, string dsSlug, string? toolId, string? state,
-        int skip, int take, CancellationToken ct = default);
-
-    /// <summary>The full status of a task, including its log tail and artifact descriptor.</summary>
-    Task<TaskStatusDto> GetStatusAsync(string orgSlug, string dsSlug, string id, CancellationToken ct = default);
-
-    /// <summary>The log lines of a task beyond the caller's cursor.</summary>
-    Task<TaskLogDto> GetLogAsync(string orgSlug, string dsSlug, string id, long since, CancellationToken ct = default);
-
-    /// <summary>The file a succeeded task produced.</summary>
-    Task<TaskArtifactFile> GetResultAsync(string orgSlug, string dsSlug, string id, CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="ITaskHistory"/>.</summary>
-public sealed class TaskHistory : ITaskHistory
+public sealed class TaskHistory
 {
     private const int MaxTake = 200;
 
@@ -47,12 +30,12 @@ public sealed class TaskHistory : ITaskHistory
     private readonly IDatasetAccessResolver _access;
     private readonly IJobIndexQuery _query;
     private readonly IRecordCache _cache;
-    private readonly ITaskAuthorizer _authorizer;
-    private readonly ITaskArtifactStore _artifacts;
+    private readonly TaskAuthorizer _authorizer;
+    private readonly TaskArtifactStore _artifacts;
     private readonly ProcessingPlatformSettings _settings;
 
     public TaskHistory(IDatasetAccessResolver access, IJobIndexQuery query, IRecordCache cache,
-        ITaskAuthorizer authorizer, ITaskArtifactStore artifacts, IOptions<ProcessingPlatformSettings> platformSettings)
+        TaskAuthorizer authorizer, TaskArtifactStore artifacts, IOptions<ProcessingPlatformSettings> platformSettings)
     {
         _access = access;
         _query = query;
@@ -62,6 +45,7 @@ public sealed class TaskHistory : ITaskHistory
         _settings = platformSettings.Value;
     }
 
+    /// <summary>The page of the dataset's task history, newest first, with the entity tag of the page.</summary>
     public async Task<TaskListPage> ListPageAsync(string orgSlug, string dsSlug, string? toolId, string? state,
         int skip, int take, CancellationToken ct = default)
     {
@@ -103,6 +87,7 @@ public sealed class TaskHistory : ITaskHistory
     private static string ETagOf(byte[] content, int take) =>
         $"W/\"{Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(content).AsSpan(0, 12))}-{take}\"";
 
+    /// <summary>The full status of a task, including its log tail and artifact descriptor.</summary>
     public async Task<TaskStatusDto> GetStatusAsync(string orgSlug, string dsSlug, string id,
         CancellationToken ct = default)
     {
@@ -118,6 +103,7 @@ public sealed class TaskHistory : ITaskHistory
             job.ErrorType);
     }
 
+    /// <summary>The log lines of a task beyond the caller's cursor.</summary>
     public async Task<TaskLogDto> GetLogAsync(string orgSlug, string dsSlug, string id, long since,
         CancellationToken ct = default)
     {
@@ -136,6 +122,7 @@ public sealed class TaskHistory : ITaskHistory
         return new TaskLogDto(snapshot.Cursor, lines, snapshot.TruncatedFromTail);
     }
 
+    /// <summary>The file a succeeded task produced.</summary>
     public async Task<TaskArtifactFile> GetResultAsync(string orgSlug, string dsSlug, string id,
         CancellationToken ct = default)
     {

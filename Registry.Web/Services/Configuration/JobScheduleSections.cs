@@ -11,9 +11,9 @@ namespace Registry.Web.Services.Configuration;
 /// <summary>The admin configuration sections of the recurring jobs and the job retention.</summary>
 public sealed class JobScheduleSections : IConfigurationSectionBuilder
 {
-    private readonly IConfigurationView _view;
+    private readonly ConfigurationView _view;
 
-    public JobScheduleSections(IConfigurationView view)
+    public JobScheduleSections(ConfigurationView view)
     {
         _view = view;
     }

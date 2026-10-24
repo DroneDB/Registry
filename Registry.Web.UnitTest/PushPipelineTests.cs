@@ -179,7 +179,7 @@ public class PushPipelineTests : TestBase
     }
 
     /// <summary>
-    /// RQ-12 (IBuildScheduler): the dataset is flagged as having pending builds before the first build job is queued,
+    /// RQ-12 (BuildScheduler): the dataset is flagged as having pending builds before the first build job is queued,
     /// as uploads always did: a build that fails at once must find the flag, or the pending-build coordinator does not
     /// look at the dataset. Push queued its builds first and flagged after (red before the change).
     /// </summary>

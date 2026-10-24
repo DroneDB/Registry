@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Registry.Ports.Import;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Import;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -12,32 +13,16 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.RemoteImport;
 
 /// <summary>The administrator's side of the remote import: queue one, follow it, cancel it.</summary>
-public interface IRemoteImportService
-{
-    /// <summary>Validates the request and queues the import of one dataset.</summary>
-    Task<RemoteImportJobDto> StartAsync(ImportDatasetRequestDto request, CancellationToken ct);
-
-    /// <summary>Validates the request and queues the import of every dataset of an organization.</summary>
-    Task<RemoteImportJobDto> StartAsync(ImportOrganizationRequestDto request, CancellationToken ct);
-
-    /// <summary>The state of the import job <paramref name="jobId"/>; <see cref="NotFoundException"/> if it is not one.</summary>
-    RemoteImportStatusDto GetStatus(string jobId);
-
-    /// <summary>Cancels the import job <paramref name="jobId"/>; <see cref="NotFoundException"/> if it is not one.</summary>
-    void Cancel(string jobId);
-}
-
-/// <summary>Default <see cref="IRemoteImportService"/>: the import itself runs in <see cref="RemoteImportJob"/>.</summary>
-public sealed class RemoteImportService : IRemoteImportService
+public sealed class RemoteImportService
 {
     private readonly SsrfGuard _ssrfGuard;
     private readonly IImportCredentialProtector _credentials;
     private readonly IBackgroundJobsProcessor _jobs;
-    private readonly IJobOutcomeReader _outcomes;
+    private readonly HangfireJobOutcomeReader _outcomes;
     private readonly IUrlBuilder _urls;
 
     public RemoteImportService(SsrfGuard ssrfGuard, IImportCredentialProtector credentials,
-        IBackgroundJobsProcessor jobs, IJobOutcomeReader outcomes, IUrlBuilder urls)
+        IBackgroundJobsProcessor jobs, HangfireJobOutcomeReader outcomes, IUrlBuilder urls)
     {
         _ssrfGuard = ssrfGuard;
         _credentials = credentials;
@@ -46,6 +31,7 @@ public sealed class RemoteImportService : IRemoteImportService
         _urls = urls;
     }
 
+    /// <summary>Validates the request and queues the import of one dataset.</summary>
     public async Task<RemoteImportJobDto> StartAsync(ImportDatasetRequestDto request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -58,6 +44,7 @@ public sealed class RemoteImportService : IRemoteImportService
             request.DestinationOrganization ?? request.SourceOrganization, request.DestinationDataset, request.Mode));
     }
 
+    /// <summary>Validates the request and queues the import of every dataset of an organization.</summary>
     public async Task<RemoteImportJobDto> StartAsync(ImportOrganizationRequestDto request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -68,6 +55,7 @@ public sealed class RemoteImportService : IRemoteImportService
             request.Mode));
     }
 
+    /// <summary>The state of the import job <paramref name="jobId"/>; <see cref="NotFoundException"/> if it is not one.</summary>
     public RemoteImportStatusDto GetStatus(string jobId)
     {
         var outcome = Find(jobId);
@@ -80,6 +68,7 @@ public sealed class RemoteImportService : IRemoteImportService
         };
     }
 
+    /// <summary>Cancels the import job <paramref name="jobId"/>; <see cref="NotFoundException"/> if it is not one.</summary>
     public void Cancel(string jobId)
     {
         Find(jobId);

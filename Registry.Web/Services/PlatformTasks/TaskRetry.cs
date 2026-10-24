@@ -12,24 +12,16 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.PlatformTasks;
 
 /// <summary>Re-running a failed task (RQ-12, out of <c>TasksManager</c>).</summary>
-public interface ITaskRetry
+public sealed class TaskRetry
 {
-    /// <summary>Re-queues a failed task; false when the job store did not accept it (see the conflict it throws).</summary>
-    /// <exception cref="ConflictException">The task cannot be retried in its state, or the pending-build sweep owns the retry.</exception>
-    Task<bool> RetryAsync(string orgSlug, string dsSlug, string id, CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="ITaskRetry"/>.</summary>
-public sealed class TaskRetry : ITaskRetry
-{
-    private readonly ITaskAuthorizer _authorizer;
+    private readonly TaskAuthorizer _authorizer;
     private readonly IBackgroundJobsProcessor _processor;
     private readonly IJobIndexWriter _writer;
     private readonly IDatasetResolver _datasets;
     private readonly IDdbManager _ddbManager;
     private readonly ILogger<TaskRetry> _logger;
 
-    public TaskRetry(ITaskAuthorizer authorizer, IBackgroundJobsProcessor processor, IJobIndexWriter writer,
+    public TaskRetry(TaskAuthorizer authorizer, IBackgroundJobsProcessor processor, IJobIndexWriter writer,
         IDatasetResolver datasets, IDdbManager ddbManager, ILogger<TaskRetry> logger)
     {
         _authorizer = authorizer;
@@ -40,6 +32,8 @@ public sealed class TaskRetry : ITaskRetry
         _logger = logger;
     }
 
+    /// <summary>Re-queues a failed task; false when the job store did not accept it (see the conflict it throws).</summary>
+    /// <exception cref="ConflictException">The task cannot be retried in its state, or the pending-build sweep owns the retry.</exception>
     public async Task<bool> RetryAsync(string orgSlug, string dsSlug, string id, CancellationToken ct = default)
     {
         var job = await _authorizer.LoadAsync(orgSlug, dsSlug, id, AccessType.Write, ct);

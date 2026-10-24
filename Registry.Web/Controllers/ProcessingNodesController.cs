@@ -27,9 +27,9 @@ namespace Registry.Web.Controllers;
 [Produces("application/json")]
 public class ProcessingNodesController : ControllerBaseEx
 {
-    private readonly IProcessingNodeCatalog _nodes;
+    private readonly ProcessingNodeCatalog _nodes;
 
-    public ProcessingNodesController(IProcessingNodeCatalog nodes) => _nodes = nodes;
+    public ProcessingNodesController(ProcessingNodeCatalog nodes) => _nodes = nodes;
 
     /// <summary>
     /// Gets the list of configured processing nodes (NodeODX) available for photogrammetry tasks.

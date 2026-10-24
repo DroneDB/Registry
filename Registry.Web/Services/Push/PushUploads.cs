@@ -1,48 +1,35 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
-using Registry.Web.Services.Builds;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
-using Stamp = Registry.Ports.DroneDB.Stamp;
 
 namespace Registry.Web.Services.Push;
 
 /// <summary>The files and metadata of a push: streamed against the storage quota, checked against the hash of the delta, staged in the push folder.</summary>
-public interface IPushUploads
-{
-    Task<PushUpload> StreamUploadAsync(string orgSlug, string dsSlug, Stream source, long? expectedBytes, CancellationToken ct = default);
-    Task UploadAsync(PushUpload upload, string path, string token, CancellationToken ct = default);
-    Task SaveMeta(string orgSlug, string dsSlug, string token, string meta, CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IPushUploads"/> (RQ-12, out of <c>PushManager</c>).</summary>
-public sealed class PushUploads : IPushUploads
+public sealed class PushUploads
 {
     private readonly IDatasetAccessResolver _access;
     private readonly IAuthManager _authManager;
-    private readonly IUploadQuotaGuard _quota;
-    private readonly IScratchFileProvider _scratch;
+    private readonly UploadQuotaGuard _quota;
+    private readonly ScratchFileProvider _scratch;
     private readonly IFileSystem _fileSystem;
-    private readonly IPushSessionStore _sessionStore;
+    private readonly PushSessionStore _sessionStore;
     private readonly DatasetPathPolicy _paths;
 
-    public PushUploads(IDatasetAccessResolver access, IAuthManager authManager, IUploadQuotaGuard quota, IScratchFileProvider scratch, IFileSystem fileSystem, IPushSessionStore sessionStore, DatasetPathPolicy paths)
+    public PushUploads(IDatasetAccessResolver access, IAuthManager authManager, UploadQuotaGuard quota, ScratchFileProvider scratch, IFileSystem fileSystem, PushSessionStore sessionStore, DatasetPathPolicy paths)
     {
         _access = access;
         _authManager = authManager;

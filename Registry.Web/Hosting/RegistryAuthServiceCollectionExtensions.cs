@@ -96,7 +96,7 @@ public static class RegistryAuthServiceCollectionExtensions
         // A request queues builds as its signed-in user (the job hosts' requester is the service)
         services.Replace(ServiceDescriptor.Scoped<Services.Builds.IBuildRequester, Services.Builds.CurrentUserBuildRequester>());
         services.AddScoped<IDatasetAccessResolver, DatasetAccessResolver>();
-        services.AddScoped<IOrganizationMembershipService, OrganizationMembershipService>();
+        services.AddScoped<OrganizationMembershipService>();
         services.AddSingleton<IPasswordPolicyValidator, PasswordPolicyValidator>();
 
         return services;

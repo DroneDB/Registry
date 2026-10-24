@@ -18,36 +18,17 @@ namespace Registry.Web.Services.RemoteImport;
 public sealed record ImportDestination(string OrganizationSlug, string DatasetSlug, Guid InternalRef, string Folder);
 
 /// <summary>The local side of a remote import: the destination dataset, its folder, its index and its build.</summary>
-public interface IImportDestinations
-{
-    /// <summary>
-    /// The destination organization and dataset of <paramref name="source"/>, created when missing (a new
-    /// organization is private, described as imported from the source organization).
-    /// </summary>
-    Task<ImportDestination> GetOrCreateAsync(RemoteDataset source, CancellationToken ct);
-
-    /// <summary>Removes everything in the destination folder, the index included, creating the folder if missing.</summary>
-    void Empty(ImportDestination destination);
-
-    /// <summary>The index of the destination (initialized when the folder has none).</summary>
-    IDDB Open(ImportDestination destination);
-
-    /// <summary>Queues the forced build of the whole destination dataset.</summary>
-    Task<string> QueueBuildAsync(ImportDestination destination, IDDB ddb, CancellationToken ct);
-}
-
-/// <summary>Default <see cref="IImportDestinations"/>.</summary>
-public sealed class ImportDestinations : IImportDestinations
+public sealed class ImportDestinations
 {
     private readonly RegistryContext _context;
     private readonly IDdbManager _ddbManager;
     private readonly IFileSystem _fileSystem;
-    private readonly IBuildScheduler _builds;
+    private readonly BuildScheduler _builds;
     private readonly TimeProvider _time;
     private readonly ILogger<ImportDestinations> _logger;
 
     public ImportDestinations(RegistryContext context, IDdbManager ddbManager, IFileSystem fileSystem,
-        IBuildScheduler builds, TimeProvider time, ILogger<ImportDestinations> logger)
+        BuildScheduler builds, TimeProvider time, ILogger<ImportDestinations> logger)
     {
         _context = context;
         _ddbManager = ddbManager;
@@ -57,6 +38,10 @@ public sealed class ImportDestinations : IImportDestinations
         _logger = logger;
     }
 
+    /// <summary>
+    /// The destination organization and dataset of <paramref name="source"/>, created when missing (a new
+    /// organization is private, described as imported from the source organization).
+    /// </summary>
     public async Task<ImportDestination> GetOrCreateAsync(RemoteDataset source, CancellationToken ct)
     {
         var orgSlug = source.DestinationOrganization;
@@ -99,6 +84,7 @@ public sealed class ImportDestinations : IImportDestinations
             _ddbManager.GetDatasetFolder(orgSlug, dataset.InternalRef));
     }
 
+    /// <summary>Removes everything in the destination folder, the index included, creating the folder if missing.</summary>
     public void Empty(ImportDestination destination)
     {
         var folder = destination.Folder;
@@ -118,9 +104,11 @@ public sealed class ImportDestinations : IImportDestinations
             _fileSystem.Delete(file);
     }
 
+    /// <summary>The index of the destination (initialized when the folder has none).</summary>
     public IDDB Open(ImportDestination destination) =>
         _ddbManager.Get(destination.OrganizationSlug, destination.InternalRef);
 
+    /// <summary>Queues the forced build of the whole destination dataset.</summary>
     public async Task<string> QueueBuildAsync(ImportDestination destination, IDDB ddb, CancellationToken ct)
     {
         var jobId = await _builds.QueueDatasetAsync(new BuildTarget(ddb,

@@ -24,19 +24,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Datasets;
 
 /// <summary>The changes to a dataset by its writers: creation, edit, deletion, rename, the legacy public flag. Each renews the listings it changes.</summary>
-public interface IDatasetCommands
-{
-    Task<DatasetDto> AddNew(string orgSlug, DatasetNewDto dataset, CancellationToken ct = default);
-    Task Edit(string orgSlug, string dsSlug, DatasetEditDto dataset, CancellationToken ct = default);
-    Task Delete(string orgSlug, string dsSlug, CancellationToken ct = default);
-    Task Rename(string orgSlug, string dsSlug, string newSlug, CancellationToken ct = default);
-
-    /// <summary>Sets the legacy public flag (use the dataset metadata).</summary>
-    Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, AttributesDto attributes, CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IDatasetCommands"/> (RQ-12, out of <c>DatasetsManager</c>).</summary>
-public sealed class DatasetCommands : IDatasetCommands
+public sealed class DatasetCommands
 {
     private readonly RegistryContext _context;
     private readonly IDatasetResolver _datasets;
@@ -210,6 +198,7 @@ public sealed class DatasetCommands : IDatasetCommands
 
     // The legacy attribute of the DroneDB CLI's old "chattr": "public" is the visibility, changed like a dataset
     // edit changes it (one rule: the visibility meta and the listings' invalidation). No "public" is no change.
+    /// <summary>Sets the legacy public flag (use the dataset metadata).</summary>
     [Obsolete("Use meta")]
     public async Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug,
         AttributesDto attributes, CancellationToken ct = default)

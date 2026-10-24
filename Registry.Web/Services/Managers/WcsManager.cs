@@ -5,17 +5,16 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.Managers.Wcs;
-using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// Thin dispatcher implementing <see cref="IWcsManager"/>. Routes each request to the
+/// Thin dispatcher implementing <see cref="WcsManager"/>. Routes each request to the
 /// registered <see cref="IWcsProtocolHandler"/> matching the negotiated WCS version
 /// (1.0.0 / 1.1.1 / 2.0.1). All version-specific wire-format logic lives in the
 /// handlers; this class deliberately holds no XML / KVP knowledge of its own.
 /// </summary>
-public class WcsManager : IWcsManager
+public class WcsManager
 {
     private readonly Dictionary<string, IWcsProtocolHandler> _handlers;
 

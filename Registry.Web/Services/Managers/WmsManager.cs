@@ -26,7 +26,7 @@ namespace Registry.Web.Services.Managers;
 /// <summary>
 /// WMS 1.3.0 (and best-effort 1.1.1) manager.
 /// </summary>
-public class WmsManager : OgcManagerBase, IWmsManager
+public class WmsManager : OgcManagerBase
 {
     private static readonly string[] Requests = ["GetCapabilities", "GetMap", "GetFeatureInfo"];
 
@@ -51,7 +51,6 @@ public class WmsManager : OgcManagerBase, IWmsManager
         var key = await LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, $"caps-wms-v2-{version}", folderPath, ct);
         return await Records.GetOrCreateRecordAsync(key, async token =>
         {
-
             var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, token);
             var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath, ct: token);
             var rasterLayers = layers.Where(l => l.EntryType == EntryType.GeoRaster).ToList();

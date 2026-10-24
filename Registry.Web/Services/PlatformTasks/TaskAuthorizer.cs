@@ -9,19 +9,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.PlatformTasks;
 
 /// <summary>Loads a task of a dataset for a caller who may touch it (RQ-12, out of <c>TasksManager</c>).</summary>
-public interface ITaskAuthorizer
-{
-    /// <summary>
-    /// Resolves a task after checking dataset access and per-task ownership: the task's owner, the dataset's
-    /// owner or an admin, or anybody for a system task.
-    /// </summary>
-    /// <exception cref="NotFoundException">The dataset or the task does not exist.</exception>
-    /// <exception cref="ForbiddenException">The caller owns neither the task nor the dataset.</exception>
-    Task<JobIndex> LoadAsync(string orgSlug, string dsSlug, string id, AccessType access, CancellationToken ct);
-}
-
-/// <summary>Default <see cref="ITaskAuthorizer"/>.</summary>
-public sealed class TaskAuthorizer : ITaskAuthorizer
+public sealed class TaskAuthorizer
 {
     private readonly IDatasetAccessResolver _access;
     private readonly IJobIndexQuery _query;
@@ -34,6 +22,12 @@ public sealed class TaskAuthorizer : ITaskAuthorizer
         _authManager = authManager;
     }
 
+    /// <summary>
+    /// Resolves a task after checking dataset access and per-task ownership: the task's owner, the dataset's
+    /// owner or an admin, or anybody for a system task.
+    /// </summary>
+    /// <exception cref="NotFoundException">The dataset or the task does not exist.</exception>
+    /// <exception cref="ForbiddenException">The caller owns neither the task nor the dataset.</exception>
     public async Task<JobIndex> LoadAsync(string orgSlug, string dsSlug, string id, AccessType access, CancellationToken ct)
     {
         // A missing/unknown dataset surfaces as an unhandled exception; the global

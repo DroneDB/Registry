@@ -8,17 +8,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.HeavyTasks.Adapters;
 
 /// <summary>Whether an equivalent task is already in the history (RQ-12, out of <c>HeavyTaskRunner</c>).</summary>
-public interface IHeavyTaskDedup
-{
-    /// <summary>
-    /// The id of a task of the dataset with the same tool and request hash that was submitted within the lookback
-    /// window and can be reused, or null (none, or deduplication is off).
-    /// </summary>
-    Task<string?> FindAsync(string orgSlug, string dsSlug, string toolId, string requestHash, CancellationToken ct);
-}
-
-/// <summary>Default <see cref="IHeavyTaskDedup"/>: the job index within <see cref="ProcessingPlatformSettings.DedupLookbackHours"/>.</summary>
-public sealed class HeavyTaskDedup : IHeavyTaskDedup
+public sealed class HeavyTaskDedup
 {
     private readonly IJobIndexQuery _query;
     private readonly ProcessingPlatformSettings _settings;
@@ -29,6 +19,10 @@ public sealed class HeavyTaskDedup : IHeavyTaskDedup
         _settings = settings.Value;
     }
 
+    /// <summary>
+    /// The id of a task of the dataset with the same tool and request hash that was submitted within the lookback
+    /// window and can be reused, or null (none, or deduplication is off).
+    /// </summary>
     public async Task<string?> FindAsync(string orgSlug, string dsSlug, string toolId, string requestHash,
         CancellationToken ct)
     {

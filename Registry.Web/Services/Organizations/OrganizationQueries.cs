@@ -22,23 +22,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Organizations;
 
 /// <summary>Reading organizations (RQ-12, out of <c>OrganizationsManager</c>): the lists and one organization, with the owner shown by name and the caller's permissions.</summary>
-public interface IOrganizationQueries
-{
-    /// <summary>The organizations the current user can see (or owns, with <paramref name="ownedOnly"/>), with its permissions in each.</summary>
-    Task<IEnumerable<OrganizationDto>> List(bool ownedOnly = false, CancellationToken ct = default);
-
-    /// <summary>The public organizations (open to anonymous callers).</summary>
-    Task<IEnumerable<OrganizationDto>> ListPublic(CancellationToken ct = default);
-
-    /// <summary>One organization (read access) with the permissions of the current user in it.</summary>
-    Task<OrganizationDto> GetOrganization(string orgSlug, CancellationToken ct = default);
-
-    /// <summary><paramref name="org"/> as every organization answer shows it: the owner is the user name.</summary>
-    Task<OrganizationDto> ToDtoWithOwnerNameAsync(Organization org);
-}
-
-/// <summary>Default <see cref="IOrganizationQueries"/>.</summary>
-public sealed class OrganizationQueries : IOrganizationQueries
+public sealed class OrganizationQueries
 {
     private readonly IAuthManager _authManager;
     private readonly IDatasetAccessResolver _access;
@@ -54,6 +38,7 @@ public sealed class OrganizationQueries : IOrganizationQueries
         _appContext = appContext;
     }
 
+    /// <summary>The organizations the current user can see (or owns, with <paramref name="ownedOnly"/>), with its permissions in each.</summary>
     public async Task<IEnumerable<OrganizationDto>> List(bool ownedOnly = false, CancellationToken ct = default)
     {
         var currentUser = await _authManager.GetCurrentUser();
@@ -116,6 +101,7 @@ public sealed class OrganizationQueries : IOrganizationQueries
         return organizations;
     }
 
+    /// <summary>The public organizations (open to anonymous callers).</summary>
     public async Task<IEnumerable<OrganizationDto>> ListPublic(CancellationToken ct = default)
     {
         // List all public organizations for data discovery
@@ -215,6 +201,7 @@ public sealed class OrganizationQueries : IOrganizationQueries
         return result;
     }
 
+    /// <summary>One organization (read access) with the permissions of the current user in it.</summary>
     public async Task<OrganizationDto> GetOrganization(string orgSlug, CancellationToken ct = default)
     {
         var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Read, ct: ct);

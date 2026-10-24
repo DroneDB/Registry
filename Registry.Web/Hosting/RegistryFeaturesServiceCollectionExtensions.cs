@@ -48,66 +48,65 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddSingleton<Microsoft.EntityFrameworkCore.Diagnostics.ISaveChangesInterceptor, DatasetChangeInterceptor>();
         services.AddScoped<IDatasetSummaryProvider, DatasetSummaryProvider>();
 
-        services.AddScoped<IUsersManager, UsersManager>();
-        services.AddScoped<IJwtTokenIssuer, JwtTokenIssuer>();
-        services.AddScoped<IUserProvisioning, UserProvisioning>();
+        services.AddScoped<UsersManager>();
+        services.AddScoped<JwtTokenIssuer>();
+        services.AddScoped<UserProvisioning>();
         services.AddScoped<IUserSessions, UserSessions>();
-        services.AddScoped<IUserAccounts, UserAccounts>();
-        services.AddScoped<IUserPasswords, UserPasswords>();
-        services.AddScoped<IUserRoles, UserRoles>();
-        services.AddScoped<IUserDirectory, UserDirectory>();
-        services.AddScoped<IUserDeletion, UserDeletion>();
+        services.AddScoped<UserAccounts>();
+        services.AddScoped<UserPasswords>();
+        services.AddScoped<UserRoles>();
+        services.AddScoped<UserDirectory>();
+        services.AddScoped<UserDeletion>();
         services.AddScoped<IOrganizationsManager, OrganizationsManager>();
-        services.AddScoped<IOrganizationQueries, OrganizationQueries>();
-        services.AddScoped<IOrganizationCommands, OrganizationCommands>();
-        services.AddScoped<IOrganizationMerger, OrganizationMerger>();
-        services.AddScoped<IOrganizationMembers, OrganizationMembers>();
+        services.AddScoped<OrganizationQueries>();
+        services.AddScoped<OrganizationCommands>();
+        services.AddScoped<OrganizationMerger>();
+        services.AddScoped<OrganizationMembers>();
         services.AddScoped<IDatasetsManager, DatasetsManager>();
-        services.AddScoped<IDatasetQueries, DatasetQueries>();
-        services.AddScoped<IDatasetCommands, DatasetCommands>();
-        services.AddScoped<IDatasetMover, DatasetMover>();
-        services.AddScoped<IStacManager, StacManager>();
+        services.AddScoped<DatasetQueries>();
+        services.AddScoped<DatasetCommands>();
+        services.AddScoped<DatasetMover>();
+        services.AddScoped<StacManager>();
         services.AddScoped<Services.Stac.StacCatalog>();
         services.AddScoped<Services.Stac.StacUrls>();
         services.AddScoped<Services.Caching.IDatasetListingInvalidator, Services.Caching.DatasetListingInvalidator>();
         services.AddObjectsSlice();
-        services.AddScoped<ICadCrsManager, CadCrsManager>();
-        services.AddScoped<IShareManager, ShareManager>();
-        services.AddScoped<IShareBatchStore, ShareBatchStore>();
-        services.AddScoped<IShareBatchRollback, ShareBatchRollback>();
-        services.AddScoped<IShareTargets, ShareTargets>();
-        services.AddScoped<IShareBatches, ShareBatches>();
-        services.AddScoped<IShareUploads, ShareUploads>();
-        services.AddScoped<IShareChunkedUploads, ShareChunkedUploads>();
-        services.AddScoped<IPushManager, PushManager>();
-        services.AddScoped<IPushSessions, PushSessions>();
-        services.AddScoped<IPushUploads, PushUploads>();
-        services.AddScoped<IPushCommit, PushCommit>();
-        services.AddSingleton<IPushSessionStore, PushSessionStore>();
+        services.AddScoped<CadCrsManager>();
+        services.AddScoped<ShareManager>();
+        services.AddScoped<ShareBatchStore>();
+        services.AddScoped<ShareBatchRollback>();
+        services.AddScoped<ShareTargets>();
+        services.AddScoped<ShareBatches>();
+        services.AddScoped<ShareUploads>();
+        services.AddScoped<ShareChunkedUploads>();
+        services.AddScoped<PushManager>();
+        services.AddScoped<PushSessions>();
+        services.AddScoped<PushUploads>();
+        services.AddScoped<PushCommit>();
+        services.AddSingleton<PushSessionStore>();
         services.AddSystemAdministration();
-        services.AddScoped<IRescanManager, RescanManager>();
+        services.AddScoped<RescanManager>();
         services.AddScoped<IMetaManager, MetaManager>();
         services.AddScoped<IBuildStatusService, BuildStatusService>();
 
         // Admin global tasks dashboard and the per-dataset Processing Platform tasks (TasksController)
-        services.AddScoped<IAdminTasksManager, AdminTasksManager>();
+        services.AddScoped<AdminTasksManager>();
         services.AddScoped<ITasksManager, TasksManager>();
-        services.AddScoped<ITaskSubmission, TaskSubmission>();
-        services.AddScoped<ITaskHistory, TaskHistory>();
-        services.AddScoped<ITaskLifecycle, TaskLifecycle>();
-        services.AddScoped<ITaskRetry, TaskRetry>();
-        services.AddScoped<ITaskAuthorizer, TaskAuthorizer>();
-        services.AddScoped<ITaskArtifactStore, TaskArtifactStore>();
+        services.AddScoped<TaskSubmission>();
+        services.AddScoped<TaskHistory>();
+        services.AddScoped<TaskLifecycle>();
+        services.AddScoped<TaskRetry>();
+        services.AddScoped<TaskAuthorizer>();
+        services.AddScoped<TaskArtifactStore>();
 
         // Web-only submission side of the task substrate (gating, quota, runner)
         services.AddProcessingPlatformSubmission();
 
         // Import orchestration (the import heavy tools are registered by AddImportSources for every job host)
-        services.AddScoped<IImportManager, ImportManager>();
-        services.AddScoped<IImportQuotaGate, ImportQuotaGate>();
-        services.AddScoped<IImportTargetDatasets, ImportTargetDatasets>();
-        services.AddScoped<IFileUrlImportManager, FileUrlImportManager>();
-
+        services.AddScoped<ImportManager>();
+        services.AddScoped<ImportQuotaGate>();
+        services.AddScoped<ImportTargetDatasets>();
+        services.AddScoped<FileUrlImportManager>();
 
         services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
         services.AddSingleton<INameGenerator, NameGenerator>();
@@ -116,7 +115,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddTransient<DownloadLimitMiddleware>();
         services.AddTransient<SecurityHeadersMiddleware>();
         services.AddSingleton<IDownloadLimiter, DownloadLimiter>();
-        services.AddSingleton<IClientIpResolver, ClientIpResolver>();
+        services.AddSingleton<ClientIpResolver>();
 
         return services;
     }
@@ -128,12 +127,12 @@ public static class RegistryFeaturesServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddSystemAdministration(this IServiceCollection services)
     {
-        services.AddScoped<ISystemManager, SystemManager>();
-        services.AddScoped<IDatasetSlugRepair, DatasetSlugRepair>();
-        services.AddScoped<IGlobalReportBuilder, GlobalReportBuilder>();
-        services.AddScoped<IBuildMaintenance, BuildMaintenance>();
-        services.AddSingleton<IConfigurationView, ConfigurationView>();
-        services.AddScoped<IConfigurationDataBuilder, ConfigurationDataBuilder>();
+        services.AddScoped<SystemManager>();
+        services.AddScoped<DatasetSlugRepair>();
+        services.AddScoped<GlobalReportBuilder>();
+        services.AddScoped<BuildMaintenance>();
+        services.AddSingleton<ConfigurationView>();
+        services.AddScoped<ConfigurationDataBuilder>();
         services.AddScoped<IConfigurationSectionBuilder, IdentitySections>();
         services.AddScoped<IConfigurationSectionBuilder, DataStoreSections>();
         services.AddScoped<IConfigurationSectionBuilder, TransferSections>();
@@ -143,12 +142,12 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IConfigurationSectionBuilder, ImportSections>();
         services.AddScoped<IConfigurationSectionBuilder, HostSections>();
 
-        services.AddSingleton<IJobOutcomeReader, HangfireJobOutcomeReader>();
-        services.AddScoped<IRemoteImportService, RemoteImportService>();
+        services.AddSingleton<HangfireJobOutcomeReader>();
+        services.AddScoped<RemoteImportService>();
 
-        services.AddScoped<IProcessingNodeCatalog, ProcessingNodeCatalog>();
+        services.AddScoped<ProcessingNodeCatalog>();
 
-        services.AddScoped<IFeaturesBuilder, FeaturesBuilder>();
+        services.AddScoped<FeaturesBuilder>();
         services.AddScoped<IFeatureSection, AccountFeatures>();
         services.AddScoped<IFeatureSection, DownloadFeatures>();
         services.AddScoped<IFeatureSection, TaskFeatures>();
@@ -173,9 +172,9 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IEntryCommandService, EntryCommandService>();
         services.AddScoped<IEntryTransferService, EntryTransferService>();
         services.AddScoped<IObjectRenderService, ObjectRenderService>();
-        services.AddScoped<IBuildQueryService, BuildQueryService>();
-        services.AddScoped<IRasterAnalysisService, RasterAnalysisService>();
-        services.AddScoped<IRasterProcessingService, RasterProcessingService>();
+        services.AddScoped<BuildQueryService>();
+        services.AddScoped<RasterAnalysisService>();
+        services.AddScoped<RasterProcessingService>();
 
         services.AddScoped<IObjectsManager, ObjectsManager>();
         return services;
@@ -187,21 +186,21 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<OgcManagerDependencies>();
         services.AddScoped<IOgcLayerCatalog, OgcLayerCatalog>();
         services.AddScoped<IOgcRasterTileSource, OgcRasterTileSource>();
-        services.AddScoped<IRasterInfoCache, RasterInfoCache>();
+        services.AddScoped<RasterInfoCache>();
         services.AddScoped<IRasterIndexCatalog, RasterIndexCatalog>();
-        services.AddScoped<IWmtsManager, WmtsManager>();
-        services.AddScoped<IWmsManager, WmsManager>();
-        services.AddScoped<IWfsManager, WfsManager>();
-        services.AddScoped<IWfsCapabilities, WfsCapabilities>();
-        services.AddScoped<IWfsSchema, WfsSchema>();
-        services.AddScoped<IWfsFeatureQuery, WfsFeatureQuery>();
-        services.AddScoped<IWcsCoverageService, WcsCoverageService>();
+        services.AddScoped<WmtsManager>();
+        services.AddScoped<WmsManager>();
+        services.AddScoped<WfsManager>();
+        services.AddScoped<WfsCapabilities>();
+        services.AddScoped<WfsSchema>();
+        services.AddScoped<WfsFeatureQuery>();
+        services.AddScoped<WcsCoverageService>();
         services.AddScoped<IWcsProtocolHandler, WcsProtocol10Handler>();
         services.AddScoped<IWcsProtocolHandler, WcsProtocol11Handler>();
         services.AddScoped<IWcsProtocolHandler, WcsProtocol20Handler>();
-        services.AddScoped<IWcsManager, WcsManager>();
-        services.AddScoped<IOgcApiFeaturesManager, OgcApiFeaturesManager>();
-        services.AddScoped<IOgcApiTilesManager, OgcApiTilesManager>();
+        services.AddScoped<WcsManager>();
+        services.AddScoped<OgcApiFeaturesManager>();
+        services.AddScoped<OgcApiTilesManager>();
         services.AddScoped<OgcAuthorizationFilter>();
         services.AddScoped<OgcExceptionFilter>();
         return services;
@@ -229,22 +228,21 @@ public static class RegistryFeaturesServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddUploadPipeline(this IServiceCollection services)
     {
-        services.AddScoped<IUploadManager, UploadManager>();
-        services.AddScoped<IUploadFiles, UploadFiles>();
-        services.AddScoped<IUploadReceiptTracker, UploadReceiptTracker>();
-        services.AddScoped<IUploadIndexer, UploadIndexer>();
-        services.AddScoped<IUploadFinalizer, UploadFinalizer>();
-        services.AddScoped<IUploadCommitter, UploadCommitter>();
-        services.AddScoped<IChunkedUploadManager, ChunkedUploadManager>();
-        services.AddSingleton<IChunkStore, ChunkStore>();
+        services.AddScoped<UploadManager>();
+        services.AddScoped<UploadFiles>();
+        services.AddScoped<UploadReceiptTracker>();
+        services.AddScoped<UploadIndexer>();
+        services.AddScoped<UploadFinalizer>();
+        services.AddScoped<UploadCommitter>();
+        services.AddScoped<ChunkedUploadManager>();
+        services.AddSingleton<ChunkStore>();
         services.AddSingleton<UploadQuotaLedger>();
-        services.AddScoped<IUploadQuotaGuard, UploadQuotaGuard>();
-        services.AddSingleton<IUploadReceiptStore, DistributedUploadReceiptStore>();
+        services.AddScoped<UploadQuotaGuard>();
+        services.AddSingleton<DistributedUploadReceiptStore>();
         services.AddSingleton<DatasetChangeCoalescer>();
         services.AddSingleton<IDatasetChangeCoalescer>(sp => sp.GetRequiredService<DatasetChangeCoalescer>());
         services.AddHostedService(sp => sp.GetRequiredService<DatasetChangeCoalescer>());
         services.AddSingleton<ThumbnailPrecomputeQueue>();
-        services.AddSingleton<IThumbnailPrecomputeQueue>(sp => sp.GetRequiredService<ThumbnailPrecomputeQueue>());
         services.AddHostedService(sp => sp.GetRequiredService<ThumbnailPrecomputeQueue>());
         return services;
     }

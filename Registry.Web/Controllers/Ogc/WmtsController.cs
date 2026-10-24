@@ -4,11 +4,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using Registry.Web.Exceptions;
 using Registry.Web.Filters;
 using Registry.Web.Models;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Managers;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 
@@ -27,9 +26,9 @@ namespace Registry.Web.Controllers.Ogc;
 [Route(RoutesHelper.DatasetPrefix)]
 public class WmtsController : ControllerBaseEx
 {
-    private readonly IWmtsManager _mgr;
+    private readonly WmtsManager _mgr;
 
-    public WmtsController(IWmtsManager mgr)
+    public WmtsController(WmtsManager mgr)
     {
         _mgr = mgr;
     }

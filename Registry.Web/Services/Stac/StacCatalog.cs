@@ -31,10 +31,10 @@ public sealed class StacCatalog
     private readonly ICacheManager _cacheManager;
     private readonly IDdbManager _ddbManager;
     private readonly IRecordCache _records;
-    private readonly ICacheGenerations _generations;
+    private readonly CacheGenerations _generations;
 
     public StacCatalog(RegistryContext context, IAuthManager authManager, ICacheManager cacheManager,
-        IDdbManager ddbManager, IRecordCache records, ICacheGenerations generations)
+        IDdbManager ddbManager, IRecordCache records, CacheGenerations generations)
     {
         _context = context;
         _authManager = authManager;

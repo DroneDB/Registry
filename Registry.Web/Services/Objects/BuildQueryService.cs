@@ -16,19 +16,22 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Objects;
 
-/// <summary>Default <see cref="IBuildQueryService"/>.</summary>
-public sealed class BuildQueryService : IBuildQueryService
+/// <summary>
+/// The builds of a dataset's entries: starting one, the files and downloadable artifacts libddb lists for
+/// a build (XI-04), the builds waiting for a dependency, and the record of finished build jobs.
+/// </summary>
+public sealed class BuildQueryService
 {
     private readonly IDatasetAccessResolver _access;
     private readonly IBuildArtifactResolver _artifacts;
     private readonly DatasetPathPolicy _paths;
-    private readonly IBuildScheduler _builds;
+    private readonly BuildScheduler _builds;
     private readonly IJobIndexWriter _jobIndex;
     private readonly IUrlBuilder _urls;
     private readonly ILogger<BuildQueryService> _logger;
 
     public BuildQueryService(IDatasetAccessResolver access, IBuildArtifactResolver artifacts, DatasetPathPolicy paths,
-        IBuildScheduler builds, IJobIndexWriter jobIndex, IUrlBuilder urls, ILogger<BuildQueryService> logger)
+        BuildScheduler builds, IJobIndexWriter jobIndex, IUrlBuilder urls, ILogger<BuildQueryService> logger)
     {
         _access = access;
         _artifacts = artifacts;
@@ -39,6 +42,10 @@ public sealed class BuildQueryService : IBuildQueryService
         _logger = logger;
     }
 
+    /// <summary>
+    /// Queues a build of <paramref name="path"/> (nothing when it is not buildable); <paramref name="force"/>
+    /// builds again even while a build lock is held (a stale lock of a crashed build).
+    /// </summary>
     public async Task BuildAsync(string orgSlug, string dsSlug, string? path, bool force = false,
         CancellationToken ct = default)
     {
@@ -65,6 +72,8 @@ public sealed class BuildQueryService : IBuildQueryService
         _logger.LogInformation("Building '{Path}' asynchronously, background job id is {JobId}", path, jobId);
     }
 
+    /// <summary>The local path of the file <paramref name="path"/> of the build <paramref name="hash"/>.</summary>
+    /// <exception cref="Exceptions.NotFoundException">The file is not part of that build.</exception>
     public async Task<string> GetBuildFileAsync(string orgSlug, string dsSlug, string hash, string? path,
         CancellationToken ct = default)
     {
@@ -75,6 +84,10 @@ public sealed class BuildQueryService : IBuildQueryService
                ?? throw new NotFoundException($"'{file}' is not a file of the build '{hash}'");
     }
 
+    /// <summary>
+    /// The local path of the file <paramref name="path"/> of the build <paramref name="hash"/>, or null when it is
+    /// not a file of that build (a malformed hash names no build): <see cref="GetBuildFileAsync"/> without the 404.
+    /// </summary>
     public async Task<string?> FindBuildFileAsync(string orgSlug, string dsSlug, string hash, string? path,
         CancellationToken ct = default)
     {
@@ -90,6 +103,10 @@ public sealed class BuildQueryService : IBuildQueryService
         }
     }
 
+    /// <summary>The downloadable artifact of the entry at <paramref name="entryPath"/> (COG, COPC, GeoPackage).</summary>
+    /// <exception cref="Exceptions.InvalidDatasetPathException">The path is not a dataset path (no path: empty).</exception>
+    /// <exception cref="Exceptions.BadRequestException">The entry has no downloadable artifact.</exception>
+    /// <exception cref="Exceptions.NotFoundException">No such entry, or it is not built yet.</exception>
     public async Task<BuildDownload> GetBuildArtifactAsync(string orgSlug, string dsSlug, string? entryPath,
         CancellationToken ct = default)
     {
@@ -113,6 +130,7 @@ public sealed class BuildQueryService : IBuildQueryService
             $"Build artifact not found for '{entryPath}'. The entry may not have been built yet.");
     }
 
+    /// <summary>The builds deferred for a missing dependency (companion file or external tool).</summary>
     public async Task<IEnumerable<PendingBuildInfoDto>> GetPendingBuildsAsync(string orgSlug, string dsSlug,
         CancellationToken ct = default)
     {
@@ -131,6 +149,7 @@ public sealed class BuildQueryService : IBuildQueryService
         }).ToArray();
     }
 
+    /// <summary>Deletes the record of the build jobs that succeeded or failed; returns how many.</summary>
     public async Task<int> ClearCompletedBuildsAsync(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
         await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);

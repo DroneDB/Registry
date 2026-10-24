@@ -11,9 +11,9 @@ namespace Registry.Web.Services.Configuration;
 /// <summary>The admin configuration sections of the import of datasets.</summary>
 public sealed class ImportSections : IConfigurationSectionBuilder
 {
-    private readonly IConfigurationView _view;
+    private readonly ConfigurationView _view;
 
-    public ImportSections(IConfigurationView view)
+    public ImportSections(ConfigurationView view)
     {
         _view = view;
     }

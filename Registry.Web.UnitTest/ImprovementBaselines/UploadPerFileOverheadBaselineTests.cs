@@ -154,14 +154,14 @@ public class UploadPerFileOverheadBaselineTests : TestBase
     }
 
     /// <summary>Exactly what the upload endpoint does for a single-file request.</summary>
-    private static async Task UploadOne(IUploadManager uploads, string path, int bytes)
+    private static async Task UploadOne(UploadManager uploads, string path, int bytes)
     {
         using var ctx = await uploads.BeginAsync(OrgSlug, DsSlug, bytes);
         var file = await uploads.StreamAsync(ctx, new MemoryStream(new byte[bytes]));
         await uploads.CommitAsync(ctx, path, file);
     }
 
-    private static Task UploadBurst(IUploadManager uploads, string ext) =>
+    private static Task UploadBurst(UploadManager uploads, string ext) =>
         Task.WhenAll(Enumerable.Range(0, Burst).Select(i => UploadOne(uploads, $"f{i:000}.{ext}", 1024)));
 
     [Test]

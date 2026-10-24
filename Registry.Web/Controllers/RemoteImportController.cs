@@ -23,9 +23,9 @@ namespace Registry.Web.Controllers;
 [Produces("application/json")]
 public class RemoteImportController : ControllerBaseEx
 {
-    private readonly IRemoteImportService _imports;
+    private readonly RemoteImportService _imports;
 
-    public RemoteImportController(IRemoteImportService imports) => _imports = imports;
+    public RemoteImportController(RemoteImportService imports) => _imports = imports;
 
     /// <summary>
     /// Queues the import of a dataset from another Registry instance.

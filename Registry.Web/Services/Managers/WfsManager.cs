@@ -2,22 +2,21 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Services.Managers.Wfs;
-using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// WFS 2.0.0 manager (BBOX filter + pagination, no CQL; <see cref="IWfsManager"/>, what the controller calls) over
+/// WFS 2.0.0 manager (BBOX filter + pagination, no CQL; <see cref="WfsManager"/>, what the controller calls) over
 /// the services RQ-12 split the 1109-line class into: the capabilities and stored queries, the feature types'
 /// schema, and the feature queries with their local filter (the way WMS and WCS split by protocol operation).
 /// </summary>
-public class WfsManager : IWfsManager
+public class WfsManager
 {
-    private readonly IWfsCapabilities _capabilities;
-    private readonly IWfsSchema _schema;
-    private readonly IWfsFeatureQuery _features;
+    private readonly WfsCapabilities _capabilities;
+    private readonly WfsSchema _schema;
+    private readonly WfsFeatureQuery _features;
 
-    public WfsManager(IWfsCapabilities capabilities, IWfsSchema schema, IWfsFeatureQuery features)
+    public WfsManager(WfsCapabilities capabilities, WfsSchema schema, WfsFeatureQuery features)
     {
         _capabilities = capabilities;
         _schema = schema;

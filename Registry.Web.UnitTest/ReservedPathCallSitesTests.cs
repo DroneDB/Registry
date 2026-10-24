@@ -1,5 +1,4 @@
 #nullable enable
-using Registry.Web.Services.Jobs;
 using System;
 using System.Collections.Concurrent;
 using System.IO;
@@ -10,7 +9,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
@@ -18,19 +16,15 @@ using Registry.Adapters;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
-using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.Import;
 using Registry.Web.Services.RemoteImport;
-using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Registry.Web.Utilities;
 using Registry.Web.Exceptions;
 using Shouldly;
-using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test;
 

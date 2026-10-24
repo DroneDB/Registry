@@ -6,34 +6,22 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Builds;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Uploads;
 
 /// <summary>What follows the index step of an upload (RQ-12, out of <c>UploadManager</c>): builds, thumbnails, cache invalidation.</summary>
-public interface IUploadFinalizer
+public sealed class UploadFinalizer
 {
-    /// <summary>
-    /// After the files are indexed: schedule builds and thumbnails, then invalidate the caches that depend on the
-    /// entry set once for the request.
-    /// </summary>
-    Task FinalizeAsync(UploadRequestContext ctx, IReadOnlyList<MovedUploadPart> parts);
-}
-
-/// <summary>
-/// Default <see cref="IUploadFinalizer"/>. Without a thumbnail queue (a direct construction in a test) no thumbnail
-/// is pre-generated.
-/// </summary>
-public sealed class UploadFinalizer : IUploadFinalizer
-{
-    private readonly IBuildScheduler _builds;
+    private readonly BuildScheduler _builds;
     private readonly IDatasetChangeCoalescer _changes;
     private readonly int _defaultThumbnailSize;
-    private readonly IThumbnailPrecomputeQueue? _thumbnails;
+    private readonly ThumbnailPrecomputeQueue? _thumbnails;
 
-    public UploadFinalizer(IBuildScheduler builds, IDatasetChangeCoalescer changes,
-        IOptions<ThumbnailOptions> thumbnailOptions, IThumbnailPrecomputeQueue? thumbnails = null)
+    public UploadFinalizer(BuildScheduler builds, IDatasetChangeCoalescer changes,
+        IOptions<ThumbnailOptions> thumbnailOptions, ThumbnailPrecomputeQueue? thumbnails = null)
     {
         _builds = builds;
         _changes = changes;
@@ -41,6 +29,10 @@ public sealed class UploadFinalizer : IUploadFinalizer
         _thumbnails = thumbnails;
     }
 
+    /// <summary>
+    /// After the files are indexed: schedule builds and thumbnails, then invalidate the caches that depend on the
+    /// entry set once for the request.
+    /// </summary>
     public async Task FinalizeAsync(UploadRequestContext ctx, IReadOnlyList<MovedUploadPart> parts)
     {
         if (parts.Count == 0)

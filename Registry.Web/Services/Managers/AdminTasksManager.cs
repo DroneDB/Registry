@@ -14,6 +14,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Managers;
@@ -23,7 +24,7 @@ namespace Registry.Web.Services.Managers;
 /// existing JobIndex query layer and resolves task owner identities across the
 /// Identity DbContext (no cross-context SQL join).
 /// </summary>
-public sealed class AdminTasksManager : IAdminTasksManager
+public sealed class AdminTasksManager
 {
     private readonly IJobIndexQuery _query;
     private readonly IJobIndexWriter _writer;
@@ -37,7 +38,7 @@ public sealed class AdminTasksManager : IAdminTasksManager
         IJobIndexWriter writer,
         UserManager<User> userManager,
         IOptions<ProcessingPlatformSettings> platformSettings,
-        IScratchFileProvider scratch,
+        ScratchFileProvider scratch,
         IFileSystem fs)
     {
         _query = query;
@@ -48,6 +49,10 @@ public sealed class AdminTasksManager : IAdminTasksManager
         _fs = fs;
     }
 
+    /// <summary>
+    /// Deletes a single terminal (Succeeded/Failed/Deleted) job from the JobIndex table
+    /// and purges any associated artifacts. Admin-only.
+    /// </summary>
     public async Task<bool> DeleteTaskAsync(string jobId, CancellationToken ct = default)
     {
         // Writer performs the direct lookup and terminal-state check

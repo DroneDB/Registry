@@ -17,12 +17,10 @@ using static Registry.Web.Services.CacheCategories;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Default <see cref="IThumbnailPrecomputeQueue"/>: a bounded channel drained by
-/// <see cref="UploadSettings.ThumbnailPrecomputeWorkers"/> workers, which start with the first
-/// request. The thumbnail goes through <see cref="ICacheManager"/> exactly like an on-demand one,
-/// so a view that arrives first simply joins (or replaces) the pre-generation.
+/// Pre-generates the thumbnails of uploaded images in the background at the lowest priority,
+/// with a fixed number of workers (UPL-01 C.4). Replaces one unbounded task per upload.
 /// </summary>
-public sealed class ThumbnailPrecomputeQueue : IThumbnailPrecomputeQueue, IHostedService, IDisposable
+public sealed class ThumbnailPrecomputeQueue : IHostedService, IDisposable
 {
     private readonly ICacheManager _cache;
     private readonly IThumbnailGenerator _generator;
@@ -55,6 +53,10 @@ public sealed class ThumbnailPrecomputeQueue : IThumbnailPrecomputeQueue, IHoste
             });
     }
 
+    /// <summary>
+    /// Queues a thumbnail. Returns false when the queue is full: the thumbnail is then
+    /// generated on its first view instead.
+    /// </summary>
     public bool TryEnqueue(ThumbnailPrecomputeRequest request)
     {
         EnsureStarted();

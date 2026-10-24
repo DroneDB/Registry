@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Threading;
@@ -9,10 +8,9 @@ using Registry.Web.Models.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Managers;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Auth;
 
@@ -27,10 +25,10 @@ namespace Registry.Web.Controllers;
 [Produces("application/json")]
 public class UsersController : ControllerBaseEx
 {
-    private readonly IUsersManager _usersManager;
+    private readonly UsersManager _usersManager;
     private readonly AuthTokenOptions _tokens;
 
-    public UsersController(IUsersManager usersManager, IOptions<AuthTokenOptions> tokens)
+    public UsersController(UsersManager usersManager, IOptions<AuthTokenOptions> tokens)
     {
         _usersManager = usersManager;
         _tokens = tokens.Value;
@@ -50,7 +48,6 @@ public class UsersController : ControllerBaseEx
     {
         if (model == null)
             throw new BadRequestException("No auth data provided");
-
 
         var res = string.IsNullOrWhiteSpace(model.Token)
             ? await _usersManager.Authenticate(model.Username, model.Password)
@@ -413,8 +410,6 @@ public class UsersController : ControllerBaseEx
     }
 
     #endregion
-
-
 
     /// <summary>
     /// Creates a new role. Requires admin privileges.

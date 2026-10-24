@@ -15,6 +15,7 @@ using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Users;
@@ -37,13 +38,13 @@ public sealed class UserSessions : IUserSessions
 {
     private readonly ILoginManager _loginManager;
     private readonly UserManager<User> _userManager;
-    private readonly IUserProvisioning _provisioning;
-    private readonly IJwtTokenIssuer _tokens;
+    private readonly UserProvisioning _provisioning;
+    private readonly JwtTokenIssuer _tokens;
     private readonly IAuthManager _authManager;
     private readonly IdentityProviderOptions _identity;
     private readonly ILogger<UserSessions> _logger;
 
-    public UserSessions(ILoginManager loginManager, UserManager<User> userManager, IUserProvisioning provisioning, IJwtTokenIssuer tokens, IAuthManager authManager, IOptions<IdentityProviderOptions> identity, ILogger<UserSessions> logger)
+    public UserSessions(ILoginManager loginManager, UserManager<User> userManager, UserProvisioning provisioning, JwtTokenIssuer tokens, IAuthManager authManager, IOptions<IdentityProviderOptions> identity, ILogger<UserSessions> logger)
     {
         _loginManager = loginManager;
         _userManager = userManager;

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -11,7 +10,6 @@ using Newtonsoft.Json.Linq;
 using System.Text.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
-using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;

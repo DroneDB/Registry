@@ -21,13 +21,12 @@ namespace Registry.Web.Controllers;
 [Produces("application/json")]
 public class StockpileController : ControllerBaseEx
 {
-    private readonly IRasterAnalysisService _raster;
+    private readonly RasterAnalysisService _raster;
 
-    public StockpileController(IRasterAnalysisService raster)
+    public StockpileController(RasterAnalysisService raster)
     {
         _raster = raster;
     }
-
 
     #region Stockpile Volume
 
@@ -45,7 +44,6 @@ public class StockpileController : ControllerBaseEx
     {
         if (request == null)
             throw new BadRequestException("Request body is required");
-
 
         var json = await _raster.CalculateVolumeAsync(orgSlug, dsSlug, request.Path.ToString(),
             request.Polygon, request.BaseMethod, request.FlatElevation, ct: ct);
@@ -67,7 +65,6 @@ public class StockpileController : ControllerBaseEx
     {
         if (request == null)
             throw new BadRequestException("Request body is required");
-
 
         if (!request.Lat.HasValue || !request.Lon.HasValue)
             throw new BadRequestException("lat and lon are required");
@@ -91,7 +88,6 @@ public class StockpileController : ControllerBaseEx
     {
         if (request == null)
             throw new BadRequestException("Request body is required");
-
 
         var json = await _raster.DetectAllStockpilesAsync(orgSlug, dsSlug, request.Path.ToString(),
             request.Sensitivity ?? 0.5f, request.MinAreaM2 ?? 5.0, request.MaxResults ?? 50, ct: ct);

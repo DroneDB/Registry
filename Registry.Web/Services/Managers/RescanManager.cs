@@ -12,21 +12,23 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
-using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Builds;
 using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers;
 
-/// <summary>Default <see cref="IRescanManager"/>.</summary>
-public class RescanManager : IRescanManager
+/// <summary>
+/// Index rescans: re-read entries to refresh their metadata, then rebuild what changed
+/// (see <see cref="Adapters.RescanRebuild"/>). The system rescan across datasets is
+/// <see cref="Maintenance.BuildMaintenance.RescanAsync"/>.
+/// </summary>
+public class RescanManager
 {
     private readonly IBuildRequester _requester;
     private readonly IDatasetAccessResolver _access;
     private readonly RegistryContext _context;
     private readonly IDdbManager _ddbManager;
-    private readonly IBuildScheduler _builds;
+    private readonly BuildScheduler _builds;
     private readonly RescanRebuild _rebuild;
     private readonly ILogger<RescanManager> _logger;
 
@@ -35,7 +37,7 @@ public class RescanManager : IRescanManager
         IDatasetAccessResolver access,
         RegistryContext context,
         IDdbManager ddbManager,
-        IBuildScheduler builds,
+        BuildScheduler builds,
         RescanRebuild rebuild,
         ILogger<RescanManager> logger)
     {
@@ -48,6 +50,11 @@ public class RescanManager : IRescanManager
         _logger = logger;
     }
 
+    /// <summary>
+    /// Rescans the index of one dataset synchronously and queues the rebuilds.
+    /// Admins and users with write access to the dataset only.
+    /// </summary>
+    /// <param name="options">Types and extensions to rescan (null for all) and whether to stop at the first error.</param>
     public async Task<RescanResultDto> RescanDatasetIndex(string orgSlug, string dsSlug, RescanOptions? options = null,
         CancellationToken ct = default)
     {
@@ -103,7 +110,7 @@ public class RescanManager : IRescanManager
     }
 
     // Queued build jobs: a request must not run builds itself.
-    private sealed class QueuedBuilds(IBuildScheduler builds, BuildTarget target, BuildOrigin origin)
+    private sealed class QueuedBuilds(BuildScheduler builds, BuildTarget target, BuildOrigin origin)
         : IRescanBuildRunner
     {
         public Task BuildDataset() => builds.QueueDatasetAsync(target, force: true, origin);

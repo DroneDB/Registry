@@ -23,23 +23,17 @@ using Stamp = Registry.Ports.DroneDB.Stamp;
 namespace Registry.Web.Services.Push;
 
 /// <summary>The start of a push: the dataset (created on a first push), the delta against the client stamp, the session the next steps continue.</summary>
-public interface IPushSessions
-{
-    Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp, CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IPushSessions"/> (RQ-12, out of <c>PushManager</c>).</summary>
-public sealed class PushSessions : IPushSessions
+public sealed class PushSessions
 {
     private readonly IDatasetResolver _datasets;
     private readonly IDatasetsManager _datasetsManager;
     private readonly IDatasetAccessResolver _access;
     private readonly IDdbManager _ddbManager;
     private readonly IDdbWrapper _ddbWrapper;
-    private readonly IPushSessionStore _sessionStore;
+    private readonly PushSessionStore _sessionStore;
     private readonly ILogger<PushSessions> _logger;
 
-    public PushSessions(IDatasetResolver datasets, IDatasetsManager datasetsManager, IDatasetAccessResolver access, IDdbManager ddbManager, IDdbWrapper ddbWrapper, IPushSessionStore sessionStore, ILogger<PushSessions> logger)
+    public PushSessions(IDatasetResolver datasets, IDatasetsManager datasetsManager, IDatasetAccessResolver access, IDdbManager ddbManager, IDdbWrapper ddbWrapper, PushSessionStore sessionStore, ILogger<PushSessions> logger)
     {
         _datasets = datasets;
         _datasetsManager = datasetsManager;

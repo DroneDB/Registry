@@ -11,7 +11,7 @@ namespace Registry.Web.Utilities;
 /// <item>The length is <see cref="MinLength"/> to <see cref="MaxLength"/> characters (the database column holds 128).</item>
 /// <item>The characters are [a-z0-9_-], the first one [a-z0-9] (<see cref="IsWellFormed"/>: what the routes need).</item>
 /// <item>No "--": <c>ToSlug</c> collapses dashes, and slugs stored before it did were repaired
-/// (<see cref="Services.Maintenance.IDatasetSlugRepair"/>). <see cref="IsValid"/> adds this to the form; a route
+/// (<see cref="Services.Maintenance.DatasetSlugRepair"/>). <see cref="IsValid"/> adds this to the form; a route
 /// lets a slug with "--" through, so the request gets the validator's 400 and its message, not the SPA.</item>
 /// </list>
 /// </summary>

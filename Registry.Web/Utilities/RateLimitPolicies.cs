@@ -5,9 +5,8 @@ using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.Utilities;
 
@@ -49,9 +48,9 @@ public static class RateLimitPolicies
         });
 
     // Authenticated requests share one budget per user, anonymous ones one per client address
-    // (the forwarded one behind a known proxy, see IClientIpResolver)
+    // (the forwarded one behind a known proxy, see ClientIpResolver)
     private static string PartitionKey(HttpContext context) =>
         context.User.FindFirstValue(ClaimTypes.NameIdentifier) is { Length: > 0 } userId
             ? "u:" + userId
-            : context.RequestServices.GetRequiredService<IClientIpResolver>().AnonymousKey(context);
+            : context.RequestServices.GetRequiredService<ClientIpResolver>().AnonymousKey(context);
 }

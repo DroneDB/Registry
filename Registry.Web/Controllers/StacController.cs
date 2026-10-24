@@ -1,16 +1,14 @@
 using System;
 using System.ComponentModel.DataAnnotations;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Stac;
 using Registry.Web.Utilities;
 
@@ -25,12 +23,12 @@ namespace Registry.Web.Controllers;
 [Produces("application/json")]
 public class StacController : ControllerBaseEx
 {
-    private readonly IStacManager _stacManager;
+    private readonly StacManager _stacManager;
 
     private const string MediaTypeJson = "application/json";
     private const string MediaTypeGeoJson = "application/geo+json";
 
-    public StacController(IStacManager stacManager)
+    public StacController(StacManager stacManager)
     {
         _stacManager = stacManager;
     }

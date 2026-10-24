@@ -8,12 +8,12 @@ public static class CachingServiceCollectionExtensions
 {
     /// <summary>
     /// Registers <see cref="IRecordCache"/> (single-flight and fail-open get-or-create of records) and
-    /// <see cref="ICacheGenerations"/>, both process-wide over the registered <c>IDistributedCache</c>.
+    /// <see cref="CacheGenerations"/>, both process-wide over the registered <c>IDistributedCache</c>.
     /// </summary>
     public static IServiceCollection AddRecordCache(this IServiceCollection services)
     {
         services.AddSingleton<IRecordCache, RecordCache>();
-        services.AddSingleton<ICacheGenerations, CacheGenerations>();
+        services.AddSingleton<CacheGenerations>();
         return services;
     }
 }

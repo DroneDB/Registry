@@ -21,6 +21,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Import;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.RemoteImport;
 using Registry.Web.Services.Ports;
 using Shouldly;
@@ -49,7 +50,6 @@ public class RemoteRegistryImporterNetworkTest : TestBase
     [SetUp]
     public void Setup()
     {
-
         // Create temp directories for test
         _tempDatasetsPath = Path.Combine(Path.GetTempPath(), $"registry-test-{Guid.NewGuid()}");
         _tempPath = Path.Combine(Path.GetTempPath(), $"registry-test-temp-{Guid.NewGuid()}");

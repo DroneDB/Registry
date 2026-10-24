@@ -23,24 +23,17 @@ using Entry = Registry.Web.Data.Models.Entry;
 namespace Registry.Web.Services.Shares;
 
 /// <summary>The large files of a share batch, in chunks: written at their offsets next to the dataset, taken by a rename when complete.</summary>
-public interface IShareChunkedUploads
+public sealed class ShareChunkedUploads
 {
-    Task<ChunkUploadResultDto> UploadChunk(string token, ChunkUploadDto chunkInfo, Stream chunkStream, CancellationToken ct = default);
-    Task<UploadResultDto> FinalizeChunkedUpload(string token, string fileId, string path, CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IShareChunkedUploads"/> (RQ-12, out of <c>ShareManager</c>).</summary>
-public sealed class ShareChunkedUploads : IShareChunkedUploads
-{
-    private readonly IShareBatchStore _batches;
+    private readonly ShareBatchStore _batches;
     private readonly IStorageQuota _quota;
-    private readonly IChunkStore _chunks;
-    private readonly IScratchFileProvider _scratch;
+    private readonly ChunkStore _chunks;
+    private readonly ScratchFileProvider _scratch;
     private readonly IDdbManager _ddbManager;
     private readonly IObjectsManager _objectsManager;
     private readonly ILogger<ShareChunkedUploads> _logger;
 
-    public ShareChunkedUploads(IShareBatchStore batches, IStorageQuota quota, IChunkStore chunks, IScratchFileProvider scratch, IDdbManager ddbManager, IObjectsManager objectsManager, ILogger<ShareChunkedUploads> logger)
+    public ShareChunkedUploads(ShareBatchStore batches, IStorageQuota quota, ChunkStore chunks, ScratchFileProvider scratch, IDdbManager ddbManager, IObjectsManager objectsManager, ILogger<ShareChunkedUploads> logger)
     {
         _batches = batches;
         _quota = quota;

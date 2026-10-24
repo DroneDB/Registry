@@ -22,23 +22,16 @@ using Entry = Registry.Web.Data.Models.Entry;
 namespace Registry.Web.Services.Shares;
 
 /// <summary>Rolls share batches back: the batch ends first (a concurrent rollback sees it), then its files go, or its whole dataset.</summary>
-public interface IShareBatchRollback
-{
-    Task RollbackAsync(Batch batch, bool deleteDataset = false);
-    Task RollbackRunningAsync(Dataset dataset);
-}
-
-/// <summary>Default <see cref="IShareBatchRollback"/> (RQ-12, out of <c>ShareManager</c>).</summary>
-public sealed class ShareBatchRollback : IShareBatchRollback
+public sealed class ShareBatchRollback
 {
     private readonly RegistryContext _context;
     private readonly IDatasetAccessResolver _access;
-    private readonly IShareBatchStore _batches;
+    private readonly ShareBatchStore _batches;
     private readonly IDatasetsManager _datasetsManager;
     private readonly IEntryCommandService _entries;
     private readonly ILogger<ShareBatchRollback> _logger;
 
-    public ShareBatchRollback(RegistryContext context, IDatasetAccessResolver access, IShareBatchStore batches, IDatasetsManager datasetsManager, IEntryCommandService entries, ILogger<ShareBatchRollback> logger)
+    public ShareBatchRollback(RegistryContext context, IDatasetAccessResolver access, ShareBatchStore batches, IDatasetsManager datasetsManager, IEntryCommandService entries, ILogger<ShareBatchRollback> logger)
     {
         _context = context;
         _access = access;

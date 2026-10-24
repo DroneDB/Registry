@@ -12,28 +12,29 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Objects;
 
 /// <summary>
-/// Default <see cref="IRasterAnalysisService"/>. The arguments are checked once, here, before the access
-/// check; the source is resolved by <see cref="RenderSources"/> (404 before any native call when the
-/// artifact does not exist yet); every native call runs on the heavy lane of <see cref="INativeWorkGate"/>.
+/// Measurements on a raster entry (read from its build artifact once built): its description and statistics,
+/// values at points, along lines and over areas, stockpile volumes and footprints, contour lines, and a
+/// GeoTIFF export. Results are libddb's JSON, passed through.
 /// </summary>
-public sealed class RasterAnalysisService : IRasterAnalysisService
+public sealed class RasterAnalysisService
 {
     /// <summary>The most stockpile footprints one full scan returns.</summary>
     public const int MaxStockpileResults = 500;
 
     private readonly RenderSources _sources;
     private readonly INativeWorkGate _gate;
-    private readonly IScratchFileProvider _scratch;
+    private readonly ScratchFileProvider _scratch;
     private readonly IFileSystem _fs;
     private readonly DownloadOptions _downloads;
     private readonly ILogger<RasterAnalysisService> _logger;
 
-    public RasterAnalysisService(RenderSources sources, INativeWorkGate gate, IScratchFileProvider scratch,
+    public RasterAnalysisService(RenderSources sources, INativeWorkGate gate, ScratchFileProvider scratch,
         IFileSystem fs, IOptions<DownloadOptions> downloads, ILogger<RasterAnalysisService> logger)
     {
         _sources = sources;
@@ -44,6 +45,7 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
         _logger = logger;
     }
 
+    /// <summary>Bands, sensor profile and visualization presets.</summary>
     public async Task<string> GetRasterInfoAsync(string orgSlug, string dsSlug, string path,
         CancellationToken ct = default)
     {
@@ -51,6 +53,7 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
         return await RunAsync(() => source.Ddb.GetRasterInfo(source.SourcePath), ct);
     }
 
+    /// <summary>Statistics and histogram of a band or of a band formula.</summary>
     public async Task<string> GetRasterMetadataAsync(string orgSlug, string dsSlug, string path, string? formula = null,
         string? bandFilter = null, CancellationToken ct = default)
     {
@@ -58,6 +61,7 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
         return await RunAsync(() => source.Ddb.GetRasterMetadata(source.SourcePath, formula, bandFilter), ct);
     }
 
+    /// <summary>Value range, unit and dimensions (with the thermal calibration when there is one).</summary>
     public async Task<string> GetRasterValueInfoAsync(string orgSlug, string dsSlug, string path,
         CancellationToken ct = default)
     {
@@ -65,6 +69,7 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
         return await RunAsync(() => source.Ddb.GetRasterValueInfo(source.SourcePath), ct);
     }
 
+    /// <summary>The value (temperature, elevation, ...) at the pixel <paramref name="x"/>, <paramref name="y"/>.</summary>
     public async Task<string> GetRasterPointValueAsync(string orgSlug, string dsSlug, string path, int x, int y,
         CancellationToken ct = default)
     {
@@ -72,6 +77,7 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
         return await RunAsync(() => source.Ddb.GetRasterPointValue(source.SourcePath, x, y), ct);
     }
 
+    /// <summary>Value statistics over a pixel rectangle.</summary>
     public async Task<string> GetRasterAreaStatsAsync(string orgSlug, string dsSlug, string path, int x0, int y0,
         int x1, int y1, CancellationToken ct = default)
     {
@@ -79,6 +85,7 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
         return await RunAsync(() => source.Ddb.GetRasterAreaStats(source.SourcePath, x0, y0, x1, y1), ct);
     }
 
+    /// <summary>Values sampled along a GeoJSON LineString (WGS84).</summary>
     public async Task<string> GetRasterProfileAsync(string orgSlug, string dsSlug, string path,
         string geoJsonLineString, int samples, CancellationToken ct = default)
     {
@@ -89,6 +96,7 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
         return await RunAsync(() => source.Ddb.GetRasterProfile(source.SourcePath, geoJsonLineString, samples), ct);
     }
 
+    /// <summary>Cut, fill and net volume over a GeoJSON polygon of an elevation raster.</summary>
     public async Task<string> CalculateVolumeAsync(string orgSlug, string dsSlug, string path, string polygonGeoJson,
         string? baseMethod, double flatElevation, CancellationToken ct = default)
     {
@@ -100,6 +108,7 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
             flatElevation), ct);
     }
 
+    /// <summary>The footprint of the stockpile around a clicked location.</summary>
     public async Task<string> DetectStockpileAsync(string orgSlug, string dsSlug, string path, double lat, double lon,
         double radiusMeters, float sensitivity, CancellationToken ct = default)
     {
@@ -111,6 +120,7 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
             Math.Clamp(sensitivity, 0f, 1f)), ct);
     }
 
+    /// <summary>The footprints of every stockpile of the elevation raster (a full scan).</summary>
     public async Task<string> DetectAllStockpilesAsync(string orgSlug, string dsSlug, string path, float sensitivity,
         double minAreaM2, int maxResults, CancellationToken ct = default)
     {
@@ -122,6 +132,7 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
             minAreaM2, Math.Min(maxResults, MaxStockpileResults)), ct);
     }
 
+    /// <summary>Contour lines of a single-band elevation raster (DEM/DSM/DTM).</summary>
     public async Task<string> GenerateContoursAsync(string orgSlug, string dsSlug, string path, ContourOptions options,
         CancellationToken ct = default)
     {
@@ -142,6 +153,7 @@ public sealed class RasterAnalysisService : IRasterAnalysisService
             o.MinElev, o.MaxElev, o.SimplifyTolerance, o.BandIndex > 0 ? o.BandIndex : 1), ct);
     }
 
+    /// <summary>The raster as a GeoTIFF with the visualization applied, within the export size limit.</summary>
     public async Task<StorageDataDto> ExportRasterAsync(string orgSlug, string dsSlug, string path,
         RasterVisualization visualization, CancellationToken ct = default)
     {

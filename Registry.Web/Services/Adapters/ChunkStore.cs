@@ -18,14 +18,13 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Default <see cref="IChunkStore"/>. Layout of an upload under <c>{root}/{fileId}/</c>:
-/// <c>manifest.json</c>, <c>data.bin</c> (allocated at the full size; every chunk is written at
-/// its offset, so the finished file is a rename away) and <c>received/{index}</c>, one empty
-/// marker per stored chunk. The SHA-256 of the prefix of chunks stored in order is kept in memory
-/// and fed inline while an in-order chunk streams in; a chunk that arrives early is hashed from
-/// disk once the gap before it is filled, and after a restart the hash is rebuilt from disk.
+/// Durable storage of resumable chunked uploads (UPL-01 E.5). Everything that defines an upload is
+/// on disk (manifest, chunk markers, one preallocated data file the chunks are written into at
+/// their offset), so chunks can arrive in any request, in any order, on any instance sharing the
+/// storage, and across a restart. The SHA-256 is computed as the chunks arrive in order, so
+/// taking the finished file needs no extra pass over it.
 /// </summary>
-public sealed partial class ChunkStore : IChunkStore
+public sealed partial class ChunkStore
 {
     public const string ManifestFileName = "manifest.json";
     public const string DataFileName = "data.bin";
@@ -45,6 +44,11 @@ public sealed partial class ChunkStore : IChunkStore
     [GeneratedRegex("^[A-Za-z0-9_-]{8,64}$")]
     private static partial Regex FileIdPattern();
 
+    /// <summary>
+    /// Starts an upload, or resumes it when <paramref name="fileId"/> already exists with the same
+    /// manifest.
+    /// </summary>
+    /// <exception cref="Registry.Web.Exceptions.ConflictException">The id exists with another manifest.</exception>
     public ChunkStatus Open(string root, string fileId, ChunkManifest manifest)
     {
         Validate(manifest);
@@ -74,12 +78,18 @@ public sealed partial class ChunkStore : IChunkStore
         return new ChunkStatus(manifest, []);
     }
 
+    /// <summary>The state of an upload, or null when unknown.</summary>
     public ChunkStatus? GetStatus(string root, string fileId)
     {
         var folder = Folder(root, fileId);
         return File.Exists(Path.Combine(folder, ManifestFileName)) ? Status(folder, ReadManifest(folder)) : null;
     }
 
+    /// <summary>
+    /// Stores chunk <paramref name="index"/> from <paramref name="body"/>. A chunk already stored
+    /// is accepted again without being rewritten.
+    /// </summary>
+    /// <exception cref="Registry.Web.Exceptions.BadRequestException">The body is not the chunk's size.</exception>
     public async Task<ChunkStatus> WriteAsync(string root, string fileId, int index, Stream body,
         CancellationToken ct = default)
     {
@@ -145,6 +155,11 @@ public sealed partial class ChunkStore : IChunkStore
         }
     }
 
+    /// <summary>
+    /// Moves the finished file to <paramref name="destination"/> and forgets the upload.
+    /// </summary>
+    /// <returns>The file's hash hint (its SHA-256, size and write time).</returns>
+    /// <exception cref="Registry.Web.Exceptions.ConflictException">Chunks are missing.</exception>
     public async Task<FileHashHint> TakeAsync(string root, string fileId, string destination)
     {
         var folder = Folder(root, fileId);

@@ -24,13 +24,12 @@ namespace Registry.Web.Controllers;
 [Produces("application/json")]
 public class ObjectBuildsController : ControllerBaseEx
 {
-    private readonly IBuildQueryService _builds;
+    private readonly BuildQueryService _builds;
 
-    public ObjectBuildsController(IBuildQueryService builds)
+    public ObjectBuildsController(BuildQueryService builds)
     {
         _builds = builds;
     }
-
 
     /// <summary>
     /// Triggers a build process for an object.

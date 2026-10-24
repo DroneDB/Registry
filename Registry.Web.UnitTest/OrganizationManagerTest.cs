@@ -2,7 +2,6 @@ using Shouldly;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Moq;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
@@ -287,13 +286,11 @@ public class OrganizationManagerTest : TestBase
             IsPublic = true
         };
 
-
         // Act & Assert
         var action = () => _organizationsManager.Edit(MagicStrings.PublicOrganizationSlug, updateDto);
         await Should.ThrowAsync<UnauthorizedException>(action)
             .WithMessage("Invalid user");
     }*/
-
 
     [Test]
     public async Task Delete_StandardUser_CanOnlyDeleteOwnOrganization()

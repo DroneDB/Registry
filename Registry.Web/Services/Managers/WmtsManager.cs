@@ -27,7 +27,7 @@ namespace Registry.Web.Services.Managers;
 /// to the existing XYZ tile pipeline (<c>IDDB.GenerateTile</c>); for vector
 /// layers we proxy MVT tiles directly.
 /// </summary>
-public class WmtsManager : OgcManagerBase, IWmtsManager
+public class WmtsManager : OgcManagerBase
 {
     private static readonly string[] Operations = ["GetCapabilities", "GetTile", "GetFeatureInfo"];
 
@@ -60,7 +60,6 @@ public class WmtsManager : OgcManagerBase, IWmtsManager
         var key = await LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, "caps-wmts-v5-1.0.0", $"{folderPath}-{sectionsKey}", ct);
         return await Records.GetOrCreateRecordAsync(key, async token =>
         {
-
             bool Include(string section) => sectionsSet == null || sectionsSet.Contains(section);
 
             await ResolveAsync(orgSlug, dsSlug, token);

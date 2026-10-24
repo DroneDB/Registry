@@ -22,8 +22,8 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
     private readonly IHeavyToolRegistry _registry;
     private readonly IDatasetResolver _datasets;
     private readonly IDdbManager _ddbManager;
-    private readonly IHeavyTaskQuota _quota;
-    private readonly IHeavyTaskDedup _dedup;
+    private readonly HeavyTaskQuota _quota;
+    private readonly HeavyTaskDedup _dedup;
     private readonly IBackgroundJobsProcessor _processor;
     private readonly ILogger<HeavyTaskRunner> _log;
 
@@ -31,8 +31,8 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         IHeavyToolRegistry registry,
         IDatasetResolver datasets,
         IDdbManager ddbManager,
-        IHeavyTaskQuota quota,
-        IHeavyTaskDedup dedup,
+        HeavyTaskQuota quota,
+        HeavyTaskDedup dedup,
         IBackgroundJobsProcessor processor,
         ILogger<HeavyTaskRunner> log)
     {

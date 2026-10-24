@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Uploads;
@@ -14,20 +15,20 @@ namespace Registry.Web.Services.Managers;
 
 /// <summary>
 /// Default <see cref="IObjectsManager"/>: the entry operations other features use, over
-/// <see cref="IEntryCommandService"/> (folders, deletes) and the upload pipeline (<see cref="IUploadManager"/>).
+/// <see cref="IEntryCommandService"/> (folders, deletes) and the upload pipeline (<see cref="UploadManager"/>).
 /// </summary>
 public class ObjectsManager : IObjectsManager
 {
     private readonly IEntryCommandService _commands;
-    private readonly IUploadManager _uploads;
+    private readonly UploadManager _uploads;
     private readonly IDatasetResolver _datasets;
     private readonly IDdbManager _ddbManager;
-    private readonly IScratchFileProvider _scratch;
+    private readonly ScratchFileProvider _scratch;
     private readonly IFileSystem _fs;
     private readonly ILogger<ObjectsManager> _logger;
 
-    public ObjectsManager(IEntryCommandService commands, IUploadManager uploads, IDatasetResolver datasets, IDdbManager ddbManager,
-        IScratchFileProvider scratch, IFileSystem fs, ILogger<ObjectsManager> logger)
+    public ObjectsManager(IEntryCommandService commands, UploadManager uploads, IDatasetResolver datasets, IDdbManager ddbManager,
+        ScratchFileProvider scratch, IFileSystem fs, ILogger<ObjectsManager> logger)
     {
         _commands = commands;
         _uploads = uploads;

@@ -1,5 +1,4 @@
 #nullable enable
-using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Managers;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Auth;
 
@@ -27,9 +26,9 @@ namespace Registry.Web.Controllers;
 [Produces("application/json")]
 public class AdminTasksController : ControllerBaseEx
 {
-    private readonly IAdminTasksManager _admin;
+    private readonly AdminTasksManager _admin;
 
-    public AdminTasksController(IAdminTasksManager admin)
+    public AdminTasksController(AdminTasksManager admin)
     {
         _admin = admin;
     }

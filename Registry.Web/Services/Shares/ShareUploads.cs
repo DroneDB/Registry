@@ -23,21 +23,14 @@ using Entry = Registry.Web.Data.Models.Entry;
 namespace Registry.Web.Services.Shares;
 
 /// <summary>The files of a share batch, in one request: added through the upload pipeline, recorded on the batch.</summary>
-public interface IShareUploads
+public sealed class ShareUploads
 {
-    Task<(string OrgSlug, string DsSlug)> GetUploadTarget(string token, CancellationToken ct = default);
-    Task<UploadResultDto> UploadStreamed(string token, string path, StreamedFile file, CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IShareUploads"/> (RQ-12, out of <c>ShareManager</c>).</summary>
-public sealed class ShareUploads : IShareUploads
-{
-    private readonly IShareBatchStore _batches;
+    private readonly ShareBatchStore _batches;
     private readonly IObjectsManager _objectsManager;
     private readonly IFileSystem _fileSystem;
     private readonly ILogger<ShareUploads> _logger;
 
-    public ShareUploads(IShareBatchStore batches, IObjectsManager objectsManager, IFileSystem fileSystem, ILogger<ShareUploads> logger)
+    public ShareUploads(ShareBatchStore batches, IObjectsManager objectsManager, IFileSystem fileSystem, ILogger<ShareUploads> logger)
     {
         _batches = batches;
         _objectsManager = objectsManager;

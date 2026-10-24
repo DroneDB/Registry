@@ -12,15 +12,18 @@ using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
-using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Default <see cref="IOrganizationMembershipService"/>: membership rows in the registry database, users
-/// looked up by their normalized name in the identity store (the lookup ASP.NET Identity uses).
+/// The one implementation of organization membership rows (RQ-06), used by the organization member
+/// routes (<c>/orgs/{orgSlug}/members</c>) and the administrator routes (<c>/users/{userName}/orgs</c>).
+/// It does not authorize: each caller checks who may change the members first. Every grant records
+/// <see cref="OrganizationUser.GrantedAt"/> and <see cref="OrganizationUser.GrantedBy"/>.
+/// <para>Codes: an unknown organization or user 404, already a member 409, the organization's owner as
+/// the target 400, not a member 404.</para>
 /// </summary>
-public sealed class OrganizationMembershipService : IOrganizationMembershipService
+public sealed class OrganizationMembershipService
 {
     private readonly RegistryContext _context;
     private readonly ApplicationDbContext _identity;
@@ -36,12 +39,16 @@ public sealed class OrganizationMembershipService : IOrganizationMembershipServi
         _logger = logger;
     }
 
+    /// <summary>The organization <paramref name="orgSlug"/> with its members, tracked.</summary>
+    /// <exception cref="Exceptions.NotFoundException">There is no such organization.</exception>
     public async Task<Organization> GetWithMembersAsync(string orgSlug, CancellationToken ct = default) =>
         await _context.Organizations
             .Include(o => o.Users)
             .FirstOrDefaultAsync(o => o.Slug == orgSlug, ct)
         ?? throw new NotFoundException($"Organization '{orgSlug}' not found");
 
+    /// <summary>Makes <paramref name="userName"/> a member of <paramref name="organization"/> (loaded by
+    /// <see cref="GetWithMembersAsync"/>) with <paramref name="permissions"/>, granted by <paramref name="grantedBy"/>.</summary>
     public async Task AddAsync(Organization organization, string userName, OrganizationPermissions permissions,
         User grantedBy, CancellationToken ct = default)
     {
@@ -68,6 +75,8 @@ public sealed class OrganizationMembershipService : IOrganizationMembershipServi
             userName, organization.Slug, permissions, grantedBy.UserName);
     }
 
+    /// <summary>Changes the permissions of the member <paramref name="userName"/>; the change is a new grant
+    /// by <paramref name="grantedBy"/>.</summary>
     public async Task UpdateAsync(Organization organization, string userName, OrganizationPermissions permissions,
         User grantedBy, CancellationToken ct = default)
     {
@@ -85,6 +94,7 @@ public sealed class OrganizationMembershipService : IOrganizationMembershipServi
             userName, organization.Slug, oldPermission, permissions, grantedBy.UserName);
     }
 
+    /// <summary>Removes the member <paramref name="userName"/>.</summary>
     public async Task RemoveAsync(Organization organization, string userName, User removedBy,
         CancellationToken ct = default)
     {
@@ -98,6 +108,12 @@ public sealed class OrganizationMembershipService : IOrganizationMembershipServi
             userName, organization.Slug, removedBy.UserName);
     }
 
+    /// <summary>
+    /// Adds the members of <paramref name="sourceSlug"/> to <paramref name="targetSlug"/> (an organization
+    /// merge): each keeps its permissions and its recorded grant (the merge, by <paramref name="grantedBy"/>,
+    /// is the grant when none was recorded). A user who is already a member of the target, or its owner,
+    /// is skipped. Returns the number of members added.
+    /// </summary>
     public async Task<int> CopyMembersAsync(string sourceSlug, string targetSlug, User grantedBy,
         CancellationToken ct = default)
     {

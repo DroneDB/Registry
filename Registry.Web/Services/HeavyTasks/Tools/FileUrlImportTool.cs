@@ -47,7 +47,6 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
         p.Text("username"),
         p.Text("password"));
 
-
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -73,7 +72,7 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
     private readonly ImportSettings _importSettings;
     private readonly long _diskSafetyMarginBytes;
     private readonly DatasetPathPolicy _paths;
-    private readonly IScratchFileProvider _scratch;
+    private readonly ScratchFileProvider _scratch;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="FileUrlImportTool"/> class.
@@ -91,7 +90,7 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
         TaskFileIndexer indexer,
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
         DatasetPathPolicy paths,
-        IScratchFileProvider scratch)
+        ScratchFileProvider scratch)
     {
         _scratch = scratch;
         _downloader = downloader;
@@ -238,9 +237,6 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
 
     private string DecryptPassword(string? raw) =>
         string.IsNullOrEmpty(raw) ? string.Empty : _credentials.Open(raw);
-
-
-
 
     private sealed class CallbackProgress<T>(Action<T> callback) : IProgress<T>
     {

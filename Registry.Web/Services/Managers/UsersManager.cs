@@ -2,29 +2,26 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Common;
-using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Ports;
 using Registry.Web.Services.Users;
 
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// The users API (<see cref="IUsersManager"/>, what <c>UsersController</c> calls) over the user services RQ-12 split it
-/// into (1000 lines and 14 parameters before): sign-in, accounts, passwords, roles, the directory, the deletion.
+/// User CRUD interface (authenticate, list, create, delete, roles, password, storage).
 /// </summary>
-public class UsersManager : IUsersManager
+public class UsersManager
 {
     private readonly IUserSessions _sessions;
-    private readonly IUserAccounts _accounts;
-    private readonly IUserPasswords _passwords;
-    private readonly IUserRoles _roles;
-    private readonly IUserDirectory _directory;
-    private readonly IUserDeletion _deletion;
+    private readonly UserAccounts _accounts;
+    private readonly UserPasswords _passwords;
+    private readonly UserRoles _roles;
+    private readonly UserDirectory _directory;
+    private readonly UserDeletion _deletion;
 
-    public UsersManager(IUserSessions sessions, IUserAccounts accounts, IUserPasswords passwords, IUserRoles roles,
-        IUserDirectory directory, IUserDeletion deletion)
+    public UsersManager(IUserSessions sessions, UserAccounts accounts, UserPasswords passwords, UserRoles roles,
+        UserDirectory directory, UserDeletion deletion)
     {
         _sessions = sessions;
         _accounts = accounts;
@@ -83,6 +80,13 @@ public class UsersManager : IUsersManager
         OrganizationPermissions permissions) =>
         _directory.UpdateUserOrganizationPermissions(userName, orgSlug, permissions);
 
+    /// <summary>
+    /// Deletes a user and optionally transfers their data to a successor.
+    /// </summary>
+    /// <param name="userName">The username of the user to delete.</param>
+    /// <param name="successor">The username of the successor to transfer data to. If null, all data is deleted.</param>
+    /// <param name="conflictResolution">How to handle conflicts when transferring datasets.</param>
+    /// <returns>Result of the deletion operation.</returns>
     public Task<DeleteUserResultDto> DeleteUser(string userName, string successor = null,
         ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.Rename) =>
         _deletion.DeleteUser(userName, successor, conflictResolution);

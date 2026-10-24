@@ -15,6 +15,7 @@ using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -22,33 +23,15 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Organizations;
 
 /// <summary>The members of an organization (RQ-12, out of <c>OrganizationsManager</c>).</summary>
-public interface IOrganizationMembers
-{
-    /// <summary>The members of an organization, for an administrator, its owner or one of its members.</summary>
-    Task<IEnumerable<OrganizationMemberDto>> GetMembers(string orgSlug, CancellationToken ct = default);
-
-    /// <summary>Adds a member (whoever may manage the members, while the feature is on).</summary>
-    Task AddMember(string orgSlug, string userName, OrganizationPermissions permissions = OrganizationPermissions.ReadWrite,
-        CancellationToken ct = default);
-
-    /// <summary>Changes the permissions of a member.</summary>
-    Task UpdateMemberPermission(string orgSlug, string userName, OrganizationPermissions permission,
-        CancellationToken ct = default);
-
-    /// <summary>Removes a member.</summary>
-    Task RemoveMember(string orgSlug, string userName, CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IOrganizationMembers"/>.</summary>
-public sealed class OrganizationMembers : IOrganizationMembers
+public sealed class OrganizationMembers
 {
     private readonly IAuthManager _authManager;
-    private readonly IOrganizationMembershipService _memberships;
+    private readonly OrganizationMembershipService _memberships;
     private readonly RegistryContext _context;
     private readonly ApplicationDbContext _appContext;
     private readonly IOptions<AccountOptions> _accounts;
 
-    public OrganizationMembers(IAuthManager authManager, IOrganizationMembershipService memberships,
+    public OrganizationMembers(IAuthManager authManager, OrganizationMembershipService memberships,
         RegistryContext context, ApplicationDbContext appContext, IOptions<AccountOptions> accounts)
     {
         _authManager = authManager;
@@ -60,6 +43,7 @@ public sealed class OrganizationMembers : IOrganizationMembers
 
     public bool IsMemberManagementEnabled => _accounts.Value.EnableOrganizationMemberManagement;
 
+    /// <summary>The members of an organization, for an administrator, its owner or one of its members.</summary>
     public async Task<IEnumerable<OrganizationMemberDto>> GetMembers(string orgSlug, CancellationToken ct = default)
     {
         var org = await _context.Organizations
@@ -122,6 +106,7 @@ public sealed class OrganizationMembers : IOrganizationMembers
         return (org, currentUser);
     }
 
+    /// <summary>Adds a member (whoever may manage the members, while the feature is on).</summary>
     public async Task AddMember(string orgSlug, string userName, OrganizationPermissions permissions = OrganizationPermissions.ReadWrite,
         CancellationToken ct = default)
     {
@@ -129,6 +114,7 @@ public sealed class OrganizationMembers : IOrganizationMembers
         await _memberships.AddAsync(org, userName, permissions, currentUser, CancellationToken.None);
     }
 
+    /// <summary>Changes the permissions of a member.</summary>
     public async Task UpdateMemberPermission(string orgSlug, string userName, OrganizationPermissions permission,
         CancellationToken ct = default)
     {
@@ -136,6 +122,7 @@ public sealed class OrganizationMembers : IOrganizationMembers
         await _memberships.UpdateAsync(org, userName, permission, currentUser, CancellationToken.None);
     }
 
+    /// <summary>Removes a member.</summary>
     public async Task RemoveMember(string orgSlug, string userName, CancellationToken ct = default)
     {
         var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug, ct);

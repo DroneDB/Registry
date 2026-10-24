@@ -15,7 +15,7 @@ namespace Registry.Web.Utilities.Ogc;
 ///  • WCS 1.0 ad-hoc <c>BANDS</c> extension (comma-separated indices/names)
 ///
 /// All variants funnel into a single normalised <c>int[]</c> of 1-based band
-/// indices that <see cref="IWcsCoverageService.RenderRegion"/> can forward to
+/// indices that <see cref="WcsCoverageService.RenderRegion"/> can forward to
 /// the native DdbWrapper. Band name lookup is case-insensitive against the
 /// names probed via <see cref="WcsRasterInfo.BandNames"/>.
 /// </summary>

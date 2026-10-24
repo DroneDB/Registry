@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.Ports;
 
@@ -15,34 +16,14 @@ namespace Registry.Web.Services.HeavyTasks.NodeOdx;
 /// The NodeODX side of a photogrammetry task (RQ-12, out of <c>PhotogrammetryTool</c>): the configured nodes, and
 /// one run on a node: submit the images, follow the node's progress and log, download the result bundle.
 /// </summary>
-public interface INodeOdxTaskRunner
-{
-    /// <summary>Whether any node is configured.</summary>
-    bool HasNodes { get; }
-
-    /// <summary>The node <paramref name="nodeId"/> (the first one configured when null), or null when there is none.</summary>
-    NodeOdxEndpoint? Resolve(string? nodeId);
-
-    /// <summary>
-    /// Runs <paramref name="imagePaths"/> on <paramref name="node"/> to the end, reporting the node's progress and log,
-    /// and returns the result bundle (<c>all.zip</c>) as a scratch file: the caller disposes it when done. The task
-    /// is canceled on the node when <paramref name="ct"/> is, and removed from it once the bundle is downloaded.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">The node's task failed, or produced no result bundle.</exception>
-    /// <exception cref="OperationCanceledException">The task was canceled (here or on the node).</exception>
-    Task<ScratchFile> RunAsync(NodeOdxEndpoint node, string taskName, IReadOnlyList<string> imagePaths,
-        string? optionsJson, IProgress<HeavyToolProgress> progress, CancellationToken ct);
-}
-
-/// <summary>Default <see cref="INodeOdxTaskRunner"/>.</summary>
-public sealed class NodeOdxTaskRunner : INodeOdxTaskRunner
+public sealed class NodeOdxTaskRunner
 {
     private readonly INodeOdxClient _client;
-    private readonly INodeOdxNodeRegistry _nodes;
-    private readonly IScratchFileProvider _scratch;
+    private readonly NodeOdxNodeRegistry _nodes;
+    private readonly ScratchFileProvider _scratch;
     private readonly TimeSpan _pollInterval;
 
-    public NodeOdxTaskRunner(INodeOdxClient client, INodeOdxNodeRegistry nodes, IScratchFileProvider scratch,
+    public NodeOdxTaskRunner(INodeOdxClient client, NodeOdxNodeRegistry nodes, ScratchFileProvider scratch,
         IOptions<ProcessingPlatformSettings> platformSettings)
     {
         _client = client;
@@ -51,10 +32,19 @@ public sealed class NodeOdxTaskRunner : INodeOdxTaskRunner
         _pollInterval = TimeSpan.FromSeconds(Math.Max(1, platformSettings.Value.RemoteNodePollIntervalSeconds));
     }
 
+    /// <summary>Whether any node is configured.</summary>
     public bool HasNodes => _nodes.HasNodes;
 
+    /// <summary>The node <paramref name="nodeId"/> (the first one configured when null), or null when there is none.</summary>
     public NodeOdxEndpoint? Resolve(string? nodeId) => _nodes.Resolve(nodeId);
 
+    /// <summary>
+    /// Runs <paramref name="imagePaths"/> on <paramref name="node"/> to the end, reporting the node's progress and log,
+    /// and returns the result bundle (<c>all.zip</c>) as a scratch file: the caller disposes it when done. The task
+    /// is canceled on the node when <paramref name="ct"/> is, and removed from it once the bundle is downloaded.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The node's task failed, or produced no result bundle.</exception>
+    /// <exception cref="OperationCanceledException">The task was canceled (here or on the node).</exception>
     public async Task<ScratchFile> RunAsync(NodeOdxEndpoint node, string taskName, IReadOnlyList<string> imagePaths,
         string? optionsJson, IProgress<HeavyToolProgress> progress, CancellationToken ct)
     {

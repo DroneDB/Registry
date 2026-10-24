@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -10,7 +9,7 @@ using Registry.Common;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.Import;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -18,14 +17,14 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// Default <see cref="IFileUrlImportManager"/>. Verifies a single-file URL cheaply (probe + deny-list
-/// / size checks) and, on import, encrypts the optional basic-auth password before submitting the
-/// <c>import-file</c> heavy task. Authorization requires Write access on the target dataset.
+/// Web-layer orchestration for importing a single file from a URL into an existing dataset. Verifies
+/// the URL cheaply (probe) and, on import, encrypts the optional basic-auth credential and submits the
+/// <c>import-file</c> heavy task.
 /// </summary>
-public class FileUrlImportManager : IFileUrlImportManager
+public class FileUrlImportManager
 {
     private readonly IDatasetAccessResolver _access;
-    private readonly ICurrentUserTaskSubmitter _submitter;
+    private readonly CurrentUserTaskSubmitter _submitter;
     private readonly ImportCredentials _credentials;
     private readonly GuardedHttpDownloader _downloader;
     private readonly ImportSettings _settings;
@@ -36,7 +35,7 @@ public class FileUrlImportManager : IFileUrlImportManager
     /// </summary>
     public FileUrlImportManager(
         IDatasetAccessResolver access,
-        ICurrentUserTaskSubmitter submitter,
+        CurrentUserTaskSubmitter submitter,
         ImportCredentials credentials,
         GuardedHttpDownloader downloader,
         IOptions<ImportSettings> importSettings,
@@ -50,7 +49,15 @@ public class FileUrlImportManager : IFileUrlImportManager
         _paths = paths;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Probes the URL without transferring the body and reports reachability, size, the derived file
+    /// name and the outcome of the deny-list / size checks.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="request">The verify request.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The verification result.</returns>
     public async Task<UrlImportVerifyResultDto> VerifyAsync(string orgSlug, string dsSlug,
         UrlImportVerifyRequestDto request, CancellationToken ct)
     {
@@ -78,7 +85,15 @@ public class FileUrlImportManager : IFileUrlImportManager
         };
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Submits the <c>import-file</c> heavy task after re-validating the request and encrypting the
+    /// optional basic-auth password.
+    /// </summary>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="request">The import request.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The submitted task id.</returns>
     public async Task<UrlImportResultDto> ImportAsync(string orgSlug, string dsSlug,
         UrlImportRequestDto request, CancellationToken ct)
     {

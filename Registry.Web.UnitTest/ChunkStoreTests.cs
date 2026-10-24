@@ -45,7 +45,7 @@ public class ChunkStoreTests
 
     private static string Sha(byte[] data) => Convert.ToHexStringLower(SHA256.HashData(data));
 
-    private async Task<(byte[] Content, string Sha256)> Take(IChunkStore store, string fileId = "file-0001")
+    private async Task<(byte[] Content, string Sha256)> Take(ChunkStore store, string fileId = "file-0001")
     {
         var destination = Path.Combine(_root, "out.bin");
         var hint = await store.TakeAsync(_root, fileId, destination);

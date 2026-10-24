@@ -51,7 +51,7 @@ public class UploadManagerTests
     private Mock<IDDB> _ddb = null!;
     private Mock<IDatasetIndexQueue> _queue = null!;
     private Mock<IDatasetChangeCoalescer> _changes = null!;
-    private IUploadReceiptStore _receipts = null!;
+    private DistributedUploadReceiptStore _receipts = null!;
     private AppSettings _settings = null!;
     private int _enqueues, _evaluations;
     private long _used, _limit = long.MaxValue;
@@ -135,7 +135,7 @@ public class UploadManagerTests
             _receipts, _queue.Object);
     }
 
-    private static async Task<IReadOnlyList<StreamedPart>> Stream(IUploadManager uploads,
+    private static async Task<IReadOnlyList<StreamedPart>> Stream(UploadManager uploads,
         Services.Uploads.UploadRequestContext ctx, params string[] paths)
     {
         var parts = new List<StreamedPart>();

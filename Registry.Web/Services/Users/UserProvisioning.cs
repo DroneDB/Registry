@@ -20,26 +20,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Users;
 
 /// <summary>The local user records: created on a first login or by an administrator, synchronised with what the login provider returns.</summary>
-public interface IUserProvisioning
-{
-    /// <summary>Creates <paramref name="user"/> (password policy, roles that must exist, the default organization when enabled).</summary>
-    Task<User> CreateAsync(User user, string password, string[] roles = null);
-
-    /// <summary>
-    /// A password for a user of an external provider: never used to authenticate (the provider does), but Identity
-    /// stores a hashed credential. It satisfies any common password policy.
-    /// </summary>
-    string ExternalUserPassword();
-
-    /// <summary>Stores the metadata the provider returned for <paramref name="user"/> and applies the roles it lists.</summary>
-    Task SyncFromProviderAsync(User user, Dictionary<string, object> metadata);
-
-    /// <summary>Applies the roles listed in the metadata of <paramref name="user"/> (none listed: unchanged).</summary>
-    Task SyncRolesAsync(User user);
-}
-
-/// <summary>Default <see cref="IUserProvisioning"/> (RQ-12, out of <c>UsersManager</c>).</summary>
-public sealed class UserProvisioning : IUserProvisioning
+public sealed class UserProvisioning
 {
     private readonly UserManager<User> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
@@ -70,6 +51,10 @@ public sealed class UserProvisioning : IUserProvisioning
     private static string GenerateExternalUserPassword()
         => "!" + CommonUtils.RandomString(29) + "Aa1";
 
+    /// <summary>
+    /// A password for a user of an external provider: never used to authenticate (the provider does), but Identity
+    /// stores a hashed credential. It satisfies any common password policy.
+    /// </summary>
     public string ExternalUserPassword() => GenerateExternalUserPassword();
 
     /// <summary>
@@ -91,6 +76,7 @@ public sealed class UserProvisioning : IUserProvisioning
             await _applicationDbContext.SaveChangesAsync();
     }
 
+    /// <summary>Applies the roles listed in the metadata of <paramref name="user"/> (none listed: unchanged).</summary>
     public async Task SyncRolesAsync(User user)
     {
         var tmp = user.Metadata?.SafeGetValue("roles");
@@ -131,6 +117,7 @@ public sealed class UserProvisioning : IUserProvisioning
         }
     }
 
+    /// <summary>Creates <paramref name="user"/> (password policy, roles that must exist, the default organization when enabled).</summary>
     public async Task<User> CreateAsync(User user, string password, string[] roles = null)
     {
         await ValidateRoles(roles);

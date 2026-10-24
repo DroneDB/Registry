@@ -20,14 +20,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Users;
 
 /// <summary>The deletion of a user, with their data deleted or transferred to a successor; a user of an external provider is deactivated instead.</summary>
-public interface IUserDeletion
-{
-    Task<DeleteUserResultDto> DeleteUser(string userName, string successor = null,
-        ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.Rename);
-}
-
-/// <summary>Default <see cref="IUserDeletion"/> (RQ-12, out of <c>UsersManager</c>).</summary>
-public sealed class UserDeletion : IUserDeletion
+public sealed class UserDeletion
 {
     private readonly ILoginManager _loginManager;
     private readonly UserManager<User> _userManager;

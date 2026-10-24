@@ -20,7 +20,7 @@ public static class TestImports
     /// <see cref="RemoteRegistryImporter"/> with both strategies, its HTTP calls through <paramref name="http"/>.
     /// </summary>
     public static RemoteRegistryImporter Importer(RegistryContext context, IDdbManager ddbManager,
-        IHttpClientFactory http, string tempPath, IBuildScheduler? builds = null, ImportSettings? settings = null)
+        IHttpClientFactory http, string tempPath, BuildScheduler? builds = null, ImportSettings? settings = null)
     {
         settings ??= new ImportSettings();
         var fileSystem = new FileSystem();

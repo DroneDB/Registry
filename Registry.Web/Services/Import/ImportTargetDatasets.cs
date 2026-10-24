@@ -10,20 +10,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Import;
 
 /// <summary>The empty dataset a dataset import fills (RQ-12, out of the import manager).</summary>
-public interface IImportTargetDatasets
-{
-    /// <summary>Creates the empty destination dataset.</summary>
-    Task<DatasetDto> CreateAsync(string orgSlug, string slug, string name, Visibility visibility, CancellationToken ct);
-
-    /// <summary>The URL of the dataset, or null when it cannot be built (logged: the import was queued anyway).</summary>
-    Task<string?> UrlOfAsync(string orgSlug, string dsSlug, CancellationToken ct);
-
-    /// <summary>Deletes the dataset after a failed submission, so that nothing is left behind (a failed delete is logged).</summary>
-    Task RollBackAsync(string orgSlug, string dsSlug, Exception cause);
-}
-
-/// <summary>Default <see cref="IImportTargetDatasets"/>.</summary>
-public sealed class ImportTargetDatasets : IImportTargetDatasets
+public sealed class ImportTargetDatasets
 {
     private readonly IDatasetsManager _datasetsManager;
     private readonly IDatasetResolver _datasets;
@@ -39,10 +26,12 @@ public sealed class ImportTargetDatasets : IImportTargetDatasets
         _logger = logger;
     }
 
+    /// <summary>Creates the empty destination dataset.</summary>
     public Task<DatasetDto> CreateAsync(string orgSlug, string slug, string name, Visibility visibility,
         CancellationToken ct) =>
         _datasetsManager.AddNew(orgSlug, new DatasetNewDto { Slug = slug, Name = name, Visibility = visibility }, ct);
 
+    /// <summary>The URL of the dataset, or null when it cannot be built (logged: the import was queued anyway).</summary>
     public async Task<string?> UrlOfAsync(string orgSlug, string dsSlug, CancellationToken ct)
     {
         try
@@ -56,6 +45,7 @@ public sealed class ImportTargetDatasets : IImportTargetDatasets
         }
     }
 
+    /// <summary>Deletes the dataset after a failed submission, so that nothing is left behind (a failed delete is logged).</summary>
     public async Task RollBackAsync(string orgSlug, string dsSlug, Exception cause)
     {
         _logger.LogError(cause, "Import submission failed for {Org}/{Ds}; rolling back the dataset", orgSlug, dsSlug);

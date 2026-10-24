@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.Import;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -17,18 +17,16 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// Default <see cref="IImportManager"/>. Verifies sources cheaply, then (on create) gates quota, makes
-/// an empty dataset and submits the <c>import-dataset</c> heavy task, rolling the dataset back if the
-/// submission fails. The pieces are the services RQ-12 split it into (12 parameters before): the sources
-/// a server offers, the quota gate, the target dataset and the credentials of the task parameters.
+/// Orchestrates importing a remote dataset (another Registry instance or a downloadable archive) into a
+/// newly created dataset. Verification is mandatory before an import can be created.
 /// </summary>
-public class ImportManager : IImportManager
+public class ImportManager
 {
     private readonly IDatasetAccessResolver _access;
-    private readonly IImportSourceCatalog _sources;
-    private readonly IImportQuotaGate _quota;
-    private readonly IImportTargetDatasets _targets;
-    private readonly ICurrentUserTaskSubmitter _submitter;
+    private readonly ImportSourceCatalog _sources;
+    private readonly ImportQuotaGate _quota;
+    private readonly ImportTargetDatasets _targets;
+    private readonly CurrentUserTaskSubmitter _submitter;
     private readonly ImportCredentials _credentials;
 
     /// <summary>
@@ -36,10 +34,10 @@ public class ImportManager : IImportManager
     /// </summary>
     public ImportManager(
         IDatasetAccessResolver access,
-        IImportSourceCatalog sources,
-        IImportQuotaGate quota,
-        IImportTargetDatasets targets,
-        ICurrentUserTaskSubmitter submitter,
+        ImportSourceCatalog sources,
+        ImportQuotaGate quota,
+        ImportTargetDatasets targets,
+        CurrentUserTaskSubmitter submitter,
         ImportCredentials credentials)
     {
         _access = access;
@@ -50,7 +48,12 @@ public class ImportManager : IImportManager
         _credentials = credentials;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Returns the import source types enabled on this deployment (registered AND allow-listed) to a
+    /// caller who may import into the organization (write access), like the other import operations.
+    /// </summary>
+    /// <param name="orgSlug">The destination organization slug.</param>
+    /// <returns>The available source type identifiers.</returns>
     public async Task<IReadOnlyList<string>> GetAvailableSourceTypes(string orgSlug, CancellationToken ct = default)
     {
         await RequireImportAccess(orgSlug, ct);
@@ -61,7 +64,14 @@ public class ImportManager : IImportManager
     private async Task RequireImportAccess(string orgSlug, CancellationToken ct) =>
         await _access.ResolveOrganizationAsync(orgSlug, AccessType.Write, ct: ct);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Verifies (probes) an import source: checks reachability/credentials and returns cheap metadata
+    /// (estimated size, file count, a suggested name/slug) without creating anything.
+    /// </summary>
+    /// <param name="orgSlug">The destination organization slug.</param>
+    /// <param name="request">The verify request.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The probe result.</returns>
     public async Task<ImportVerifyResultDto> VerifyAsync(string orgSlug, VerifyImportRequestDto request,
         CancellationToken ct)
     {
@@ -85,7 +95,13 @@ public class ImportManager : IImportManager
         };
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Creates an empty dataset and submits a heavy task that imports the source into it.
+    /// </summary>
+    /// <param name="orgSlug">The destination organization slug.</param>
+    /// <param name="request">The create request.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The created dataset and the tracking task id.</returns>
     public async Task<ImportCreateResultDto> CreateAsync(string orgSlug, CreateImportRequestDto request,
         CancellationToken ct)
     {
@@ -139,7 +155,15 @@ public class ImportManager : IImportManager
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Browses the remote structure of an import source (lists organizations or datasets) without
+    /// creating or modifying anything. Only sources that implement
+    /// <see cref="Registry.Web.Services.Import.IBrowsableImportSource"/> support this operation.
+    /// </summary>
+    /// <param name="orgSlug">The destination organization slug (used for access-control only).</param>
+    /// <param name="request">The browse request specifying source type, params and browse type.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The browse result containing the matching items.</returns>
     public async Task<ImportBrowseResultDto> BrowseAsync(string orgSlug, BrowseImportRequestDto request,
         CancellationToken ct)
     {

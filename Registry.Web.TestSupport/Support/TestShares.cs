@@ -22,8 +22,8 @@ public static class TestShares
     public static ShareManager Manager(IObjectsManager objects, IDatasetsManager datasetsManager,
         IOrganizationsManager organizations, IDatasetResolver datasets, IStorageQuota quota, IAuthManager authManager,
         IDatasetAccessResolver access, IBatchTokenGenerator tokens, INameGenerator names, RegistryContext context,
-        IFileSystem fileSystem, IScratchFileProvider scratch, TimeProvider time, IEntryCommandService entries,
-        IChunkStore? chunks = null, IDdbManager? ddbManager = null)
+        IFileSystem fileSystem, ScratchFileProvider scratch, TimeProvider time, IEntryCommandService entries,
+        ChunkStore? chunks = null, IDdbManager? ddbManager = null)
     {
         var store = new ShareBatchStore(context, authManager, access, tokens, time, NullLogger<ShareBatchStore>.Instance);
         var rollback = new ShareBatchRollback(context, access, store, datasetsManager, entries,

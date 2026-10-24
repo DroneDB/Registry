@@ -8,13 +8,3 @@ namespace Registry.Web.Services.Ports;
 /// </summary>
 public sealed record JobOutcome<TResult>(string JobId, string State, TResult? Result, string? Error)
     where TResult : class;
-
-/// <summary>Reads the outcome of the background jobs of one kind.</summary>
-public interface IJobOutcomeReader
-{
-    /// <summary>
-    /// The outcome of the job <paramref name="jobId"/> if it is a job of <typeparamref name="TJob"/>; null when there
-    /// is no such job, or it runs another class (a caller only sees the jobs it knows).
-    /// </summary>
-    JobOutcome<TResult>? Find<TJob, TResult>(string jobId) where TResult : class;
-}

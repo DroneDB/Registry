@@ -24,7 +24,7 @@ public interface IDatasetListingInvalidator
 
 /// <summary>Default <see cref="IDatasetListingInvalidator"/>.</summary>
 public sealed class DatasetListingInvalidator(ICacheManager cacheManager, IDdbManager ddbManager,
-    ICacheGenerations generations) : IDatasetListingInvalidator
+    CacheGenerations generations) : IDatasetListingInvalidator
 {
     public async Task VisibilityChangedAsync(string orgSlug, Guid internalRef, CancellationToken ct = default)
     {

@@ -7,7 +7,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using NUnit.Framework;
-using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;

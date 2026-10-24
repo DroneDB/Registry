@@ -23,31 +23,7 @@ namespace Registry.Web.Services.Maintenance;
 /// Build and index maintenance across datasets (admin): the build cleanup, the system rescan, the job index
 /// retention.
 /// </summary>
-public interface IBuildMaintenance
-{
-    /// <summary>
-    /// Cleans up build artifacts and stale entries on one dataset (synchronously), all datasets in an
-    /// organization or every dataset (one background job per dataset).
-    /// </summary>
-    Task<CleanupBuildResultDto> CleanupBuildAsync(CleanupBuildRequestDto? request, CancellationToken ct = default);
-
-    /// <summary>
-    /// Rescans the entries that match a type and/or extension filter in every dataset of a scope (all
-    /// organizations, one organization or one dataset). Runs in the background: one rescan-index task per dataset
-    /// with matching entries.
-    /// </summary>
-    /// <returns>The id of the background job that submits the dataset tasks.</returns>
-    Task<RescanJobDto> RescanAsync(RescanRequestDto request, CancellationToken ct = default);
-
-    /// <summary>
-    /// Removes terminal (Succeeded/Failed/Deleted) job index records older than <paramref name="retentionDays"/>
-    /// (the configured retention when null).
-    /// </summary>
-    Task<CleanupJobIndicesResultDto> CleanupJobIndicesAsync(int? retentionDays = null, CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IBuildMaintenance"/> (RQ-12, out of <c>SystemManager</c> and <c>RescanManager</c>).</summary>
-public sealed class BuildMaintenance : IBuildMaintenance
+public sealed class BuildMaintenance
 {
     private readonly RegistryContext _context;
     private readonly IDdbManager _ddbManager;
@@ -70,6 +46,10 @@ public sealed class BuildMaintenance : IBuildMaintenance
         _logger = logger;
     }
 
+    /// <summary>
+    /// Cleans up build artifacts and stale entries on one dataset (synchronously), all datasets in an
+    /// organization or every dataset (one background job per dataset).
+    /// </summary>
     public async Task<CleanupBuildResultDto> CleanupBuildAsync(CleanupBuildRequestDto? request, CancellationToken ct = default)
     {
         request ??= new CleanupBuildRequestDto();
@@ -142,6 +122,10 @@ public sealed class BuildMaintenance : IBuildMaintenance
         return result;
     }
 
+    /// <summary>
+    /// Removes terminal (Succeeded/Failed/Deleted) job index records older than <paramref name="retentionDays"/>
+    /// (the configured retention when null).
+    /// </summary>
     public async Task<CleanupJobIndicesResultDto> CleanupJobIndicesAsync(int? retentionDays = null, CancellationToken ct = default)
     {
         var days = retentionDays ?? _jobs.JobIndexRetentionDays;
@@ -165,6 +149,12 @@ public sealed class BuildMaintenance : IBuildMaintenance
         };
     }
 
+    /// <summary>
+    /// Rescans the entries that match a type and/or extension filter in every dataset of a scope (all
+    /// organizations, one organization or one dataset). Runs in the background: one rescan-index task per dataset
+    /// with matching entries.
+    /// </summary>
+    /// <returns>The id of the background job that submits the dataset tasks.</returns>
     public async Task<RescanJobDto> RescanAsync(RescanRequestDto request, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(request);

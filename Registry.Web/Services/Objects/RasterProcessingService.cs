@@ -15,10 +15,10 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Objects;
 
 /// <summary>
-/// Default <see cref="IRasterProcessingService"/>. The required arguments are checked before the access check,
-/// every path through libddb's rule; the native work runs on the heavy lane of <see cref="INativeWorkGate"/>.
+/// Raster operations that make new entries: single-band rasters merged into one multi-band raster (with a
+/// check and a preview first), the alignment check of two rasters, and the masking of orthophoto borders.
 /// </summary>
-public sealed class RasterProcessingService : IRasterProcessingService
+public sealed class RasterProcessingService
 {
     private const string MaskBordersJob = "MaskBorders";
 
@@ -40,6 +40,7 @@ public sealed class RasterProcessingService : IRasterProcessingService
         _logger = logger;
     }
 
+    /// <summary>libddb's check of the inputs of a merge (JSON).</summary>
     public async Task<string> ValidateMergeMultispectralAsync(string orgSlug, string dsSlug, string[] paths,
         CancellationToken ct = default)
     {
@@ -50,6 +51,7 @@ public sealed class RasterProcessingService : IRasterProcessingService
         return await _gate.RunAsync(NativeLane.Heavy, () => ddb.ValidateMergeMultispectral(paths), ct);
     }
 
+    /// <summary>A preview image of the merge (webp).</summary>
     public async Task<byte[]> PreviewMergeMultispectralAsync(string orgSlug, string dsSlug, string[] paths,
         string? previewBands = null, int thumbSize = 512, CancellationToken ct = default)
     {
@@ -61,6 +63,7 @@ public sealed class RasterProcessingService : IRasterProcessingService
             ct);
     }
 
+    /// <summary>Merges the single-band <paramref name="paths"/> into <paramref name="outputPath"/> (replaced) and indexes it.</summary>
     public async Task MergeMultispectralAsync(string orgSlug, string dsSlug, string[] paths, string? outputPath,
         CancellationToken ct = default)
     {
@@ -84,6 +87,7 @@ public sealed class RasterProcessingService : IRasterProcessingService
         _logger.LogInformation("Merge complete and file added to the dataset");
     }
 
+    /// <summary>libddb's check that two rasters can be aligned (JSON).</summary>
     public async Task<string> ValidateAlignRasterAsync(string orgSlug, string dsSlug, string? sourcePath,
         string? referencePath, CancellationToken ct = default)
     {
@@ -100,6 +104,7 @@ public sealed class RasterProcessingService : IRasterProcessingService
         return await _gate.RunAsync(NativeLane.Heavy, () => ddb.ValidateAlignRaster(sourcePath, referencePath), ct);
     }
 
+    /// <summary>Whether the masked copy of <paramref name="path"/> (next to it) exists.</summary>
     public async Task<MaskBordersCheckResponseDto> CheckMaskedFileExistsAsync(string orgSlug, string dsSlug,
         string path, CancellationToken ct = default)
     {
@@ -109,6 +114,7 @@ public sealed class RasterProcessingService : IRasterProcessingService
         return new MaskBordersCheckResponseDto { Exists = ddb.GetEntry(outputPath) != null, OutputPath = outputPath };
     }
 
+    /// <summary>Starts the job that writes the masked copy of the georaster <paramref name="path"/> (replaced).</summary>
     public async Task MaskBordersAsync(string orgSlug, string dsSlug, string path, int nearDist, bool white,
         CancellationToken ct = default)
     {

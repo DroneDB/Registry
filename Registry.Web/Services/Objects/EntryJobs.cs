@@ -18,7 +18,7 @@ namespace Registry.Web.Services.Objects;
 
 /// <summary>
 /// The background jobs of a dataset entry started by an object request: the rebuilds an entry needs after a move
-/// or after a sidecar was removed (queued by <see cref="IBuildScheduler"/>), and the mask-borders job.
+/// or after a sidecar was removed (queued by <see cref="BuildScheduler"/>), and the mask-borders job.
 /// Buildability and the live-build check come from libddb's build manifest (XI-04); the jobs run as the current
 /// user.
 /// </summary>
@@ -29,13 +29,13 @@ public sealed class EntryJobs
         new([".shp", ".dxf", ".dwg"], StringComparer.OrdinalIgnoreCase);
 
     private readonly IBuildArtifactResolver _artifacts;
-    private readonly IBuildScheduler _builds;
+    private readonly BuildScheduler _builds;
     private readonly IAuthManager _authManager;
     private readonly IBackgroundJobsProcessor _jobs;
     private readonly IJobIndexQuery _jobIndex;
     private readonly ILogger<EntryJobs> _logger;
 
-    public EntryJobs(IBuildArtifactResolver artifacts, IBuildScheduler builds, IAuthManager authManager,
+    public EntryJobs(IBuildArtifactResolver artifacts, BuildScheduler builds, IAuthManager authManager,
         IBackgroundJobsProcessor jobs, IJobIndexQuery jobIndex, ILogger<EntryJobs> logger)
     {
         _artifacts = artifacts;

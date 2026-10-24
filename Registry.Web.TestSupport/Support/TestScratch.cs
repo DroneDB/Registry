@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Registry.Adapters;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
-using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Test.Support;
 
@@ -14,10 +13,10 @@ namespace Registry.Web.Test.Support;
 /// </summary>
 public static class TestScratch
 {
-    public static IScratchFileProvider Provider { get; } = For(Path.Combine(Path.GetTempPath(), "registry-test-scratch"));
+    public static ScratchFileProvider Provider { get; } = For(Path.Combine(Path.GetTempPath(), "registry-test-scratch"));
 
     /// <summary>A provider whose temp folder is <paramref name="tempPath"/>.</summary>
-    public static IScratchFileProvider For(string tempPath) =>
+    public static ScratchFileProvider For(string tempPath) =>
         new ScratchFileProvider(Microsoft.Extensions.Options.Options.Create(new StorageOptions { TempPath = tempPath }), new FileSystem(),
             NullLogger<ScratchFileProvider>.Instance);
 }

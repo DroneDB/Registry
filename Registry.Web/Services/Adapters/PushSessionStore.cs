@@ -7,7 +7,6 @@ using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json;
 using Registry.Ports;
 using Registry.Web.Models;
-using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters;
@@ -18,7 +17,7 @@ namespace Registry.Web.Services.Adapters;
 /// cached per process while its file keeps its size and write time: every upload of a push reads
 /// it (the delta can list thousands of files).
 /// </summary>
-public class PushSessionStore : IPushSessionStore
+public class PushSessionStore
 {
     private const string SessionFileName = "session.json";
     private const string VerifiedFolderName = "verified";
@@ -36,6 +35,7 @@ public class PushSessionStore : IPushSessionStore
     public Task SaveAsync(string pushFolder, PushSession session) =>
         _fileSystem.WriteAllTextAsync(SessionPath(pushFolder), ApiJson.Serialize(session));
 
+    /// <summary>The session of the push folder, or null when it has none.</summary>
     public async Task<PushSession?> LoadAsync(string pushFolder)
     {
         var path = SessionPath(pushFolder);
@@ -54,8 +54,13 @@ public class PushSessionStore : IPushSessionStore
         return session;
     }
 
+    /// <summary>Whether the push folder holds a session (the push was initialized).</summary>
     public bool Exists(string pushFolder) => _fileSystem.Exists(SessionPath(pushFolder));
 
+    /// <summary>
+    /// Records that the file of <paramref name="path"/> in the push folder was checked against its
+    /// delta hash while it was received (XI-05): its hash, with the size and write time it has now.
+    /// </summary>
     public async Task MarkVerifiedAsync(string pushFolder, string path, string sha256, string localFile)
     {
         var record = new Verification(sha256, _fileSystem.GetFileSize(localFile),
@@ -65,6 +70,12 @@ public class PushSessionStore : IPushSessionStore
         await _fileSystem.WriteAllTextAsync(marker, ApiJson.Serialize(record));
     }
 
+    /// <summary>
+    /// The files of <paramref name="session"/>'s delta found in <paramref name="addFolder"/> that were
+    /// verified (<see cref="MarkVerifiedAsync"/>) and still have that size and write time: delta path →
+    /// lowercase hex SHA-256 (the delta's). A file staged any other way (a hard-linked local file, a
+    /// push started before verification existed) is left out, so libddb hashes it.
+    /// </summary>
     public async Task<IReadOnlyDictionary<string, string>> VerifiedHashesAsync(string pushFolder, string addFolder,
         PushSession session)
     {

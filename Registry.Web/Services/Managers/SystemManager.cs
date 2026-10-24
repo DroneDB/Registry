@@ -14,7 +14,6 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Caching;
 using Registry.Web.Services.Objects;
-using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers;
@@ -23,7 +22,7 @@ namespace Registry.Web.Services.Managers;
 /// System-level data maintenance: expired upload batches, empty datasets, the visibility migration. The other
 /// system operations have their own services since RQ-12 (slug repair, report, build maintenance, remote import).
 /// </summary>
-public class SystemManager : ISystemManager
+public class SystemManager
 {
     private readonly RegistryContext _context;
     private readonly IDdbManager _ddbManager;
@@ -48,6 +47,7 @@ public class SystemManager : ISystemManager
 
     // The maintenance commands honour the token while they select their targets; the per-dataset work then
     // runs to completion (RQ-13): a disconnect never leaves one dataset half done
+    /// <summary>Removes the datasets whose index is empty.</summary>
     public async Task<CleanupDatasetResultDto> CleanupEmptyDatasets(CancellationToken ct = default)
     {
         var datasets = await _context.Datasets.Include(ds => ds.Organization).ToArrayAsync(ct);
@@ -95,9 +95,9 @@ public class SystemManager : ISystemManager
 
     }
 
+    /// <summary>Gives a visibility to the datasets that still have only the legacy public flag.</summary>
     public async Task<IEnumerable<MigrateVisibilityEntryDTO>> MigrateVisibility(CancellationToken ct = default)
     {
-
         var query = await (from ds in _context.Datasets.Include(ds => ds.Organization)
             select new { ds = ds.Slug, ds.InternalRef, Org = ds.Organization.Slug }).ToArrayAsync(ct);
 
@@ -136,6 +136,7 @@ public class SystemManager : ISystemManager
         return res;
     }
 
+    /// <summary>Removes the committed upload batches and the expired ones (with their files).</summary>
     public async Task<CleanupBatchesResultDto> CleanupBatches(CancellationToken ct = default)
     {
         // Batch entry times are UTC since RQ-10 (rows written before hold the server's local time)
@@ -155,17 +156,14 @@ public class SystemManager : ISystemManager
 
         foreach (var batch in toRemove)
         {
-
             var ds = batch.Dataset;
             var org = ds.Organization;
 
             try
             {
-
                 // Remove intermediate files
                 if (batch.Status is BatchStatus.Rolledback or BatchStatus.Running)
                 {
-
                     var entries = batch.Entries.ToArray();
 
                     foreach (var entry in entries)

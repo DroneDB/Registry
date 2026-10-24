@@ -22,33 +22,17 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Organizations;
 
 /// <summary>Creating, editing and deleting organizations (RQ-12, out of <c>OrganizationsManager</c>).</summary>
-public interface IOrganizationCommands
-{
-    /// <summary>Creates the private organization a new user gets, named after the user (no permission check: the caller is the sign-up).</summary>
-    Task<OrganizationDto> AddUserDefaultAsync(string userId, string userName, CancellationToken ct = default);
-
-    /// <summary>Creates an organization: any signed-in user for itself, an administrator for any existing user.</summary>
-    Task<OrganizationDto> AddNew(OrganizationRequestDto organization, bool skipAuthCheck = false, CancellationToken ct = default);
-
-    /// <summary>Edits an organization (write access); only an administrator changes its owner.</summary>
-    Task Edit(string orgSlug, OrganizationRequestDto organization, CancellationToken ct = default);
-
-    /// <summary>Deletes an organization and its datasets (delete access).</summary>
-    Task Delete(string orgSlug, CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IOrganizationCommands"/>.</summary>
-public sealed class OrganizationCommands : IOrganizationCommands
+public sealed class OrganizationCommands
 {
     private readonly IAuthManager _authManager;
     private readonly IDatasetAccessResolver _access;
     private readonly RegistryContext _context;
     private readonly IDatasetResolver _datasets;
     private readonly IDatasetsManager _datasetManager;
-    private readonly IOrganizationQueries _queries;
+    private readonly OrganizationQueries _queries;
 
     public OrganizationCommands(IAuthManager authManager, IDatasetAccessResolver access, RegistryContext context,
-        IDatasetResolver datasets, IDatasetsManager datasetManager, IOrganizationQueries queries)
+        IDatasetResolver datasets, IDatasetsManager datasetManager, OrganizationQueries queries)
     {
         _authManager = authManager;
         _access = access;
@@ -58,6 +42,7 @@ public sealed class OrganizationCommands : IOrganizationCommands
         _queries = queries;
     }
 
+    /// <summary>Creates the private organization a new user gets, named after the user (no permission check: the caller is the sign-up).</summary>
     public async Task<OrganizationDto> AddUserDefaultAsync(string userId, string userName, CancellationToken ct = default) =>
         await AddNew(new OrganizationRequestDto
         {
@@ -67,6 +52,7 @@ public sealed class OrganizationCommands : IOrganizationCommands
             Slug = await _datasets.GetFreeOrganizationSlugAsync(userName, ct)
         }, skipAuthCheck: true, ct);
 
+    /// <summary>Creates an organization: any signed-in user for itself, an administrator for any existing user.</summary>
     public async Task<OrganizationDto> AddNew(OrganizationRequestDto organization, bool skipAuthCheck = false,
         CancellationToken ct = default)
     {
@@ -127,6 +113,7 @@ public sealed class OrganizationCommands : IOrganizationCommands
         return await _queries.ToDtoWithOwnerNameAsync(org);
     }
 
+    /// <summary>Edits an organization (write access); only an administrator changes its owner.</summary>
     public async Task Edit(string orgSlug, OrganizationRequestDto organization, CancellationToken ct = default)
     {
         var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Write, withTracking: true, ct: ct);
@@ -151,6 +138,7 @@ public sealed class OrganizationCommands : IOrganizationCommands
         await _context.SaveChangesAsync(CancellationToken.None);
     }
 
+    /// <summary>Deletes an organization and its datasets (delete access).</summary>
     public async Task Delete(string orgSlug, CancellationToken ct = default)
     {
         // Honoured while the organization is looked up; its datasets are then deleted to the end (RQ-13)

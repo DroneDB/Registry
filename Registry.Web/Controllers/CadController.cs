@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Managers;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
@@ -15,7 +15,7 @@ namespace Registry.Web.Controllers;
 [ApiController]
 [Route(RoutesHelper.DatasetPrefix + "/cad")]
 [Produces("application/json")]
-public class CadController(ICadCrsManager crsManager) : ControllerBaseEx
+public class CadController(CadCrsManager crsManager) : ControllerBaseEx
 {
     /// <summary>
     /// Sets the coordinate system of a CAD drawing by writing its .prj: an authority code

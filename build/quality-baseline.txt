@@ -34,7 +34,7 @@ IsUserAdmin() + throw (any form)	3
 Sync IUtils lookups (any receiver)	0
 Raster prologue copies (EnsurePathValidity)	0
 new OrganizationUser in managers	0
-GetService/GetRequiredService calls	45
+GetService/GetRequiredService calls	44
 Console.Write* in Program+Startup	0
 .Wait() calls	0
 Node registrations re-declared by the web host	0

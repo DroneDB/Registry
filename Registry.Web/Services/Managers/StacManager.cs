@@ -21,7 +21,7 @@ namespace Registry.Web.Services.Managers;
 /// libddb gives the data of each document (XI-09: <c>DDBStacData</c>, <c>DDBStacItemCollectionData</c>), and
 /// <see cref="StacDocuments"/> adds every id, link and href; the listings are <see cref="StacCatalog"/>'s.
 /// </summary>
-public class StacManager : IStacManager
+public class StacManager
 {
     // These could end up in the config
     private const string CatalogTitle = "DroneDB public datasets catalog";

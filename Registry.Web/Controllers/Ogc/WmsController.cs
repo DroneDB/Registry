@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Exceptions;
 using Registry.Web.Filters;
 using Registry.Web.Models;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Managers;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 
@@ -25,8 +25,8 @@ namespace Registry.Web.Controllers.Ogc;
 [Route(RoutesHelper.DatasetPrefix)]
 public class WmsController : ControllerBaseEx
 {
-    private readonly IWmsManager _mgr;
-    public WmsController(IWmsManager mgr) { _mgr = mgr; }
+    private readonly WmsManager _mgr;
+    public WmsController(WmsManager mgr) { _mgr = mgr; }
 
     /// <summary>WMS KVP request: GetCapabilities (XML), GetMap (an image) or GetFeatureInfo.</summary>
     [HttpGet("wms")]

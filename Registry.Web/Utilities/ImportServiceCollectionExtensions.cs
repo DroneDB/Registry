@@ -19,7 +19,7 @@ namespace Registry.Web.Utilities;
 /// the source factory, the credential protector and the <c>import-dataset</c> heavy tool. Must be
 /// called on BOTH the web host and any processing-node host, because the heavy tool and the remote import job run
 /// on the worker.
-/// The web-only <c>IImportManager</c> is registered separately in <c>Startup</c>.
+/// The web-only <c>ImportManager</c> is registered separately in <c>Startup</c>.
 /// </summary>
 public static class ImportServiceCollectionExtensions
 {
@@ -62,13 +62,13 @@ public static class ImportServiceCollectionExtensions
         services.AddSingleton<IImportSource, RegistryImportSource>();
         services.AddSingleton<IImportSource, ArchiveUrlImportSource>();
         services.AddSingleton<IImportSourceFactory, ImportSourceFactory>();
-        services.AddSingleton<IImportSourceCatalog, ImportSourceCatalog>();
+        services.AddSingleton<ImportSourceCatalog>();
 
         // SSRF-hardened single-file downloader shared by the verify path and the import-file tool.
         services.AddSingleton<GuardedHttpDownloader>();
 
         // The remote Registry import job (RQ-12): queued by the web host, run by any job host
-        services.AddScoped<IImportDestinations, ImportDestinations>();
+        services.AddScoped<ImportDestinations>();
         services.AddScoped<IRemoteImportStrategy, ArchiveImportStrategy>();
         services.AddScoped<IRemoteImportStrategy, ParallelFilesImportStrategy>();
         services.AddScoped<RemoteRegistryImporter>();

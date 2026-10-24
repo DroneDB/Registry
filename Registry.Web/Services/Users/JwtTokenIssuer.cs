@@ -15,17 +15,7 @@ using Registry.Web.Models.Configuration;
 namespace Registry.Web.Services.Users;
 
 /// <summary>Issues the JWT of a signed-in user.</summary>
-public interface IJwtTokenIssuer
-{
-    /// <summary>
-    /// A token for <paramref name="user"/>: their id as the name claim, whether they are an administrator, signed with
-    /// <see cref="AuthTokenOptions.Secret"/>, valid <see cref="AuthTokenOptions.TokenExpirationInDays"/> days.
-    /// </summary>
-    Task<JwtDescriptor> IssueAsync(User user);
-}
-
-/// <summary>Default <see cref="IJwtTokenIssuer"/> (RQ-12, out of <c>UsersManager</c>).</summary>
-public sealed class JwtTokenIssuer : IJwtTokenIssuer
+public sealed class JwtTokenIssuer
 {
     private readonly AuthTokenOptions _tokens;
     private readonly UserManager<User> _userManager;
@@ -38,6 +28,10 @@ public sealed class JwtTokenIssuer : IJwtTokenIssuer
         _time = time;
     }
 
+    /// <summary>
+    /// A token for <paramref name="user"/>: their id as the name claim, whether they are an administrator, signed with
+    /// <see cref="AuthTokenOptions.Secret"/>, valid <see cref="AuthTokenOptions.TokenExpirationInDays"/> days.
+    /// </summary>
     public async Task<JwtDescriptor> IssueAsync(User user)
     {
         ArgumentNullException.ThrowIfNull(user);

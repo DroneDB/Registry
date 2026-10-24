@@ -11,10 +11,10 @@ namespace Registry.Web.Services.Configuration;
 /// <summary>The admin configuration sections of the host: connection strings, logging and the remaining settings.</summary>
 public sealed class HostSections : IConfigurationSectionBuilder
 {
-    private readonly IConfigurationView _view;
+    private readonly ConfigurationView _view;
     private readonly IConfiguration _configuration;
 
-    public HostSections(IConfigurationView view, IConfiguration configuration)
+    public HostSections(ConfigurationView view, IConfiguration configuration)
     {
         _view = view;
         _configuration = configuration;

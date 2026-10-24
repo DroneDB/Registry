@@ -7,11 +7,10 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Adapters;
-using Registry.Web.Services.Features;
+using Registry.Web.Services.Configuration;
 using Registry.Web.Services.Maintenance;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
-using Registry.Web.Services.Processing;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Auth;
 
@@ -29,15 +28,15 @@ namespace Registry.Web.Controllers;
 [Produces("application/json")]
 public class SystemController : ControllerBaseEx
 {
-    private readonly ISystemManager _systemManager;
-    private readonly IDatasetSlugRepair _slugs;
-    private readonly IGlobalReportBuilder _report;
+    private readonly SystemManager _systemManager;
+    private readonly DatasetSlugRepair _slugs;
+    private readonly GlobalReportBuilder _report;
     private readonly IDatasetsManager _datasets;
     private readonly IOrganizationsManager _organizations;
-    private readonly IConfigurationDataBuilder _configuration;
+    private readonly ConfigurationDataBuilder _configuration;
 
-    public SystemController(ISystemManager systemManager, IDatasetSlugRepair slugs, IGlobalReportBuilder report,
-        IDatasetsManager datasets, IOrganizationsManager organizations, IConfigurationDataBuilder configuration)
+    public SystemController(SystemManager systemManager, DatasetSlugRepair slugs, GlobalReportBuilder report,
+        IDatasetsManager datasets, IOrganizationsManager organizations, ConfigurationDataBuilder configuration)
     {
         _systemManager = systemManager;
         _slugs = slugs;

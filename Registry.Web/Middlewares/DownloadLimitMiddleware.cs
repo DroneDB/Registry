@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Exceptions;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Middlewares;
@@ -24,7 +25,7 @@ public partial class DownloadLimitMiddleware : IMiddleware
 {
     private readonly IDownloadLimiter _downloadLimiter;
     private readonly IAuthManager _authManager;
-    private readonly IClientIpResolver _clientIpResolver;
+    private readonly ClientIpResolver _clientIpResolver;
     private readonly ILogger<DownloadLimitMiddleware> _logger;
 
     private const string PreflightHeader = "X-Download-Check";
@@ -42,7 +43,7 @@ public partial class DownloadLimitMiddleware : IMiddleware
     public DownloadLimitMiddleware(
         IDownloadLimiter downloadLimiter,
         IAuthManager authManager,
-        IClientIpResolver clientIpResolver,
+        ClientIpResolver clientIpResolver,
         ILogger<DownloadLimitMiddleware> logger)
     {
         _downloadLimiter = downloadLimiter;
@@ -161,7 +162,7 @@ public partial class DownloadLimitMiddleware : IMiddleware
     /// <summary>
     /// Gets the limiter key for the current request.
     /// Uses the authenticated user ID if available, otherwise falls back to the client address
-    /// (the forwarded one behind a known proxy, see <see cref="IClientIpResolver"/>).
+    /// (the forwarded one behind a known proxy, see <see cref="ClientIpResolver"/>).
     /// </summary>
     private string GetLimiterKey(HttpContext context)
     {

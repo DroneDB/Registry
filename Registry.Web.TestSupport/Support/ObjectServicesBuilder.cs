@@ -130,11 +130,11 @@ public sealed class ObjectServicesBuilder
         var artifacts = _buildArtifactResolver ?? TestPorts.Artifacts();
         var scheduler = new BuildScheduler(artifacts, backgroundJobs, buildPendingService,
             new CurrentUserBuildRequester(authManager), NullLogger<BuildScheduler>.Instance);
-        services.AddSingleton<IBuildScheduler>(scheduler);
+        services.AddSingleton<BuildScheduler>(scheduler);
         services.AddSingleton<IUrlBuilder>(new UrlBuilder(TestSettings.Options<HttpHostOptions>(settings),
             new Microsoft.AspNetCore.Http.HttpContextAccessor()));
         services.AddSingleton(_jobIndexWriter ?? Mock.Of<IJobIndexWriter>());
-        services.AddSingleton<IUploadManager>(TestUploads.Create(authManager, access, fileSystem, thumbnails,
+        services.AddSingleton<UploadManager>(TestUploads.Create(authManager, access, fileSystem, thumbnails,
             TestSettings.Options<ImportSettings>(settings), scheduler,
             new UploadQuotaGuard(new UploadQuotaLedger(TestSettings.Options<UploadSettings>(settings)), quota),
             new DatasetChangeCoalescer(TestJobs.OgcCacheKeys(), cacheManager, thumbnails.Value.Candidates,
@@ -151,9 +151,9 @@ public sealed class ObjectServicesBuilder
             provider.GetRequiredService<IEntryCommandService>(),
             provider.GetRequiredService<IEntryTransferService>(),
             provider.GetRequiredService<IObjectRenderService>(),
-            provider.GetRequiredService<IBuildQueryService>(),
-            provider.GetRequiredService<IRasterAnalysisService>(),
-            provider.GetRequiredService<IRasterProcessingService>());
+            provider.GetRequiredService<BuildQueryService>(),
+            provider.GetRequiredService<RasterAnalysisService>(),
+            provider.GetRequiredService<RasterProcessingService>());
     }
 
     private ObjectServicesBuilder Set(Action assign)
@@ -170,6 +170,6 @@ public sealed record ObjectServices(
     IEntryCommandService Commands,
     IEntryTransferService Transfers,
     IObjectRenderService Renders,
-    IBuildQueryService Builds,
-    IRasterAnalysisService Raster,
-    IRasterProcessingService Processing);
+    BuildQueryService Builds,
+    RasterAnalysisService Raster,
+    RasterProcessingService Processing);

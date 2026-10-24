@@ -26,17 +26,7 @@ using Registry.Web.Services.Caching;
 namespace Registry.Web.Services.Managers.Wfs;
 
 /// <summary>The WFS documents that describe the service (RQ-12, out of <c>WfsManager</c>): capabilities and the stored queries.</summary>
-public interface IWfsCapabilities
-{
-    Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath = null,
-        CancellationToken ct = default);
-    Task<string> ListStoredQueriesAsync(string orgSlug, string dsSlug, CancellationToken ct = default);
-    Task<string> DescribeStoredQueriesAsync(string orgSlug, string dsSlug, string[] storedQueryIds,
-        CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IWfsCapabilities"/>: WFS 2.0.0, vector layers only.</summary>
-public class WfsCapabilities : OgcManagerBase, IWfsCapabilities
+public class WfsCapabilities : OgcManagerBase
 {
     public WfsCapabilities(OgcManagerDependencies dependencies)
         : base(dependencies)
@@ -84,7 +74,6 @@ public class WfsCapabilities : OgcManagerBase, IWfsCapabilities
         var key = await LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, "caps-wfs-v2-2.0.0", folderPath, ct);
         return await Records.GetOrCreateRecordAsync(key, async token =>
         {
-
             await ResolveAsync(orgSlug, dsSlug, token);
             var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath, ct: token);
             // Only advertise vector layers that have a built GPKG sidecar. Unbuilt entries would

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -17,37 +18,22 @@ namespace Registry.Web.Services.Uploads;
 /// response asks for the outcome instead of sending the files again. Without a receipt store (a direct construction
 /// in a test) no receipt is kept and every method is a no-op.
 /// </summary>
-public interface IUploadReceiptTracker
+public sealed class UploadReceiptTracker
 {
-    /// <summary>
-    /// Starts the receipt of the upload of <paramref name="ctx"/> (<see cref="UploadRequestContext.UploadId"/> set):
-    /// an upload already done puts its receipt on the context and returns false (nothing else must be done).
-    /// </summary>
-    /// <exception cref="ConflictException">An upload with that id is still running.</exception>
-    Task<bool> BeginAsync(UploadRequestContext ctx);
-
-    /// <summary>Records <paramref name="state"/> (and the part results of a finished upload); a failure to record is logged.</summary>
-    Task SetStateAsync(UploadRequestContext ctx, UploadReceiptState state, IReadOnlyList<UploadPartResultDto>? results);
-
-    /// <summary>Records that the request failed: a client that went away sends the file again (the attempt is forgotten), any other failure is kept with its status.</summary>
-    Task FailAsync(UploadRequestContext ctx, Exception cause);
-
-    /// <summary>The receipt of upload <paramref name="uploadId"/> of the dataset, or null.</summary>
-    Task<UploadReceipt?> GetAsync(string orgSlug, string dsSlug, string uploadId);
-}
-
-/// <summary>Default <see cref="IUploadReceiptTracker"/>.</summary>
-public sealed class UploadReceiptTracker : IUploadReceiptTracker
-{
-    private readonly IUploadReceiptStore? _receipts;
+    private readonly DistributedUploadReceiptStore? _receipts;
     private readonly ILogger<UploadReceiptTracker> _logger;
 
-    public UploadReceiptTracker(ILogger<UploadReceiptTracker> logger, IUploadReceiptStore? receipts = null)
+    public UploadReceiptTracker(ILogger<UploadReceiptTracker> logger, DistributedUploadReceiptStore? receipts = null)
     {
         _logger = logger;
         _receipts = receipts;
     }
 
+    /// <summary>
+    /// Starts the receipt of the upload of <paramref name="ctx"/> (<see cref="UploadRequestContext.UploadId"/> set):
+    /// an upload already done puts its receipt on the context and returns false (nothing else must be done).
+    /// </summary>
+    /// <exception cref="ConflictException">An upload with that id is still running.</exception>
     public async Task<bool> BeginAsync(UploadRequestContext ctx)
     {
         if (ctx.UploadId == null || _receipts == null)
@@ -68,6 +54,7 @@ public sealed class UploadReceiptTracker : IUploadReceiptTracker
         return true;
     }
 
+    /// <summary>Records <paramref name="state"/> (and the part results of a finished upload); a failure to record is logged.</summary>
     public async Task SetStateAsync(UploadRequestContext ctx, UploadReceiptState state,
         IReadOnlyList<UploadPartResultDto>? results)
     {
@@ -85,6 +72,7 @@ public sealed class UploadReceiptTracker : IUploadReceiptTracker
         }
     }
 
+    /// <summary>Records that the request failed: a client that went away sends the file again (the attempt is forgotten), any other failure is kept with its status.</summary>
     public async Task FailAsync(UploadRequestContext ctx, Exception cause)
     {
         if (ctx.UploadId == null || _receipts == null)
@@ -109,6 +97,7 @@ public sealed class UploadReceiptTracker : IUploadReceiptTracker
         }
     }
 
+    /// <summary>The receipt of upload <paramref name="uploadId"/> of the dataset, or null.</summary>
     public async Task<UploadReceipt?> GetAsync(string orgSlug, string dsSlug, string uploadId) =>
         _receipts == null ? null : await _receipts.GetAsync(orgSlug, dsSlug, uploadId);
 }

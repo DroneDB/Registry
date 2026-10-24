@@ -16,26 +16,7 @@ namespace Registry.Web.Services.Configuration;
 /// as the live options, <see cref="RegistryOptions.SectionOf{T}"/>): what is configured, and the default shipped in
 /// <c>appsettings-default.json</c>.
 /// </summary>
-public interface IConfigurationView
-{
-    /// <summary>
-    /// <typeparamref name="T"/> as configured: bound from the configuration like the live options, without the
-    /// defaults they apply afterwards (the view shows what the settings file holds, the editor writes it back).
-    /// </summary>
-    T Configured<T>() where T : class, new();
-
-    /// <summary><see cref="Configured{T}"/>, or null when the configuration has no section for it.</summary>
-    T? ConfiguredOrNull<T>() where T : class, new();
-
-    /// <summary><typeparamref name="T"/> as <c>appsettings-default.json</c> ships it.</summary>
-    T Shipped<T>() where T : class, new();
-
-    /// <summary><see cref="Shipped{T}"/>, or null when the defaults have no section for it.</summary>
-    T? ShippedOrNull<T>() where T : class, new();
-}
-
-/// <summary>Default <see cref="IConfigurationView"/>; the defaults are read once.</summary>
-public sealed class ConfigurationView : IConfigurationView
+public sealed class ConfigurationView
 {
     private readonly IConfiguration _configuration;
     private readonly Lazy<JsonNode?> _defaults =
@@ -43,16 +24,23 @@ public sealed class ConfigurationView : IConfigurationView
 
     public ConfigurationView(IConfiguration configuration) => _configuration = configuration;
 
+    /// <summary>
+    /// <typeparamref name="T"/> as configured: bound from the configuration like the live options, without the
+    /// defaults they apply afterwards (the view shows what the settings file holds, the editor writes it back).
+    /// </summary>
     public T Configured<T>() where T : class, new() => ConfiguredOrNull<T>() ?? new T();
 
+    /// <summary><see cref="Configured{T}"/>, or null when the configuration has no section for it.</summary>
     public T? ConfiguredOrNull<T>() where T : class, new()
     {
         var section = _configuration.GetSection(RegistryOptions.SectionOf<T>());
         return section.Exists() ? section.Get<T>() ?? new T() : null;
     }
 
+    /// <summary><typeparamref name="T"/> as <c>appsettings-default.json</c> ships it.</summary>
     public T Shipped<T>() where T : class, new() => ShippedOrNull<T>() ?? new T();
 
+    /// <summary><see cref="Shipped{T}"/>, or null when the defaults have no section for it.</summary>
     public T? ShippedOrNull<T>() where T : class, new() =>
         RegistryOptions.SectionOf<T>().Split(':')
             .Aggregate(_defaults.Value, (node, key) => node?[key])?.Deserialize<T>(ApiJson.Options);

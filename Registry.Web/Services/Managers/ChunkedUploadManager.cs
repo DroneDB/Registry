@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Uploads;
 using Registry.Web.Utilities;
@@ -14,18 +15,18 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// Default <see cref="IChunkedUploadManager"/>: chunks are stored by <see cref="IChunkStore"/>
-/// under the dataset's uploads folder (<c>.uploads/chunks</c>, same volume as the dataset), and
-/// the finished file goes through the same commit as any upload (<see cref="IUploadManager"/>).
+/// Resumable uploads of large files into a dataset (UPL-01 E.5): the client sends the file in
+/// chunks, asks which chunks are stored after any failure, sends only those, then commits once.
+/// The commit is idempotent (keyed by the file id) and needs no pass over the file.
 /// </summary>
-public sealed class ChunkedUploadManager(IUploadManager uploads, IChunkStore store, IUploadQuotaGuard quota,
-    IScratchFileProvider scratch)
-    : IChunkedUploadManager
+public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store, UploadQuotaGuard quota,
+    ScratchFileProvider scratch)
 {
     /// <summary>Folder of the chunked uploads of a dataset, under its uploads folder.</summary>
     public static string ChunksRoot(IDDB ddb) =>
         Path.Combine(ddb.DatasetFolderPath, IDDB.UploadsFolderName, DatasetUploads.ChunksFolderName);
 
+    /// <summary>Stores a chunk; the first chunk of an upload checks access, path and quota.</summary>
     public async Task<ChunkStatusDto> WriteChunkAsync(string orgSlug, string dsSlug, ChunkRequest chunk, Stream body,
         CancellationToken ct = default)
     {
@@ -49,6 +50,8 @@ public sealed class ChunkedUploadManager(IUploadManager uploads, IChunkStore sto
         return ToDto(chunk.FileId, await store.WriteAsync(root, chunk.FileId, chunk.ChunkIndex, body, ct));
     }
 
+    /// <summary>The state of an upload.</summary>
+    /// <exception cref="Registry.Web.Exceptions.NotFoundException">Unknown upload.</exception>
     public async Task<ChunkStatusDto> GetStatusAsync(string orgSlug, string dsSlug, string fileId,
         CancellationToken ct = default)
     {
@@ -59,6 +62,8 @@ public sealed class ChunkedUploadManager(IUploadManager uploads, IChunkStore sto
         return ToDto(fileId, status);
     }
 
+    /// <summary>Adds the finished file to the dataset; again for a committed upload, returns its entry.</summary>
+    /// <exception cref="Registry.Web.Exceptions.ConflictException">Chunks are missing.</exception>
     public async Task<EntryDto> CommitAsync(string orgSlug, string dsSlug, string fileId,
         CancellationToken ct = default)
     {

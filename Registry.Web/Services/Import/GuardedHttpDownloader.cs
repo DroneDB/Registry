@@ -6,7 +6,6 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using Registry.Common;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks;

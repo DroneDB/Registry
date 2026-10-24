@@ -46,7 +46,7 @@ public static class TestJobs
     /// <summary>A heavy-tool execution context for <paramref name="ddb"/> of org/<paramref name="internalRef"/>.</summary>
     public static Services.HeavyTasks.Adapters.HeavyToolExecutionContext ExecutionContext(Registry.Ports.DroneDB.IDDB ddb,
         string orgSlug = "org", System.Guid internalRef = default, string taskId = "task-1", string? workDir = null,
-        IBackgroundJobsProcessor? jobs = null, IDatasetBuilds? builds = null) =>
+        IBackgroundJobsProcessor? jobs = null, DdbJobs? builds = null) =>
         new(ddb, new DatasetKey(orgSlug, internalRef == default ? System.Guid.NewGuid() : internalRef),
             NullLogger.Instance, new Services.HeavyTasks.Adapters.TaskRun(taskId, workDir), null!, Scheduler(jobs),
             builds ?? DdbJobs(jobs: jobs));

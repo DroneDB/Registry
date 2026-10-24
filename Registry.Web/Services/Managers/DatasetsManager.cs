@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,11 +16,11 @@ namespace Registry.Web.Services.Managers;
 /// </summary>
 public class DatasetsManager : IDatasetsManager
 {
-    private readonly IDatasetQueries _queries;
-    private readonly IDatasetCommands _commands;
-    private readonly IDatasetMover _mover;
+    private readonly DatasetQueries _queries;
+    private readonly DatasetCommands _commands;
+    private readonly DatasetMover _mover;
 
-    public DatasetsManager(IDatasetQueries queries, IDatasetCommands commands, IDatasetMover mover)
+    public DatasetsManager(DatasetQueries queries, DatasetCommands commands, DatasetMover mover)
     {
         _queries = queries;
         _commands = commands;
@@ -46,6 +47,7 @@ public class DatasetsManager : IDatasetsManager
 
     public Task Rename(string orgSlug, string dsSlug, string newSlug, CancellationToken ct = default) => _commands.Rename(orgSlug, dsSlug, newSlug, ct: ct);
 
+    [Obsolete("Use meta")]
     public Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, AttributesDto attributes, CancellationToken ct = default) =>
         _commands.ChangeAttributes(orgSlug, dsSlug, attributes, ct: ct);
 

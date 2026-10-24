@@ -1,15 +1,13 @@
 #nullable enable
-using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Managers;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
@@ -23,13 +21,13 @@ namespace Registry.Web.Controllers;
 [Produces("application/json")]
 public class ImportController : ControllerBaseEx
 {
-    private readonly IImportManager _importManager;
+    private readonly ImportManager _importManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ImportController"/> class.
     /// </summary>
     /// <param name="importManager">The import manager.</param>
-    public ImportController(IImportManager importManager)
+    public ImportController(ImportManager importManager)
     {
         _importManager = importManager;
     }

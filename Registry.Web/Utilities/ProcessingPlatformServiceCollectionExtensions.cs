@@ -31,9 +31,9 @@ public static class ProcessingPlatformServiceCollectionExtensions
         services.AddSingleton<IZipArchiveBuilder, ZipArchiveBuilder>();
 
         // NodeODX (OpenDroneMap) integration: config-based node registry + HTTP client.
-        services.AddSingleton<INodeOdxNodeRegistry, NodeOdxNodeRegistry>();
+        services.AddSingleton<NodeOdxNodeRegistry>();
         services.AddSingleton<INodeOdxClient, NodeOdxClient>();
-        services.AddSingleton<INodeOdxTaskRunner, NodeOdxTaskRunner>();
+        services.AddSingleton<NodeOdxTaskRunner>();
 
         // Archive extraction backend (SharpCompress) for the archive-extract tool.
         services.AddSingleton<Ports.Archives.IArchiveExtractor,
@@ -85,10 +85,10 @@ public static class ProcessingPlatformServiceCollectionExtensions
         services.AddScoped<IHeavyToolGating, HeavyToolGating>();
 
         // Per-request orchestration.
-        services.AddScoped<IHeavyTaskQuota, HeavyTaskQuota>();
+        services.AddScoped<HeavyTaskQuota>();
         services.AddScoped<IHeavyTaskRunner, HeavyTaskRunner>();
-        services.AddScoped<IHeavyTaskDedup, HeavyTaskDedup>();
-        services.AddScoped<ICurrentUserTaskSubmitter, CurrentUserTaskSubmitter>();
+        services.AddScoped<HeavyTaskDedup>();
+        services.AddScoped<CurrentUserTaskSubmitter>();
 
         return services;
     }

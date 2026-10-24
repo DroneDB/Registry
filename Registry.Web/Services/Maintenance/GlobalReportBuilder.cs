@@ -16,14 +16,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Maintenance;
 
 /// <summary>The report of every organization and dataset: sizes and contents by extension.</summary>
-public interface IGlobalReportBuilder
-{
-    /// <summary>The report of all organizations and datasets (a dataset that cannot be read carries its error).</summary>
-    Task<GlobalReportDto> BuildAsync(CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IGlobalReportBuilder"/> (RQ-12, out of <c>SystemManager</c>).</summary>
-public sealed class GlobalReportBuilder : IGlobalReportBuilder
+public sealed class GlobalReportBuilder
 {
     private readonly RegistryContext _context;
     private readonly IDdbManager _ddbManager;
@@ -39,6 +32,7 @@ public sealed class GlobalReportBuilder : IGlobalReportBuilder
         _logger = logger;
     }
 
+    /// <summary>The report of all organizations and datasets (a dataset that cannot be read carries its error).</summary>
     public async Task<GlobalReportDto> BuildAsync(CancellationToken ct = default)
     {
         var userName = await _authManager.SafeGetCurrentUserName();

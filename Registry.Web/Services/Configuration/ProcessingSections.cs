@@ -11,10 +11,10 @@ namespace Registry.Web.Services.Configuration;
 /// <summary>The admin configuration sections of the processing platform, the tool gating, the processing and host budgets.</summary>
 public sealed class ProcessingSections : IConfigurationSectionBuilder
 {
-    private readonly IConfigurationView _view;
+    private readonly ConfigurationView _view;
     private readonly HostResourceBudget _budget;
 
-    public ProcessingSections(IConfigurationView view, HostResourceBudget budget)
+    public ProcessingSections(ConfigurationView view, HostResourceBudget budget)
     {
         _view = view;
         _budget = budget;

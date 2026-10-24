@@ -24,13 +24,13 @@ namespace Registry.Web.Services.RemoteImport;
 public sealed class ParallelFilesImportStrategy : IRemoteImportStrategy
 {
     private readonly IRemoteRegistryClient _remote;
-    private readonly IImportDestinations _destinations;
+    private readonly ImportDestinations _destinations;
     private readonly IFileSystem _fileSystem;
     private readonly DatasetPathPolicy _paths;
     private readonly ImportSettings _settings;
     private readonly ILogger<ParallelFilesImportStrategy> _logger;
 
-    public ParallelFilesImportStrategy(IRemoteRegistryClient remote, IImportDestinations destinations,
+    public ParallelFilesImportStrategy(IRemoteRegistryClient remote, ImportDestinations destinations,
         IFileSystem fileSystem, DatasetPathPolicy paths, ImportSettings settings,
         ILogger<ParallelFilesImportStrategy> logger)
     {

@@ -16,33 +16,22 @@ using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Users;
 
 /// <summary>The users as administrators list them: with their roles, organizations and storage, and their memberships.</summary>
-public interface IUserDirectory
-{
-    Task<IEnumerable<UserDto>> GetAll(CancellationToken ct = default);
-    Task<IEnumerable<UserDetailDto>> GetAllDetailed(CancellationToken ct = default);
-    Task<UserStorageInfo> GetUserStorageInfo(string userName = null);
-    Task<UserOrganizationMembershipDto[]> GetUserOrganizations(string userName, CancellationToken ct = default);
-    Task AddUserToOrganization(string userName, string orgSlug, OrganizationPermissions permissions);
-    Task RemoveUserFromOrganization(string userName, string orgSlug);
-    Task UpdateUserOrganizationPermissions(string userName, string orgSlug, OrganizationPermissions permissions);
-}
-
-/// <summary>Default <see cref="IUserDirectory"/> (RQ-12, out of <c>UsersManager</c>).</summary>
-public sealed class UserDirectory : IUserDirectory
+public sealed class UserDirectory
 {
     private readonly UserManager<User> _userManager;
     private readonly IAuthManager _authManager;
     private readonly IStorageQuota _quota;
-    private readonly IOrganizationMembershipService _memberships;
+    private readonly OrganizationMembershipService _memberships;
     private readonly ApplicationDbContext _applicationDbContext;
     private readonly RegistryContext _registryContext;
 
-    public UserDirectory(UserManager<User> userManager, IAuthManager authManager, IStorageQuota quota, IOrganizationMembershipService memberships, ApplicationDbContext applicationDbContext, RegistryContext registryContext)
+    public UserDirectory(UserManager<User> userManager, IAuthManager authManager, IStorageQuota quota, OrganizationMembershipService memberships, ApplicationDbContext applicationDbContext, RegistryContext registryContext)
     {
         _userManager = userManager;
         _authManager = authManager;

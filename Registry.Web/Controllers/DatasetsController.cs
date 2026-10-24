@@ -17,6 +17,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -31,10 +32,10 @@ namespace Registry.Web.Controllers;
 public class DatasetsController : ControllerBaseEx
 {
     private readonly IDatasetsManager _datasetsManager;
-    private readonly IShareManager _shareManager;
-    private readonly IRescanManager _rescanManager;
+    private readonly ShareManager _shareManager;
+    private readonly RescanManager _rescanManager;
 
-    public DatasetsController(IDatasetsManager datasetsManager, IShareManager shareManager, IRescanManager rescanManager)
+    public DatasetsController(IDatasetsManager datasetsManager, ShareManager shareManager, RescanManager rescanManager)
     {
         _datasetsManager = datasetsManager;
         _shareManager = shareManager;
@@ -205,11 +206,9 @@ public class DatasetsController : ControllerBaseEx
         [FromRoute, Required] string dsSlug,
         [FromForm(Name = "attrs")] string rawAttributes, CancellationToken ct)
     {
-
         var attributes = string.IsNullOrWhiteSpace(rawAttributes) ?
             new AttributesDto() :
             ApiJson.Deserialize<AttributesDto>(rawAttributes);
-
 
         var res = await _datasetsManager.ChangeAttributes(orgSlug, dsSlug, attributes, ct: ct);
 

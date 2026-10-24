@@ -11,9 +11,9 @@ namespace Registry.Web.Services.Configuration;
 /// <summary>The admin configuration sections of uploads, downloads and exports.</summary>
 public sealed class TransferSections : IConfigurationSectionBuilder
 {
-    private readonly IConfigurationView _view;
+    private readonly ConfigurationView _view;
 
-    public TransferSections(IConfigurationView view)
+    public TransferSections(ConfigurationView view)
     {
         _view = view;
     }

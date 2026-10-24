@@ -9,16 +9,16 @@ using Registry.Web.Services.Push;
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// The offline-first push (<see cref="IPushManager"/>, what <c>PushController</c> calls) over the push services RQ-12
+/// The offline-first push (<see cref="PushManager"/>, what <c>PushController</c> calls) over the push services RQ-12
 /// split it into (14 parameters before): the session, the uploads, the commit.
 /// </summary>
-public class PushManager : IPushManager
+public class PushManager
 {
-    private readonly IPushSessions _sessions;
-    private readonly IPushUploads _uploads;
-    private readonly IPushCommit _commit;
+    private readonly PushSessions _sessions;
+    private readonly PushUploads _uploads;
+    private readonly PushCommit _commit;
 
-    public PushManager(IPushSessions sessions, IPushUploads uploads, IPushCommit commit)
+    public PushManager(PushSessions sessions, PushUploads uploads, PushCommit commit)
     {
         _sessions = sessions;
         _uploads = uploads;
@@ -28,9 +28,20 @@ public class PushManager : IPushManager
     public Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp, CancellationToken ct = default) =>
         _sessions.Init(orgSlug, dsSlug, checksum, stamp, ct: ct);
 
+    /// <summary>
+    /// Streams an uploaded file to a temp file on the dataset volume, after checking write access and
+    /// the storage quota (before writing when <paramref name="expectedBytes"/> is known).
+    /// </summary>
     public Task<PushUpload> StreamUploadAsync(string orgSlug, string dsSlug, Stream source, long? expectedBytes, CancellationToken ct = default) =>
         _uploads.StreamUploadAsync(orgSlug, dsSlug, source, expectedBytes, ct: ct);
 
+    /// <summary>
+    /// Moves a file streamed by <see cref="StreamUploadAsync"/> (dataset and access already checked)
+    /// to <paramref name="filePath"/> in the folder of the push <paramref name="token"/>, once its
+    /// streamed hash matches the one the push's delta gives that path (XI-05).
+    /// </summary>
+    /// <exception cref="Exceptions.BadRequestException">The delta adds no file at that path, or the
+    /// bytes received are not the delta's (the file is not moved).</exception>
     public Task UploadAsync(PushUpload upload, string filePath, string token, CancellationToken ct = default) =>
         _uploads.UploadAsync(upload, filePath, token, ct: ct);
 

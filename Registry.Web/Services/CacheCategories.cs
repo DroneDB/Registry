@@ -21,7 +21,7 @@ public static class CacheCategories
 
     // ---- Distributed-cache keys ------------------------------------------------------------------
 
-    /// <summary>The generation of a dataset's OGC documents (<c>ICacheGenerations</c>).</summary>
+    /// <summary>The generation of a dataset's OGC documents (<c>CacheGenerations</c>).</summary>
     public static string OgcGeneration(string orgSlug, string dsSlug) => $"ogc-gen-{orgSlug}-{dsSlug}";
 
     /// <summary>An OGC document of a dataset (capabilities, layer list) in a generation.</summary>

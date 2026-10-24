@@ -6,6 +6,7 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Filters;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO.Ogc;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
@@ -25,11 +26,11 @@ namespace Registry.Web.Controllers.Ogc;
 [Route(RoutesHelper.DatasetPrefix + "/ogcapi")]
 public class OgcApiController : ControllerBaseEx
 {
-    private readonly IOgcApiFeaturesManager _features;
-    private readonly IOgcApiTilesManager _tiles;
+    private readonly OgcApiFeaturesManager _features;
+    private readonly OgcApiTilesManager _tiles;
     private readonly IOgcLayerCatalog _layers;
 
-    public OgcApiController(IOgcApiFeaturesManager features, IOgcApiTilesManager tiles, IOgcLayerCatalog layers)
+    public OgcApiController(OgcApiFeaturesManager features, OgcApiTilesManager tiles, IOgcLayerCatalog layers)
     {
         _features = features; _tiles = tiles; _layers = layers;
     }

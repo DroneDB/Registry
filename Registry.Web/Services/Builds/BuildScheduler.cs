@@ -11,8 +11,13 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Builds;
 
-/// <summary>Default <see cref="IBuildScheduler"/>: indexed build jobs (<see cref="QueueDdbJobs"/>).</summary>
-public sealed class BuildScheduler : IBuildScheduler
+/// <summary>
+/// The one place that queues builds of a dataset (RQ-12): whether an entry is buildable and whether a dataset has
+/// deferred builds comes from libddb (the build manifest, XI-04); the scheduler only queues. Before the first
+/// job of a call is queued, the dataset is flagged as having pending builds, so a build that fails at once is
+/// retried by the pending-build coordinator (the flag must precede the job, or a quick failure is missed).
+/// </summary>
+public sealed class BuildScheduler
 {
     private readonly IBuildArtifactResolver _artifacts;
     private readonly IBackgroundJobsProcessor _jobs;
@@ -30,6 +35,10 @@ public sealed class BuildScheduler : IBuildScheduler
         _logger = logger;
     }
 
+    /// <summary>
+    /// Queues a build of each of <paramref name="paths"/> libddb reports buildable (one manifest call), in order.
+    /// </summary>
+    /// <returns>The builds queued (the buildable paths).</returns>
     public async Task<IReadOnlyList<QueuedBuild>> QueueBuildableAsync(BuildTarget target, IReadOnlyList<string> paths,
         BuildOrigin? origin = null, CancellationToken ct = default)
     {
@@ -59,6 +68,11 @@ public sealed class BuildScheduler : IBuildScheduler
         return queued;
     }
 
+    /// <summary>
+    /// Queues the build of <paramref name="path"/> the caller decided on (its buildability and live-build checks
+    /// are the caller's, as for the build endpoint).
+    /// </summary>
+    /// <returns>The job id.</returns>
     public async Task<string> QueueAsync(BuildTarget target, string path, string? hash, bool force = false,
         BuildOrigin? origin = null, CancellationToken ct = default)
     {
@@ -67,6 +81,8 @@ public sealed class BuildScheduler : IBuildScheduler
         return _jobs.EnqueueBuild(target.Dataset, path, force, Payload(target, userId, origin, path, hash));
     }
 
+    /// <summary>Queues a build of the whole dataset (an import, a rescan).</summary>
+    /// <returns>The job id.</returns>
     public async Task<string> QueueDatasetAsync(BuildTarget target, bool force, BuildOrigin? origin = null,
         CancellationToken ct = default)
     {
@@ -75,6 +91,8 @@ public sealed class BuildScheduler : IBuildScheduler
         return _jobs.EnqueueBuild(target.Dataset, null, force, Payload(target, userId, origin, null, null));
     }
 
+    /// <summary>Queues the pending-build job when libddb reports deferred builds in the dataset.</summary>
+    /// <returns>The job id, or null when nothing is deferred.</returns>
     public async Task<string?> QueuePendingAsync(BuildTarget target, BuildOrigin? origin = null,
         CancellationToken ct = default)
     {

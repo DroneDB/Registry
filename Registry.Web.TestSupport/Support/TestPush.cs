@@ -16,9 +16,9 @@ namespace Registry.Web.Test.Support;
 public static class TestPush
 {
     public static PushManager Manager(IDatasetResolver datasets, IDdbManager ddbManager, IDatasetsManager datasetsManager,
-        IAuthManager authManager, IDatasetAccessResolver access, IDdbWrapper ddbWrapper, IBuildScheduler builds,
-        IOptions<ImportSettings> importSettings, IFileSystem fileSystem, IPushSessionStore sessionStore,
-        IUploadQuotaGuard quota, DatasetPathPolicy paths, IScratchFileProvider scratch) =>
+        IAuthManager authManager, IDatasetAccessResolver access, IDdbWrapper ddbWrapper, BuildScheduler builds,
+        IOptions<ImportSettings> importSettings, IFileSystem fileSystem, PushSessionStore sessionStore,
+        UploadQuotaGuard quota, DatasetPathPolicy paths, ScratchFileProvider scratch) =>
         new(new PushSessions(datasets, datasetsManager, access, ddbManager, ddbWrapper, sessionStore,
                 NullLogger<PushSessions>.Instance),
             new PushUploads(access, authManager, quota, scratch, fileSystem, sessionStore, paths),

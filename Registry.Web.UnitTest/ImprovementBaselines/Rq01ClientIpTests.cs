@@ -36,7 +36,7 @@ namespace Registry.Web.Test.ImprovementBaselines;
 /// <c>Secure</c> and HSTS is sent.</item>
 /// </list>
 /// The limiter key is observed through a recording <see cref="IDownloadLimiter"/> on a preflight
-/// download check (real pipeline, real <c>DownloadLimitMiddleware</c>). <see cref="IClientIpResolver"/>,
+/// download check (real pipeline, real <c>DownloadLimitMiddleware</c>). <see cref="ClientIpResolver"/>,
 /// the one source of the client address, and the anonymous rate-limit partition are unit-tested.
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~Rq01ClientIpTests"
 /// </summary>
@@ -275,7 +275,7 @@ public class Rq01ClientIpTests
         response.Headers.Contains("Strict-Transport-Security").ShouldBeFalse();
     }
 
-    // IClientIpResolver and the rate-limit partition
+    // ClientIpResolver and the rate-limit partition
 
     private static DefaultHttpContext Anonymous(string? peer, IServiceProvider? services = null)
     {

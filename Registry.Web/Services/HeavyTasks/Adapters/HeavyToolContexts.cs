@@ -38,7 +38,7 @@ public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
 
     public HeavyToolExecutionContext(
         IDDB ddb, DatasetKey dataset, ILogger logger, TaskRun run, PerformContext hangfire,
-        IBuildScheduler buildQueue, IDatasetBuilds builds)
+        BuildScheduler buildQueue, DdbJobs builds)
     {
         Ddb = ddb;
         Dataset = dataset;
@@ -50,8 +50,8 @@ public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
     }
 
     public DatasetKey Dataset { get; }
-    public IBuildScheduler BuildQueue { get; }
-    public IDatasetBuilds Builds { get; }
+    public BuildScheduler BuildQueue { get; }
+    public DdbJobs Builds { get; }
 
     public IDDB Ddb { get; }
     public ClaimsPrincipal? Caller => null;

@@ -10,11 +10,11 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// <see cref="IUploadReceiptStore"/> on the distributed cache (shared by every instance), kept
-/// for <see cref="UploadSettings.ReceiptHours"/>.
+/// Keeps the outcome of uploads by client-generated id (UPL-01 E.4): when a proxy times out after
+/// the last byte (504) while the Registry is still adding the file, the client asks here instead
+/// of uploading the whole file again.
 /// </summary>
 public sealed class DistributedUploadReceiptStore(IDistributedCache cache, IOptions<UploadSettings> settings)
-    : IUploadReceiptStore
 {
     private readonly TimeSpan _ttl = TimeSpan.FromHours(Math.Max(1, settings.Value.ReceiptHours));
 

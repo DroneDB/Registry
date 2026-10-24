@@ -12,7 +12,6 @@ using Hangfire.Server;
 using Hangfire.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
 using Registry.Adapters;
@@ -93,7 +92,7 @@ public class Rq09HeavyTaskLifecycleTests
         services.AddSingleton(_writer.Object);
         services.AddSingleton(_jobs.Object);
         services.AddScoped(_ => TestJobs.DdbJobs(manager.Object));
-        services.AddScoped<Registry.Web.Services.Builds.IBuildScheduler>(_ => TestJobs.Scheduler(_jobs.Object));
+        services.AddScoped<Registry.Web.Services.Builds.BuildScheduler>(_ => TestJobs.Scheduler(_jobs.Object));
         _provider = services.BuildServiceProvider();
     }
 

@@ -25,12 +25,12 @@ public sealed class ArchiveImportStrategy : IRemoteImportStrategy
     private const int ProgressLogSeconds = 10;
 
     private readonly IRemoteRegistryClient _remote;
-    private readonly IImportDestinations _destinations;
+    private readonly ImportDestinations _destinations;
     private readonly IFileSystem _fileSystem;
     private readonly StorageOptions _storage;
     private readonly ILogger<ArchiveImportStrategy> _logger;
 
-    public ArchiveImportStrategy(IRemoteRegistryClient remote, IImportDestinations destinations,
+    public ArchiveImportStrategy(IRemoteRegistryClient remote, ImportDestinations destinations,
         IFileSystem fileSystem, IOptions<StorageOptions> storage, ILogger<ArchiveImportStrategy> logger)
     {
         _remote = remote;

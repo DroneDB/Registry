@@ -25,18 +25,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Datasets;
 
 /// <summary>The datasets as their readers see them: the readable datasets of an organization, one dataset, its root entry, its stamp.</summary>
-public interface IDatasetQueries
-{
-    Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false, CancellationToken ct = default);
-    Task<(IReadOnlyList<DatasetDto> Items, int Total)> ListPage(string orgSlug, DatasetListQuery query,
-        bool includeThumbnailCheck = false, CancellationToken ct = default);
-    Task<DatasetDto> GetDataset(string orgSlug, string dsSlug, CancellationToken ct = default);
-    Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug, CancellationToken ct = default);
-    Task<StampDto> GetStamp(string orgSlug, string dsSlug, CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IDatasetQueries"/> (RQ-12, out of <c>DatasetsManager</c>).</summary>
-public sealed class DatasetQueries : IDatasetQueries
+public sealed class DatasetQueries
 {
     private readonly IDatasetAccessResolver _access;
     private readonly IAuthManager _authManager;

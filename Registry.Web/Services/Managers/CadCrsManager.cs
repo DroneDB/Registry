@@ -18,8 +18,13 @@ public sealed class CadCrsManager(
     IDatasetAccessResolver access,
     IDdbWrapper ddbWrapper,
     IObjectsManager objectsManager,
-    ILogger<CadCrsManager> logger) : ICadCrsManager
+    ILogger<CadCrsManager> logger)
 {
+    /// <summary>
+    /// Gives the drawing at <paramref name="path"/> the coordinate system <paramref name="crs"/>: an
+    /// authority code ("EPSG:32632"), WKT or PROJ string, or "local" to keep it in drawing
+    /// coordinates. Returns the .prj entry.
+    /// </summary>
     public async Task<EntryDto> SetAsync(string orgSlug, string dsSlug, string path, string crs,
         CancellationToken ct = default)
     {

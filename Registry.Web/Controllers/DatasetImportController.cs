@@ -1,14 +1,12 @@
 #nullable enable
-using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Managers;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
@@ -23,13 +21,13 @@ namespace Registry.Web.Controllers;
 [Produces("application/json")]
 public class DatasetImportController : ControllerBaseEx
 {
-    private readonly IFileUrlImportManager _importManager;
+    private readonly FileUrlImportManager _importManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DatasetImportController"/> class.
     /// </summary>
     /// <param name="importManager">The single-file URL import manager.</param>
-    public DatasetImportController(IFileUrlImportManager importManager)
+    public DatasetImportController(FileUrlImportManager importManager)
     {
         _importManager = importManager;
     }

@@ -7,6 +7,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using System;
 using System.ComponentModel.DataAnnotations;
@@ -36,14 +37,14 @@ namespace Registry.Web.Controllers;
 [Produces("application/json")]
 public class ShareController : ControllerBaseEx
 {
-    private readonly IShareManager _shareManager;
+    private readonly ShareManager _shareManager;
     private readonly IObjectsManager _objectsManager;
 
     private readonly ILogger<ShareController> _logger;
     private readonly FormOptions _formOptions;
     private readonly IFileSystem _fs;
 
-    public ShareController(IShareManager shareManager, IObjectsManager objectsManager,
+    public ShareController(ShareManager shareManager, IObjectsManager objectsManager,
         ILogger<ShareController> logger, IOptions<FormOptions> formOptions, IFileSystem fs)
     {
         _shareManager = shareManager;
@@ -122,7 +123,6 @@ public class ShareController : ControllerBaseEx
 
         if (file == null)
             throw new BadRequestException("No file uploaded");
-
 
         var res = await _shareManager.UploadStreamed(token, path, file, ct: ct);
         return res;

@@ -26,23 +26,7 @@ using Registry.Web.Services.Caching;
 namespace Registry.Web.Services.Managers.Wfs;
 
 /// <summary>The features of the vector layers (RQ-12, out of <c>WfsManager</c>): GetFeature, GetFeatureById and GetPropertyValue.</summary>
-public interface IWfsFeatureQuery
-{
-    Task<string> GetFeatureAsync(string orgSlug, string dsSlug, string typeName,
-        double[]? bbox, string? bboxCrs, int count, int startIndex, string outputFormat,
-        string? resourceId = null, string? filterXml = null, CancellationToken ct = default);
-    Task<string> GetFeatureByIdAsync(string orgSlug, string dsSlug, string id, string outputFormat,
-        CancellationToken ct = default);
-    Task<string> GetPropertyValueAsync(string orgSlug, string dsSlug, string typeName,
-        string valueReference, int count, int startIndex, string outputFormat,
-        string? resourceId = null, string? filterXml = null, CancellationToken ct = default);
-}
-
-/// <summary>
-/// Default <see cref="IWfsFeatureQuery"/>: BBOX, resource id and FES filters with pagination, evaluated by DroneDB
-/// when its SQL can express them and by <see cref="WfsLocalFilter"/> otherwise (no CQL).
-/// </summary>
-public class WfsFeatureQuery : OgcManagerBase, IWfsFeatureQuery
+public class WfsFeatureQuery : OgcManagerBase
 {
     private readonly ILogger<WfsFeatureQuery> _logger;
 
@@ -167,7 +151,6 @@ public class WfsFeatureQuery : OgcManagerBase, IWfsFeatureQuery
             StartIndex = 0
         });
     }
-
 
     /// <summary>An OGR GML response without features.</summary>
     private const string EmptyOgrCollection =

@@ -22,23 +22,17 @@ using Entry = Registry.Web.Data.Models.Entry;
 namespace Registry.Web.Services.Shares;
 
 /// <summary>The dataset a share goes to: the tagged one (created when missing; its running batches rolled back), a new one in the tagged organization, or a new one in the user's default organization (created when missing).</summary>
-public interface IShareTargets
-{
-    Task<Dataset> ResolveAsync(ShareInitDto parameters, User currentUser);
-}
-
-/// <summary>Default <see cref="IShareTargets"/> (RQ-12, out of <c>ShareManager</c>).</summary>
-public sealed class ShareTargets : IShareTargets
+public sealed class ShareTargets
 {
     private readonly RegistryContext _context;
     private readonly IDatasetResolver _datasets;
     private readonly IOrganizationsManager _organizationsManager;
     private readonly IDatasetsManager _datasetsManager;
-    private readonly IShareBatchRollback _rollback;
+    private readonly ShareBatchRollback _rollback;
     private readonly INameGenerator _nameGenerator;
     private readonly ILogger<ShareTargets> _logger;
 
-    public ShareTargets(RegistryContext context, IDatasetResolver datasets, IOrganizationsManager organizationsManager, IDatasetsManager datasetsManager, IShareBatchRollback rollback, INameGenerator nameGenerator, ILogger<ShareTargets> logger)
+    public ShareTargets(RegistryContext context, IDatasetResolver datasets, IOrganizationsManager organizationsManager, IDatasetsManager datasetsManager, ShareBatchRollback rollback, INameGenerator nameGenerator, ILogger<ShareTargets> logger)
     {
         _context = context;
         _datasets = datasets;

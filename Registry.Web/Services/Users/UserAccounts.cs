@@ -21,26 +21,17 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Users;
 
 /// <summary>The accounts an administrator manages: creation, profile, metadata.</summary>
-public interface IUserAccounts
-{
-    Task<UserDto> CreateUser(string userName, string email, string password, string[] roles);
-    Task UpdateUser(string userName, string email);
-    Task<Dictionary<string, object>> GetUserMeta(string userName = null);
-    Task SetUserMeta(string userName, Dictionary<string, object> meta);
-}
-
-/// <summary>Default <see cref="IUserAccounts"/> (RQ-12, out of <c>UsersManager</c>).</summary>
-public sealed class UserAccounts : IUserAccounts
+public sealed class UserAccounts
 {
     private readonly ILoginManager _loginManager;
     private readonly UserManager<User> _userManager;
-    private readonly IUserProvisioning _provisioning;
+    private readonly UserProvisioning _provisioning;
     private readonly IAuthManager _authManager;
     private readonly ApplicationDbContext _applicationDbContext;
     private readonly RegistryContext _registryContext;
     private readonly ILogger<UserAccounts> _logger;
 
-    public UserAccounts(ILoginManager loginManager, UserManager<User> userManager, IUserProvisioning provisioning, IAuthManager authManager, ApplicationDbContext applicationDbContext, RegistryContext registryContext, ILogger<UserAccounts> logger)
+    public UserAccounts(ILoginManager loginManager, UserManager<User> userManager, UserProvisioning provisioning, IAuthManager authManager, ApplicationDbContext applicationDbContext, RegistryContext registryContext, ILogger<UserAccounts> logger)
     {
         _loginManager = loginManager;
         _userManager = userManager;

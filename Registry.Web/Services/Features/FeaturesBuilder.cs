@@ -18,12 +18,6 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Features;
 
-/// <summary>The platform features the Hub adapts to (<c>GET /sys/features</c>, anonymous).</summary>
-public interface IFeaturesBuilder
-{
-    Task<FeaturesDto> BuildAsync(CancellationToken ct = default);
-}
-
 /// <summary>
 /// One part of <see cref="FeaturesDto"/>, from one concern's settings and services: a new feature is a new section,
 /// not one more dependency of a builder (RQ-12).
@@ -33,8 +27,8 @@ public interface IFeatureSection
     Task FillAsync(FeaturesDto features);
 }
 
-/// <summary>Default <see cref="IFeaturesBuilder"/>: every <see cref="IFeatureSection"/> fills its part.</summary>
-public sealed class FeaturesBuilder : IFeaturesBuilder
+/// <summary>The platform features the Hub adapts to (<c>GET /sys/features</c>, anonymous).</summary>
+public sealed class FeaturesBuilder
 {
     private readonly IReadOnlyList<IFeatureSection> _sections;
 

@@ -54,7 +54,6 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         p.Text("name"),
         p.RawArray("options"));
 
-
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -76,7 +75,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         }
         """);
 
-    private readonly INodeOdxTaskRunner _node;
+    private readonly NodeOdxTaskRunner _node;
     private readonly DatasetArchiveExtractor _archives;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ProcessingPlatformSettings _settings;
@@ -85,7 +84,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
     private readonly TaskFileIndexer _indexer;
 
     public PhotogrammetryTool(
-        INodeOdxTaskRunner node,
+        NodeOdxTaskRunner node,
         DatasetArchiveExtractor archives,
         IServiceScopeFactory scopeFactory,
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
@@ -358,8 +357,5 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
     {
         public void Report(T value) => report(value);
     }
-
-
-
 
 }

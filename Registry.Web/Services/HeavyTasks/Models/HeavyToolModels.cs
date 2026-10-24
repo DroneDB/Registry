@@ -75,8 +75,8 @@ public interface IHeavyToolExecutionContext : IHeavyToolValidationContext
     DatasetKey Dataset { get; }
 
     /// <summary>Queues the builds of what the tool added (as children of the task), in the task's scope.</summary>
-    IBuildScheduler BuildQueue { get; }
+    BuildScheduler BuildQueue { get; }
 
     /// <summary>Runs builds inline, in the task's own job (the build and rescan tools).</summary>
-    IDatasetBuilds Builds { get; }
+    DdbJobs Builds { get; }
 }

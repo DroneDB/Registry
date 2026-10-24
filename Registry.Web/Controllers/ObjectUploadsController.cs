@@ -15,6 +15,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Uploads;
@@ -34,15 +35,15 @@ public class ObjectUploadsController : ControllerBaseEx
     /// <summary>Client-generated id of an upload, echoed in its receipt.</summary>
     public const string UploadIdHeader = "X-Upload-Id";
 
-    private readonly IUploadManager _uploads;
-    private readonly IChunkedUploadManager _chunks;
+    private readonly UploadManager _uploads;
+    private readonly ChunkedUploadManager _chunks;
     private readonly IEntryCommandService _commands;
     private readonly ILogger<ObjectUploadsController> _logger;
     private readonly FormOptions _formOptions;
     private readonly UploadSettings _uploadSettings;
     private readonly ApiErrorResponder _errors;
 
-    public ObjectUploadsController(IUploadManager uploads, IChunkedUploadManager chunks, IEntryCommandService commands,
+    public ObjectUploadsController(UploadManager uploads, ChunkedUploadManager chunks, IEntryCommandService commands,
         ILogger<ObjectUploadsController> logger, IOptions<FormOptions> formOptions, IOptions<UploadSettings> uploadSettings,
         ApiErrorResponder errors)
     {

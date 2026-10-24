@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.Utilities;
 
@@ -26,7 +26,7 @@ public static class DatasetUploads
     /// stream leaves no file behind.
     /// </summary>
     /// <returns>The temp file, its size and its SHA-256.</returns>
-    public static async Task<StreamedFile> StreamToTempAsync(IScratchFileProvider scratch, IFileSystem fs,
+    public static async Task<StreamedFile> StreamToTempAsync(ScratchFileProvider scratch, IFileSystem fs,
         string datasetFolderPath, Stream source, CancellationToken ct = default)
     {
         // Temp lives under the dataset folder (same volume as the final file) -> a same-volume

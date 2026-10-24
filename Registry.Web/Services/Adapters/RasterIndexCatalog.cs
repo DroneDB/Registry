@@ -11,15 +11,15 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// <see cref="IRasterIndexCatalog"/> over libddb's raster info (<see cref="IRasterInfoCache"/>, the one cached read WCS
+/// <see cref="IRasterIndexCatalog"/> over libddb's raster info (<see cref="RasterInfoCache"/>, the one cached read WCS
 /// shares): the <c>indexLayer</c> member of the document of the raster.
 /// </summary>
 public sealed class RasterIndexCatalog : IRasterIndexCatalog
 {
-    private readonly IRasterInfoCache _info;
+    private readonly RasterInfoCache _info;
     private readonly ILogger<RasterIndexCatalog> _logger;
 
-    public RasterIndexCatalog(IRasterInfoCache info, ILogger<RasterIndexCatalog> logger)
+    public RasterIndexCatalog(RasterInfoCache info, ILogger<RasterIndexCatalog> logger)
     {
         _info = info;
         _logger = logger;

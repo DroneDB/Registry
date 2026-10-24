@@ -11,7 +11,7 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// <summary>
 /// Native tool wrapping DroneDB derivative build. Produces no
 /// downloadable artifact; it mutates the dataset build cache in place. It runs the build
-/// inline in its task's job, as the build jobs do (<see cref="IDatasetBuilds"/>).
+/// inline in its task's job, as the build jobs do (<see cref="DdbJobs"/>).
 /// </summary>
 public sealed class BuildTool : HeavyToolBase<BuildTool.Parameters>
 {

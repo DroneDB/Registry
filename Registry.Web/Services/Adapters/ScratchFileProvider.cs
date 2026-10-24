@@ -11,11 +11,16 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// <see cref="IScratchFileProvider"/> over <see cref="IFileSystem"/>: the configured temp folder
-/// (<see cref="StorageOptions.TempPath"/>, <c>AppSettings:TempPath</c>) and the dataset uploads folder. Generalizes the upload
-/// pipeline's temp files (same volume as the dataset, a new name every time).
+/// Where the Registry writes files that are not (yet) part of a dataset (RQ-10). Two places, by what
+/// happens to the file next:
+/// <list type="bullet">
+/// <item><see cref="Create"/>: under the configured temp folder (<c>StorageOptions.TempPath</c>), for a
+/// file that is read and deleted (a downloaded archive, an export, a task folder).</item>
+/// <item><see cref="CreateForDataset"/>: in the dataset's uploads folder, the same volume as the
+/// dataset, for a file that is moved into it later: the move is a rename, never a copy.</item>
+/// </list>
 /// </summary>
-public sealed class ScratchFileProvider : IScratchFileProvider
+public sealed class ScratchFileProvider
 {
     private readonly IFileSystem _fs;
     private readonly ILogger<ScratchFileProvider> _logger;
@@ -37,8 +42,10 @@ public sealed class ScratchFileProvider : IScratchFileProvider
         });
     }
 
+    /// <summary>The configured temp folder, absolute (created on first use).</summary>
     public string Root => _root.Value;
 
+    /// <summary>A new file name under <see cref="Root"/>: <paramref name="prefix"/>, a GUID, <paramref name="extension"/>.</summary>
     public ScratchFile Create(string prefix, string extension)
     {
         ArgumentNullException.ThrowIfNull(prefix);
@@ -46,6 +53,10 @@ public sealed class ScratchFileProvider : IScratchFileProvider
         return New(Path.Combine(Root, prefix + Guid.NewGuid().ToString("N") + extension));
     }
 
+    /// <summary>
+    /// A new file name in the uploads folder of the dataset at <paramref name="datasetFolder"/>
+    /// (created on first use). The abandoned-upload sweep removes a <c>.tmp</c> file left there.
+    /// </summary>
     public ScratchFile CreateForDataset(string datasetFolder, string extension = ".tmp")
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(datasetFolder);

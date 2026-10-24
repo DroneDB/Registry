@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using Registry.Web.Data;
 using Registry.Web.Identity;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Organizations;
 using Registry.Web.Services.Ports;
@@ -18,7 +19,7 @@ public static class TestOrganizations
 {
     public static OrganizationsManager Create(IAuthManager authManager, IDatasetAccessResolver access,
         RegistryContext context, IDatasetResolver datasets, IDatasetsManager datasetsManager,
-        ApplicationDbContext appContext, IOptions<AccountOptions> accounts, IOrganizationMembershipService memberships)
+        ApplicationDbContext appContext, IOptions<AccountOptions> accounts, OrganizationMembershipService memberships)
     {
         var queries = new OrganizationQueries(authManager, access, context, appContext);
         return new OrganizationsManager(

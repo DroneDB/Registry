@@ -15,6 +15,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Attributes;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -29,11 +30,11 @@ namespace Registry.Web.Controllers;
 [Produces("application/json")]
 public class PushController : ControllerBaseEx
 {
-    private readonly IPushManager _pushManager;
+    private readonly PushManager _pushManager;
     private readonly FormOptions _formOptions;
     private readonly IFileSystem _fs;
 
-    public PushController(IPushManager pushManager, IOptions<FormOptions> formOptions, IFileSystem fs)
+    public PushController(PushManager pushManager, IOptions<FormOptions> formOptions, IFileSystem fs)
     {
         _pushManager = pushManager;
         _formOptions = formOptions.Value;
@@ -68,7 +69,6 @@ public class PushController : ControllerBaseEx
         var res = await _pushManager.Init(orgSlug, dsSlug, checksum, stamp, ct: ct);
 
         return res;
-
 
     }
 
@@ -109,7 +109,6 @@ public class PushController : ControllerBaseEx
             var path = form.GetField("path");
             var token = form.GetField("token");
 
-
             if (upload == null)
                 throw new BadRequestException("No file uploaded");
 
@@ -123,7 +122,6 @@ public class PushController : ControllerBaseEx
             _fs.TryDelete(upload?.TempPath);
         }
     }
-
 
     /// <summary>
     /// Uploads metadata as part of a push operation.
@@ -175,6 +173,5 @@ public class PushController : ControllerBaseEx
 
         return Ok();
     }
-
 
 }

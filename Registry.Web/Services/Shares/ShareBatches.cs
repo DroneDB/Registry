@@ -22,25 +22,17 @@ using Entry = Registry.Web.Data.Models.Entry;
 
 namespace Registry.Web.Services.Shares;
 
-/// <summary>The life of a share batch: its start (on the dataset <see cref="IShareTargets"/> resolves), its commit, its rollback.</summary>
-public interface IShareBatches
+/// <summary>The life of a share batch: its start (on the dataset <see cref="ShareTargets"/> resolves), its commit, its rollback.</summary>
+public sealed class ShareBatches
 {
-    Task<ShareInitResultDto> Initialize(ShareInitDto parameters, CancellationToken ct = default);
-    Task<CommitResultDto> Commit(string token, CancellationToken ct = default);
-    Task Rollback(string token, CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IShareBatches"/> (RQ-12, out of <c>ShareManager</c>).</summary>
-public sealed class ShareBatches : IShareBatches
-{
-    private readonly IShareBatchStore _batches;
-    private readonly IShareBatchRollback _rollback;
-    private readonly IShareTargets _targets;
+    private readonly ShareBatchStore _batches;
+    private readonly ShareBatchRollback _rollback;
+    private readonly ShareTargets _targets;
     private readonly IAuthManager _authManager;
     private readonly IStorageQuota _quota;
     private readonly ILogger<ShareBatches> _logger;
 
-    public ShareBatches(IShareBatchStore batches, IShareBatchRollback rollback, IShareTargets targets, IAuthManager authManager, IStorageQuota quota, ILogger<ShareBatches> logger)
+    public ShareBatches(ShareBatchStore batches, ShareBatchRollback rollback, ShareTargets targets, IAuthManager authManager, IStorageQuota quota, ILogger<ShareBatches> logger)
     {
         _batches = batches;
         _rollback = rollback;

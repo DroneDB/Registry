@@ -12,18 +12,18 @@ namespace Registry.Web.Services.Managers;
 /// Processing Platform task substrate for a single dataset (<see cref="ITasksManager"/>, what the controller calls)
 /// over the services RQ-12 split it into (17 parameters before): the tool catalog and submission, the history
 /// (list, status, log, result), ending a task, retrying one, and the change subscription. Authorization combines
-/// dataset access with per-task ownership (<see cref="ITaskAuthorizer"/>).
+/// dataset access with per-task ownership (<see cref="TaskAuthorizer"/>).
 /// </summary>
 public sealed class TasksManager : ITasksManager
 {
-    private readonly ITaskSubmission _submission;
-    private readonly ITaskHistory _history;
-    private readonly ITaskLifecycle _lifecycle;
-    private readonly ITaskRetry _retry;
+    private readonly TaskSubmission _submission;
+    private readonly TaskHistory _history;
+    private readonly TaskLifecycle _lifecycle;
+    private readonly TaskRetry _retry;
     private readonly IDatasetAccessResolver _access;
     private readonly ITaskChangeNotifier? _changes;
 
-    public TasksManager(ITaskSubmission submission, ITaskHistory history, ITaskLifecycle lifecycle, ITaskRetry retry,
+    public TasksManager(TaskSubmission submission, TaskHistory history, TaskLifecycle lifecycle, TaskRetry retry,
         IDatasetAccessResolver access, ITaskChangeNotifier? changes = null)
     {
         _submission = submission;

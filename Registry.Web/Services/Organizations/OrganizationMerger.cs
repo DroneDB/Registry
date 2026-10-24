@@ -15,6 +15,7 @@ using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -22,30 +23,16 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Organizations;
 
 /// <summary>Merging an organization into another (RQ-12, out of <c>OrganizationsManager</c>).</summary>
-public interface IOrganizationMerger
-{
-    /// <summary>
-    /// Moves every dataset and member of <paramref name="sourceOrgSlug"/> into <paramref name="destOrgSlug"/> and, when
-    /// every dataset moved, deletes the source.
-    /// </summary>
-    Task<MergeOrganizationResultDto> Merge(
-        string sourceOrgSlug,
-        string destOrgSlug,
-        ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict,
-        bool deleteSourceOrganization = true, CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IOrganizationMerger"/>.</summary>
-public sealed class OrganizationMerger : IOrganizationMerger
+public sealed class OrganizationMerger
 {
     private readonly IAuthManager _authManager;
-    private readonly IOrganizationMembershipService _memberships;
+    private readonly OrganizationMembershipService _memberships;
     private readonly RegistryContext _context;
     private readonly IDatasetResolver _datasets;
     private readonly IDatasetsManager _datasetManager;
     private readonly ILogger<OrganizationMerger> _logger;
 
-    public OrganizationMerger(IAuthManager authManager, IOrganizationMembershipService memberships,
+    public OrganizationMerger(IAuthManager authManager, OrganizationMembershipService memberships,
         RegistryContext context, IDatasetResolver datasets, IDatasetsManager datasetManager,
         ILogger<OrganizationMerger> logger)
     {
@@ -57,6 +44,10 @@ public sealed class OrganizationMerger : IOrganizationMerger
         _logger = logger;
     }
 
+    /// <summary>
+    /// Moves every dataset and member of <paramref name="sourceOrgSlug"/> into <paramref name="destOrgSlug"/> and, when
+    /// every dataset moved, deletes the source.
+    /// </summary>
     public async Task<MergeOrganizationResultDto> Merge(
         string sourceOrgSlug,
         string destOrgSlug,

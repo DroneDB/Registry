@@ -6,36 +6,24 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
-using Registry.Web.Models;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Uploads;
 
 /// <summary>The commit of an upload request (RQ-12, out of <c>UploadManager</c>): the streamed files become entries of the dataset.</summary>
-public interface IUploadCommitter
+public sealed class UploadCommitter
 {
-    /// <summary>
-    /// Commits <paramref name="parts"/> with one quota decision, one index batch and one invalidation: validates
-    /// each file, moves it into place, indexes the batch, quarantines what failed to index, finalizes the rest and
-    /// settles the receipt. A part that fails does not fail the others; a request-level failure (quota, a native
-    /// outage) is every unsettled part's outcome. Never throws.
-    /// </summary>
-    Task<IReadOnlyList<UploadPartOutcome>> CommitAsync(UploadRequestContext ctx, IReadOnlyList<StreamedPart> parts);
-}
-
-/// <summary>Default <see cref="IUploadCommitter"/>.</summary>
-public sealed class UploadCommitter : IUploadCommitter
-{
-    private readonly IUploadFiles _files;
-    private readonly IUploadQuotaGuard _quota;
-    private readonly IUploadReceiptTracker _receipts;
-    private readonly IUploadIndexer _indexer;
-    private readonly IUploadFinalizer _finalizer;
+    private readonly UploadFiles _files;
+    private readonly UploadQuotaGuard _quota;
+    private readonly UploadReceiptTracker _receipts;
+    private readonly UploadIndexer _indexer;
+    private readonly UploadFinalizer _finalizer;
     private readonly ILogger<UploadCommitter> _logger;
 
-    public UploadCommitter(IUploadFiles files, IUploadQuotaGuard quota, IUploadReceiptTracker receipts,
-        IUploadIndexer indexer, IUploadFinalizer finalizer, ILogger<UploadCommitter> logger)
+    public UploadCommitter(UploadFiles files, UploadQuotaGuard quota, UploadReceiptTracker receipts,
+        UploadIndexer indexer, UploadFinalizer finalizer, ILogger<UploadCommitter> logger)
     {
         _files = files;
         _quota = quota;
@@ -45,6 +33,12 @@ public sealed class UploadCommitter : IUploadCommitter
         _logger = logger;
     }
 
+    /// <summary>
+    /// Commits <paramref name="parts"/> with one quota decision, one index batch and one invalidation: validates
+    /// each file, moves it into place, indexes the batch, quarantines what failed to index, finalizes the rest and
+    /// settles the receipt. A part that fails does not fail the others; a request-level failure (quota, a native
+    /// outage) is every unsettled part's outcome. Never throws.
+    /// </summary>
     public async Task<IReadOnlyList<UploadPartOutcome>> CommitAsync(UploadRequestContext ctx,
         IReadOnlyList<StreamedPart> parts)
     {

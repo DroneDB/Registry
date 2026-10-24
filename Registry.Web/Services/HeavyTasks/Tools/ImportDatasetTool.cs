@@ -45,7 +45,6 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
         p.WholeNumber("budgetBytes"),
         p.JsonObject("params"));
 
-
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -61,7 +60,7 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
         }
         """);
 
-    private readonly IImportSourceCatalog _sources;
+    private readonly ImportSourceCatalog _sources;
     private readonly ImportCredentials _credentials;
     private readonly TaskFileIndexer _indexer;
     private readonly ImportSettings _settings;
@@ -80,7 +79,7 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
     /// <param name="headroom">The disk head-room of the dataset volume.</param>
     /// <param name="files">The files of the dataset folder: what was there, what the import added, the rollback.</param>
     public ImportDatasetTool(
-        IImportSourceCatalog sources,
+        ImportSourceCatalog sources,
         ImportCredentials credentials,
         TaskFileIndexer indexer,
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,

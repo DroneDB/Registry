@@ -9,7 +9,7 @@ namespace Registry.Web.Services.Adapters;
 /// <summary>
 /// Embedded resource stream reader for assembly-manifest resources.
 /// </summary>
-public class EmbeddedResourceQuery : IEmbeddedResourceQuery
+public class EmbeddedResourceQuery
 {
     public Stream Read(Assembly assembly, string resource)
     {

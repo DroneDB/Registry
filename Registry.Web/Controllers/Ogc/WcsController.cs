@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Exceptions;
 using Registry.Web.Filters;
 using Registry.Web.Models;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Managers;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 
@@ -27,9 +27,9 @@ namespace Registry.Web.Controllers.Ogc;
 [Route(RoutesHelper.DatasetPrefix)]
 public class WcsController : ControllerBaseEx
 {
-    private readonly IWcsManager _mgr;
+    private readonly WcsManager _mgr;
 
-    public WcsController(IWcsManager mgr)
+    public WcsController(WcsManager mgr)
     {
         _mgr = mgr;
     }

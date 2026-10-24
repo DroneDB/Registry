@@ -26,14 +26,7 @@ using Registry.Web.Services.Caching;
 namespace Registry.Web.Services.Managers.Wfs;
 
 /// <summary>The XML schema of the vector layers (RQ-12, out of <c>WfsManager</c>): DescribeFeatureType.</summary>
-public interface IWfsSchema
-{
-    Task<string> DescribeFeatureTypeAsync(string orgSlug, string dsSlug, string[] typeNames,
-        CancellationToken ct = default);
-}
-
-/// <summary>Default <see cref="IWfsSchema"/>: one feature type per vector layer, its fields from DroneDB's description.</summary>
-public class WfsSchema : OgcManagerBase, IWfsSchema
+public class WfsSchema : OgcManagerBase
 {
     private readonly ILogger<WfsSchema> _logger;
 

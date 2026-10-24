@@ -10,21 +10,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Uploads;
 
 /// <summary>The index step of an upload (RQ-12, out of <c>UploadManager</c>): the files of a request become entries in one batch.</summary>
-public interface IUploadIndexer
-{
-    /// <summary>Registers the upload of <paramref name="ctx"/> with the index lane, or null when there is no lane.</summary>
-    UploadTicket? BeginUpload(UploadRequestContext ctx);
-
-    /// <summary>One index batch for every file of the request; each file gets its own entry or error.</summary>
-    Task IndexAsync(UploadRequestContext ctx, IReadOnlyList<MovedUploadPart> parts);
-}
-
-/// <summary>
-/// Default <see cref="IUploadIndexer"/>: through the per-dataset index queue, which coalesces concurrent uploads to
-/// the same dataset into one native batch and one write transaction; without a queue (a direct construction in a
-/// test) one <c>AddRaw</c> per file.
-/// </summary>
-public sealed class UploadIndexer : IUploadIndexer
+public sealed class UploadIndexer
 {
     private readonly ILogger<UploadIndexer> _logger;
     private readonly IDatasetIndexQueue? _indexQueue;
@@ -35,8 +21,10 @@ public sealed class UploadIndexer : IUploadIndexer
         _indexQueue = indexQueue;
     }
 
+    /// <summary>Registers the upload of <paramref name="ctx"/> with the index lane, or null when there is no lane.</summary>
     public UploadTicket? BeginUpload(UploadRequestContext ctx) => _indexQueue?.BeginUpload(ctx.Key);
 
+    /// <summary>One index batch for every file of the request; each file gets its own entry or error.</summary>
     public async Task IndexAsync(UploadRequestContext ctx, IReadOnlyList<MovedUploadPart> parts)
     {
         if (parts.Count == 0)
