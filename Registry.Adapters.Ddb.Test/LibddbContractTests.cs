@@ -326,6 +326,19 @@ public unsafe class LibddbContractTests : TestBase
         types[(int)EntryType.PointCloud]["roles"]!.Values<string>().ShouldBe(["pointcloud.copc", "pointcloud.ept"]);
     }
 
+    // The members the Hub's entryTypes feature (GET /sys/features, EntryTypeDto) passes through: libddb adding, renaming
+    // or dropping one is a change of that wire shape, so it is noticed here
+    [Test]
+    public void GetEntryTypes_HasExactlyTheMembersTheFeaturesPassThrough()
+    {
+        Ok(NativeDdb.DDBGetEntryTypes(out var output), "DDBGetEntryTypes");
+
+        foreach (var type in TakeJson(output).Children<JObject>())
+            type.Properties().Select(p => p.Name).ShouldBe(
+                ["buildable", "id", "name", "roles", "sidecarExtensions", "thumbnail"], ignoreOrder: true,
+                $"entry type {type["name"]}");
+    }
+
     // fixtures/build-artifacts.json
     [Test]
     public void GetBuildArtifacts_ReportsBuiltNotBuildableAndMissingEntries()

@@ -72,6 +72,20 @@ public class FeaturesDto
     public TaskStateInfoDto[]? TaskStates { get; set; }
 
     /// <summary>
+    /// The entry types libddb knows and what it does with each (<c>DDBGetEntryTypes</c>, passed through in libddb's
+    /// order; Registry has no type rules of its own). Clients derive which entries build, which have a thumbnail and
+    /// which extensions are sidecars from this list instead of hardcoding them.
+    /// </summary>
+    public EntryTypeDto[]? EntryTypes { get; set; }
+
+    /// <summary>
+    /// The archive file name suffixes Registry's own extraction accepts: lowercase, without the leading dot,
+    /// compound ones (<c>tar.gz</c>) before their own suffixes (<c>gz</c>). A name that ends with one can be
+    /// extracted into a dataset.
+    /// </summary>
+    public string[]? ArchiveExtensions { get; set; }
+
+    /// <summary>
     /// Hub UI branding and customization options. Materializes <c>window.HubOptions</c>
     /// on the client. Always populated from <c>AppSettings:HubOptions</c> in production
     /// (defaults shipped via <c>appsettings-default.json</c>); only null if an admin has
@@ -113,6 +127,23 @@ public sealed record TaskToolInfoDto(
     bool Hidden,
     bool Disabled,
     string? DisabledMessage);
+
+/// <summary>
+/// An entry type as libddb describes it (<c>DDBGetEntryTypes</c>).
+/// </summary>
+/// <param name="Id">libddb's numeric id of the type (the <c>type</c> of an entry).</param>
+/// <param name="Name">Its name, as <c>DDBRescan</c> takes it.</param>
+/// <param name="Buildable">libddb builds entries of the type.</param>
+/// <param name="Thumbnail"><c>none</c>, <c>file</c> (rendered from the entry's file) or <c>build</c> (from an artifact once built).</param>
+/// <param name="SidecarExtensions">Lowercase extensions, without the dot, of the files that belong to a main file of the type.</param>
+/// <param name="Roles">The artifact roles a build of the type can produce.</param>
+public sealed record EntryTypeDto(
+    int Id,
+    string Name,
+    bool Buildable,
+    string Thumbnail,
+    string[] SidecarExtensions,
+    string[] Roles);
 
 /// <summary>
 /// Authoritative descriptor of a task state (value + terminal flag), surfaced to

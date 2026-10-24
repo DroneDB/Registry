@@ -36,6 +36,19 @@ public class SharpCompressArchiveExtractorTest
     }
 
     [Test]
+    public void SupportedExtensions_AreExactlyWhatIsSupportedAccepts()
+    {
+        var ex = new SharpCompressArchiveExtractor();
+
+        ex.SupportedExtensions.ShouldAllBe(e => e.StartsWith('.') && e.All(c => !char.IsUpper(c)));
+        ex.SupportedExtensions.ShouldAllBe(e => ex.IsSupported("data" + e));
+        ex.SupportedExtensions.ShouldContain(".tar.gz");
+        // Compound suffixes come before their own suffixes
+        ex.SupportedExtensions.ToList().IndexOf(".tar.gz").ShouldBeLessThan(ex.SupportedExtensions.ToList().IndexOf(".gz"));
+        ex.IsSupported("data.docx").ShouldBeFalse();
+    }
+
+    [Test]
     public void IsSupported_RecognizesArchiveExtensions()
     {
         var ex = new SharpCompressArchiveExtractor();

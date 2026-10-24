@@ -64,6 +64,8 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
             .ToFrozenSet());
     }
 
+    public IReadOnlyList<EntryTypeInfo> EntryTypes => _types.Value;
+
     public bool IsBuildableType(EntryType type) => _buildableTypes.Value.Contains(type);
 
     public bool HasThumbnail(EntryType type) => _thumbnailTypes.Value.Contains(type);

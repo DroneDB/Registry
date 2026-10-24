@@ -946,8 +946,9 @@ schema DeletedDto { deleted:boolean }
 schema EditUserRequestDto { email:string, roles:array<string> }
 schema EntryDto { path:string, hash:string, type:EntryType, properties:map<any>, mtime:string(date-time), size:integer(int64), depth:integer(int32), point_geom:any, polygon_geom:any, buildStatus:string, buildMissingDependencies:array<string>, artifacts:array<ArtifactLinkDto> }
 schema EntryType {  }
+schema EntryTypeDto { id:integer(int32), name:string, buildable:boolean, thumbnail:string, sidecarExtensions:array<string>, roles:array<string> }
 schema FaviconOptions { faviconIco:string, favicon16:string, favicon32:string, appleTouchIcon:string, manifest:string, themeColor:string }
-schema FeaturesDto { organizationMemberManagement:boolean, userManagement:boolean, storageLimiter:boolean, maxConcurrentDownloadsPerUser:integer(int32), disableAnonymousBulkDownloads:boolean, passwordPolicy:PasswordPolicyDto, datasetThumbnailCandidates:array<string>, maxExportSizeBytes:integer(int64), bulkDownloadAsyncThresholdBytes:integer(int64), taskTools:array<TaskToolInfoDto>, taskStates:array<TaskStateInfoDto>, hubOptions:HubOptions, hubVersion:string, registryVersion:string, ddbVersion:string }
+schema FeaturesDto { organizationMemberManagement:boolean, userManagement:boolean, storageLimiter:boolean, maxConcurrentDownloadsPerUser:integer(int32), disableAnonymousBulkDownloads:boolean, passwordPolicy:PasswordPolicyDto, datasetThumbnailCandidates:array<string>, maxExportSizeBytes:integer(int64), bulkDownloadAsyncThresholdBytes:integer(int64), taskTools:array<TaskToolInfoDto>, taskStates:array<TaskStateInfoDto>, entryTypes:array<EntryTypeDto>, archiveExtensions:array<string>, hubOptions:HubOptions, hubVersion:string, registryVersion:string, ddbVersion:string }
 schema FileImportErrorDto { organization:string, dataset:string, filePath:string, message:string, retryCount:integer(int32) }
 schema FixInvalidSlugsResultDto { dryRun:boolean, entries:array<SlugFixEntryDto> }
 schema GlobalReportContentDto { extension:string, files:integer(int32), size:integer(int64) }

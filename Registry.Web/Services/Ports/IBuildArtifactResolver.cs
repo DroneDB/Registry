@@ -26,6 +26,13 @@ public interface IBuildArtifactResolver
     /// </summary>
     bool HasThumbnail(EntryType type);
 
+    /// <summary>
+    /// The entry types as libddb reports them (<c>DDBGetEntryTypes</c>: id, name, buildable, thumbnail, sidecar
+    /// extensions, artifact roles), in libddb's order, read once per process (so once per libddb version). Whoever
+    /// needs a type rule asks here; Registry holds none of its own.
+    /// </summary>
+    IReadOnlyList<EntryTypeInfo> EntryTypes { get; }
+
     /// <summary>The build of one entry (one native call).</summary>
     EntryBuildArtifacts GetBuild(IDDB ddb, string entryPath);
 
