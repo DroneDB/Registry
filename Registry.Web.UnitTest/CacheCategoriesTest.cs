@@ -53,19 +53,22 @@ public class CacheCategoriesTest
         CacheCategories.OgcGeneration("o", "d").ShouldBe("ogc-gen-o-d");
         CacheCategories.OgcDocument("o", "d", "abc", "layers", null).ShouldBe("ogc-layers-o-d-gabc-");
         CacheCategories.OgcDocument("o", "d", "abc", "caps-wfs-v2-2.0.0", "sub").ShouldBe("ogc-caps-wfs-v2-2.0.0-o-d-gabc-sub");
-        CacheCategories.OgcRasterProbe("h", "cog").ShouldBe("ogc-wcs-probe-h-cog");
         CacheCategories.DatasetLookup("o", "d").ShouldBe("ds-lookup:o/d");
         CacheCategories.UploadReceipt("o", "d", "u").ShouldBe("upload-receipt-o-d-u");
         CacheCategories.TasksList("o", "d").ShouldBe("tasks-list:o/d");
         CacheCategories.PushSession("/p/session.json").ShouldBe("push-session:/p/session.json");
     }
 
-    /// <summary>XI-04: libddb's spectral-index list of a raster depends on its content, its source and libddb's rule.</summary>
+    /// <summary>
+    /// libddb's raster info of a file depends on its content, its source and libddb's rule, and is one record for WMS and
+    /// WCS: the keys of the two services' own records (<c>ogc-wcs-probe-*</c>, <c>ogc-wms-index-layer-*</c>) are gone.
+    /// </summary>
     [Test]
-    public void OgcRasterIndexLayer_NamesTheVersionTheHashAndTheSource()
+    public void OgcRasterInfo_NamesTheVersionTheHashAndTheSource()
     {
-        CacheCategories.OgcRasterIndexLayer("h", "raster.cog", "2.0.0").ShouldBe("ogc-wms-index-layer-2.0.0-h-raster.cog");
-        CacheCategories.OgcRasterIndexLayer("h", "raster.cog", "2.1.0")
-            .ShouldNotBe(CacheCategories.OgcRasterIndexLayer("h", "raster.cog", "2.0.0"));
+        CacheCategories.OgcRasterInfo("h", "raster.cog", "2.0.0").ShouldBe("ogc-raster-info-2.0.0-h-raster.cog");
+        CacheCategories.OgcRasterInfo("h", "raster.cog", "2.1.0")
+            .ShouldNotBe(CacheCategories.OgcRasterInfo("h", "raster.cog", "2.0.0"));
+        CacheCategories.OgcRasterInfo("h", "file", "2.0.0").ShouldNotBe(CacheCategories.OgcRasterInfo("h", "raster.cog", "2.0.0"));
     }
 }

@@ -16,7 +16,8 @@ public interface IRasterIndexCatalog
     /// <summary>
     /// The indices libddb lists for the file <paramref name="source"/> of the entry with content hash
     /// <paramref name="entryHash"/>: upper-case, in libddb's order, empty when none (also when the raster cannot be
-    /// read: the failure is logged and not remembered). Read once per content and libddb version, then cached.
+    /// read: the failure is logged and not remembered). Read once per content and libddb version
+    /// (<see cref="IRasterInfoCache"/>).
     /// </summary>
     Task<IReadOnlyList<string>> GetAsync(string entryHash, RasterSource source, CancellationToken ct = default);
 }

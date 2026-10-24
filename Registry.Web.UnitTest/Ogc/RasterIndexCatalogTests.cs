@@ -49,7 +49,7 @@ public class RasterIndexCatalogTests
     // One store for the catalogs of a test: what a catalog caches, another instance reads (the distributed cache)
     private IDistributedCache _store = null!;
 
-    private RasterIndexCatalog Create() => new(_ddb.Object, TestCaches.Records(_store), _log);
+    private RasterIndexCatalog Create() => new(new RasterInfoCache(_ddb.Object, TestCaches.Records(_store)), _log);
 
     private int Reads() => _ddb.Invocations.Count(i => i.Method.Name == nameof(IDdbWrapper.GetRasterInfo));
 
@@ -153,15 +153,29 @@ public class RasterIndexCatalogTests
     }
 
     [Test]
-    public async Task Get_AnInfoWithoutIndexLayer_IsNoIndexAndIsNotRemembered()
+    public async Task Get_AnInfoWithoutIndexLayer_IsNoIndex_AndTheDocumentIsLibddbsAnswerForTheContent()
     {
         _info = """{"width":1,"height":1,"bandCount":1}""";
         var catalog = Create();
 
         (await catalog.GetAsync(Hash, Cog)).ShouldBeEmpty();
-        _log.Count(LogLevel.Warning).ShouldBe(1, "libddb always writes indexLayer: its absence is not 'no index'");
+        (await catalog.GetAsync(Hash, Cog)).ShouldBeEmpty();
 
+        // libddb always writes indexLayer: its absence is not 'no index', and each request says so; the document is
+        // the one record WCS reads too, kept like any answer of libddb for given content and version
+        _log.Count(LogLevel.Warning).ShouldBe(2);
+        Reads().ShouldBe(1);
+    }
+
+    [Test]
+    public async Task Get_AnInfoThatIsNotJson_IsNotRemembered()
+    {
+        _info = "not json";
+        var catalog = Create();
+
+        await catalog.GetAsync(Hash, Cog);
         _info = FakeDdbWrapper.RasterInfo("NDVI");
+
         (await catalog.GetAsync(Hash, Cog)).ShouldBe(["NDVI"]);
     }
 
@@ -183,7 +197,7 @@ public class RasterIndexCatalogTests
         var gate = new Mock<INativeWorkGate>();
         gate.Setup(g => g.RunAsync(NativeLane.Tiles, It.IsAny<Func<string>>(), It.IsAny<CancellationToken>()))
             .Returns((NativeLane _, Func<string> work, CancellationToken _) => Task.FromResult(work()));
-        var catalog = new RasterIndexCatalog(_ddb.Object, TestCaches.Records(), _log, gate.Object);
+        var catalog = new RasterIndexCatalog(new RasterInfoCache(_ddb.Object, TestCaches.Records(), gate.Object), _log);
 
         await catalog.GetAsync(Hash, Cog);
 

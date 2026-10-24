@@ -103,7 +103,7 @@ public class WmsIndexStylesTests
         _wms = new WmsManager(new DatasetAccessResolver(utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy),
             _artifacts.Object, _wrapper.Object, _catalog.Object, records,
             new HttpContextAccessor { HttpContext = new DefaultHttpContext() }, NullLogger<WmsManager>.Instance,
-            cacheManager, new RasterIndexCatalog(_wrapper.Object, records, NullLogger<RasterIndexCatalog>.Instance));
+            cacheManager, new RasterIndexCatalog(new RasterInfoCache(_wrapper.Object, records), NullLogger<RasterIndexCatalog>.Instance));
     }
 
     private Task<byte[]> GetMap(string layer, string? style, double[]? bbox = null) =>

@@ -34,18 +34,13 @@ public static class CacheCategories
         $"ogc-{kind}-{orgSlug}-{dsSlug}-g{generation}-{detail ?? string.Empty}";
 
     /// <summary>
-    /// The raster probe (size, bands) of the file a WCS coverage reads, the build's artifact or the entry's own file
-    /// (<paramref name="source"/> names which). A probe does not change for given content (the hash).
+    /// libddb's raster info document of the file an OGC raster layer reads (<paramref name="source"/> names which: the
+    /// build's artifact or the entry's own file): the one record WMS (spectral indices) and WCS (size, bands) share.
+    /// It depends on the content (the hash) and on libddb's rules, so the libddb version is part of the key: a libddb that
+    /// changes a rule never reads a document its predecessor kept.
     /// </summary>
-    public static string OgcRasterProbe(string entryHash, string source) => $"ogc-wcs-probe-{entryHash}-{source}";
-
-    /// <summary>
-    /// The spectral indices libddb can render from the file a WMS layer reads (<paramref name="source"/> names which:
-    /// the build's artifact or the entry's own file). They depend on the content (the hash) and on libddb's rule, so
-    /// the libddb version is part of the key: a libddb that changes the rule never reads a list its predecessor kept.
-    /// </summary>
-    public static string OgcRasterIndexLayer(string entryHash, string source, string ddbVersion) =>
-        $"ogc-wms-index-layer-{ddbVersion}-{entryHash}-{source}";
+    public static string OgcRasterInfo(string entryHash, string source, string ddbVersion) =>
+        $"ogc-raster-info-{ddbVersion}-{entryHash}-{source}";
 
     /// <summary>The generation of every STAC listing (landing page, collections): one for the whole catalog.</summary>
     public const string StacGeneration = "stac-gen";

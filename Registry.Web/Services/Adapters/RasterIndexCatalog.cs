@@ -1,78 +1,56 @@
 #nullable enable
-using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Registry.Ports;
 using Registry.Ports.DroneDB;
-using Registry.Web.Services.Caching;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// <see cref="IRasterIndexCatalog"/> over <see cref="IDdbWrapper.GetRasterInfo"/>: one native read per content hash,
-/// source file and libddb version (<see cref="CacheCategories.OgcRasterIndexLayer"/>), on the tiles lane of
-/// <see cref="INativeWorkGate"/> (a small call made on the way to a map).
+/// <see cref="IRasterIndexCatalog"/> over libddb's raster info (<see cref="IRasterInfoCache"/>, the one cached read WCS
+/// shares): the <c>indexLayer</c> member of the document of the raster.
 /// </summary>
 public sealed class RasterIndexCatalog : IRasterIndexCatalog
 {
-    /// <summary>The list does not change for given content: kept a day.</summary>
-    private static readonly RecordCacheOptions ListCache = RecordCacheOptions.For(TimeSpan.FromDays(1));
-
-    private readonly IDdbWrapper _ddb;
-    private readonly IRecordCache _records;
-    private readonly INativeWorkGate _gate;
+    private readonly IRasterInfoCache _info;
     private readonly ILogger<RasterIndexCatalog> _logger;
 
-    public RasterIndexCatalog(IDdbWrapper ddb, IRecordCache records, ILogger<RasterIndexCatalog> logger,
-        INativeWorkGate? gate = null)
+    public RasterIndexCatalog(IRasterInfoCache info, ILogger<RasterIndexCatalog> logger)
     {
-        _ddb = ddb;
-        _records = records;
+        _info = info;
         _logger = logger;
-        _gate = gate ?? NativeWorkGate.Default;
-    }
-
-    public async Task<IReadOnlyList<string>> GetAsync(string entryHash, RasterSource source,
-        CancellationToken ct = default)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-        var key = CacheCategories.OgcRasterIndexLayer(entryHash, source.Source, _ddb.GetVersion());
-
-        // A read that failed is null: not stored, the next request asks libddb again
-        var list = await _records.GetOrCreateRecordAsync<string[]?>(key, token => ReadAsync(source.Path, token),
-            ListCache, ct);
-        return list ?? [];
     }
 
     /// <summary>
-    /// The list of one raster, or null when it cannot be read (logged): a raster libddb cannot open renders no index,
-    /// and must not fail the capabilities of the dataset. A canceled call is not a failure and propagates.
+    /// The list of one raster, empty when it cannot be read (logged): a raster libddb cannot open renders no index, and
+    /// must not fail the capabilities of the dataset. A canceled call is not a failure and propagates.
     /// </summary>
-    private async Task<string[]?> ReadAsync(string path, CancellationToken ct)
+    public async Task<IReadOnlyList<string>> GetAsync(string entryHash, RasterSource source,
+        CancellationToken ct = default)
     {
         try
         {
-            var info = await _gate.RunAsync(NativeLane.Tiles, () => _ddb.GetRasterInfo(path), ct);
-            var list = RasterIndexLayer.Parse(info);
-            if (list != null) return [.. list];
+            var info = await _info.GetAsync(entryHash, source, ct);
+            if (RasterIndexLayer.Parse(info) is { } list)
+                return list;
 
             _logger.LogWarning(
-                "libddb's raster info of {Path} has no \"indexLayer\" (a libddb older than 2.0?); it renders none", path);
+                "libddb's raster info of {Path} has no \"indexLayer\" (a libddb older than 2.0?); it renders none",
+                source.Path);
         }
         catch (DdbException ex)
         {
-            _logger.LogWarning(ex, "Reading the spectral indices of {Path} failed; it renders none", path);
+            _logger.LogWarning(ex, "Reading the spectral indices of {Path} failed; it renders none", source.Path);
         }
         catch (JsonException ex)
         {
-            _logger.LogWarning(ex, "libddb's raster info of {Path} is not JSON; it renders none", path);
+            _logger.LogWarning(ex, "libddb's raster info of {Path} is not JSON; it renders none", source.Path);
         }
 
-        return null;
+        return [];
     }
 }

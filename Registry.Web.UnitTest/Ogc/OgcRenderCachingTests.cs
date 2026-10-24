@@ -15,6 +15,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
+using Registry.Adapters.Testing;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
@@ -229,8 +230,7 @@ public class OgcRenderCachingTests
     {
         _wrapper.Setup(w => w.GetRasterInfo("/data/cog.tif"))
             .Returns("{\"width\":2516,\"height\":1956,\"bandCount\":4,\"crs\":\"EPSG:32630\",\"bands\":[{\"name\":\"red\"}]}");
-        var svc = new WcsCoverageService(Resolver, _artifacts.Object,
-            _wrapper.Object, _catalog.Object, TestCaches.Records(_cache), new HttpContextAccessor(), NullLogger<WcsCoverageService>.Instance);
+        var svc = CreateWcs(TestCaches.Records(_cache));
         var layer = new OgcLayerDto { Name = "ortho", EntryType = EntryType.GeoRaster, EntryPath = "ortho.tif", EntryHash = "h1" };
 
         var first = await svc.ProbeRasterAsync(_ddb.Object, layer);
@@ -240,6 +240,60 @@ public class OgcRenderCachingTests
         second.Width.ShouldBe(2516);
         second.BandNames.ShouldBe(["red"]);
         _wrapper.Verify(w => w.GetRasterInfo(It.IsAny<string>()), Times.Once);
+    }
+
+    private WcsCoverageService CreateWcs(IRecordCache records) => new(Resolver, _artifacts.Object,
+        _wrapper.Object, _catalog.Object, records, new HttpContextAccessor(),
+        new RasterInfoCache(_wrapper.Object, records), NullLogger<WcsCoverageService>.Instance);
+
+    // WMS (the spectral indices) and WCS (size, bands) read the same libddb document of a raster
+    [TestCase(true, TestName = "Wms_AndWcs_ShareOneNativeRasterInfoRead_WmsFirst")]
+    [TestCase(false, TestName = "Wms_AndWcs_ShareOneNativeRasterInfoRead_WcsFirst")]
+    public async Task Wms_AndWcs_ShareOneNativeRasterInfoRead(bool wmsFirst)
+    {
+        _wrapper.Setup(w => w.GetRasterInfo("/data/cog.tif")).Returns(FakeDdbWrapper.RasterInfo("NDVI", "NDRE"));
+        var layer = new OgcLayerDto { Name = "ortho", EntryType = EntryType.GeoRaster, EntryPath = "ortho.tif", EntryHash = "h1" };
+        var source = new RasterSource("/data/cog.tif", ArtifactRoles.RasterCog);
+
+        // Each request has its own services over the same cache, as the host's scopes do
+        async Task<IReadOnlyList<string>> Styles() => await new RasterIndexCatalog(
+            new RasterInfoCache(_wrapper.Object, TestCaches.Records(_cache)), NullLogger<RasterIndexCatalog>.Instance)
+            .GetAsync("h1", source);
+        async Task<WcsRasterInfo> Probe() => await CreateWcs(TestCaches.Records(_cache)).ProbeRasterAsync(_ddb.Object, layer);
+
+        IReadOnlyList<string> styles;
+        WcsRasterInfo probe;
+        if (wmsFirst)
+        {
+            styles = await Styles();
+            probe = await Probe();
+        }
+        else
+        {
+            probe = await Probe();
+            styles = await Styles();
+        }
+
+        styles.ShouldBe(["NDVI", "NDRE"]);
+        probe.Width.ShouldBeGreaterThan(0);
+        probe.BandCount.ShouldBeGreaterThan(0);
+        _wrapper.Verify(w => w.GetRasterInfo(It.IsAny<string>()), Times.Once);
+    }
+
+    [Test]
+    public async Task Wcs_ProbeOfAFailedRead_IsEmptyAndTheNextProbeReadsAgain()
+    {
+        var calls = 0;
+        _wrapper.Setup(w => w.GetRasterInfo("/data/cog.tif")).Returns(() =>
+            ++calls == 1 ? throw new DdbRetryableException("the disk is full") : FakeDdbWrapper.RasterInfo());
+        var svc = CreateWcs(TestCaches.Records(_cache));
+        var layer = new OgcLayerDto { Name = "ortho", EntryType = EntryType.GeoRaster, EntryPath = "ortho.tif", EntryHash = "h1" };
+
+        (await svc.ProbeRasterAsync(_ddb.Object, layer)).ShouldBeSameAs(WcsRasterInfo.Empty);
+        (await svc.ProbeRasterAsync(_ddb.Object, layer)).Width.ShouldBeGreaterThan(0);
+        (await svc.ProbeRasterAsync(_ddb.Object, layer)).Width.ShouldBeGreaterThan(0);
+
+        calls.ShouldBe(2, "the failure is not kept; the document that followed is");
     }
 }
 
