@@ -32,7 +32,7 @@ namespace Registry.Web.Test.ImprovementBaselines;
 [TestFixture]
 [NonParallelizable]
 [Category(TestCategories.Baseline)]
-public sealed class Rq14WireShapeTests
+public sealed class Rq14WireShapeTests : IDisposable
 {
     private const string SnapshotName = "wire/dto-shapes.json";
 
@@ -58,11 +58,11 @@ public sealed class Rq14WireShapeTests
     [OneTimeSetUp]
     public void OneTimeSetUp() => _factory = new RegistryWebFactory();
 
-    [OneTimeTearDown]
-    public void OneTimeTearDown() => _factory.Dispose();
+    /// <summary>NUnit disposes the fixture after its last test.</summary>
+    public void Dispose() => _factory.Dispose();
 
     /// <summary>What a JSON document member holds on the stack under test (the one place that differs by stack).</summary>
-    private static object? Literal(Type type, string json) => JToken.Parse(json);
+    private static JToken Literal(Type type, string json) => JToken.Parse(json);
 
     public static IEnumerable<Type> Types() => WireTypes.Discover().Where(t => !NotWireTypes.Contains(t.FullName!));
 
@@ -127,7 +127,7 @@ public sealed class Rq14WireShapeTests
 /// <summary>The wire types of the host: the DTO and port-model namespaces, and every type an action names.</summary>
 internal static class WireTypes
 {
-    public static IReadOnlyList<Type> Discover()
+    public static List<Type> Discover()
     {
         var web = typeof(Program).Assembly;
         var ports = typeof(Registry.Ports.DroneDB.Entry).Assembly;

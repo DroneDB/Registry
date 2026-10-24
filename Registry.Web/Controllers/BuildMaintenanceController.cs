@@ -47,14 +47,14 @@ public class BuildMaintenanceController : ControllerBaseEx
     /// <returns>The cleanup result with removed entries/builds (sync) or job id (async).</returns>
     [HttpPost("cleanup", Name = SystemRoutes.Prefix + nameof(Cleanup))]
     [Authorize(Policy = Policies.Admin)]
-    [ProducesResponseType(typeof(CleanupBuildResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(CleanupBuildResultDto), StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Cleanup([FromBody] CleanupBuildRequestDto? request, CancellationToken ct)
+    public async Task<ActionResult<CleanupBuildResultDto>> Cleanup([FromBody] CleanupBuildRequestDto? request, CancellationToken ct)
     {
         var result = await _maintenance.CleanupBuildAsync(request, ct: ct);
-        return result.Async ? Accepted(result) : Ok(result);
+        return result.Async ? Accepted(result) : result;
     }
 
     /// <summary>
@@ -74,7 +74,7 @@ public class BuildMaintenanceController : ControllerBaseEx
     [ProducesResponseType(typeof(RescanJobDto), StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Rescan([FromBody] RescanRequestDto request, CancellationToken ct)
+    public async Task<ActionResult<RescanJobDto>> Rescan([FromBody] RescanRequestDto request, CancellationToken ct)
     {
         return Accepted(await _maintenance.RescanAsync(request ?? new RescanRequestDto(), ct: ct));
     }
@@ -85,12 +85,12 @@ public class BuildMaintenanceController : ControllerBaseEx
     /// <returns>The current status of the build pending job including metrics and next scheduled run.</returns>
     [HttpGet("build-pending-status", Name = SystemRoutes.Prefix + nameof(GetBuildPendingStatus))]
     [Authorize(Policy = Policies.Admin)]
-    [ProducesResponseType(typeof(BuildPendingStatusDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public IActionResult GetBuildPendingStatus([FromServices] BuildPendingService pending)
+    public ActionResult<BuildPendingStatusDto> GetBuildPendingStatus([FromServices] BuildPendingService pending)
     {
-        return Ok(pending.GetStatus());
+        return pending.GetStatus();
     }
 
     /// <summary>
@@ -101,12 +101,12 @@ public class BuildMaintenanceController : ControllerBaseEx
     /// <returns>Cleanup result with the number of records deleted.</returns>
     [HttpPost("cleanup-jobindices", Name = SystemRoutes.Prefix + nameof(CleanupJobIndices))]
     [Authorize(Policy = Policies.Admin)]
-    [ProducesResponseType(typeof(CleanupJobIndicesResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> CleanupJobIndices([FromQuery] int? retentionDays = null, CancellationToken ct = default)
+    public async Task<ActionResult<CleanupJobIndicesResultDto>> CleanupJobIndices([FromQuery] int? retentionDays = null, CancellationToken ct = default)
     {
-        return Ok(await _maintenance.CleanupJobIndicesAsync(retentionDays, ct: ct));
+        return await _maintenance.CleanupJobIndicesAsync(retentionDays, ct: ct);
     }
 
     /// <summary>
@@ -121,11 +121,11 @@ public class BuildMaintenanceController : ControllerBaseEx
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public IActionResult CheckArtifactCompleteness([FromServices] IBackgroundJobsProcessor jobs)
+    public ActionResult<JobAcceptedDto> CheckArtifactCompleteness([FromServices] IBackgroundJobsProcessor jobs)
     {
         var jobId = jobs.Enqueue<ArtifactCompletenessCheckerService>(
             s => s.CheckAndQueueAsync(null, CancellationToken.None));
 
-        return Accepted(new { JobId = jobId });
+        return Accepted(new JobAcceptedDto(jobId));
     }
 }

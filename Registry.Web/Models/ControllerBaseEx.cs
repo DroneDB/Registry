@@ -32,6 +32,14 @@ public class ControllerBaseEx : ControllerBase
             entityTag is null ? null! : EntityTagHeaderValue.Parse(entityTag), enableRangeProcessing: true);
 
     /// <summary>
+    /// 200 with <paramref name="value"/> for an action declared <c>ActionResult&lt;T&gt;</c> whose <c>T</c> is an interface
+    /// (<c>IEnumerable&lt;X&gt;</c>): C# has no implicit conversion from an interface type to <c>ActionResult&lt;T&gt;</c>, so
+    /// <c>return list;</c> does not compile there. Name <typeparamref name="T"/> when the value's static type is another one.
+    /// </summary>
+    [NonAction]
+    public static ActionResult<T> Answer<T>(T value) => new(value);
+
+    /// <summary>
     /// 200 with <paramref name="value"/>, or 304 when the request's <c>If-None-Match</c> has <paramref name="entityTag"/>;
     /// both carry the tag and <paramref name="cacheControl"/>. For a JSON response whose tag the caller computed.
     /// </summary>

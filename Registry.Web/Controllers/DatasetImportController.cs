@@ -19,8 +19,7 @@ namespace Registry.Web.Controllers;
 /// whole remote dataset into a freshly created one.
 /// </summary>
 [ApiController]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" +
-       RoutesHelper.DatasetRadix + "/" + RoutesHelper.DatasetSlug + "/import")]
+[Route(RoutesHelper.DatasetPrefix + "/import")]
 [Produces("application/json")]
 public class DatasetImportController : ControllerBaseEx
 {
@@ -49,16 +48,16 @@ public class DatasetImportController : ControllerBaseEx
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The verification result.</returns>
     [HttpPost("verify-url", Name = nameof(VerifyUrlImport))]
-    [ProducesResponseType(typeof(UrlImportVerifyResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> VerifyUrlImport(
+    public async Task<ActionResult<UrlImportVerifyResultDto>> VerifyUrlImport(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] UrlImportVerifyRequestDto body,
         CancellationToken ct)
     {
-        return Ok(await _importManager.VerifyAsync(orgSlug, dsSlug, body, ct));
+        return await _importManager.VerifyAsync(orgSlug, dsSlug, body, ct);
     }
 
     /// <summary>
@@ -70,15 +69,15 @@ public class DatasetImportController : ControllerBaseEx
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The tracking task id.</returns>
     [HttpPost("url", Name = nameof(ImportUrl))]
-    [ProducesResponseType(typeof(UrlImportResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> ImportUrl(
+    public async Task<ActionResult<UrlImportResultDto>> ImportUrl(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] UrlImportRequestDto body,
         CancellationToken ct)
     {
-        return Ok(await _importManager.ImportAsync(orgSlug, dsSlug, body, ct));
+        return await _importManager.ImportAsync(orgSlug, dsSlug, body, ct);
     }
 }

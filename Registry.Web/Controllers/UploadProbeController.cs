@@ -34,10 +34,10 @@ public class UploadProbeController : ControllerBaseEx
     [HttpPost("upload-probe", Name = nameof(UploadProbeController) + "." + nameof(Probe))]
     [EnableRateLimiting(RateLimitPolicies.UploadProbe)]
     [RequestSizeLimit(MaxProbeBytes)]
-    [ProducesResponseType(typeof(UploadProbeResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
-    public async Task<IActionResult> Probe(CancellationToken ct)
+    public async Task<ActionResult<UploadProbeResultDto>> Probe(CancellationToken ct)
     {
         var watch = Stopwatch.StartNew();
         var buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
@@ -55,6 +55,6 @@ public class UploadProbeController : ControllerBaseEx
 
         // Never cached or compressed: the client times the whole round trip
         Response.Headers.CacheControl = "no-store";
-        return Ok(new UploadProbeResultDto(total, watch.Elapsed.TotalMilliseconds));
+        return new UploadProbeResultDto(total, watch.Elapsed.TotalMilliseconds);
     }
 }

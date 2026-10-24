@@ -18,10 +18,7 @@ namespace Registry.Web.Controllers;
 /// Controller for managing metadata within datasets.
 /// </summary>
 [ApiController]
-[Route(RoutesHelper.OrganizationsRadix + "/" +
-       RoutesHelper.OrganizationSlug + "/" +
-       RoutesHelper.DatasetRadix + "/" +
-       RoutesHelper.DatasetSlug + "/" +
+[Route(RoutesHelper.DatasetPrefix + "/" +
        RoutesHelper.MetaRadix)]
 [Produces("application/json")]
 public class MetaController : ControllerBaseEx
@@ -43,11 +40,11 @@ public class MetaController : ControllerBaseEx
     /// <param name="path">Optional path within the dataset.</param>
     /// <returns>The created metadata entry.</returns>
     [HttpPost("add/{key}", Name = nameof(MetaController) + "." + nameof(Add))]
-    [ProducesResponseType(typeof(MetaDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Add(
+    public async Task<ActionResult<MetaDto>> Add(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string key,
@@ -56,7 +53,7 @@ public class MetaController : ControllerBaseEx
     {
         var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path, ct: ct);
 
-        return Ok(res);
+        return res;
     }
 
     /// <summary>
@@ -71,12 +68,12 @@ public class MetaController : ControllerBaseEx
     /// <param name="keyFromQuery">Optional key from query.</param>
     /// <returns>The created metadata entry.</returns>
     [HttpPost("add", Name = nameof(MetaController) + "." + nameof(AddAlt))]
-    [ProducesResponseType(typeof(MetaDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
-    public async Task<IActionResult> AddAlt(
+    public async Task<ActionResult<MetaDto>> AddAlt(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm(Name = "key")] string keyFromForm,
@@ -91,7 +88,7 @@ public class MetaController : ControllerBaseEx
 
         var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path, ct: ct);
 
-        return Ok(res);
+        return res;
     }
 
     /// <summary>
@@ -104,11 +101,11 @@ public class MetaController : ControllerBaseEx
     /// <param name="path">Optional path within the dataset.</param>
     /// <returns>The updated metadata entry.</returns>
     [HttpPost("set/{key}", Name = nameof(MetaController) + "." + nameof(Set))]
-    [ProducesResponseType(typeof(MetaDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Set(
+    public async Task<ActionResult<MetaDto>> Set(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string key,
@@ -117,7 +114,7 @@ public class MetaController : ControllerBaseEx
     {
         var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path, ct: ct);
 
-        return Ok(res);
+        return res;
     }
 
     /// <summary>
@@ -132,12 +129,12 @@ public class MetaController : ControllerBaseEx
     /// <param name="keyFromQuery">Optional key from query.</param>
     /// <returns>The updated metadata entry.</returns>
     [HttpPost("set", Name = nameof(MetaController) + "." + nameof(SetAlt))]
-    [ProducesResponseType(typeof(MetaDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
-    public async Task<IActionResult> SetAlt(
+    public async Task<ActionResult<MetaDto>> SetAlt(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm(Name = "key")] string keyFromForm,
@@ -152,7 +149,7 @@ public class MetaController : ControllerBaseEx
 
         var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path, ct: ct);
 
-        return Ok(res);
+        return res;
     }
 
     /// <summary>
@@ -163,18 +160,18 @@ public class MetaController : ControllerBaseEx
     /// <param name="id">The metadata entry ID to remove.</param>
     /// <returns>The count of removed entries.</returns>
     [HttpDelete("remove/{id}", Name = nameof(MetaController) + "." + nameof(Remove))]
-    [ProducesResponseType(typeof(RemoveResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Remove(
+    public async Task<ActionResult<RemoveResponse>> Remove(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string id, CancellationToken ct)
     {
         var res = await _metaManager.Remove(orgSlug, dsSlug, id, ct: ct);
 
-        return Ok(new RemoveResponse(res));
+        return new RemoveResponse(res);
     }
 
     /// <summary>
@@ -185,19 +182,19 @@ public class MetaController : ControllerBaseEx
     /// <param name="id">The metadata entry ID to remove.</param>
     /// <returns>The count of removed entries.</returns>
     [HttpPost("remove", Name = nameof(MetaController) + "." + nameof(RemoveAlt))]
-    [ProducesResponseType(typeof(RemoveResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
-    public async Task<IActionResult> RemoveAlt(
+    public async Task<ActionResult<RemoveResponse>> RemoveAlt(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm, Required] string id, CancellationToken ct)
     {
         var res = await _metaManager.Remove(orgSlug, dsSlug, id, ct: ct);
 
-        return Ok(new RemoveResponse(res));
+        return new RemoveResponse(res);
     }
 
     /// <summary>
@@ -209,11 +206,11 @@ public class MetaController : ControllerBaseEx
     /// <param name="path">Optional path within the dataset.</param>
     /// <returns>The count of removed entries.</returns>
     [HttpDelete("unset/{key}", Name = nameof(MetaController) + "." + nameof(Unset))]
-    [ProducesResponseType(typeof(RemoveResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Unset(
+    public async Task<ActionResult<RemoveResponse>> Unset(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string key,
@@ -221,7 +218,7 @@ public class MetaController : ControllerBaseEx
     {
         var res = await _metaManager.Unset(orgSlug, dsSlug, key, path, ct: ct);
 
-        return Ok(new RemoveResponse(res));
+        return new RemoveResponse(res);
     }
 
     /// <summary>
@@ -235,12 +232,12 @@ public class MetaController : ControllerBaseEx
     /// <param name="keyFromQuery">Optional key from query.</param>
     /// <returns>The count of removed entries.</returns>
     [HttpPost("unset", Name = nameof(MetaController) + "." + nameof(UnsetAlt))]
-    [ProducesResponseType(typeof(RemoveResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
-    public async Task<IActionResult> UnsetAlt(
+    public async Task<ActionResult<RemoveResponse>> UnsetAlt(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm(Name = "key")] string keyFromForm,
@@ -254,7 +251,7 @@ public class MetaController : ControllerBaseEx
 
         var res = await _metaManager.Unset(orgSlug, dsSlug, key, path, ct: ct);
 
-        return Ok(new RemoveResponse(res));
+        return new RemoveResponse(res);
     }
 
     /// <summary>
@@ -265,18 +262,18 @@ public class MetaController : ControllerBaseEx
     /// <param name="path">Optional path within the dataset.</param>
     /// <returns>A list of metadata keys with their counts.</returns>
     [HttpGet("list", Name = nameof(MetaController) + "." + nameof(List))]
-    [ProducesResponseType(typeof(IEnumerable<MetaListItemDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> List(
+    public async Task<ActionResult<IEnumerable<MetaListItemDto>>> List(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery] string path = null, CancellationToken ct = default)
     {
         var res = await _metaManager.List(orgSlug, dsSlug, path, ct: ct);
 
-        return Ok(res);
+        return Answer(res);
     }
 
     /// <summary>
@@ -311,18 +308,18 @@ public class MetaController : ControllerBaseEx
     /// <param name="ids">Optional comma-separated list of metadata IDs to include.</param>
     /// <returns>A list of all metadata entries.</returns>
     [HttpPost("dump", Name = nameof(MetaController) + "." + nameof(Dump))]
-    [ProducesResponseType(typeof(IEnumerable<MetaDumpDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
-    public async Task<IActionResult> Dump(
+    public async Task<ActionResult<IEnumerable<MetaDumpDto>>> Dump(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm] string ids = null, CancellationToken ct = default)
     {
         var res = await _metaManager.Dump(orgSlug, dsSlug, ids, ct: ct);
 
-        return Ok(res);
+        return Answer(res);
     }
 }

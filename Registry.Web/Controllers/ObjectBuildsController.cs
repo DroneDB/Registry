@@ -20,8 +20,7 @@ namespace Registry.Web.Controllers;
 /// libddb lists them, XI-04), the builds waiting for a dependency, and the record of finished build jobs.
 /// </summary>
 [ApiController]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix +
-       "/" + RoutesHelper.DatasetSlug)]
+[Route(RoutesHelper.DatasetPrefix)]
 [Produces("application/json")]
 public class ObjectBuildsController : ControllerBaseEx
 {
@@ -143,17 +142,17 @@ public class ObjectBuildsController : ControllerBaseEx
     [Obsolete("Use 'GET builds/pending' instead. This alias is kept for backward compatibility with " +
               "clients built against the pre-unified-viewer API (which returned BuildJobDto) and will " +
               "be removed in a future version.")]
-    [ProducesResponseType(typeof(IEnumerable<PendingBuildInfoDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetPendingBuilds(
+    public async Task<ActionResult<IEnumerable<PendingBuildInfoDto>>> GetPendingBuilds(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
         var pending = await _builds.GetPendingBuildsAsync(orgSlug, dsSlug, ct: ct);
 
-        return Ok(pending);
+        return Answer(pending);
     }
 
     /// <summary>
@@ -163,16 +162,16 @@ public class ObjectBuildsController : ControllerBaseEx
     /// <param name="dsSlug">The dataset slug.</param>
     /// <returns>The number of deleted build jobs.</returns>
     [HttpPost("builds/clear", Name = nameof(ObjectsController) + "." + nameof(ClearCompletedBuilds))]
-    [ProducesResponseType(typeof(ClearCompletedBuildsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> ClearCompletedBuilds(
+    public async Task<ActionResult<ClearCompletedBuildsResponse>> ClearCompletedBuilds(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
         var deletedCount = await _builds.ClearCompletedBuildsAsync(orgSlug, dsSlug, ct: ct);
 
-        return Ok(new ClearCompletedBuildsResponse { DeletedCount = deletedCount });
+        return new ClearCompletedBuildsResponse { DeletedCount = deletedCount };
     }
 }

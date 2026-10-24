@@ -27,8 +27,7 @@ namespace Registry.Web.Controllers;
 /// state of an upload by its <c>X-Upload-Id</c>.
 /// </summary>
 [ApiController]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix +
-       "/" + RoutesHelper.DatasetSlug)]
+[Route(RoutesHelper.DatasetPrefix)]
 [Produces("application/json")]
 public class ObjectUploadsController : ControllerBaseEx
 {
@@ -143,10 +142,10 @@ public class ObjectUploadsController : ControllerBaseEx
     /// <returns>200 with the receipt when the upload is done or failed; 202 while it is still being
     /// received or added; 404 when the id is unknown (send the file again).</returns>
     [HttpGet(RoutesHelper.ObjectsRadix + "/uploads/{uploadId}", Name = nameof(ObjectUploadsController) + "." + nameof(GetUpload))]
-    [ProducesResponseType(typeof(UploadReceipt), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(UploadReceipt), StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetUpload([FromRoute, Required] string orgSlug,
+    public async Task<ActionResult<UploadReceipt>> GetUpload([FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug, [FromRoute, Required] string uploadId, CancellationToken ct)
     {
         var receipt = await _uploads.GetReceiptAsync(orgSlug, dsSlug, uploadId, ct: ct);
@@ -156,7 +155,7 @@ public class ObjectUploadsController : ControllerBaseEx
         {
             null => throw new NotFoundException($"Unknown upload '{uploadId}'"),
             { State: UploadReceiptState.Receiving or UploadReceiptState.Committing } => Accepted(receipt),
-            _ => Ok(receipt)
+            _ => receipt
         };
     }
 
@@ -172,11 +171,11 @@ public class ObjectUploadsController : ControllerBaseEx
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [ConfigurableUploadSizeLimit]
     [EnforceContentLength(ContentLengthLimit.Chunk)]
-    [ProducesResponseType(typeof(ChunkStatusDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status507InsufficientStorage)]
-    public async Task<IActionResult> PostChunk([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug, CancellationToken ct)
+    public async Task<ActionResult<ChunkStatusDto>> PostChunk([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
         if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType ?? string.Empty))
             throw new BadRequestException("Expected a multipart/form-data request");
@@ -190,18 +189,18 @@ public class ObjectUploadsController : ControllerBaseEx
                 return status;
             }, _ => { /* a chunk is stored by the chunk store, which owns it */ });
 
-        return Ok(status ?? throw new BadRequestException("No chunk uploaded"));
+        return status ?? throw new BadRequestException("No chunk uploaded");
     }
 
     /// <summary>Which chunks of a resumable upload are stored and which are missing.</summary>
     [HttpGet(RoutesHelper.ObjectsRadix + "/chunk/{fileId}", Name = nameof(ObjectUploadsController) + "." + nameof(GetChunks))]
-    [ProducesResponseType(typeof(ChunkStatusDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetChunks([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
+    public async Task<ActionResult<ChunkStatusDto>> GetChunks([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string fileId, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        return Ok(await _chunks.GetStatusAsync(orgSlug, dsSlug, fileId, ct: ct));
+        return await _chunks.GetStatusAsync(orgSlug, dsSlug, fileId, ct: ct);
     }
 
     /// <summary>
@@ -211,7 +210,7 @@ public class ObjectUploadsController : ControllerBaseEx
     [HttpPost(RoutesHelper.ObjectsRadix + "/chunk/{fileId}/commit", Name = nameof(ObjectUploadsController) + "." + nameof(CommitChunks))]
     [ProducesResponseType(typeof(EntryDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> CommitChunks([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
+    public async Task<ActionResult<EntryDto>> CommitChunks([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string fileId, CancellationToken ct) =>
         Created(orgSlug, dsSlug, await _chunks.CommitAsync(orgSlug, dsSlug, fileId, ct: ct));
 
@@ -227,7 +226,7 @@ public class ObjectUploadsController : ControllerBaseEx
                 _errors.Create(HttpContext, single.Status, single.Error ?? "Upload failed", noRetry: false));
     }
 
-    private IActionResult Created(string orgSlug, string dsSlug, EntryDto entry) =>
+    private CreatedAtRouteResult Created(string orgSlug, string dsSlug, EntryDto entry) =>
         CreatedAtRoute(nameof(ObjectsController) + "." + nameof(ObjectsController.GetInfo),
             new { orgSlug, dsSlug, path = entry.Path }, entry);
 }

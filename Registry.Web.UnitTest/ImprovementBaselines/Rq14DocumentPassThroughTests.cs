@@ -33,7 +33,7 @@ namespace Registry.Web.Test.ImprovementBaselines;
 [TestFixture]
 [NonParallelizable]
 [Category(TestCategories.Baseline)]
-public sealed class Rq14DocumentPassThroughTests
+public sealed class Rq14DocumentPassThroughTests : IDisposable
 {
     private const string SnapshotName = "wire/passthrough.json";
 
@@ -50,8 +50,8 @@ public sealed class Rq14DocumentPassThroughTests
     [OneTimeSetUp]
     public void OneTimeSetUp() => _factory = new RegistryWebFactory();
 
-    [OneTimeTearDown]
-    public void OneTimeTearDown() => _factory.Dispose();
+    /// <summary>NUnit disposes the fixture after its last test.</summary>
+    public void Dispose() => _factory.Dispose();
 
     private const string Properties = """
         {"captureTime":1700000000.5,"altitude":100,"altitudeFraction":100.0,"exposure":1e-05,"huge":1.5E+20,"bigInt":12345678901234567890,

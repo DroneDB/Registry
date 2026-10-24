@@ -13,8 +13,7 @@ namespace Registry.Web.Controllers;
 
 /// <summary>CAD drawings of a dataset (DDB-12).</summary>
 [ApiController]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix +
-       "/" + RoutesHelper.DatasetSlug + "/cad")]
+[Route(RoutesHelper.DatasetPrefix + "/cad")]
 [Produces("application/json")]
 public class CadController(ICadCrsManager crsManager) : ControllerBaseEx
 {
@@ -29,14 +28,14 @@ public class CadController(ICadCrsManager crsManager) : ControllerBaseEx
     /// <param name="crs">The coordinate system.</param>
     /// <returns>The .prj entry.</returns>
     [HttpPost("crs", Name = nameof(CadController) + "." + nameof(SetCrs))]
-    [ProducesResponseType(typeof(EntryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> SetCrs(
+    public async Task<ActionResult<EntryDto>> SetCrs(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm, Required] string path,
         [FromForm, Required] string crs, CancellationToken ct) =>
-        Ok(await crsManager.SetAsync(orgSlug, dsSlug, path, crs, ct: ct));
+        await crsManager.SetAsync(orgSlug, dsSlug, path, crs, ct: ct);
 }

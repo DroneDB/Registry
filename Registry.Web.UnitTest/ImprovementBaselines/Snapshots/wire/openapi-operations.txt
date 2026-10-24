@@ -45,7 +45,7 @@ DELETE /orgs/{orgSlug}/ds/{dsSlug}
   401 application/json ProblemDetails
   404 application/json ProblemDetails
 GET /orgs/{orgSlug}/ds/{dsSlug}
-  200 application/json EntryDto
+  200 application/json array<EntryDto>
   400 application/json ProblemDetails
   401 application/json ProblemDetails
   404 application/json ProblemDetails
@@ -107,7 +107,7 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/cad/crs
   404 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/chattr
   body multipart/form-data object
-  200 application/json AttributesDto
+  200 application/json map<any>
   400 application/json ProblemDetails
   401 application/json ProblemDetails
   404 application/json ProblemDetails
@@ -169,7 +169,7 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/list
   404 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/mask-borders
   body application/*+json MaskBordersRequestDto; application/json MaskBordersRequestDto; application/json-patch+json MaskBordersRequestDto; text/json MaskBordersRequestDto
-  200
+  200 application/json OkDto
   400 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/mask-borders/check
   body application/*+json MaskBordersRequestDto; application/json MaskBordersRequestDto; application/json-patch+json MaskBordersRequestDto; text/json MaskBordersRequestDto
@@ -177,7 +177,7 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/mask-borders/check
   400 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/merge-multispectral
   body application/*+json MergeMultispectralRequestDto; application/json MergeMultispectralRequestDto; application/json-patch+json MergeMultispectralRequestDto; text/json MergeMultispectralRequestDto
-  200
+  200 application/json OkDto
   400 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/merge-multispectral/preview
   body application/*+json MergeMultispectralRequestDto; application/json MergeMultispectralRequestDto; application/json-patch+json MergeMultispectralRequestDto; text/json MergeMultispectralRequestDto
@@ -313,21 +313,61 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/obj/uploads/{uploadId}
   202 application/json UploadReceipt
   404 application/json ProblemDetails
 GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi
-  200
+  200 application/json OgcApiLandingDto; text/json OgcApiLandingDto; text/plain OgcApiLandingDto
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections
-  200
+  200 application/json OgcApiCollectionsDto; text/json OgcApiCollectionsDto; text/plain OgcApiCollectionsDto
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}
-  200
+  200 application/json OgcApiCollectionDto; text/json OgcApiCollectionDto; text/plain OgcApiCollectionDto
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/items
-  200
+  200 application/geo+json string
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/items/{featureId}
-  200
+  200 application/geo+json string
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/tiles
   200
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/tiles/{tileMatrixSet}/{z}/{y}/{x}
-  200
+  200 application/vnd.mapbox-vector-tile string(binary); image/png string(binary)
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/conformance
-  200
+  200 application/json OgcConformanceDto; text/json OgcConformanceDto; text/plain OgcConformanceDto
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 POST /orgs/{orgSlug}/ds/{dsSlug}/push/commit
   body multipart/form-data object
   200
@@ -401,7 +441,7 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/stac/{pathBase64}
   404 application/json ProblemDetails
   500 application/json ProblemDetails
 GET /orgs/{orgSlug}/ds/{dsSlug}/stamp
-  200 application/json Stamp
+  200 application/json StampDto
   400 application/json ProblemDetails
   401 application/json ProblemDetails
   404 application/json ProblemDetails
@@ -425,32 +465,32 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/tasks
   304
 POST /orgs/{orgSlug}/ds/{dsSlug}/tasks
   body application/*+json SubmitTaskRequestDto; application/json SubmitTaskRequestDto; application/json-patch+json SubmitTaskRequestDto; text/json SubmitTaskRequestDto
-  200
+  200 application/json SubmitTaskResponseDto
   202
   400 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/tasks/clear
-  200
+  200 application/json TasksClearedDto
 GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/events
   200
 GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/tools
-  200
+  200 application/json array<TaskToolDto>
 DELETE /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}
-  200
+  200 application/json DeletedDto
   404 application/json ProblemDetails
 GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}
-  200
+  200 application/json TaskStatusDto
   404 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}/delete
-  200
+  200 application/json DeletedDto
   400 application/json ProblemDetails
   404 application/json ProblemDetails
 GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}/log
-  200
+  200 application/json TaskLogDto
 GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}/result
   200
   404 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}/retry
-  200
+  200 application/json TaskRequeuedDto
   404 application/json ProblemDetails
   409 application/json ProblemDetails
 GET /orgs/{orgSlug}/ds/{dsSlug}/thumb
@@ -481,25 +521,75 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/transfer
   404 application/json ProblemDetails
   409 application/json ProblemDetails
 GET /orgs/{orgSlug}/ds/{dsSlug}/wcs
-  200
+  200 application/xml string(binary); image/jpeg string(binary); image/png string(binary); image/tiff string(binary); text/xml string(binary)
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 GET /orgs/{orgSlug}/ds/{dsSlug}/wcs/p/{folder}
-  200
+  200 application/xml string(binary); image/jpeg string(binary); image/png string(binary); image/tiff string(binary); text/xml string(binary)
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 GET /orgs/{orgSlug}/ds/{dsSlug}/wfs
-  200
+  200 application/geo+json string; application/gml+xml string; application/json string; application/xml string; text/xml string
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 POST /orgs/{orgSlug}/ds/{dsSlug}/wfs
-  200
+  200 application/geo+json string; application/gml+xml string; application/json string; application/xml string; text/xml string
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 GET /orgs/{orgSlug}/ds/{dsSlug}/wfs/p/{folder}
-  200
+  200 application/geo+json string; application/gml+xml string; application/json string; application/xml string; text/xml string
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 GET /orgs/{orgSlug}/ds/{dsSlug}/wms
-  200
+  200 application/json string(binary); application/xml string(binary); image/jpeg string(binary); image/png string(binary); image/webp string(binary); text/plain string(binary); text/xml string(binary)
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 GET /orgs/{orgSlug}/ds/{dsSlug}/wms/p/{folder}
-  200
+  200 application/json string(binary); application/xml string(binary); image/jpeg string(binary); image/png string(binary); image/webp string(binary); text/plain string(binary); text/xml string(binary)
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 GET /orgs/{orgSlug}/ds/{dsSlug}/wmts
-  200
+  200 application/vnd.mapbox-vector-tile string(binary); application/xml string(binary); image/jpeg string(binary); image/png string(binary); text/xml string(binary)
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 GET /orgs/{orgSlug}/ds/{dsSlug}/wmts/1.0.0/{layer}/{style}/{tms}/{z}/{y}/{x}.{ext}
-  200
+  200 application/vnd.mapbox-vector-tile string(binary); image/jpeg string(binary); image/png string(binary)
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 GET /orgs/{orgSlug}/ds/{dsSlug}/wmts/p/{folder}
-  200
+  200 application/vnd.mapbox-vector-tile string(binary); application/xml string(binary); image/jpeg string(binary); image/png string(binary); text/xml string(binary)
+  400 application/xml string; text/xml string
+  401 application/xml string; text/xml string
+  403 application/xml string; text/xml string
+  404 application/xml string; text/xml string
+  503 application/xml string; text/xml string
 POST /orgs/{orgSlug}/import
   body application/*+json CreateImportRequestDto; application/json CreateImportRequestDto; application/json-patch+json CreateImportRequestDto; text/json CreateImportRequestDto
   200 application/json ImportCreateResultDto
@@ -703,7 +793,7 @@ GET /sys/tasks
   401 application/json ProblemDetails
   403 application/json ProblemDetails
 POST /sys/tasks/{id}/delete
-  200
+  200 application/json DeletedDto
   400 application/json ProblemDetails
   401 application/json ProblemDetails
   403 application/json ProblemDetails
@@ -822,7 +912,6 @@ schema AdminTaskListDto { items:array<AdminTaskSummaryDto>, total:integer(int64)
 schema AdminTaskSummaryDto { taskId:string, orgSlug:string, dsSlug:string, toolId:string, version:string, state:string, progressPercent:integer(int32), phaseMessage:string, createdAt:string(date-time), startedAt:string(date-time), finishedAt:string(date-time), path:string, userId:string, owner:string, errorType:string, artifactExpiresAt:string(date-time) }
 schema AlignRasterRequestDto { sourcePath:string, referencePath:string, outputPath:string, mode:string }
 schema ArtifactLinkDto { role:string, url:string, mediaType:string }
-schema AttributesDto { isPublic:boolean }
 schema AuthenticateResponse { username:string, token:string, expires:string(date-time) }
 schema BatchDto { token:string, userName:string, start:string(date-time), end:string(date-time), status:BatchStatus, entries:array<BatchEntryDto> }
 schema BatchEntryDto { path:string, hash:string, type:EntryType, size:integer(int64), addedOn:string(date-time) }
@@ -853,6 +942,7 @@ schema DatasetDto { slug:string, creationDate:string(date-time), properties:map<
 schema DatasetPermissionsDto { canRead:boolean, canWrite:boolean, canDelete:boolean }
 schema DeleteBatchResponse { deleted:array<string>, failed:map<string> }
 schema DeleteUserResultDto { userName:string, successor:string, organizationsTransferred:integer(int32), organizationsDeleted:integer(int32), datasetsTransferred:integer(int32), datasetsDeleted:integer(int32), batchesDeleted:integer(int32), datasetResults:array<MoveDatasetResultDto> }
+schema DeletedDto { deleted:boolean }
 schema EditUserRequestDto { email:string, roles:array<string> }
 schema EntryDto { path:string, hash:string, type:EntryType, properties:map<any>, modifiedTime:string(date-time), size:integer(int64), depth:integer(int32), pointGeometry:any, polygonGeometry:any, buildStatus:string, buildMissingDependencies:array<string>, artifacts:array<ArtifactLinkDto> }
 schema EntryType {  }
@@ -887,6 +977,14 @@ schema MigrateVisibilityEntryDTO { organizationSlug:string, datasetSlug:string, 
 schema MoveDatasetDto { sourceOrgSlug:string, datasetSlugs:array<string>, destinationOrgSlug:string, conflictResolution:ConflictResolutionStrategy }
 schema MoveDatasetResultDto { originalSlug:string, newSlug:string, success:boolean, error:string }
 schema NodeOdxOptionDto { name:string, type:string, domain:any, help:string, value:any }
+schema OgcApiCollectionDto { id:string, title:string, description:string, itemType:string, crs:array<string>, extent:OgcApiExtentDto, links:array<OgcApiLinkDto> }
+schema OgcApiCollectionsDto { links:array<OgcApiLinkDto>, collections:array<OgcApiCollectionDto> }
+schema OgcApiExtentDto { spatial:OgcApiSpatialExtentDto }
+schema OgcApiLandingDto { title:string, description:string, links:array<OgcApiLinkDto> }
+schema OgcApiLinkDto { href:string, rel:string, type:string, title:string }
+schema OgcApiSpatialExtentDto { bbox:array<array<number(double)>>, crs:string }
+schema OgcConformanceDto { conformsTo:array<string> }
+schema OkDto { ok:boolean }
 schema OrganizationDto { slug:string, name:string, description:string, creationDate:string(date-time), owner:string, isPublic:boolean, permissions:OrganizationPermissionsDto }
 schema OrganizationMemberDto { userName:string, email:string, permissions:OrganizationPermissions, grantedAt:string(date-time), grantedBy:string }
 schema OrganizationPermissions {  }
@@ -914,13 +1012,21 @@ schema StacCollectionsDto { collections:array<any>, links:array<StacLinkDto>, nu
 schema StacConformanceDto { conformsTo:array<string> }
 schema StacLinkDto { href:string, relationship:string, type:string, title:string, method:string }
 schema StacSearchRequestDto { bbox:array<number(double)>, intersects:any, datetime:string, limit:integer(int32), collections:array<string>, ids:array<string>, token:string }
-schema Stamp { checksum:string, entries:array<map<string>>, meta:array<string> }
+schema StampDto { checksum:string, entries:array<map<string>>, meta:array<string> }
 schema StockpileBatchDetectionRequestDto { path:string, sensitivity:number(float), minAreaM2:number(double), maxResults:integer(int32) }
 schema StockpileDetectionRequestDto { path:string, lat:number(double), lon:number(double), radius:number(double), sensitivity:number(float) }
 schema SubmitTaskRequestDto { toolId:string, version:string, path:string, params:any, force:boolean }
+schema SubmitTaskResponseDto { taskId:string, toolId:string, version:string, deduplicated:boolean, statusUrl:string, resultUrl:string, estimatedOutputBytes:integer(int64) }
 schema TagDto { organizationSlug:string, datasetSlug:string }
+schema TaskArtifactDto { sizeBytes:integer(int64), sha256:string, resultUrl:string, expiresAt:string(date-time) }
+schema TaskLogDto { cursor:integer(int64), lines:array<string>, truncatedFromTail:integer(int64) }
+schema TaskProgressDto { percent:integer(int32), phase:string, message:string }
+schema TaskRequeuedDto { requeued:boolean }
 schema TaskStateInfoDto { value:string, terminal:boolean }
+schema TaskStatusDto { taskId:string, toolId:string, version:string, state:string, progress:TaskProgressDto, createdAt:string(date-time), startedAt:string(date-time), finishedAt:string(date-time), parentJobId:string, workflowExecutionId:string, logCursor:integer(int64), logTail:array<string>, artifact:TaskArtifactDto, error:string }
+schema TaskToolDto { id:string, version:string, title:string, requiredAccess:string, producesArtifact:boolean, inputSchema:any, hidden:boolean, disabled:boolean, disabledMessage:string }
 schema TaskToolInfoDto { id:string, version:string, title:string, requiredAccess:string, producesArtifact:boolean, resultExtension:string, hidden:boolean, disabled:boolean, disabledMessage:string }
+schema TasksClearedDto { cleared:integer(int32) }
 schema UpdateMemberPermissionsDto { permissions:OrganizationPermissions }
 schema UploadPartResultDto { path:string, status:integer(int32), entry:EntryDto, error:string, retryable:boolean }
 schema UploadProbeResultDto { bytes:integer(int64), serverMs:number(double) }

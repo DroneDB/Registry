@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Exceptions;
 using Registry.Web.Filters;
@@ -18,8 +19,12 @@ namespace Registry.Web.Controllers.Ogc;
 [BasicAuthentication]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]
 [TypeFilter(typeof(OgcExceptionFilter))]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" +
-       RoutesHelper.DatasetRadix + "/" + RoutesHelper.DatasetSlug)]
+[ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status401Unauthorized, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status404NotFound, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status503ServiceUnavailable, "text/xml", "application/xml")]
+[Route(RoutesHelper.DatasetPrefix)]
 public class WcsController : ControllerBaseEx
 {
     private readonly IWcsManager _mgr;
@@ -29,11 +34,15 @@ public class WcsController : ControllerBaseEx
         _mgr = mgr;
     }
 
+    /// <summary>WCS KVP request (1.0.0, 1.1.1, 2.0.1): capabilities and coverage descriptions (XML), coverages (a raster file).</summary>
     [HttpGet("wcs")]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "text/xml", "application/xml", "image/tiff", "image/png", "image/jpeg")]
     public Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)
         => Dispatch(orgSlug, dsSlug, null, ct);
 
+    /// <summary>WCS KVP request for the coverages of a folder of the dataset.</summary>
     [HttpGet("wcs/p/{*folder}")]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "text/xml", "application/xml", "image/tiff", "image/png", "image/jpeg")]
     public Task<IActionResult> KvpFolder([FromRoute] string orgSlug, [FromRoute] string dsSlug,
         [FromRoute] string folder, CancellationToken ct) => Dispatch(orgSlug, dsSlug, folder, ct);
 

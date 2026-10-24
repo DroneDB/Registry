@@ -31,7 +31,7 @@ public class UploadProbeTests
             }
         };
 
-        var result = (await controller.Probe(CancellationToken.None)).ShouldBeOfType<OkObjectResult>();
+        var result = await controller.Probe(CancellationToken.None);
 
         var dto = result.Value.ShouldBeOfType<UploadProbeResultDto>();
         dto.Bytes.ShouldBe(size);

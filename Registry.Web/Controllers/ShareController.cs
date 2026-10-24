@@ -59,15 +59,15 @@ public class ShareController : ControllerBaseEx
     /// <param name="parameters">The share initialization parameters.</param>
     /// <returns>The share initialization result containing the token.</returns>
     [HttpPost("init", Name = nameof(ShareController) + "." + nameof(Init))]
-    [ProducesResponseType(typeof(ShareInitResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Init([FromForm, Required] ShareInitDto parameters, CancellationToken ct)
+    public async Task<ActionResult<ShareInitResultDto>> Init([FromForm, Required] ShareInitDto parameters, CancellationToken ct)
     {
         var initRes = await _shareManager.Initialize(parameters, ct: ct);
 
-        return Ok(initRes);
+        return initRes;
     }
 
     /// <summary>
@@ -76,15 +76,15 @@ public class ShareController : ControllerBaseEx
     /// <param name="token">The share token.</param>
     /// <returns>The batch information.</returns>
     [HttpGet("info/{token}", Name = nameof(ShareController) + "." + nameof(Info))]
-    [ProducesResponseType(typeof(BatchDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Info([FromRoute, Required] string token, CancellationToken ct)
+    public async Task<ActionResult<BatchDto>> Info([FromRoute, Required] string token, CancellationToken ct)
     {
         var res = await _shareManager.GetBatchInfo(token, ct: ct);
 
-        return Ok(res);
+        return res;
     }
 
     /// <summary>
@@ -98,11 +98,11 @@ public class ShareController : ControllerBaseEx
     [ConfigurableUploadSizeLimit]
     [EnforceContentLength]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
-    [ProducesResponseType(typeof(UploadResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Upload([FromRoute, Required] string token, CancellationToken ct)
+    public async Task<ActionResult<UploadResultDto>> Upload([FromRoute, Required] string token, CancellationToken ct)
     {
         if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType))
             throw new BadRequestException("Expected a multipart/form-data request");
@@ -125,7 +125,7 @@ public class ShareController : ControllerBaseEx
 
 
         var res = await _shareManager.UploadStreamed(token, path, file, ct: ct);
-        return Ok(res);
+        return res;
     }
 
     /// <summary>
@@ -134,15 +134,15 @@ public class ShareController : ControllerBaseEx
     /// <param name="token">The share token.</param>
     /// <returns>The commit result containing the URL and tag information.</returns>
     [HttpPost("commit/{token}", Name = nameof(ShareController) + "." + nameof(Commit))]
-    [ProducesResponseType(typeof(CommitResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Commit([FromRoute, Required] string token, CancellationToken ct)
+    public async Task<ActionResult<CommitResultDto>> Commit([FromRoute, Required] string token, CancellationToken ct)
     {
         var res = await _shareManager.Commit(token, ct: ct);
 
-        return Ok(res);
+        return res;
     }
 
     /// <summary>

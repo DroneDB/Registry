@@ -51,7 +51,7 @@ public sealed class WirePopulator(Func<Type, string, object?> jsonLiteral)
             return full ? jsonLiteral(type, DocumentJson) : null;
 
         if (type == typeof(string))
-            return full ? $"{member}-text" : null;
+            return full ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{member}-text") : null;
         if (type == typeof(bool)) return full;
         if (type == typeof(int)) return full ? 42 : 0;
         if (type == typeof(long)) return full ? 1234567890123L : 0L;
@@ -89,7 +89,8 @@ public sealed class WirePopulator(Func<Type, string, object?> jsonLiteral)
     private static object Enumeration(Type type, bool full)
     {
         var values = Enum.GetValues(type).Cast<object>()
-            .Where(v => Convert.ToInt64(v) != 0).OrderBy(Convert.ToInt64).ToArray();
+            .Where(v => Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture) != 0)
+            .OrderBy(v => Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
         return full && values.Length > 0 ? values[0] : Activator.CreateInstance(type)!;
     }
 

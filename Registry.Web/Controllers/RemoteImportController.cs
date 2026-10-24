@@ -38,7 +38,7 @@ public class RemoteImportController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> ImportDataset([FromBody] ImportDatasetRequestDto request, CancellationToken ct)
+    public async Task<ActionResult<RemoteImportJobDto>> ImportDataset([FromBody] ImportDatasetRequestDto request, CancellationToken ct)
     {
         var job = await _imports.StartAsync(request, ct);
         return Accepted(job.StatusUrl, job);
@@ -55,7 +55,7 @@ public class RemoteImportController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> ImportOrganization([FromBody] ImportOrganizationRequestDto request, CancellationToken ct)
+    public async Task<ActionResult<RemoteImportJobDto>> ImportOrganization([FromBody] ImportOrganizationRequestDto request, CancellationToken ct)
     {
         var job = await _imports.StartAsync(request, ct);
         return Accepted(job.StatusUrl, job);
@@ -67,11 +67,11 @@ public class RemoteImportController : ControllerBaseEx
     /// <param name="jobId">The id returned when the import was queued.</param>
     [HttpGet("imports/{jobId}", Name = SystemRoutes.Prefix + nameof(GetImportStatus))]
     [Authorize(Policy = Policies.Admin)]
-    [ProducesResponseType(typeof(RemoteImportStatusDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public IActionResult GetImportStatus([Required] string jobId) => Ok(_imports.GetStatus(jobId));
+    public ActionResult<RemoteImportStatusDto> GetImportStatus([Required] string jobId) => _imports.GetStatus(jobId);
 
     /// <summary>
     /// Cancels an import job: a queued import does not start, a running one stops.

@@ -24,7 +24,7 @@ namespace Registry.Web.Test.ImprovementBaselines;
 [TestFixture]
 [NonParallelizable]
 [Category(TestCategories.Baseline)]
-public sealed class Rq14OpenApiTests
+public sealed class Rq14OpenApiTests : IDisposable
 {
     private const string SnapshotName = "wire/openapi-operations.txt";
 
@@ -38,8 +38,8 @@ public sealed class Rq14OpenApiTests
         _client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
     }
 
-    [OneTimeTearDown]
-    public void OneTimeTearDown()
+    /// <summary>NUnit disposes the fixture after its last test.</summary>
+    public void Dispose()
     {
         _client.Dispose();
         _factory.Dispose();

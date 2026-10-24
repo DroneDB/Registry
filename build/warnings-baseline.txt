@@ -127,7 +127,6 @@ Registry.Web.UnitTest/UsersManagerTest.cs CA1304 1
 Registry.Web.UnitTest/UsersManagerTest.cs CA1311 1
 Registry.Web/Controllers/DatasetsController.cs CA1711 1
 Registry.Web/Controllers/DatasetsController.cs CS8632 2
-Registry.Web/Controllers/ObjectUploadsController.cs CA1859 1
 Registry.Web/Controllers/ObjectsController.cs CA1711 1
 Registry.Web/Controllers/Ogc/OgcApiController.cs CS8632 2
 Registry.Web/Controllers/Ogc/WcsController.cs CS8632 2

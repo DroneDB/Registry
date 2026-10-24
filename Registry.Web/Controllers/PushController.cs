@@ -24,10 +24,7 @@ namespace Registry.Web.Controllers;
 /// Controller for managing push operations to datasets.
 /// </summary>
 [ApiController]
-[Route(RoutesHelper.OrganizationsRadix + "/" +
-       RoutesHelper.OrganizationSlug + "/" +
-       RoutesHelper.DatasetRadix + "/" +
-       RoutesHelper.DatasetSlug + "/" +
+[Route(RoutesHelper.DatasetPrefix + "/" +
        RoutesHelper.PushRadix)]
 [Produces("application/json")]
 public class PushController : ControllerBaseEx
@@ -56,11 +53,11 @@ public class PushController : ControllerBaseEx
     [DisableRequestSizeLimit]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [HttpPost("init")]
-    [ProducesResponseType(typeof(PushInitResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Init(
+    public async Task<ActionResult<PushInitResultDto>> Init(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm, Required] string checksum,
@@ -70,7 +67,7 @@ public class PushController : ControllerBaseEx
 
         var res = await _pushManager.Init(orgSlug, dsSlug, checksum, stamp, ct: ct);
 
-        return Ok(res);
+        return res;
 
 
     }

@@ -20,8 +20,7 @@ namespace Registry.Web.Controllers;
 /// lines and over areas, contour lines and orthophoto border masking. Stockpiles have their own controller.
 /// </summary>
 [ApiController]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix +
-       "/" + RoutesHelper.DatasetSlug)]
+[Route(RoutesHelper.DatasetPrefix)]
 [Produces("application/json")]
 public class RasterAnalysisController : ControllerBaseEx
 {
@@ -193,14 +192,14 @@ public class RasterAnalysisController : ControllerBaseEx
     [HttpPost("merge-multispectral", Name = nameof(ObjectsController) + "." + nameof(MergeMultispectral))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> MergeMultispectral(
+    public async Task<ActionResult<OkDto>> MergeMultispectral(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] MergeMultispectralRequestDto request, CancellationToken ct)
     {
 
         await _processing.MergeMultispectralAsync(orgSlug, dsSlug, PathsOf(request), request.OutputPath, ct: ct);
-        return Ok(new { ok = true });
+        return OkDto.Success;
     }
 
     /// <summary>Validate that source and reference rasters are compatible for alignment.</summary>
@@ -332,30 +331,30 @@ public class RasterAnalysisController : ControllerBaseEx
 
     /// <summary>Check if a masked version of the file already exists.</summary>
     [HttpPost("mask-borders/check", Name = nameof(ObjectsController) + "." + nameof(CheckMaskBorders))]
-    [ProducesResponseType(typeof(MaskBordersCheckResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> CheckMaskBorders(
+    public async Task<ActionResult<MaskBordersCheckResponseDto>> CheckMaskBorders(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] MaskBordersRequestDto request, CancellationToken ct)
     {
 
         var result = await _processing.CheckMaskedFileExistsAsync(orgSlug, dsSlug, request.Path.ToString(), ct: ct);
-        return Ok(result);
+        return result;
     }
 
     /// <summary>Start masking orthophoto borders to make them transparent.</summary>
     [HttpPost("mask-borders", Name = nameof(ObjectsController) + "." + nameof(MaskBorders))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> MaskBorders(
+    public async Task<ActionResult<OkDto>> MaskBorders(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] MaskBordersRequestDto request, CancellationToken ct)
     {
 
         await _processing.MaskBordersAsync(orgSlug, dsSlug, request.Path.ToString(), request.Near, request.White, ct: ct);
-        return Ok(new { ok = true });
+        return OkDto.Success;
     }
 
     #endregion

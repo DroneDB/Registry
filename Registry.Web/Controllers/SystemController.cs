@@ -52,12 +52,12 @@ public class SystemController : ControllerBaseEx
     /// </summary>
     /// <returns>The version string.</returns>
     [HttpGet("version", Name = SystemRoutes.Prefix + nameof(GetVersion))]
-    [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public IActionResult GetVersion()
+    public ActionResult<string> GetVersion()
     {
-        return Ok(RegistryVersion.Current);
+        return RegistryVersion.Current;
     }
 
     /// <summary>
@@ -66,12 +66,12 @@ public class SystemController : ControllerBaseEx
     /// <returns>The cleanup result with removed batches and any errors encountered.</returns>
     [HttpPost("cleanupbatches", Name = SystemRoutes.Prefix + nameof(CleanupBatches))]
     [Authorize(Policy = Policies.Admin)]
-    [ProducesResponseType(typeof(CleanupBatchesResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> CleanupBatches(CancellationToken ct)
+    public async Task<ActionResult<CleanupBatchesResultDto>> CleanupBatches(CancellationToken ct)
     {
-        return Ok(await _systemManager.CleanupBatches(ct: ct));
+        return await _systemManager.CleanupBatches(ct: ct);
     }
 
     /// <summary>
@@ -80,12 +80,12 @@ public class SystemController : ControllerBaseEx
     /// <returns>The cleanup result with removed datasets and any errors encountered.</returns>
     [HttpPost("cleanupdatasets", Name = SystemRoutes.Prefix + nameof(CleanupDatasets))]
     [Authorize(Policy = Policies.Admin)]
-    [ProducesResponseType(typeof(CleanupDatasetResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> CleanupDatasets(CancellationToken ct)
+    public async Task<ActionResult<CleanupDatasetResultDto>> CleanupDatasets(CancellationToken ct)
     {
-        return Ok(await _systemManager.CleanupEmptyDatasets(ct: ct));
+        return await _systemManager.CleanupEmptyDatasets(ct: ct);
     }
 
     /// <summary>
@@ -94,12 +94,12 @@ public class SystemController : ControllerBaseEx
     /// <returns>A list of migrated visibility entries.</returns>
     [HttpPost("migratevisibility", Name = SystemRoutes.Prefix + nameof(MigrateVisibility))]
     [Authorize(Policy = Policies.Admin)]
-    [ProducesResponseType(typeof(IEnumerable<MigrateVisibilityEntryDTO>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> MigrateVisibility(CancellationToken ct)
+    public async Task<ActionResult<IEnumerable<MigrateVisibilityEntryDTO>>> MigrateVisibility(CancellationToken ct)
     {
-        return Ok(await _systemManager.MigrateVisibility(ct: ct));
+        return Answer(await _systemManager.MigrateVisibility(ct: ct));
     }
 
     /// <summary>
@@ -111,11 +111,11 @@ public class SystemController : ControllerBaseEx
     /// <param name="dryRun">When true (default) only returns the planned renames.</param>
     [HttpPost("fix-invalid-slugs", Name = SystemRoutes.Prefix + nameof(FixInvalidSlugs))]
     [Authorize(Policy = Policies.Admin)]
-    [ProducesResponseType(typeof(FixInvalidSlugsResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> FixInvalidSlugs([FromQuery] bool dryRun = true, CancellationToken ct = default)
+    public async Task<ActionResult<FixInvalidSlugsResultDto>> FixInvalidSlugs([FromQuery] bool dryRun = true, CancellationToken ct = default)
     {
-        return Ok(await _slugs.FixInvalidSlugsAsync(dryRun, ct: ct));
+        return await _slugs.FixInvalidSlugsAsync(dryRun, ct: ct);
     }
 
     /// <summary>
@@ -126,12 +126,12 @@ public class SystemController : ControllerBaseEx
     /// <returns>Results of the move operation for each dataset.</returns>
     [HttpPost("move-datasets", Name = SystemRoutes.Prefix + nameof(MoveDatasets))]
     [Authorize(Policy = Policies.Admin)]
-    [ProducesResponseType(typeof(IEnumerable<MoveDatasetResultDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> MoveDatasets(
+    public async Task<ActionResult<IEnumerable<MoveDatasetResultDto>>> MoveDatasets(
         [FromBody, Required] MoveDatasetDto request, CancellationToken ct)
     {
         var results = await _datasets.MoveToOrganization(
@@ -140,7 +140,7 @@ public class SystemController : ControllerBaseEx
             request?.DestinationOrgSlug,
             request!.ConflictResolution, ct: ct);
 
-        return Ok(results);
+        return Answer(results);
     }
 
     /// <summary>
@@ -152,12 +152,12 @@ public class SystemController : ControllerBaseEx
     /// <returns>Result of the merge operation.</returns>
     [HttpPost("merge-organizations", Name = SystemRoutes.Prefix + nameof(MergeOrganizations))]
     [Authorize(Policy = Policies.Admin)]
-    [ProducesResponseType(typeof(MergeOrganizationResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> MergeOrganizations(
+    public async Task<ActionResult<MergeOrganizationResultDto>> MergeOrganizations(
         [FromBody, Required] MergeOrganizationDto request, CancellationToken ct)
     {
         var result = await _organizations.Merge(
@@ -166,7 +166,7 @@ public class SystemController : ControllerBaseEx
             request!.ConflictResolution,
             request!.DeleteSourceOrganization, ct: ct);
 
-        return Ok(result);
+        return result;
     }
 
     /// <summary>
@@ -175,12 +175,12 @@ public class SystemController : ControllerBaseEx
     /// <returns>Global report containing user, organizations, datasets, and file statistics.</returns>
     [HttpGet("report", Name = SystemRoutes.Prefix + nameof(GetGlobalReport))]
     [Authorize(Policy = Policies.Admin)]
-    [ProducesResponseType(typeof(GlobalReportDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetGlobalReport(CancellationToken ct)
+    public async Task<ActionResult<GlobalReportDto>> GetGlobalReport(CancellationToken ct)
     {
-        return Ok(await _report.BuildAsync(ct: ct));
+        return await _report.BuildAsync(ct: ct);
     }
 
     /// <summary>
@@ -191,11 +191,11 @@ public class SystemController : ControllerBaseEx
     /// <returns>ConfigurationDataDto with all sections and fields.</returns>
     [HttpGet("config", Name = SystemRoutes.Prefix + nameof(GetConfig))]
     [Authorize(Policy = Policies.Admin)]
-    [ProducesResponseType(typeof(ConfigurationDataDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public IActionResult GetConfig()
+    public ActionResult<ConfigurationDataDto> GetConfig()
     {
-        return Ok(_configuration.Build());
+        return _configuration.Build();
     }
 }

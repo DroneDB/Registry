@@ -2,6 +2,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Exceptions;
@@ -18,8 +19,12 @@ namespace Registry.Web.Controllers.Ogc;
 [BasicAuthentication]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]
 [TypeFilter(typeof(OgcExceptionFilter))]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" +
-       RoutesHelper.DatasetRadix + "/" + RoutesHelper.DatasetSlug)]
+[ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status401Unauthorized, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status404NotFound, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status503ServiceUnavailable, "text/xml", "application/xml")]
+[Route(RoutesHelper.DatasetPrefix)]
 public class WmtsController : ControllerBaseEx
 {
     private readonly IWmtsManager _mgr;
@@ -30,11 +35,15 @@ public class WmtsController : ControllerBaseEx
         _mgr = mgr; _logger = logger;
     }
 
+    /// <summary>WMTS 1.0.0 KVP request: GetCapabilities (XML), GetTile (an image or a vector tile) or GetFeatureInfo.</summary>
     [HttpGet("wmts")]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "text/xml", "application/xml", "image/png", "image/jpeg", "application/vnd.mapbox-vector-tile")]
     public async Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)
         => await Dispatch(orgSlug, dsSlug, folderPath: null, ct);
 
+    /// <summary>WMTS KVP request for the layers of a folder of the dataset.</summary>
     [HttpGet("wmts/p/{*folder}")]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "text/xml", "application/xml", "image/png", "image/jpeg", "application/vnd.mapbox-vector-tile")]
     public async Task<IActionResult> KvpFolder([FromRoute] string orgSlug, [FromRoute] string dsSlug,
         [FromRoute] string folder, CancellationToken ct) => await Dispatch(orgSlug, dsSlug, folder, ct);
 
@@ -101,7 +110,9 @@ public class WmtsController : ControllerBaseEx
         return v;
     }
 
+    /// <summary>WMTS 1.0.0 RESTful tile.</summary>
     [HttpGet("wmts/1.0.0/{layer}/{style}/{tms}/{z:int}/{y:int}/{x:int}.{ext:regex(^(pbf|png|jpe?g)$)}")]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "image/png", "image/jpeg", "application/vnd.mapbox-vector-tile")]
     public async Task<IActionResult> Restful([FromRoute] string orgSlug, [FromRoute] string dsSlug,
         [FromRoute] string layer, [FromRoute] string style, [FromRoute] string tms,
         [FromRoute] int z, [FromRoute] int y, [FromRoute] int x, [FromRoute] string ext, CancellationToken ct)

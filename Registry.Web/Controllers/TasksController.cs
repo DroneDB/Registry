@@ -21,8 +21,7 @@ namespace Registry.Web.Controllers;
 /// with per-task ownership.
 /// </summary>
 [ApiController]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix +
-       "/" + RoutesHelper.DatasetSlug + "/tasks")]
+[Route(RoutesHelper.DatasetPrefix + "/tasks")]
 [Produces("application/json")]
 public class TasksController : ControllerBaseEx
 {
@@ -37,8 +36,8 @@ public class TasksController : ControllerBaseEx
 
     [HttpGet("tools", Name = nameof(TasksController) + "." + nameof(GetTools))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetTools([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug, CancellationToken ct)
-        => Ok(await _tasksManager.GetToolsAsync(orgSlug, dsSlug, ct: ct));
+    public async Task<ActionResult<TaskToolDto[]>> GetTools([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug, CancellationToken ct)
+        => await _tasksManager.GetToolsAsync(orgSlug, dsSlug, ct: ct);
 
     // ---- POST /tasks ------------------------------------------------------
 
@@ -46,14 +45,14 @@ public class TasksController : ControllerBaseEx
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Submit(
+    public async Task<ActionResult<SubmitTaskResponseDto>> Submit(
         [FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
         [FromBody] SubmitTaskRequestDto body, CancellationToken ct)
     {
         var response = await _tasksManager.SubmitAsync(orgSlug, dsSlug, body, ct);
 
         // Dedup hit returns 200; fresh enqueue returns 202.
-        return response.Deduplicated ? Ok(response) : Accepted(response.StatusUrl, response);
+        return response.Deduplicated ? response : Accepted(response.StatusUrl, response);
     }
 
     // ---- GET /tasks -------------------------------------------------------
@@ -138,29 +137,29 @@ public class TasksController : ControllerBaseEx
 
     [HttpPost("clear", Name = nameof(TasksController) + "." + nameof(Clear))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Clear(
+    public async Task<ActionResult<TasksClearedDto>> Clear(
         [FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
         [FromQuery] string? toolId, CancellationToken ct)
-        => Ok(new { cleared = await _tasksManager.ClearAsync(orgSlug, dsSlug, toolId, ct) });
+        => new TasksClearedDto(await _tasksManager.ClearAsync(orgSlug, dsSlug, toolId, ct));
 
     // ---- GET /tasks/{id} --------------------------------------------------
 
     [HttpGet("{id}", Name = nameof(TasksController) + "." + nameof(GetStatus))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetStatus(
+    public async Task<ActionResult<TaskStatusDto>> GetStatus(
         [FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string id, CancellationToken ct)
-        => Ok(await _tasksManager.GetStatusAsync(orgSlug, dsSlug, id, ct));
+        => await _tasksManager.GetStatusAsync(orgSlug, dsSlug, id, ct);
 
     // ---- GET /tasks/{id}/log ----------------------------------------------
 
     [HttpGet("{id}/log", Name = nameof(TasksController) + "." + nameof(GetLog))]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetLog(
+    public async Task<ActionResult<TaskLogDto>> GetLog(
         [FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string id, [FromQuery] long since = 0, CancellationToken ct = default)
-        => Ok(await _tasksManager.GetLogAsync(orgSlug, dsSlug, id, since, ct));
+        => await _tasksManager.GetLogAsync(orgSlug, dsSlug, id, since, ct);
 
     // ---- GET /tasks/{id}/result -------------------------------------------
 
@@ -180,10 +179,10 @@ public class TasksController : ControllerBaseEx
     [HttpDelete("{id}", Name = nameof(TasksController) + "." + nameof(Cancel))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Cancel(
+    public async Task<ActionResult<DeletedDto>> Cancel(
         [FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string id, CancellationToken ct)
-        => Ok(new { deleted = await _tasksManager.CancelAsync(orgSlug, dsSlug, id, ct) });
+        => new DeletedDto(await _tasksManager.CancelAsync(orgSlug, dsSlug, id, ct));
 
     // ---- POST /tasks/{id}/retry -------------------------------------------
 
@@ -191,10 +190,10 @@ public class TasksController : ControllerBaseEx
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Retry(
+    public async Task<ActionResult<TaskRequeuedDto>> Retry(
         [FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string id, CancellationToken ct)
-        => Ok(new { requeued = await _tasksManager.RetryAsync(orgSlug, dsSlug, id, ct) });
+        => new TaskRequeuedDto(await _tasksManager.RetryAsync(orgSlug, dsSlug, id, ct));
 
     // ---- POST /tasks/{id}/delete -----------------------------------------
 
@@ -202,8 +201,8 @@ public class TasksController : ControllerBaseEx
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Delete(
+    public async Task<ActionResult<DeletedDto>> Delete(
         [FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string id, CancellationToken ct)
-        => Ok(new { deleted = await _tasksManager.DeleteAsync(orgSlug, dsSlug, id, ct) });
+        => new DeletedDto(await _tasksManager.DeleteAsync(orgSlug, dsSlug, id, ct));
 }

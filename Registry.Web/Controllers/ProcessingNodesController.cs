@@ -37,9 +37,9 @@ public class ProcessingNodesController : ControllerBaseEx
     /// </summary>
     /// <returns>A list of processing node descriptors.</returns>
     [HttpGet("processingNodes", Name = SystemRoutes.Prefix + nameof(GetProcessingNodes))]
-    [ProducesResponseType(typeof(IEnumerable<ProcessingNodeDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public IActionResult GetProcessingNodes() => Ok(_nodes.List());
+    public ActionResult<IEnumerable<ProcessingNodeDto>> GetProcessingNodes() => Answer<IEnumerable<ProcessingNodeDto>>(_nodes.List());
 
     /// <summary>
     /// Gets the available processing options from a specific NodeODX processing node.
@@ -49,11 +49,11 @@ public class ProcessingNodesController : ControllerBaseEx
     /// <param name="nodeId">The id of the processing node.</param>
     /// <returns>A list of processing option descriptors.</returns>
     [HttpGet("processingNodes/{nodeId}/options", Name = SystemRoutes.Prefix + nameof(GetProcessingNodeOptions))]
-    [ProducesResponseType(typeof(IEnumerable<NodeOdxOptionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetProcessingNodeOptions([Required] string nodeId, CancellationToken ct) =>
-        Ok(await _nodes.GetOptionsAsync(nodeId, ct));
+    public async Task<ActionResult<IEnumerable<NodeOdxOptionDto>>> GetProcessingNodeOptions([Required] string nodeId, CancellationToken ct) =>
+        Answer<IEnumerable<NodeOdxOptionDto>>(await _nodes.GetOptionsAsync(nodeId, ct));
 
     /// <summary>
     /// Checks whether a specific NodeODX processing node is reachable and reports its
@@ -64,9 +64,9 @@ public class ProcessingNodesController : ControllerBaseEx
     /// <param name="nodeId">The id of the processing node.</param>
     /// <returns>The node status descriptor.</returns>
     [HttpGet("processingNodes/{nodeId}/status", Name = SystemRoutes.Prefix + nameof(GetProcessingNodeStatus))]
-    [ProducesResponseType(typeof(ProcessingNodeStatusDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetProcessingNodeStatus([Required] string nodeId, CancellationToken ct) =>
-        Ok(await _nodes.GetStatusAsync(nodeId, ct));
+    public async Task<ActionResult<ProcessingNodeStatusDto>> GetProcessingNodeStatus([Required] string nodeId, CancellationToken ct) =>
+        await _nodes.GetStatusAsync(nodeId, ct);
 }

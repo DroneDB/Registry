@@ -29,8 +29,7 @@ namespace Registry.Web.Controllers;
 [ApiController]
 [BasicAuthentication]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" +
-       RoutesHelper.DatasetRadix + "/" + RoutesHelper.DatasetSlug + "/mvt")]
+[Route(RoutesHelper.DatasetPrefix + "/mvt")]
 [Tags("MVT")]
 public class MvtController : ControllerBaseEx
 {

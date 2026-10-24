@@ -1500,6 +1500,14 @@
       "datasetResults": null
     }
   },
+  "Registry.Web.Models.DTO.DeletedDto": {
+    "full": {
+      "deleted": true
+    },
+    "sparse": {
+      "deleted": false
+    }
+  },
   "Registry.Web.Models.DTO.DeltaDto": {
     "full": {
       "adds": [
@@ -2047,6 +2055,14 @@
     "sparse": {
       "isReady": false,
       "entryPaths": null
+    }
+  },
+  "Registry.Web.Models.DTO.JobAcceptedDto": {
+    "full": {
+      "jobId": "JobId-text"
+    },
+    "sparse": {
+      "jobId": null
     }
   },
   "Registry.Web.Models.DTO.LoginResultDto": {
@@ -2695,6 +2711,14 @@
       "contactName": null,
       "contactEmail": null,
       "keywords": null
+    }
+  },
+  "Registry.Web.Models.DTO.OkDto": {
+    "full": {
+      "ok": true
+    },
+    "sparse": {
+      "ok": false
     }
   },
   "Registry.Web.Models.DTO.OrganizationDto": {
@@ -3445,6 +3469,14 @@
       "message": null
     }
   },
+  "Registry.Web.Models.DTO.TaskRequeuedDto": {
+    "full": {
+      "requeued": true
+    },
+    "sparse": {
+      "requeued": false
+    }
+  },
   "Registry.Web.Models.DTO.TaskStateInfoDto": {
     "full": {
       "value": "Value-text",
@@ -3595,6 +3627,14 @@
       "hidden": false,
       "disabled": false,
       "disabledMessage": null
+    }
+  },
+  "Registry.Web.Models.DTO.TasksClearedDto": {
+    "full": {
+      "cleared": 42
+    },
+    "sparse": {
+      "cleared": 0
     }
   },
   "Registry.Web.Models.DTO.UpdateMemberPermissionsDto": {

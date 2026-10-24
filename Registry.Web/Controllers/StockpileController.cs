@@ -17,8 +17,7 @@ namespace Registry.Web.Controllers;
 /// over the whole raster.
 /// </summary>
 [ApiController]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix +
-       "/" + RoutesHelper.DatasetSlug)]
+[Route(RoutesHelper.DatasetPrefix)]
 [Produces("application/json")]
 public class StockpileController : ControllerBaseEx
 {

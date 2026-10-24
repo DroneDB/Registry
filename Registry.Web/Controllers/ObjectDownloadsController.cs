@@ -20,8 +20,7 @@ namespace Registry.Web.Controllers;
 /// of the whole dataset, and the dataset's index (<c>.ddb</c>); archives are written while they are sent.
 /// </summary>
 [ApiController]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix +
-       "/" + RoutesHelper.DatasetSlug)]
+[Route(RoutesHelper.DatasetPrefix)]
 [Produces("application/json")]
 public class ObjectDownloadsController : ControllerBaseEx
 {

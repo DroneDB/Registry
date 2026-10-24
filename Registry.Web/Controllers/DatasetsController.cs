@@ -26,7 +26,7 @@ namespace Registry.Web.Controllers;
 /// Controller for managing datasets within organizations.
 /// </summary>
 [ApiController]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix)]
+[Route(RoutesHelper.DatasetsPrefix)]
 [Produces("application/json")]
 public class DatasetsController : ControllerBaseEx
 {
@@ -48,17 +48,17 @@ public class DatasetsController : ControllerBaseEx
     /// <param name="dsSlug">The dataset slug.</param>
     /// <returns>A list of batches.</returns>
     [HttpGet(RoutesHelper.DatasetSlug + "/batches", Name = nameof(GetBatches))]
-    [ProducesResponseType(typeof(IEnumerable<BatchDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetBatches(
+    public async Task<ActionResult<IEnumerable<BatchDto>>> GetBatches(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
         var lst = await _shareManager.ListBatches(orgSlug, dsSlug, ct: ct);
 
-        return Ok(lst);
+        return Answer(lst);
 
     }
 
@@ -68,23 +68,23 @@ public class DatasetsController : ControllerBaseEx
     /// <param name="orgSlug">The organization slug.</param>
     /// <returns>A list of datasets.</returns>
     [HttpGet(Name = nameof(DatasetsController) + "." + nameof(GetAll))]
-    [ProducesResponseType(typeof(IEnumerable<DatasetDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetAll([FromRoute, Required] string orgSlug, [FromQuery] bool includeThumbnailCheck = false,
+    public async Task<ActionResult<IEnumerable<DatasetDto>>> GetAll([FromRoute, Required] string orgSlug, [FromQuery] bool includeThumbnailCheck = false,
         [FromQuery] int? skip = null, [FromQuery] int? take = null, [FromQuery] string q = null,
         [FromQuery] string sort = null, [FromQuery] bool desc = false, [FromQuery] string slugs = null, CancellationToken ct = default)
     {
         // Without paging parameters: the whole list, as before
         if (skip == null && take == null && q == null && sort == null && slugs == null)
-            return Ok(await _datasetsManager.List(orgSlug, includeThumbnailCheck, ct: ct));
+            return Answer(await _datasetsManager.List(orgSlug, includeThumbnailCheck, ct: ct));
 
         var slugList = slugs?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var (items, total) = await _datasetsManager.ListPage(orgSlug,
             new DatasetListQuery(skip ?? 0, take, q, sort, desc, slugList), includeThumbnailCheck, ct: ct);
         Response.Headers["X-Total-Count"] = total.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        return Ok(items);
+        return Answer<IEnumerable<DatasetDto>>(items);
     }
 
     /// <summary>
@@ -94,15 +94,15 @@ public class DatasetsController : ControllerBaseEx
     /// <param name="dsSlug">The dataset slug.</param>
     /// <returns>The dataset entry information.</returns>
     [HttpGet(RoutesHelper.DatasetSlug, Name = nameof(DatasetsController) + "." + nameof(Get))]
-    [ProducesResponseType(typeof(EntryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Get(
+    public async Task<ActionResult<EntryDto[]>> Get(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
-        return Ok(await _datasetsManager.GetEntry(orgSlug, dsSlug, ct: ct));
+        return await _datasetsManager.GetEntry(orgSlug, dsSlug, ct: ct);
     }
 
     /// <summary>
@@ -112,15 +112,15 @@ public class DatasetsController : ControllerBaseEx
     /// <param name="dsSlug">The dataset slug.</param>
     /// <returns>The dataset extended information.</returns>
     [HttpGet(RoutesHelper.DatasetSlug + "/ex", Name = nameof(DatasetsController) + "." + nameof(GetEx))]
-    [ProducesResponseType(typeof(DatasetDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetEx(
+    public async Task<ActionResult<DatasetDto>> GetEx(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
-        return Ok(await _datasetsManager.Get(orgSlug, dsSlug, ct: ct));
+        return await _datasetsManager.Get(orgSlug, dsSlug, ct: ct);
     }
 
     /// <summary>
@@ -130,15 +130,15 @@ public class DatasetsController : ControllerBaseEx
     /// <param name="dsSlug">The dataset slug.</param>
     /// <returns>The dataset stamp.</returns>
     [HttpGet(RoutesHelper.DatasetSlug + "/stamp", Name = nameof(DatasetsController) + "." + nameof(GetStamp))]
-    [ProducesResponseType(typeof(Stamp), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetStamp(
+    public async Task<ActionResult<StampDto>> GetStamp(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
-        return Ok(await _datasetsManager.GetStamp(orgSlug, dsSlug, ct: ct));
+        return await _datasetsManager.GetStamp(orgSlug, dsSlug, ct: ct);
     }
 
     /// <summary>
@@ -153,7 +153,7 @@ public class DatasetsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Create(
+    public async Task<ActionResult<DatasetDto>> Create(
         [FromRoute, Required] string orgSlug,
         [FromForm, Required] DatasetNewDto dataset, CancellationToken ct)
     {
@@ -171,19 +171,19 @@ public class DatasetsController : ControllerBaseEx
     /// <param name="newSlug">The new dataset slug.</param>
     /// <returns>The renamed dataset.</returns>
     [HttpPost(RoutesHelper.DatasetSlug + "/rename", Name = nameof(Rename))]
-    [ProducesResponseType(typeof(DatasetDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Rename(
+    public async Task<ActionResult<DatasetDto>> Rename(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm(Name = "slug"), Required] string newSlug, CancellationToken ct)
     {
         await _datasetsManager.Rename(orgSlug, dsSlug, newSlug, ct: ct);
 
-        return Ok(await _datasetsManager.Get(orgSlug, newSlug, ct: ct));
+        return await _datasetsManager.Get(orgSlug, newSlug, ct: ct);
     }
 
     /// <summary>
@@ -196,11 +196,11 @@ public class DatasetsController : ControllerBaseEx
     /// <param name="rawAttributes">The attributes as JSON string.</param>
     /// <returns>The updated attributes.</returns>
     [HttpPost(RoutesHelper.DatasetSlug + "/chattr", Name = nameof(ChangeAttributes))]
-    [ProducesResponseType(typeof(AttributesDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> ChangeAttributes(
+    public async Task<ActionResult<Dictionary<string, object>>> ChangeAttributes(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm(Name = "attrs")] string rawAttributes, CancellationToken ct)
@@ -213,7 +213,7 @@ public class DatasetsController : ControllerBaseEx
 
         var res = await _datasetsManager.ChangeAttributes(orgSlug, dsSlug, attributes, ct: ct);
 
-        return Ok(res);
+        return res;
     }
 
     /// <summary>
@@ -267,19 +267,19 @@ public class DatasetsController : ControllerBaseEx
     /// <param name="extensions">Optional comma-separated list of file extensions to rescan (e.g., "dwg,dxf"). An entry must match both filters. With a filter only the rescanned entries are rebuilt.</param>
     /// <returns>The rescan result with processed entries and statistics.</returns>
     [HttpPost(RoutesHelper.DatasetSlug + "/rescan", Name = nameof(DatasetsController) + "." + nameof(RescanIndex))]
-    [ProducesResponseType(typeof(RescanResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RescanIndex(
+    public async Task<ActionResult<RescanResultDto>> RescanIndex(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery] string? types = null,
         [FromQuery] bool stopOnError = true,
         [FromQuery] string? extensions = null, CancellationToken ct = default)
     {
-        return Ok(await _rescanManager.RescanDatasetIndex(orgSlug, dsSlug,
-            new RescanOptions(types, extensions, stopOnError), ct: ct));
+        return await _rescanManager.RescanDatasetIndex(orgSlug, dsSlug,
+            new RescanOptions(types, extensions, stopOnError), ct: ct);
     }
 
 }

@@ -41,12 +41,12 @@ public class OrganizationsController : ControllerBaseEx
     /// </summary>
     /// <returns>A list of organizations.</returns>
     [HttpGet(Name = nameof(GetAll))]
-    [ProducesResponseType(typeof(IEnumerable<OrganizationDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetAll([FromQuery] bool ownedOnly = false, CancellationToken ct = default)
+    public async Task<ActionResult<IEnumerable<OrganizationDto>>> GetAll([FromQuery] bool ownedOnly = false, CancellationToken ct = default)
     {
-        return Ok(await _organizationsManager.List(ownedOnly, ct: ct));
+        return Answer(await _organizationsManager.List(ownedOnly, ct: ct));
     }
 
     /// <summary>
@@ -55,11 +55,11 @@ public class OrganizationsController : ControllerBaseEx
     /// <returns>A list of public organizations.</returns>
     [HttpGet("public", Name = nameof(GetAllPublic))]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(IEnumerable<OrganizationDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> GetAllPublic(CancellationToken ct)
+    public async Task<ActionResult<IEnumerable<OrganizationDto>>> GetAllPublic(CancellationToken ct)
     {
-        return Ok(await _organizationsManager.ListPublic(ct: ct));
+        return Answer(await _organizationsManager.ListPublic(ct: ct));
     }
 
     /// <summary>
@@ -68,13 +68,13 @@ public class OrganizationsController : ControllerBaseEx
     /// <param name="orgSlug">The organization slug.</param>
     /// <returns>The organization information.</returns>
     [HttpGet(RoutesHelper.OrganizationSlug, Name = nameof(Get))]
-    [ProducesResponseType(typeof(OrganizationDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Get([FromRoute, Required] string orgSlug, CancellationToken ct)
+    public async Task<ActionResult<OrganizationDto>> Get([FromRoute, Required] string orgSlug, CancellationToken ct)
     {
-        return Ok(await _organizationsManager.Get(orgSlug, ct: ct));
+        return await _organizationsManager.Get(orgSlug, ct: ct);
 
     }
 
@@ -88,7 +88,7 @@ public class OrganizationsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Create([FromForm, Required] OrganizationRequestDto organization, CancellationToken ct)
+    public async Task<ActionResult<OrganizationDto>> Create([FromForm, Required] OrganizationRequestDto organization, CancellationToken ct)
     {
 
         var newOrg = await _organizationsManager.AddNew(organization, ct: ct);
@@ -144,12 +144,12 @@ public class OrganizationsController : ControllerBaseEx
     /// <param name="orgSlug">The organization slug.</param>
     /// <returns>List of organization members with their permissions.</returns>
     [HttpGet("{orgSlug}/members", Name = nameof(GetMembers))]
-    [ProducesResponseType(typeof(IEnumerable<OrganizationMemberDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetMembers([FromRoute, Required] string orgSlug, CancellationToken ct)
+    public async Task<ActionResult<IEnumerable<OrganizationMemberDto>>> GetMembers([FromRoute, Required] string orgSlug, CancellationToken ct)
     {
-        return Ok(await _organizationsManager.GetMembers(orgSlug, ct: ct));
+        return Answer(await _organizationsManager.GetMembers(orgSlug, ct: ct));
     }
 
     /// <summary>

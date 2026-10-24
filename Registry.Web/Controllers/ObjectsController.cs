@@ -24,8 +24,7 @@ namespace Registry.Web.Controllers;
 /// stockpiles have controllers of their own on the same route prefix.
 /// </summary>
 [ApiController]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" + RoutesHelper.DatasetRadix +
-       "/" + RoutesHelper.DatasetSlug)]
+[Route(RoutesHelper.DatasetPrefix)]
 [Produces("application/json")]
 public class ObjectsController : ControllerBaseEx
 {
@@ -192,18 +191,18 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="type">Optional filter by entry type.</param>
     /// <returns>A list of entries.</returns>
     [HttpGet("list", Name = nameof(ObjectsController) + "." + nameof(GetInfo))]
-    [ProducesResponseType(typeof(IEnumerable<EntryDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetInfo(
+    public async Task<ActionResult<IEnumerable<EntryDto>>> GetInfo(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery] string? path,
         [FromQuery] EntryType? type = null, CancellationToken ct = default)
     {
         var res = await _queries.ListAsync(orgSlug, dsSlug, path, false, type, ct: ct);
-        return Ok(res);
+        return Answer(res);
     }
 
     /// <summary>
@@ -215,18 +214,18 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="type">Optional filter by entry type.</param>
     /// <returns>A list of entries.</returns>
     [HttpPost("list", Name = nameof(ObjectsController) + "." + nameof(GetInfoEx))]
-    [ProducesResponseType(typeof(IEnumerable<EntryDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetInfoEx(
+    public async Task<ActionResult<IEnumerable<EntryDto>>> GetInfoEx(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm] string? path,
         [FromForm] EntryType? type = null, CancellationToken ct = default)
     {
         var res = await _queries.ListAsync(orgSlug, dsSlug, path, false, type, ct: ct);
-        return Ok(res);
+        return Answer(res);
     }
 
     /// <summary>
@@ -240,11 +239,11 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="type">Optional filter by entry type.</param>
     /// <returns>A list of matching entries.</returns>
     [HttpPost("search", Name = nameof(ObjectsController) + "." + nameof(Search))]
-    [ProducesResponseType(typeof(IEnumerable<EntryDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Search(
+    public async Task<ActionResult<IEnumerable<EntryDto>>> Search(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm] string? query,
@@ -253,7 +252,7 @@ public class ObjectsController : ControllerBaseEx
         [FromForm] EntryType? type = null, CancellationToken ct = default)
     {
         var res = await _queries.SearchAsync(orgSlug, dsSlug, query, path, recursive, type, ct: ct);
-        return Ok(res);
+        return Answer(res);
     }
 
     /// <summary>
@@ -286,10 +285,10 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="paths">Array of paths to delete.</param>
     /// <returns>A response containing the list of successfully deleted paths and any failures.</returns>
     [HttpDelete(RoutesHelper.ObjectsRadix + "/batch", Name = nameof(ObjectsController) + "." + nameof(DeleteBatch))]
-    [ProducesResponseType(typeof(DeleteBatchResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> DeleteBatch(
+    public async Task<ActionResult<DeleteBatchResponse>> DeleteBatch(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm] string[]? paths, CancellationToken ct)
@@ -298,7 +297,7 @@ public class ObjectsController : ControllerBaseEx
             throw new BadRequestException("No paths provided");
 
         var response = await _commands.DeleteBatchAsync(orgSlug, dsSlug, paths, ct: ct);
-        return Ok(response);
+        return response;
     }
 
     /// <summary>
@@ -310,18 +309,18 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="dest">The destination path.</param>
     /// <returns>The updated entry on success.</returns>
     [HttpPut(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + "." + nameof(Move))]
-    [ProducesResponseType(typeof(EntryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Move(
+    public async Task<ActionResult<EntryDto>> Move(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm] string? source,
         [FromForm] string? dest, CancellationToken ct)
     {
         var entry = await _commands.MoveAsync(orgSlug, dsSlug, source, dest, ct: ct);
-        return Ok(entry);
+        return entry;
     }
 
     /// <summary>
@@ -365,12 +364,12 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="overwrite">Whether to overwrite an existing destination.</param>
     /// <returns>The created destination entry.</returns>
     [HttpPost(RoutesHelper.ObjectsRadix + "/copy", Name = nameof(ObjectsController) + "." + nameof(Copy))]
-    [ProducesResponseType(typeof(EntryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Copy(
+    public async Task<ActionResult<EntryDto>> Copy(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromForm, Required] string source,
@@ -378,6 +377,6 @@ public class ObjectsController : ControllerBaseEx
         [FromForm] bool overwrite = false, CancellationToken ct = default)
     {
         var entry = await _transfers.CopyAsync(orgSlug, dsSlug, source, dest, overwrite, ct: ct);
-        return Ok(entry);
+        return entry;
     }
 }

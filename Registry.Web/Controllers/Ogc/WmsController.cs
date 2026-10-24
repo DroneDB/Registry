@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Exceptions;
 using Registry.Web.Filters;
@@ -16,18 +17,26 @@ namespace Registry.Web.Controllers.Ogc;
 [BasicAuthentication]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]
 [TypeFilter(typeof(OgcExceptionFilter))]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" +
-       RoutesHelper.DatasetRadix + "/" + RoutesHelper.DatasetSlug)]
+[ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status401Unauthorized, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status404NotFound, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status503ServiceUnavailable, "text/xml", "application/xml")]
+[Route(RoutesHelper.DatasetPrefix)]
 public class WmsController : ControllerBaseEx
 {
     private readonly IWmsManager _mgr;
     public WmsController(IWmsManager mgr) { _mgr = mgr; }
 
+    /// <summary>WMS KVP request: GetCapabilities (XML), GetMap (an image) or GetFeatureInfo.</summary>
     [HttpGet("wms")]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "text/xml", "application/xml", "text/plain", "application/json", "image/png", "image/jpeg", "image/webp")]
     public Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)
         => Dispatch(orgSlug, dsSlug, null, ct);
 
+    /// <summary>WMS KVP request for the layers of a folder of the dataset.</summary>
     [HttpGet("wms/p/{*folder}")]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "text/xml", "application/xml", "text/plain", "application/json", "image/png", "image/jpeg", "image/webp")]
     public Task<IActionResult> KvpFolder([FromRoute] string orgSlug, [FromRoute] string dsSlug,
         [FromRoute] string folder, CancellationToken ct) => Dispatch(orgSlug, dsSlug, folder, ct);
 

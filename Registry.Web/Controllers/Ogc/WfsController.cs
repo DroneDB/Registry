@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Exceptions;
 using Registry.Web.Filters;
@@ -19,22 +20,32 @@ namespace Registry.Web.Controllers.Ogc;
 [BasicAuthentication]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]
 [TypeFilter(typeof(OgcExceptionFilter))]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" +
-       RoutesHelper.DatasetRadix + "/" + RoutesHelper.DatasetSlug)]
+[ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status401Unauthorized, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status404NotFound, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status503ServiceUnavailable, "text/xml", "application/xml")]
+[Route(RoutesHelper.DatasetPrefix)]
 public class WfsController : ControllerBaseEx
 {
     private readonly IWfsManager _mgr;
     public WfsController(IWfsManager mgr) { _mgr = mgr; }
 
+    /// <summary>WFS 2.0.0 KVP request: capabilities, feature types, stored queries (XML) and features (GML or GeoJSON).</summary>
     [HttpGet("wfs")]
+    [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "text/xml", "application/xml", "application/gml+xml", "application/geo+json", "application/json")]
     public Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)
         => Dispatch(orgSlug, dsSlug, null, ct);
 
+    /// <summary>WFS KVP request for the layers of a folder of the dataset.</summary>
     [HttpGet("wfs/p/{*folder}")]
+    [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "text/xml", "application/xml", "application/gml+xml", "application/geo+json", "application/json")]
     public Task<IActionResult> KvpFolder([FromRoute] string orgSlug, [FromRoute] string dsSlug,
         [FromRoute] string folder, CancellationToken ct) => Dispatch(orgSlug, dsSlug, folder, ct);
 
+    /// <summary>WFS 2.0.0 XML request (POST).</summary>
     [HttpPost("wfs")]
+    [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "text/xml", "application/xml", "application/gml+xml", "application/geo+json", "application/json")]
     [Consumes("application/xml", "text/xml", "application/soap+xml")]
     public async Task<IActionResult> PostXml([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)
     {
