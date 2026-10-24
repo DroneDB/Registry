@@ -24,7 +24,6 @@
         <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
         <PackageReference Include="Microsoft.Extensions.Options" />
         <PackageReference Include="Moq" />
-        <PackageReference Include="NUnit" />
         <PackageReference Include="Serilog.Extensions.Logging" />
         <PackageReference Include="Shouldly" />
     </ItemGroup>

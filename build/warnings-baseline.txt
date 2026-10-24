@@ -129,7 +129,6 @@ Registry.Web/Controllers/RasterAnalysisController.cs CA1711 2
 Registry.Web/Controllers/StacController.cs CA1822 1
 Registry.Web/Exceptions/OgcException.cs CS8632 2
 Registry.Web/Hosting/RegistryJobsServiceCollectionExtensions.cs CS0618 1
-Registry.Web/Models/Configuration/HeavyToolConfig.cs CA1805 2
 Registry.Web/Models/Configuration/ImportSettings.cs CA1805 3
 Registry.Web/Models/Configuration/LdapSettings.cs CA1805 1
 Registry.Web/Models/ControllerBaseEx.cs CA1711 1

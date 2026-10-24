@@ -32,13 +32,11 @@
         <PackageReference Include="Microsoft.Extensions.Options" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" />
         <PackageReference Include="Moq" />
-        <PackageReference Include="NetTopologySuite.Core" />
         <!-- Json.NET as the oracle of the wire (RQ-14): the converters are tested against what it wrote -->
         <PackageReference Include="Newtonsoft.Json" />
         <PackageReference Include="NUnit" />
         <PackageReference Include="NUnit3TestAdapter" />
         <PackageReference Include="Serilog.Extensions.Logging" />
-        <PackageReference Include="Serilog.Sinks.NUnit" />
         <PackageReference Include="Shouldly" />
     </ItemGroup>
 

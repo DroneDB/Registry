@@ -50,18 +50,6 @@ public static class Extenders
         };
     }
 
-    /*public static Dataset ToEntity(this DatasetDto dataset)
-    {
-        var entity = new Dataset
-        {
-            Id = dataset.Id,
-            Slug = dataset.Slug,
-            CreationDate = dataset.CreationDate,
-            Name = string.IsNullOrEmpty(dataset.Name) ? dataset.Slug : dataset.Name
-        };
-        return entity;
-    }*/
-
     public static StampDto ToDto(this Stamp stamp)
     {
         if (stamp == null) return null;

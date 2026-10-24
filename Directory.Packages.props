@@ -37,8 +37,6 @@
         <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="$(DotNetPackagesVersion)" />
-        <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="$(DotNetPackagesVersion)" />
-        <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="$(DotNetPackagesVersion)" />
         <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="$(DotNetPackagesVersion)" />
@@ -48,7 +46,6 @@
     <!-- Data access -->
     <ItemGroup>
         <PackageVersion Include="Microting.EntityFrameworkCore.MySql" Version="10.0.7" />
-        <PackageVersion Include="NetTopologySuite.Core" Version="1.15.3" />
     </ItemGroup>
 
     <!-- Background jobs and health checks -->
@@ -72,7 +69,6 @@
         <PackageVersion Include="Serilog.Extensions.Logging" Version="10.0.0" />
         <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
         <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
-        <PackageVersion Include="Serilog.Sinks.NUnit" Version="1.0.3" />
     </ItemGroup>
 
     <!-- Web API, security and tooling -->

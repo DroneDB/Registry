@@ -192,9 +192,6 @@ public class Startup
             {
                 AsyncAuthorization = [new HangfireAuthorizationFilter()]
             }).RequireAuthorization();
-
-            // TODO: Enable when needed
-            // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
         });
 
         app.UseWhen(context => !context.Request.Path.StartsWithSegments("/static"), builder =>
