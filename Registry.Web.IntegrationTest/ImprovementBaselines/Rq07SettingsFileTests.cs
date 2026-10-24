@@ -48,7 +48,8 @@ public class Rq07SettingsFileTests
         settings["AppSettings"]!["Secret"] = "rq07-secret-0123456789";
         settings["AppSettings"]!["ThumbnailGeneratorToken"] = "rq07-thumbnail-token";
         settings["AppSettings"]!["HangfireProvider"] = "Mysql";
-        // A key this version does not know (the production template still carries one)
+        // A key this version does not know (the production template used to carry ChunkedUploadSessionTimeout, which nothing
+        // read: the files of existing deployments still have it)
         settings["AppSettings"]!["ChunkedUploadSessionTimeout"] = "01:00:00";
         return settings;
     }

@@ -122,7 +122,7 @@ public class Rq07ConfigurationCompatibilityTests
     {
         var section = Load(source)[RegistryOptions.SectionName]!.AsObject();
 
-        foreach (var (key, value) in section.Where(pair => !LegacyKeys.Contains(pair.Key)))
+        foreach (var (key, value) in section)
         {
             var owners = RegistryOptions.Sections
                 .Where(entry => entry.Value == RegistryOptions.SectionName + ":" + key ||
@@ -139,8 +139,28 @@ public class Rq07ConfigurationCompatibilityTests
         }
     }
 
-    /// <summary>Keys the shipped files still carry that no code reads (the binder ignores them): left in the file, not bound.</summary>
-    private static readonly string[] LegacyKeys = ["ChunkedUploadSessionTimeout"];
+    /// <summary>
+    /// The production template used to carry <c>ChunkedUploadSessionTimeout</c>, which nothing reads: a deployment whose
+    /// file still has it (or any key this version does not know) binds to exactly the options the template does, and
+    /// passes validation for every role.
+    /// </summary>
+    [Test]
+    public void AKeyNoClassBinds_IsIgnored_ByEveryFocusedClass()
+    {
+        // The same generated secrets in both, so that what differs is the key
+        var template = Load("docker/production/appsettings-template.json");
+        SettingsFile.AddMissingSecrets(template);
+        var older = template.DeepClone().AsObject();
+        older[RegistryOptions.SectionName]!["ChunkedUploadSessionTimeout"] = "01:00:00";
+
+        var current = Configuration(template);
+        var withKey = Configuration(older);
+
+        foreach (var options in RegistryOptions.Sections.Keys)
+            Json(Bind(withKey, options)).ShouldBe(Json(Bind(current, options)), options.Name);
+        foreach (var role in AllRoles)
+            RegistryOptions.Validate(withKey, role).ShouldBeEmpty($"the older template as {role}");
+    }
 
     private static bool HasProperty(Type type, string name) =>
         type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) != null;
