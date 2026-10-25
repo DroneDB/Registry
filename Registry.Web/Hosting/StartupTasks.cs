@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 namespace Registry.Web.Hosting;
 
 /// <summary>
-/// Work that must finish before the host starts serving (RQ-07): run by <see cref="StartupTaskRunner"/>
+/// Work that must finish before the host starts serving: run by <see cref="StartupTaskRunner"/>
 /// in <see cref="Order"/>, before any hosted service starts. Dependencies come through the constructor
 /// (the runner resolves the tasks from one scope); a task that throws stops the start.
 /// </summary>

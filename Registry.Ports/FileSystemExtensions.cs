@@ -9,7 +9,7 @@ public static class FileSystemExtensions
 {
     /// <summary>
     /// Deletes the file, or the folder with everything in it, at <paramref name="path"/> when it
-    /// exists; never throws. The one best-effort delete of the Registry (RQ-10): scratch files,
+    /// exists; never throws. The one best-effort delete of the Registry: scratch files,
     /// rolled-back writes, abandoned uploads and task folders. A failure goes to
     /// <paramref name="onError"/> (the caller logs it) and the caller carries on: what is left is
     /// removed by the abandoned-file sweeps.

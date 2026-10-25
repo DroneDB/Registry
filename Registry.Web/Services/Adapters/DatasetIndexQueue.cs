@@ -338,7 +338,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
                 // Greedily coalesce whatever is already queued, then wait a short window for
                 // stragglers from other concurrently-enqueuing callers. A batch made only of
                 // registered uploads stops waiting as soon as no registered upload is still
-                // streaming: nothing else can arrive for it (UPL-01 C.5).
+                // streaming: nothing else can arrive for it.
                 using var window = new CancellationTokenSource(TimeSpan.FromMilliseconds(_opts.BatchWindowMs), _time);
                 using var windowLinked =
                     CancellationTokenSource.CreateLinkedTokenSource(window.Token, _shutdown.Token);

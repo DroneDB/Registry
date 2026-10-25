@@ -81,7 +81,7 @@ public sealed class PushUploads
     public async Task UploadAsync(PushUpload upload, string path, string token, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(upload);
-        // Honoured until the file is staged (RQ-13)
+        // Honoured until the file is staged
         ct.ThrowIfCancellationRequested();
 
         if (string.IsNullOrWhiteSpace(path))
@@ -95,7 +95,7 @@ public sealed class PushUploads
         // The entry path of the delta: libddb's path rule, as for any upload
         path = _paths.Normalize(path);
 
-        // XI-05: the hash computed while the file streamed must be the delta's for that path; a
+        // The hash computed while the file streamed must be the delta's for that path; a
         // file the delta does not add, or whose bytes differ, is refused before it is staged
         var expected = session.AddedFileHash(path) ??
                        throw new BadRequestException($"'{path}' is not a file of this push");

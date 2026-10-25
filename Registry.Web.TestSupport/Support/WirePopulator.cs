@@ -8,7 +8,7 @@ using System.Reflection;
 namespace Registry.Web.Test.Support;
 
 /// <summary>
-/// Builds deterministic instances of the wire types (RQ-14): every member filled ("full"), or every
+/// Builds deterministic instances of the wire types: every member filled ("full"), or every
 /// reference member null and every value member default ("sparse"). The wire shape test serializes
 /// both through the host's formatter, so a member's name, nullability, enum form, date form, number
 /// form and ordering are all pinned without a hand-written case per DTO.

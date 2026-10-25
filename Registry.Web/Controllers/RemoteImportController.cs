@@ -14,7 +14,7 @@ using Registry.Web.Utilities.Auth;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// Imports from another Registry (RQ-12, out of <see cref="SystemController"/>): the import runs as a background
+/// Imports from another Registry (out of <see cref="SystemController"/>): the import runs as a background
 /// job; these endpoints queue it, report its state and result, and cancel it. Admin only.
 /// </summary>
 [Authorize]

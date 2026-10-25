@@ -8,7 +8,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Caching;
 
 /// <summary>
-/// What may change who can list a dataset, or how it is listed (RQ-12): its visibility, its name, its slug, its
+/// What may change who can list a dataset, or how it is listed: its visibility, its name, its slug, its
 /// existence. The one place that drops the caches those answers live in, so no path that changes one of them can
 /// forget a cache: the dataset's cached visibility, and every STAC listing (the landing page and the collections
 /// listing are cached per caller, so they are keyed by one STAC generation that is renewed here).

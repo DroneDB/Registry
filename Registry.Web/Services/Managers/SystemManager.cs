@@ -20,7 +20,7 @@ namespace Registry.Web.Services.Managers;
 
 /// <summary>
 /// System-level data maintenance: expired upload batches, empty datasets, the visibility migration. The other
-/// system operations have their own services since RQ-12 (slug repair, report, build maintenance, remote import).
+/// system operations have their own services (slug repair, report, build maintenance, remote import).
 /// </summary>
 public class SystemManager
 {
@@ -46,7 +46,7 @@ public class SystemManager
     }
 
     // The maintenance commands honour the token while they select their targets; the per-dataset work then
-    // runs to completion (RQ-13): a disconnect never leaves one dataset half done
+    // runs to completion: a disconnect never leaves one dataset half done
     /// <summary>Removes the datasets whose index is empty.</summary>
     public async Task<CleanupDatasetResultDto> CleanupEmptyDatasets(CancellationToken ct = default)
     {
@@ -139,7 +139,7 @@ public class SystemManager
     /// <summary>Removes the committed upload batches and the expired ones (with their files).</summary>
     public async Task<CleanupBatchesResultDto> CleanupBatches(CancellationToken ct = default)
     {
-        // Batch entry times are UTC since RQ-10 (rows written before hold the server's local time)
+        // Batch entry times are UTC (rows written by earlier releases hold the server's local time)
         var expiration = _time.GetUtcNow().UtcDateTime - _share.UploadBatchTimeout;
 
         // I'm scared

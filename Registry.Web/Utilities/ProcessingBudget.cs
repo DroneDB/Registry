@@ -18,7 +18,7 @@ public sealed record HostFacts(int Cores, long MemoryBytes)
 /// the Hangfire servers (worker counts), the queue routing and the native build options.
 /// <para>
 /// A native raster build needs about <see cref="BuildCacheMb"/> + <see cref="BuildWarpMemoryMb"/>
-/// + ~1 GB of driver temporaries (2.4–2.8 GB measured for a 72 MB, 40k × 90k px source, DDB-08),
+/// + ~1 GB of driver temporaries (2.4–2.8 GB measured for a 72 MB, 40k × 90k px source),
 /// hence one heavy worker per 4 GB; heavy workers × build threads stays within the cores.
 /// </para>
 /// </summary>

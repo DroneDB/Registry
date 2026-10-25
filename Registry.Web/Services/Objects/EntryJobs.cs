@@ -19,7 +19,7 @@ namespace Registry.Web.Services.Objects;
 /// <summary>
 /// The background jobs of a dataset entry started by an object request: the rebuilds an entry needs after a move
 /// or after a sidecar was removed (queued by <see cref="BuildScheduler"/>), and the mask-borders job.
-/// Buildability and the live-build check come from libddb's build manifest (XI-04); the jobs run as the current
+/// Buildability and the live-build check come from libddb's build manifest; the jobs run as the current
 /// user.
 /// </summary>
 public sealed class EntryJobs

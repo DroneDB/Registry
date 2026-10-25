@@ -6,7 +6,7 @@ namespace Registry.Adapters.DroneDB;
 
 /// <summary>
 /// The libddb C ABI as Registry calls it (ddb.h of DroneDB 2.0.0, ABI 2.0): the only place an export
-/// is declared (RQ-08, XI-03). Every declaration is a source-generated
+/// is declared. Every declaration is a source-generated
 /// <see cref="LibraryImportAttribute"/> stub named exactly like its export, so
 /// <see cref="DdbAbi.RequiredSymbols"/> (the startup check) is derived from this class.
 /// <list type="bullet">
@@ -22,7 +22,7 @@ namespace Registry.Adapters.DroneDB;
 /// <item>Callbacks are <c>[UnmanagedCallersOnly]</c> function pointers that never throw.</item>
 /// </list>
 /// Call these through <see cref="NativeCall"/>, which reads the last error synchronously after a
-/// failed call (XI-02), never directly from a managed API.
+/// failed call, never directly from a managed API.
 /// </summary>
 internal static unsafe partial class NativeDdb
 {
@@ -175,12 +175,12 @@ internal static unsafe partial class NativeDdb
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBCleanup(string ddbPath, out IntPtr output);
 
-    /// <summary>Deprecated in libddb 2.x (no other dataset-wide pending query yet): RQ-11/RQ-12.</summary>
+    /// <summary>Deprecated in libddb 2.x (no other dataset-wide pending query yet).</summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBIsBuildPending(string ddbPath,
         [MarshalAs(UnmanagedType.U1)] out bool isBuildPending);
 
-    /// <summary>Deprecated in libddb 2.x (no other dataset-wide pending query yet): RQ-11/RQ-12.</summary>
+    /// <summary>Deprecated in libddb 2.x (no other dataset-wide pending query yet).</summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBGetPendingBuildInfo(string ddbPath, out IntPtr output);
 

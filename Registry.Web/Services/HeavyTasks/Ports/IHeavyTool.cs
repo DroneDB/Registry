@@ -32,7 +32,7 @@ public interface IHeavyTool
     /// <summary>
     /// Whether the tool runs a native build or raster processing inline (GDAL warps, COG/COPC
     /// builds). Such jobs run on the "builds" queue, whose worker count bounds concurrent
-    /// builds (REG-09). Tools that only enqueue build jobs keep the default.
+    /// builds. Tools that only enqueue build jobs keep the default.
     /// </summary>
     bool RunsNativeBuild => false;
 

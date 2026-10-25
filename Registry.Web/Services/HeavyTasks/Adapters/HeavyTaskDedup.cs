@@ -7,7 +7,7 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.HeavyTasks.Adapters;
 
-/// <summary>Whether an equivalent task is already in the history (RQ-12, out of <c>HeavyTaskRunner</c>).</summary>
+/// <summary>Whether an equivalent task is already in the history (out of <c>HeavyTaskRunner</c>).</summary>
 public sealed class HeavyTaskDedup
 {
     private readonly IJobIndexQuery _query;

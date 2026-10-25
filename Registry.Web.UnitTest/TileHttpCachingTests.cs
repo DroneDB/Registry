@@ -20,7 +20,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// REG-03: tiles and thumbnails carry an ETag derived from the entry hash and a private
+/// Tiles and thumbnails carry an ETag derived from the entry hash and a private
 /// Cache-Control; a matching If-None-Match is answered with 304 after the access check but
 /// before any cache lookup or rendering.
 /// </summary>

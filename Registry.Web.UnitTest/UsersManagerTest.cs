@@ -467,7 +467,7 @@ public class UsersManagerTest : TestBase
 
     #region User listing Tests
 
-    // RQ-04 golden finding (users-list): a user without a role was listed with "roles": [null]
+    // Golden finding (users-list): a user without a role was listed with "roles": [null]
     // (the LEFT JOIN on the roles yields one row with a null role name).
 
     [Test]

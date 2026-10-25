@@ -11,7 +11,7 @@ using Registry.Web.Models.DTO;
 namespace Registry.Web.Services.Configuration;
 
 /// <summary>
-/// The field kinds of the admin configuration view (RQ-12, out of <c>ConfigurationDataBuilder</c>): each compares a
+/// The field kinds of the admin configuration view (out of <c>ConfigurationDataBuilder</c>): each compares a
 /// configured value with its default; a sensitive field only says whether it is set.
 /// </summary>
 public static class ConfigurationFields

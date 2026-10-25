@@ -9,7 +9,7 @@ namespace Registry.Web.Services.HeavyTasks.Ports;
 /// leniently, the one way every tool reads them: a missing property, a value of another JSON kind
 /// or a request whose parameters are not an object reads as absent (null), never as an error.
 /// Property names are case-sensitive. Task requests stored in the job queue keep the meaning they
-/// were stored with (D4).
+/// were stored with.
 /// </summary>
 public readonly struct ToolParameters(JsonElement json)
 {

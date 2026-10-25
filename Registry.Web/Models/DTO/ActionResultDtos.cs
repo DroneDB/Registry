@@ -1,6 +1,6 @@
 namespace Registry.Web.Models.DTO;
 
-// Named answers of the actions that used to return an anonymous object (RQ-14): same member names, same types,
+// Named answers of the actions that used to return an anonymous object: same member names, same types,
 // so the JSON is unchanged, and the API description names them.
 
 /// <summary>The answer of an action that removed something: whether it was removed.</summary>

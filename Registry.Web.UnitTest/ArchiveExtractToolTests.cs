@@ -182,7 +182,7 @@ public class ArchiveExtractToolTests
                 Ctx(ddb.Object), CancellationToken.None));
     }
 
-    // XI-09: the reserved rule is libddb's, a ".ddb" segment at any depth (libddb would skip it).
+    // The reserved rule is libddb's, a ".ddb" segment at any depth (libddb would skip it).
     [TestCase("sub/.ddb")]
     [TestCase(@"sub\.ddb\evil")]
     public void ValidateAsync_NestedReservedDestPath_Throws(string destPath)
@@ -199,7 +199,7 @@ public class ArchiveExtractToolTests
                 Ctx(ddb.Object), CancellationToken.None));
     }
 
-    // XI-09: ".ddbx" only starts like the index folder; it is an ordinary folder.
+    // ".ddbx" only starts like the index folder; it is an ordinary folder.
     [Test]
     public async Task ValidateAsync_DdbLookalikeDestPath_Passes()
     {

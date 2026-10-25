@@ -11,7 +11,7 @@ namespace Registry.Web.Services.Managers.Wfs;
 /// <summary>A field of a vector layer as DroneDB describes it (the document is gone once it is read).</summary>
 internal sealed record LayerField(string? Name, string? Type);
 
-/// <summary>The fields of a vector layer (RQ-12, out of <c>WfsManager</c>): what the schema and the local filter both need.</summary>
+/// <summary>The fields of a vector layer (out of <c>WfsManager</c>): what the schema and the local filter both need.</summary>
 internal static class WfsLayerFields
 {
     /// <summary>The fields of the layer from DroneDB's description, or null when it lists none.</summary>

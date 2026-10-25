@@ -7,7 +7,7 @@ namespace Registry.Web.Services.Configuration;
 
 /// <summary>
 /// The admin configuration view (<c>GET /sys/config</c>): the sections of every <see cref="IConfigurationSectionBuilder"/>
-/// in page order (RQ-12: the 1180-line builder over the whole <c>AppSettings</c> became one builder per settings
+/// in page order (the 1180-line builder over the whole <c>AppSettings</c> became one builder per settings
 /// area over <see cref="ConfigurationView"/>).
 /// </summary>
 public sealed class ConfigurationDataBuilder

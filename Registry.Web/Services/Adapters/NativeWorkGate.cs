@@ -15,7 +15,7 @@ namespace Registry.Web.Services.Adapters;
 /// Default <see cref="INativeWorkGate"/>: one semaphore per lane, widths from
 /// the host budget (<see cref="HostResourceBudget"/>: <see cref="NativeConcurrencySettings"/> on the cores of this process). Reports the calls in flight per lane as the
 /// <c>registry.native.in_flight</c> gauge (meter <c>Registry.NativeWork</c>). The caller's token cancels the
-/// wait and runs the work as its <see cref="DdbCancellation"/> (RQ-13).
+/// wait and runs the work as its <see cref="DdbCancellation"/>.
 /// </summary>
 public sealed class NativeWorkGate : INativeWorkGate, IDisposable
 {
@@ -35,7 +35,7 @@ public sealed class NativeWorkGate : INativeWorkGate, IDisposable
     private readonly int _heavyWidth;
     private readonly Meter _meter;
 
-    /// <summary>The host's gate: the lane widths of the host budget (XI-06).</summary>
+    /// <summary>The host's gate: the lane widths of the host budget.</summary>
     public NativeWorkGate(HostResourceBudget budget) : this(budget.RenderTiles, budget.RenderHeavy)
     {
     }
@@ -72,7 +72,7 @@ public sealed class NativeWorkGate : INativeWorkGate, IDisposable
             // A slot freed after the caller went away: the work is not started for nobody
             ct.ThrowIfCancellationRequested();
 
-            // The work's native calls get the token (libddb cancel tokens, RQ-13); Task.Run flows it in
+            // The work's native calls get the token (libddb cancel tokens); Task.Run flows it in
             using (DdbCancellation.Enter(ct))
                 return await work();
         }

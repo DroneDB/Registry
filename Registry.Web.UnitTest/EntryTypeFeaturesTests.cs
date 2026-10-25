@@ -18,7 +18,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// The Hub reads the entry types and the archive extensions from <c>GET /sys/features</c> (plan decision D8): the
+/// The Hub reads the entry types and the archive extensions from <c>GET /sys/features</c>: the
 /// types are libddb's (<c>DDBGetEntryTypes</c>), passed through; the archive extensions are the extractor's own rule.
 /// Registry names no type and copies no extension.
 /// </summary>

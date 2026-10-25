@@ -11,7 +11,7 @@ using Registry.Web.Data.Models;
 namespace Registry.Web.Services.Stac;
 
 /// <summary>
-/// Registry's STAC documents from libddb's data-only ones (XI-09): libddb writes the data (properties, geometry,
+/// Registry's STAC documents from libddb's data-only ones: libddb writes the data (properties, geometry,
 /// assets, extent) and Registry every id, collection, link and asset href. Members keep the order clients have
 /// always read: libddb writes keys sorted, so a document is sorted again after Registry adds its members.
 /// </summary>

@@ -58,7 +58,7 @@ public class OgcBasicAuthTests
         _http = new DefaultHttpContext();
 
         var user = new User { Id = UserId, UserName = "admin" };
-        // The Basic credentials are checked by the sign-in service (RQ-12: IUserSessions, out of UsersManager)
+        // The Basic credentials are checked by the sign-in service (IUserSessions, out of UsersManager)
         var usersManager = new Mock<Registry.Web.Services.Users.IUserSessions>();
         usersManager.Setup(m => m.Authenticate("admin", "password123"))
             .ReturnsAsync(new AuthenticateResponse(user.UserName, "jwt", DateTime.UtcNow.AddHours(1)));

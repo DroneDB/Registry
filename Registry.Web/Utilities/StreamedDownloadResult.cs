@@ -12,7 +12,7 @@ using Registry.Web.Models.DTO;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// A download written straight to the response while it is produced (REG-04): no Content-Length (chunked), no
+/// A download written straight to the response while it is produced: no Content-Length (chunked), no
 /// buffering on the way out, <c>Cache-Control: no-store</c>, and the work stops when the client goes away (that
 /// is logged, not an error). Offered as an attachment named by <see cref="ContentDispositionHeader"/>, or shown
 /// inline.

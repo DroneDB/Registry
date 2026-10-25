@@ -6,7 +6,7 @@ using Microsoft.Net.Http.Headers;
 
 namespace Registry.Web.Utilities;
 
-/// <summary>The one <c>If-None-Match</c> evaluation of the responses Registry validates itself (RQ-13).</summary>
+/// <summary>The one <c>If-None-Match</c> evaluation of the responses Registry validates itself.</summary>
 public static class EntityTags
 {
     /// <summary>

@@ -186,7 +186,7 @@ public class ReservedPathCallSitesTests
         var ddbManager = new Mock<IDdbManager>().WithFolders(Path.Combine(_root, "datasets"));
         ddbManager.Setup(m => m.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
 
-        // The legacy admin import of SystemManager is the remote import job since RQ-12
+        // The legacy admin import of SystemManager is the remote import job
         return await TestImports.Importer(context, ddbManager.Object, factory.Object, _root).ImportAsync(
             new RemoteImportRequest("http://remote.test", null, null, "src", "ds", "src", null, ImportMode.ParallelFiles),
             null, CancellationToken.None);

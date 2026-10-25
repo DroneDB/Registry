@@ -9,7 +9,7 @@ using Registry.Ports.DroneDB;
 namespace Registry.Web.Test.Support;
 
 /// <summary>
-/// libddb's build manifest in tests (<see cref="IDdbBuild.GetBuildArtifacts"/>, XI-04): the build object of
+/// libddb's build manifest in tests (<see cref="IDdbBuild.GetBuildArtifacts"/>): the build object of
 /// an entry in each state, and a <see cref="Mock{IDDB}"/> answering the manifest call from them.
 /// </summary>
 public static class TestBuilds

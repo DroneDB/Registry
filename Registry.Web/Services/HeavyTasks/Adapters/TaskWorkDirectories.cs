@@ -6,7 +6,7 @@ using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.Services.HeavyTasks.Adapters;
 
-/// <summary>The work folder of a task that produces an artifact (RQ-12, out of <c>HeavyTaskJobWrapper</c>).</summary>
+/// <summary>The work folder of a task that produces an artifact (out of <c>HeavyTaskJobWrapper</c>).</summary>
 public sealed class TaskWorkDirectories
 {
     private readonly string _tempPath;

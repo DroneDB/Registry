@@ -178,7 +178,7 @@ public class CacheManager : ICacheManager
 
     /// <summary>
     /// Generates the data for <paramref name="key"/> for one flight and stores it unless the key was
-    /// invalidated meanwhile. The provider gets the flight's token: canceled once no caller waits (RQ-13).
+    /// invalidated meanwhile. The provider gets the flight's token: canceled once no caller waits.
     /// </summary>
     private async Task<byte[]> GenerateAsync(string key, Carrier carrier, object[] parameters,
         SingleFlight<byte[]>.Flight flight)

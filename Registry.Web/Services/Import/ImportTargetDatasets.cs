@@ -9,7 +9,7 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Import;
 
-/// <summary>The empty dataset a dataset import fills (RQ-12, out of the import manager).</summary>
+/// <summary>The empty dataset a dataset import fills (out of the import manager).</summary>
 public sealed class ImportTargetDatasets
 {
     private readonly IDatasetsManager _datasetsManager;

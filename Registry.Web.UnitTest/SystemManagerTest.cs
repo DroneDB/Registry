@@ -353,7 +353,7 @@ public class SystemManagerTest : TestBase
             Times.Exactly(2));
     }
 
-    // RQ-10: batch times are UTC from the injected clock; the expiry compares UTC with UTC
+    // Batch times are UTC from the injected clock; the expiry compares UTC with UTC
     [Test]
     public async Task CleanupBatches_ExpiresRunningBatchesByTheClock()
     {

@@ -12,7 +12,7 @@ using Registry.Web.Models.DTO;
 namespace Registry.Web.Services.Configuration;
 
 /// <summary>
-/// The settings the admin configuration view compares, per focused settings class of RQ-07 (the same section map
+/// The settings the admin configuration view compares, per focused settings class (the same section map
 /// as the live options, <see cref="RegistryOptions.SectionOf{T}"/>): what is configured, and the default shipped in
 /// <c>appsettings-default.json</c>.
 /// </summary>

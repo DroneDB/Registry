@@ -8,7 +8,7 @@ using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Hosting;
 
-// The rules of the options (RQ-07). They are the checks Program.VerifySettings ran on the storage
+// The rules of the options. They are the checks Program.VerifySettings ran on the storage
 // folder's file before the host started, unchanged, so a configuration that started before starts now;
 // they now see the effective configuration (file, environment, command line) and run at host start
 // (ValidateOnStart) and in --check. Messages name the configuration key.
@@ -127,7 +127,7 @@ internal sealed class ShareOptionsValidator : IValidateOptions<ShareOptions>
         .Result();
 }
 
-/// <summary>The keys of <c>AppSettings:HostBudget</c> (new in RQ-07, so new rules break nothing).</summary>
+/// <summary>The keys of <c>AppSettings:HostBudget</c> (a new section, so new rules break nothing).</summary>
 internal sealed class HostResourceOptionsValidator : IValidateOptions<HostResourceOptions>
 {
     public ValidateOptionsResult Validate(string? name, HostResourceOptions options)

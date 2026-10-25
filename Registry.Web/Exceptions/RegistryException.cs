@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace Registry.Web.Exceptions;
 
 /// <summary>
-/// Base of every error the Registry raises on purpose (RQ-05). The exception carries its own HTTP
+/// Base of every error the Registry raises on purpose. The exception carries its own HTTP
 /// outcome, so a throw site states what went wrong and <see cref="Utilities.ApiExceptionClassifier"/>
 /// maps every subclass with one rule; a new client error needs a subclass or a throw, never a new
 /// classifier arm. Anything that is not a <see cref="RegistryException"/> (and not one of the few

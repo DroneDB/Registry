@@ -17,7 +17,7 @@ using Serilog.Events;
 namespace Registry.Web.Hosting;
 
 /// <summary>
-/// Builds the host of every instance type (RQ-07): one builder with the common parts (configuration of
+/// Builds the host of every instance type: one builder with the common parts (configuration of
 /// the instance type, Serilog, the libddb runtime first, the options, the startup task runner), then the
 /// modules of the role.
 /// </summary>
@@ -29,7 +29,7 @@ public static class RegistryHost
     /// <summary>
     /// The builder every host starts from: <paramref name="role"/> in the configuration, Serilog, and the
     /// hosted services every role has, in this order: the libddb runtime (the first hosted service: it
-    /// starts first and stops last, XI-07; the native log sink, XI-08) and the startup task runner. The
+    /// starts first and stops last; the native log sink) and the startup task runner. The
     /// role's modules add the options (<see cref="RegistryOptions.AddRegistryOptions"/>).
     /// </summary>
     /// <param name="role">The instance type; null keeps the one of the configuration (default: <see cref="InstanceType.Default"/>).</param>

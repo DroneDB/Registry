@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// The one writer of Registry error responses (RQ-05, plan decision D1: RFC 9457 ProblemDetails). For an
+/// The one writer of Registry error responses (RFC 9457 ProblemDetails). For an
 /// exception it classifies once (<see cref="ApiExceptionClassifier"/>), logs once at the classifier's
 /// level, sets <c>Retry-After</c> and builds the body; its callers only deliver it:
 /// <see cref="ApiExceptionFilter"/> (MVC actions), <see cref="ApiExceptionHandler"/> (middleware, minimal
@@ -43,7 +43,7 @@ public sealed class ApiErrorResponder
 
     /// <summary>
     /// Classifies and logs <paramref name="exception"/>, sets <c>Retry-After</c>, and returns the outcome:
-    /// the descriptor and the body (null when the client went away: nobody reads it, RQ-13).
+    /// the descriptor and the body (null when the client went away: nobody reads it).
     /// </summary>
     public (ApiErrorDescriptor Descriptor, ProblemDetails? Problem) Describe(HttpContext httpContext, Exception exception)
     {

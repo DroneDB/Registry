@@ -9,7 +9,7 @@ using Registry.Web.Middlewares;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// <c>Cache-Control</c> of the Hub's static files (HUB-09). A file whose name carries its content
+/// <c>Cache-Control</c> of the Hub's static files. A file whose name carries its content
 /// hash never changes, so browsers keep it without asking again; <c>index.html</c> is always
 /// revalidated so a Hub upgrade is picked up; other public files (Potree, images) are reused for
 /// an hour and then revalidated, unless their URL carries the Hub version (<c>?v=</c>, the Potree

@@ -6,7 +6,7 @@ using Shouldly;
 namespace Registry.Adapters.Test.DroneDB;
 
 /// <summary>
-/// XI-01: the ABI rule of the startup handshake. DroneDB has one version and the ABI follows it, so
+/// The ABI rule of the startup handshake. DroneDB has one version and the ABI follows it, so
 /// Registry runs on libddb 2.x (ABI major 2, any minor) and refuses a 1.x library with a message
 /// that says which library it needs.
 /// </summary>

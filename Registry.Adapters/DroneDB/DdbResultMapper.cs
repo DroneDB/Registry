@@ -7,7 +7,7 @@ using Registry.Ports.DroneDB;
 namespace Registry.Adapters.DroneDB;
 
 /// <summary>
-/// The libddb error contract (XI-02): every non-success <see cref="DdbResult"/> maps to one typed
+/// The libddb error contract: every non-success <see cref="DdbResult"/> maps to one typed
 /// exception, with the message and reason libddb set for that call. Public static so the mapping is
 /// unit-tested without native code (<see cref="Map"/>).
 /// <list type="table">
@@ -34,7 +34,7 @@ public static class DdbResultMapper
     /// <summary>
     /// The exception of a failed call: <paramref name="message"/> and <paramref name="reason"/> are
     /// what libddb set ("" means none). Not for <see cref="DdbResult.Success"/>. A canceled call's
-    /// exception carries <paramref name="token"/>, the managed token its cancel token was for (RQ-13).
+    /// exception carries <paramref name="token"/>, the managed token its cancel token was for.
     /// </summary>
     public static Exception Map(DdbResult result, string operation, string? message, string? reason,
         CancellationToken token = default)

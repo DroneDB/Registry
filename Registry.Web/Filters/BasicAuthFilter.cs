@@ -27,7 +27,7 @@ namespace Registry.Web.Filters;
 /// the request anonymous: what an anonymous user may read stays readable. Every 401 these endpoints
 /// answer (an anonymous caller denied access, from the error model or a filter) carries the Basic
 /// challenge, so OGC clients prompt for credentials; a signed-in caller who lacks access gets a 403
-/// without one (plan decision D2).
+/// without one.
 /// </summary>
 public class BasicAuthFilter : IAsyncAuthorizationFilter, IAlwaysRunResultFilter
 {

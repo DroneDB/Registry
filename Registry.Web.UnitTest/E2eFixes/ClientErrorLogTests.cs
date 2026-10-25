@@ -29,7 +29,7 @@ using Shouldly;
 namespace Registry.Web.Test.E2eFixes;
 
 /// <summary>
-/// End-to-end check of Registry eb1311f2 + libddb 2.0.0, finding 5: an expected denial (<c>401</c>, <c>403</c>, any
+/// End-to-end check: an expected denial (<c>401</c>, <c>403</c>, any
 /// <c>4xx</c>) logged <c>Exception in /orgs/.../ds/...</c> with its full stack at Information. The classifier's
 /// outcome is logged once at its level: a client error as one line (method, route, status, message) without the
 /// stack, a server fault (<c>5xx</c>) with the exception.

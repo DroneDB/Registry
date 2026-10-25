@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
-# Quality metrics ratchet (RQ-03): counts of patterns the backend refactor removes may not grow.
+# Quality metrics ratchet: counts of patterns the backend refactor removes may not grow.
 #
-# This is the CI subset of the roadmap script DroneDB-Roadmap/TBD/RegistryRefactor/_shared/
-# registry_quality_metrics.sh, which stays the source of the README tables. CI cannot read the
-# roadmap repository, so the metrics that must only go down are repeated here with the same
-# patterns and scopes. Left out: counts expected to grow (CancellationToken, TimeProvider, ...),
-# file line counts, and anything that depends on git history.
+# The metrics here must only go down. Left out: counts expected to grow (CancellationToken,
+# TimeProvider, ...), file line counts, and anything that depends on git history.
 #
 # The baseline (build/quality-baseline.txt) has one line per metric: "<name><TAB><value>".
 # Only tracked and untracked-but-not-ignored files are counted (git grep), so build output and
@@ -129,7 +126,7 @@ async_actions_without_token() {
 
 # Controller actions (the method after an [Http*] attribute) with no [ProducesResponseType] among the
 # attributes between the previous action's signature and its own, in the given pathspecs (read
-# NUL-separated from stdin). Whole signatures are parsed (RQ-14).
+# NUL-separated from stdin). Whole signatures are parsed.
 actions_without_produces() {
     list_files | xargs -0 -r perl -0777 -ne '
         BEGIN { $c = 0 }
@@ -142,7 +139,7 @@ actions_without_produces() {
         awk '{ s += $1 } END { print s + 0 }'
 }
 
-# Newtonsoft attributes (RQ-14): attribute uses in the files that import Newtonsoft.Json, plus fully qualified ones.
+# Newtonsoft attributes: attribute uses in the files that import Newtonsoft.Json, plus fully qualified ones.
 newtonsoft_attributes() {
     list_files | xargs -0 -r perl -0777 -ne '
         my $c = 0;
@@ -152,7 +149,7 @@ newtonsoft_attributes() {
         awk '{ s += $1 } END { print s + 0 }'
 }
 
-# Synchronous EF queries (RQ-15): a statement that starts at a DbSet of a context variable and ends in a synchronous terminal
+# Synchronous EF queries: a statement that starts at a DbSet of a context variable and ends in a synchronous terminal
 # operator (no ...Async( in it), in the given pathspecs (read NUL-separated from stdin).
 sync_ef_queries() {
     list_files | xargs -0 -r perl -0777 -ne '
@@ -167,22 +164,22 @@ sync_ef_queries() {
         awk '{ s += $1 } END { print s + 0 }'
 }
 
-# The libddb exports that honour a cancel token (DDBGetCapabilities().cancellable) and Registry calls (RQ-13).
+# The libddb exports that honour a cancel token (DDBGetCapabilities().cancellable) and Registry calls.
 CANCELLABLE_EXPORTS='NativeDdb\.(DDBBuild|DDBExportRaster2?|DDBGenerateMemoryThumbnail(Ex)?|DDBGenerateThumbnail|DDBMemoryTile(Ex|Fmt)?|DDBRenderRasterIndex|DDBRenderRasterRegion(Ex)?|DDBTile)\('
 
 tests() { printf '%s\0' "${TEST_CODE[@]}"; }
 paths() { printf '%s\0' "$@"; }
 
-# The objects slice (RQ-11): the objects manager and its services, the object controllers and their ports.
+# The objects slice: the objects manager and its services, the object controllers and their ports.
 OBJECTS_SLICE=(Registry.Web/Services/Managers/ObjectsManager.cs Registry.Web/Services/Ports/IObjectsManager.cs
     ':(glob)Registry.Web/Services/Objects/**/*.cs' ':(glob)Registry.Web/Controllers/Object*Controller.cs'
     Registry.Web/Controllers/RasterAnalysisController.cs Registry.Web/Controllers/StockpileController.cs)
 slice() { printf '%s\0' "${OBJECTS_SLICE[@]}"; }
 
-# Build-layout literals (XI-04, D8): libddb's build folder and file names, its marker suffixes, the build folder members.
+# Build-layout literals: libddb's build folder and file names, its marker suffixes, the build folder members.
 BUILD_LAYOUT='"(cog|copc|ept|vec|mvt|nxs|gsplat|3dtiles)"|(cog\.tif|cloud\.copc\.laz|source\.gpkg|model\.nxz|model\.rad|model\.spz|ept\.json|tileset\.json|georef\.json|local\.json|bounds\.json)|\.pending\b|\.building\b|BuildFolderName|BuildFolderPath'
 
-# The native raster calls of the objects slice (XI-06): all of them, and those made through INativeWorkGate
+# The native raster calls of the objects slice: all of them, and those made through INativeWorkGate
 # (RunAsync(NativeLane.X, () => ...), or a service's own RunAsync(() => ...) over the gate).
 NATIVE_RASTER='(?:GetRaster\w+|CalculateVolume|DetectStockpile|DetectAllStockpiles|GenerateContours|ExportRaster|MergeMultispectral|ValidateMergeMultispectral|PreviewMergeMultispectral|ValidateAlignRaster|GenerateThumbnailEx|GenerateTileEx|GenerateTile)'
 ungated_native_calls() {
@@ -205,9 +202,9 @@ slice_constructors() {
 # Files of the slice longer than 800 lines.
 slice_long_files() { slice | list_files | xargs -0 -r wc -l | awk '$2 != "total" && $1 > 800' | wc -l | tr -d ' '; }
 
-# The RQ-12 set: the classes the plan names (system, configuration, users, STAC, datasets, push, share,
-# local login, the former WebUtils) and the folders their pieces move to.
-RQ12_SET=(Registry.Web/Services/Managers/SystemManager.cs Registry.Web/Controllers/SystemController.cs
+# The split classes: the large classes that were divided into services (system, configuration, users, STAC,
+# datasets, push, share, local login, the former WebUtils) and the folders their pieces moved to.
+SPLIT_CLASSES=(Registry.Web/Services/Managers/SystemManager.cs Registry.Web/Controllers/SystemController.cs
     Registry.Web/Services/Adapters/WebUtils.cs Registry.Web/Services/Adapters/ConfigurationDataBuilder.cs
     Registry.Web/Services/Managers/UsersManager.cs Registry.Web/Services/Managers/StacManager.cs
     Registry.Web/Services/Managers/DatasetsManager.cs Registry.Web/Services/Managers/PushManager.cs
@@ -221,7 +218,7 @@ RQ12_SET=(Registry.Web/Services/Managers/SystemManager.cs Registry.Web/Controlle
     ':(glob)Registry.Web/Services/Builds/**/*.cs' ':(glob)Registry.Web/Services/Caching/**/*.cs'
     ':(glob)Registry.Web/Services/Urls/**/*.cs' ':(glob)Registry.Web/Services/Features/**/*.cs'
     ':(glob)Registry.Web/Services/Processing/**/*.cs')
-rq12() { printf '%s\0' "${RQ12_SET[@]}"; }
+split_classes() { printf '%s\0' "${SPLIT_CLASSES[@]}"; }
 
 # "<class> <parameters>" for every public constructor of the classes declared in the given files (NUL-separated on stdin).
 constructors() {
@@ -246,19 +243,19 @@ all_constructors() {
 metrics() {
     m() { printf '%s\t%s\n' "$1" "$2"; }
 
-    # Security and runtime (RQ-01, RQ-02): fixed defects that must not come back
+    # Security and runtime: fixed defects that must not come back
     m "Raw X-Forwarded-For reads"                    "$(prod '' | lines '"X-Forwarded-For"')"
     m "Admin password persisted to config"           "$(prod Registry.Web/Services | lines 'DefaultAdmin\.Password = ')"
     m "Console dump of admin password"               "$(prod Registry.Web | lines 'Console\.WriteLine\(.*DefaultAdmin\.Password')"
     m "Path.GetPathRoot disk checks"                 "$(prod '' | lines 'Path\.GetPathRoot')"
     m "ServerVersion.AutoDetect calls"               "$(prod '' | lines 'ServerVersion\.AutoDetect')"
 
-    # Tooling (RQ-03)
+    # Tooling
     m "Files with UTF-8 BOM"                         "$(paths '*.cs' '*.csproj' '*.props' '*.json' '*.yml' '*.sh' '*.md' ':(exclude,glob)**/ClientApp/**' | bom_files)"
     m "Projects/props pinning LangVersion"           "$(paths '*.csproj' '*.props' | lines '<LangVersion>')"
     m "PackageReference with inline Version (CPM)"   "$(paths '*.csproj' '*.props' | lines '<PackageReference\b[^>]*\bVersion(Override)?=')"
 
-    # Tests (RQ-04)
+    # Tests
     m "UseInMemoryDatabase (tests)"                  "$(tests | lines 'UseInMemoryDatabase')"
     m "new ObjectsManager( in tests"                 "$(tests | lines 'new ObjectsManager\(')"
     m "Thread.Sleep / Task.Delay in tests"           "$(tests | lines 'Thread\.Sleep|Task\.Delay')"
@@ -266,14 +263,14 @@ metrics() {
     m "Test helpers in Registry.Common/Test"         "$(paths ':(glob)Registry.Common/**/Test*.cs' | files)"
     m "Category string literals (use TestCategories)" "$(tests | lines '\[(assembly: )?Category\("')"
 
-    # Error model (RQ-05). "Managers" includes the services of the objects slice (Services/Objects, RQ-11),
-    # which took over ObjectsManager's code, and the folders RQ-12 moved the code of the organizations, tasks and
-    # upload managers to (Services/Organizations, PlatformTasks, Uploads)
+    # Error model. "Managers" includes the services of the objects slice (Services/Objects),
+    # which took over ObjectsManager's code, and the folders the code of the organizations, tasks and
+    # upload managers moved to (Services/Organizations, PlatformTasks, Uploads)
     m "Controller log+rethrow catch blocks"          "$(paths ':(glob)Registry.Web/Controllers/**/*.cs' |
         multiline 'catch \(Exception \w+\)\s*\{\s*_logger\.Log\w+\([^;]*;\s*throw;')"
     m "catch (Exception ...) total"                  "$(prod '' | lines 'catch \(Exception\b')"
     m "new ErrorResponse( in controllers"            "$(prod Registry.Web/Controllers | lines 'new ErrorResponse\(')"
-    m "ErrorResponse references (D1)"                "$(prod Registry.Web | lines '\bErrorResponse\b')"
+    m "ErrorResponse references"                "$(prod Registry.Web | lines '\bErrorResponse\b')"
     m "Controller entry debug traces"                "$(paths ':(glob)Registry.Web/Controllers/**/*.cs' |
         multiline '_logger\.LogDebug\(\s*"[^"]*[Cc]ontroller')"
     m "Controller Content-Length pre-checks"         "$(prod Registry.Web/Controllers | lines 'Request\.ContentLength is \{ \} \w+ && \w+ >')"
@@ -285,7 +282,7 @@ metrics() {
         Registry.Web/Services/PlatformTasks Registry.Web/Services/Uploads | lines 'throw new UnauthorizedException')"
     m "Web files importing Registry.Adapters"        "$(prod Registry.Web | list_files_matching '^using Registry\.Adapters')"
 
-    # Access and authorization (RQ-06)
+    # Access and authorization
     m "RequestAccess + throw blocks"                 "$(prod Registry.Web/Services |
         multiline 'RequestAccess\(\w+, AccessType\.\w+\)\)\s*\n\s*throw new (Unauthorized|Forbidden)Exception\(')"
     m "IsUserAdmin() guard + throw blocks"           "$(prod Registry.Web/Services |
@@ -300,7 +297,7 @@ metrics() {
     m "Raster prologue copies (EnsurePathValidity)"  "$(prod Registry.Web | lines '= EnsurePathValidity\(')"
     m "new OrganizationUser in managers"             "$(prod Registry.Web/Services/Managers Registry.Web/Services/Objects | lines 'new OrganizationUser\b')"
 
-    # Composition root (RQ-07)
+    # Composition root
     m "GetService/GetRequiredService calls"          "$(prod '' | lines 'Get(Required)?Service<')"
     m "Console.Write* in Program+Startup"            "$(paths Registry.Web/Program.cs Registry.Web/Startup.cs | lines 'Console\.Write')"
     m ".Wait() calls"                                "$(prod '' | lines '\.Wait\(\)')"
@@ -318,24 +315,24 @@ metrics() {
         ':(glob)Registry.Web/Services/Initialization/**/*.cs' ':(glob)Registry.Web/Hosting/**/*.cs' |
         lines '\.Wait\(\)|Task\.Delay\(')"
     m "Console helper calls in Program+Startup"      "$(paths Registry.Web/Program.cs Registry.Web/Startup.cs | lines 'WriteLineColor\(|WriteColor\(')"
-    m "HostFacts.Current() call sites (XI-06)"       "$(prod Registry.Web | lines 'HostFacts\.Current\(\)')"
+    m "HostFacts.Current() call sites"       "$(prod Registry.Web | lines 'HostFacts\.Current\(\)')"
 
-    # Native interop (RQ-08)
+    # Native interop
     m "[DllImport] in production code"               "$(prod '' | lines '\[DllImport')"
     m "EntryPointNotFoundException catches"          "$(paths Registry.Adapters/DroneDB/NativeDdbWrapper.cs | lines 'catch \(EntryPointNotFoundException')"
 
-    # Background jobs (RQ-09)
+    # Background jobs
     m "Copied DDB AutomaticRetry attribute"          "$(prod Registry.Web | lines 'DelaysInSeconds = \[15, 60, 180, 600, 1800\]')"
     m "Recurring-job local WriteLine copies"         "$(prod Registry.Web | lines 'void WriteLine\(string message\)')"
     m "ReadString(JsonElement) copies"               "$(prod Registry.Web | lines 'static string\? ReadString\(JsonElement')"
-    # Added for RQ-09 (2026-10-21): jobs without DroneDB objects in their arguments (D4), injected
+    # Jobs without DroneDB objects in their arguments, injected
     # Hangfire services, one console, one lenient parameter reader
     m "Recurring jobs without CancellationToken"     "$(prod Registry.Web | lines 'public async Task \w+\(PerformContext\? context = null\)')"
     m "HangfireUtils static call sites"              "$({ prod Registry.Web; paths ':(exclude,glob)**/HangfireUtils.cs'; } | lines 'HangfireUtils\.\w+\(')"
     m "JobStorage.Current uses"                      "$(prod Registry.Web | lines 'JobStorage\.Current')"
     m "context != null ? ... : Log copies"           "$(prod Registry.Web | lines 'context != null \?')"
     m "Lenient JsonElement reader copies"            "$(prod Registry.Web | lines 'static [\w<>\[\]?]+ Read(String|Bool|Long|StringArray|Paths|RawJsonArray)\(JsonElement')"
-    m "Job expressions passing an IDDB (D4)"         "$(prod Registry.Web |
+    m "Job expressions passing an IDDB"         "$(prod Registry.Web |
         multiline '(?:(?:Enqueue|Schedule)\w*\(\s*\(\)\s*=>|Expression<Action>\s+\w+\s*=\s*\(\)\s*=>)\s*(?:\w+\.)?\w+\(\s*(?:ctx\.Ddb|ddb)\s*,')"
     m "Hangfire filters taking IServiceProvider"     "$(prod Registry.Web |
         multiline '(?s)class \w+\(\s*IServiceProvider sp\b[^{]*\b(?:IApplyStateFilter|IServerFilter|IClientFilter|IElectStateFilter)\b')"
@@ -343,17 +340,17 @@ metrics() {
     m "Hangfire static facade calls"                 "$(prod Registry.Web | lines '\b(BackgroundJob|RecurringJob)\.(Enqueue|Schedule|AddOrUpdate|Delete|Requeue|ContinueJobWith)')"
     m "Read-after-write artifact hash copies"        "$(prod Registry.Web | lines 'static async Task<string> ComputeSha256Async')"
     m "ApplyDelta calls without verified hashes"     "$(prod Registry.Web | lines '\.ApplyDelta\((?![^;]*verified)')"
-    # Added for XI-04 (2026-10-22): libddb owns the pending-build retry rule (retryAfter); no backoff
+    # libddb owns the pending-build retry rule (retryAfter); no backoff
     # constant and no arithmetic on lastAttempt in Registry (it was 3 lines in PendingBuildEnqueuer)
-    m "Pending-build backoff copies (XI-04)"         "$(prod '' | lines 'RetryBackoffSeconds|\.LastAttempt\s*[-+<>]|[-+<>]=?\s*\w+\.LastAttempt\b')"
+    m "Pending-build backoff copies"         "$(prod '' | lines 'RetryBackoffSeconds|\.LastAttempt\s*[-+<>]|[-+<>]=?\s*\w+\.LastAttempt\b')"
 
-    # File system, paths, clock (RQ-10)
+    # File system, paths, clock
     m "Zip-slip normalizer copies"                   "$(prod Registry.Web | lines 'private static string\?? (SafeJoin|SafeRelative)\(')"
     m "Direct Path.GetTempPath()"                    "$(prod Registry.Web | lines 'Path\.GetTempPath\(\)')"
     m "Ad-hoc backslash->slash normalizations"       "$(prod '' | lines 'Replace\(\x27\\\\\x27, \x27/\x27\)')"
     m "Static File./Directory. calls"                "$(prod Registry.Web Registry.Adapters | matches '\b(File|Directory)\.[A-Z]\w+\(')"
     m "DateTime.Now (local)"                         "$(prod '' | lines 'DateTime\.Now\b')"
-    # Added for RQ-10 (2026-10-21): one path rule (libddb's), one extraction loop, one disk API
+    # One path rule (libddb's), one extraction loop, one disk API
     m "Archive key normalization call sites (zip-slip)" "$(prod Registry.Web | lines '\w+\.(JoinArchiveEntry|NormalizeArchiveEntry|NormalizeArchiveKey)\(')"
     m "Archive extraction loops"                     "$(prod Registry.Web | lines 'foreach \(var \w+ in \w+\.Entries\(\)\)')"
     m "Inline reserved-path checks"                  "$({ prod Registry.Web; paths ':(exclude,glob)**/DatasetPathRules.cs' \
@@ -377,14 +374,14 @@ metrics() {
         paths ':(exclude,glob)**/VolumeInfo.cs'; } |
         lines 'VolumeInfo\.For\(|GetStorageInfo\(|GetAvailableDiskBytes\(|new DriveInfo\(|DriveInfo\.GetDrives')"
 
-    # Cross-repository contract (XI-09): test_data is downloaded only through TestData.Url, which
+    # Cross-repository contract: test_data is downloaded only through TestData.Url, which
     # pins the commit of DroneDB's tests/test-data.sha; a branch URL (raw/master) is unpinned.
     m "Unpinned test_data URLs"                      "$(paths ':(exclude,glob)**/ClientApp/**' \
         ':(exclude)Registry.Test.Common/TestData.cs' |
         lines '(github\.com/DroneDB/test_data/(raw|blob)/|githubusercontent\.com/(media/)?DroneDB/test_data/)(?![0-9a-f]{40}/)')"
 
-    # Objects slice (RQ-11, 2026-10-22): no god class, one path rule by type, one download writer, every
-    # native raster call through the gate, libddb's build manifest instead of its layout (XI-04, D8)
+    # Objects slice: no god class, one path rule by type, one download writer, every
+    # native raster call through the gate, libddb's build manifest instead of its layout
     m "Objects-slice files over 800 lines"           "$(slice_long_files)"
     m "Objects-slice constructors over 7 parameters" "$(slice_constructors | awk '$2 > 7' | wc -l | tr -d ' ')"
     m "Objects-slice optional constructor parameters" "$(slice_constructors | awk '{ s += $3 } END { print s + 0 }')"
@@ -397,11 +394,11 @@ metrics() {
     m "Build-layout literals in production C#"       "$(prod '' | matches "$BUILD_LAYOUT")"
     m "Per-entry build probe calls"                  "$(prod Registry.Web | lines '\.(IsBuildable|IsBuildActive|IsBuildComplete|GetBuildStatus)\(')"
 
-    # Other large classes and shared services (RQ-12, 2026-10-22): no god class in the set, one owner for
-    # queueing builds, for caching records, for cache keys and for STAC URLs (XI-09), no build layout in
-    # Registry.Web (XI-04, D8)
-    m "RQ-12 files over 800 lines"                   "$(rq12 | list_files | xargs -0 -r wc -l | awk '$2 != "total" && $1 > 800' | wc -l | tr -d ' ')"
-    m "RQ-12 constructors over 7 parameters"         "$(rq12 | constructors | awk '$2 > 7' | wc -l | tr -d ' ')"
+    # Other large classes and shared services: no god class in the set, one owner for
+    # queueing builds, for caching records, for cache keys and for STAC URLs, no build layout in
+    # Registry.Web
+    m "Split classes: files over 800 lines"           "$(split_classes | list_files | xargs -0 -r wc -l | awk '$2 != "total" && $1 > 800' | wc -l | tr -d ' ')"
+    m "Split classes: constructors over 7 parameters" "$(split_classes | constructors | awk '$2 > 7' | wc -l | tr -d ' ')"
     m "Registry.Web constructors over 7 parameters"  "$(prod Registry.Web | all_constructors | awk '$2 > 7' | wc -l | tr -d ' ')"
     m "Registry.Web files over 800 lines"            "$(prod Registry.Web | list_files | xargs -0 -r wc -l | awk '$2 != "total" && $1 > 800' | wc -l | tr -d ' ')"
     m "Whole-section AppSettings in the container"   "$(prod '' | lines '(AddOptions|IOptions|IOptionsMonitor|IOptionsSnapshot)<AppSettings>')"
@@ -423,28 +420,28 @@ metrics() {
     m "IOgcBuildArtifactPaths uses"                  "$(prod Registry.Web | lines '\bIOgcBuildArtifactPaths\b')"
     m "Build-layout literals in Registry.Web"        "$(prod Registry.Web | matches "$BUILD_LAYOUT")"
 
-    # Managers and API contracts (RQ-12, RQ-14)
+    # Managers and API contracts
     m "Task.Run in managers"                         "$(prod Registry.Web/Services/Managers Registry.Web/Services/Objects | lines 'Task\.Run\(')"
     m "Hand-built Content-Disposition"               "$(prod Registry.Web | lines 'attachment; filename=')"
 
-    # Cancellation (RQ-13)
+    # Cancellation
     m "Async actions without a CancellationToken"    "$(prod Registry.Web/Controllers | async_actions_without_token)"
     m "Cancellable libddb export calls outside the call envelope" "$(prod Registry.Adapters | lines "= $CANCELLABLE_EXPORTS")"
     m "Hand-built ETag code in controllers"          "$(prod Registry.Web/Controllers | lines 'Headers\.ETag\s*=|Headers\.IfNoneMatch')"
     m "Cancellation answered 408"                    "$(prod Registry.Web | lines 'Status408RequestTimeout')"
 
-    # API contracts and serialization (RQ-14)
+    # API contracts and serialization
     m "Anonymous response objects"                   "$(prod Registry.Web/Controllers | lines '\b(Ok|Accepted|Created|CreatedAtRoute|CreatedAtAction|Json)\((?!.*\bnew \{ (orgSlug|dsSlug))[^;]*\bnew \{')"
     m "Actions without [ProducesResponseType]"       "$(prod Registry.Web/Controllers | actions_without_produces)"
     m "Newtonsoft attributes in Models and Ports"    "$(prod Registry.Web/Models Registry.Ports | newtonsoft_attributes)"
     m "JToken/JObject/JArray/JValue in port signatures" "$(prod Registry.Ports Registry.Web/Services/Ports | lines '\bJ(Token|Object|Array|Value)\b')"
-    # The allow-list (RQ-14, RQ-15): DDB (Hangfire reads the jobs stored before RQ-09 with Json.NET). Nothing else may use it:
-    # the User.Metadata column left it in RQ-15.
+    # The allow-list: DDB (Hangfire reads the jobs stored by earlier releases with Json.NET). Nothing else may use it:
+    # the User.Metadata column no longer uses it.
     m "Production files using Newtonsoft outside the allow-list" "$({ prod ""; paths ':(exclude,glob)Registry.Adapters/DroneDB/Ddb.cs'; } | list_files_matching 'Newtonsoft')"
     m "AddNewtonsoftJson / MvcNewtonsoftJsonOptions" "$(prod "" | lines 'AddNewtonsoftJson|MvcNewtonsoftJsonOptions')"
     m "Dataset route prefix copies in controllers"   "$(prod Registry.Web/Controllers | lines 'RoutesHelper\.DatasetRadix|/ds/\{dsSlug\}')"
 
-    # Persistence (RQ-15): one configuration class per entity, no second host for the EF tools, one provider
+    # Persistence: one configuration class per entity, no second host for the EF tools, one provider
     # configuration, queries that do not block a thread, no comparer that hashes a reference
     m "Entity configuration inline in OnModelCreating" "$(prod Registry.Web.Data Registry.Web.Identity | lines '\b(modelBuilder|builder)\s*\.Entity<')"
     m "Value comparers hashing the reference (x => x.GetHashCode())" "$(prod Registry.Web.Data Registry.Web.Identity | lines 'x => x\.GetHashCode\(\)')"

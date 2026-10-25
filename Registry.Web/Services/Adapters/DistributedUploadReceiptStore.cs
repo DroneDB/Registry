@@ -10,7 +10,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Keeps the outcome of uploads by client-generated id (UPL-01 E.4): when a proxy times out after
+/// Keeps the outcome of uploads by client-generated id: when a proxy times out after
 /// the last byte (504) while the Registry is still adding the file, the client asks here instead
 /// of uploading the whole file again.
 /// </summary>

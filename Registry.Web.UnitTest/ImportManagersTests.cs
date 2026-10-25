@@ -33,7 +33,7 @@ namespace Registry.Web.Test;
 
 /// <summary>
 /// What the two import managers do on the way to the <c>import-dataset</c> and <c>import-file</c> heavy tasks
-/// (RQ-12 split their constructors; these pin the behaviour across it): access checks, the source allow-list,
+/// (these pin the behaviour across the split of their constructors): access checks, the source allow-list,
 /// the probe, the quota gate and budget, the encrypted credentials, the task submitted in the name of the
 /// current user, and the rollback of the empty dataset when the submission fails.
 /// </summary>

@@ -13,7 +13,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// <see cref="DatasetPathPolicy"/> (RQ-10): libddb's path rule (the golden vectors, XI-09) with
+/// <see cref="DatasetPathPolicy"/>: libddb's path rule (the golden vectors) with
 /// Registry's two additions (".uploads" reserved as the first segment, a whitespace-only path is
 /// empty), and the security cases of every entry point: NUL, traversal, absolute (POSIX, Windows
 /// root, drive, UNC, device), reserved, zip-slip.

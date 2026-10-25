@@ -17,10 +17,10 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// <see cref="DatasetArchiveExtractor"/> (RQ-10), the one extraction loop: the URL import's use
+/// <see cref="DatasetArchiveExtractor"/>, the one extraction loop: the URL import's use
 /// (into the dataset root, always overwriting), duplicate names, the disk head-room and the rollback
 /// of a replaced file that was not indexed. The tool-level behaviour is in
-/// <c>Rq10ArchiveExtractionTests</c>.
+/// <c>ArchiveExtractionTests</c>.
 /// </summary>
 [TestFixture]
 public class DatasetArchiveExtractorTests

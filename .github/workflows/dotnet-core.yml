@@ -68,7 +68,7 @@ jobs:
     # one Cobertura file per test project and run, reported, not gated. --blame-hang-timeout names
     # a test stuck on a signal wait and dumps it instead of letting the job time out.
     # Test categories (Registry.Test.Common/TestCategories.cs): Unit, Integration, Native, Network, Baseline.
-    # The unit tests run before DroneDB is installed: Registry.Web.UnitTest never loads libddb (D5),
+    # The unit tests run before DroneDB is installed: Registry.Web.UnitTest never loads libddb,
     # and its UnitTestSetup fails the run if a test tries to.
     - name: Unit tests, without libddb (with code coverage)
       run: |

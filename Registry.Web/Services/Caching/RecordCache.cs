@@ -79,7 +79,7 @@ public sealed class RecordCache : IRecordCache
 
         return await _flights.RunAsync(key, async flight =>
         {
-            // The flight's token: canceled once no caller waits for the record any more (RQ-13)
+            // The flight's token: canceled once no caller waits for the record any more
             if (await TryReadAsync(key, read, flight.Token) is { Ok: true } again)
                 return again.Value;
 

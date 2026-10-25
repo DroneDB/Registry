@@ -7,7 +7,7 @@ namespace Registry.Web.Test.Support;
 
 /// <summary>
 /// The Hangfire global filters as they were when the snapshot was taken; <see cref="Restore"/> puts back
-/// exactly that list. A host build replaces the global retry policy (RQ-07: one
+/// exactly that list. A host build replaces the global retry policy (one
 /// <see cref="AutomaticRetryAttribute"/>, Hangfire's default removed) and adds filters bound to its
 /// container, so removing only the added filters would leave the process without its original retry policy.
 /// </summary>

@@ -5,7 +5,7 @@ using Registry.Web.Data.Models;
 namespace Registry.Web.Services.Ports;
 
 /// <summary>
-/// Organizations and datasets by slug (RQ-12, split from the former utilities service). No access check:
+/// Organizations and datasets by slug (split from the former utilities service). No access check:
 /// see <see cref="IDatasetAccessResolver"/>, which resolves through this.
 /// </summary>
 public interface IDatasetResolver

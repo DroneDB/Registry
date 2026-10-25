@@ -21,7 +21,7 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Organizations;
 
-/// <summary>Creating, editing and deleting organizations (RQ-12, out of <c>OrganizationsManager</c>).</summary>
+/// <summary>Creating, editing and deleting organizations (out of <c>OrganizationsManager</c>).</summary>
 public sealed class OrganizationCommands
 {
     private readonly IAuthManager _authManager;
@@ -105,7 +105,7 @@ public sealed class OrganizationCommands
 
         var org = organization.ToEntity(ownerId, DateTime.UtcNow);
 
-        // Honoured until the organization is written (RQ-13)
+        // Honoured until the organization is written
         ct.ThrowIfCancellationRequested();
         await _context.Organizations.AddAsync(org, CancellationToken.None);
         await _context.SaveChangesAsync(CancellationToken.None);
@@ -141,7 +141,7 @@ public sealed class OrganizationCommands
     /// <summary>Deletes an organization and its datasets (delete access).</summary>
     public async Task Delete(string orgSlug, CancellationToken ct = default)
     {
-        // Honoured while the organization is looked up; its datasets are then deleted to the end (RQ-13)
+        // Honoured while the organization is looked up; its datasets are then deleted to the end
         var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Delete, withTracking: true,
             withDatasets: true, ct: ct);
 

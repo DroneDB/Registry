@@ -18,7 +18,7 @@ using Registry.Web.Utilities.Auth;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// The platform features the Hub adapts to (RQ-12, out of <see cref="SystemController"/>). Anonymous.
+/// The platform features the Hub adapts to (out of <see cref="SystemController"/>). Anonymous.
 /// </summary>
 [Authorize]
 [ApiController]

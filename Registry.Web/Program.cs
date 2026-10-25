@@ -31,7 +31,7 @@ namespace Registry.Web;
 /// <summary>
 /// The command line: parses it, prepares the storage folder (Hub, ddb, settings file) and runs the host of
 /// the instance type (<see cref="RegistryHost"/>), or a maintenance command. Every message goes through
-/// Serilog: a bootstrap logger until a host replaces it (RQ-07).
+/// Serilog: a bootstrap logger until a host replaces it.
 /// </summary>
 public class Program
 {
@@ -186,7 +186,7 @@ public class Program
     }
 
     /// <summary>
-    /// Fails fast when the libddb on the library path cannot be used (XI-01): it must load, be libddb
+    /// Fails fast when the libddb on the library path cannot be used: it must load, be libddb
     /// 2.x (ABI major 2) and export every function Registry calls (<see cref="DdbAbi.Verify"/>). The
     /// library itself is configured and initialized by each host's <c>DdbRuntimeService</c>.
     /// </summary>

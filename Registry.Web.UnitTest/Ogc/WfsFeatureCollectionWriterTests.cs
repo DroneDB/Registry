@@ -13,7 +13,7 @@ using Shouldly;
 namespace Registry.Web.Test.Ogc;
 
 /// <summary>
-/// REG-11: the streaming OGR GML to WFS 2.0 rewrite. The expected files were produced by the DOM
+/// The streaming OGR GML to WFS 2.0 rewrite. The expected files were produced by the DOM
 /// rewrite it replaces (WfsManager.WrapAsWfsFeatureCollection / ExtractBareFeatureById) from real
 /// DDBQueryVector output (polygons, a later page, points, an empty result) and an edge-case file
 /// (comments, empty/blank/nil leaves, nested and mixed content, CDATA, an empty featureMember, an
@@ -113,7 +113,7 @@ public class WfsFeatureCollectionWriterTests : TestBase
         fid.ShouldBe(25036);
     }
 
-    /// <summary>OGR GML 3.2 shape for a polygon layer with 12 attributes (as the REG-11 baseline).</summary>
+    /// <summary>OGR GML 3.2 shape for a polygon layer with 12 attributes.</summary>
     private static string BuildOgrGml(int features)
     {
         var sb = new StringBuilder(features * 3000);

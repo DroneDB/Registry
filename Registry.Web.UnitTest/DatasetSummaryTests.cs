@@ -27,7 +27,7 @@ using Registry.Web.Services.Caching;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// REG-06: the storage quota and the dataset listing read dataset summaries reused while the
+/// The storage quota and the dataset listing read dataset summaries reused while the
 /// index files are unchanged (one native DDBInfo per dataset and change, not per call), and
 /// the STAC root catalog takes visibility from the visibility cache, so private datasets cost
 /// no native call once cached.

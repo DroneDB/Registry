@@ -7,7 +7,7 @@ namespace Registry.Web.Services.Jobs;
 
 /// <summary>
 /// The one way to queue a dataset job (<see cref="DdbJobs"/>): as an indexed job that names its
-/// dataset by <see cref="DatasetKey"/> (D4: no DroneDB object in the job arguments).
+/// dataset by <see cref="DatasetKey"/> (no DroneDB object in the job arguments).
 /// </summary>
 public static class QueueDdbJobs
 {

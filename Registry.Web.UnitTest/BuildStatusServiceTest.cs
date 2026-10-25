@@ -29,7 +29,7 @@ namespace Registry.Web.Test;
 /// <summary>
 /// Status rules of <see cref="BuildStatusService"/> ("building" &gt; "pending" &gt; ready &gt;
 /// "failed" &gt; "queued") and their data access: one build manifest call
-/// (<see cref="IDdbBuild.GetBuildArtifacts"/>, XI-04) and job index queries scoped to the listed
+/// (<see cref="IDdbBuild.GetBuildArtifacts"/>) and job index queries scoped to the listed
 /// paths, run against the real <see cref="JobIndexQuery"/> on an in-memory context.
 /// </summary>
 [TestFixture]

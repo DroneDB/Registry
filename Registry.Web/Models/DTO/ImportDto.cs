@@ -109,7 +109,7 @@ public class FileImportErrorDto
 }
 
 /// <summary>
-/// A remote import queued as a background job (RQ-12; <c>POST /sys/import-dataset</c> and
+/// A remote import queued as a background job (<c>POST /sys/import-dataset</c> and
 /// <c>/sys/import-organization</c> answer 202 with it, <c>Location</c> is the status URL).
 /// </summary>
 public class RemoteImportJobDto
@@ -128,7 +128,7 @@ public class RemoteImportStatusDto
     /// <summary>The Hangfire state: Enqueued, Processing, Succeeded, Failed, Deleted...</summary>
     public string State { get; set; }
 
-    /// <summary>The result of a succeeded import (the body the synchronous endpoint answered before RQ-12).</summary>
+    /// <summary>The result of a succeeded import (the body the former synchronous endpoint answered).</summary>
     public ImportResultDto Result { get; set; }
 
     /// <summary>The error of a failed job (an import that ran reports its errors in <see cref="Result"/>).</summary>

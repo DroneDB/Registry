@@ -41,7 +41,7 @@ internal static class LibddbNative
     }
 
     /// <summary>
-    /// The startup handshake of the adapter (<see cref="DdbAbi.Verify"/>): since RQ-08 Registry runs on
+    /// The startup handshake of the adapter (<see cref="DdbAbi.Verify"/>): Registry runs on
     /// libddb 2.x only, so a library that fails it fails the tests, it never makes them inconclusive.
     /// </summary>
     internal static (Gate Gate, string Message) CheckAbi()

@@ -11,7 +11,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Where the Registry writes files that are not (yet) part of a dataset (RQ-10). Two places, by what
+/// Where the Registry writes files that are not (yet) part of a dataset. Two places, by what
 /// happens to the file next:
 /// <list type="bullet">
 /// <item><see cref="Create"/>: under the configured temp folder (<c>StorageOptions.TempPath</c>), for a

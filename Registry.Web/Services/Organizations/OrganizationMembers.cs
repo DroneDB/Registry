@@ -22,7 +22,7 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Organizations;
 
-/// <summary>The members of an organization (RQ-12, out of <c>OrganizationsManager</c>).</summary>
+/// <summary>The members of an organization (out of <c>OrganizationsManager</c>).</summary>
 public sealed class OrganizationMembers
 {
     private readonly IAuthManager _authManager;
@@ -90,7 +90,7 @@ public sealed class OrganizationMembers
 
     // The organization (with its members) whose members the current user is about to change: it must
     // exist, the user must be allowed to manage its members, and the feature must be on. The access
-    // check comes before the feature check, so an anonymous caller gets 401 and a stranger 403 (D2)
+    // check comes before the feature check, so an anonymous caller gets 401 and a stranger 403
     private async Task<(Organization Org, User CurrentUser)> GetOrganizationToManageMembers(string orgSlug,
         CancellationToken ct)
     {

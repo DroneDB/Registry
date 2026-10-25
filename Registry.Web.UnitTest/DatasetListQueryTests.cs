@@ -10,7 +10,7 @@ using Shouldly;
 
 namespace Registry.Web.Test;
 
-/// <summary>HUB-07: the organization page searches, sorts and pages its datasets on the server.</summary>
+/// <summary>The organization page searches, sorts and pages its datasets on the server.</summary>
 [TestFixture]
 public class DatasetListQueryTests
 {

@@ -6,7 +6,7 @@ using System.Text;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// Writes a file so that a reader sees the old content or the new one, never a part (RQ-07: the storage
+/// Writes a file so that a reader sees the old content or the new one, never a part (the storage
 /// folder's <c>appsettings.json</c>, read by every Registry container sharing the folder).
 /// </summary>
 public static class AtomicFile

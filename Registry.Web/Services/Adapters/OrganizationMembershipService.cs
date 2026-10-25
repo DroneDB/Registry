@@ -16,7 +16,7 @@ using Registry.Web.Identity.Models;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// The one implementation of organization membership rows (RQ-06), used by the organization member
+/// The one implementation of organization membership rows, used by the organization member
 /// routes (<c>/orgs/{orgSlug}/members</c>) and the administrator routes (<c>/users/{userName}/orgs</c>).
 /// It does not authorize: each caller checks who may change the members first. Every grant records
 /// <see cref="OrganizationUser.GrantedAt"/> and <see cref="OrganizationUser.GrantedBy"/>.

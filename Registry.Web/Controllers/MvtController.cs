@@ -22,7 +22,7 @@ namespace Registry.Web.Controllers;
 
 /// <summary>
 /// Mapbox Vector Tile (MVT) endpoint. Serves the precomputed tiles of a vector's build (the <c>vector.mvt</c>
-/// artifact of libddb's build manifest, XI-04: <see cref="MvtTiles"/>) for the Vue/OpenLayers frontend and the
+/// artifact of libddb's build manifest: <see cref="MvtTiles"/>) for the Vue/OpenLayers frontend and the
 /// OGC API Tiles delegate. Authorized like the OGC endpoints: Basic credentials, then
 /// <see cref="OgcAuthorizationFilter"/> (read access, its denials in the OGC envelope).
 /// </summary>
@@ -63,7 +63,7 @@ public class MvtController : ControllerBaseEx
             return NotFound();
 
         // Tiles are already gzip-compressed (COMPRESS=YES in MVT driver). The tag names the tile of a build: it never
-        // changes, so a client that has it gets a 304 (RQ-13)
+        // changes, so a client that has it gets a 304
         Response.Headers.ContentEncoding = "gzip";
         Response.Headers.CacheControl = "public, max-age=31536000, immutable";
         return ValidatedPhysicalFile(tilePath, "application/vnd.mapbox-vector-tile", $"\"{hash}-{z}-{x}-{y}\"");

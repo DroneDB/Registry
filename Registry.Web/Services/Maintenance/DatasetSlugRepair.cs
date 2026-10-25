@@ -52,7 +52,7 @@ public sealed class DatasetSlugRepair
     {
         var result = new FixInvalidSlugsResultDto { DryRun = dryRun };
 
-        // The token is honoured while the targets are read; the renames then run to completion (RQ-13)
+        // The token is honoured while the targets are read; the renames then run to completion
         var orgs = await _context.Organizations.AsNoTracking().Include(o => o.Datasets).ToArrayAsync(ct);
         var takenOrgSlugs = orgs.Select(o => o.Slug).ToHashSet();
 

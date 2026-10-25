@@ -54,7 +54,7 @@ public sealed class ShareBatches
         // Check if user has enough space to upload any file
         await _quota.CheckCurrentUserStorage();
 
-        // Honoured until the target (which may be a new dataset) and the batch are written (RQ-13)
+        // Honoured until the target (which may be a new dataset) and the batch are written
         ct.ThrowIfCancellationRequested();
         var dataset = await _targets.ResolveAsync(parameters, currentUser);
         var batch = await _batches.StartAsync(dataset);

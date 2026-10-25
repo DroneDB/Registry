@@ -20,7 +20,7 @@ using Shouldly;
 namespace Registry.Web.Test.Ogc;
 
 /// <summary>
-/// XI-04: the spectral indices a raster can render come from libddb's <c>indexLayer</c>, read once per content,
+/// The spectral indices a raster can render come from libddb's <c>indexLayer</c>, read once per content,
 /// source file and libddb version.
 /// </summary>
 [TestFixture]

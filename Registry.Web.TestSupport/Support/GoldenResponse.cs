@@ -9,7 +9,7 @@ using System.Text.Json.Nodes;
 namespace Registry.Web.Test.Support;
 
 /// <summary>
-/// The golden form of one HTTP response (RQ-04 golden JSON contract tests): a pretty-printed JSON
+/// The golden form of one HTTP response (the golden JSON contract tests): a pretty-printed JSON
 /// envelope
 /// <code>
 /// { "request": "GET /sys/features", "caller": "anonymous", "status": 200,

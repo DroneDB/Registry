@@ -5,7 +5,7 @@ using Registry.Web.Test.Support;
 using Shouldly;
 using Registry.Test.Common;
 
-// Category taxonomy (RQ-04): every test of this assembly is a Unit test
+// Category taxonomy: every test of this assembly is a Unit test
 [assembly: Category(TestCategories.Unit)]
 
 namespace Registry.Web.Test;

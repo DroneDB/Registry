@@ -14,7 +14,7 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Test.Support;
 
-/// <summary>The datasets API (RQ-12: a facade over queries, commands and the mover) over test collaborators.</summary>
+/// <summary>The datasets API (a facade over queries, commands and the mover) over test collaborators.</summary>
 public static class TestDatasets
 {
     public static DatasetsManager Manager(RegistryContext context, WebPorts ports, IDdbManager ddbManager,

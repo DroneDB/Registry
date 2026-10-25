@@ -17,7 +17,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// The upload pipeline (UPL-01): one context per request, pre-checks before the first byte,
+/// The upload pipeline: one context per request, pre-checks before the first byte,
 /// hashing while streaming, one index batch, quota reservation and cache invalidation per request,
 /// and receipts for clients that lost the response.
 /// </summary>

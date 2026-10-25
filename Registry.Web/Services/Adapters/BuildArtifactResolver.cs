@@ -13,7 +13,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Default <see cref="IBuildArtifactResolver"/>, over libddb's build manifest (XI-04): the one place where
+/// Default <see cref="IBuildArtifactResolver"/>, over libddb's build manifest: the one place where
 /// Registry chooses which artifact role a renderer reads and which media type a download is served
 /// with. The entry types come from libddb once per process; the locations of existing artifacts are kept in a
 /// bounded process-memory cache (<see cref="FindArtifact"/>).
@@ -220,7 +220,7 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
     }
 }
 
-/// <summary>Reading libddb's build manifest (XI-04).</summary>
+/// <summary>Reading libddb's build manifest.</summary>
 public static class BuildManifestExtensions
 {
     /// <summary>The entry is buildable (by itself, or as a sidecar of its main file).</summary>

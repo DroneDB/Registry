@@ -13,7 +13,7 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.PlatformTasks;
 
-/// <summary>The tool catalog of a dataset and the submission of a tool run (RQ-12, out of <c>TasksManager</c>).</summary>
+/// <summary>The tool catalog of a dataset and the submission of a tool run (out of <c>TasksManager</c>).</summary>
 public sealed class TaskSubmission
 {
     private readonly IHeavyToolRegistry _registry;

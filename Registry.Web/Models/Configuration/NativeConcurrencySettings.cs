@@ -4,7 +4,7 @@ using System;
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>
-/// How many native renders run at once in this process (REG-07 §5.2). Bound from
+/// How many native renders run at once in this process. Bound from
 /// <c>AppSettings:NativeConcurrency</c>; a value of 0 or less means the default.
 /// </summary>
 public class NativeConcurrencySettings

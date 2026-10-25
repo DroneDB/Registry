@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 namespace Registry.Web.Services.Caching;
 
 /// <summary>
-/// Records in the distributed cache, computed on a miss (RQ-12): the one place where Registry writes the
+/// Records in the distributed cache, computed on a miss: the one place where Registry writes the
 /// get-then-set sequence. A miss is computed once per key within the process (single-flight), and the cache
 /// never fails a request: a read or write error is logged and the computed value returned (fail-open).
 /// </summary>

@@ -14,7 +14,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// REG-07: concurrent misses for one key share a single generation, cache I/O failures fall back
+/// Concurrent misses for one key share a single generation, cache I/O failures fall back
 /// to generating the data, and invalidation never lets a pre-invalidation generation be reused
 /// or stored.
 /// </summary>
@@ -200,7 +200,7 @@ public class CacheManagerSingleFlightTests
         var stale = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
         var fresh = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
         var gates = new[] { stale.Task, fresh.Task };
-        // Generations start on the pool (RQ-13), so the order in which they run is not the order of the
+        // Generations start on the pool, so the order in which they run is not the order of the
         // calls: the first one must be running before the invalidation and the second call, or the
         // second call's generation could take the first gate (stale) and the first call would wait on
         // a gate nobody completes. Waiting for it is also the case under test: invalidation DURING a
@@ -264,7 +264,7 @@ public class CacheManagerSingleFlightTests
         (await _store.PeekAsync(Key("a"))).ShouldBeNull();
     }
 
-    // REG-05: seeds with a local expiration keep their entries in memory; invalidation drops them
+    // Seeds with a local expiration keep their entries in memory; invalidation drops them
     [Test]
     public async Task LocalTier_ServesFromMemory_UntilInvalidated()
     {

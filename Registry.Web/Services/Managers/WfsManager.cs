@@ -7,7 +7,7 @@ namespace Registry.Web.Services.Managers;
 
 /// <summary>
 /// WFS 2.0.0 manager (BBOX filter + pagination, no CQL; <see cref="WfsManager"/>, what the controller calls) over
-/// the services RQ-12 split the 1109-line class into: the capabilities and stored queries, the feature types'
+/// the services it is split into: the capabilities and stored queries, the feature types'
 /// schema, and the feature queries with their local filter (the way WMS and WCS split by protocol operation).
 /// </summary>
 public class WfsManager

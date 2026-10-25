@@ -21,7 +21,7 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Organizations;
 
-/// <summary>Reading organizations (RQ-12, out of <c>OrganizationsManager</c>): the lists and one organization, with the owner shown by name and the caller's permissions.</summary>
+/// <summary>Reading organizations (out of <c>OrganizationsManager</c>): the lists and one organization, with the owner shown by name and the caller's permissions.</summary>
 public sealed class OrganizationQueries
 {
     private readonly IAuthManager _authManager;

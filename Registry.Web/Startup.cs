@@ -71,7 +71,7 @@ public class Startup
         // address and scheme, taken from the headers of a known proxy only
         app.UseForwardedHeaders();
 
-        // Every native call made while a request is served logs with that request's id (XI-08)
+        // Every native call made while a request is served logs with that request's id
         app.UseDdbRequestOperation();
 
         // Every error below answers ProblemDetails (ApiExceptionHandler), in every environment: the
@@ -186,8 +186,8 @@ public class Startup
                 });
 
             // Registered once, as an endpoint: signed-in callers only, then the admin check of the
-            // dashboard itself; an unknown dashboard page is Hangfire's 404 (it was a 500 while the
-            // middleware form was registered too, RQ-04 finding)
+            // dashboard itself; an unknown dashboard page is Hangfire's 404 (registering the middleware form too
+            // made it a 500)
             endpoints.MapHangfireDashboard(MagicStrings.HangFireUrl, new DashboardOptions
             {
                 AsyncAuthorization = [new HangfireAuthorizationFilter()]
@@ -209,13 +209,13 @@ public class Startup
                 ServeUnknownFileTypes = true
             });
 
-            // Build-time .br/.gz twins of the Hub's JS/CSS (HUB-09)
+            // Build-time .br/.gz twins of the Hub's JS/CSS
             var spaFiles = builder.ApplicationServices
                 .GetService<Microsoft.AspNetCore.SpaServices.StaticFiles.ISpaStaticFileProvider>();
             builder.UseMiddleware<PrecompressedStaticFilesMiddleware>(
                 new Func<Microsoft.Extensions.FileProviders.IFileProvider>(() => spaFiles?.FileProvider));
 
-            // Hashed files immutable, index.html revalidated (HUB-09)
+            // Hashed files immutable, index.html revalidated
             var hubStaticFiles = HubCachePolicy.StaticFileOptions();
             builder.UseSpaStaticFiles(hubStaticFiles);
 

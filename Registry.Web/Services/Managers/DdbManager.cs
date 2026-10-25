@@ -34,7 +34,7 @@ public class DdbManager : IDdbManager
         var baseDdbPath = GetDatasetFolder(orgSlug, internalRef);
 
         // Every request opens its dataset: check the folder and the index once per process, not
-        // with two file system calls per open (REG-05 item 4)
+        // with two file system calls per open
         if (_initialized.Contains(baseDdbPath))
             return new DDB(baseDdbPath, _ddbWrapper);
 

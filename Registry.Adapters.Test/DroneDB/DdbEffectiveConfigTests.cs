@@ -6,7 +6,7 @@ using Shouldly;
 
 namespace Registry.Adapters.Test.DroneDB;
 
-/// <summary>XI-06: <c>DDBGetEffectiveConfig()</c> parsed into <see cref="DdbEffectiveConfig"/>.</summary>
+/// <summary><c>DDBGetEffectiveConfig()</c> parsed into <see cref="DdbEffectiveConfig"/>.</summary>
 [TestFixture]
 public class DdbEffectiveConfigTests
 {

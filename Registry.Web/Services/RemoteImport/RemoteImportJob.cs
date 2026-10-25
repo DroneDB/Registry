@@ -8,7 +8,7 @@ using Registry.Web.Models.DTO;
 namespace Registry.Web.Services.RemoteImport;
 
 /// <summary>
-/// The background job of a remote import (RQ-12): before, the import ran inside the HTTP request. Its return value
+/// The background job of a remote import: before, the import ran inside the HTTP request. Its return value
 /// is the result <c>GET /sys/imports/{jobId}</c> reports; deleting the job cancels the import. Not retried: an import
 /// is run again by an administrator (the parallel mode resumes, skipping the files already imported).
 /// </summary>

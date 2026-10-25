@@ -13,7 +13,7 @@ using Entry = Registry.Ports.DroneDB.Entry;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// REG-01: <see cref="DDB.GetEntry"/> / <see cref="DDB.EntryExists"/> do one exact native
+/// <see cref="DDB.GetEntry"/> / <see cref="DDB.EntryExists"/> do one exact native
 /// lookup (DDBGet). They used to list the path recursively (a folder marshalled its whole
 /// subtree) and then list the parent: 2 native calls for folders and missing paths.
 /// The wrapper mock is strict, so any listing call fails the test.

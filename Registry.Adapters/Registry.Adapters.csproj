@@ -14,14 +14,14 @@
     </ItemGroup>
 
     <ItemGroup>
-      <!-- The adapter tests call the internal NativeDdb declarations and NativeCall (RQ-08) -->
+      <!-- The adapter tests call the internal NativeDdb declarations and NativeCall -->
       <InternalsVisibleTo Include="Registry.Adapters.Ddb.Test" />
       <!-- The struct layout and marshalling rules of NativeDdb, checked without loading libddb -->
       <InternalsVisibleTo Include="Registry.Adapters.Test" />
     </ItemGroup>
 
     <ItemGroup>
-      <!-- Only DDB (Ddb.cs): Hangfire reads jobs stored before RQ-09 with Json.NET (D4) -->
+      <!-- Only DDB (Ddb.cs): Hangfire reads jobs stored by earlier releases with Json.NET -->
       <PackageReference Include="Newtonsoft.Json" />
       <PackageReference Include="SharpCompress" />
     </ItemGroup>

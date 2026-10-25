@@ -1,7 +1,7 @@
 namespace Registry.Test.Common;
 
 /// <summary>
-/// The one test category taxonomy (RQ-04). Use these constants, never a string literal:
+/// The one test category taxonomy. Use these constants, never a string literal:
 /// <c>[Category(TestCategories.Native)]</c>. Select with <c>dotnet test --filter "TestCategory=..."</c>.
 /// <list type="bullet">
 /// <item><see cref="Unit"/> and <see cref="Integration"/>: set once per assembly
@@ -10,8 +10,8 @@ namespace Registry.Test.Common;
 /// <item><see cref="Native"/>: the fixture calls native libddb (or a Program path that initialises it).</item>
 /// <item><see cref="Network"/>: the fixture needs the network or a Docker daemon: test data downloads
 /// (TestFS), container images (MariaDB, LDAP through Testcontainers) or a remote service.</item>
-/// <item><see cref="Baseline"/>: a characterization test of an improvement proposal (RQ-xx); the
-/// files live in ImprovementBaselines/.</item>
+/// <item><see cref="Baseline"/>: a characterization test that pins existing behaviour; the
+/// files live in Baselines/.</item>
 /// </list>
 /// </summary>
 public static class TestCategories

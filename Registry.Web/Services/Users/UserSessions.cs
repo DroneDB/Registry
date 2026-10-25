@@ -33,7 +33,7 @@ public interface IUserSessions
     Task<AuthenticateResponse> Refresh();
 }
 
-/// <summary>Default <see cref="IUserSessions"/> (RQ-12, out of <c>UsersManager</c>).</summary>
+/// <summary>Default <see cref="IUserSessions"/> (out of <c>UsersManager</c>).</summary>
 public sealed class UserSessions : IUserSessions
 {
     private readonly ILoginManager _loginManager;

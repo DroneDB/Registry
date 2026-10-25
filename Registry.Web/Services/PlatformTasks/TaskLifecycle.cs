@@ -8,7 +8,7 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.PlatformTasks;
 
-/// <summary>Ending a task and clearing the history (RQ-12, out of <c>TasksManager</c>).</summary>
+/// <summary>Ending a task and clearing the history (out of <c>TasksManager</c>).</summary>
 public sealed class TaskLifecycle
 {
     private readonly IDatasetAccessResolver _access;

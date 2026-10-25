@@ -18,7 +18,7 @@ namespace Registry.Web.Services.Objects;
 
 /// <summary>
 /// The builds of a dataset's entries: starting one, the files and downloadable artifacts libddb lists for
-/// a build (XI-04), the builds waiting for a dependency, and the record of finished build jobs.
+/// a build, the builds waiting for a dependency, and the record of finished build jobs.
 /// </summary>
 public sealed class BuildQueryService
 {
@@ -137,7 +137,7 @@ public sealed class BuildQueryService
         var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct)).Ddb;
 
         var pending = ddb.GetPendingBuildInfo();
-        // The artifacts that exist (an earlier build's), one manifest call for every pending entry (XI-04)
+        // The artifacts that exist (an earlier build's), one manifest call for every pending entry
         var builds = pending.Length == 0 ? [] : _artifacts.GetBuilds(ddb, [.. pending.Select(p => p.Path)]);
         return pending.Select((p, i) => new PendingBuildInfoDto
         {

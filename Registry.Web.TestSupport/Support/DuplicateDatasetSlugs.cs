@@ -12,7 +12,7 @@ using Shouldly;
 namespace Registry.Web.Test.Support;
 
 /// <summary>
-/// RQ-15: a registry database at the migration before the unique <c>(OrganizationSlug, Slug)</c> index of
+/// A registry database at the migration before the unique <c>(OrganizationSlug, Slug)</c> index of
 /// <c>Datasets</c>, holding datasets that share a slug, and what the migration must make of it. One scenario for every
 /// provider (the tests run it on SQLite and on the MariaDB of production): the same rows go in, the same rows come out,
 /// except where the engine compares text differently (a case-insensitive collation sees <c>Survey</c> and <c>survey</c>

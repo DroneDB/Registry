@@ -81,12 +81,12 @@ public interface IDdbIndex
 
     /// <summary>
     /// The data-only STAC Item of <paramref name="path"/>, or the dataset's Collection when it is null
-    /// (<see cref="IDdbWrapper.StacData"/>, XI-09): Registry adds every id, link and href.
+    /// (<see cref="IDdbWrapper.StacData"/>): Registry adds every id, link and href.
     /// </summary>
     JsonElement GetStacData(string path = null);
 
     /// <summary>
-    /// The data-only STAC ItemCollection of the dataset (<see cref="IDdbWrapper.StacItemCollectionData"/>, XI-09),
+    /// The data-only STAC ItemCollection of the dataset (<see cref="IDdbWrapper.StacItemCollectionData"/>),
     /// optionally filtered by bbox and datetime, with paging.
     /// </summary>
     /// <param name="bbox">Optional bounding box "minX,minY,maxX,maxY" (WGS84), or null</param>

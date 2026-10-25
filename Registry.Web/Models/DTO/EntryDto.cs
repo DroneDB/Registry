@@ -62,7 +62,7 @@ public class EntryDto
     public string[] BuildMissingDependencies { get; set; }
 
     /// <summary>
-    /// The artifacts of the entry's own build that exist (libddb's build manifest, XI-04), absent when there are
+    /// The artifacts of the entry's own build that exist (libddb's build manifest), absent when there are
     /// none: a client reads them instead of composing build paths or probing files.
     /// </summary>
     [JsonPropertyName("artifacts")]

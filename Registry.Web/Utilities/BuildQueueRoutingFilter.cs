@@ -8,7 +8,7 @@ using Registry.Web.Services.Jobs;
 
 namespace Registry.Web.Utilities;
 
-/// <summary>Hangfire queues and the server that processes each (REG-09).</summary>
+/// <summary>Hangfire queues and the server that processes each.</summary>
 public static class JobQueues
 {
     /// <summary>Jobs that run native builds; served by <see cref="ProcessingBudget.HeavyWorkers"/> workers.</summary>

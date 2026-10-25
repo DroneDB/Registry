@@ -174,7 +174,7 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
 
         // The download goes to the dataset's uploads folder: never indexed, and on the dataset's volume,
         // so the disk guard measures the volume it fills and the move into place is a rename, not a
-        // full copy from /tmp (RQ-10). Deleted on any failure (Dispose), kept once moved.
+        // full copy from /tmp. Deleted on any failure (Dispose), kept once moved.
         using var scratch = _scratch.CreateForDataset(ctx.Ddb.DatasetFolderPath);
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);

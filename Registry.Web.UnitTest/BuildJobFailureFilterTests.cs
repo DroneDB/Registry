@@ -95,7 +95,7 @@ public class BuildJobFailureFilterTests
         _registryContext.Dispose();
     }
 
-    // The job shape stored before RQ-09 (HangfireUtils, D4) unless jobType says otherwise
+    // The job shape stored by earlier releases (HangfireUtils) unless jobType says otherwise
     private ApplyStateContext BuildContext(string methodName, IState newState, Type? jobType = null)
     {
         jobType ??= typeof(HangfireUtils);

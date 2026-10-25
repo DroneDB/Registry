@@ -95,7 +95,7 @@ public interface IDdbWrapper
 
     /// <summary>
     /// The build state and the existing artifacts of several entries with one index open
-    /// (DDBGetBuildArtifacts, XI-04): one element per path, in input order. libddb owns the build
+    /// (DDBGetBuildArtifacts): one element per path, in input order. libddb owns the build
     /// layout, the states and the type rules; Registry serves the paths it returns.
     /// </summary>
     /// <param name="ddbPath">Dataset folder (parent of .ddb)</param>
@@ -103,7 +103,7 @@ public interface IDdbWrapper
     public EntryBuildArtifacts[] GetBuildArtifacts(string ddbPath, string[] paths);
 
     /// <summary>
-    /// The absolute path of a file of a build, checked by libddb (DDBResolveBuildFile, XI-04): it
+    /// The absolute path of a file of a build, checked by libddb (DDBResolveBuildFile): it
     /// serves <c>.../build/{hash}/{path}</c>, tiles included.
     /// </summary>
     /// <param name="ddbPath">Dataset folder (parent of .ddb)</param>
@@ -113,11 +113,11 @@ public interface IDdbWrapper
     /// <exception cref="DdbInvalidArgumentsException">The hash is malformed or the path breaks the dataset path rules.</exception>
     public string? ResolveBuildFile(string ddbPath, string hash, string path);
 
-    /// <summary>The entry types of libddb and what it does with them (DDBGetEntryTypes, XI-04).</summary>
+    /// <summary>The entry types of libddb and what it does with them (DDBGetEntryTypes).</summary>
     public IReadOnlyList<EntryTypeInfo> GetEntryTypes();
 
     /// <summary>
-    /// libddb's dataset path rule (DDBNormalizePath, XI-09): the normalized form of
+    /// libddb's dataset path rule (DDBNormalizePath): the normalized form of
     /// <paramref name="path"/> or the first rule it breaks. No dataset is opened.
     /// </summary>
     /// <param name="path">A dataset-relative path, '/' or '\' separated. A NUL byte or a lone
@@ -130,7 +130,7 @@ public interface IDdbWrapper
 
     /// <summary>
     /// Copies the build of an entry (its artifacts and pending marker) to another dataset
-    /// (DDBCopyBuildArtifacts, XI-04), so a copied or moved file needs no rebuild.
+    /// (DDBCopyBuildArtifacts), so a copied or moved file needs no rebuild.
     /// </summary>
     /// <exception cref="DdbNotFoundException">No buildable entry of the source has this hash.</exception>
     /// <exception cref="DdbBuildInProgressException">A build of it runs in either dataset (nothing copied).</exception>
@@ -139,15 +139,15 @@ public interface IDdbWrapper
 
     /// <summary>
     /// Whether the dataset has pending (deferred) builds (DDBIsBuildPending, deprecated in libddb
-    /// 2.x). Kept for the pending-build scheduling until RQ-11/RQ-12 hand it to libddb
-    /// (DDBBuild pendingOnly, XI-04): libddb 2.x has no other dataset-wide pending query.
+    /// 2.x). Kept for the pending-build scheduling until libddb answers it through
+    /// DDBBuild pendingOnly: libddb 2.x has no other dataset-wide pending query.
     /// </summary>
     public bool IsBuildPending(string ddbPath);
 
     /// <summary>
     /// The pending (deferred) builds of the dataset: builds skipped because a dependency was
     /// missing at the last attempt (DDBGetPendingBuildInfo, deprecated in libddb 2.x).
-    /// Read-only. Kept until RQ-11/RQ-12, like <see cref="IsBuildPending"/>.
+    /// Read-only. Kept for the same reason as <see cref="IsBuildPending"/>.
     /// </summary>
     public PendingBuildInfo[] GetPendingBuildInfo(string ddbPath);
 
@@ -174,7 +174,7 @@ public interface IDdbWrapper
     public List<MetaDump> MetaDump(string ddbPath, string? ids = null);
 
     /// <summary>
-    /// The data-only STAC document (<c>DDBStacData</c>, XI-09): the Item of <paramref name="entry"/>, or the
+    /// The data-only STAC document (<c>DDBStacData</c>): the Item of <paramref name="entry"/>, or the
     /// Collection of the dataset when it is null or empty, without any member made from a URL or an ID ("id",
     /// "collection", "links", asset "href"s), which Registry owns. Keys in libddb's (sorted) order.
     /// </summary>
@@ -182,7 +182,7 @@ public interface IDdbWrapper
     public JsonElement StacData(string ddbPath, string? entry);
 
     /// <summary>
-    /// The data-only STAC ItemCollection (<c>DDBStacItemCollectionData</c>, XI-09): the entries with a geometry,
+    /// The data-only STAC ItemCollection (<c>DDBStacItemCollectionData</c>): the entries with a geometry,
     /// in path order, filtered by <paramref name="bbox"/> ("minX,minY,maxX,maxY", EPSG:4326) and
     /// <paramref name="datetime"/> (RFC 3339 instant or interval), paged; <c>numberMatched</c> counts every match.
     /// </summary>

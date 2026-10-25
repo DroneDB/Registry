@@ -4,18 +4,18 @@ using System.Collections.Generic;
 namespace Registry.Web.Test.Support;
 
 /// <summary>
-/// RQ-09 / D4 fixtures: the exact Hangfire InvocationData JSON of the jobs Registry v2.7.1 stores,
-/// captured at b7026d48 (before RQ-09) with the production serializer settings
+/// Fixtures: the exact Hangfire InvocationData JSON of the jobs Registry v2.7.1 stores,
+/// captured from that release with the production serializer settings
 /// (CompatibilityLevel 1.8, simple assembly names, recommended settings). Datasets live under
 /// <see cref="CapturedRoot"/>; tests move it to a temporary folder.
 /// </summary>
 public static class LegacyJobPayloads
 {
     /// <summary>The dataset root in the captured payloads.</summary>
-    public const string CapturedRoot = "/tmp/rq09-capture";
+    public const string CapturedRoot = "/tmp/legacyjobpayloads-capture";
 
     private static readonly string DdbArg =
-        "{\\\"$type\\\":\\\"Registry.Adapters.DroneDB.DDB, Registry.Adapters\\\",\\\"DatasetFolderPath\\\":\\\"/tmp/rq09-capture/org1/3f2504e0-4f89-11d3-9a0c-0305e82c3301\\\",\\\"BuildFolderPath\\\":\\\"/tmp/rq09-capture/org1/3f2504e0-4f89-11d3-9a0c-0305e82c3301/.ddb/build\\\"}";
+        "{\\\"$type\\\":\\\"Registry.Adapters.DroneDB.DDB, Registry.Adapters\\\",\\\"DatasetFolderPath\\\":\\\"/tmp/legacyjobpayloads-capture/org1/3f2504e0-4f89-11d3-9a0c-0305e82c3301\\\",\\\"BuildFolderPath\\\":\\\"/tmp/legacyjobpayloads-capture/org1/3f2504e0-4f89-11d3-9a0c-0305e82c3301/.ddb/build\\\"}";
 
     private const string Utils = "Registry.Web.Utilities.HangfireUtils, Registry.Web";
     private const string Ctx = "Hangfire.Server.PerformContext, Hangfire.Core";

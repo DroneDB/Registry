@@ -7,7 +7,7 @@ using Registry.Web.Data.Models;
 namespace Registry.Web.Services.Ports;
 
 /// <summary>
-/// Short-lived cache of dataset lookups by slug (REG-05 item 3): every request resolves its dataset
+/// Short-lived cache of dataset lookups by slug: every request resolves its dataset
 /// (and organization) by slug, often twice. Entries are dropped when a dataset or organization row
 /// changes (see <c>DatasetChangeInterceptor</c>) and expire after a few seconds otherwise.
 /// </summary>

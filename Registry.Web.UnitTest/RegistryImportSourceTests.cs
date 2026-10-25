@@ -18,7 +18,7 @@ namespace Registry.Web.Test;
 /// Tests for <see cref="RegistryImportSource"/> browse auth handling: a rejected remote credential must
 /// surface as a non-retryable 403 (<see cref="Registry.Web.Exceptions.ForbiddenException"/>), never as a raw
 /// <see cref="System.InvalidOperationException"/> that the classifier collapses into a generic 500, and
-/// never as a 401, which would sign the caller out of this Registry (plan decision D2).
+/// never as a 401, which would sign the caller out of this Registry.
 /// An SSRF-allowed IP literal is used as the registry host so no real DNS lookups occur.
 /// </summary>
 [TestFixture]

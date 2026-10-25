@@ -21,7 +21,7 @@ public enum MetaKeyKind
 /// Why Registry checks it: libddb rejects a key that breaks the rule with <c>DDBERR_EXCEPTION</c> and a message
 /// (the <c>DDBMeta*</c> exports keep the codes they always returned, ABI 2.0), so the call can only be a 500 for
 /// Registry unless it knows the rule is the reason. The messages are libddb's own, and the corpus test of
-/// the integration project (<c>Rq15MetaKeyRuleTests</c>) runs every key through the real library, so a rule that
+/// the integration project (<c>MetaKeyRuleTests</c>) runs every key through the real library, so a rule that
 /// drifts from libddb's fails there. When the <c>DDBMeta*</c> exports return <c>DDBERR_INVALIDARGS</c> (a later
 /// ABI), this class goes and <c>DdbResultMapper</c> answers 400.
 /// </para>

@@ -18,7 +18,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Uploads;
 
 /// <summary>
-/// The files of an upload request (RQ-12, out of <c>UploadManager</c>): the path rule, streaming a body to a temp
+/// The files of an upload request (out of <c>UploadManager</c>): the path rule, streaming a body to a temp
 /// file in the dataset, and what the commit does with them on disk (validate, size, move into place, quarantine,
 /// delete what was never moved).
 /// </summary>

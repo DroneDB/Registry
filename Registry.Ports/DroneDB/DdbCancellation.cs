@@ -4,7 +4,7 @@ using System.Threading;
 namespace Registry.Ports.DroneDB;
 
 /// <summary>
-/// The cancellation the current native work runs for (RQ-13, XI-07), as a token that flows with the async
+/// The cancellation the current native work runs for, as a token that flows with the async
 /// context, like <see cref="DdbOperation"/>: the libddb adapter hands it to libddb (a cancel token set on the
 /// calling thread right before the call) for each call of an export that honours cancel tokens, so a canceled
 /// request or job stops the native work at its next checkpoint. Entered where request or job work becomes

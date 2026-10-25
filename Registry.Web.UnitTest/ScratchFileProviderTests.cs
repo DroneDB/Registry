@@ -15,7 +15,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// RQ-10: <see cref="ScratchFileProvider"/> (the configured temp folder and the dataset uploads
+/// <see cref="ScratchFileProvider"/> (the configured temp folder and the dataset uploads
 /// folder, a new name every time, deleted unless released) and the one best-effort delete,
 /// <see cref="FileSystemExtensions.TryDelete"/>.
 /// </summary>

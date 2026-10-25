@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
-/// <summary>The result of <c>DDBCopyBuildArtifacts</c> (XI-04): the destination's artifacts after the copy.</summary>
+/// <summary>The result of <c>DDBCopyBuildArtifacts</c>: the destination's artifacts after the copy.</summary>
 public sealed class CopiedBuildArtifacts
 {
     [JsonPropertyName("hash")]

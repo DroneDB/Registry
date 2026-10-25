@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <!--
-        Registry.Web integration tests (RQ-04, D5). Category "Integration" (assembly level), plus
+        Registry.Web integration tests. Category "Integration" (assembly level), plus
         "Native" on fixtures that call libddb and "Network" on fixtures that need the network or
         Docker. GlobalSetup loads native libddb once for the run.
         A test belongs here when it needs native libddb, test data downloads (TestFS), Docker or

@@ -19,7 +19,7 @@ using Registry.Web.Utilities.Auth;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// Build and index maintenance across datasets (RQ-12, out of <see cref="SystemController"/>): the build cleanup,
+/// Build and index maintenance across datasets (out of <see cref="SystemController"/>): the build cleanup,
 /// the system rescan, the pending-build sweep status, the job index retention, the artifact completeness check.
 /// Admin only.
 /// </summary>

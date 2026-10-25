@@ -8,8 +8,8 @@ using Registry.Web.Exceptions;
 namespace Registry.Web.Services.HeavyTasks;
 
 /// <summary>
-/// The disk-space API of the Registry's writers (RQ-10, XI-06): the free space of the volume a path
-/// is on (<see cref="VolumeInfo"/>, the path's own mount, RQ-02) and the head-room a write must leave
+/// The disk-space API of the Registry's writers: the free space of the volume a path
+/// is on (<see cref="VolumeInfo"/>, the path's own mount) and the head-room a write must leave
 /// there. The head-room is the caller's safety margin plus libddb's free-disk floor
 /// (<c>minFreeDiskMb</c> from <c>DDBGetEffectiveConfig</c>), so an extraction or a download never
 /// leaves less than the builds of the files it writes need.

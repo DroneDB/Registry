@@ -8,7 +8,7 @@ using Registry.Web.Models.Configuration;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// What this process may use of the machine (XI-06): one budget per host, computed once from the
+/// What this process may use of the machine: one budget per host, computed once from the
 /// instance type, the machine and <see cref="HostResourceOptions"/>, and consumed by the Hangfire servers
 /// (<see cref="Processing"/>), the native render gate (<see cref="RenderTiles"/>, <see cref="RenderHeavy"/>)
 /// and libddb (<see cref="Ddb"/>, passed through <c>DDBConfigure</c>; <see cref="NativeBuildEnvironment"/>).
@@ -152,7 +152,7 @@ public sealed class HostResourceBudget
     }
 
     /// <summary>
-    /// The per-build limits libddb reads from the environment (DDB-08) on a job host; a value set in the
+    /// The per-build limits libddb reads from the environment on a job host; a value set in the
     /// deployment environment wins over the budget. Empty on a host that runs no builds.
     /// </summary>
     public IReadOnlyList<(string Name, string Value)> NativeBuildEnvironment => Processing is { } p

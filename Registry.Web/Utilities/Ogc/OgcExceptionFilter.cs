@@ -92,13 +92,13 @@ public class OgcExceptionFilter : IExceptionFilter
 
                 break;
             default:
-                // Every other exception: the API's status, message and log level (one mapping, RQ-05),
+                // Every other exception: the API's status, message and log level (one mapping),
                 // in the OGC envelope
                 var d = ApiExceptionClassifier.Classify(context.Exception, context.HttpContext);
                 ApiExceptionClassifier.Log(_logger, d, context.Exception, context.HttpContext.Request);
                 if (ApiExceptionClassifier.IsClientGone(d))
                 {
-                    // Nobody reads an exception report any more (RQ-13)
+                    // Nobody reads an exception report any more
                     context.Result = new StatusCodeResult(d.StatusCode);
                     context.ExceptionHandled = true;
                     return;

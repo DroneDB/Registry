@@ -9,7 +9,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.HeavyTasks;
 
 /// <summary>
-/// The files of a dataset folder as a task that writes into it sees them (RQ-12, out of <c>ImportDatasetTool</c>):
+/// The files of a dataset folder as a task that writes into it sees them (out of <c>ImportDatasetTool</c>):
 /// what was there before the task, what it added, and the removal of what it added when it must be rolled back.
 /// Paths are the dataset's: '/' separated and relative to the folder, without any ".ddb" folder (libddb never
 /// indexes it) and without the root ".uploads" folder, whose in-flight files must not be indexed or rolled back

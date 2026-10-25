@@ -8,7 +8,7 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.PlatformTasks;
 
-/// <summary>Loads a task of a dataset for a caller who may touch it (RQ-12, out of <c>TasksManager</c>).</summary>
+/// <summary>Loads a task of a dataset for a caller who may touch it (out of <c>TasksManager</c>).</summary>
 public sealed class TaskAuthorizer
 {
     private readonly IDatasetAccessResolver _access;

@@ -8,7 +8,7 @@ using Registry.Ports.Json;
 namespace Registry.Web.Identity;
 
 /// <summary>
-/// How <c>User.Metadata</c> is stored in its column: JSON text, written and read with System.Text.Json (RQ-15; the
+/// How <c>User.Metadata</c> is stored in its column: JSON text, written and read with System.Text.Json (the
 /// column was Json.NET text until then, and the text is the same, so no stored row changes and an older Registry reads
 /// what this one writes).
 /// <para>

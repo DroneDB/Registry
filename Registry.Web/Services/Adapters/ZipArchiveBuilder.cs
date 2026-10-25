@@ -95,7 +95,7 @@ public sealed class ZipArchiveBuilder : IZipArchiveBuilder
         Stream output, IProgress<long>? progress = null, CancellationToken ct = default)
     {
         // Written entry by entry, asynchronously and without seeking, so output can be a response
-        // body (REG-04): the first bytes leave while later files are still being read, and
+        // body: the first bytes leave while later files are still being read, and
         // memory stays at the copy buffer whatever the size of the selection
         await using var sink = new SyncWriteBufferingStream(output);
         await using (var archive = await ZipArchive.CreateAsync(sink, ZipArchiveMode.Create, leaveOpen: true,

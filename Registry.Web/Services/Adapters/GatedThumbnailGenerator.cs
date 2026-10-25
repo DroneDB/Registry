@@ -9,7 +9,7 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Runs every thumbnail of the decorated generator on the <see cref="NativeLane.Heavy"/> lane of
-/// the native work gate (REG-07 §5.2), whoever asks for it (views, upload pre-generation, STAC).
+/// the native work gate, whoever asks for it (views, upload pre-generation, STAC).
 /// </summary>
 public sealed class GatedThumbnailGenerator(IThumbnailGenerator inner, INativeWorkGate gate) : IThumbnailGenerator
 {

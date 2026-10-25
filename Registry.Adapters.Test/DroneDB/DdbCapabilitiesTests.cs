@@ -6,7 +6,7 @@ using Shouldly;
 
 namespace Registry.Adapters.Test.DroneDB;
 
-/// <summary>XI-01: <c>DDBGetCapabilities()</c> parsed into <see cref="DdbCapabilities"/> (fields are only ever added).</summary>
+/// <summary><c>DDBGetCapabilities()</c> parsed into <see cref="DdbCapabilities"/> (fields are only ever added).</summary>
 [TestFixture]
 public class DdbCapabilitiesTests
 {

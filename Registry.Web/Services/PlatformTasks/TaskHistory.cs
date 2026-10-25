@@ -19,7 +19,7 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.PlatformTasks;
 
-/// <summary>What a dataset's tasks did: the list, a task's status, its log and its result (RQ-12, out of <c>TasksManager</c>).</summary>
+/// <summary>What a dataset's tasks did: the list, a task's status, its log and its result (out of <c>TasksManager</c>).</summary>
 public sealed class TaskHistory
 {
     private const int MaxTake = 200;

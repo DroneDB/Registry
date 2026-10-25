@@ -71,7 +71,7 @@ public class DatasetResolver : IDatasetResolver
             .AsNoTracking()
             .FirstOrDefaultAsync(item => item.Slug == dsSlug && item.Organization.Slug == orgSlug, token);
 
-        // Read-only lookups repeat on every request: reuse them (REG-05). A tracked entity is for
+        // Read-only lookups repeat on every request: reuse them. A tracked entity is for
         // an update, so it always comes from the database.
         var dataset = withTracking
             ? await Load(ct)

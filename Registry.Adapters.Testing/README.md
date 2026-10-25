@@ -1,6 +1,6 @@
 # Registry.Adapters.Testing
 
-Test doubles for the ports that `Registry.Adapters` implements (XI-09). Test projects only.
+Test doubles for the ports that `Registry.Adapters` implements. Test projects only.
 
 ## FakeDdbWrapper
 
@@ -49,7 +49,7 @@ served (or listed as not served).
 `PendingMarkers.Of(path, hash, lastAttempt, missingDependencies...)` builds a `PendingBuildInfo` as
 libddb reports it: `RetryAfter` = `lastAttempt` + `LibddbRetryBackoffSeconds` (60, ddb.h "Build
 manifest"). The constant is test data only: Registry reads `retryAfter` and keeps no copy of the
-rule (XI-04); `Abi11ContractTests` checks that libddb still applies it.
+rule; `Abi11ContractTests` checks that libddb still applies it.
 
 ## Vendored contract files
 
@@ -82,7 +82,7 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   (`entry-paths.json`, the `DDBNormalizePath` golden vectors) is vendored too; 14 new fixtures and 11 new
   schemas (build artifacts, entry types, resolve/copy build files, capabilities, effective config, list
   entries with build, normalize path, data-only STAC); the STAC collection and item schemas changed.
-* 2026-10-22: DroneDB `6b9daee968412f7c1485ea0d3f6c0c3bf14af568` (XI-04): the build object
+* 2026-10-22: DroneDB `6b9daee968412f7c1485ea0d3f6c0c3bf14af568`: the build object
   (`build-artifacts`, `build-artifacts-pending`, `list-entries-ex`) and `pending-build-info` gain
   `retryAfter` (required in both schemas; volatile next to `lastAttempt` in the two pending fixtures).
   `PendingBuildInfo.RetryAfter` and `EntryBuild.RetryAfter` read it, required.
@@ -97,17 +97,17 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   (`capabilities`, `entry-types`, `build-artifacts`, `build-file`, `copy-build-artifacts`, `effective-config`,
   `list-entries-ex`: "new in 2.0" instead of "ABI 1.1"); `capabilities.schema.json` requires `abi.major >= 2`.
   The raster, colormap and index fixtures did not change. `DdbAbi` requires libddb 2.x.
-* 2026-10-24: DroneDB `d3b4945db9069b90da5ba1a9f3a707bec8a94121` (DQ-06): `raster-info` gains `indexLayer` (required in the
+* 2026-10-24: DroneDB `d3b4945db9069b90da5ba1a9f3a707bec8a94121`: `raster-info` gains `indexLayer` (required in the
   schema: the subset of `NDVI`, `NDRE`, `NDWI`, `SAVI`, `EVI` the WMS vegetation-index layer renders from the raster, in that
   order, `[]` when none; the fixture's RGB raster lists none). The commits since the last vendoring (`c5633bb`) change
   no other contract file. WMS reads the list instead of its own band-count rule (`IRasterIndexCatalog`).
 * 2026-10-24: DroneDB `58a55a560dabf7633fad904ddb11d8a00edb4e98` (the pinned build): no file changes since `d3b4945` (a test-only
   fix), SOURCE names the pinned commit.
-* 2026-10-24: DroneDB `2c9508aff26c63321fb5821ca2ac8e3041d7c221` (DQ-09, DQ-15): `effective-config` has `gdalCacheMb` (XI-06: integer
+* 2026-10-24: DroneDB `2c9508aff26c63321fb5821ca2ac8e3041d7c221`: `effective-config` has `gdalCacheMb` (integer
   16..1048576 MiB, in `settings` and in `sources`, both required by the schema; the fixture sets 256 through `DDBConfigure`), so a libddb
   built before `36d2b54` no longer matches this fixture and schema; `capabilities` lists 13 more `cancellable` exports (26 in all:
   the raster analysis exports, `DDBCalculateVolume`, `DDBDetectStockpile`, `DDBDetectAllStockpiles`, `DDBGenerateContours`,
-  `DDBMaskBorders`, `DDBComputeDeltaLocals`, `DDBApplyDelta`, `DDBApplyDeltaEx`: XI-07 steps 3 and 4). The README changelog
+  `DDBMaskBorders`, `DDBComputeDeltaLocals`, `DDBApplyDelta`, `DDBApplyDeltaEx`: the cancellation steps 3 and 4). The README changelog
   of `Contract/` also describes the entry-path rule (every export that takes an entry path refuses an absolute path, a `..`
   segment, `.ddb` and invalid UTF-8 with `DDBERR_INVALIDARGS`), which changes no fixture. No other file changed.
 * 2026-10-24: DroneDB `00b6768fcfd4738ea8d4b308b59db959289af875` (the pinned build): no file changes since `2c9508a`, SOURCE

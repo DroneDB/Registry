@@ -25,7 +25,7 @@ public class SafeMetaManager
     /// <summary>
     /// The value <paramref name="read"/> returns, or null when libddb has none. A transient error (busy index,
     /// build in progress, full disk, shutdown: <see cref="DdbErrors.IsTransient"/>) says nothing about the value
-    /// and propagates (RQ-12).
+    /// and propagates.
     /// </summary>
     private static T Read<T>(Func<T> read)
     {

@@ -161,7 +161,7 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
 
     /// <summary>
     /// Hangfire-scheduled TTL cleanup of a finished task's work directory, kept for the jobs
-    /// scheduled before RQ-10 (D4): new schedules use <see cref="FileJobs.Delete"/>.
+    /// scheduled by earlier releases: new schedules use <see cref="FileJobs.Delete"/>.
     /// </summary>
     [AutomaticRetry(Attempts = 1, OnAttemptsExceeded = AttemptsExceededAction.Fail)]
     public void DeleteWorkDirJob(string workDir) => _files.Delete(workDir, null);

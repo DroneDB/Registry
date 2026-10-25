@@ -12,7 +12,7 @@ using Registry.Web.Test.Support;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// REG-02: path-scoped job index queries used by the build badges of a listing.
+/// Path-scoped job index queries used by the build badges of a listing.
 /// </summary>
 [TestFixture]
 public class JobIndexQueryPathScopedTests

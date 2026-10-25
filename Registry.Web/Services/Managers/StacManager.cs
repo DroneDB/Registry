@@ -18,7 +18,7 @@ namespace Registry.Web.Services.Managers;
 
 /// <summary>
 /// STAC: the STAC API 1.0.0 (landing page, collections, items, search) and the legacy per-dataset documents.
-/// libddb gives the data of each document (XI-09: <c>DDBStacData</c>, <c>DDBStacItemCollectionData</c>), and
+/// libddb gives the data of each document (<c>DDBStacData</c>, <c>DDBStacItemCollectionData</c>), and
 /// <see cref="StacDocuments"/> adds every id, link and href; the listings are <see cref="StacCatalog"/>'s.
 /// </summary>
 public class StacManager

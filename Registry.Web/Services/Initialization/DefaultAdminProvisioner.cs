@@ -21,7 +21,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Initialization;
 
 /// <summary>
-/// The default admin of the web host (RQ-12, out of <see cref="DatabaseInitializer"/>): its roles, its user and its
+/// The default admin of the web host (out of <see cref="DatabaseInitializer"/>): its roles, its user and its
 /// organization, brought in line with the configuration at every start. An identity managed by an external provider
 /// has no local default admin.
 /// </summary>

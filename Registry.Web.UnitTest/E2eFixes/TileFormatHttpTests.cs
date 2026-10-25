@@ -21,7 +21,7 @@ using SkiaSharp;
 namespace Registry.Web.Test.E2eFixes;
 
 /// <summary>
-/// End-to-end check of Registry eb1311f2 + libddb 2.0.0, finding 2: <c>GET tiles/{z}/{x}/{y}.png</c> answered WebP
+/// End-to-end check: <c>GET tiles/{z}/{x}/{y}.png</c> answered WebP
 /// bytes (<c>image/webp</c>, a <c>.webp</c> download name): the render service hardcoded the format. The
 /// extension of the URL chooses the format now (<c>.png</c> a real PNG, <c>.webp</c> WebP, <c>.jpg</c> JPEG), the
 /// <c>Content-Type</c> and the file name match the bytes, libddb's format-aware export renders them

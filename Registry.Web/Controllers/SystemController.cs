@@ -18,8 +18,8 @@ namespace Registry.Web.Controllers;
 
 /// <summary>
 /// System administration: the version, the data maintenance (upload batches, empty datasets, visibility, slugs),
-/// moving datasets and merging organizations, the global report and the configuration. RQ-12 moved the build
-/// maintenance, the remote import, the processing nodes and the features to their own controllers (same routes,
+/// moving datasets and merging organizations, the global report and the configuration. The build
+/// maintenance, the remote import, the processing nodes and the features have their own controllers (same routes,
 /// same route names: <see cref="SystemRoutes"/>).
 /// </summary>
 [Authorize]

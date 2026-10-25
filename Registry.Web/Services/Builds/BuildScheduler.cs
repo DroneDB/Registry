@@ -12,8 +12,8 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Builds;
 
 /// <summary>
-/// The one place that queues builds of a dataset (RQ-12): whether an entry is buildable and whether a dataset has
-/// deferred builds comes from libddb (the build manifest, XI-04); the scheduler only queues. Before the first
+/// The one place that queues builds of a dataset: whether an entry is buildable and whether a dataset has
+/// deferred builds comes from libddb (the build manifest); the scheduler only queues. Before the first
 /// job of a call is queued, the dataset is flagged as having pending builds, so a build that fails at once is
 /// retried by the pending-build coordinator (the flag must precede the job, or a quick failure is missed).
 /// </summary>
@@ -45,7 +45,7 @@ public sealed class BuildScheduler
         if (paths.Count == 0)
             return [];
 
-        // One build object per path, in input order (the build manifest, XI-04)
+        // One build object per path, in input order (the build manifest)
         var buildable = _artifacts.GetBuilds(target.Ddb, paths)
             .Where(b => b.CanBeBuilt())
             .ToArray();

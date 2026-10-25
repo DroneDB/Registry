@@ -9,8 +9,7 @@ using Registry.Web.Services.Push;
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// The offline-first push (<see cref="PushManager"/>, what <c>PushController</c> calls) over the push services RQ-12
-/// split it into (14 parameters before): the session, the uploads, the commit.
+/// The offline-first push (<see cref="PushManager"/>, what <c>PushController</c> calls) over the push services it is split into: the session, the uploads, the commit.
 /// </summary>
 public class PushManager
 {
@@ -38,7 +37,7 @@ public class PushManager
     /// <summary>
     /// Moves a file streamed by <see cref="StreamUploadAsync"/> (dataset and access already checked)
     /// to <paramref name="filePath"/> in the folder of the push <paramref name="token"/>, once its
-    /// streamed hash matches the one the push's delta gives that path (XI-05).
+    /// streamed hash matches the one the push's delta gives that path.
     /// </summary>
     /// <exception cref="Exceptions.BadRequestException">The delta adds no file at that path, or the
     /// bytes received are not the delta's (the file is not moved).</exception>

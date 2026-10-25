@@ -12,7 +12,7 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Uploads;
 
-/// <summary>What follows the index step of an upload (RQ-12, out of <c>UploadManager</c>): builds, thumbnails, cache invalidation.</summary>
+/// <summary>What follows the index step of an upload (out of <c>UploadManager</c>): builds, thumbnails, cache invalidation.</summary>
 public sealed class UploadFinalizer
 {
     private readonly BuildScheduler _builds;
@@ -38,7 +38,7 @@ public sealed class UploadFinalizer
         if (parts.Count == 0)
             return;
 
-        // The buildable parts are built (one manifest call, XI-04); the others get their thumbnail
+        // The buildable parts are built (one manifest call); the others get their thumbnail
         var queued = await _builds.QueueBuildableAsync(new BuildTarget(ctx.Ddb, ctx.Key, ctx.OrgSlug, ctx.DsSlug),
             [.. parts.Select(p => p.Entry!.Path)], new BuildOrigin(ctx.User?.Id));
         var built = queued.Select(b => b.Path).ToHashSet(StringComparer.Ordinal);

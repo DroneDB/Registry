@@ -108,7 +108,7 @@ public class OrganizationManagerTest : TestBase
         result.Description.ShouldBe(newOrg.Description);
     }
 
-    // RQ-04 golden finding (orgs-create): POST /orgs answered the owner's user id, GET /orgs and
+    // Golden finding (orgs-create): POST /orgs answered the owner's user id, GET /orgs and
     // GET /orgs/{org} the owner's user name. The user id and name differ on purpose here.
 
     [Test]

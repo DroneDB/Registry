@@ -2,7 +2,7 @@
 namespace Registry.Web.Services;
 
 /// <summary>
-/// Every cache key format and cache category of Registry (RQ-12): what a key looks like is decided here, so the
+/// Every cache key format and cache category of Registry: what a key looks like is decided here, so the
 /// code that writes an entry and the code that invalidates it cannot drift apart.
 /// </summary>
 public static class CacheCategories

@@ -203,7 +203,7 @@ public class RescanManagerTest : TestBase
     }
 
     /// <summary>
-    /// RQ-12: the pending-build job is queued when libddb reports deferred builds (BuildScheduler), not after every
+    /// The pending-build job is queued when libddb reports deferred builds (BuildScheduler), not after every
     /// rescan; a rebuild that is deferred later is retried by the pending-build coordinator, which the scheduler
     /// flags before it queues the rebuild.
     /// </summary>
@@ -339,7 +339,7 @@ public class RescanManagerTest : TestBase
             new RescanRebuild(_cacheInvalidatorMock.Object, CreateTestLogger<RescanRebuild>()),
             CreateTestLogger<RescanManager>());
 
-    // The system rescan moved to the build maintenance (RQ-12)
+    // The system rescan moved to the build maintenance
     private BuildMaintenance CreateMaintenance(RegistryContext context) =>
         new(context, _ddbManagerMock.Object, _backgroundJobMock.Object,
             new CurrentUserBuildRequester(_authManagerMock.Object), Mock.Of<IJobIndexWriter>(),

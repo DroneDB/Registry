@@ -137,7 +137,7 @@ public class IndexReconciliationServiceTests
     }
 
     /// <summary>
-    /// Regression (review round 2): the walk used to be a single recursive
+    /// Regression: the walk used to be a single recursive
     /// <c>Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)</c>, which recursed
     /// into the live <c>.ddb</c> folder and could surface database internals as "unindexed".
     /// The iterative, pruned walk must never emit a path under a reserved prefix at any depth

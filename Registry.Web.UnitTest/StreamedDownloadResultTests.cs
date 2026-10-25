@@ -19,7 +19,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// <see cref="StreamedDownloadResult"/> and its <see cref="ContentDispositionHeader"/> (RQ-11): RFC 6266
+/// <see cref="StreamedDownloadResult"/> and its <see cref="ContentDispositionHeader"/>: RFC 6266
 /// <c>filename*</c> with the exact UTF-8 name next to an ASCII, quoted, escaped <c>filename</c>.
 /// </summary>
 [TestFixture]

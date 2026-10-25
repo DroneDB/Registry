@@ -290,7 +290,7 @@ public class PendingRecoveryIntegrationTests
         var ddb = await PendingModel("boundary");
         Add(ddb, "late.mtl", "newmtl plain\nKd 1 1 1\n");
         var marker = ddb.GetPendingBuildInfo().Single();
-        // XI-04: libddb reports when it retries the build; the enqueue path follows it
+        // Libddb reports when it retries the build; the enqueue path follows it
         marker.RetryAfter.ShouldBe(marker.LastAttempt + PendingMarkers.LibddbRetryBackoffSeconds);
         using var scope = _provider.CreateScope();
         var index = scope.ServiceProvider.GetRequiredService<IJobIndexQuery>();
@@ -629,7 +629,7 @@ public class PendingRecoveryIntegrationTests
         await WaitForState(stagedId!, "Failed");
         var failed = (await Rows(ds)).Single(x => x.JobId == stagedId);
         failed.CurrentState.ShouldBe("Failed");
-        // XI-02: the low-disk failure is typed (libddb's reason "lowDiskSpace"), so the completeness
+        // The low-disk failure is typed (libddb's reason "lowDiskSpace"), so the completeness
         // checker treats it as transient; before libddb reported reasons it was a generic InvalidOperationException
         failed.ErrorType.ShouldBe(nameof(DdbRetryableException));
         var retry = await WaitForRetry(ds, 1);

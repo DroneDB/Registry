@@ -17,7 +17,7 @@ using Shouldly;
 
 namespace Registry.Web.Test;
 
-/// <summary>HUB-05 server side: task change notifications, the event stream, and 304 on an unchanged list.</summary>
+/// <summary>Server side: task change notifications, the event stream, and 304 on an unchanged list.</summary>
 [TestFixture]
 public class TaskEventsTests
 {

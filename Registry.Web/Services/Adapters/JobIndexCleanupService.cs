@@ -40,7 +40,7 @@ public class JobIndexCleanupService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <summary>The job as stored before RQ-09 (D4): runs with the context's shutdown token.</summary>
+    /// <summary>The job as stored by earlier releases: runs with the context's shutdown token.</summary>
     public Task CleanupOldJobIndicesAsync(PerformContext? context) =>
         CleanupOldJobIndicesAsync(context, JobCancellation.Of(context));
 

@@ -11,7 +11,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// The argument checks of the raster services (RQ-11): written once, in the service, with the messages the
+/// The argument checks of the raster services: written once, in the service, with the messages the
 /// controllers sent, and made before the access check (an invalid request is a 400 whoever sends it).
 /// </summary>
 [TestFixture]

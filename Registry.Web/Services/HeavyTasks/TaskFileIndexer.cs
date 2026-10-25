@@ -18,7 +18,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.HeavyTasks;
 
 /// <summary>
-/// What a task does after it wrote files into a dataset (RQ-11; the sequence was copied in the
+/// What a task does after it wrote files into a dataset (the sequence was copied in the
 /// archive-extract, photogrammetry and dataset-import tools): index the files in chunks, queue a
 /// build of every buildable one as a child job of the task, invalidate the dataset's caches.
 /// </summary>

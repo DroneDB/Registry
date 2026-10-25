@@ -9,7 +9,7 @@ using Registry.Web.Models.DTO;
 namespace Registry.Web.Models;
 
 /// <summary>
-/// A page of an organization's dataset list (HUB-07): search, sort and paging done by the server,
+/// A page of an organization's dataset list: search, sort and paging done by the server,
 /// so the per-dataset work that only the page needs (the thumbnail check) runs for the page only.
 /// </summary>
 /// <param name="Skip">Datasets to skip after filtering and sorting.</param>

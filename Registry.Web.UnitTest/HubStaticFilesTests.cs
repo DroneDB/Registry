@@ -15,7 +15,7 @@ using Shouldly;
 
 namespace Registry.Web.Test;
 
-/// <summary>HUB-09: cache policy of the Hub's static files and serving of build-time compressed twins.</summary>
+/// <summary>Cache policy of the Hub's static files and serving of build-time compressed twins.</summary>
 [TestFixture]
 public class HubStaticFilesTests
 {

@@ -11,7 +11,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Owns the libddb process lifecycle in every host (RQ-08; XI-01, XI-06, XI-07, XI-08). Registered as
+/// Owns the libddb process lifecycle in every host. Registered as
 /// the first hosted service (<see cref="DdbRuntimeServiceCollectionExtensions.AddDdbRuntime{TRuntime}"/>):
 /// <list type="bullet">
 /// <item><see cref="StartingAsync"/>, before any hosted service starts: checks the ABI, sends the log

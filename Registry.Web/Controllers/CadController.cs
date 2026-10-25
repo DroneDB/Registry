@@ -11,7 +11,7 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
 
-/// <summary>CAD drawings of a dataset (DDB-12).</summary>
+/// <summary>CAD drawings of a dataset.</summary>
 [ApiController]
 [Route(RoutesHelper.DatasetPrefix + "/cad")]
 [Produces("application/json")]

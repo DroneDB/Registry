@@ -200,7 +200,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
-        // --- Phase 1: Submit to NodeODX and download results ---
+        // --- Step 1: Submit to NodeODX and download results ---
         var nodeId = args.NodeId;
         var node = _node.Resolve(nodeId)
                    ?? throw new InvalidOperationException($"NodeODX node '{nodeId}' is not configured.");
@@ -217,7 +217,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         using var bundle = await _node.RunAsync(node, taskName, imagePaths, optionsJson, progress, ct);
         var tempZipPath = bundle.Path;
 
-        // --- Phase 2: Determine output target ---
+        // --- Step 2: Determine output target ---
         var createNewDataset = args.CreateNewDataset ?? false;
         var targetDdb = ctx.Ddb;
         var targetDataset = ctx.Dataset;
@@ -271,7 +271,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
             destPath = string.Empty;
         }
 
-        // --- Phase 3: Extract archive into target dataset ---
+        // --- Step 3: Extract archive into target dataset ---
         await ExtractArchiveIntoDataset(
             tempZipPath, destPath, targetDdb, targetDataset, targetRoot, targetOrgSlug, targetDsSlug,
             ctx, progress, ct);

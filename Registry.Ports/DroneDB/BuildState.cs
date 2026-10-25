@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Registry.Ports.DroneDB;
 
 /// <summary>
-/// The build state of an entry (ddb.h "build manifest", XI-04), in libddb's precedence order. Written and read by
+/// The build state of an entry (ddb.h "build manifest"), in libddb's precedence order. Written and read by
 /// libddb's lowercase names (<c>"pending"</c>).
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<BuildState>))]

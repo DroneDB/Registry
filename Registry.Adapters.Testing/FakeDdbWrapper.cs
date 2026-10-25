@@ -11,7 +11,7 @@ namespace Registry.Adapters.Testing;
 
 /// <summary>
 /// An <see cref="IDdbWrapper"/> that never loads native libddb: it replays the libddb contract
-/// fixtures (XI-09, <c>Contract/</c>) recorded by DroneDB on its contract dataset
+/// fixtures (<c>Contract/</c>) recorded by DroneDB on its contract dataset
 /// (<c>a.txt</c>, <c>cloud.las</c>, <c>layer.geojson</c>, <c>ortho.tif</c>, <c>sub/img.jpg</c>,
 /// plus the drone image <c>DJI_0018.JPG</c>).
 /// <list type="bullet">

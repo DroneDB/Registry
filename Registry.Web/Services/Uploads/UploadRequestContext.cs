@@ -10,7 +10,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Uploads;
 
 /// <summary>
-/// What an upload request resolved once, before its body (UPL-01 C.1): the dataset, its index,
+/// What an upload request resolved once, before its body: the dataset, its index,
 /// the user, the quota reservation and the index-queue registration. Disposing it gives back
 /// what was not used: the reservation, the registration and temp files never committed.
 /// </summary>

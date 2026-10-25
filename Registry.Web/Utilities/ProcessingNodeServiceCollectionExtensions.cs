@@ -18,8 +18,8 @@ namespace Registry.Web.Utilities;
 /// <summary>
 /// DI registration for the application services shared by every host that executes background jobs
 /// and heavy tools: the processing node, and the web host, which builds on it and adds only its own
-/// services (RQ-07). The same container is built in tests (<c>ProcessingNodeDiCompletenessTests</c>,
-/// <c>Rq03DiValidationTests</c>) to catch a registration a tool needs at runtime.
+/// services. The same container is built in tests (<c>ProcessingNodeDiCompletenessTests</c>,
+/// <c>DiValidationTests</c>) to catch a registration a tool needs at runtime.
 /// </summary>
 public static class ProcessingNodeServiceCollectionExtensions
 {
@@ -89,7 +89,7 @@ public static class ProcessingNodeServiceCollectionExtensions
         services.AddScoped<FileJobs>();
         services.AddScoped<HealthCheckJob>();
         services.AddScoped<ExpiredRecurringJobsSweep>();
-        services.AddScoped<HangfireUtils>(); // the jobs stored before RQ-09 (D4)
+        services.AddScoped<HangfireUtils>(); // the jobs stored by earlier releases
 
         // Processing Platform task substrate (native tools incl. build/raster-export)
         services.AddProcessingPlatform();

@@ -27,7 +27,7 @@ internal static class Program
 }
 
 /// <summary>
-/// DDBShutdown (ABI 2.0, DQ-15/XI-07) in a child process, since no call but the exempt accessors
+/// DDBShutdown (ABI 2.0) in a child process, since no call but the exempt accessors
 /// works after it. Run by <see cref="LibddbContractTests"/>; prints one line per step and
 /// <see cref="Passed"/> at the end. Exit codes: 0 passed, 1 a step failed, 3 the loaded libddb is
 /// not libddb 2.x (the parent test checks the gate first, so 3 is a failure there too).

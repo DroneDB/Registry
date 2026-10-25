@@ -65,7 +65,7 @@ public class IndexReconciliationService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <summary>The job as stored before RQ-09 (D4): runs with the context's shutdown token.</summary>
+    /// <summary>The job as stored by earlier releases: runs with the context's shutdown token.</summary>
     public Task ReconcileAllDatasetsAsync(PerformContext? context) =>
         ReconcileAllDatasetsAsync(context, JobCancellation.Of(context));
 
@@ -98,7 +98,7 @@ public class IndexReconciliationService
         var root = ddb.DatasetFolderPath;
 
         // 1. Enumerate files on disk with the one dataset walker (DatasetPathPolicy.EnumerateFiles):
-        //    the reserved folders are pruned during the walk (review round 2), so the live database
+        //    the reserved folders are pruned during the walk, so the live database
         //    (.ddb at any depth) and the staged/quarantined uploads (the root .uploads) are never
         //    scanned and never count as "unindexed"; a nested ".uploads" is an ordinary user folder.
         var onDisk = new HashSet<string>(_paths.EnumerateFiles(_fs, root), StringComparer.Ordinal);

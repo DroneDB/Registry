@@ -94,7 +94,7 @@ public class OgcLayerCatalogTests
         result[1].BboxWgs84.ShouldBe([5.0, 6.0, 7.0, 8.0]);
     }
 
-    // ---- DDB-12: local CAD drawings (no CRS) ----
+    // ---- local CAD drawings (no CRS) ----
 
     [Test]
     public async Task LocalLayer_HiddenFromListingsButResolvableForFeatures()

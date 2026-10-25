@@ -28,7 +28,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// The single-purpose pieces of the UPL-01 upload pipeline and of REG-05/REG-07: hashing while
+/// The single-purpose pieces of the upload pipeline: hashing while
 /// streaming, the quota ledger, the change coalescer, multi-part reading, the native work gate,
 /// the thumbnail pre-generation queue, the dataset lookup cache and the initialized-folder set.
 /// </summary>
@@ -210,7 +210,7 @@ public class UploadPipelineComponentTests
 
     private static HttpRequest Multipart(params (string Name, string? FileName, string Content)[] parts)
     {
-        const string boundary = "----upl01boundary";
+        const string boundary = "----uploadboundary";
         var sb = new StringBuilder();
         foreach (var (name, fileName, content) in parts)
         {
@@ -263,7 +263,7 @@ public class UploadPipelineComponentTests
         temps.ShouldAllBe(t => !File.Exists(t));
     }
 
-    // ---- native work gate (REG-07 §5.2)
+    // ---- native work gate
 
     [Test]
     public async Task NativeWorkGate_NeverRunsMoreThanTheLaneWidth()
@@ -379,7 +379,7 @@ public class UploadPipelineComponentTests
         await queue.StopAsync(CancellationToken.None);
     }
 
-    // ---- dataset lookups (REG-05 item 3) and initialized folders (item 4)
+    // ---- dataset lookups and initialized folders
 
     [Test]
     public async Task DatasetLookupCache_ServesCopies_AndForgetsAnOrganizationOnInvalidation()

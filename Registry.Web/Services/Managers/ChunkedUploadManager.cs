@@ -15,7 +15,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// Resumable uploads of large files into a dataset (UPL-01 E.5): the client sends the file in
+/// Resumable uploads of large files into a dataset: the client sends the file in
 /// chunks, asks which chunks are stored after any failure, sends only those, then commits once.
 /// The commit is idempotent (keyed by the file id) and needs no pass over the file.
 /// </summary>
@@ -68,7 +68,7 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
         CancellationToken ct = default)
     {
         // Keyed by the file id: committing again (the response was lost) answers from the receipt. Honoured
-        // while the upload is resolved; the commit then runs to completion (RQ-13)
+        // while the upload is resolved; the commit then runs to completion
         using var ctx = await uploads.BeginAsync(orgSlug, dsSlug, uploadId: fileId, ct: ct);
         if (ctx.Receipt?.Results is { Count: > 0 } done && done[0].Entry is { } entry)
             return entry;

@@ -6,7 +6,7 @@ using Registry.Web.Models.DTO;
 namespace Registry.Web.Services.Ports;
 
 /// <summary>
-/// The absolute URLs Registry gives its resources (RQ-12, split from the former utilities service): the public
+/// The absolute URLs Registry gives its resources (split from the former utilities service): the public
 /// host (the external URL override, else the request's), the dataset URLs.
 /// </summary>
 public interface IUrlBuilder
@@ -24,7 +24,7 @@ public interface IUrlBuilder
     string GenerateDatasetUrl(Dataset dataset, bool useDdbScheme = false);
 
     /// <summary>
-    /// The artifacts of <paramref name="build"/> as links (XI-04): the role as libddb names it, the build-file URL
+    /// The artifacts of <paramref name="build"/> as links: the role as libddb names it, the build-file URL
     /// (a directory artifact's descriptor), the served media type. Empty for a build with no artifact or a build
     /// that is not the entry's own (a sidecar's).
     /// </summary>

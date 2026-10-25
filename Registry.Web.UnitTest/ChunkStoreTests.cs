@@ -13,7 +13,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// UPL-01 E.5: resumable chunked uploads. Each test uses a new <see cref="ChunkStore"/> per request
+/// Resumable chunked uploads. Each test uses a new <see cref="ChunkStore"/> per request
 /// where it matters: the share chunk endpoint used to keep its chunk tracker in a request-scoped
 /// object, so an upload of more than one chunk never completed.
 /// </summary>

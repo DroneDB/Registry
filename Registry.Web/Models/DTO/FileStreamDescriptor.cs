@@ -17,7 +17,7 @@ public enum FileDescriptorType
 
 /// <summary>
 /// A download: one file, or a ZIP archive of a selection or of the whole dataset, written straight
-/// to the response (REG-04: nothing is buffered, the first bytes leave while later files are still
+/// to the response (nothing is buffered, the first bytes leave while later files are still
 /// being read).
 /// </summary>
 public class FileStreamDescriptor

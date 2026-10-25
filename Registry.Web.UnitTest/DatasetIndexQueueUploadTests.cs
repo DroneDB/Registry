@@ -15,7 +15,7 @@ using static Registry.Web.Test.DatasetIndexQueueTests;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// UPL-01 C.5 and E.1 on the index queue: uploads registered with BeginUpload do not wait for the
+/// C.5 and E.1 on the index queue: uploads registered with BeginUpload do not wait for the
 /// batch window once nothing else is streaming, while a registered upload still streaming keeps the
 /// window open for its files; hash hints reach the native batch; each file gets its own outcome.
 /// </summary>

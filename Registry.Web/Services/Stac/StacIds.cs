@@ -5,7 +5,7 @@ using System.Text;
 namespace Registry.Web.Services.Stac;
 
 /// <summary>
-/// The STAC ids and URL segments Registry gives the entries of a dataset (XI-09: libddb's data-only documents
+/// The STAC ids and URL segments Registry gives the entries of a dataset (libddb's data-only documents
 /// have none). The STAC API names a feature by the URL-safe Base64 of its path; the legacy per-dataset documents
 /// (<c>/orgs/{org}/ds/{ds}/stac</c>) keep the ids and links they always had.
 /// </summary>

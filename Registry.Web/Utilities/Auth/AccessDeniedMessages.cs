@@ -5,9 +5,9 @@ using Registry.Web.Services.Managers;
 namespace Registry.Web.Utilities.Auth;
 
 /// <summary>
-/// The client-facing message of every refused access check (RQ-06): one per rule, so a client sees the
-/// same text for the same refusal whatever the endpoint. The status comes from plan decision D2 (401 for
-/// an anonymous caller, 403 for a signed-in one).
+/// The client-facing message of every refused access check: one per rule, so a client sees the
+/// same text for the same refusal whatever the endpoint. The status is 401 for
+/// an anonymous caller and 403 for a signed-in one.
 /// </summary>
 public static class AccessDeniedMessages
 {

@@ -87,7 +87,7 @@ public sealed class DatasetQueries
                     continue;
             }
 
-            // Sizes and properties are cached per dataset until its index changes (REG-06)
+            // Sizes and properties are cached per dataset until its index changes
             var summary = _summaries.Get(orgSlug, ds.InternalRef);
 
             readable.Add((new DatasetDto

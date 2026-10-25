@@ -5,7 +5,7 @@ using Registry.Ports.Import;
 
 namespace Registry.Web.Services.Import;
 
-/// <summary>The name and slug of the dataset an import creates (RQ-12, out of the import manager).</summary>
+/// <summary>The name and slug of the dataset an import creates (out of the import manager).</summary>
 public static class ImportDatasetNaming
 {
     /// <summary>The name: the requested one, else the source's suggestion, else "Imported dataset".</summary>

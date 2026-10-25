@@ -113,7 +113,7 @@ public sealed unsafe class NativeDdbRuntime : IDdbRuntime
 
     /// <summary>
     /// <c>DDBLogCallback</c>: called on the native thread that logs, possibly on several at once.
-    /// Never throws (XI-03): a sink failure is dropped.
+    /// Never throws: a sink failure is dropped.
     /// </summary>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnLog(int level, byte* message, byte* source, ulong opId, IntPtr userData)

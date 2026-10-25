@@ -9,7 +9,7 @@ using Registry.Web.Models.Configuration;
 namespace Registry.Web.Services.Import;
 
 /// <summary>
-/// The import sources a server offers (RQ-12, out of the import manager and tool): the registered sources
+/// The import sources a server offers (out of the import manager and tool): the registered sources
 /// (<see cref="IImportSourceFactory"/>) narrowed by the allow-list of the import settings, with the one wording of
 /// why a source type is refused. The web host answers with a 400, the worker with an invalid-operation failure.
 /// </summary>

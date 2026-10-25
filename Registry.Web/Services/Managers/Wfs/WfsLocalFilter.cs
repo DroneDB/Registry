@@ -13,7 +13,7 @@ using Registry.Web.Utilities.Ogc;
 namespace Registry.Web.Services.Managers.Wfs;
 
 /// <summary>
-/// The FES 2.0 filter evaluation WFS does itself (RQ-12, out of <c>WfsManager</c>), for the filters DroneDB's SQL
+/// The FES 2.0 filter evaluation WFS does itself (out of <c>WfsManager</c>), for the filters DroneDB's SQL
 /// cannot express.
 /// </summary>
 internal static class WfsLocalFilter

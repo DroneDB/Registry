@@ -6,7 +6,7 @@ using Registry.Web.Services.HeavyTasks;
 
 namespace Registry.Web.Test.Support;
 
-/// <summary>The shared archive extraction for tests (RQ-10), over the real file system and the test path rule.</summary>
+/// <summary>The shared archive extraction for tests, over the real file system and the test path rule.</summary>
 public static class TestArchives
 {
     public static DatasetArchiveExtractor Extractor(IArchiveExtractor archives, VolumeHeadroom? headroom = null) =>

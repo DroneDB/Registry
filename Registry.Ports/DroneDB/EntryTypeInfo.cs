@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace Registry.Ports.DroneDB;
 
 /// <summary>
-/// An entry type and what libddb does with it (<c>DDBGetEntryTypes</c>, XI-04): the one source of
+/// An entry type and what libddb does with it (<c>DDBGetEntryTypes</c>): the one source of
 /// "which types build, which have thumbnails, which extensions are sidecars".
 /// </summary>
 public sealed class EntryTypeInfo

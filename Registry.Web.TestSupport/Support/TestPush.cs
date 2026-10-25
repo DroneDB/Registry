@@ -12,7 +12,7 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Test.Support;
 
-/// <summary>The push API (RQ-12: a facade over the session, the uploads and the commit) over test collaborators.</summary>
+/// <summary>The push API (a facade over the session, the uploads and the commit) over test collaborators.</summary>
 public static class TestPush
 {
     public static PushManager Manager(IDatasetResolver datasets, IDdbManager ddbManager, IDatasetsManager datasetsManager,

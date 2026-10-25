@@ -399,7 +399,7 @@ public class PendingBuildCoordinationTests
             .Throws(new InvalidOperationException("storage unavailable"));
         Should.Throw<InvalidOperationException>(() =>
             DatasetBuildCoordinator.Acquire(Org, Ds, _storage, connection.Object));
-        // Both shapes of the pending-build job retry a coordinator contention (D4: the stored one too)
+        // Both shapes of the pending-build job retry a coordinator contention (the stored one too)
         foreach (var job in new[]
                  {
                      Job.FromExpression<DdbJobs>(j => j.BuildPending(Org, Guid.Empty, null)),

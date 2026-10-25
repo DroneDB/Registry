@@ -8,7 +8,7 @@ using Registry.Web.Models;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// The JSON contract of the Registry API (RQ-14, D3), source-generated: every DTO the controllers answer or bind, the
+/// The JSON contract of the Registry API, source-generated: every DTO the controllers answer or bind, the
 /// request bodies and the records the caches and the stores keep. Its names are the ones of the DTOs
 /// (<c>camelCase</c>, or the explicit <c>[JsonPropertyName]</c>); libddb's own documents travel as
 /// <see cref="JsonElement"/> and are never renamed. Used through <see cref="ApiJson.Options"/>, together with

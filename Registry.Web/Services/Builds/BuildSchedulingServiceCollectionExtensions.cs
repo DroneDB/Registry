@@ -9,7 +9,7 @@ namespace Registry.Web.Services.Builds;
 public static class BuildSchedulingServiceCollectionExtensions
 {
     /// <summary>
-    /// libddb's build manifest by role (XI-04), the one place that queues builds (RQ-12) and the pending flag it
+    /// libddb's build manifest by role, the one place that queues builds and the pending flag it
     /// sets; builds queued without an origin run as the service (the web host replaces the requester with the
     /// signed-in user). Needs the job services (<see cref="IBackgroundJobsProcessor"/>, <see cref="BuildPendingService"/>).
     /// </summary>

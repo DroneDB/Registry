@@ -41,7 +41,7 @@ public class LocalThumbnailGenerator : IThumbnailGenerator
 
         try
         {
-            // The native render stops with the current DdbCancellation (the gate's token, RQ-13)
+            // The native render stops with the current DdbCancellation (the gate's token)
             var data = _ddbWrapper.GenerateThumbnail(filePath, size);
             await output.WriteAsync(data, ct);
 

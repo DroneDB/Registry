@@ -20,7 +20,7 @@ namespace Registry.Web.Services.Features;
 
 /// <summary>
 /// One part of <see cref="FeaturesDto"/>, from one concern's settings and services: a new feature is a new section,
-/// not one more dependency of a builder (RQ-12).
+/// not one more dependency of a builder.
 /// </summary>
 public interface IFeatureSection
 {
@@ -177,7 +177,7 @@ public sealed class HubFeatures : IFeatureSection
     }
 }
 
-/// <summary>The entry types: what libddb reports (<c>DDBGetEntryTypes</c>), passed through (plan decision D8).</summary>
+/// <summary>The entry types: what libddb reports (<c>DDBGetEntryTypes</c>), passed through.</summary>
 public sealed class EntryTypeFeatures : IFeatureSection
 {
     private readonly IBuildArtifactResolver _builds;

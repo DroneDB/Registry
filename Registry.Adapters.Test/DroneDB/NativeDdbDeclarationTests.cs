@@ -11,7 +11,7 @@ using Shouldly;
 namespace Registry.Adapters.Test.DroneDB;
 
 /// <summary>
-/// XI-03, RQ-08: the native declarations match ddb.h's binary layout (its static assertions) and the
+/// The native declarations match ddb.h's binary layout (its static assertions) and the
 /// marshalling rules, checked by reflection without loading libddb.
 /// </summary>
 [TestFixture]

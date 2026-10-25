@@ -35,7 +35,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Registry.Adapters\Registry.Adapters.csproj" />
-      <!-- The vendored libddb contract (XI-09): the golden path vectors (Rq10PathVectorTests) -->
+      <!-- The vendored libddb contract: the golden path vectors (EntryPathVectorTests) -->
       <ProjectReference Include="..\Registry.Adapters.Testing\Registry.Adapters.Testing.csproj" />
       <ProjectReference Include="..\Registry.Test.Common\Registry.Test.Common.csproj" />
     </ItemGroup>

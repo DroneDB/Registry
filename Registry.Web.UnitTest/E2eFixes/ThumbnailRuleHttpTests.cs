@@ -20,7 +20,7 @@ using Shouldly;
 namespace Registry.Web.Test.E2eFixes;
 
 /// <summary>
-/// End-to-end check of Registry eb1311f2 + libddb 2.0.0, finding 1: <c>GET thumb?path=model/x.obj</c> was a 500 with
+/// End-to-end check: <c>GET thumb?path=model/x.obj</c> was a 500 with
 /// an ERR stack (<c>nxs/model.nxz not recognized as being in a supported file format</c>): the thumbnail source of a
 /// model is its Nexus artifact, which GDAL cannot open. libddb says per type whether it has a thumbnail
 /// (<c>DDBGetEntryTypes</c>: <c>thumbnail: none|file|build</c>); the thumbnail path asks that one rule and answers

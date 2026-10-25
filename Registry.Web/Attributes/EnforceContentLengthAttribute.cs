@@ -22,7 +22,7 @@ public enum ContentLengthLimit
 /// <summary>
 /// Rejects a request whose declared <c>Content-Length</c> is above the configured limit with
 /// <see cref="PayloadTooLargeException"/> (413), before any byte of the body is read or stored. The one
-/// place of that rule (RQ-05): it used to be copied into three upload actions. Kestrel still enforces
+/// place of that rule: it used to be copied into three upload actions. Kestrel still enforces
 /// the limit mid-stream for a body without a length (<see cref="ConfigurableUploadSizeLimitAttribute"/>);
 /// the classifier maps that 413 too. A resource filter, so the exception reaches the pipeline's
 /// exception handler, which writes the ProblemDetails body.

@@ -12,7 +12,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Utilities.Auth;
 
 /// <summary>
-/// The requirement of the <see cref="Policies.Admin"/> policy (RQ-06), checked by
+/// The requirement of the <see cref="Policies.Admin"/> policy, checked by
 /// <see cref="AdminAuthorizationHandler"/>.
 /// </summary>
 public sealed class AdminRequirement : IAuthorizationRequirement;
@@ -29,7 +29,7 @@ public sealed class AdminOrMonitorTokenRequirement : IAuthorizationRequirement;
 /// is authenticated, <b>its token says admin</b> (<see cref="Policies.IsAdmin"/>, the claim the Hub also
 /// reads) <b>and the identity store still says admin</b> for an active user (the cached auth snapshot that
 /// <see cref="IAuthManager.IsUserAdmin"/> reads). It is the conjunction of the two rules the gates used
-/// before RQ-06, so no gate became more permissive: a user promoted after signing in is an admin from the
+/// separately, so no gate became more permissive: a user promoted after signing in is an admin from the
 /// next token (when the Hub shows the admin pages too), a demoted, deactivated or deleted administrator
 /// loses the gates at once.
 /// </summary>
@@ -82,7 +82,7 @@ public sealed class AdminAuthorizationHandler : IAuthorizationHandler
 /// <summary>
 /// Answers a signed-in caller refused by the <see cref="Policies.Admin"/> policy with a ProblemDetails 403
 /// and one message (<see cref="AccessDeniedMessages.AdminRequired"/>, <c>noRetry: true</c>), like every
-/// other refusal of the API (D1). Every other outcome (an anonymous caller's challenge, other policies)
+/// other refusal of the API. Every other outcome (an anonymous caller's challenge, other policies)
 /// is the framework's default.
 /// </summary>
 public sealed class RegistryAuthorizationResultHandler : IAuthorizationMiddlewareResultHandler

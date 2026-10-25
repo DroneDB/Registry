@@ -1,7 +1,7 @@
 namespace Registry.Test.Common;
 
 /// <summary>
-/// URLs of the DroneDB/test_data fixtures, pinned to one commit (XI-09).
+/// URLs of the DroneDB/test_data fixtures, pinned to one commit.
 /// </summary>
 /// <remarks>
 /// <para>Every test downloads test_data through <see cref="Url"/>, never from a branch

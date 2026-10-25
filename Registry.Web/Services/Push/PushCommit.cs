@@ -44,7 +44,7 @@ public sealed class PushCommit
 
     public async Task Commit(string orgSlug, string dsSlug, string token, CancellationToken ct = default)
     {
-        // Honoured while the dataset is resolved, and by the two native calls that read the pushed files below (XI-07)
+        // Honoured while the dataset is resolved, and by the two native calls that read the pushed files below
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
 
         var ddb = access.Ddb;
@@ -68,7 +68,7 @@ public sealed class PushCommit
         // Unchanged dataset: the delta computed by Init still holds
         var delta = session.Delta;
 
-        // The uploads checked against the delta when they arrived (XI-05), taken before the local
+        // The uploads checked against the delta when they arrived, taken before the local
         // files are linked in: libddb hashes the linked ones, and nothing it was not told about
         var verifiedHashes = await _sessionStore.VerifiedHashesAsync(baseTempFolder, addTempFolder, session);
 
@@ -96,7 +96,7 @@ public sealed class PushCommit
             metaDump = await _fileSystem.ReadAllTextAsync(metaFile, ct);
         }
 
-        // Applies delta. Atomic to a cancel (libddb, XI-07): a request that goes away while it reads and hashes the
+        // Applies delta. Atomic to a cancel (libddb): a request that goes away while it reads and hashes the
         // added files stops it with the dataset and the pushed files as they were (DdbCanceledException, the session
         // stays: the client commits again); once it starts to change the dataset it finishes whole, returns normally
         // and the commit goes on whatever the token says now, the builds below queueing with no token

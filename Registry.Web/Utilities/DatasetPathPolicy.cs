@@ -11,10 +11,10 @@ using Registry.Web.Services.Import;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// The one dataset path rule of the Registry (RQ-10): which paths name something in a dataset, and
+/// The one dataset path rule of the Registry: which paths name something in a dataset, and
 /// how each is spelled. The rule is libddb's (<c>DDBNormalizePath</c>, through
 /// <see cref="IDdbWrapper.NormalizePath"/>; golden vectors in DroneDB
-/// <c>tests/contract/vectors/entry-paths.json</c>, XI-09), so Registry and libddb accept and reject
+/// <c>tests/contract/vectors/entry-paths.json</c>), so Registry and libddb accept and reject
 /// the same paths. Registry adds two things: <see cref="IDDB.UploadsFolderName"/> is reserved as the
 /// first segment (its staging and quarantine folder), and a whitespace-only path is empty.
 /// <para>

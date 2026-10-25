@@ -2,7 +2,7 @@
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>
-/// Tuning of the upload pipeline (UPL-01). Bound from <c>AppSettings:Uploads</c>.
+/// Tuning of the upload pipeline. Bound from <c>AppSettings:Uploads</c>.
 /// </summary>
 public class UploadSettings
 {

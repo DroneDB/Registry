@@ -72,7 +72,7 @@ public class OgcExceptionFilterTest
         r.Content.ShouldContain("NoApplicableCode");
     }
 
-    /// <summary>RQ-08 (XI-02): the typed libddb errors take the API's status in the OGC envelope.</summary>
+    /// <summary>The typed libddb errors take the API's status in the OGC envelope.</summary>
     [TestCase(typeof(DdbInvalidArgumentsException), 400, "InvalidParameterValue")]
     [TestCase(typeof(DdbNotFoundException), 404, "NotFound")]
     [TestCase(typeof(DdbRetryableException), 503, "ServiceUnavailable")]

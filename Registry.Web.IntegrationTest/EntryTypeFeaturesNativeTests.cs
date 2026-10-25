@@ -16,7 +16,7 @@ namespace Registry.Web.Test;
 
 /// <summary>
 /// The <c>entryTypes</c> of <c>GET /sys/features</c> on the real libddb: the section is what <c>DDBGetEntryTypes</c>
-/// answers (plan decision D8), for every type of Registry's <see cref="EntryType"/> and with the rules the Hub relies on.
+/// answers, for every type of Registry's <see cref="EntryType"/> and with the rules the Hub relies on.
 /// Run: dotnet test Registry.Web.IntegrationTest --filter "FullyQualifiedName~EntryTypeFeaturesNativeTests"
 /// </summary>
 [TestFixture]

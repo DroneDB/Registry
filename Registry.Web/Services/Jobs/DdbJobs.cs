@@ -11,7 +11,7 @@ namespace Registry.Web.Services.Jobs;
 
 /// <summary>
 /// The dataset jobs (build, pending builds, cleanup, mask borders, thumbnail). A job names its
-/// dataset by organization and <c>InternalRef</c> (D4: never a DroneDB object, which Hangfire
+/// dataset by organization and <c>InternalRef</c> (never a DroneDB object, which Hangfire
 /// would serialize) and opens it when it runs (<see cref="IDdbManager.Open"/>, which never
 /// creates a dataset deleted in the meantime). Each job writes its progress through a
 /// <see cref="JobConsole"/> scrubbed of the dataset folder (the build log tail is readable by
@@ -35,7 +35,7 @@ public class DdbJobs : DdbRetriedJob
 
     /// <summary>Builds <paramref name="path"/> (null: the whole dataset).</summary>
     /// <remarks>
-    /// The class policy without <see cref="DdbRetryableException"/> (XI-02): a retryable build failure
+    /// The class policy without <see cref="DdbRetryableException"/>: a retryable build failure
     /// (low disk, tool idle timeout) fails the job, and the pending-build coordinator
     /// (<see cref="Adapters.BuildPendingService"/>) owns its retry with its own budgeted backoff;
     /// the artifact completeness check does not count it as a content failure. A second retry loop
@@ -139,7 +139,7 @@ public class DdbJobs : DdbRetriedJob
         catch (OperationCanceledException)
         {
             // Hangfire canceled the job (shutdown: it is requeued; aborted: it ends here). libddb stopped the build
-            // at its next checkpoint and left no partial artifact: not a build failure (RQ-13)
+            // at its next checkpoint and left no partial artifact: not a build failure
             console.Debug("Build canceled");
             throw;
         }

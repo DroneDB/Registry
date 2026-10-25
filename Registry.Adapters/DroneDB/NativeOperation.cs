@@ -5,7 +5,7 @@ namespace Registry.Adapters.DroneDB;
 
 /// <summary>
 /// Hands the current <see cref="DdbOperation"/> to libddb right before a native call
-/// (<c>DDBSetThreadOperation</c>, ABI 2.0, XI-08). libddb keeps it for the next call on the
+/// (<c>DDBSetThreadOperation</c>, ABI 2.0). libddb keeps it for the next call on the
 /// thread only, until that call returns, so it is set before each call of an operation: an async
 /// job hops between pool threads, and every call it makes carries its own id. Outside an
 /// operation nothing is called (the previous call's id ended with it).

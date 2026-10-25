@@ -9,7 +9,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Import;
 
 /// <summary>
-/// The credentials in the parameters of an import task (RQ-12, out of the import managers and tools): encrypted by
+/// The credentials in the parameters of an import task (out of the import managers and tools): encrypted by
 /// the web host before the task is queued (so a password is never stored in the job payload or the job index in
 /// plaintext) and decrypted by the worker. An encrypted value is the cipher text behind the <see cref="Prefix"/>.
 /// </summary>

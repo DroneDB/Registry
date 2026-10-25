@@ -11,7 +11,7 @@ namespace Registry.Web.Services.Managers;
 
 /// <summary>
 /// The organizations API (<see cref="IOrganizationsManager"/>, what the controllers and the sign-up call) over the
-/// services RQ-12 split it into (9 parameters before): reading, creating and editing, merging, and the members.
+/// services it is split into: reading, creating and editing, merging, and the members.
 /// </summary>
 public class OrganizationsManager : IOrganizationsManager
 {

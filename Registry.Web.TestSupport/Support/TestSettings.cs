@@ -22,7 +22,7 @@ namespace Registry.Web.Test.Support;
 /// <item><see cref="Mutable"/>: an <see cref="IOptions{TOptions}"/> whose value a test can swap after
 /// the SUT dependencies were wired (what <c>mock.Setup(o =&gt; o.Value).Returns(...)</c> did).</item>
 /// <item><see cref="As{T}"/> / <see cref="Options{T}(IOptions{AppSettings})"/>: a focused options class
-/// (RQ-07) bound from the same keys as an <see cref="AppSettings"/>, as the host binds it, so a test keeps
+/// bound from the same keys as an <see cref="AppSettings"/>, as the host binds it, so a test keeps
 /// one settings object for every class it wires.</item>
 /// </list>
 /// </summary>

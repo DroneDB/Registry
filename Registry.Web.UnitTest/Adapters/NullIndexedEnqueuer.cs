@@ -9,7 +9,7 @@ namespace Registry.Web.Test.Adapters;
 /// <summary>
 /// Shared no-op <see cref="IIndexedJobEnqueuer"/> for unit-test doubles that must not index
 /// job runs (previously copy-pasted as a private nested class in RetryEndpointTest and
-/// BackgroundJobsProcessorTest - review round 2, finding 3/D4).
+/// BackgroundJobsProcessorTest).
 /// </summary>
 internal sealed class NullIndexedEnqueuer : IIndexedJobEnqueuer
 {

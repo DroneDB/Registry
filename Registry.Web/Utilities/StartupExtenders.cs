@@ -40,7 +40,7 @@ public static class StartupExtenders
 
         var migrationsAssembly = DbProviderConfigurator.MigrationsAssemblyName(migrationsNamespace, provider);
 
-        // Pooled (RQ-15, numbers in its RESULTS): the options are built once, from the root provider, so what they
+        // Pooled: the options are built once, from the root provider, so what they
         // hold must be singletons (the interceptors are) and the contexts must not change their options in OnConfiguring
         services.AddDbContextPool<T>((sp, options) =>
         {

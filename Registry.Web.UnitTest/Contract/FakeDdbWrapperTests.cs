@@ -16,7 +16,7 @@ namespace Registry.Web.Test.Contract;
 
 /// <summary>
 /// <see cref="FakeDdbWrapper"/> answers the calls the libddb contract fixtures record, with the
-/// caller's paths and URLs, and refuses every other call (XI-09).
+/// caller's paths and URLs, and refuses every other call.
 /// </summary>
 [TestFixture]
 public sealed class FakeDdbWrapperTests
@@ -91,9 +91,9 @@ public sealed class FakeDdbWrapperTests
         // Deprecated exports Registry no longer calls (GetBuildArtifacts replaces the build status; the entry
         // listing is ListEntries)
         "build-status", "list", "list-folder",
-        // ABI 2.0 outputs with no port member yet: the listing with build objects (RQ-11)
+        // ABI 2.0 outputs with no port member yet: the listing with build objects
         "list-entries-ex",
-        // The STAC exports that build Registry's URLs, which Registry no longer calls (XI-09, RQ-12: the data-only
+        // The STAC exports that build Registry's URLs, which Registry no longer calls (the data-only
         // documents replace them and Registry builds every id, link and href)
         "stac-collection", "stac-item-collection", "stac-item-drone-image", "stac-item-georaster", "stac-item-image"
     ];
@@ -131,7 +131,7 @@ public sealed class FakeDdbWrapperTests
 
     private static PathVector[] Vectors() => [.. PathVectors.All];
 
-    // XI-09: the fake answers DDBNormalizePath with a copy of libddb's rule; every golden vector pins
+    // The fake answers DDBNormalizePath with a copy of libddb's rule; every golden vector pins
     // it (Registry.Adapters.Ddb.Test runs the same vectors through native libddb)
     [TestCaseSource(nameof(Vectors))]
     public void NormalizePath_AnswersEveryGoldenVector(PathVector vector)

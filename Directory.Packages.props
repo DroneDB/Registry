@@ -1,7 +1,7 @@
 <Project>
 
     <!--
-        Central package management (RQ-03): every NuGet package version is set here, once.
+        Central package management: every NuGet package version is set here, once.
         A project lists the package with <PackageReference Include="..." /> and no Version.
         PrivateAssets/IncludeAssets stay on the PackageReference in the project.
 

@@ -32,7 +32,7 @@ using Registry.Web.Services.Caching;
 namespace Registry.Web.Test.Ogc;
 
 /// <summary>
-/// REG-12: OGC requests authorize once, WMS GetMap renders are cached on the pixel grid of the
+/// OGC requests authorize once, WMS GetMap renders are cached on the pixel grid of the
 /// request, WMTS tiles share the Registry tile cache and WCS raster probes are cached.
 /// </summary>
 [TestFixture]
@@ -298,7 +298,7 @@ public class OgcRenderCachingTests
     }
 }
 
-/// <summary>REG-12: pure tests of the GetMap render cache key.</summary>
+/// <summary>Pure tests of the GetMap render cache key.</summary>
 [TestFixture]
 public class WmsRenderKeyTests
 {

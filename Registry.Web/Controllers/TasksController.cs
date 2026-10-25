@@ -67,7 +67,7 @@ public class TasksController : ControllerBaseEx
     {
         var page = await _tasksManager.ListPageAsync(orgSlug, dsSlug, toolId, state, skip, take, ct);
 
-        // Polling clients send the tag they have: an unchanged list costs a 304, not the list (HUB-05)
+        // Polling clients send the tag they have: an unchanged list costs a 304, not the list
         return OkUnlessNotModified(page.Items, page.ETag, "private, no-cache");
     }
 
@@ -77,7 +77,7 @@ public class TasksController : ControllerBaseEx
     public const int EventStreamHeartbeatSeconds = 25;
 
     /// <summary>
-    /// Server-sent events: a <c>tasks</c> event whenever the dataset's task list changes (HUB-05).
+    /// Server-sent events: a <c>tasks</c> event whenever the dataset's task list changes.
     /// The Hub refreshes the list (a conditional GET) on each event instead of polling. A comment
     /// line is sent every <see cref="EventStreamHeartbeatSeconds"/> seconds so proxies keep the
     /// connection open; <c>X-Accel-Buffering: no</c> keeps nginx from buffering the stream.

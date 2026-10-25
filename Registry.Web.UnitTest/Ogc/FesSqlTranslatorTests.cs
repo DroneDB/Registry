@@ -6,7 +6,7 @@ using Shouldly;
 
 namespace Registry.Web.Test.Ogc;
 
-/// <summary>REG-11: FES 2.0 filters DroneDB evaluates in SQL, and those left to the Registry.</summary>
+/// <summary>FES 2.0 filters DroneDB evaluates in SQL, and those left to the Registry.</summary>
 [TestFixture]
 public class FesSqlTranslatorTests
 {

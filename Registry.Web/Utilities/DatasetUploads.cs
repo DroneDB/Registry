@@ -30,7 +30,7 @@ public static class DatasetUploads
         string datasetFolderPath, Stream source, CancellationToken ct = default)
     {
         // Temp lives under the dataset folder (same volume as the final file) -> a same-volume
-        // File.Move at commit time is a genuine atomic rename (review round 2, finding 6).
+        // File.Move at commit time is a genuine atomic rename.
         // An aborted or oversized stream drops the partial file (the scratch file's Dispose).
         using var temp = scratch.CreateForDataset(datasetFolderPath, TempFileExtension);
 

@@ -13,9 +13,9 @@ namespace Registry.Web.Test;
 
 /// <summary>
 /// Tests for <see cref="ExtractionBudget"/>, the shared decompression-bomb / disk-space guard, and
-/// <see cref="VolumeHeadroom"/> (RQ-10), which creates it: the volume is measured through a function,
+/// <see cref="VolumeHeadroom"/>, which creates it: the volume is measured through a function,
 /// so the disk-space net is tested on a volume with a given free space, and its margin includes
-/// libddb's free-disk floor (XI-06).
+/// libddb's free-disk floor.
 /// </summary>
 [TestFixture]
 public class ExtractionBudgetTests
@@ -111,7 +111,7 @@ public class ExtractionBudgetTests
         headroom.MarginBytes(0).ShouldBe(0);
     }
 
-    // XI-06: an extraction that would leave less than libddb needs stops; with the old margin alone
+    // An extraction that would leave less than libddb needs stops; with the old margin alone
     // (256 MiB) this one would have gone on and left every build of the files without room
     [Test]
     public void Budget_StopsBeforeEatingIntoLibddbsFloor()

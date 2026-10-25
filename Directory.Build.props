@@ -17,7 +17,7 @@
     </PropertyGroup>
 
     <!--
-        Analyzer and nullable ratchet (RQ-03, decision D7).
+        Analyzer and nullable ratchet.
 
         Nullable is on for every project. A project that is not annotated yet sets
         <Nullable>disable</Nullable> in its csproj and is listed in build/nullable-allowlist.txt.
@@ -30,7 +30,7 @@
     </PropertyGroup>
 
     <!--
-        The DroneDB (libddb) build Registry is built and tested against (RQ-02 item 10, XI-01).
+        The DroneDB (libddb) build Registry is built and tested against.
 
         This is the only place it is written. scripts/ddb-release.sh reads it for everything that
         installs libddb, downloads exactly this build and checks it with sha256sum -c:

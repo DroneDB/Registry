@@ -12,7 +12,7 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Uploads;
 
-/// <summary>The commit of an upload request (RQ-12, out of <c>UploadManager</c>): the streamed files become entries of the dataset.</summary>
+/// <summary>The commit of an upload request (out of <c>UploadManager</c>): the streamed files become entries of the dataset.</summary>
 public sealed class UploadCommitter
 {
     private readonly UploadFiles _files;

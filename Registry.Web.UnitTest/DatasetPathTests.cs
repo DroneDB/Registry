@@ -9,7 +9,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// <see cref="DatasetPath"/>, the checked dataset path of a request (RQ-11): made only by
+/// <see cref="DatasetPath"/>, the checked dataset path of a request: made only by
 /// <see cref="DatasetPathPolicy.Parse"/>, read from JSON bodies by <see cref="DatasetPathJsonConverter"/>.
 /// </summary>
 [TestFixture]

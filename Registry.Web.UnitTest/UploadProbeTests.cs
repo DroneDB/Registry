@@ -13,7 +13,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// UPL-01 A.2: the upload self-test endpoint discards the body and reports its size; its rate
+/// The upload self-test endpoint discards the body and reports its size; its rate
 /// limit is one fixed window per user.
 /// </summary>
 [TestFixture]

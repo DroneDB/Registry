@@ -8,7 +8,7 @@ using System.Text;
 namespace Registry.Web.Test.Support;
 
 /// <summary>
-/// A checked-in, line-based snapshot under <c>ImprovementBaselines/Snapshots</c> of the running test
+/// A checked-in, line-based snapshot under <c>Baselines/Snapshots</c> of the running test
 /// project (e.g. <c>Registry.Web.UnitTest</c>).
 /// It is read from the source tree when the tests run inside the repository (so an update is seen
 /// without a rebuild), else from the copy in the test output. <see cref="Verify"/> fails with a diff on any
@@ -24,7 +24,7 @@ public static class SnapshotFile
     public const string UpdateVariable = "REGISTRY_UPDATE_SNAPSHOTS";
 
     private const string SnapshotsFolder = "Snapshots";
-    private const string BaselinesFolder = "ImprovementBaselines";
+    private const string BaselinesFolder = "Baselines";
     private const string ProjectFilePattern = "*.csproj";
     private const string CommentPrefix = "#";
 

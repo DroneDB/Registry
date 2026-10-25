@@ -12,7 +12,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Test.Support;
 
 /// <summary>
-/// An <see cref="OrganizationsManager"/> over its collaborators, for tests that build it by hand (RQ-12: the manager
+/// An <see cref="OrganizationsManager"/> over its collaborators, for tests that build it by hand (the manager
 /// takes the services it was split into; this wires them the way the container does).
 /// </summary>
 public static class TestOrganizations

@@ -62,7 +62,7 @@ public class ArtifactCompletenessCheckerService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <summary>The job as stored before RQ-09 (D4): runs with the context's shutdown token.</summary>
+    /// <summary>The job as stored by earlier releases: runs with the context's shutdown token.</summary>
     public Task CheckAndQueueAsync(PerformContext? context) => CheckAndQueueAsync(context, JobCancellation.Of(context));
 
     public async Task CheckAndQueueAsync(PerformContext? context, CancellationToken cancellationToken)
@@ -94,7 +94,7 @@ public class ArtifactCompletenessCheckerService
     }
 
     /// <summary>
-    /// The build manifest of every entry with one native call (XI-04), or null when DroneDB cannot
+    /// The build manifest of every entry with one native call, or null when DroneDB cannot
     /// answer in one go (the scan then asks entry by entry, isolating failures).
     /// </summary>
     private Dictionary<string, EntryBuildArtifacts>? GetBuilds(IDDB ddb, IReadOnlyList<EntrySummary> entries,

@@ -42,7 +42,7 @@ public class OrphanedDatasetCleanupService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <summary>The job as stored before RQ-09 (D4): runs with the context's shutdown token.</summary>
+    /// <summary>The job as stored by earlier releases: runs with the context's shutdown token.</summary>
     public Task CleanupOrphanedFoldersAsync(PerformContext? context) =>
         CleanupOrphanedFoldersAsync(context, JobCancellation.Of(context));
 

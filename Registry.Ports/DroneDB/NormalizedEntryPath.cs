@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Registry.Ports.DroneDB;
 
 /// <summary>
-/// libddb's answer to "is this a dataset path, and which one?" (<c>DDBNormalizePath</c>, XI-09): the
+/// libddb's answer to "is this a dataset path, and which one?" (<c>DDBNormalizePath</c>): the
 /// normalized path ('/' separated, no empty or "." segment, no trailing separator) or the first rule
 /// it breaks (<see cref="EntryPathRejection"/>). Exactly one of the two is set. The golden vectors
 /// of the rule are DroneDB's <c>tests/contract/vectors/entry-paths.json</c>.

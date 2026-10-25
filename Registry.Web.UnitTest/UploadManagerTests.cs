@@ -34,8 +34,8 @@ using Registry.Web.Services.Builds;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// UPL-01 upload pipeline: bundles (C.2), pre-checks before the first byte (E.2), receipts for a
-/// lost response (E.4), and the dataset lookup cache with its EF hook (REG-05 item 3).
+/// Upload pipeline: bundles (C.2), pre-checks before the first byte (E.2), receipts for a
+/// lost response (E.4), and the dataset lookup cache with its EF hook.
 /// </summary>
 [TestFixture]
 public class UploadManagerTests
@@ -171,7 +171,7 @@ public class UploadManagerTests
 
         results[0].Status.ShouldBe(StatusCodes.Status201Created);
         results[1].Status.ShouldBe(StatusCodes.Status400BadRequest);           // blocked extension
-        results[2].Status.ShouldBe(StatusCodes.Status400BadRequest);           // reserved path (RQ-10: was 500)
+        results[2].Status.ShouldBe(StatusCodes.Status400BadRequest);           // reserved path (was 500)
         results[3].Error.ShouldNotBeNull();                                    // index failure
         File.Exists(Path.Combine(_root, "ok.txt")).ShouldBeTrue();
         File.Exists(Path.Combine(_root, "tool.exe")).ShouldBeFalse();
@@ -229,7 +229,7 @@ public class UploadManagerTests
         using var ctx = await uploads.BeginAsync(Org, Ds);
 
         Should.Throw<ExtensionBlockedException>(() => uploads.ValidatePath(ctx, "setup.exe"));
-        // RQ-10: one rule (libddb's) and one 400 for every refused path; a reserved path was a 500
+        // One rule (libddb's) and one 400 for every refused path; a reserved path was a 500
         Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(ctx, ".uploads/x.bin"))
             .Rejection.ShouldBe(EntryPathRejection.Reserved);
         Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(ctx, "../outside.txt"))
@@ -388,7 +388,7 @@ public class UploadManagerTests
         Directory.Exists(Path.Combine(_root, IDDB.UploadsFolderName, "chunks", "big-file-0001")).ShouldBeFalse();
     }
 
-    // ---- REG-05 item 3: dataset lookups
+    // ---- dataset lookups
 
     [Test]
     public async Task GetDataset_IsServedFromTheCache_UntilTheRowChanges()

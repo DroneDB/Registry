@@ -1,7 +1,7 @@
 namespace Registry.Ports.DroneDB;
 
 /// <summary>
-/// Receives libddb's log records and GDAL's messages (<c>DDBSetLogCallback</c>, ABI 2.0, XI-08).
+/// Receives libddb's log records and GDAL's messages (<c>DDBSetLogCallback</c>, ABI 2.0).
 /// Called on the native thread that logs, possibly on several threads at once: it must be
 /// thread-safe and quick, and it must not throw (an exception is dropped) or call libddb.
 /// </summary>

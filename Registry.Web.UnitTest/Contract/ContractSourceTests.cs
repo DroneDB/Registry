@@ -9,7 +9,7 @@ namespace Registry.Web.Test.Contract;
 
 /// <summary>
 /// The libddb contract files vendored in Registry.Adapters.Testing/Contract are exactly the ones
-/// Contract/SOURCE lists, byte for byte (XI-09). A hand edit, a partial copy or a line-ending
+/// Contract/SOURCE lists, byte for byte. A hand edit, a partial copy or a line-ending
 /// conversion fails here; an update is deliberate: Registry.Adapters.Testing/update-contract.sh
 /// copies the files from DroneDB at one commit and rewrites SOURCE.
 /// </summary>

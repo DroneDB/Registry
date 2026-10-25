@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <!--
-        Registry.Web unit tests (RQ-04, D5). Category "Unit" (assembly level).
+        Registry.Web unit tests. Category "Unit" (assembly level).
         A test belongs here when it needs none of:
           - native libddb: no NativeDdbWrapper or other real IDdbWrapper, no DDB deserialized by
             Hangfire (it creates a native wrapper), no Program path that initialises libddb;
@@ -32,7 +32,7 @@
         <PackageReference Include="Microsoft.Extensions.Options" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" />
         <PackageReference Include="Moq" />
-        <!-- Json.NET as the oracle of the wire (RQ-14): the converters are tested against what it wrote -->
+        <!-- Json.NET as the oracle of the wire: the converters are tested against what it wrote -->
         <PackageReference Include="Newtonsoft.Json" />
         <PackageReference Include="NUnit" />
         <PackageReference Include="NUnit3TestAdapter" />
@@ -54,7 +54,7 @@
         <None Include="Data\Wfs\**">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
-        <None Include="ImprovementBaselines\Snapshots\**">
+        <None Include="Baselines\Snapshots\**">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
     </ItemGroup>

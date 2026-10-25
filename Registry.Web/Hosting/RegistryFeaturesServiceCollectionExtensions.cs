@@ -35,7 +35,7 @@ using IMetaManager = Registry.Web.Services.Ports.IMetaManager;
 
 namespace Registry.Web.Hosting;
 
-/// <summary>The feature modules of the web host (RQ-07): each registers one feature on top of <c>AddProcessingNodeServices</c>.</summary>
+/// <summary>The feature modules of the web host: each registers one feature on top of <c>AddProcessingNodeServices</c>.</summary>
 public static class RegistryFeaturesServiceCollectionExtensions
 {
     /// <summary>The web managers and their adapters (datasets, objects, users, organizations, shares, tasks, imports, system).</summary>
@@ -121,7 +121,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
     }
 
     /// <summary>
-    /// The <c>/sys</c> features (RQ-12): data and build maintenance, the slug repair, the global report, the
+    /// The <c>/sys</c> features: data and build maintenance, the slug repair, the global report, the
     /// configuration view, the remote import (queued; the job is registered by <c>AddImportSources</c>), the
     /// processing nodes and the platform features.
     /// </summary>
@@ -158,7 +158,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
     }
 
     /// <summary>
-    /// The objects slice (RQ-11): the entry, transfer, render, build and raster services the object controllers
+    /// The objects slice: the entry, transfer, render, build and raster services the object controllers
     /// use, their shared collaborators, and the <see cref="IObjectsManager"/> facade for the other features.
     /// </summary>
     public static IServiceCollection AddObjectsSlice(this IServiceCollection services)
@@ -207,7 +207,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Native renders share a concurrency budget per lane (REG-07 §5.2, widths from the host budget);
+    /// Native renders share a concurrency budget per lane (widths from the host budget);
     /// every thumbnail goes through the Heavy lane, whichever generator (local, or the remote thumbnail
     /// generator host when <see cref="ThumbnailOptions.RemoteThumbnailGeneratorUrl"/> is set) makes it.
     /// </summary>
@@ -223,7 +223,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Upload pipeline (UPL-01): per-request context, quota reservations, receipts, coalesced
+    /// Upload pipeline: per-request context, quota reservations, receipts, coalesced
     /// invalidation and bounded thumbnail pre-generation.
     /// </summary>
     public static IServiceCollection AddUploadPipeline(this IServiceCollection services)

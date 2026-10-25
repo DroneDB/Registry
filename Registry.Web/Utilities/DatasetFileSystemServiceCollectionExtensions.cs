@@ -10,7 +10,7 @@ using Registry.Web.Services.HeavyTasks;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// The file system services of every host that touches dataset folders (RQ-10): the web server and
+/// The file system services of every host that touches dataset folders: the web server and
 /// the processing node register the same set, so a heavy tool resolves on both.
 /// </summary>
 public static class DatasetFileSystemServiceCollectionExtensions

@@ -13,14 +13,14 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// The role choices of <see cref="BuildArtifactResolver"/> over libddb's build manifest (XI-04, D8): which
+/// The role choices of <see cref="BuildArtifactResolver"/> over libddb's build manifest: which
 /// artifact a renderer reads, which one is downloaded and with which media type, which builds a transfer
 /// copies. The entry types come from the libddb contract fixture (<c>entry-types.json</c>).
 /// </summary>
 [TestFixture]
 public class BuildArtifactResolverTests
 {
-    private static readonly string Folder = Path.Combine(Path.GetTempPath(), "rq11-resolver", "ds");
+    private static readonly string Folder = Path.Combine(Path.GetTempPath(), "buildartifactresolver-resolver", "ds");
     private const string Hash = "abc123";
 
     private Mock<IDDB> _ddb = null!;

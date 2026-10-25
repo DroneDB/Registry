@@ -23,7 +23,7 @@ using static Registry.Adapters.Ddb.Test.LibddbNative;
 namespace Registry.Adapters.Ddb.Test;
 
 /// <summary>
-/// The libddb 2.x contract (XI-01, XI-09; DroneDB P3-10): one test per export of the ABI that
+/// The libddb 2.x contract: one test per export of the ABI that
 /// Registry uses beyond the original wrapper, called through the P/Invoke declarations of <see cref="NativeDdb"/>, the adapter's one
 /// native-methods home (UTF-8 strings, 1-byte bools, <see cref="DdbListEntriesOptions"/>, outputs
 /// freed with DDBFree), with the outputs checked against DroneDB's contract fixtures

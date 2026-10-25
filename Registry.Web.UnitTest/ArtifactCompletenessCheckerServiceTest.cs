@@ -280,7 +280,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
             It.IsAny<IndexPayload>()), Times.Once);
     }
 
-    // ---- DDB-12: pending entries and repeated failures are not re-enqueued every night ----
+    // ---- pending entries and repeated failures are not re-enqueued every night ----
 
     private const string Folder = "/datasets/ds";
 
@@ -387,7 +387,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
             [new("h", "Succeeded", null, now.AddDays(-0.5)), Failed(1), Failed(2)], "h", now, out _, out _).ShouldBeFalse();
         ArtifactCompletenessCheckerService.ShouldBackOff(
             [Failed(0.1, type: "DdbBusyException")], "h", now, out _, out _).ShouldBeFalse();
-        // XI-02: a full disk or a tool timeout (libddb ABI 2.0 reason) is transient, not a content failure
+        // A full disk or a tool timeout (libddb ABI 2.0 reason) is transient, not a content failure
         ArtifactCompletenessCheckerService.ShouldBackOff(
             [Failed(0.1, type: nameof(DdbRetryableException)), Failed(0.2, type: nameof(DdbRetryableException))],
             "h", now, out _, out _).ShouldBeFalse();

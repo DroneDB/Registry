@@ -16,7 +16,7 @@ using Shouldly;
 namespace Registry.Web.Test.Support;
 
 /// <summary>
-/// The host's own JSON output and input formatters (RQ-14), driven without a request: what MVC writes for an
+/// The host's own JSON output and input formatters, driven without a request: what MVC writes for an
 /// action result, and how MVC reads a JSON request body into a parameter. The wire tests use it so the stack
 /// under test is whichever one the host registers, never a copy of its settings.
 /// </summary>

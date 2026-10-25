@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Http;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// <see cref="IExceptionHandler"/> of the whole pipeline (<c>UseExceptionHandler()</c>, RQ-05): errors that
+/// <see cref="IExceptionHandler"/> of the whole pipeline (<c>UseExceptionHandler()</c>): errors that
 /// the MVC filter never sees (middleware, minimal endpoints, the Hangfire branch, resource filters such as
 /// <c>[EnforceContentLength]</c>, the SPA fallback) get the same ProblemDetails answer as an action,
 /// built by <see cref="ApiErrorResponder"/>. A response that has already started is not handled here: the

@@ -2,7 +2,7 @@
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>
-/// The machine and the Registry processes that share it (XI-06), bound from
+/// The machine and the Registry processes that share it, bound from
 /// <c>AppSettings:HostBudget</c>. Every value is optional. With no process declared, each process
 /// plans the whole machine, as before this setting existed. A deployment that runs several processes on
 /// one machine (the production compose file: a web server and two processing nodes) declares them, and

@@ -68,7 +68,7 @@ public sealed record EndpointAuthEntry(
 
 /// <summary>
 /// Reads every routed endpoint of the running app from its own <see cref="EndpointDataSource"/>
-/// and classifies its authorization (RQ-04): the declared metadata (<c>[AllowAnonymous]</c>,
+/// and classifies its authorization: the declared metadata (<c>[AllowAnonymous]</c>,
 /// <c>[Authorize]</c>, policies, policies added with <c>RequireAuthorization</c>, MVC authorization
 /// filters such as <c>BasicAuthFilter</c> and <c>OgcAuthorizationFilter</c>) and the gate, found by
 /// evaluating the effective policy for an anonymous, a regular and an admin principal. New
@@ -93,7 +93,7 @@ public static class EndpointAuthCatalog
         using var scope = services.CreateScope();
         var authorization = scope.ServiceProvider.GetRequiredService<IAuthorizationService>();
 
-        // The admin gate needs the admin claim and an administrator in the identity store (RQ-06): the
+        // The admin gate needs the admin claim and an administrator in the identity store: the
         // admin probe is the factory's default administrator
         var adminId = (await scope.ServiceProvider.GetRequiredService<UserManager<User>>()
             .FindByNameAsync(RegistryWebFactory.AdminUserName))?.Id ?? "probe-admin-id";

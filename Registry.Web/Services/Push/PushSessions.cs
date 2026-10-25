@@ -47,7 +47,7 @@ public sealed class PushSessions
     public async Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp,
         CancellationToken ct = default)
     {
-        // Honoured while the target is looked up; a new dataset and the session are then written (RQ-13)
+        // Honoured while the target is looked up; a new dataset and the session are then written
         var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, safe: true, ct: ct);
 
         var validateChecksum = false;
@@ -102,7 +102,7 @@ public sealed class PushSessions
             Meta = stamp.Meta
         }, ourStamp);
 
-        // Compute locals (stops when the request goes away, before the session is written: XI-07)
+        // Compute locals (stops when the request goes away, before the session is written)
         Dictionary<string, bool> locals;
         using (DdbCancellation.Enter(ct))
             locals = _ddbWrapper.ComputeDeltaLocals(delta, ddb.DatasetFolderPath);

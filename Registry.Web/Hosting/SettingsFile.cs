@@ -16,7 +16,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Hosting;
 
 /// <summary>
-/// The storage folder's <c>appsettings.json</c> (RQ-07). A first start creates it from the embedded
+/// The storage folder's <c>appsettings.json</c>. A first start creates it from the embedded
 /// defaults; every start adds the secrets that are missing (<see cref="GeneratedSecrets"/>) and changes
 /// nothing else, so a normal start does not write the file. Writes are atomic
 /// (<see cref="AtomicFile"/>). <c>--check</c> validates the same content the host would read, with the

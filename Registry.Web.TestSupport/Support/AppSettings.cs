@@ -6,7 +6,7 @@ using Registry.Web.Hosting;
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>
-/// The whole <c>AppSettings</c> configuration section as one object, for tests (RQ-07): one settings object
+/// The whole <c>AppSettings</c> configuration section as one object, for tests: one settings object
 /// that a fixture fills and <see cref="Registry.Web.Test.Support.TestSettings"/> projects into the focused
 /// options classes the services take (<see cref="AuthTokenOptions"/>, <see cref="StorageOptions"/>, ...),
 /// through the same keys the host binds. Production code never reads it: the table of classes and sections
@@ -161,7 +161,7 @@ public class AppSettings
     public int WorkerThreads { get; set; }
 
     /// <summary>
-    /// Concurrency and native resource budget of background jobs (REG-09).
+    /// Concurrency and native resource budget of background jobs.
     /// </summary>
     public ProcessingBudgetSettings ProcessingBudget { get; set; } = new();
 
@@ -387,7 +387,7 @@ public class AppSettings
     /// <summary>Concurrency of native renders (tiles, thumbnails, coverages) in this process.</summary>
     public NativeConcurrencySettings? NativeConcurrency { get; set; }
 
-    /// <summary>The machine and the Registry processes that share it (XI-06).</summary>
+    /// <summary>The machine and the Registry processes that share it.</summary>
     public HostBudgetSettings? HostBudget { get; set; }
 
     /// <summary>Tuning of the upload pipeline.</summary>

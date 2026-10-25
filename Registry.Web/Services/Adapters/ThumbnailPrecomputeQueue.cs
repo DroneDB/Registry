@@ -18,7 +18,7 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Pre-generates the thumbnails of uploaded images in the background at the lowest priority,
-/// with a fixed number of workers (UPL-01 C.4). Replaces one unbounded task per upload.
+/// with a fixed number of workers. Replaces one unbounded task per upload.
 /// </summary>
 public sealed class ThumbnailPrecomputeQueue : IHostedService, IDisposable
 {

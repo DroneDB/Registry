@@ -10,7 +10,7 @@ namespace Registry.Adapters.DroneDB;
 /// <summary>
 /// Bridges a managed progress observer and a <see cref="CancellationToken"/> to
 /// <c>DDBProgressCallback</c> (<c>int (*)(double fraction, const char *phase, void *userData)</c>;
-/// a non-zero return asks the call to cancel). XI-03: the callback is an
+/// a non-zero return asks the call to cancel). The callback is an
 /// <c>[UnmanagedCallersOnly]</c> static method that finds this instance through a
 /// <see cref="GCHandle"/> passed as <c>userData</c>, so no delegate has to be kept alive and nothing
 /// managed can unwind through the native frames (the runtime would end the process): an exception

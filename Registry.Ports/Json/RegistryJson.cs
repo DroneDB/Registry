@@ -7,7 +7,7 @@ using System.Text.Json.Serialization.Metadata;
 namespace Registry.Ports.Json;
 
 /// <summary>
-/// How Registry writes and reads JSON (RQ-14, D3): the one place that names a serializer setting. Controllers, the
+/// How Registry writes and reads JSON: the one place that names a serializer setting. Controllers, the
 /// RFC 9457 error writers, the caches, the stores and the readers of libddb's output take their options from here,
 /// so the wire cannot drift between them (<c>ApiJson</c> in Registry.Web for the HTTP and storage wire, <c>NativeJson</c>
 /// in Registry.Adapters for libddb's). The settings reproduce what Json.NET did for the Hub, the ddb CLI and
@@ -37,7 +37,7 @@ public static class RegistryJson
     /// <item>text written as is (no <c>é</c>, no HTML escaping), as Json.NET did: the body is JSON for an API, never
     /// embedded in HTML;</item>
     /// <item>numbers read from strings, <c>NaN</c> and infinity as strings; comments and trailing commas skipped;</item>
-    /// <item>unknown members ignored: the Hub, the ddb CLI and scripts send members the DTOs do not read (RQ-14 decision).</item>
+    /// <item>unknown members ignored: the Hub, the ddb CLI and scripts send members the DTOs do not read.</item>
     /// </list>
     /// </remarks>
     public static void Configure(JsonSerializerOptions options, params IJsonTypeInfoResolver[] resolvers)

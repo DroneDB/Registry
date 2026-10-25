@@ -6,7 +6,7 @@ using Registry.Ports.DroneDB;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// The libddb operation ids of the HTTP requests being served (XI-08): one per request, mapped to the request id
+/// The libddb operation ids of the HTTP requests being served: one per request, mapped to the request id
 /// (<c>HttpContext.TraceIdentifier</c>, the <c>RequestId</c> property Serilog writes on every record logged while
 /// the request is served), so a native log record (<see cref="DdbLogSink"/>) names the request it was made for and
 /// the host's records and libddb's can be read together. The jobs have theirs in

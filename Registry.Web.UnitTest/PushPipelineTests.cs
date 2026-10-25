@@ -39,7 +39,7 @@ using Registry.Web.Services.Builds;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// REG-10: a push computes its delta once (Init) and Commit reuses it after checking the stamp
+/// A push computes its delta once (Init) and Commit reuses it after checking the stamp
 /// checksum; Commit asks the buildability of the adds with one batch call; an uploaded file is
 /// streamed once to the dataset volume and moved into the push folder.
 /// Real <see cref="PushManager"/> and file system (a temp dataset folder), counting native mocks.
@@ -179,7 +179,7 @@ public class PushPipelineTests : TestBase
     }
 
     /// <summary>
-    /// RQ-12 (BuildScheduler): the dataset is flagged as having pending builds before the first build job is queued,
+    /// The dataset is flagged as having pending builds before the first build job is queued,
     /// as uploads always did: a build that fails at once must find the flag, or the pending-build coordinator does not
     /// look at the dataset. Push queued its builds first and flagged after (red before the change).
     /// </summary>
@@ -220,7 +220,7 @@ public class PushPipelineTests : TestBase
     }
 
     /// <summary>
-    /// XI-07 (steps 3 and 4): the request's token is the cancellation of the two native calls that read the pushed files, so
+    /// The request's token is the cancellation of the two native calls that read the pushed files, so
     /// a request that goes away stops them: <c>DDBComputeDeltaLocals</c> and <c>DDBApplyDelta</c> are cancellable and the
     /// apply is atomic to a cancel (red before: no token was current, the commit ran to completion with nobody waiting).
     /// </summary>
@@ -478,7 +478,7 @@ public class PushPipelineTests : TestBase
         Directory.GetFiles(Path.Combine(_root, IDDB.UploadsFolderName)).ShouldBeEmpty();
     }
 
-    // REG-10: the files of a push add up against one storage evaluation (it used to check each
+    // The files of a push add up against one storage evaluation (it used to check each
     // file against the stored use alone, with a user query and a query per owned dataset per file)
     [Test]
     public async Task StreamUpload_FilesOfAPushAddUpAgainstOneEvaluation()

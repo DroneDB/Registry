@@ -22,7 +22,7 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Organizations;
 
-/// <summary>Merging an organization into another (RQ-12, out of <c>OrganizationsManager</c>).</summary>
+/// <summary>Merging an organization into another (out of <c>OrganizationsManager</c>).</summary>
 public sealed class OrganizationMerger
 {
     private readonly IAuthManager _authManager;
@@ -67,7 +67,7 @@ public sealed class OrganizationMerger
         if (sourceOrgSlug == MagicStrings.PublicOrganizationSlug)
             throw new BadRequestException("Cannot merge the public organization");
 
-        // Honoured while the merge is prepared; the moves then run to completion (RQ-13)
+        // Honoured while the merge is prepared; the moves then run to completion
         var sourceOrg = await _datasets.GetOrganizationAsync(sourceOrgSlug, withTracking: true, withDatasets: true,
             ct: ct);
         var destOrg = await _datasets.GetOrganizationAsync(destOrgSlug, withTracking: true, ct: ct);

@@ -11,7 +11,7 @@ namespace Registry.Web.Middlewares;
 
 /// <summary>
 /// Serves the <c>.br</c> / <c>.gz</c> twin of a static file, compressed once at build time at the
-/// highest level, instead of compressing it again on every request at a fast level (HUB-09).
+/// highest level, instead of compressing it again on every request at a fast level.
 /// It rewrites the request path to the twin and records the original so the static-file
 /// middleware that follows can send the original content type; nothing else changes.
 /// </summary>

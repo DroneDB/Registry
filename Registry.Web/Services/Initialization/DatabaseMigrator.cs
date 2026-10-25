@@ -21,7 +21,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Initialization;
 
 /// <summary>
-/// The migrations of the identity and registry databases (RQ-12, out of <see cref="DatabaseInitializer"/>): SQLite
+/// The migrations of the identity and registry databases (out of <see cref="DatabaseInitializer"/>): SQLite
 /// and MySQL are migrated, any other provider is left alone.
 /// </summary>
 internal sealed class DatabaseMigrator

@@ -68,7 +68,7 @@ public class NativeDdbWrapperTests : TestBase
         DdbWrapper.GetVersion().Length.ShouldBeGreaterThan(0, "Can call GetVersion()");
     }
 
-    // DDB-12: the .prj the Hub's "Set coordinate system" writes
+    // The .prj the Hub's "Set coordinate system" writes
     [Test]
     public void MakeCadPrj_WritesEsriWktOrLocal()
     {
@@ -83,7 +83,7 @@ public class NativeDdbWrapperTests : TestBase
         Action act = () => DdbWrapper.Init("nonexistant");
         Should.Throw<DdbException>(act);
 
-        // A null argument is a programming error, rejected before libddb is called (RQ-08)
+        // A null argument is a programming error, rejected before libddb is called
         act = () => DdbWrapper.Init(null);
         Should.Throw<ArgumentNullException>(act);
 
@@ -606,7 +606,7 @@ public class NativeDdbWrapperTests : TestBase
         FileHashHint HintFor(string path, long sizeDelta) =>
             new(fakeHash, new FileInfo(path).Length + sizeDelta, File.GetLastWriteTimeUtc(path));
 
-        // UPL-01 E.1: the Registry hashes uploads while streaming them; a hint whose size and
+        // The Registry hashes uploads while streaming them; a hint whose size and
         // write time still match the file is used as is (the fake digest proves no re-read)
         var result = DdbWrapper.AddWithHints(area.TestFolder,
             [new AddItem(trusted, HintFor(trusted, 0)), new AddItem(stale, HintFor(stale, 1))]);
@@ -875,7 +875,7 @@ public class NativeDdbWrapperTests : TestBase
 
         DdbWrapper.Add(area.TestFolder, f);
 
-        // The entry is named by its dataset-relative path (an absolute one is refused: DQ-09)
+        // The entry is named by its dataset-relative path (an absolute one is refused)
         const string entry = "test.txt";
         var act = () => DdbWrapper.MetaSet(area.TestFolder, "tests", "123", entry);
         Should.Throw<DdbException>(act); // Needs singular key
@@ -1042,7 +1042,7 @@ public class NativeDdbWrapperTests : TestBase
             Path.Join(area.TestFolder, "readme.md")
         ]);
 
-        // A missing export must fail (XI-09: this suite is the contract DroneDB CI runs), not be ignored
+        // A missing export must fail (this suite is the contract DroneDB CI runs), not be ignored
         var res = DdbWrapper.RescanIndex(area.TestFolder, new RescanOptions(Extensions: ".txt"));
 
         res.Select(r => r.Path).OrderBy(p => p, StringComparer.Ordinal).ShouldBe(["OTHER.TXT", "notes.txt"]);

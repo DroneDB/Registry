@@ -23,20 +23,20 @@ namespace Registry.Web.Hosting;
 /// <summary>The HTTP API of the web host: MVC, the error model, OpenAPI, caching, compression, rate limits and the HTTP edge.</summary>
 public static class RegistryApiServiceCollectionExtensions
 {
-    /// <summary>MVC with the RQ-05 error model, the OpenAPI document, response caching and compression, rate limiting.</summary>
+    /// <summary>MVC with the ProblemDetails error model, the OpenAPI document, response caching and compression, rate limiting.</summary>
     public static IServiceCollection AddRegistryApi(this IServiceCollection services)
     {
         services.AddControllers(o =>
         {
             o.Filters.Add<ApiExceptionFilter>();
-            // Dataset paths are checked by libddb's rule while the request is bound (RQ-11)
+            // Dataset paths are checked by libddb's rule while the request is bound
             o.ModelBinderProviders.Insert(0, new DatasetPathModelBinderProvider());
         });
 
         // {orgSlug:slug} and {dsSlug:slug}: the slug rules decide what routes, as they decide what is created
         services.Configure<RouteOptions>(o => o.ConstraintMap[RoutesHelper.SlugConstraint] = typeof(SlugRouteConstraint));
 
-        // One error model (RQ-05, D1): RFC 9457 ProblemDetails written by ApiErrorResponder from the MVC
+        // One error model: RFC 9457 ProblemDetails written by ApiErrorResponder from the MVC
         // filter, the model-state factory below and the pipeline-wide exception handler
         // Every ProblemDetails carries noRetry, also the framework's own (e.g. a bare NotFound()); the
         // responder sets the real value of a classified error after this default
@@ -96,8 +96,8 @@ public static class RegistryApiServiceCollectionExtensions
         services.AddMvcCore()
             .AddApiExplorer();
 
-        // One JSON configuration for the controllers and for the RFC 9457 writers (RQ-14, D3); the dataset path rule
-        // applies to JSON bodies as it does to the query, the route and the form (RQ-11)
+        // One JSON configuration for the controllers and for the RFC 9457 writers; the dataset path rule
+        // applies to JSON bodies as it does to the query, the route and the form
         services.AddOptions<Microsoft.AspNetCore.Mvc.JsonOptions>().Configure<DatasetPathPolicy>((options, paths) =>
             ApiJson.Configure(options.JsonSerializerOptions, paths));
         services.AddOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>().Configure<DatasetPathPolicy>((options, paths) =>

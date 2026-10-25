@@ -30,7 +30,7 @@ using Registry.Web.Services.Caching;
 namespace Registry.Web.Test.Ogc;
 
 /// <summary>
-/// REG-11: WFS GetFeatureById and RESOURCEID read the requested features by id (one primary-key
+/// WFS GetFeatureById and RESOURCEID read the requested features by id (one primary-key
 /// query, no scan of every layer at 10 000 features), plain GetFeature reports the real
 /// numberMatched, and OGC API Features /items/{id} reads one feature.
 /// </summary>

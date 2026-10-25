@@ -19,7 +19,7 @@ using Shouldly;
 namespace Registry.Web.Test.E2eFixes;
 
 /// <summary>
-/// End-to-end check of Registry eb1311f2 + libddb 2.0.0, finding 4: the obsolete <c>POST chattr {"public":true}</c>
+/// End-to-end check: the obsolete <c>POST chattr {"public":true}</c>
 /// answered 200 but changed nothing: it wrote the legacy <c>public</c> meta key, and access reads <c>visibility</c>.
 /// It is still routed (the DroneDB CLI's old <c>ddb chattr</c> reaches it), so it is a compatibility alias of the
 /// visibility change now: <c>public: true</c> sets the visibility to Public, <c>false</c> to Private, through the

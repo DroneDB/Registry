@@ -4,13 +4,13 @@ namespace Registry.Ports.DroneDB;
 
 /// <summary>
 /// Build orchestration: build/rebuild artifacts, the build manifest (buildability, build state and
-/// artifacts, XI-04) and cache cleanup.
+/// artifacts) and cache cleanup.
 /// </summary>
 public interface IDdbBuild
 {
     /// <summary>
     /// The folders of the database that hold what libddb derives from the files (the builds): left out of a copy
-    /// of the database, which they would only make larger (XI-04: Registry never names them).
+    /// of the database, which they would only make larger (Registry never names them).
     /// </summary>
     IReadOnlyList<string> DerivedFolderPaths { get; }
 
@@ -26,8 +26,7 @@ public interface IDdbBuild
     bool IsBuildPending();
 
     /// <summary>
-    /// The build objects of several entries with one native call (<c>DDBGetBuildArtifacts</c>,
-    /// XI-04): whether each is buildable, the state of its build and the artifacts that exist, one
+    /// The build objects of several entries with one native call (<c>DDBGetBuildArtifacts</c>): whether each is buildable, the state of its build and the artifacts that exist, one
     /// element per path, in input order. libddb owns the build layout, the states and the type
     /// rules; Registry reads them here and never composes a build path.
     /// </summary>
@@ -35,7 +34,7 @@ public interface IDdbBuild
     IReadOnlyList<EntryBuildArtifacts> GetBuildArtifacts(IReadOnlyList<string> paths);
 
     /// <summary>
-    /// The absolute path of a file of a build (<c>DDBResolveBuildFile</c>, XI-04): an artifact or a
+    /// The absolute path of a file of a build (<c>DDBResolveBuildFile</c>): an artifact or a
     /// file below a directory artifact, containment-checked by libddb.
     /// </summary>
     /// <param name="hash">The hash that names the build (<see cref="EntryBuild.Hash"/>).</param>
@@ -46,7 +45,7 @@ public interface IDdbBuild
 
     /// <summary>
     /// Copies the build named by <paramref name="hash"/> (its artifacts and its pending marker) to
-    /// another dataset (<c>DDBCopyBuildArtifacts</c>, XI-04), so a transferred file needs no rebuild.
+    /// another dataset (<c>DDBCopyBuildArtifacts</c>), so a transferred file needs no rebuild.
     /// </summary>
     /// <param name="destinationDatasetFolder">The dataset folder of the destination.</param>
     /// <param name="hash">The hash that names the build.</param>

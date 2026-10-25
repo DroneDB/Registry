@@ -18,7 +18,7 @@ using Registry.Web.Utilities.Auth;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// The processing nodes (NodeODX) a user can run photogrammetry on (RQ-12, out of <see cref="SystemController"/>):
+/// The processing nodes (NodeODX) a user can run photogrammetry on (out of <see cref="SystemController"/>):
 /// their list, options and status. URLs and tokens are never returned.
 /// </summary>
 [Authorize]

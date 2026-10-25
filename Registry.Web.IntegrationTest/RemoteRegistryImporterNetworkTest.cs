@@ -31,8 +31,7 @@ using Registry.Web.Services.Caching;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// The remote Registry import (<see cref="RemoteRegistryImporter"/>, the import job; SystemManager.ImportDataset before
-/// RQ-12) against a real remote registry.
+/// The remote Registry import (<see cref="RemoteRegistryImporter"/>, the import job) against a real remote registry.
 /// These tests require network access and should be run explicitly.
 /// </summary>
 [TestFixture]

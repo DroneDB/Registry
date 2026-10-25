@@ -13,7 +13,7 @@ namespace Registry.Web.Services.Caching;
 /// cache detaches a flight when it invalidates the key: later callers start a new flight, and the detached one
 /// is marked so its result, computed from the state before the invalidation, is not stored.
 /// <para>
-/// Cancellation (RQ-13): a caller's token ends that caller's wait only. The computation gets the flight's
+/// Cancellation: a caller's token ends that caller's wait only. The computation gets the flight's
 /// <see cref="Flight.Token"/>, canceled when the last caller still waiting has cancelled (a render for clients
 /// that all went away stops), never while one waits. An abandoned flight leaves the table at the moment it is
 /// abandoned (one lock for joins and leaves), so a new caller starts a fresh flight and never joins a canceled

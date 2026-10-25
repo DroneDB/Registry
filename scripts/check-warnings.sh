@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Warning ratchet (RQ-03, decision D7): the build may not add a compiler or analyzer warning.
+# Warning ratchet: the build may not add a compiler or analyzer warning.
 #
 # The baseline (build/warnings-baseline.txt) has one line per file and warning code:
 #     <path from the repository root> <code> <count>

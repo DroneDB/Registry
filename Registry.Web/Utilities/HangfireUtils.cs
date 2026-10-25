@@ -10,7 +10,7 @@ using Registry.Web.Services.Jobs;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// The jobs as Hangfire stored them before RQ-09 (D4): exactly the type, method names and
+/// The jobs as Hangfire stored them in earlier releases: exactly the type, method names and
 /// parameter types that production storage holds (enqueued, scheduled, retrying jobs), so each
 /// still deserializes and runs after the upgrade. Every method only forwards, in the same job
 /// (same job id, JobIndex row and filters), to the job that replaced it. Activated by DI like any
@@ -41,7 +41,7 @@ public sealed class HangfireUtils : DdbRetriedJob
         _healthCheck = healthCheck ?? throw new ArgumentNullException(nameof(healthCheck));
     }
 
-    /// <summary>Stored <see cref="DdbJobs.Build"/>, with its policy (no retry of a retryable build failure, XI-02).</summary>
+    /// <summary>Stored <see cref="DdbJobs.Build"/>, with its policy (no retry of a retryable build failure).</summary>
     [AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
         OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]

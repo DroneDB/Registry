@@ -35,7 +35,7 @@ public class ProcessingNodeDiCompletenessTests
             {
                 // Registration-only; the Sqlite provider never opens this connection here.
                 ["ConnectionStrings:RegistryConnection"] = "Data Source=:memory:",
-                // The options are validated when a service reads them (RQ-07)
+                // The options are validated when a service reads them
                 ["AppSettings:DatasetsPath"] = "./datasets",
                 ["AppSettings:CachePath"] = "./cache"
             })
@@ -126,10 +126,10 @@ public class ProcessingNodeDiCompletenessTests
     [TestCase(typeof(Registry.Web.Services.Jobs.HealthCheckJob))]
     [TestCase(typeof(HangfireUtils))]
     [TestCase(typeof(Registry.Web.Services.HeavyTasks.Adapters.HeavyTaskJobWrapper))]
-    [TestCase(typeof(Registry.Web.Services.RemoteImport.RemoteImportJob))] // RQ-12: queued by the web host
+    [TestCase(typeof(Registry.Web.Services.RemoteImport.RemoteImportJob))] // Queued by the web host
     public void ProcessingNode_ActivatesTheJobClasses(Type jobClass)
     {
-        // Hangfire's activator creates a job's class from the job scope: the stored shapes (D4) too
+        // Hangfire's activator creates a job's class from the job scope: the stored shapes too
         using var provider = BuildNodeProvider(s => s.AddSingleton(Mock.Of<IBackgroundJobClient>()));
         using var scope = provider.CreateScope();
 

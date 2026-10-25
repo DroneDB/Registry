@@ -14,7 +14,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// Exception-classifier characterization safety net (RQ-05: one row per exception type; the D2 rows
+/// Exception-classifier characterization safety net (one row per exception type; the permission rows
 /// classify an anonymous and an authenticated request).
 ///
 /// These tests pin the exception-type → HTTP-response decision table that
@@ -24,7 +24,7 @@ namespace Registry.Web.Test;
 /// stable through the catch-block deletion waves and the residual-helper
 /// removal. Rows marked "intentional flip" document the status that
 /// deliberately changed at unification (the union mapping table):
-/// server bugs are 500 (not masked 400), cancellations are 499/503 (RQ-13; were 408, before that 400),
+/// server bugs are 500 (not masked 400), cancellations are 499/503 (were 408, before that 400),
 /// build-in-progress is 503 (not 400), quota is 507/413/429 (not 400).
 /// </summary>
 public class ApiExceptionClassifierTests
@@ -66,7 +66,7 @@ public class ApiExceptionClassifierTests
         d.Level.ShouldBe(LogLevel.Warning);
     }
 
-    // ---- cancellation (RQ-13): by what cancelled it ----
+    // ---- cancellation: by what cancelled it ----
 
     [Test]
     public void OperationCanceled_ClientGone_Is499Debug_WithoutMessage()
@@ -345,7 +345,7 @@ public class ApiExceptionClassifierTests
     [Test]
     public void InvalidOperationException_IsNeverAClientError()
     {
-        // RQ-05: client errors are typed at their throw site; the classifier is not widened
+        // Client errors are typed at their throw site; the classifier is not widened
         ApiExceptionClassifier.Classify(new InvalidOperationException("Merge conflicts detected"), authenticated: true)
             .StatusCode.ShouldBe(StatusCodes.Status500InternalServerError);
     }

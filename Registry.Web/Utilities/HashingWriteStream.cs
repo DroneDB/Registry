@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// Write-only decorator that computes the SHA-256 of everything written through it (UPL-01 E.1):
+/// Write-only decorator that computes the SHA-256 of everything written through it:
 /// an upload is hashed while it streams to disk, so indexing it does not read the whole file
 /// again after the last byte. The digest equals DroneDB's <c>Hash::fileSHA256</c> of the file.
 /// </summary>

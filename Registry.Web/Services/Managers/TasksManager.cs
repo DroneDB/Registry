@@ -10,7 +10,7 @@ namespace Registry.Web.Services.Managers;
 
 /// <summary>
 /// Processing Platform task substrate for a single dataset (<see cref="ITasksManager"/>, what the controller calls)
-/// over the services RQ-12 split it into (17 parameters before): the tool catalog and submission, the history
+/// over the services it is split into: the tool catalog and submission, the history
 /// (list, status, log, result), ending a task, retrying one, and the change subscription. Authorization combines
 /// dataset access with per-task ownership (<see cref="TaskAuthorizer"/>).
 /// </summary>

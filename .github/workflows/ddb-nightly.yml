@@ -1,6 +1,6 @@
 name: DroneDB nightly drift
 
-# XI-09 cross-repository CI, Registry side: runs Registry's libddb adapter suite
+# Cross-repository CI, Registry side: runs Registry's libddb adapter suite
 # (Registry.Adapters.Ddb.Test, which P/Invokes every export Registry uses and fails on a missing
 # one) against the newest .deb that DroneDB CI built (c-cpp.yml, job build_ubuntu, artifact
 # "Linux-Binaries"), so drift between libddb and Registry shows up before a DroneDB release, not

@@ -21,7 +21,7 @@ using Shouldly;
 
 namespace Registry.Web.Test;
 
-/// <summary>DDB-12 P4: "Set coordinate system" writes the drawing's .prj through the normal add.</summary>
+/// <summary>P4: "Set coordinate system" writes the drawing's .prj through the normal add.</summary>
 [TestFixture]
 public class CadCrsManagerTests
 {

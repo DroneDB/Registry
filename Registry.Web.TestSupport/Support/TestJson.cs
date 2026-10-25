@@ -5,7 +5,7 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Test.Support;
 
-/// <summary>JSON values for tests (RQ-14): the documents the ports carry are <see cref="JsonElement"/>s.</summary>
+/// <summary>JSON values for tests: the documents the ports carry are <see cref="JsonElement"/>s.</summary>
 public static class TestJson
 {
     /// <summary><paramref name="value"/> as the JSON document the API would write for it.</summary>

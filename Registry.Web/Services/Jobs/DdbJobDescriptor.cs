@@ -16,8 +16,8 @@ public enum DdbJobKind
 
 /// <summary>
 /// The kind and entry path of a dataset job, for the filters that act on build jobs. It knows both
-/// shapes: <see cref="DdbJobs"/> and the jobs stored before RQ-09 (<see cref="HangfireUtils"/>,
-/// D4), so a filter never matches method names or argument positions itself.
+/// shapes: <see cref="DdbJobs"/> and the jobs stored by earlier releases (<see cref="HangfireUtils"/>),
+/// so a filter never matches method names or argument positions itself.
 /// </summary>
 /// <param name="Kind">What the job does.</param>
 /// <param name="Path">The entry it works on (build, mask borders, thumbnail), or null.</param>

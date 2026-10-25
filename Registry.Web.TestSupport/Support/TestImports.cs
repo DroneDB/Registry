@@ -13,7 +13,7 @@ using Registry.Web.Services.RemoteImport;
 
 namespace Registry.Web.Test.Support;
 
-/// <summary>The remote Registry import (RQ-12) as the job host builds it, over test doubles.</summary>
+/// <summary>The remote Registry import as the job host builds it, over test doubles.</summary>
 public static class TestImports
 {
     /// <summary>

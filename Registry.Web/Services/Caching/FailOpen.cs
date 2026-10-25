@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace Registry.Web.Services.Caching;
 
 /// <summary>
-/// A cache call that never fails the request (RQ-12): an error is logged as a warning and the fallback
+/// A cache call that never fails the request: an error is logged as a warning and the fallback
 /// returned, so a cache that is down costs a recomputation, not an error. A cancellation the caller asked for
 /// still propagates.
 /// </summary>

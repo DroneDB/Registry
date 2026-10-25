@@ -6,7 +6,7 @@ using Registry.Ports.DroneDB;
 namespace Registry.Adapters.DroneDB;
 
 /// <summary>
-/// The libddb cancel token of one native call (XI-07, RQ-13): for an export that
+/// The libddb cancel token of one native call: for an export that
 /// <c>DDBGetCapabilities().cancellable</c> lists, when the current <see cref="DdbCancellation"/> can be
 /// canceled, a native token is created, canceled by the managed token (<c>DDBCancel</c>, callable from any
 /// thread), set on the calling thread right before the call (<c>DDBSetThreadCancelToken</c>: for that call

@@ -15,7 +15,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Hosting;
 
 /// <summary>
-/// Where the adapters of <c>Registry.Adapters</c> are bound to their ports (RQ-05): the composition root
+/// Where the adapters of <c>Registry.Adapters</c> are bound to their ports: the composition root
 /// registers them here and the rest of Registry.Web depends on <c>Registry.Ports</c> only (plus
 /// <c>DdbManager</c>, which builds the dataset adapter it hands out).
 /// </summary>
@@ -23,7 +23,7 @@ public static class AdapterServiceCollectionExtensions
 {
     /// <summary>
     /// libddb's process lifecycle (configure, register the process, shut down) over the native library, started
-    /// first and stopped last by every host (RQ-08, XI-07).
+    /// first and stopped last by every host.
     /// </summary>
     public static IServiceCollection AddNativeDdbRuntime(this IServiceCollection services) =>
         services.AddDdbRuntime<NativeDdbRuntime>();

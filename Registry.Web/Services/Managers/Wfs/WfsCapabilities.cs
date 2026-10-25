@@ -25,7 +25,7 @@ using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Services.Managers.Wfs;
 
-/// <summary>The WFS documents that describe the service (RQ-12, out of <c>WfsManager</c>): capabilities and the stored queries.</summary>
+/// <summary>The WFS documents that describe the service (out of <c>WfsManager</c>): capabilities and the stored queries.</summary>
 public class WfsCapabilities : OgcManagerBase
 {
     public WfsCapabilities(OgcManagerDependencies dependencies)

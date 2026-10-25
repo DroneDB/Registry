@@ -9,7 +9,7 @@ using Shouldly;
 namespace Registry.Web.Test.Ogc;
 
 /// <summary>
-/// The OGC managers share six collaborators through <see cref="OgcManagerDependencies"/> (RQ-12): none of them lists
+/// The OGC managers share six collaborators through <see cref="OgcManagerDependencies"/>: none of them lists
 /// them one by one, so none is near the seven-parameter limit the constructors of this code base keep to.
 /// </summary>
 [TestFixture]

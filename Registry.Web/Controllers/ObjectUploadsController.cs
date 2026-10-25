@@ -24,7 +24,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// Uploads into a dataset (UPL-01): single files, bundles of small files in one request, and the
+/// Uploads into a dataset: single files, bundles of small files in one request, and the
 /// state of an upload by its <c>X-Upload-Id</c>.
 /// </summary>
 [ApiController]

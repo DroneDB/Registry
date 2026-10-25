@@ -18,7 +18,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Durable storage of resumable chunked uploads (UPL-01 E.5). Everything that defines an upload is
+/// Durable storage of resumable chunked uploads. Everything that defines an upload is
 /// on disk (manifest, chunk markers, one preallocated data file the chunks are written into at
 /// their offset), so chunks can arrive in any request, in any order, on any instance sharing the
 /// storage, and across a restart. The SHA-256 is computed as the chunks arrive in order, so

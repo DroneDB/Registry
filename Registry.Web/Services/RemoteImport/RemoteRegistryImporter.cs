@@ -12,7 +12,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.RemoteImport;
 
 /// <summary>
-/// Imports a dataset, or every dataset of an organization, from another Registry (RQ-12, out of
+/// Imports a dataset, or every dataset of an organization, from another Registry (out of
 /// <c>SystemManager</c>): authenticates when credentials are given, lists the datasets of an organization, and
 /// hands each one to the <see cref="IRemoteImportStrategy"/> of the requested mode. What fails is reported in the
 /// result; the other datasets go on. Cancellation (the job deleted, the host stopping) stops the import.

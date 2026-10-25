@@ -44,7 +44,7 @@ public class CacheCategoriesTest
     }
 
     /// <summary>
-    /// RQ-12: the distributed-cache keys moved here keep the formats they had where they were written, so the
+    /// The distributed-cache keys moved here keep the formats they had where they were written, so the
     /// entries of the previous version stay reachable (and are invalidated) across an upgrade.
     /// </summary>
     [Test]

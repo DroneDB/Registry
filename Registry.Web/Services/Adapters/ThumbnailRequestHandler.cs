@@ -114,7 +114,7 @@ internal sealed class ThumbnailRequestHandler
 
         try
         {
-            // The render stops when the web server cancels its request (its own client went away, RQ-13)
+            // The render stops when the web server cancels its request (its own client went away)
             byte[] thumbnail;
             using (DdbCancellation.Enter(context.RequestAborted))
                 thumbnail = _ddbWrapper.GenerateThumbnail(filePath, sizeInt);

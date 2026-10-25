@@ -16,7 +16,7 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Test.Support;
 
-/// <summary>The share API (RQ-12: a facade over the batch, rollback, target and upload services) over test collaborators.</summary>
+/// <summary>The share API (a facade over the batch, rollback, target and upload services) over test collaborators.</summary>
 public static class TestShares
 {
     public static ShareManager Manager(IObjectsManager objects, IDatasetsManager datasetsManager,

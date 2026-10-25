@@ -64,7 +64,7 @@ public sealed class DatasetMover
         if (sourceOrgSlug == destOrgSlug)
             throw new BadRequestException("Source and destination organizations cannot be the same");
 
-        // The token is honoured while the move is prepared; the per-dataset moves then run to completion (RQ-13)
+        // The token is honoured while the move is prepared; the per-dataset moves then run to completion
         var sourceOrg = await _datasets.GetOrganizationAsync(sourceOrgSlug, withTracking: true, ct: ct);
         var destOrg = await _datasets.GetOrganizationAsync(destOrgSlug, withTracking: true, ct: ct);
 

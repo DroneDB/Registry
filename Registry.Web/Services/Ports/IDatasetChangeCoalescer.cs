@@ -6,7 +6,7 @@ namespace Registry.Web.Services.Ports;
 
 /// <summary>
 /// Collects the cache invalidations that follow uploads (OGC documents, dataset thumbnail) and
-/// runs them once per dataset per window instead of once per uploaded file (UPL-01 C.3).
+/// runs them once per dataset per window instead of once per uploaded file.
 /// </summary>
 public interface IDatasetChangeCoalescer
 {

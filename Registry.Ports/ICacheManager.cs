@@ -17,7 +17,7 @@ public interface ICacheManager
         TimeSpan? localExpiration = null);
 
     /// <summary>
-    /// Registers a provider that takes a token (RQ-13): canceled when every caller waiting for the generation
+    /// Registers a provider that takes a token: canceled when every caller waiting for the generation
     /// has cancelled (concurrent misses share one generation), never while one still waits.
     /// </summary>
     /// <inheritdoc cref="Register(string, Func{object[], Task{byte[]}}, TimeSpan?, TimeSpan?)"/>

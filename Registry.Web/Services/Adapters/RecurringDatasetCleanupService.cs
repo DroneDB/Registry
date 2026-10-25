@@ -45,7 +45,7 @@ public class RecurringDatasetCleanupService
         _time = time ?? TimeProvider.System;
     }
 
-    /// <summary>The job as stored before RQ-09 (D4): runs with the context's shutdown token.</summary>
+    /// <summary>The job as stored by earlier releases: runs with the context's shutdown token.</summary>
     public Task CleanupAllDatasetsAsync(PerformContext? context) =>
         CleanupAllDatasetsAsync(context, JobCancellation.Of(context));
 

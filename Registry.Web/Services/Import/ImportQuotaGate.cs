@@ -4,7 +4,7 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Import;
 
-/// <summary>The storage limit of the current user as the dataset import sees it (RQ-12, out of the import manager).</summary>
+/// <summary>The storage limit of the current user as the dataset import sees it (out of the import manager).</summary>
 public sealed class ImportQuotaGate
 {
     private readonly IAuthManager _authManager;

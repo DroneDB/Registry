@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Registry.Ports.DroneDB;
 
 /// <summary>
-/// One artifact of a build, as libddb describes it (ddb.h "build manifest", XI-04). Registry serves
+/// One artifact of a build, as libddb describes it (ddb.h "build manifest"). Registry serves
 /// <see cref="Path"/> under <c>.../build/{hash}/</c> and never composes it.
 /// </summary>
 public sealed class BuildArtifact

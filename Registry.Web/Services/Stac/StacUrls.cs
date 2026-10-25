@@ -6,7 +6,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Stac;
 
 /// <summary>
-/// Every URL of Registry's STAC documents (XI-09: Registry owns them, libddb writes none): the STAC API routes,
+/// Every URL of Registry's STAC documents (Registry owns them, libddb writes none): the STAC API routes,
 /// the legacy per-dataset documents and the asset links. One instance per request (the host is the request's).
 /// </summary>
 public sealed class StacUrls

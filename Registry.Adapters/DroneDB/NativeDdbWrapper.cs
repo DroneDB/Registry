@@ -517,7 +517,7 @@ public class NativeDdbWrapper : IDdbWrapper
         using var callback = NativeProgressCallback.Create(progress, cancellationToken);
 
         // The caller's token is the call's cancellation too: the export stops at its next checkpoint, not only
-        // at its next progress report (XI-07)
+        // at its next progress report
         using var cancellation = DdbCancellation.Enter(cancellationToken);
 
         // An exception thrown by the observer canceled the call: it wins over the canceled result.

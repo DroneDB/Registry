@@ -12,7 +12,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Hosting;
 
 /// <summary>
-/// The options of the Registry (RQ-07): one table of the focused classes and the section each binds,
+/// The options of the Registry: one table of the focused classes and the section each binds,
 /// one registration path (bind, defaults, validator, <c>ValidateOnStart</c>), and the registration-time
 /// read of a class for the composition decisions that need a value before the container exists.
 /// </summary>
@@ -95,7 +95,7 @@ public static class RegistryOptions
                 break;
         }
 
-        // libddb's process settings (RQ-08): the cache under the temp folder by default
+        // libddb's process settings: the cache under the temp folder by default
         services.AddOptions<DdbRuntimeOptions>()
             .Bind(configuration.GetSection(DdbRuntimeOptions.SectionName))
             .PostConfigure<IOptions<StorageOptions>>((options, storage) =>
@@ -103,7 +103,7 @@ public static class RegistryOptions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        // XI-06: what this process may use of the machine, computed once from the options above
+        // What this process may use of the machine, computed once from the options above
         services.TryAddSingleton(sp => HostResourceBudget.Create(role, HostFacts.Current(),
             sp.GetRequiredService<IOptions<HostResourceOptions>>().Value,
             sp.GetRequiredService<IOptions<DdbRuntimeOptions>>().Value, Environment.GetEnvironmentVariable));

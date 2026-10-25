@@ -21,7 +21,7 @@ using Registry.Web.Services.Builds;
 namespace Registry.Web.Test.Support;
 
 /// <summary>
-/// The services of the objects slice (RQ-11) and the <see cref="ObjectsManager"/> facade for tests, wired by the
+/// The services of the objects slice and the <see cref="ObjectsManager"/> facade for tests, wired by the
 /// production registration (<see cref="RegistryFeaturesServiceCollectionExtensions.AddObjectsSlice"/>) over the
 /// collaborators a test names. Every other collaborator gets a default:
 /// <list type="bullet">

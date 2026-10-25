@@ -30,7 +30,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// REG-05: authorization facts (user exists, admin, deactivated) are cached across requests in
+/// Authorization facts (user exists, admin, deactivated) are cached across requests in
 /// <see cref="UserAuthSnapshotCache"/>. A request with a warm snapshot makes no identity store
 /// query (it used to make 3 for the owner and 5 for an organization member, every request);
 /// role changes and deletions through <see cref="RegistryUserManager"/> invalidate it.

@@ -33,7 +33,7 @@ namespace Registry.Web.Test;
 /// The dataset jobs (<see cref="DdbJobs"/>) and the pending-build enqueue path
 /// (<see cref="PendingBuildEnqueuer"/>): failures land in the job log tail (catch-all + rethrow), the
 /// tail is scrubbed of the dataset folder, and a pending retry enqueues one indexed build per due
-/// entry. Ported from the tests of the static HangfireUtils wrappers (RQ-09).
+/// entry. Ported from the tests of the static HangfireUtils wrappers.
 /// </summary>
 [TestFixture]
 public class DdbJobsTests
@@ -133,7 +133,7 @@ public class DdbJobsTests
     [Test]
     public void Build_Canceled_RethrowsWithoutAFailureLineOrWarning()
     {
-        // RQ-13: Hangfire canceled the job (its token reached libddb through the job's operation)
+        // Hangfire canceled the job (its token reached libddb through the job's operation)
         _ddb.Setup(x => x.Build("ortho.tif", null!, false))
             .Throws(new DdbCanceledException("Canceled by the cancel token (DDBCancel)"));
 
@@ -338,7 +338,7 @@ public class DdbJobsTests
         Pending(MockJobs(enqueued).Object, index.Object).Run(_ddb.Object, Org, Ds, Console());
 
         enqueued.Select(e => e.Path).ShouldBe(["model.obj", "sub/model.obj", "never.obj"]);
-        // The new job shape (D4): organization and InternalRef, never the DDB object
+        // The new job shape: organization and InternalRef, never the DDB object
         enqueued.ShouldAllBe(e => e.Method == nameof(DdbJobs.Build) && e.OrgSlug == Org && e.InternalRef == Ref && !e.Force);
 
         var root = enqueued[0].Meta;
@@ -357,7 +357,7 @@ public class DdbJobsTests
     [Test]
     public void Pending_DueIsLibddbsRetryAfter_NotARegistryBackoff()
     {
-        // XI-04: libddb owns the retry rule and reports it as retryAfter; the enqueue path must follow
+        // Libddb owns the retry rule and reports it as retryAfter; the enqueue path must follow
         // it whatever the time since lastAttempt, or a coordinator run and libddb's buildPending disagree
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([
             new PendingBuildInfo { Path = "short.obj", Hash = "h1", LastAttempt = Now - 5, RetryAfter = Now - 1 },

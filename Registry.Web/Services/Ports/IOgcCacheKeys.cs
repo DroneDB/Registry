@@ -6,7 +6,7 @@ namespace Registry.Web.Services.Ports;
 /// <summary>
 /// Cache keys of a dataset's OGC documents (capabilities, layer lists). Every key carries the
 /// dataset's current OGC generation, so invalidating them all is one write of a new generation:
-/// no key scan, and it works on every cache provider (UPL-01 C.3).
+/// no key scan, and it works on every cache provider.
 /// </summary>
 public interface IOgcCacheKeys
 {

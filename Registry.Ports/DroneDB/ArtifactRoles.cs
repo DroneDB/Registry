@@ -1,7 +1,7 @@
 namespace Registry.Ports.DroneDB;
 
 /// <summary>
-/// The artifact roles libddb defines (ddb.h "build manifest", XI-04): what an artifact is for,
+/// The artifact roles libddb defines (ddb.h "build manifest"): what an artifact is for,
 /// never where it is. Roles are only ever added: a role not listed here passes through unchanged
 /// and is ignored where it has no use.
 /// </summary>

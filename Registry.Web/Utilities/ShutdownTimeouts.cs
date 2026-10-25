@@ -4,7 +4,7 @@ using System;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// The graceful-shutdown budget (RQ-02 item 6, XI-07). The stages nest, each inside the next:
+/// The graceful-shutdown budget. The stages nest, each inside the next:
 /// <list type="number">
 /// <item>the Hangfire servers drain their jobs (<see cref="HangfireServer"/>);</item>
 /// <item>then libddb shuts down (<c>DDBShutdown</c>: checkpoints and closes the index connections),

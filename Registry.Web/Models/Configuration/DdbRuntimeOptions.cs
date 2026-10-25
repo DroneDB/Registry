@@ -6,12 +6,12 @@ namespace Registry.Web.Models.Configuration;
 
 /// <summary>
 /// The libddb process configuration (configuration section <c>Ddb</c>), handed to libddb with
-/// <c>DDBConfigure</c> before <c>DDBRegisterProcess</c> (XI-06, RQ-08). A value left out is not sent:
+/// <c>DDBConfigure</c> before <c>DDBRegisterProcess</c>. A value left out is not sent:
 /// libddb uses its environment variable (<c>DDB_CPU_POOL_SIZE</c>, <c>DDB_IO_THREADS</c>,
 /// <c>DDB_MIN_FREE_DISK_MB</c>, <c>DDB_GDAL_CACHE_MB</c>) or its default. The effective values are logged at startup.
 /// <para>
 /// An explicit value here always wins. Left out, <see cref="CpuPoolSize"/> and <see cref="IoThreads"/>
-/// come from the host budget when one is declared (<see cref="HostBudgetSettings"/>, XI-06; computed by
+/// come from the host budget when one is declared (<see cref="HostBudgetSettings"/>; computed by
 /// <c>Utilities.HostResourceBudget</c>), unless the libddb environment variable is set.
 /// </para>
 /// </summary>
@@ -45,8 +45,8 @@ public sealed class DdbRuntimeOptions
 
     /// <summary>
     /// Where libddb caches thumbnails, tiles, index templates and DSM tiles. Default:
-    /// <c>&lt;StorageOptions.TempPath&gt;/ddb-cache</c>, absolute (before RQ-08 it was the profile folder,
-    /// <c>~/.ddb</c>, inside the container layer).
+    /// <c>&lt;StorageOptions.TempPath&gt;/ddb-cache</c>, absolute (not the profile folder
+    /// <c>~/.ddb</c>, which lives in the container layer).
     /// </summary>
     public string? CacheDir { get; set; }
 }

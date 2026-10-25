@@ -16,7 +16,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Stac;
 
 /// <summary>
-/// The datasets a caller may list in STAC, their names, and the cache of the per-caller listings (RQ-12).
+/// The datasets a caller may list in STAC, their names, and the cache of the per-caller listings.
 /// A listing costs one database query (untracked, with the organizations and their members, so the access check
 /// of a member loads nothing) and no cache round trip per dataset once warm: the visibility and the name of a
 /// dataset come from caches kept in process memory. The listings are keyed by the STAC generation, which

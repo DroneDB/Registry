@@ -15,7 +15,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// REG-09: the processing budget derived from the host, and the routing of native builds to
+/// The processing budget derived from the host, and the routing of native builds to
 /// the "builds" queue on every transition to Enqueued.
 /// </summary>
 [TestFixture]
@@ -76,7 +76,7 @@ public class ProcessingBudgetTests
 
     private static Job BuildJob() => Job.FromExpression<DdbJobs>(j => j.Build("org", Ref, "o.tif", false, null));
 
-    // The shape stored before RQ-09 (D4) routes the same way
+    // The shape stored by earlier releases routes the same way
     private static Job LegacyBuildJob() =>
         Job.FromExpression<HangfireUtils>(u => u.BuildWrapper(null!, "o.tif", false, null!));
 

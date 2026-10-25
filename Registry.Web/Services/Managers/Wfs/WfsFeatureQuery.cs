@@ -25,7 +25,7 @@ using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Services.Managers.Wfs;
 
-/// <summary>The features of the vector layers (RQ-12, out of <c>WfsManager</c>): GetFeature, GetFeatureById and GetPropertyValue.</summary>
+/// <summary>The features of the vector layers (out of <c>WfsManager</c>): GetFeature, GetFeatureById and GetPropertyValue.</summary>
 public class WfsFeatureQuery : OgcManagerBase
 {
     private readonly ILogger<WfsFeatureQuery> _logger;

@@ -37,7 +37,7 @@ namespace Registry.Web.Test;
 
 /// <summary>
 /// Slugs generated before ToSlug collapsed dashes ("a--b") fail IsValidSlug, which makes
-/// those organizations and datasets unreachable. <see cref="DatasetSlugRepair"/> (SystemManager before RQ-12) renames
+/// those organizations and datasets unreachable. <see cref="DatasetSlugRepair"/> renames
 /// them in the database and on disk, and renews the listings that show them.
 /// </summary>
 [TestFixture("sqlite")] // relational: real primary/foreign keys and cascades

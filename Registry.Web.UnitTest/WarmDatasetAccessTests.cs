@@ -28,7 +28,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// REG-05: a warm request to a dataset (each COPC range request of a point cloud) checks access
+/// A warm request to a dataset (each COPC range request of a point cloud) checks access
 /// without a Redis round trip or a database query: the visibility stays in process memory and the
 /// organization's members come with the cached dataset lookup. Changes are seen at once.
 /// </summary>

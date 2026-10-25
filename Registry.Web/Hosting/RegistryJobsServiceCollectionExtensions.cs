@@ -67,7 +67,7 @@ public static class RegistryJobsServiceCollectionExtensions
     }
 
     /// <summary>
-    /// The Hangfire servers of a job-executing host (REG-09), sized by the host budget
+    /// The Hangfire servers of a job-executing host, sized by the host budget
     /// (<see cref="HostResourceBudget.Processing"/>): one for the <see cref="JobQueues.Builds"/> queue with
     /// the heavy workers, one for the other queues with the light workers.
     /// </summary>

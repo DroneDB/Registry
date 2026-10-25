@@ -7,7 +7,7 @@ using Shouldly;
 
 namespace Registry.Web.Test;
 
-/// <summary>The public URLs (RQ-12: <see cref="Services.Adapters.UrlBuilder"/>, from <c>IUtils</c>).</summary>
+/// <summary>The public URLs (<see cref="Services.Adapters.UrlBuilder"/>).</summary>
 [TestFixture]
 public class UrlBuilderTests
 {

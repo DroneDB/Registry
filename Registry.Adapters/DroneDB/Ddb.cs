@@ -23,18 +23,18 @@ public class DDB : IDDB
     private static readonly FileSystem FileSystem = new();
     private readonly IDdbWrapper _wrapper;
 
-    // Null only in a DDB read from job data stored before RQ-09 (D4): that one only names its folder
+    // Null only in a DDB read from job data stored by earlier releases: that one only names its folder
     private IDdbWrapper Wrapper => _wrapper ?? throw new InvalidOperationException(
-        $"The dataset '{DatasetFolderPath}' was read from job data: it only names its folder (D4)");
+        $"The dataset '{DatasetFolderPath}' was read from job data: it only names its folder");
 
     [JsonIgnore] public string Version => Wrapper.GetVersion();
 
     [JsonProperty] public string DatasetFolderPath { get; private set; }
 
-    /// <summary>libddb's build folder under the database folder (XI-04: the adapter's knowledge, not Registry's).</summary>
+    /// <summary>libddb's build folder under the database folder (the adapter's knowledge, not Registry's).</summary>
     public const string BuildFolderName = "build";
 
-    /// <summary>The build folder (also the member job data stored before RQ-09 carries).</summary>
+    /// <summary>The build folder (also the member job data stored by earlier releases carries).</summary>
     [JsonProperty] public string BuildFolderPath { get; private set; }
 
     [JsonIgnore] public IReadOnlyList<string> DerivedFolderPaths => [BuildFolderPath];
@@ -48,7 +48,7 @@ public class DDB : IDDB
     }
 
     /// <summary>
-    /// A DDB read from Hangfire job data stored before RQ-09 (D4): the job shims read only
+    /// A DDB read from Hangfire job data stored by earlier releases: the job shims read only
     /// <see cref="DatasetFolderPath"/> and open the dataset through DI, so no native wrapper is
     /// created here and any other member throws.
     /// </summary>

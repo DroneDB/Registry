@@ -246,7 +246,7 @@ public sealed class ShareBatchStore
     }
 
     // Chunks of a share upload live where the dataset's other uploads do (same volume as the dataset)
-    // Batch and entry times are UTC (RQ-10): they were the server's local time, which the API then
+    // Batch and entry times are UTC: they were the server's local time, which the API then
     // served as UTC (Kind is lost in the database)
     private DateTime UtcNow() => _time.GetUtcNow().UtcDateTime;
 }

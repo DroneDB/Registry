@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
-/// <summary>One element of <c>DDBGetBuildArtifacts</c> (XI-04): an entry path and its build object.</summary>
+/// <summary>One element of <c>DDBGetBuildArtifacts</c>: an entry path and its build object.</summary>
 public sealed class EntryBuildArtifacts
 {
     /// <summary>Dataset-relative entry path, as requested.</summary>

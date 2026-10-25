@@ -9,7 +9,7 @@ using Registry.Ports.DroneDB;
 namespace Registry.Adapters.DroneDB;
 
 /// <summary>
-/// The startup handshake with libddb (XI-01, D9): the loaded library must have the ABI Registry is
+/// The startup handshake with libddb: the loaded library must have the ABI Registry is
 /// written for (<see cref="Major"/> equal, minor at least <see cref="Minor"/>) and export every
 /// function <see cref="NativeDdb"/> declares. Checked once, with <see cref="NativeLibrary"/> export
 /// lookups, never by calling an export and catching <see cref="EntryPointNotFoundException"/>; a

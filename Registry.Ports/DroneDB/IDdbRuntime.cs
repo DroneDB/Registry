@@ -3,7 +3,7 @@ using System;
 namespace Registry.Ports.DroneDB;
 
 /// <summary>
-/// The libddb process lifecycle (ABI 2.0, XI-01/XI-06/XI-07/XI-08): the capabilities of the loaded
+/// The libddb process lifecycle (ABI 2.0): the capabilities of the loaded
 /// library, the process configuration and the log sink (both set before
 /// <see cref="RegisterProcess"/>), the one-time initialization and the shutdown. Kept apart from
 /// <see cref="IDdbWrapper"/> (dataset operations): only the host's startup and shutdown use it.

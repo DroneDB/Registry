@@ -3,7 +3,7 @@
     <!--
         Test helpers shared by every test project (test file system, download cache, loggers).
         It must not reference Registry.Web: Registry.Adapters.Ddb.Test, which DroneDB CI runs as
-        the libddb contract suite (XI-09), would otherwise build Registry.Web and the Hub. Web test
+        the libddb contract suite, would otherwise build Registry.Web and the Hub. Web test
         helpers live in Registry.Web.TestSupport.
     -->
     <PropertyGroup>

@@ -7,7 +7,7 @@ namespace Registry.Web.Exceptions;
 /// The caller has no valid credentials (HTTP 401, whatever the request carries): a failed login, a
 /// token whose user no longer exists, a refresh refused to a deactivated user. A 401 makes the Hub
 /// sign the user out, so a caller that is authenticated but lacks a permission gets
-/// <see cref="ForbiddenException"/> instead (plan decision D2).
+/// <see cref="ForbiddenException"/> instead.
 /// </summary>
 public class UnauthorizedException : RegistryException
 {

@@ -1,6 +1,6 @@
 # EditorConfig for DroneDB Registry: https://editorconfig.org
 #
-# These rules describe what the code base already follows (RQ-03). A rule is
+# These rules describe what the code base already follows. A rule is
 # a warning only if it has 0 violations today. The other rules are
 # suggestions, so the build warning count does not change. Raise a rule to
 # warning after its violations are fixed.

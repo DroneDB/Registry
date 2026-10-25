@@ -178,7 +178,7 @@ public sealed class RasterAnalysisService
         };
     }
 
-    // Native raster work runs on the heavy lane of the gate (XI-06), as thumbnails do
+    // Native raster work runs on the heavy lane of the gate, as thumbnails do
     private Task<T> RunAsync<T>(Func<T> work, CancellationToken ct) => _gate.RunAsync(NativeLane.Heavy, work, ct);
 
     /// <summary>

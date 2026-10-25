@@ -8,14 +8,13 @@ using Registry.Ports.DroneDB;
 namespace Registry.Adapters.DroneDB;
 
 /// <summary>
-/// The one call / error / free / deserialize envelope of every libddb call (RQ-08, XI-02, XI-03),
+/// The one call / error / free / deserialize envelope of every libddb call,
 /// generalized from the batch add. Each helper runs the native call, and on failure reads the last
 /// error and reason synchronously, on the same thread, before anything else (no await, no other
 /// libddb call in between), then throws the mapped exception (<see cref="DdbResultMapper"/>). An
 /// output is read only on success and freed in a finally block whenever it is not null. Each call
-/// runs under the current <see cref="DdbOperation"/> (<see cref="NativeOperation"/>, XI-08) and, for an
-/// export that honours cancel tokens, the current <see cref="DdbCancellation"/> (<see cref="NativeCancellation"/>,
-/// XI-07, RQ-13): a canceled call throws <see cref="DdbCanceledException"/> with the managed token.
+/// runs under the current <see cref="DdbOperation"/> (<see cref="NativeOperation"/>) and, for an
+/// export that honours cancel tokens, the current <see cref="DdbCancellation"/> (<see cref="NativeCancellation"/>): a canceled call throws <see cref="DdbCanceledException"/> with the managed token.
 /// </summary>
 internal static class NativeCall
 {

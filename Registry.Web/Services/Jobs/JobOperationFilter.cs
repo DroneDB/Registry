@@ -8,9 +8,9 @@ using Registry.Web.Services.Adapters;
 namespace Registry.Web.Services.Jobs;
 
 /// <summary>
-/// Gives every job a libddb operation (<see cref="JobOperations"/>, XI-08) for as long as it
+/// Gives every job a libddb operation (<see cref="JobOperations"/>) for as long as it
 /// runs, so the native log records of its calls carry the job id and dataset, and the job's
-/// cancellation (RQ-13): its cancellable native calls (a build, an export) stop at their next
+/// cancellation: its cancellable native calls (a build, an export) stop at their next
 /// checkpoint when Hangfire cancels the job (server shutdown, job aborted). Writes the native
 /// warnings still queued when the job ends to its console. Both flow into the job from
 /// <see cref="OnPerforming"/> (synchronous, same flow as the job).

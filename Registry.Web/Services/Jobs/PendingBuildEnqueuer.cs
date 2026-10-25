@@ -26,7 +26,7 @@ namespace Registry.Web.Services.Jobs;
 /// dataset of the job (job parameters set by <see cref="IndexedJobEnqueuer"/>), or a dataset
 /// folder Registry cannot map, libddb runs the due builds inline (the native fallback).
 /// An entry is due when the current time is at or past its <see cref="PendingBuildInfo.RetryAfter"/>:
-/// libddb owns the retry rule (XI-04), so the enqueue path and <c>buildPending</c> agree.
+/// libddb owns the retry rule, so the enqueue path and <c>buildPending</c> agree.
 /// </summary>
 public sealed class PendingBuildEnqueuer
 {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The pinned DroneDB build (RQ-02 item 10, XI-01).
+# The pinned DroneDB build.
 #
 # Directory.Build.props is the single source of "which libddb": DdbSource, DdbVersion, the CI
 # coordinates of an unreleased build, and the SHA-256 of the .deb and of the Windows zip. This

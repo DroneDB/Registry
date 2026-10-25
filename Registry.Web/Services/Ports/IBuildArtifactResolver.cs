@@ -5,7 +5,7 @@ using Registry.Ports.DroneDB;
 namespace Registry.Web.Services.Ports;
 
 /// <summary>
-/// The builds of dataset entries by role (plan decision D8, XI-04): libddb's build manifest
+/// The builds of dataset entries by role: libddb's build manifest
 /// (<see cref="IDdbBuild.GetBuildArtifacts"/>) says whether an entry is buildable, what state its build
 /// is in and which artifacts exist, each with a role (<see cref="ArtifactRoles"/>), a path relative to
 /// the build root, a media type and an optional download name. Registry chooses roles here and serves

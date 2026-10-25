@@ -17,7 +17,7 @@ namespace Registry.Web.Controllers;
 
 /// <summary>
 /// The builds of a dataset's entries: starting one, the files and the downloadable artifact of a build (as
-/// libddb lists them, XI-04), the builds waiting for a dependency, and the record of finished build jobs.
+/// libddb lists them), the builds waiting for a dependency, and the record of finished build jobs.
 /// </summary>
 [ApiController]
 [Route(RoutesHelper.DatasetPrefix)]

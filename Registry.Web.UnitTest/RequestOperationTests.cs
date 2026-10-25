@@ -27,7 +27,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// XI-08: a native call made while an HTTP request is served carries an operation id that names the request, the
+/// A native call made while an HTTP request is served carries an operation id that names the request, the
 /// same <c>RequestId</c> (<c>HttpContext.TraceIdentifier</c>) Serilog writes on the request's own records; a job keeps
 /// its job id. One middleware sets it: the code that calls libddb passes nothing.
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~RequestOperationTests"

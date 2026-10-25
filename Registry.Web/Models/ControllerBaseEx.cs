@@ -17,7 +17,7 @@ namespace Registry.Web.Models;
 public class ControllerBaseEx : ControllerBase
 {
     /// <summary>
-    /// A file on disk with its validators (RQ-13): <c>Last-Modified</c> from the file, <c>ETag</c> when the caller knows
+    /// A file on disk with its validators: <c>Last-Modified</c> from the file, <c>ETag</c> when the caller knows
     /// one, and range processing, so the framework answers <c>If-None-Match</c> (304), <c>If-Modified-Since</c>,
     /// <c>Range</c> (206) and <c>If-Range</c> itself.
     /// </summary>

@@ -47,7 +47,7 @@ public sealed record ArchiveExtractionProgress(int Done, int Total, string Key, 
 public sealed record ArchiveExtractionResult(IReadOnlyList<string> Extracted, int Skipped, long BytesWritten, int Total);
 
 /// <summary>
-/// The one archive extraction into a dataset (RQ-10), shared by the archive extract tool, the
+/// The one archive extraction into a dataset, shared by the archive extract tool, the
 /// photogrammetry results and the archive URL import (each had its own copy of this loop).
 /// <list type="bullet">
 /// <item>Every entry goes through the dataset path rule (<see cref="DatasetPathPolicy"/>): an unsafe

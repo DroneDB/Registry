@@ -8,7 +8,7 @@ namespace Registry.Web.Services.Ports;
 /// <summary>
 /// The entry operations other features use (shares, CAD coordinate systems, system maintenance): adding a
 /// file or a folder, streaming a file to the dataset volume and committing it, deleting an entry. A facade
-/// over the objects slice (RQ-11): the object controllers use the focused services in
+/// over the objects slice: the object controllers use the focused services in
 /// <see cref="Objects"/> (entries, transfers, renders, builds, raster analysis and processing).
 /// </summary>
 public interface IObjectsManager

@@ -18,7 +18,7 @@ public static class CacheProviderFactories
     /// <returns>
     /// A function that takes parameters (key parts..., generate) and returns the bytes of generate as they are.
     /// generate (<c>Func&lt;CancellationToken, Task&lt;byte[]&gt;&gt;</c>, always the last parameter) gets the
-    /// generation's token, canceled once no caller waits for it (RQ-13).
+    /// generation's token, canceled once no caller waits for it.
     /// </returns>
     public static Func<object[], CancellationToken, Task<byte[]>> CreatePassThroughProvider() =>
         (parameters, ct) => ((Func<CancellationToken, Task<byte[]>>)parameters[^1])(ct);

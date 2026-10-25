@@ -12,7 +12,7 @@ namespace Registry.Web.Services.Managers;
 
 /// <summary>
 /// The datasets API (<see cref="IDatasetsManager"/>, what the controllers and the organizations call) over the
-/// dataset services RQ-12 split it into (13 parameters before): queries, commands, the move between organizations.
+/// dataset services it is split into: queries, commands, the move between organizations.
 /// </summary>
 public class DatasetsManager : IDatasetsManager
 {

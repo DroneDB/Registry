@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 namespace Registry.Adapters.Testing;
 
 /// <summary>
-/// The libddb contract files vendored from DroneDB <c>tests/contract</c> (XI-09), embedded byte for
+/// The libddb contract files vendored from DroneDB <c>tests/contract</c>, embedded byte for
 /// byte. <see cref="Source"/> records the DroneDB commit they come from and the sha256 of each file.
 /// </summary>
 public static class ContractFiles

@@ -5,7 +5,7 @@ using System.IO;
 namespace Registry.Common;
 
 /// <summary>
-/// The two spellings of a path the Registry works with (RQ-10): the DroneDB form ('/' separated,
+/// The two spellings of a path the Registry works with: the DroneDB form ('/' separated,
 /// what libddb indexes and the API exchanges) and the local form (the OS separator, what the file
 /// system takes). The one place that rewrites separators.
 /// </summary>
@@ -30,7 +30,7 @@ public static class PathExtensions
 }
 
 /// <summary>
-/// How the OS compares file names (RQ-10): case-insensitive on Windows, ordinal elsewhere. The one
+/// How the OS compares file names: case-insensitive on Windows, ordinal elsewhere. The one
 /// copy of the rule for comparing and keying local paths.
 /// </summary>
 public static class PathComparison

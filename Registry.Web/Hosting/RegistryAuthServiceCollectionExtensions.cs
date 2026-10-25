@@ -28,7 +28,7 @@ public static class RegistryAuthServiceCollectionExtensions
     /// <summary>
     /// The identity database and store (one Identity builder; the sign-in manager for local accounts
     /// only), the login manager of the configured provider (LDAP, external or local), JWT bearer
-    /// authentication, the authorization policies and handlers (RQ-06), the token manager and the auth
+    /// authentication, the authorization policies and handlers, the token manager and the auth
     /// middlewares, the cached auth facts, the dataset access resolver and the membership service.
     /// </summary>
     public static IServiceCollection AddRegistryAuth(this IServiceCollection services, IConfiguration configuration)

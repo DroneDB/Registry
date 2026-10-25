@@ -1,4 +1,4 @@
-# Nullable allow-list (RQ-03, decision D7). It may only shrink.
+# Nullable allow-list. It may only shrink.
 #
 # Directory.Build.props enables nullable reference types for every project.
 # Each entry opts one project or one file out:

@@ -8,7 +8,7 @@ using Shouldly;
 namespace Registry.Web.Test.E2eFixes;
 
 /// <summary>
-/// End-to-end check of Registry eb1311f2 + libddb 2.0.0, finding 3: <c>IsValidSlug</c> accepted one character while
+/// End-to-end check: <c>IsValidSlug</c> accepted one character while
 /// the routes (<c>^[a-z0-9][a-z0-9_-]{1,128}$</c>) need two, so <c>POST /orgs</c> with slug <c>o</c> stored the
 /// organization, answered 500 (no route for the Location header) and left it unreachable. One definition
 /// now (<see cref="SlugRules"/>) is used by the validator, <c>ToSlug</c> and the route constraint.

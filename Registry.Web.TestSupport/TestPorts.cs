@@ -12,7 +12,7 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Test;
 
-/// <summary>The focused ports that replaced <c>IUtils</c> (RQ-12), built over a test's collaborators.</summary>
+/// <summary>The focused ports that replaced <c>IUtils</c>, built over a test's collaborators.</summary>
 public static class TestPorts
 {
     /// <summary>The dataset resolver over <paramref name="context"/>, without the lookup cache (every lookup queries).</summary>

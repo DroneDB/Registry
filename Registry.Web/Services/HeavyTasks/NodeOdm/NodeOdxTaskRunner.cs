@@ -13,7 +13,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.HeavyTasks.NodeOdx;
 
 /// <summary>
-/// The NodeODX side of a photogrammetry task (RQ-12, out of <c>PhotogrammetryTool</c>): the configured nodes, and
+/// The NodeODX side of a photogrammetry task (out of <c>PhotogrammetryTool</c>): the configured nodes, and
 /// one run on a node: submit the images, follow the node's progress and log, download the result bundle.
 /// </summary>
 public sealed class NodeOdxTaskRunner

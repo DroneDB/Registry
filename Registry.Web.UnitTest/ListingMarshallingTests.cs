@@ -18,7 +18,7 @@ using Entry = Registry.Ports.DroneDB.Entry;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// REG-08: listings are deserialized in place from libddb's UTF-8 buffer (<see cref="NativeJson"/>),
+/// Listings are deserialized in place from libddb's UTF-8 buffer (<see cref="NativeJson"/>),
 /// callers that need paths, hashes or types get <see cref="EntrySummary"/> rows without properties
 /// and geometries, and <see cref="DDB.Find"/> hands folder, name and type filters to DroneDB.
 /// The payloads mirror DDBListEntries output for 50 000 GeoImage entries.

@@ -14,7 +14,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Uploads;
 
 /// <summary>
-/// The receipt of an upload that carries a client id (RQ-12, out of <c>UploadManager</c>): a client that lost the
+/// The receipt of an upload that carries a client id (out of <c>UploadManager</c>): a client that lost the
 /// response asks for the outcome instead of sending the files again. Without a receipt store (a direct construction
 /// in a test) no receipt is kept and every method is a no-op.
 /// </summary>

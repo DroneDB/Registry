@@ -18,7 +18,7 @@ Category string literals (use TestCategories)	0
 Controller log+rethrow catch blocks	0
 catch (Exception ...) total	166
 new ErrorResponse( in controllers	0
-ErrorResponse references (D1)	0
+ErrorResponse references	0
 Controller entry debug traces	0
 Controller Content-Length pre-checks	0
 InvalidOperationException thrown by managers	4
@@ -49,7 +49,7 @@ Inline ?? new XSettings() defaults	0
 Service-locator calls in Services/Initialization	0
 .Wait() / Task.Delay in startup code	0
 Console helper calls in Program+Startup	0
-HostFacts.Current() call sites (XI-06)	1
+HostFacts.Current() call sites	1
 [DllImport] in production code	4
 EntryPointNotFoundException catches	0
 Copied DDB AutomaticRetry attribute	3
@@ -60,13 +60,13 @@ HangfireUtils static call sites	0
 JobStorage.Current uses	0
 context != null ? ... : Log copies	0
 Lenient JsonElement reader copies	0
-Job expressions passing an IDDB (D4)	0
+Job expressions passing an IDDB	0
 Hangfire filters taking IServiceProvider	0
 UseFilter(new ...) in the Hangfire configuration	0
 Hangfire static facade calls	0
 Read-after-write artifact hash copies	0
 ApplyDelta calls without verified hashes	0
-Pending-build backoff copies (XI-04)	0
+Pending-build backoff copies	0
 Zip-slip normalizer copies	0
 Direct Path.GetTempPath()	0
 Ad-hoc backslash->slash normalizations	1
@@ -95,8 +95,8 @@ Native raster calls outside INativeWorkGate (objects slice)	0
 Build-layout literals in the objects slice	0
 Build-layout literals in production C#	12
 Per-entry build probe calls	0
-RQ-12 files over 800 lines	0
-RQ-12 constructors over 7 parameters	0
+Split classes: files over 800 lines	0
+Split classes: constructors over 7 parameters	0
 Registry.Web constructors over 7 parameters	2
 Registry.Web files over 800 lines	0
 Whole-section AppSettings in the container	0

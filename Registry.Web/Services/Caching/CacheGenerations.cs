@@ -9,7 +9,7 @@ namespace Registry.Web.Services.Caching;
 
 /// <summary>
 /// Generations of cache scopes: every key of a scope carries the scope's current generation, so invalidating
-/// them all is one write of a new generation, with no key scan, on every cache provider (UPL-01 C.3). A
+/// them all is one write of a new generation, with no key scan, on every cache provider. A
 /// generation is a random token: two concurrent invalidations cannot cancel each other out, and the entries of
 /// an old generation expire on their own expiry.
 /// </summary>

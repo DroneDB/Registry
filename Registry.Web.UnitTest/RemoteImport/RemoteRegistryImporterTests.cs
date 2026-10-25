@@ -28,7 +28,7 @@ using Shouldly;
 namespace Registry.Web.Test.RemoteImport;
 
 /// <summary>
-/// <see cref="RemoteRegistryImporter"/> and its two strategies (RQ-12, the import of <c>SystemManager</c> as a
+/// <see cref="RemoteRegistryImporter"/> and its two strategies (the import of <c>SystemManager</c> as a
 /// background job) over a fake source Registry: what is imported, what is reported, what stops the import.
 /// </summary>
 [TestFixture]
@@ -47,7 +47,7 @@ public sealed class RemoteRegistryImporterTests : IDisposable
     [SetUp]
     public void SetUp()
     {
-        _root = Path.Combine(Path.GetTempPath(), "rq12-import-" + Guid.NewGuid().ToString("N"));
+        _root = Path.Combine(Path.GetTempPath(), "remoteregistryimporter-import-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
         _context = TestDb.CreateContext<RegistryContext>();
         _remote = new FakeRegistry();

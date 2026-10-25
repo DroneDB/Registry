@@ -35,7 +35,7 @@ public sealed class CadCrsManager(
         if (Path.GetExtension(path).ToLowerInvariant() is not (".dxf" or ".dwg"))
             throw new BadRequestException("Only CAD drawings (.dxf, .dwg) take a coordinate system");
 
-        // The token is honoured until the change starts: the access check (RQ-13)
+        // The token is honoured until the change starts: the access check
         var ddb = (await access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct)).Ddb;
 
         var entry = ddb.GetEntry(path)

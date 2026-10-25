@@ -56,7 +56,7 @@ public class OgcAuthorizationFilter : IAsyncAuthorizationFilter
         }
         catch (ForbiddenException)
         {
-            // D2: a signed-in caller who lacks access gets 403; an anonymous one 401 with the Basic
+            // A signed-in caller who lacks access gets 403; an anonymous one 401 with the Basic
             // challenge, so the OGC client asks for credentials
             var status = ApiExceptionClassifier.AccessDeniedStatus(
                 context.HttpContext.User.Identity?.IsAuthenticated == true);
@@ -79,7 +79,7 @@ public class OgcAuthorizationFilter : IAsyncAuthorizationFilter
             _logger.Log(d.Level, ex, "OGC authorization failed: {Path}", context.HttpContext.Request.Path);
             if (ApiExceptionClassifier.IsClientGone(d))
             {
-                // Nobody reads an exception report any more (RQ-13)
+                // Nobody reads an exception report any more
                 context.Result = new StatusCodeResult(d.StatusCode);
                 return;
             }

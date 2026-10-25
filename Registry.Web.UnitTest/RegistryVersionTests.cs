@@ -7,7 +7,7 @@ namespace Registry.Web.Test.VersionTests;
 
 /// <summary>
 /// The Registry version (GET /sys/version, the features) is always major.minor.patch, never a 4-part string ending
-/// in ".0". RQ-12 moved it from <c>SystemManager.GetVersion</c> to <see cref="RegistryVersion"/>.
+/// in ".0". It is built by <see cref="RegistryVersion"/>.
 /// </summary>
 [TestFixture]
 public class RegistryVersionTests

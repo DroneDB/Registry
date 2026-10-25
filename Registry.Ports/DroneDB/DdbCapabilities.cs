@@ -7,7 +7,7 @@ using System.Text.Json;
 namespace Registry.Ports.DroneDB;
 
 /// <summary>
-/// What the loaded libddb supports (<c>DDBGetCapabilities</c>, ABI 2.0, XI-01): its ABI and
+/// What the loaded libddb supports (<c>DDBGetCapabilities</c>, ABI 2.0): its ABI and
 /// version, its error codes and reasons, the exports that honour a cancel token and every exported
 /// symbol. Read once at startup; it replaces probing an export by calling it and catching
 /// <see cref="EntryPointNotFoundException"/>.

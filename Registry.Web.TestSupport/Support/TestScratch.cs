@@ -8,7 +8,7 @@ using Registry.Web.Services.Adapters;
 namespace Registry.Web.Test.Support;
 
 /// <summary>
-/// The scratch file provider for tests (RQ-10): the real <see cref="ScratchFileProvider"/> over the
+/// The scratch file provider for tests: the real <see cref="ScratchFileProvider"/> over the
 /// real file system, its temp folder under the system temp folder.
 /// </summary>
 public static class TestScratch

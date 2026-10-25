@@ -10,16 +10,16 @@ using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.Utilities;
 
-/// <summary>The libddb process lifecycle of a host (RQ-08): one registration for the web server, the processing node and the thumbnail generator.</summary>
+/// <summary>The libddb process lifecycle of a host: one registration for the web server, the processing node and the thumbnail generator.</summary>
 public static class DdbRuntimeServiceCollectionExtensions
 {
     /// <summary>
     /// Registers <typeparamref name="TRuntime"/> as the <see cref="IDdbRuntime"/> (the composition root
-    /// passes the native one), the native log sink (XI-08), the shutdown budget
+    /// passes the native one), the native log sink, the shutdown budget
     /// (<see cref="ShutdownTimeouts.Host"/>) and <see cref="DdbRuntimeService"/>, which configures libddb
-    /// with the host's <see cref="HostResourceBudget"/> (XI-06; <see cref="DdbRuntimeOptions"/> is
+    /// with the host's <see cref="HostResourceBudget"/> (<see cref="DdbRuntimeOptions"/> is
     /// registered with the other options by <c>AddRegistryOptions</c>). <c>RegistryHost</c> calls it before
-    /// any other hosted service is added, so the runtime starts first and stops last (XI-07).
+    /// any other hosted service is added, so the runtime starts first and stops last.
     /// </summary>
     public static IServiceCollection AddDdbRuntime<TRuntime>(this IServiceCollection services)
         where TRuntime : class, IDdbRuntime

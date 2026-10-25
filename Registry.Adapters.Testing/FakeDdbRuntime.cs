@@ -3,7 +3,7 @@ using Registry.Ports.DroneDB;
 namespace Registry.Adapters.Testing;
 
 /// <summary>
-/// An <see cref="IDdbRuntime"/> that never loads native libddb (XI-09): the capabilities are the
+/// An <see cref="IDdbRuntime"/> that never loads native libddb: the capabilities are the
 /// <c>capabilities</c> contract fixture, the effective configuration the <c>effective-config</c>
 /// fixture, and the lifecycle calls are recorded so a test can check the order a host makes them
 /// in (libddb's rule: configuration and log sink before <see cref="RegisterProcess"/>, nothing after

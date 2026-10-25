@@ -5,7 +5,7 @@ namespace Registry.Web.Exceptions;
 
 /// <summary>
 /// The caller may not perform the operation: a failed access check, an admin-only action, a feature
-/// disabled on this server. Plan decision D2: <see cref="Utilities.ApiExceptionClassifier"/> answers
+/// disabled on this server. <see cref="Utilities.ApiExceptionClassifier"/> answers
 /// 403 to an authenticated request and 401 to an anonymous one (signing in may help). Distinct from
 /// <see cref="UnauthorizedException"/>, which means "no valid credentials" and is always 401.
 /// </summary>

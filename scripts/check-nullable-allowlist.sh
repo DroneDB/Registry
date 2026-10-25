@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Checks that the projects and files that opt out of nullable reference types are
-# exactly the ones listed in build/nullable-allowlist.txt (RQ-03, decision D7).
+# exactly the ones listed in build/nullable-allowlist.txt.
 #
 #   - Directory.Build.props must enable Nullable for every project.
 #   - A csproj that sets <Nullable> to anything but `enable` must be listed by directory name.

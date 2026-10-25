@@ -31,7 +31,7 @@ namespace Registry.Web.Test;
 /// <summary>
 /// The image/tile/raster-info pipeline must answer 404 "not processed yet" — not 500 — when the
 /// build artifact a renderer reads does not exist yet. The render source comes from libddb's build
-/// manifest (XI-04: the artifact of the entry's own build with a rendered role), is checked BEFORE
+/// manifest (the artifact of the entry's own build with a rendered role), is checked BEFORE
 /// the response cache, and entries of a type that is never rendered from a build skip the manifest
 /// call.
 /// </summary>
@@ -194,7 +194,7 @@ public class ObjectsManagerThumbnailTests : TestBase
     [Test]
     public async Task GenerateThumbnailData_FolderPath_IsRejectedInsteadOfFirstChild()
     {
-        // DDB-11 B5: the folder listing's first child used to be thumbnailed in its place
+        // B5: the folder listing's first child used to be thumbnailed in its place
         var folder = new Entry { Path = "photos", Type = EntryType.Directory };
         var child = new Entry { Path = "photos/a.jpg", Type = EntryType.GeoImage, Hash = "img1", Size = 100 };
         _ddbMock.Setup(x => x.GetEntry("photos")).Returns(folder);

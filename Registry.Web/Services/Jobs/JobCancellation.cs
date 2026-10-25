@@ -4,7 +4,7 @@ using Hangfire.Server;
 
 namespace Registry.Web.Services.Jobs;
 
-/// <summary>The cancellation of a job that has no token parameter (the D4 overloads).</summary>
+/// <summary>The cancellation of a job that has no token parameter (the overloads without a token parameter).</summary>
 public static class JobCancellation
 {
     /// <summary>

@@ -96,7 +96,7 @@ public class OgcAuthorizationFilterTest
     [Test]
     public async Task ReadDenied_Authenticated_Returns403WithoutChallenge()
     {
-        // D2 (RQ-05): signed-in OGC clients that lack access are not asked for credentials again
+        // signed-in OGC clients that lack access are not asked for credentials again
         var ds = new Dataset { Slug = "ds" };
         SetupDataset(ds);
         _auth.Setup(a => a.RequestAccess(ds, AccessType.Read)).ReturnsAsync(false);
@@ -112,7 +112,7 @@ public class OgcAuthorizationFilterTest
     [Test]
     public async Task InvalidSlug_Returns400NotAServerError()
     {
-        // RQ-06: the lookup's BadRequestException used to fall into the catch-all and answer 500
+        // The lookup's BadRequestException used to fall into the catch-all and answer 500
         _utils.Setup(u => u.GetDatasetAsync("Bad", "ds", false, false, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new BadRequestException("Invalid organization id"));
         var ctx = MakeContext("Bad", "ds");

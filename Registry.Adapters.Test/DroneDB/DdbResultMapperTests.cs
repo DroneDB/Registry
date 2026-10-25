@@ -8,7 +8,7 @@ using Shouldly;
 namespace Registry.Adapters.Test.DroneDB;
 
 /// <summary>
-/// XI-02, RQ-08: every libddb result code maps to one typed exception carrying libddb's message
+/// Every libddb result code maps to one typed exception carrying libddb's message
 /// and reason (<see cref="DdbResultMapper.Map"/>, pure: no libddb).
 /// </summary>
 [TestFixture]

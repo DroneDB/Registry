@@ -6,7 +6,7 @@ using Registry.Ports.Json;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// The JSON options of the Registry API and of everything Registry stores as JSON (RQ-14, D3): MVC's formatters, the
+/// The JSON options of the Registry API and of everything Registry stores as JSON: MVC's formatters, the
 /// RFC 9457 writers, the caches, the chunk manifests and the push sessions all use these, so a type is written the same
 /// way everywhere. <see cref="RegistryJson"/> sets the behaviour; the generated contracts of the API
 /// (<see cref="RegistryJsonContext"/>) and of libddb (<see cref="DdbJsonContext"/>) are consulted before reflection.

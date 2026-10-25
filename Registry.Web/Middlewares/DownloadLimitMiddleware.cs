@@ -115,7 +115,7 @@ public partial class DownloadLimitMiddleware : IMiddleware
     /// <summary>
     /// Answers 429 Too Many Requests with <c>Retry-After</c>: a user-friendly HTML page for direct browser
     /// navigation (Accept: text/html), otherwise the API's ProblemDetails body, written by the exception
-    /// handler from <see cref="TooManyRequestsException"/> (one error model, RQ-05).
+    /// handler from <see cref="TooManyRequestsException"/> (one error model).
     /// </summary>
     private static async Task WriteTooManyRequestsResponse(HttpContext context)
     {

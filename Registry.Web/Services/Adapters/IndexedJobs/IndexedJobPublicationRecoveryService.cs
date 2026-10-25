@@ -116,7 +116,7 @@ public class IndexedJobPublicationRecoveryService
         _time = time ?? TimeProvider.System;
     }
 
-    /// <summary>The job as stored before RQ-09 (D4): runs with the context's shutdown token.</summary>
+    /// <summary>The job as stored by earlier releases: runs with the context's shutdown token.</summary>
     public Task RecoverPublications(PerformContext? context) => RecoverPublications(context, JobCancellation.Of(context));
 
     /// <summary>Recurring entry point: one bounded pass.</summary>

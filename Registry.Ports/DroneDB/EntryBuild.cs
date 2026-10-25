@@ -5,7 +5,7 @@ namespace Registry.Ports.DroneDB;
 
 /// <summary>
 /// The build object of an entry (<c>DDBGetBuildArtifacts</c>, <c>DDBListEntriesEx</c>; ddb.h "build
-/// manifest", XI-04): libddb's one answer to "is it buildable, what state is its build in and
+/// manifest"): libddb's one answer to "is it buildable, what state is its build in and
 /// which artifacts exist".
 /// </summary>
 public sealed class EntryBuild

@@ -14,7 +14,7 @@ using Registry.Adapters.DroneDB;
 namespace Registry.Web.Test.Support;
 
 /// <summary>
-/// Keeps native libddb out of the unit test process (D5) and proves it stayed out:
+/// Keeps native libddb out of the unit test process and proves it stayed out:
 /// <list type="bullet">
 /// <item><see cref="Install"/> resolves the <c>[DllImport("ddb")]</c> bindings of Registry.Adapters
 /// to a <see cref="DllNotFoundException"/> that names the test, as if libddb were not installed,
@@ -59,7 +59,7 @@ public static partial class NativeDdbGuard
         var test = TestContext.CurrentContext.Test.FullName;
         BlockedAttempts.Enqueue($"{test} (DllImport \"{libraryName}\")");
         throw new DllNotFoundException(
-            $"Registry.Web.UnitTest never loads native libddb (D5), but {test} called it. Use FakeDdbWrapper " +
+            $"Registry.Web.UnitTest never loads native libddb, but {test} called it. Use FakeDdbWrapper " +
             "or a Mock<IDdbWrapper>, or move the test to Registry.Web.IntegrationTest.");
     }
 

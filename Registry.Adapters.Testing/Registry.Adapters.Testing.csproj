@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <!--
-        Test doubles for the ports that Registry.Adapters implements (XI-09). Referenced by test
+        Test doubles for the ports that Registry.Adapters implements. Referenced by test
         projects only: FakeDdbWrapper replays the libddb contract fixtures vendored in Contract/
         (see README.md and Contract/SOURCE), so a test that uses it never loads native libddb.
     -->

@@ -5,7 +5,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Test.Support;
 
 /// <summary>
-/// The dataset path rule for tests (RQ-10): <see cref="DatasetPathPolicy"/> over
+/// The dataset path rule for tests: <see cref="DatasetPathPolicy"/> over
 /// <see cref="FakeDdbWrapper"/>, whose <c>NormalizePath</c> follows libddb's golden path vectors, so a
 /// unit test applies the production rule without loading libddb.
 /// </summary>

@@ -23,7 +23,7 @@ namespace Registry.Web.Services.Objects;
 /// Default <see cref="IObjectRenderService"/>: renders are cached per entry hash (the dataset thumbnail per
 /// candidate path) and every native render runs through <see cref="INativeWorkGate"/> (tiles on the tiles
 /// lane, thumbnails on the heavy lane, through the gated thumbnail generator). A render runs with the cache
-/// flight's token: it stops when every request waiting for it has gone (RQ-13).
+/// flight's token: it stops when every request waiting for it has gone.
 /// </summary>
 public sealed class ObjectRenderService : IObjectRenderService
 {

@@ -9,7 +9,7 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Uploads;
 
-/// <summary>The index step of an upload (RQ-12, out of <c>UploadManager</c>): the files of a request become entries in one batch.</summary>
+/// <summary>The index step of an upload (out of <c>UploadManager</c>): the files of a request become entries in one batch.</summary>
 public sealed class UploadIndexer
 {
     private readonly ILogger<UploadIndexer> _logger;

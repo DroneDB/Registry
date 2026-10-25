@@ -12,7 +12,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Keeps the push session as a JSON file in the push folder, and the upload verifications (XI-05)
+/// Keeps the push session as a JSON file in the push folder, and the upload verifications
 /// as one small record per verified file under <c>verified/</c>, next to it. A loaded session is
 /// cached per process while its file keeps its size and write time: every upload of a push reads
 /// it (the delta can list thousands of files).
@@ -59,7 +59,7 @@ public class PushSessionStore
 
     /// <summary>
     /// Records that the file of <paramref name="path"/> in the push folder was checked against its
-    /// delta hash while it was received (XI-05): its hash, with the size and write time it has now.
+    /// delta hash while it was received: its hash, with the size and write time it has now.
     /// </summary>
     public async Task MarkVerifiedAsync(string pushFolder, string path, string sha256, string localFile)
     {

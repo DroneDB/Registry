@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <!--
-        Test support shared by Registry.Web.UnitTest and Registry.Web.IntegrationTest (RQ-04, D5):
+        Test support shared by Registry.Web.UnitTest and Registry.Web.IntegrationTest:
         the in-process web host (RegistryWebFactory), SQLite test databases (TestDb), builders and
         seeds (ObjectsManagerBuilder, Seed, TestSettings), FakeTime, snapshots and the command line
         harness. Not a test project. Nothing here loads native libddb: RegistryWebFactory serves

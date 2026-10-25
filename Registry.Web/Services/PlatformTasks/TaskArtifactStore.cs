@@ -5,7 +5,7 @@ using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.Services.PlatformTasks;
 
-/// <summary>The files a task produced, under the scratch folder (RQ-12, out of <c>TasksManager</c>).</summary>
+/// <summary>The files a task produced, under the scratch folder (out of <c>TasksManager</c>).</summary>
 public sealed class TaskArtifactStore
 {
     private readonly IFileSystem _fs;

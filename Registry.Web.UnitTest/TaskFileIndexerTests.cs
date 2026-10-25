@@ -21,7 +21,7 @@ namespace Registry.Web.Test;
 
 /// <summary>
 /// <see cref="TaskFileIndexer"/>, the one copy of what the archive-extract, photogrammetry and import
-/// tools did after writing files (RQ-11): index in chunks, ask libddb's build manifest once per chunk,
+/// tools did after writing files: index in chunks, ask libddb's build manifest once per chunk,
 /// queue the builds of the buildable files as children of the task, invalidate the dataset's caches.
 /// </summary>
 [TestFixture]

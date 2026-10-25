@@ -3,7 +3,7 @@ using System;
 
 namespace Registry.Ports.DroneDB;
 
-/// <summary>Classification of libddb's errors shared by every caller (XI-02).</summary>
+/// <summary>Classification of libddb's errors shared by every caller.</summary>
 public static class DdbErrors
 {
     /// <summary>

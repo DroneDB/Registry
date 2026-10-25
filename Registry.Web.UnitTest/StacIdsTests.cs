@@ -6,7 +6,7 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// The STAC ids Registry gives entries since XI-09 (libddb's data-only documents have none): the STAC API feature
+/// The STAC ids Registry gives entries (libddb's data-only documents have none): the STAC API feature
 /// id, and the legacy ids and links, which keep libddb's former rules (cases from the contract fixtures recorded
 /// with libddb's URL-building export).
 /// </summary>

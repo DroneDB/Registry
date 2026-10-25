@@ -8,7 +8,7 @@ using Registry.Ports.DroneDB;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// Indexes a byte copy of indexed entries (transfer, copy) without hashing it again (XI-05): each
+/// Indexes a byte copy of indexed entries (transfer, copy) without hashing it again: each
 /// copied file is added with the source entry's hash as a hint (<c>DDBAddWithHints</c>), with the
 /// copy's own size and write time, so libddb trusts the hash only while the copy is unchanged. A
 /// source file is hinted only while it still has its entry's size and write time (libddb's own
@@ -75,7 +75,7 @@ public static class CopiedEntries
         return items;
     }
 
-    // The index keeps sub-second times since DQ-09 and whole seconds before: a whole-second time
+    // The index keeps sub-second times (whole seconds in older indexes): a whole-second time
     // matches the file's time truncated to the second, as libddb compares them
     private static bool SameModifiedTime(DateTime indexedUtc, DateTime fileUtc)
     {

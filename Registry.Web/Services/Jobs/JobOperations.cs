@@ -8,10 +8,10 @@ using Registry.Ports.DroneDB;
 namespace Registry.Web.Services.Jobs;
 
 /// <summary>
-/// The libddb operation ids of the running jobs (XI-08): one per job, mapped to the job id and
+/// The libddb operation ids of the running jobs: one per job, mapped to the job id and
 /// its dataset, so a native log record (<see cref="Adapters.DdbLogSink"/>) says which job and
 /// dataset it belongs to. Process-wide like libddb's log callback: ids are unique in the process.
-/// An operation also carries the job's cancellation (RQ-13): its native calls stop at their next
+/// An operation also carries the job's cancellation: its native calls stop at their next
 /// checkpoint when Hangfire cancels the job (server shutdown, job aborted).
 /// </summary>
 public static class JobOperations

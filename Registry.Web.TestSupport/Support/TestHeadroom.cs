@@ -7,7 +7,7 @@ using Registry.Web.Services.HeavyTasks;
 namespace Registry.Web.Test.Support;
 
 /// <summary>
-/// <see cref="VolumeHeadroom"/> for tests (RQ-10): over <see cref="FakeDdbRuntime"/> (libddb's floor
+/// <see cref="VolumeHeadroom"/> for tests: over <see cref="FakeDdbRuntime"/> (libddb's floor
 /// is the <c>effective-config</c> fixture's 256 MiB), measuring the real volume or a given one.
 /// </summary>
 public static class TestHeadroom

@@ -13,7 +13,7 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// Upload self-test (UPL-01 A.2): receives a body and discards it, so the Hub can measure the
+/// Upload self-test: receives a body and discards it, so the Hub can measure the
 /// upload throughput through whatever reverse proxy sits in front of the Registry.
 /// </summary>
 [Authorize]

@@ -10,10 +10,10 @@ using Entry = Registry.Ports.DroneDB.Entry;
 namespace Registry.Web.Services.Ports;
 
 /// <summary>
-/// The one gate between a request and an organization or a dataset (RQ-06): it looks the resource up,
+/// The one gate between a request and an organization or a dataset: it looks the resource up,
 /// asks <see cref="IAuthManager"/> whether the current user may access it, and turns a refusal into a
 /// <see cref="Exceptions.ForbiddenException"/> with the one message of the rule
-/// (<see cref="Utilities.Auth.AccessDeniedMessages"/>; plan decision D2 makes it a 401 for an anonymous
+/// (<see cref="Utilities.Auth.AccessDeniedMessages"/>: a 401 for an anonymous
 /// caller and a 403 for a signed-in one). The access rules themselves stay in <see cref="IAuthManager"/>.
 /// <para>A grant is remembered for the scope (the request): the OGC authorization filter, the MVT
 /// endpoint and the managers of one request authorize a dataset once.</para>

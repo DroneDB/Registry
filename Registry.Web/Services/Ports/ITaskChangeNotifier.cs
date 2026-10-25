@@ -4,7 +4,7 @@ using System;
 namespace Registry.Web.Services.Ports;
 
 /// <summary>
-/// Tells listeners that the task list of a dataset changed (HUB-05): published wherever the task
+/// Tells listeners that the task list of a dataset changed: published wherever the task
 /// list cache is invalidated (<c>JobIndexWriter</c>), consumed by the task event stream so the Hub
 /// refreshes on change instead of polling.
 /// </summary>

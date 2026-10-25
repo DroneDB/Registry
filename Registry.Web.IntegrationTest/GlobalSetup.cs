@@ -8,7 +8,7 @@ using Registry.Common;
 using Registry.Web.Test.Support;
 using Registry.Test.Common;
 
-// Category taxonomy (RQ-04): every test of this assembly is an Integration test
+// Category taxonomy: every test of this assembly is an Integration test
 [assembly: Category(TestCategories.Integration)]
 
 namespace Registry.Web.Test;

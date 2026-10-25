@@ -11,7 +11,7 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.PlatformTasks;
 
-/// <summary>Re-running a failed task (RQ-12, out of <c>TasksManager</c>).</summary>
+/// <summary>Re-running a failed task (out of <c>TasksManager</c>).</summary>
 public sealed class TaskRetry
 {
     private readonly TaskAuthorizer _authorizer;

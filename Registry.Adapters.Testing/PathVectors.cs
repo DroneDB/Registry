@@ -23,7 +23,7 @@ public sealed record PathVector(string Input, IReadOnlyList<string>? Reserved, b
     }
 }
 
-/// <summary>The vendored golden path vectors (XI-09), parsed.</summary>
+/// <summary>The vendored golden path vectors, parsed.</summary>
 public static class PathVectors
 {
     /// <summary>The vectors file, relative to <c>Contract/</c>.</summary>

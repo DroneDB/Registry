@@ -8,7 +8,7 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Writes libddb's log records and GDAL's messages to the host's logger (Serilog), category
-/// <c>DroneDB</c> (XI-08). Called on native threads: it never throws. A record of a running job's
+/// <c>DroneDB</c>. Called on native threads: it never throws. A record of a running job's
 /// operation (<see cref="JobOperations"/>) carries the job id and dataset, and its warnings and
 /// errors are queued for the job's console; a record of a request's operation (<see cref="RequestOperations"/>)
 /// carries the request id as <c>RequestId</c>, the property Serilog puts on the request's own records.
@@ -64,7 +64,7 @@ public sealed class DdbLogSink : IDdbLogSink
         }
         catch (Exception)
         {
-            // A sink failure must not reach native code (XI-03); the record is dropped
+            // A sink failure must not reach native code; the record is dropped
         }
     }
 

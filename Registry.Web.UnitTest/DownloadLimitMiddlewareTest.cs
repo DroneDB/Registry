@@ -176,7 +176,7 @@ public class DownloadLimitMiddlewareTest : TestBase
         var context = CreateContext("/orgs/org1/ds/ds1/download", "user1");
         context.Request.Headers["X-Download-Check"] = "1";
 
-        // Act: the exception handler writes the ProblemDetails 429 (RQ-05)
+        // Act: the exception handler writes the ProblemDetails 429
         var ex = await Should.ThrowAsync<TooManyRequestsException>(() =>
             _middleware.InvokeAsync(context, NextDelegate()));
 
@@ -313,7 +313,7 @@ public class DownloadLimitMiddlewareTest : TestBase
         var context = CreateContext("/orgs/org1/ds/ds1/download", "user1");
         context.Request.Headers.Accept = "application/json";
 
-        // Act: ProblemDetails with Retry-After, written by the exception handler (Rq05ErrorModelTests)
+        // Act: ProblemDetails with Retry-After, written by the exception handler (ErrorModelTests)
         var ex = await Should.ThrowAsync<TooManyRequestsException>(() =>
             _middleware.InvokeAsync(context, NextDelegate()));
 

@@ -36,7 +36,7 @@ public sealed class MariaDbServer
 
     /// <summary>
     /// A server to use instead of starting the container (a root connection string, for example a MySQL 8 the developer
-    /// runs): the MySQL-version-sensitive tests (RQ-15) can be run against it. Not used by CI.
+    /// runs): the MySQL-version-sensitive tests can be run against it. Not used by CI.
     /// </summary>
     public const string ServerOverrideVariable = "REGISTRY_TEST_MYSQL_CONNECTION";
 

@@ -97,7 +97,7 @@ public sealed class EntryTransferService : IEntryTransferService
             _fs.CopyEntry(sourceDdb.GetLocalPath(sourcePath), destLocalPath, isFolder);
             fileSystemCopied = true;
 
-            // XI-05: the copy is indexed with the source hashes, not hashed again
+            // The copy is indexed with the source hashes, not hashed again
             CopiedEntries.Index(sourceDdb, sourceEntry, destDdb, destPath, _fs);
             addedToDdb = true;
 
@@ -235,7 +235,7 @@ public sealed class EntryTransferService : IEntryTransferService
 
             fileSystemCopied = true;
 
-            // XI-05: the copy is indexed with the source hashes, not hashed again
+            // The copy is indexed with the source hashes, not hashed again
             CopiedEntries.Index(ddb, sourceEntry, ddb, dest, _fs);
             destDdbAdded = true;
 
@@ -285,7 +285,7 @@ public sealed class EntryTransferService : IEntryTransferService
 
     /// <summary>
     /// Refuses to copy or transfer an entry while one of its files is being built: one manifest call for the
-    /// file, or for every file of a folder (XI-04).
+    /// file, or for every file of a folder.
     /// </summary>
     /// <exception cref="ConflictException">A live build holds the lock of one of the files.</exception>
     private void EnsureNoLiveBuild(IDDB ddb, Entry entry, string path, string[] files)

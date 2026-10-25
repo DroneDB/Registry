@@ -191,7 +191,7 @@ public class ObjectManagerTest : TestBase
     }
 
     /// <summary>
-    /// REG-08: the name and type filters of a search run in DroneDB; the dataset is never listed
+    /// The name and type filters of a search run in DroneDB; the dataset is never listed
     /// in full and filtered here.
     /// </summary>
     [Test]
@@ -599,7 +599,7 @@ public class ObjectManagerTest : TestBase
         res.Count().ShouldBe(1);
     }
 
-    // DDB-12: deleting a drawing's .prj re-reads it as local (DroneDB) and drops its
+    // Deleting a drawing's .prj re-reads it as local (DroneDB) and drops its
     // georeferenced artifacts; Registry must rebuild it right away (here the build
     // runs synchronously) instead of leaving it unbuilt until the nightly sweep.
     [Test]
@@ -629,7 +629,7 @@ public class ObjectManagerTest : TestBase
         var hash = ddb.GetEntry("site.dxf")!.Hash;
         var build = Path.Combine(ddb.DerivedFolderPaths.Single(), hash);
         if (!File.Exists(Path.Combine(build, "mvt", "metadata.json")))
-            Assert.Ignore("The loaded native libddb predates CAD coordinate systems (DDB-12)");
+            Assert.Ignore("The loaded native libddb predates CAD coordinate systems");
 
         await objectManager.Commands.DeleteAsync(org, ds, ["site.prj"]);
 
@@ -729,7 +729,7 @@ public class ObjectManagerTest : TestBase
         var (tempPath, bytes, _) = await objectManager.Manager.StreamToTempAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ms);
 
-        // Committing onto the reserved uploads folder must be rejected (RQ-10: a 400, it was a 500)
+        // Committing onto the reserved uploads folder must be rejected (a 400, it was a 500)
         var act = async () => await objectManager.Manager.CommitStreamedAsync(
             MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, ".uploads/evil.bin", Streamed(tempPath, bytes));
 
@@ -827,7 +827,7 @@ public class ObjectManagerTest : TestBase
     }
 
     /// <summary>
-    /// Regression (review round 2, finding 1): AddNew with a payload used to write straight to
+    /// Regression: AddNew with a payload used to write straight to
     /// the final dataset path with no compensation. After the path unification it goes through the
     /// same stage → atomic-move → quarantine flow as streamed uploads; an index failure must
     /// quarantine the file rather than leave an untracked orphan at the destination path.
@@ -1132,7 +1132,7 @@ public class ObjectManagerTest : TestBase
         ));
         ex2.Message.ShouldContain("absolute paths are not allowed");
 
-        // RQ-10: a Windows drive, a UNC path and a device path are absolute on every OS (libddb's
+        // A Windows drive, a UNC path and a device path are absolute on every OS (libddb's
         // rule); Path.IsPathRooted accepted them on Linux
         foreach (var windowsAbsolute in new[] { @"C:\x.jpg", "c:/x.jpg", @"\\server\share\x.jpg", @"\\?\C:\x.jpg" })
         {
@@ -1143,7 +1143,7 @@ public class ObjectManagerTest : TestBase
         }
     }
 
-    // RQ-10: ".." inside a name is ordinary (libddb's rule); Contains("..") refused this destination
+    // ".." inside a name is ordinary (libddb's rule); Contains("..") refused this destination
     [Test]
     public async Task Transfer_DestinationWithDotsInAName_IsAccepted()
     {
