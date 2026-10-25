@@ -133,8 +133,8 @@ change).
 ## Build manifest
 
 `DDBGetEntryTypes`, `DDBGetBuildArtifacts`, `DDBResolveBuildFile`, `DDBCopyBuildArtifacts` and
-`DDBListEntriesEx` (2.0.0) let a host serve builds without knowing their layout
-. The vocabulary and the fields are documented in `ddb.h` ("Build manifest");
+`DDBListEntriesEx` (2.0.0) let a host serve builds without knowing their layout.
+The vocabulary and the fields are documented in `ddb.h` ("Build manifest");
 `build-artifacts.schema.json` holds the shared shapes: `$defs/build` (the build object of an
 entry, also embedded by `DDBListEntriesEx`) and `$defs/artifact`.
 
@@ -246,7 +246,7 @@ git diff ../tests/contract
 ```
 
 Review the diff, adjust the schema if a field or type changed, and list the change below. The
-ABI rule applies: outputs only grow; renaming or retyping a field is a breaking change that
+ABI rule applies (XI): outputs only grow; renaming or retyping a field is a breaking change that
 Registry has to adopt first.
 
 ### Changes
@@ -276,7 +276,7 @@ Registry has to adopt first.
   `DDBGetEffectiveConfig`); `capabilities` lists the new exports. The existing fixtures did not
   change.
 
-* 2026-10-21: `capabilities` lists the new exports (2.0.0):
+* 2026-10-21: `capabilities` lists the new exports for the process configuration, shutdown, cancellation and logging (2.0.0):
   `DDBShutdown`, `DDBCreateCancelToken`, `DDBCancel`, `DDBFreeCancelToken`,
   `DDBSetThreadCancelToken`, `DDBSetLogCallback`, `DDBSetThreadOperation`. Its `cancellable` list
   now names the exports whose work checks a cancel token (the render paths, the thumbnails,
@@ -326,8 +326,8 @@ Registry has to adopt first.
   `DDB_GDAL_CACHE_MB` or 1024, source `environment` or `default`. Additive: the other
   settings did not change.
 
-* 2026-10-24: the `cancellable` list of `capabilities` grows (cancellation steps 3
-  and 4): `DDBGetRasterMetadata`, `DDBGetRasterValueInfo`, `DDBGetRasterPointValue`,
+* 2026-10-24: the `cancellable` list of `capabilities` grows (the analyses, the
+  delta and the masks check the token too): `DDBGetRasterMetadata`, `DDBGetRasterValueInfo`, `DDBGetRasterPointValue`,
   `DDBGetRasterAreaStats`, `DDBGetRasterProfile`, `DDBCalculateVolume`, `DDBDetectStockpile`,
   `DDBDetectAllStockpiles`, `DDBGenerateContours`, `DDBMaskBorders`, `DDBComputeDeltaLocals`,
   `DDBApplyDelta` and `DDBApplyDeltaEx` (13 exports, 26 in all). Additive: no other member and no
@@ -336,3 +336,12 @@ Registry has to adopt first.
   files untouched, and once it starts to change the dataset it applies the delta whole and
   returns `DDBERR_NONE` (a cancel or a shutdown that comes later is not seen). A canceled
   `DDBMaskBorders` leaves no output file.
+
+* 2026-10-25: the artifact role `gsplat.georef` is removed from the manifest: the `roles` of the
+  `GaussianSplat` entry type in `entry-types` are now `gsplat.lod`, `gsplat.spz` and
+  `gsplat.bounds`, and `DDBGetBuildArtifacts` and `DDBListEntriesEx` no longer list a
+  `gsplat/georef.json` artifact. No build ever wrote that file (libddb has no way to give a splat
+  a georeference), so no output lost data; a host that reads the role list must not require it.
+  The `properties` of a Gaussian splat entry no longer carry `"georeferenced": false` either; a
+  splat is never georeferenced, so a host reads the absent member as false. The `entry-types`
+  fixture changed; no other fixture did.

@@ -18,5 +18,4 @@ public static class ArtifactRoles
     public const string GsplatLod = "gsplat.lod";
     public const string GsplatSpz = "gsplat.spz";
     public const string GsplatBounds = "gsplat.bounds";
-    public const string GsplatGeoref = "gsplat.georef";
 }

@@ -112,3 +112,6 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   segment, `.ddb` and invalid UTF-8 with `DDBERR_INVALIDARGS`), which changes no fixture. No other file changed.
 * 2026-10-24: DroneDB `00b6768fcfd4738ea8d4b308b59db959289af875` (the pinned build): no file changes since `2c9508a`, SOURCE
   names the pinned commit.
+* 2026-10-25: DroneDB `345cd5c2ef80ea6bd6ade3ab5f16a090d24d0193`: the artifact role `gsplat.georef` is gone from the `entry-types`
+  fixture (the roles of `GaussianSplat` are `gsplat.lod`, `gsplat.spz`, `gsplat.bounds`); the contract files carry no planning
+  identifiers any more, so `update-contract.sh` copies them verbatim.
