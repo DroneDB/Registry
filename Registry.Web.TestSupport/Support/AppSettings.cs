@@ -399,6 +399,9 @@ public class AppSettings
     /// </summary>
     public ReconciliationSettings? Reconciliation { get; set; }
 
+    /// <summary>The outgoing e-mail server. When null, e-mail is off.</summary>
+    public SmtpSettings? Smtp { get; set; }
+
     /// <summary>
     /// Cron expression for the recurring index reconciliation sweep. Re-enqueues unindexed
     /// on-disk files, reports (never deletes) indexed entries missing on disk, and ages out

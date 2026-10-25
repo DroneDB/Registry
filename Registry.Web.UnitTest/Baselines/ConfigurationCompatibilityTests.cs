@@ -179,6 +179,7 @@ public class ConfigurationCompatibilityTests
             ["AppSettings__DatasetsPath"] = "/data/datasets",
             ["AppSettings__Import__MaxRedirects"] = "2",
             ["AppSettings__HangfireJobRetentionDays"] = "5",
+            ["AppSettings__Smtp__Password"] = "smtp-password-from-env",
             ["ConnectionStrings__RegistryConnection"] = "Server=db;Database=RegistryData"
         };
 
@@ -198,6 +199,7 @@ public class ConfigurationCompatibilityTests
             configuration.GetRegistryOptions<HttpHostOptions>().ExternalUrlOverride.ShouldBe("https://hub.example.org");
             configuration.GetRegistryOptions<StorageOptions>().DatasetsPath.ShouldBe("/data/datasets");
             configuration.GetRegistryOptions<ImportSettings>().MaxRedirects.ShouldBe(2);
+            configuration.GetRegistryOptions<SmtpSettings>().Password.ShouldBe("smtp-password-from-env");
             configuration.GetRegistryOptions<JobScheduleOptions>().HangfireJobRetentionDays.ShouldBe(5);
             configuration.GetConnectionString("RegistryConnection").ShouldBe("Server=db;Database=RegistryData");
             RegistryOptions.Validate(configuration, InstanceType.ProcessingNode).ShouldBeEmpty();
@@ -265,6 +267,61 @@ public class ConfigurationCompatibilityTests
 
         RegistryOptions.Validate(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), InstanceType.WebServer)
             .ShouldHaveSingleItem().ShouldContain(reported);
+    }
+
+    [TestCase("Host", "", "Smtp:Host")]
+    [TestCase("Port", "0", "Smtp:Port")]
+    [TestCase("Port", "65536", "Smtp:Port")]
+    [TestCase("FromAddress", "", "Smtp:FromAddress")]
+    [TestCase("FromAddress", "registry", "Smtp:FromAddress")]
+    [TestCase("FromAddress", "Registry <registry@example.org>", "Smtp:FromAddress")]
+    [TestCase("ReplyTo", "not an address", "Smtp:ReplyTo")]
+    [TestCase("Password", "", "Smtp:UserName and AppSettings:Smtp:Password must be set together")]
+    [TestCase("TimeoutSeconds", "0", "Smtp:TimeoutSeconds")]
+    public void SmtpRule_IsAValidatorRule_WhenEmailIsEnabled(string key, string value, string reported)
+    {
+        var settings = EnabledSmtp();
+        settings["AppSettings:Smtp:" + key] = value;
+
+        RegistryOptions.Validate(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), InstanceType.WebServer)
+            .ShouldHaveSingleItem().ShouldContain(reported);
+    }
+
+    [Test]
+    public void SmtpSettings_Valid_PassForEveryRole()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(EnabledSmtp()).Build();
+
+        foreach (var role in AllRoles)
+            RegistryOptions.Validate(configuration, role).ShouldBeEmpty(role.ToString());
+    }
+
+    [Test]
+    public void SmtpSettings_Disabled_AreNotChecked()
+    {
+        var settings = EnabledSmtp();
+        settings["AppSettings:Smtp:Enabled"] = "false";
+        settings["AppSettings:Smtp:Host"] = "";
+        settings["AppSettings:Smtp:FromAddress"] = "not an address";
+
+        RegistryOptions.Validate(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), InstanceType.WebServer)
+            .ShouldBeEmpty();
+    }
+
+    /// <summary>The testing settings with a complete, enabled SMTP section.</summary>
+    private static Dictionary<string, string?> EnabledSmtp()
+    {
+        var settings = Values(Load("docker/testing/appsettings-testing.json"));
+        settings["AppSettings:Smtp:Enabled"] = "true";
+        settings["AppSettings:Smtp:Host"] = "smtp.example.org";
+        settings["AppSettings:Smtp:Port"] = "587";
+        settings["AppSettings:Smtp:UserName"] = "registry";
+        settings["AppSettings:Smtp:Password"] = "secret";
+        settings["AppSettings:Smtp:FromAddress"] = "registry@example.org";
+        settings["AppSettings:Smtp:ReplyTo"] = "support@example.org";
+        // What the thumbnail generator role needs anyway (a first start generates it)
+        settings["AppSettings:ThumbnailGeneratorToken"] = "token";
+        return settings;
     }
 
     /// <summary>The checks that moved from elsewhere into validators, per role.</summary>

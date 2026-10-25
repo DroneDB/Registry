@@ -44,7 +44,8 @@ public static class RegistryOptions
         [typeof(UploadSettings)] = Nested("Uploads"),
         [typeof(IndexQueueSettings)] = Nested("IndexQueue"),
         [typeof(ReconciliationSettings)] = Nested("Reconciliation"),
-        [typeof(HubOptions)] = Nested("HubOptions")
+        [typeof(HubOptions)] = Nested("HubOptions"),
+        [typeof(SmtpSettings)] = Nested("Smtp")
     };
 
     private static string Nested(string name) => SectionName + ":" + name;
@@ -83,6 +84,7 @@ public static class RegistryOptions
         Add<IndexQueueSettings>(services, configuration);
         Add<ReconciliationSettings>(services, configuration);
         Add<HubOptions>(services, configuration);
+        Add<SmtpSettings, SmtpSettingsValidator>(services, configuration);
 
         // Rules of one role only
         switch (role)

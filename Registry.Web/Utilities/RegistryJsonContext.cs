@@ -169,6 +169,7 @@ namespace Registry.Web.Utilities;
 [JsonSerializable(typeof(TaskToolDto))]
 [JsonSerializable(typeof(TaskToolInfoDto))]
 [JsonSerializable(typeof(TasksClearedDto))]
+[JsonSerializable(typeof(TestEmailRequestDto))]
 [JsonSerializable(typeof(UpdateMemberPermissionsDto))]
 [JsonSerializable(typeof(UploadNewSessionResultDto))]
 [JsonSerializable(typeof(UploadPartResultDto))]

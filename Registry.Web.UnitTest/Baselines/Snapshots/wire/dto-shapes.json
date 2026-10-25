@@ -3708,6 +3708,14 @@
       "cleared": 0
     }
   },
+  "Registry.Web.Models.DTO.TestEmailRequestDto": {
+    "full": {
+      "to": "To-text"
+    },
+    "sparse": {
+      "to": null
+    }
+  },
   "Registry.Web.Models.DTO.UpdateMemberPermissionsDto": {
     "full": {
       "permissions": 1

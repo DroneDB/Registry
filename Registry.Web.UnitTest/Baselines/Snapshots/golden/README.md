@@ -186,3 +186,8 @@ scheme also answers with an empty body (plus `WWW-Authenticate: Bearer`, not rec
   (`UsersManagerTest.GetAll_UserWithoutRole_HasNoRoles`).
 * `orgs-create` returned `owner` as the user id, now the user name like `orgs-get`/`orgs-list`
   (`OrganizationManagerTest.AddNew_AnswersTheOwnerLikeGetAndList`).
+
+## Additions (goldens updated on purpose)
+
+* `sys-config`: a `Smtp` section (outgoing e-mail, off by default). Its password is a sensitive field: only
+  whether it is set is shown (`EmailEndpointTests.ConfigView_ShowsTheSmtpSection_WithoutThePassword`).

@@ -19,8 +19,9 @@ public static class StartupBanner
     /// <param name="serverAddresses">The addresses the server listens on.</param>
     /// <param name="http">The external URL override.</param>
     /// <param name="identity">The default admin (its user name only).</param>
+    /// <param name="smtp">The outgoing e-mail server (its address only), when known.</param>
     public static IReadOnlyList<string> Lines(string? environmentName, ICollection<string>? serverAddresses,
-        HttpHostOptions http, IdentityProviderOptions identity)
+        HttpHostOptions http, IdentityProviderOptions identity, SmtpSettings? smtp = null)
     {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(identity);
@@ -35,6 +36,9 @@ public static class StartupBanner
 
         if (identity.DefaultAdmin?.UserName is { } admin)
             lines.Add($"Default admin username: {admin}");
+
+        if (smtp != null)
+            lines.Add(smtp.Enabled ? $"E-mail: {smtp.Host}:{smtp.Port} ({smtp.Security})" : "E-mail: disabled");
 
         var url = serverAddresses?.FirstOrDefault();
         if (!string.IsNullOrWhiteSpace(http.ExternalUrlOverride))
@@ -61,5 +65,19 @@ public static class StartupBanner
 
         lines.Add("Press Ctrl+C to quit");
         return lines;
+    }
+
+    /// <summary>
+    /// The warning to log when e-mail is enabled without a public URL: the e-mails then have no link to the
+    /// instance and no logo (a mail client cannot resolve a relative address). Null when there is nothing to warn.
+    /// </summary>
+    public static string? EmailLinksWarning(SmtpSettings smtp, HttpHostOptions http)
+    {
+        ArgumentNullException.ThrowIfNull(smtp);
+        ArgumentNullException.ThrowIfNull(http);
+
+        return smtp.Enabled && string.IsNullOrWhiteSpace(http.ExternalUrlOverride)
+            ? "E-mail is enabled but AppSettings:ExternalUrlOverride is not set: e-mails will have no link to this instance and no logo"
+            : null;
     }
 }

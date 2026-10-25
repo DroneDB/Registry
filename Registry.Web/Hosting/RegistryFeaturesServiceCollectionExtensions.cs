@@ -133,6 +133,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddSingleton<ConfigurationView>();
         services.AddScoped<ConfigurationDataBuilder>();
         services.AddScoped<IConfigurationSectionBuilder, IdentitySections>();
+        services.AddScoped<IConfigurationSectionBuilder, EmailSections>();
         services.AddScoped<IConfigurationSectionBuilder, DataStoreSections>();
         services.AddScoped<IConfigurationSectionBuilder, TransferSections>();
         services.AddScoped<IConfigurationSectionBuilder, JobScheduleSections>();
@@ -275,6 +276,10 @@ public static class RegistryFeaturesServiceCollectionExtensions
 
         if (configuration.GetRegistryOptions<IdentityProviderOptions>().LdapEnabled)
             checks.AddCheck<LdapHealthCheck>("LDAP health check", null, ["service"]);
+
+        // A singleton (registered by AddEmail): it caches its result
+        if (configuration.GetRegistryOptions<SmtpSettings>().Enabled)
+            checks.AddCheck<SmtpHealthCheck>("SMTP health check", null, ["service"]);
 
         return services;
     }

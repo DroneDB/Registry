@@ -126,6 +126,7 @@ public sealed class RequestBindingTests : IDisposable
         yield return new BindingCase("sys-cleanup-builds", typeof(CleanupBuildRequestDto), """{"organizationSlug":"o","datasetSlug":"d"}""");
         yield return new BindingCase("sys-rescan", typeof(RescanRequestDto),
             """{"organizationSlug":"o","datasetSlug":null,"types":["image"],"extensions":[".jpg"],"stopOnError":true}""");
+        yield return new BindingCase("sys-email-test", typeof(TestEmailRequestDto), """{"to":"admin@example.com"}""");
     }
 
     /// <summary>What the formatter accepts and refuses beyond the Hub's payloads.</summary>

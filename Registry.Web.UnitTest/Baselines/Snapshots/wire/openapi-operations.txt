@@ -723,6 +723,13 @@ GET /sys/config
   200 application/json ConfigurationDataDto
   401 application/json ProblemDetails
   403 application/json ProblemDetails
+POST /sys/email/test
+  body application/json TestEmailRequestDto
+  204
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+  502 application/json ProblemDetails
 GET /sys/features
   200 application/json FeaturesDto
 POST /sys/fix-invalid-slugs
@@ -1031,6 +1038,7 @@ schema TaskStatusDto { taskId:string, toolId:string, version:string, state:strin
 schema TaskToolDto { id:string, version:string, title:string, requiredAccess:string, producesArtifact:boolean, inputSchema:any, hidden:boolean, disabled:boolean, disabledMessage:string }
 schema TaskToolInfoDto { id:string, version:string, title:string, requiredAccess:string, producesArtifact:boolean, resultExtension:string, hidden:boolean, disabled:boolean, disabledMessage:string }
 schema TasksClearedDto { cleared:integer(int32) }
+schema TestEmailRequestDto { to:string }
 schema UpdateMemberPermissionsDto { permissions:OrganizationPermissions }
 schema UploadPartResultDto { path:string, status:integer(int32), entry:EntryDto, error:string, retryable:boolean }
 schema UploadProbeResultDto { bytes:integer(int64), serverMs:number(double) }

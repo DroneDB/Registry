@@ -453,6 +453,14 @@
       "stopOnError": true
     }
   },
+  "sys-email-test": {
+    "type": "TestEmailRequestDto",
+    "input": "{\"to\":\"admin@example.com\"}",
+    "outcome": "bound",
+    "model": {
+      "to": "admin@example.com"
+    }
+  },
   "names-pascal-case": {
     "type": "CreateUserRequest",
     "input": "{\"UserName\":\"a\",\"Password\":\"p\",\"Email\":\"e\",\"Roles\":[\"r\"]}",

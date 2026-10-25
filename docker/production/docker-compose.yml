@@ -64,6 +64,11 @@ services:
             # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
             # altitude of images without one in their EXIF falls back to the GPS altitude
             - DDB_OPENTOPOGRAPHY_KEY=${DDB_OPENTOPOGRAPHY_KEY:-}
+            # Outgoing e-mail: configure AppSettings:Smtp in ./appsettings.json (every service reads it:
+            # the nodes send the queued e-mails). To keep the SMTP password out of the file, uncomment
+            # this line here and in every node service. Left set but empty, it would replace the
+            # password of the file with nothing.
+            # - AppSettings__Smtp__Password=${SMTP_PASSWORD}
             # Keep GDAL/Nexus build scratch on the data volume, off the container
             # root filesystem and off the /tmp tmpfs. /data is bind-mounted below;
             # /data/temp must exist on the host (created by the app on startup).
@@ -107,6 +112,8 @@ services:
             # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
             # altitude of images without one in their EXIF falls back to the GPS altitude
             - DDB_OPENTOPOGRAPHY_KEY=${DDB_OPENTOPOGRAPHY_KEY:-}
+            # The SMTP password, when it is not in ./appsettings.json (see registry_webserver)
+            # - AppSettings__Smtp__Password=${SMTP_PASSWORD}
             # Keep GDAL/Nexus build scratch on the data volume (see webserver).
             - CPL_TMPDIR=/data/temp
             - TMPDIR=/data/temp
@@ -146,6 +153,8 @@ services:
             # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
             # altitude of images without one in their EXIF falls back to the GPS altitude
             - DDB_OPENTOPOGRAPHY_KEY=${DDB_OPENTOPOGRAPHY_KEY:-}
+            # The SMTP password, when it is not in ./appsettings.json (see registry_webserver)
+            # - AppSettings__Smtp__Password=${SMTP_PASSWORD}
             # Keep GDAL/Nexus build scratch on the data volume (see webserver).
             - CPL_TMPDIR=/data/temp
             - TMPDIR=/data/temp

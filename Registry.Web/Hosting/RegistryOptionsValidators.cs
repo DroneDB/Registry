@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Models.Email;
 
 namespace Registry.Web.Hosting;
 
@@ -164,6 +165,35 @@ internal sealed class ProcessingNodeDataStoreValidator : IValidateOptions<DataSt
         .Check(options.HangfireProvider != HangfireProvider.InMemory,
             $"{OptionsFailures.Key(nameof(DataStoreOptions.HangfireProvider))} InMemory is not supported for a processing node")
         .Result();
+}
+
+/// <summary>The outgoing e-mail server: checked only when e-mail is enabled.</summary>
+internal sealed class SmtpSettingsValidator : IValidateOptions<SmtpSettings>
+{
+    private static readonly string SmtpKey = OptionsFailures.Key("Smtp");
+
+    public ValidateOptionsResult Validate(string? name, SmtpSettings options)
+    {
+        if (!options.Enabled)
+            return ValidateOptionsResult.Success;
+
+        return new OptionsFailures()
+            .Check(!string.IsNullOrWhiteSpace(options.Host),
+                $"{SmtpKey}:{nameof(SmtpSettings.Host)} is required when e-mail is enabled")
+            .Check(options.Port is >= 1 and <= 65535,
+                $"{SmtpKey}:{nameof(SmtpSettings.Port)} is not valid (must be between 1 and 65535)")
+            .Check(Enum.IsDefined(options.Security),
+                $"{SmtpKey}:{nameof(SmtpSettings.Security)} is not valid (StartTls, SslOnConnect or None)")
+            .Check(EmailAddress.IsValid(options.FromAddress),
+                $"{SmtpKey}:{nameof(SmtpSettings.FromAddress)} is required when e-mail is enabled and must be one address (name@domain)")
+            .Check(options.ReplyTo == null || EmailAddress.IsValid(options.ReplyTo),
+                $"{SmtpKey}:{nameof(SmtpSettings.ReplyTo)} is not one address (name@domain)")
+            .Check(string.IsNullOrEmpty(options.UserName) == string.IsNullOrEmpty(options.Password),
+                $"{SmtpKey}:{nameof(SmtpSettings.UserName)} and {SmtpKey}:{nameof(SmtpSettings.Password)} must be set together (or both left empty for no authentication)")
+            .Check(options.TimeoutSeconds >= 1,
+                $"{SmtpKey}:{nameof(SmtpSettings.TimeoutSeconds)} is not valid (must be greater than 0)")
+            .Result();
+    }
 }
 
 /// <summary>The reverse proxies whose forwarded headers are trusted (<see cref="HttpHostOptions"/>).</summary>

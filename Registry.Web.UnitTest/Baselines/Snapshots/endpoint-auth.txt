@@ -156,6 +156,7 @@ POST /sys/cleanup-jobindices -> Authorize + Authorize(Policy=Admin) [admin] @ Bu
 POST /sys/cleanupbatches -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.CleanupBatches
 POST /sys/cleanupdatasets -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.CleanupDatasets
 GET /sys/config -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.GetConfig
+POST /sys/email/test -> Authorize + Authorize(Policy=Admin) [admin] @ EmailController.SendTestEmail
 GET /sys/features -> AllowAnonymous + Authorize [anonymous] @ FeaturesController.GetFeatures
 POST /sys/fix-invalid-slugs -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.FixInvalidSlugs
 POST /sys/import-dataset -> Authorize + Authorize(Policy=Admin) [admin] @ RemoteImportController.ImportDataset

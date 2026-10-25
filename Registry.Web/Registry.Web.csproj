@@ -46,6 +46,7 @@
         <PackageReference Include="Hangfire.Core" />
         <PackageReference Include="Hangfire.InMemory" />
         <PackageReference Include="Hangfire.MySqlStorage" />
+        <PackageReference Include="MailKit" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
         <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" />
         <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />

@@ -76,6 +76,32 @@ public sealed class DiValidationTests
         Should.NotThrow(() => _ = host.Services);
     }
 
+    /// <summary>E-mail on: the MailKit sender, the SMTP health check and its clock instead of the disabled sender.</summary>
+    private static readonly Dictionary<string, string?> EmailEnabled = new()
+    {
+        ["AppSettings:Smtp:Enabled"] = "true",
+        ["AppSettings:Smtp:Host"] = "smtp.example.org",
+        ["AppSettings:Smtp:FromAddress"] = "registry@example.org"
+    };
+
+    [TestCase(InstanceType.WebServer)]
+    [TestCase(InstanceType.Default)]
+    public void WebHost_WithEmail_BuildsWithScopeAndBuildValidation(InstanceType instanceType)
+    {
+        using var host = CreateValidatingWebHost(instanceType, settings: EmailEnabled);
+
+        Should.NotThrow(() => _ = host.Services);
+    }
+
+    [Test]
+    public void ProcessingNodeHost_WithEmail_BuildsWithScopeAndBuildValidation()
+    {
+        Should.NotThrow(() =>
+        {
+            using var host = BuildValidatingHost(RegistryHost.CreateProcessingNodeBuilder([]), settings: EmailEnabled);
+        });
+    }
+
     [Test]
     public void WebHost_RejectsCaptiveDependency()
     {
@@ -131,16 +157,18 @@ public sealed class DiValidationTests
 
     /// <summary>The real web host (boots on first access to <c>Services</c>) with full DI validation.</summary>
     private static ValidatingWebHost CreateValidatingWebHost(InstanceType instanceType,
-        Action<IServiceCollection>? configureServices = null)
+        Action<IServiceCollection>? configureServices = null, IReadOnlyDictionary<string, string?>? settings = null)
     {
-        var factory = new RegistryWebFactory(
-            settings: new Dictionary<string, string>
-            {
-                ["InstanceType"] = instanceType.ToString(),
-                // Default instances run real Hangfire servers: keep the per-minute recurring job quiet
-                ["AppSettings:RecoverIndexedJobPublicationsCron"] = "disabled"
-            },
-            configureServices: configureServices);
+        var values = new Dictionary<string, string>
+        {
+            ["InstanceType"] = instanceType.ToString(),
+            // Default instances run real Hangfire servers: keep the per-minute recurring job quiet
+            ["AppSettings:RecoverIndexedJobPublicationsCron"] = "disabled"
+        };
+        foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
+            values[key] = value!;
+
+        var factory = new RegistryWebFactory(settings: values, configureServices: configureServices);
 
         return new ValidatingWebHost(factory,
             factory.WithWebHostBuilder(builder => builder.UseDefaultServiceProvider(ValidateAll)));
@@ -154,7 +182,8 @@ public sealed class DiValidationTests
     /// Builds (does not start) <paramref name="builder"/> with full DI validation, on settings of its own:
     /// the MySQL job storage is created lazily, so its connection string is never opened.
     /// </summary>
-    private IHost BuildValidatingHost(IHostBuilder builder, Action<IServiceCollection>? configureServices = null) =>
+    private IHost BuildValidatingHost(IHostBuilder builder, Action<IServiceCollection>? configureServices = null,
+        IReadOnlyDictionary<string, string?>? settings = null) =>
         builder
             // The test bin folder holds an appsettings.json: keep it out of the host configuration
             .UseContentRoot(_root)
@@ -169,7 +198,7 @@ public sealed class DiValidationTests
                 ["AppSettings:ThumbnailGeneratorToken"] = "divalidation-thumbnail-token",
                 ["ConnectionStrings:RegistryConnection"] = $"Data Source={Path.Combine(_root, "registry.db")}",
                 ["ConnectionStrings:HangfireConnection"] = "Server=localhost;Database=hangfire;Uid=unused;Pwd=unused"
-            }))
+            }).AddInMemoryCollection(settings ?? new Dictionary<string, string?>()))
             .ConfigureServices(services => configureServices?.Invoke(services))
             .Build();
 

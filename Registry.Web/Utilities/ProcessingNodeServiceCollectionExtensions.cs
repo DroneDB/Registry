@@ -96,6 +96,9 @@ public static class ProcessingNodeServiceCollectionExtensions
         // Import Dataset feature (the import-dataset heavy tool runs on the worker host).
         services.AddImportSources(configuration);
 
+        // E-mail: a request queues it, the host that runs the job sends it
+        services.AddEmail(configuration);
+
         return services;
     }
 }

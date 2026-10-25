@@ -63,7 +63,7 @@ public class Startup
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IHostApplicationLifetime lifetime,
         ILoggerFactory loggerFactory, IOptions<HttpHostOptions> http, IOptions<StorageOptions> storage,
-        IOptions<IdentityProviderOptions> identity)
+        IOptions<IdentityProviderOptions> identity, IOptions<SmtpSettings> smtp)
     {
         var logger = loggerFactory.CreateLogger(RegistryHost.StartupLogCategory);
 
@@ -237,8 +237,12 @@ public class Startup
         lifetime.ApplicationStarted.Register(() =>
         {
             foreach (var line in StartupBanner.Lines(env.EnvironmentName,
-                         app.ServerFeatures.Get<IServerAddressesFeature>()?.Addresses, http.Value, identity.Value))
+                         app.ServerFeatures.Get<IServerAddressesFeature>()?.Addresses, http.Value, identity.Value,
+                         smtp.Value))
                 logger.LogInformation("{StartupBanner:l}", line);
+
+            if (StartupBanner.EmailLinksWarning(smtp.Value, http.Value) is { } warning)
+                logger.LogWarning("{EmailWarning:l}", warning);
         });
     }
 }
