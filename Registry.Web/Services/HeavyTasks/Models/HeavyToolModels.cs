@@ -2,7 +2,6 @@
 using System.Security.Claims;
 using System.Text.Json;
 using Hangfire.Server;
-using Microsoft.Extensions.Logging;
 using Registry.Ports.DroneDB;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;

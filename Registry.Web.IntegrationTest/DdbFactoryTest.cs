@@ -4,12 +4,9 @@ using System.IO;
 using System.Linq;
 using Shouldly;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Moq;
 using System.Text.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
-using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
@@ -28,7 +25,6 @@ public class DdbFactoryTest : TestBase
     private ILogger<DdbManager> _ddbFactoryLogger;
 
     private const string TestDataFolder = @"Data/Ddb";
-    private const string DdbTestDataFolder = @"Data/DdbTest";
 
     private static readonly string DbTest1ArchiveUrl = TestData.Url("registry/DdbFactoryTest/testdb2.zip");
 

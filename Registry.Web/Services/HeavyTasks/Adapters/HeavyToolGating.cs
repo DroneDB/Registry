@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Ports;

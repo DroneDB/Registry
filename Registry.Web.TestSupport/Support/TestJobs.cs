@@ -1,8 +1,6 @@
 #nullable enable
 using Hangfire;
 using Hangfire.InMemory;
-using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;

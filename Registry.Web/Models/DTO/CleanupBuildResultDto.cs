@@ -1,5 +1,4 @@
 #nullable enable
-using System;
 using System.Collections.Generic;
 
 namespace Registry.Web.Models.DTO;

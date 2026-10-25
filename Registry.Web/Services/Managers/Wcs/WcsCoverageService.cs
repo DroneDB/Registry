@@ -3,18 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using Registry.Ports.Json;
-using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
-using Registry.Web.Services.Caching;
 
 #nullable enable
 

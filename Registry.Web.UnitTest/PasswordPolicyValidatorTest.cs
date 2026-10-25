@@ -1,9 +1,6 @@
-using Microsoft.Extensions.Options;
-using Moq;
 using NUnit.Framework;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
-using Registry.Web.Services.Ports;
 using Shouldly;
 using Registry.Web.Test.Support;
 

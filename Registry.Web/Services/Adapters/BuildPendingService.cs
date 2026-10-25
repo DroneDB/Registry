@@ -13,7 +13,6 @@ using Microsoft.Extensions.Configuration;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Attributes;
-using Registry.Web.Data;
 using Registry.Web.Models;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;

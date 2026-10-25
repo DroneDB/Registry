@@ -1,5 +1,4 @@
 #nullable enable
-using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports.DroneDB;
 using Registry.Web.Services.Adapters;

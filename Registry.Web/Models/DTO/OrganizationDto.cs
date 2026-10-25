@@ -1,12 +1,6 @@
 using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Threading.Tasks;
 using Registry.Common;
-using Registry.Web.Data.Models;
-using Registry.Web.Models;
 using Registry.Web.Services.Managers;
 
 namespace Registry.Web.Models.DTO;

@@ -12,7 +12,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
 using Registry.Adapters;
@@ -34,7 +33,6 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Shouldly;
 using Registry.Web.Test.Support;
-using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Test;
 

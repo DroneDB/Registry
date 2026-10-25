@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,9 +10,7 @@ using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Services.Caching;
-using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 
 namespace Registry.Web.Services.Adapters;

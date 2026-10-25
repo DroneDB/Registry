@@ -1,7 +1,6 @@
 using Shouldly;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Moq;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
@@ -36,7 +35,6 @@ public class OrganizationManagerTest : TestBase
     private Mock<IDatasetsManager> _datasetManagerMock;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private Mock<IDdbManager> _ddbManagerMock;
-    private ILogger<OrganizationsManager> _logger;
     private OrganizationsManager _organizationsManager;
     private RegistryContext _context;
     private ApplicationDbContext _appContext;
@@ -51,7 +49,6 @@ public class OrganizationManagerTest : TestBase
         _datasetManagerMock = new Mock<IDatasetsManager>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
         _ddbManagerMock = new Mock<IDdbManager>();
-        _logger = CreateTestLogger<OrganizationsManager>();
 
         // Set up contexts
         _context = await CreateTestRegistryContext();
@@ -274,24 +271,6 @@ public class OrganizationManagerTest : TestBase
         updated.Owner.ShouldBe(standardUser.UserName);
     }
 
-    /*[Test]
-    public async Task Edit_StandardUser_CannotEditOthersOrganization()
-    {
-        // Arrange
-        SetupStandardUser("standard-user");
-        var updateDto = new OrganizationRequestDto
-        {
-            Name = "Updated Public Org",
-            Description = "Updated description",
-            IsPublic = true
-        };
-
-        // Act & Assert
-        var action = () => _organizationsManager.Edit(MagicStrings.PublicOrganizationSlug, updateDto);
-        await Should.ThrowAsync<UnauthorizedException>(action)
-            .WithMessage("Invalid user");
-    }*/
-
     [Test]
     public async Task Delete_StandardUser_CanOnlyDeleteOwnOrganization()
     {
@@ -308,18 +287,6 @@ public class OrganizationManagerTest : TestBase
         var organizations = await _organizationsManager.List();
         organizations.ShouldNotContain(org => org.Slug == ownedOrg.Slug);
     }
-/*
-    [Test]
-    public async Task Delete_StandardUser_CannotDeleteOthersOrganization()
-    {
-        // Arrange
-        SetupStandardUser("standard-user");
-
-        // Act & Assert
-        var action = () => _organizationsManager.Delete(MagicStrings.PublicOrganizationSlug);
-        await Should.ThrowAsync<UnauthorizedException>(action)
-            .WithMessage("Invalid user");
-    }*/
 
     #endregion
 

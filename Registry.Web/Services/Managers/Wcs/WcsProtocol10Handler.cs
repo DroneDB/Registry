@@ -1,6 +1,4 @@
 using System;
-using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -11,7 +9,6 @@ using Microsoft.AspNetCore.Http;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO.Ogc;
-using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 using Registry.Web.Services.Caching;
 

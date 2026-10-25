@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Registry.Ports;
 using Registry.Web.Middlewares;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Utilities;

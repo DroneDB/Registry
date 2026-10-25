@@ -13,8 +13,6 @@ using NUnit.Framework;
 using Registry.Common;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
-using Registry.Web.Models.Configuration;
-using Registry.Web.Services.Managers;
 using Registry.Web.Test.Support;
 using Shouldly;
 using Registry.Test.Common;

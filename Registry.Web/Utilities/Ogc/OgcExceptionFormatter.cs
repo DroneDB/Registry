@@ -1,7 +1,5 @@
-using System.IO;
 using System.Text;
 using System.Xml;
-using Registry.Web.Exceptions;
 
 namespace Registry.Web.Utilities.Ogc;
 

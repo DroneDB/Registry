@@ -1,29 +1,18 @@
 #nullable enable
 using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Common;
-using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Ports.Import;
 using Registry.Web.Exceptions;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Import;
-using Registry.Web.Services.Jobs;
-using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.HeavyTasks.Tools;
 

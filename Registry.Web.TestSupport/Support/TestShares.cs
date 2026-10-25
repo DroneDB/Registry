@@ -12,7 +12,6 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Shares;
-using Registry.Web.Utilities;
 
 namespace Registry.Web.Test.Support;
 

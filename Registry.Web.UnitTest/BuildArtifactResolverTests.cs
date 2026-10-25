@@ -1,10 +1,8 @@
 #nullable enable
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using Moq;
 using NUnit.Framework;
-using Registry.Adapters.Testing;
 using Registry.Ports.DroneDB;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Test.Support;

@@ -1,20 +1,15 @@
-using Registry.Web.Test.Support;
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
-using MSOptions = Microsoft.Extensions.Options.Options;
 using Moq;
 using NUnit.Framework;
 using Registry.Ports.DroneDB;
 using Registry.Web.Controllers;
-using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Objects;
 using Shouldly;
 

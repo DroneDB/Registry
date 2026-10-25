@@ -1,6 +1,5 @@
 #nullable enable
 using System.Threading.Tasks;
-using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Services.HeavyTasks.Ports;
 

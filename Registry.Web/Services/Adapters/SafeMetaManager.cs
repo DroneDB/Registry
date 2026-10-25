@@ -1,5 +1,4 @@
 using System;
-using Registry.Common;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Services.Adapters;

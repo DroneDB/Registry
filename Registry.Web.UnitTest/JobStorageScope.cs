@@ -1,6 +1,5 @@
 using System;
 using Hangfire;
-using Hangfire.Storage;
 
 namespace Registry.Web.Test;
 

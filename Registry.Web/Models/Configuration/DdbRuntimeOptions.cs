@@ -1,6 +1,5 @@
 #nullable enable
 using System.ComponentModel.DataAnnotations;
-using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Models.Configuration;
 

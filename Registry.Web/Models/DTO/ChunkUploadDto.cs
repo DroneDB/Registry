@@ -1,5 +1,3 @@
-using System;
-
 namespace Registry.Web.Models.DTO;
 
 public class ChunkUploadDto

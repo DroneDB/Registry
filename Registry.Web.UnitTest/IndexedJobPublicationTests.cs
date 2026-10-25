@@ -1,5 +1,4 @@
 #nullable enable
-using System.Threading;
 using Registry.Web.Services.Jobs;
 using System;
 using System.Linq;
@@ -15,7 +14,6 @@ using NUnit.Framework;
 using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
 using Registry.Web.Test.Support;
 using Shouldly;
 

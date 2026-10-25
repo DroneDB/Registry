@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models;
-using Registry.Web.Models.DTO;
 using Registry.Web.Services.Objects;
 using Registry.Web.Utilities;
 

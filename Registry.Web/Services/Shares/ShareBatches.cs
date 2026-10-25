@@ -1,24 +1,11 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Registry.Ports;
-using Registry.Ports.DroneDB;
-using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
-using Registry.Web.Identity.Models;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Adapters;
-using Registry.Web.Services.Managers;
-using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
-using Entry = Registry.Web.Data.Models.Entry;
 
 namespace Registry.Web.Services.Shares;
 

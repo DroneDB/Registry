@@ -25,7 +25,6 @@ namespace Registry.Web.Test;
 public class RegistryImportSourceTests
 {
     private const string Url = "http://8.8.8.8";
-    private const string Host = "8.8.8.8";
 
     private static SsrfGuard Guard => new(new ImportSettings());
 

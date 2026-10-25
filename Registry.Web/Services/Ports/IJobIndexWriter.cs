@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Models;
-using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.Services.Ports;
 

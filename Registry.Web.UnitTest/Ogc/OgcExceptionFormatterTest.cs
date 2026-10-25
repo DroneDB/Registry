@@ -1,6 +1,5 @@
 using System.Xml.Linq;
 using NUnit.Framework;
-using Registry.Web.Exceptions;
 using Registry.Web.Utilities.Ogc;
 using Shouldly;
 

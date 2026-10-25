@@ -5,7 +5,6 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
-using Microsoft.AspNetCore.Mvc;
 using NUnit.Framework;
 using Registry.Test.Common;
 using Registry.Web.Controllers;

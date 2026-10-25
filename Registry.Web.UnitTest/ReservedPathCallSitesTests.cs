@@ -18,7 +18,6 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.Import;
 using Registry.Web.Services.RemoteImport;
 using Registry.Web.Test.Support;

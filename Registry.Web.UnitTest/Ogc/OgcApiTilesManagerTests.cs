@@ -12,7 +12,6 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
-using Registry.Web.Test.Support;
 using Registry.Web.Utilities.Ogc;
 using Shouldly;
 using AccessType = Registry.Web.Services.Managers.AccessType;

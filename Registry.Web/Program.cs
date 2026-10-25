@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -18,12 +17,9 @@ using Microsoft.Extensions.Options;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
 using Registry.Web.Services.Adapters;
-using Registry.Web.Data;
 using Registry.Web.Hosting;
-using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
-using Registry.Web.Utilities;
 using Serilog;
 
 namespace Registry.Web;

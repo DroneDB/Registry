@@ -10,7 +10,6 @@ using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Registry.Test.Common;
 using Registry.Web.Data;
-using Registry.Web.Data.Models;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Test.Support;

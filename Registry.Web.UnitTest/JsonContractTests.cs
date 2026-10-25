@@ -1,13 +1,11 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
-using Newtonsoft.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Ports.DroneDB;

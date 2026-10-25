@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
@@ -12,7 +11,6 @@ using NUnit.Framework;
 using Registry.Web.Data.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
 using Shouldly;
 
 namespace Registry.Web.Test;

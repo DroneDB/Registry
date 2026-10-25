@@ -77,7 +77,7 @@ public sealed class WirePopulator(Func<Type, string, object?> jsonLiteral)
         if (type == typeof(byte[])) return full ? new byte[] { 1, 2, 3 } : null;
         if (type.IsEnum) return Enumeration(type, full);
 
-        if (TryDictionary(type, full, member, depth, out var dictionary)) return dictionary;
+        if (TryDictionary(type, full, depth, out var dictionary)) return dictionary;
         if (TryCollection(type, full, member, depth, out var collection)) return collection;
 
         // The root of a sparse variant is built (its members are null); anything below it is absent
@@ -100,7 +100,7 @@ public sealed class WirePopulator(Func<Type, string, object?> jsonLiteral)
         return full && values.Length > 0 ? values[0] : Activator.CreateInstance(type)!;
     }
 
-    private bool TryDictionary(Type type, bool full, string member, int depth, out object? result)
+    private bool TryDictionary(Type type, bool full, int depth, out object? result)
     {
         result = null;
         var dictionary = Generic(type, typeof(IDictionary<,>)) ?? Generic(type, typeof(IReadOnlyDictionary<,>));

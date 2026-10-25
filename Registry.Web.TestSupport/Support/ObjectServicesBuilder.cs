@@ -6,7 +6,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Registry.Adapters;
-using Registry.Adapters.Testing;
 using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Hosting;

@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Registry.Web.Data;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models;

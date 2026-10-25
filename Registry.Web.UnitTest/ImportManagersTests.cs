@@ -17,7 +17,6 @@ using Registry.Test.Common;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Identity.Models;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.HeavyTasks.Adapters;
@@ -26,7 +25,6 @@ using Registry.Web.Services.Import;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
-using Registry.Web.Utilities;
 using Shouldly;
 
 namespace Registry.Web.Test;

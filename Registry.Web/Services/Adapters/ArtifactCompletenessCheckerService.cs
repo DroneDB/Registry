@@ -11,11 +11,9 @@ using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
-using Registry.Web.Models;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
 using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Services.Adapters;

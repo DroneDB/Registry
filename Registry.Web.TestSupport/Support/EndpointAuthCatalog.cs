@@ -13,7 +13,6 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.Extensions.DependencyInjection;
-using Registry.Web.Attributes;
 using Registry.Web.Identity.Models;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Auth;

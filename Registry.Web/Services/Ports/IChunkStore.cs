@@ -1,8 +1,6 @@
 #nullable enable
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
-using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Services.Ports;
 

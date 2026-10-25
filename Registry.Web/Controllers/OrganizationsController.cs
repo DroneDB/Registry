@@ -1,21 +1,12 @@
-using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Registry.Web.Data;
-using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 

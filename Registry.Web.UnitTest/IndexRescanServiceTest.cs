@@ -17,7 +17,6 @@ using Registry.Web.Data.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Ports;
-using Registry.Web.Services.Ports;
 using Shouldly;
 using DdbEntry = Registry.Ports.DroneDB.Entry;
 using Registry.Web.Test.Support;

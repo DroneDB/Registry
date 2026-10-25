@@ -8,13 +8,10 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeMapping;
 using Registry.Ports;
-using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
-using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
 using static Registry.Web.Services.CacheCategories;
 
 namespace Registry.Web.Services.Objects;

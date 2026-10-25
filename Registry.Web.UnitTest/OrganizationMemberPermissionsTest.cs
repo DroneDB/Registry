@@ -1,7 +1,5 @@
 using Shouldly;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Moq;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
@@ -13,12 +11,10 @@ using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
-using Registry.Web.Models.DTO;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Test.Common;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
@@ -35,7 +31,6 @@ public class OrganizationMemberPermissionsTest : TestBase
     private MutableOptions<AppSettings> _settingsOptions;
     private Mock<IDatasetsManager> _datasetManagerMock;
     private Mock<IDatasetResolver> _utilsMock;
-    private ILogger<OrganizationsManager> _logger;
     private RegistryContext _context;
     private ApplicationDbContext _appContext;
     private AppSettings _appSettings;
@@ -55,7 +50,6 @@ public class OrganizationMemberPermissionsTest : TestBase
         _settingsOptions.Value = _appSettings;
         _datasetManagerMock = new Mock<IDatasetsManager>();
         _utilsMock = new Mock<IDatasetResolver>();
-        _logger = CreateTestLogger<OrganizationsManager>();
 
         _context = await CreateTestRegistryContext();
         _appContext = await CreateTestApplicationContext();

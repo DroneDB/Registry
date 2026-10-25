@@ -1,12 +1,10 @@
 #nullable enable
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
 using Registry.Adapters;
@@ -20,13 +18,11 @@ using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
-using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Registry.Web.Utilities;
 using Shouldly;
-using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Test;
 

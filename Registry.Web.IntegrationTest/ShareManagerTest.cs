@@ -1,9 +1,7 @@
 using System;
 using Registry.Web.Services.Jobs;
-using System.Dynamic;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Shouldly;
 using Microsoft.AspNetCore.Http;
@@ -43,17 +41,12 @@ class ShareManagerTest : TestBase
 {
     private ILogger<ObjectsManager> _objectManagerLogger;
     private ILogger<DdbManager> _ddbFactoryLogger;
-    private ILogger<OrganizationsManager> _organizationsManagerLogger;
     private ILogger<BatchTokenGenerator> _batchTokenGeneratorLogger;
     private ILogger<NameGenerator> _nameGeneratorLogger;
 
     private MutableOptions<AppSettings> _settingsOptions;
     private Mock<IDdbManager> _ddbFactoryMock;
     private Mock<IAuthManager> _authManagerMock;
-    private Mock<IDatasetResolver> _utilsMock;
-    private Mock<IObjectsManager> _objectsManagerMock;
-    private Mock<IOrganizationsManager> _organizationsManagerMock;
-    private Mock<IDatasetsManager> _datasetsManagerMock;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private ICacheManager _cacheManager;
     private Mock<IDatasetListingInvalidator> _listingsMock;
@@ -80,11 +73,7 @@ class ShareManagerTest : TestBase
         _settingsOptions = TestSettings.Mutable();
         _ddbFactoryMock = new Mock<IDdbManager>();
         _authManagerMock = new Mock<IAuthManager>();
-        _utilsMock = new Mock<IDatasetResolver>();
 
-        _objectsManagerMock = new Mock<IObjectsManager>();
-        _organizationsManagerMock = new Mock<IOrganizationsManager>();
-        _datasetsManagerMock = new Mock<IDatasetsManager>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
         _backgroundJobsProcessor = new SimpleBackgroundJobsProcessor();
         _cacheManager = TestCaches.InMemoryWithDatasetVisibility();
@@ -95,42 +84,9 @@ class ShareManagerTest : TestBase
 
         _objectManagerLogger = CreateTestLogger<ObjectsManager>();
         _ddbFactoryLogger = CreateTestLogger<DdbManager>();
-        _organizationsManagerLogger = CreateTestLogger<OrganizationsManager>();
         _batchTokenGeneratorLogger = CreateTestLogger<BatchTokenGenerator>();
         _nameGeneratorLogger = CreateTestLogger<NameGenerator>();
-
     }
-
-    /*
-    [Test]
-    public async Task Initialize_NullParameters_BadRequest()
-    {
-        const string userName = "admin";
-
-        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
-        {
-            UserName = userName,
-            Email = "admin@example.com"
-        }));
-        _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
-
-        var settings = JsonConvert.DeserializeObject<AppSettings>(_settingsJson);
-        _settingsOptions.Value = settings;
-
-        var manager = TestShares.Manager(_objectsManagerMock.Object,
-            _datasetsManagerMock.Object,
-            _organizationsManagerMock.Object, _utilsMock.Object, _authManagerMock.Object,
-            new DatasetAccessResolver(_utilsMock.Object, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
-            new BatchTokenGenerator(_settingsOptions, _batchTokenGeneratorLogger),
-            new NameGenerator(_settingsOptions, _nameGeneratorLogger), GetTest1Context(), TestScratch.Provider, TimeProvider.System);
-
-        await Should.ThrowAsync<BadRequestException>(async () => await manager.Initialize(null));
-
-        // Now empty tag is supported
-        //manager.Invoking(x => x.Initialize(new ShareInitDto())).Should().Throw<BadRequestException>();
-        await Should.ThrowAsync<BadRequestException>(async () => await manager.Initialize(new ShareInitDto { Tag = "ciao" }));
-    }*/
 
     [Test]
     public async Task Initialize_WithOrgWithoutDataset_GeneratedTag()
@@ -175,10 +131,6 @@ class ShareManagerTest : TestBase
 
         var mockMeta = new MockMeta();
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
-
-        var ddbMock2 = new Mock<IDDB>();
-        // ddbMock.Setup(x => x.GetAttributesAsync(default))
-        //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
@@ -277,10 +229,6 @@ class ShareManagerTest : TestBase
         var mockMeta = new MockMeta();
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
 
-        var ddbMock2 = new Mock<IDDB>();
-        // ddbMock.Setup(x => x.GetAttributesAsync(default))
-        //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
-
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
         var ddbFactory = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
@@ -312,19 +260,6 @@ class ShareManagerTest : TestBase
 
         initRes.ShouldNotBeNull();
         initRes.Token.ShouldNotBeNullOrWhiteSpace();
-        //initRes.Tag.DatasetSlug.ShouldBe(datasetTestSlug);
-        //initRes.Tag.OrganizationSlug.ShouldBe(userName);
-
-        // ListBatches
-        //batches = (await shareManager.ListBatches(initRes.Tag.OrganizationSlug, initRes.Tag.DatasetSlug)).ToArray();
-
-        //batches.Count().ShouldBe(1);
-
-        //var batch = batches.First();
-
-        //batch.UserName.ShouldBe(userName);
-        //batch.Status.ShouldBe(BatchStatus.Running);
-        //batch.End.ShouldBeNull();
 
         // Commit
         var commitRes = await shareManager.Commit(initRes.Token);
@@ -388,10 +323,6 @@ class ShareManagerTest : TestBase
         var mockMeta = new MockMeta();
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
 
-        var ddbMock2 = new Mock<IDDB>();
-        // ddbMock.Setup(x => x.GetAttributesAsync(default))
-        //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
-
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
         var ddbFactory = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
@@ -449,8 +380,6 @@ class ShareManagerTest : TestBase
 
         initRes.ShouldNotBeNull();
         initRes.Token.ShouldNotBeNullOrWhiteSpace();
-        //initRes.Tag.DatasetSlug.ShouldBe(datasetTestSlug);
-        //initRes.Tag.OrganizationSlug.ShouldBe(organizationTestSlug);
 
         // ListBatches
         batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
@@ -524,10 +453,6 @@ class ShareManagerTest : TestBase
         var mockMeta = new MockMeta();
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
 
-        var ddbMock2 = new Mock<IDDB>();
-        // ddbMock.Setup(x => x.GetAttributesAsync(default))
-        //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
-
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
         var ddbFactory = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
@@ -584,8 +509,6 @@ class ShareManagerTest : TestBase
 
         initRes.ShouldNotBeNull();
         initRes.Token.ShouldNotBeNullOrWhiteSpace();
-        //initRes.Tag.DatasetSlug.ShouldBe(datasetTestSlug);
-        //initRes.Tag.OrganizationSlug.ShouldBe(organizationTestSlug);
 
         // ListBatches
         batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
@@ -791,10 +714,6 @@ class ShareManagerTest : TestBase
         var mockMeta = new MockMeta();
         ddbMock.Setup(x => x.Meta).Returns(mockMeta);
 
-        var ddbMock2 = new Mock<IDDB>();
-        // ddbMock.Setup(x => x.GetAttributesAsync(default))
-        //     .Returns(Task.FromResult(new EntryAttributes(ddbMock2.Object)));
-
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
 
         var ddbFactory = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
@@ -846,8 +765,6 @@ class ShareManagerTest : TestBase
 
         initRes.ShouldNotBeNull();
         initRes.Token.ShouldNotBeNullOrWhiteSpace();
-        //initRes.Tag.DatasetSlug.ShouldBe(datasetTestSlug);
-        //initRes.Tag.OrganizationSlug.ShouldBe(organizationTestSlug);
 
         // ListBatches
         batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
@@ -914,15 +831,6 @@ class ShareManagerTest : TestBase
         batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
 
         batches.Length.ShouldBe(2);
-
-        //batches = (await shareManager.ListBatches(organizationTestSlug, datasetTestSlug)).ToArray();
-
-        //batches.Count().ShouldBe(1);
-        //var batch = batches.First();
-        //batch.Token.ShouldBe(token);
-        //batch.UserName.ShouldBe("admin");
-        //batch.Entries.Count().ShouldBe(1);
-        //batch.End.ShouldNotBeNull();
     }
 
     #region Test Data

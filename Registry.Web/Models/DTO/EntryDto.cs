@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Registry.Ports.Json;
-using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 

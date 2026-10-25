@@ -1,10 +1,7 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Options;
 using Registry.Common;
-using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Ports;

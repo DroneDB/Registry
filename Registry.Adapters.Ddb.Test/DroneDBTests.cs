@@ -187,10 +187,6 @@ public class NativeDdbWrapperTests : TestBase
     [Test]
     public void Info_ImageFile_Details()
     {
-
-        //var expectedMeta = JsonConvert.DeserializeObject<Dictionary<string, string>>(
-        //    @"{""cameraPitch"":""-89.9000015258789"",""cameraRoll"":""0.0"",""cameraYaw"":""43.79999923706055"",""captureTime"":""1466699554000.0"",""focalLength"":""3.4222222222222225"",""focalLength35"":""20.0"",""height"":""2250"",""make"":""DJI"",""model"":""FC300S"",""orientation"":""1"",""sensor"":""dji fc300s"",""sensorHeight"":""3.4650000000000003"",""sensorWidth"":""6.16"",""width"":""4000""}");
-
         using var tempFile = new TempFile(TestFileUrl, BaseTestFolder);
 
         var res = DdbWrapper.Info(tempFile.FilePath, withHash: true);
@@ -201,8 +197,6 @@ public class NativeDdbWrapperTests : TestBase
         var info = res.First();
 
         // Just check some fields
-        //info.Meta.Should().BeEquivalentTo(expectedMeta);
-
         info.Properties.ShouldNotBeEmpty();
         info.Properties.Count.ShouldBe(15);
         info.Properties["make"].GetString().ShouldBe("DJI");
@@ -211,8 +205,6 @@ public class NativeDdbWrapperTests : TestBase
         info.Hash.ShouldBe("246fed68dec31b17dc6d885cee10a2c08f2f1c68901a8efa132c60bdb770e5ff");
         info.Type.ShouldBe(EntryType.GeoImage);
         info.Size.ShouldBe(3876862);
-        // We can ignore this
-        // info.Depth.Should().Be(0);
         info.PointGeometry.ShouldNotBeNull();
         info.PolygonGeometry.ShouldNotBeNull();
 
@@ -249,10 +241,6 @@ public class NativeDdbWrapperTests : TestBase
         file.Type.ShouldBe(expectedType);
         file.Properties.ShouldBeEquivalentTo(expectedMeta);
         file.PointGeometry.ShouldNotBeNull();
-        //file.PointGeometry.Coordinates.Latitude.Should().BeApproximately(expectedLatitude, 0.00001);
-        //file.PointGeometry.Coordinates.Longitude.Should().BeApproximately(expectedLongitude, 0.00001);
-        //file.PointGeometry.Coordinates.Altitude.Should().Be(expectedAltitude);
-
     }
 
     [Test]
@@ -849,7 +837,6 @@ public class NativeDdbWrapperTests : TestBase
 
         var act = () => DdbWrapper.MetaAdd(area.TestFolder, "test", "123");
         Should.Throw<DdbException>(act); // Needs plural key
-        // DdbWrapper.MetaAdd("metaAddTest", "", "tests", "123").Data.ToObject<int>().Should().Be(123);
     }
 
     [Test]

@@ -16,7 +16,6 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Shouldly;
 using Entry = Registry.Ports.DroneDB.Entry;
-using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test.Ogc;
 

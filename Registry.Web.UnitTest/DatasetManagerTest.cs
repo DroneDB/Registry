@@ -6,13 +6,10 @@ using System.Threading.Tasks;
 using Shouldly;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Moq;
 using System.Text.Json;
 using NUnit.Framework;
 using Registry.Adapters;
-using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
@@ -21,7 +18,6 @@ using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
-using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Models.DTO;
@@ -37,7 +33,6 @@ public class DatasetManagerTest : TestBase
 
     private Mock<IAuthManager> _authManagerMock;
     private MutableOptions<AppSettings> _settingsOptions;
-    private Mock<IDatasetsManager> _datasetManagerMock;
     private Mock<IDdbManager> _ddbFactoryMock;
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private Mock<IDatasetListingInvalidator> _listingsMock;
@@ -55,7 +50,6 @@ public class DatasetManagerTest : TestBase
     {
         _settingsOptions = TestSettings.Mutable();
         _authManagerMock = new Mock<IAuthManager>();
-        _datasetManagerMock = new Mock<IDatasetsManager>();
         _ddbFactoryMock = new Mock<IDdbManager>();
         _listingsMock = new Mock<IDatasetListingInvalidator>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
@@ -1013,19 +1007,6 @@ public class DatasetManagerTest : TestBase
         _authManagerMock.Setup(x => x.GetCurrentUser()).ReturnsAsync(adminUser);
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(true);
         _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
-    }
-
-    private void SetupStandardUser()
-    {
-        var standardUser = new User
-        {
-            UserName = "standard",
-            Email = "standard@example.com",
-            Id = "standard-id"
-        };
-
-        _authManagerMock.Setup(x => x.GetCurrentUser()).ReturnsAsync(standardUser);
-        _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
     }
 
     private (WebPorts utils, Mock<IFileSystem> fileSystemMock) SetupMoveTestDependencies(RegistryContext context)

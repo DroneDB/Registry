@@ -18,7 +18,6 @@ using Registry.Web.Models.DTO;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
-using Registry.Web.Services.Uploads;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;

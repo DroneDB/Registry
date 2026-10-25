@@ -12,9 +12,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Caching;
-using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Adapters;
-using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.PlatformTasks;

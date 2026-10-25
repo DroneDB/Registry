@@ -10,7 +10,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NUnit.Framework;
 using Registry.Test.Common;
-using Registry.Web.Models;
 using Registry.Web.Test.Support;
 using Shouldly;
 

@@ -1,5 +1,4 @@
 #nullable enable
-using System;
 using System.Text.Json;
 using Registry.Ports.Json;
 

@@ -6,7 +6,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Registry.Web.Data;
 using Registry.Web.Identity;
-using Registry.Web.Models.Configuration;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Test.Support;

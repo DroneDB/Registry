@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using NUnit.Framework;
 using Registry.Test.Common;
 using Registry.Web.Models.Configuration;

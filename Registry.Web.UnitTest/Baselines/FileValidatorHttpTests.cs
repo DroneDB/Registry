@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -12,7 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Moq;
 using NUnit.Framework;
-using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Registry.Web.Data;

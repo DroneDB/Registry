@@ -1,25 +1,10 @@
-using System;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Moq;
-using Newtonsoft.Json;
 using NUnit.Framework;
-using Registry.Adapters;
-using Registry.Adapters.DroneDB;
 using Registry.Ports;
-using Registry.Ports.DroneDB;
 using Registry.Test.Common;
-using Registry.Web.Data;
-using Registry.Web.Models.Configuration;
 using Registry.Web.Services;
 using Registry.Web.Services.Adapters;
-using Registry.Web.Services.Managers;
-using Registry.Web.Services.Ports;
-using Registry.Web.Test.Adapters;
-using Shouldly;
 using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;

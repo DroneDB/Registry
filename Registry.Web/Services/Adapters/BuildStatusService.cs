@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Ports.DroneDB;
-using Registry.Web.Data.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Ports;

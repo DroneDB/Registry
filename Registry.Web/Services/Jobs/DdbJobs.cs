@@ -5,7 +5,6 @@ using Hangfire.Server;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
-using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Jobs;
 

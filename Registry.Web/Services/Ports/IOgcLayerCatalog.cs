@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Registry.Ports.DroneDB;
 using Registry.Web.Models.DTO.Ogc;
 
 namespace Registry.Web.Services.Ports;

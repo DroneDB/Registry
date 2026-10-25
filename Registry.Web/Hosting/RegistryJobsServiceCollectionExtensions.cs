@@ -7,7 +7,6 @@ using Hangfire.Console;
 using Hangfire.MySql;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Registry.Web.Filters;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;

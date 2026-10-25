@@ -2,7 +2,6 @@
 using System;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.HealthChecks;

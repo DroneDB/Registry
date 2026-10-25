@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Net.Http.Headers;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.Configuration;
-using Registry.Web.Services.Ports;
 using Registry.Web.Services.Users;
 using System;
 using System.Linq;

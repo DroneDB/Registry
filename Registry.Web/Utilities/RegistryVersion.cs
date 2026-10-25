@@ -1,6 +1,5 @@
 #nullable enable
 using System.Linq;
-using System.Reflection;
 
 namespace Registry.Web.Utilities;
 

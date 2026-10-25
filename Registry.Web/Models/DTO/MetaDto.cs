@@ -1,7 +1,6 @@
 using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Registry.Common;
 using Registry.Ports;
 
 namespace Registry.Web.Models.DTO;

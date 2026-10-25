@@ -9,7 +9,6 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
 using Entry = Registry.Ports.DroneDB.Entry;
 
 namespace Registry.Web.Services.Objects;

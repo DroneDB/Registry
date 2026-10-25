@@ -2,7 +2,6 @@
 using System;
 using System.Net.Http;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
 using Registry.Adapters;
 using Registry.Ports;
 using Registry.Web.Data;

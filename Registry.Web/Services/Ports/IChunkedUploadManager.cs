@@ -1,8 +1,4 @@
 #nullable enable
-using System.Threading;
-using System.Threading.Tasks;
-using Registry.Web.Models.DTO;
-
 namespace Registry.Web.Services.Ports;
 
 /// <summary>A chunk of a resumable upload, as sent by the client.</summary>

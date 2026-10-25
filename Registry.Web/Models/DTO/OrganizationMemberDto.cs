@@ -1,6 +1,5 @@
 using System;
 using Registry.Common;
-using Registry.Web.Models;
 
 namespace Registry.Web.Models.DTO;
 

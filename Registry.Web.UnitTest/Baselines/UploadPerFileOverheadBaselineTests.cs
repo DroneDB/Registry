@@ -7,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
 using Registry.Ports;
@@ -24,7 +23,6 @@ using Registry.Web.Services.Ports;
 using Shouldly;
 using Entry = Registry.Ports.DroneDB.Entry;
 using Registry.Web.Test.Support;
-using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Test.Baselines;
 

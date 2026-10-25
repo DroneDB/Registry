@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Shouldly;
@@ -11,7 +10,6 @@ using Registry.Ports;
 using Registry.Test.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
-using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;

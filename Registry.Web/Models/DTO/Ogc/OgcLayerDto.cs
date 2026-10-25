@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text.Json.Serialization;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Models.DTO.Ogc;

@@ -1,9 +1,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text;
 using Shouldly;
 using NUnit.Framework;
 using Registry.Common;
@@ -14,8 +12,6 @@ namespace Registry.Adapters.Test;
 [TestFixture]
 public class UtilsTest
 {
-
-    private static readonly string TestString = new(Enumerable.Range(0, 1024 * 1024 * 5 + 731).Select(item => 'A').ToArray());
 
     [Test]
     [Explicit]

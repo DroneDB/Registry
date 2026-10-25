@@ -13,10 +13,8 @@ using Shouldly;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
-using Registry.Adapters;
 using Registry.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -25,7 +23,6 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
-using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Adapters;
 using Registry.Web.Utilities;
@@ -52,12 +49,6 @@ public class ObjectManagerTest : TestBase
     private ICacheManager _cacheManager;
     private IBackgroundJobsProcessor _backgroundJobsProcessor;
     private BuildPendingService _buildPendingService;
-
-    //private const string DataFolder = "Data";
-    private const string TestStorageFolder = @"Data/Storage";
-    private const string DdbTestDataFolder = @"Data/DdbTest";
-    private const string StorageFolder = "Storage";
-    private const string DdbFolder = "Ddb";
 
     private const string BaseTestFolder = "ObjectManagerTest";
 
@@ -91,11 +82,8 @@ public class ObjectManagerTest : TestBase
         ddbMock1.Setup(x => x.Meta).Returns(mockMeta);
 
         var ddbMock2 = new Mock<IDDB>();
-        // ddbMock2.Setup(x => x.GetAttributesAsync(default))
-        //     .Returns(Task.FromResult(new EntryAttributes(ddbMock1.Object)));
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock2.Object);
-
     }
 
     [Test]
@@ -989,7 +977,6 @@ public class ObjectManagerTest : TestBase
         var newres = await objectManager.Manager.AddNew(MagicStrings.PublicOrganizationSlug,
             MagicStrings.DefaultDatasetSlug, "Test");
         newres.Size.ShouldBe(0);
-        //newres.ContentType.ShouldBeNull();
         newres.Path.ShouldBe("Test");
 
         var newFileUrl = TestData.Url("test-datasets/drone_dataset_brighton_beach/" + fileName);
@@ -1013,19 +1000,6 @@ public class ObjectManagerTest : TestBase
 
         (await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "Test2"))
             .Count().ShouldBe(2);
-
-        //await objectManager.Manager.Delete(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, fileName);
-
-        //res = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
-        //    fileName);
-
-        //res.Count().ShouldBe(0);
-
-
-        //res = await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
-        //    fileName);
-
-        //res.Count().ShouldBe(1);
     }
 
 

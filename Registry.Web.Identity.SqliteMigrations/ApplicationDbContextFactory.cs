@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore.Design;
 using Registry.Web.Data;
-using Registry.Web.Identity;
 
 namespace Registry.Web.Identity.SqliteMigrations;
 

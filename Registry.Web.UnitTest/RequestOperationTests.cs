@@ -15,7 +15,6 @@ using Moq;
 using NUnit.Framework;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
-using Registry.Test.Common;
 using Registry.Web.Data;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Jobs;

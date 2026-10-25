@@ -3,19 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Hangfire;
-using Hangfire.Client;
-using Hangfire.Server;
 using Hangfire.States;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Caching;
 using Registry.Web.Services.Ports;
-using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Services.Adapters;
 

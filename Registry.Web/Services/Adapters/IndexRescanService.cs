@@ -7,7 +7,6 @@ using Hangfire.Server;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
-using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Models;
 using Registry.Web.Services.HeavyTasks;

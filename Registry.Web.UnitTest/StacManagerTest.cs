@@ -3,7 +3,6 @@ using System.Threading;
 using System.Linq;
 using System.Threading.Tasks;
 using Shouldly;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
@@ -17,9 +16,6 @@ using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
-using Registry.Web.Identity;
-using Registry.Web.Identity.Models;
-using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
@@ -32,19 +28,13 @@ namespace Registry.Web.Test;
 public class StacManagerTest : TestBase
 {
     private Mock<IAuthManager> _authManagerMock;
-    private MutableOptions<AppSettings> _settingsOptions;
-    private Mock<IDatasetsManager> _datasetManagerMock;
     private ILogger<StacManager> _stacManagerLogger;
-    private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private Mock<IDdbManager> _ddbManagerMock;
 
     [SetUp]
     public void Setup()
     {
-        _settingsOptions = TestSettings.Mutable();
         _authManagerMock = new Mock<IAuthManager>();
-        _datasetManagerMock = new Mock<IDatasetsManager>();
-        _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
         _ddbManagerMock = new Mock<IDdbManager>();
 
         _stacManagerLogger = CreateTestLogger<StacManager>();
@@ -193,12 +183,6 @@ public class StacManagerTest : TestBase
         });
     }
 
-    #region Test Data
-
-    private readonly AppSettings _settings = TestSettings.Default;
-
-    #endregion
-
     #region TestContexts
 
     private static RegistryContext GetTest1Context()
@@ -207,51 +191,6 @@ public class StacManagerTest : TestBase
         return TestDb.CreateContext<RegistryContext>(context =>
         {
             Seed.PublicDefaultDataset(context);
-
-            context.SaveChanges();
-        });
-    }
-
-    private static ApplicationDbContext GetAppTest1Context()
-    {
-        // Insert seed data into the database using one instance of the context
-        return TestDb.CreateContext<ApplicationDbContext>(context =>
-        {
-            var adminRole = new IdentityRole
-            {
-                Id = "1db5b539-6e54-4674-bb74-84732eb48204",
-                Name = "admin",
-                NormalizedName = "ADMIN",
-                ConcurrencyStamp = "72c80593-64a2-40b4-b0c4-26a9dcc06400"
-            };
-
-            context.Roles.Add(adminRole);
-
-            var standardRole = new IdentityRole
-            {
-                Id = "7d02507e-8eab-48c0-ba19-fea3ae644ab9",
-                Name = "standard",
-                NormalizedName = "STANDARD",
-                ConcurrencyStamp = "2e279a3c-4273-4f0a-abf6-8e97811651a9"
-            };
-
-            context.Roles.Add(standardRole);
-
-            var admin = new User
-            {
-                Id = "bfb579ce-8435-4c70-a365-158a3d93811f",
-                UserName = "admin",
-                Email = "admin@example.com",
-                NormalizedUserName = "ADMIN"
-            };
-
-            context.Users.Add(admin);
-
-            context.UserRoles.Add(new IdentityUserRole<string>
-            {
-                RoleId = "1db5b539-6e54-4674-bb74-84732eb48204",
-                UserId = "bfb579ce-8435-4c70-a365-158a3d93811f"
-            });
 
             context.SaveChanges();
         });

@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;

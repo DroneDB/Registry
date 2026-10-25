@@ -1,10 +1,8 @@
-using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
-using Registry.Common;
 using Registry.Web.Test.Support;
 using Registry.Test.Common;
 

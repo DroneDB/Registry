@@ -11,7 +11,6 @@ using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
-using Registry.Web.Services.Managers;
 using Shouldly;
 
 namespace Registry.Web.Test.Baselines;

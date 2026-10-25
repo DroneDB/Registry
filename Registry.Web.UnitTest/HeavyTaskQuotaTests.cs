@@ -2,7 +2,6 @@
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
 using Registry.Web.Models.Configuration;

@@ -1,15 +1,11 @@
 using System;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Registry.Web.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Registry.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity;

@@ -8,7 +8,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
-using Registry.Adapters.Testing;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
@@ -21,7 +20,6 @@ using Registry.Web.Services.Ports;
 using Shouldly;
 using DdbEntry = Registry.Ports.DroneDB.Entry;
 using Registry.Web.Test.Support;
-using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Test;
 

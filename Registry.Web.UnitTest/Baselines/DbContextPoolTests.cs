@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Registry.Test.Common;
@@ -15,7 +14,6 @@ using Registry.Web.Data.Models;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Test.Support;
-using Registry.Web.Utilities;
 using Shouldly;
 
 namespace Registry.Web.Test.Baselines;

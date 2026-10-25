@@ -6,7 +6,6 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Registry.Ports;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;

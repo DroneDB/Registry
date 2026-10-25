@@ -2,7 +2,6 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Options;
 using NUnit.Framework;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
@@ -10,7 +9,6 @@ using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
-using Registry.Web.Services.Ports;
 using Shouldly;
 using Registry.Web.Test.Support;
 

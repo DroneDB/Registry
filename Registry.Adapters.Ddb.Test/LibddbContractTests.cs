@@ -14,7 +14,6 @@ using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using Registry.Adapters.Testing;
-using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Shouldly;

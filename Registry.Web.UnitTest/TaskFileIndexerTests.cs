@@ -15,7 +15,6 @@ using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Shouldly;
-using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Test;
 

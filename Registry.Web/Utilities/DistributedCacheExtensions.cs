@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
-using System.Text.Json;
 
 namespace Registry.Web.Utilities;
 

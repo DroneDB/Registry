@@ -7,7 +7,6 @@ using System.Runtime.InteropServices;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Registry.Adapters.DroneDB;
-using Registry.Common;
 using Registry.Test.Common;
 using Shouldly;
 

@@ -3,10 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Caching.Memory;
 using Moq;
 using NUnit.Framework;
 using Registry.Ports;
@@ -17,12 +14,10 @@ using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
-using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Shouldly;
 using Entry = Registry.Ports.DroneDB.Entry;
 using Registry.Web.Test.Support;
-using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Test;
 

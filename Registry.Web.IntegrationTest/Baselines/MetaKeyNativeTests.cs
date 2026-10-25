@@ -124,7 +124,7 @@ public sealed class MetaKeyNativeTests : IDisposable
         // The list is written with add, and get returns it
         (status, _) = await SendAsync(HttpMethod.Post, $"{Api}/add/tags", "\"survey\"");
         status.ShouldBe(200);
-        (status, body) = await SendAsync(HttpMethod.Post, $"{Api}/add/tags", "\"mapping\"");
+        (status, _) = await SendAsync(HttpMethod.Post, $"{Api}/add/tags", "\"mapping\"");
         status.ShouldBe(200);
 
         (status, body) = await SendAsync(HttpMethod.Get, $"{Api}/get/tags");

@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -7,13 +5,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Features;
-using Registry.Web.Services.Maintenance;
-using Registry.Web.Services.Ports;
-using Registry.Web.Services.Processing;
 using Registry.Web.Utilities;
-using Registry.Web.Utilities.Auth;
 
 namespace Registry.Web.Controllers;
 

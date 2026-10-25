@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json;
-using Registry.Ports.Json;
-using Registry.Adapters.DroneDB;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 

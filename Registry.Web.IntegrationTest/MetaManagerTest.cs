@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -7,12 +6,9 @@ using Shouldly;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Moq;
-using System.Text.Json;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
-using Registry.Common;
 using Registry.Ports;
 using Registry.Test.Common;
 using Registry.Web.Data;
@@ -39,17 +35,12 @@ internal class MetaManagerTest : TestBase
     private Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private ICacheManager _cacheManager;
 
-    private const string TestStorageFolder = @"Data/Storage";
-    private const string DdbTestDataFolder = @"Data/DdbTest";
-    private const string StorageFolder = "Storage";
     private const string DdbFolder = "Ddb";
 
     private const string BaseTestFolder = "ObjectManagerTest";
 
     private static readonly string Test4ArchiveUrl = TestData.Url("registry/Test4-new.zip");
     private static readonly string Test5ArchiveUrl = TestData.Url("registry/Test5-new.zip");
-
-    private readonly Guid _defaultDatasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
 
     private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper();
 

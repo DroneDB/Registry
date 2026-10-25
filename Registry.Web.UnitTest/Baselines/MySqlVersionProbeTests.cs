@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +9,6 @@ using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Microting.EntityFrameworkCore.MySql.Infrastructure;
 using Registry.Web.Data;
-using Registry.Web.Models.Configuration;
 using Registry.Web.Utilities;
 using Shouldly;
 using Registry.Test.Common;

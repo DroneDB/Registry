@@ -1,7 +1,4 @@
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using Registry.Ports.DroneDB;
-using Registry.Web.Models.DTO.Ogc;
 
 namespace Registry.Web.Services.Managers.Wcs;
 

@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Registry.Ports;
-using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Hosting;
 using Registry.Web.Models.Configuration;

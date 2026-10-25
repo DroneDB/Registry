@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using Registry.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
-using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;

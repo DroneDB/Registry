@@ -1,10 +1,8 @@
-using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Services.Ports;
 

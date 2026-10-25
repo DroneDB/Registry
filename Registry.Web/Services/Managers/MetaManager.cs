@@ -1,11 +1,9 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
-using Registry.Ports;
 using DdbException = Registry.Ports.DroneDB.DdbException;
 using DdbErrors = Registry.Ports.DroneDB.DdbErrors;
 using IDDB = Registry.Ports.DroneDB.IDDB;

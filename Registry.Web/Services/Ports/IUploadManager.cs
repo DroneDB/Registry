@@ -1,9 +1,4 @@
 #nullable enable
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
-using Registry.Web.Models.DTO;
-using Registry.Web.Services.Uploads;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Ports;
