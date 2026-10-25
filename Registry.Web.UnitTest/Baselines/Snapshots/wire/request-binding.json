@@ -461,6 +461,26 @@
       "to": "admin@example.com"
     }
   },
+  "sys-update-check-settings": {
+    "type": "UpdateCheckSettingsDto",
+    "input": "{\"useDeclaration\":\"commercial_needs_license\",\"contactEmail\":\"it@acme-survey.com\",\"contactConsent\":true}",
+    "outcome": "bound",
+    "model": {
+      "useDeclaration": "commercial_needs_license",
+      "contactEmail": "it@acme-survey.com",
+      "contactConsent": true
+    }
+  },
+  "sys-update-check-settings-cleared": {
+    "type": "UpdateCheckSettingsDto",
+    "input": "{\"useDeclaration\":null,\"contactEmail\":null,\"contactConsent\":false}",
+    "outcome": "bound",
+    "model": {
+      "useDeclaration": null,
+      "contactEmail": null,
+      "contactConsent": false
+    }
+  },
   "names-pascal-case": {
     "type": "CreateUserRequest",
     "input": "{\"UserName\":\"a\",\"Password\":\"p\",\"Email\":\"e\",\"Roles\":[\"r\"]}",

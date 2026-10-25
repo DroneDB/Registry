@@ -21,6 +21,7 @@ using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
+using Registry.Web.Services.UpdateCheck;
 using Serilog;
 
 namespace Registry.Web.Test.Support;
@@ -150,6 +151,10 @@ public sealed class RegistryWebFactory : WebApplicationFactory<Program>
             services.AddSingleton<IDdbWrapper>(DdbWrapper.Object);
             services.RemoveAll<IDdbRuntime>();
             services.AddSingleton<IDdbRuntime>(DdbRuntime);
+
+            // The update check never leaves the test process (tests that exercise it replace this handler)
+            services.AddHttpClient(UpdateCheckClient.HttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(() => new NoNetworkHandler());
 
             services.AddAuthentication()
                 .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName,

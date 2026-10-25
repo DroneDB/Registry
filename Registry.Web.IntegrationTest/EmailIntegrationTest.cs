@@ -19,6 +19,7 @@ using Registry.Test.Common;
 using Registry.Web.Exceptions;
 using Registry.Web.HealthChecks;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Models.DTO;
 using Registry.Web.Models.Email;
 using Registry.Web.Services.Email;
 using Registry.Web.Services.Email.Templates;
@@ -240,5 +241,37 @@ public class EmailIntegrationTest : IDisposable
             [job.Args[0], CancellationToken.None])!;
 
         Addresses(await ReceivedMessage(), "To").ShouldBe(["queued@example.com"]);
+    }
+
+    [Test]
+    public async Task UpdateEmail_GoesToTheAdmins_InOneMessage_AndTheVersionIsRecorded()
+    {
+        using var factory = new RegistryWebFactory(HostSettings());
+        await factory.CreateUserAsync("ops", isAdmin: true);
+        await factory.CreateUserAsync("plain");
+        using var scope = factory.Services.CreateScope();
+
+        await scope.ServiceProvider.GetRequiredService<IUpdateNotifier>().NotifyAsync(new UpdateInfoDto
+        {
+            CurrentVersion = "3.0.0",
+            LatestVersion = "3.1.0",
+            IsUpdateAvailable = true,
+            IsSecurityUpdate = true,
+            ReleaseNotes = "## Security\n- Fixes a flaw (v3.1.0)\n- <script>alert(1)</script>\n\nAll changes: https://github.com/DroneDB/Registry/compare/v3.0.0...v3.1.0",
+            CompareUrl = "https://github.com/DroneDB/Registry/compare/v3.0.0...v3.1.0"
+        }, CancellationToken.None);
+
+        var received = await ReceivedMessage();
+        received.GetProperty("Subject").GetString().ShouldBe("Registry 3.1.0: security update");
+        Addresses(received, "To").OrderBy(a => a).ShouldBe([RegistryWebFactory.AdminEmail, "ops@example.com"]);
+        received.GetProperty("Text").GetString().ShouldNotBeNull().ShouldSatisfyAllConditions(
+            t => t.ShouldContain("Latest version: 3.1.0"),
+            t => t.ShouldContain("## Security"),
+            t => t.ShouldContain("AppSettings:UpdateCheckEmail"),
+            t => t.ShouldContain("https://hub.example.org/"));
+        var html = received.GetProperty("HTML").GetString().ShouldNotBeNull();
+        html.ShouldContain("white-space:pre-wrap");
+        html.ShouldNotContain("<script>");
+        scope.ServiceProvider.GetRequiredService<IUpdateCheckCache>().Read().LastNotifiedVersion.ShouldBe("3.1.0");
     }
 }

@@ -1,8 +1,12 @@
 using Registry.Adapters.Testing;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
 using Hangfire;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -28,16 +32,20 @@ namespace Registry.Web.Test;
 [TestFixture]
 public class ProcessingNodeDiCompletenessTests
 {
-    private static ServiceProvider BuildNodeProvider(Action<IServiceCollection>? configure = null)
+    private static ServiceProvider BuildNodeProvider(Action<IServiceCollection>? configure = null,
+        InstanceType? role = null, string identityConnection = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 // Registration-only; the Sqlite provider never opens this connection here.
                 ["ConnectionStrings:RegistryConnection"] = "Data Source=:memory:",
+                ["ConnectionStrings:IdentityConnection"] = identityConnection,
                 // The options are validated when a service reads them
                 ["AppSettings:DatasetsPath"] = "./datasets",
-                ["AppSettings:CachePath"] = "./cache"
+                ["AppSettings:CachePath"] = "./cache",
+                // As RegistryHost sets it for the role
+                [Program.InstanceTypeKey] = role?.ToString()
             })
             .Build();
 
@@ -120,6 +128,21 @@ public class ProcessingNodeDiCompletenessTests
         service.ShouldNotBeNull();
     }
 
+    [Test]
+    public void ProcessingNode_ActivatesTheUpdateCheck_AndHasTheInstanceIdentityTask()
+    {
+        // The update e-mail sends through IEmailService, whose queue is the Hangfire client of the job storage
+        using var provider = BuildNodeProvider(s => s.AddSingleton(Mock.Of<IBackgroundJobClient>()));
+        using var scope = provider.CreateScope();
+
+        // The recurring job is activated by its interface; the identity is created by a startup task of every job host
+        scope.ServiceProvider.GetRequiredService<IUpdateCheckService>().ShouldBeOfType<Registry.Web.Services.UpdateCheck.UpdateCheckService>();
+        scope.ServiceProvider.GetServices<Registry.Web.Hosting.IStartupTask>()
+            .ShouldContain(task => task.GetType().Name == "InstanceIdInitializer");
+        scope.ServiceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(Registry.Web.Services.UpdateCheck.UpdateCheckClient.HttpClientName)
+            .Timeout.ShouldBe(Registry.Web.Services.UpdateCheck.UpdateCheckClient.Timeout);
+    }
+
     [TestCase(typeof(Registry.Web.Services.Jobs.DdbJobs))]
     [TestCase(typeof(Registry.Web.Services.Jobs.FileJobs))]
     [TestCase(typeof(Registry.Web.Services.Jobs.ExpiredRecurringJobsSweep))]
@@ -148,5 +171,65 @@ public class ProcessingNodeDiCompletenessTests
         var service = scope.ServiceProvider.GetService<Registry.Web.Services.Adapters.IndexRescanService>();
 
         service.ShouldNotBeNull();
+    }
+
+    [Test]
+    public void ProcessingNode_TellsTheAdministrators_FromTheIdentityDatabaseItShares()
+    {
+        using var provider = BuildNodeProvider(s => s.AddSingleton(Mock.Of<IBackgroundJobClient>()), InstanceType.ProcessingNode);
+        using var scope = provider.CreateScope();
+
+        // The update check job runs on whichever node serves the default queue: the node has no authentication, so the
+        // notifier needs the identity database registered for it
+        scope.ServiceProvider.GetRequiredService<IUpdateNotifier>().ShouldBeOfType<Registry.Web.Services.UpdateCheck.UpdateNotifier>();
+        scope.ServiceProvider.GetRequiredService<IAdminRecipients>().ShouldBeOfType<Registry.Web.Services.Adapters.IdentityAdminRecipients>();
+        scope.ServiceProvider.GetService<Registry.Web.Identity.ApplicationDbContext>().ShouldNotBeNull();
+    }
+
+    [Test]
+    public async Task ProcessingNode_ReadsTheAdministratorsOfTheDatabaseTheWebHostMigrated()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "registry-node-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        var connection = $"Data Source={Path.Combine(folder, "identity.db")};Mode=ReadWriteCreate;Pooling=False";
+
+        try
+        {
+            // What the web host left in the shared database
+            await using (var web = new Registry.Web.Identity.ApplicationDbContext(
+                             new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<Registry.Web.Identity.ApplicationDbContext>()
+                                 .UseSqlite(connection).Options))
+            {
+                await web.Database.EnsureCreatedAsync();
+                var admin = new Microsoft.AspNetCore.Identity.IdentityRole("admin") { NormalizedName = "ADMIN" };
+                web.Roles.Add(admin);
+                web.Users.Add(new Registry.Web.Identity.Models.User { Id = "u1", UserName = "root", Email = "root@example.com" });
+                web.UserRoles.Add(new Microsoft.AspNetCore.Identity.IdentityUserRole<string> { UserId = "u1", RoleId = admin.Id });
+                await web.SaveChangesAsync();
+            }
+
+            using var provider = BuildNodeProvider(role: InstanceType.ProcessingNode, identityConnection: connection);
+            using var scope = provider.CreateScope();
+
+            var recipients = await scope.ServiceProvider.GetRequiredService<IAdminRecipients>().GetAsync(default);
+
+            recipients.Select(r => r.Address).ShouldBe(["root@example.com"]);
+        }
+        finally
+        {
+            Directory.Delete(folder, true);
+        }
+    }
+
+    [TestCase(InstanceType.Default)]
+    [TestCase(InstanceType.WebServer)]
+    public void WebHost_LeavesTheIdentityDatabaseToItsAuthentication(InstanceType role)
+    {
+        // The web host registers the context with AddRegistryAuth: a second registration would configure it twice
+        using var provider = BuildNodeProvider(s => s.AddSingleton(Mock.Of<IBackgroundJobClient>()), role);
+        using var scope = provider.CreateScope();
+
+        scope.ServiceProvider.GetService<Registry.Web.Identity.ApplicationDbContext>().ShouldBeNull();
+        scope.ServiceProvider.GetRequiredService<IAdminRecipients>().ShouldBeOfType<Registry.Web.Services.Adapters.IdentityAdminRecipients>();
     }
 }

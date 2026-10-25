@@ -320,6 +320,8 @@ public class JobInfrastructureTests
         using var storage = new InMemoryStorage();
         await new HangfireJobsInitializer(new RecurringJobManager(storage),
                 Microsoft.Extensions.Options.Options.Create(new Models.Configuration.JobScheduleOptions()),
+                Microsoft.Extensions.Options.Options.Create(new Models.Configuration.UpdateCheckOptions()),
+                new FixedInstanceIdentity(),
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<HangfireJobsInitializer>.Instance)
             .ExecuteAsync(CancellationToken.None);
 

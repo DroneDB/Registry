@@ -19,6 +19,7 @@ public static class RecurringJobIds
     public const string RecurringDatasetCleanup = "recurring-dataset-cleanup";
     public const string CheckArtifactCompleteness = "check-artifact-completeness";
     public const string IndexReconciliation = "index-reconciliation";
+    public const string CheckUpdates = "check-updates";
 
     /// <summary>Every recurring job ID owned by the application (ordinal comparison, as Hangfire stores them).</summary>
     public static readonly FrozenSet<string> Owned = new[]
@@ -31,6 +32,7 @@ public static class RecurringJobIds
         CleanupOldJobIndices,
         RecurringDatasetCleanup,
         CheckArtifactCompleteness,
-        IndexReconciliation
+        IndexReconciliation,
+        CheckUpdates
     }.ToFrozenSet();
 }

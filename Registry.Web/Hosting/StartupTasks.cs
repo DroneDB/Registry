@@ -44,6 +44,12 @@ public static class StartupTaskOrder
     /// <summary>Cache connection check and cache providers (every job or web host).</summary>
     public const int Caches = 200;
 
+    /// <summary>
+    /// The instance identity (every host with the job storage): created or loaded before the recurring job
+    /// definitions, which derive the time of the daily update check from it.
+    /// </summary>
+    public const int InstanceIdentity = 250;
+
     /// <summary>Recurring job definitions (every host with the job storage), before the Hangfire servers start.</summary>
     public const int RecurringJobs = 300;
 }

@@ -115,6 +115,18 @@ public class FeaturesDto
     /// Native DroneDB library version. Surfaced for the post-update notice dialog.
     /// </summary>
     public string? DdbVersion { get; set; }
+
+    /// <summary>
+    /// Whether the update check runs (<c>AppSettings:UpdateCheckCron</c> is not disabled). Clients do not ask for the
+    /// update information when it is false.
+    /// </summary>
+    public bool UpdateCheckEnabled { get; set; }
+
+    /// <summary>
+    /// Proves that this deployment is the one with a given instance id, without revealing the id: lowercase hex SHA-256
+    /// of <c>ddb-instance-v1:</c> and the lowercase instance id.
+    /// </summary>
+    public string? InstanceHash { get; set; }
 }
 
 /// <summary>

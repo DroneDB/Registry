@@ -1,0 +1,24 @@
+@inherits EmailBody<UpdateAvailableEmailModel>
+
+<p style="margin:0 0 16px;">
+    A new version of Registry is available@(Model.IsSecurityUpdate ? ", and it includes security fixes" : "").
+</p>
+<p style="margin:0 0 16px;">
+    Installed version: <strong>@Model.InstalledVersionText</strong><br>
+    Latest version: <strong>@Model.LatestVersion</strong>
+</p>
+@if (!string.IsNullOrWhiteSpace(Model.ReleaseNotes))
+{
+    @* The notes come from the update check service: Razor encodes them, and they stay Markdown text in one block *@
+    <p style="margin:0 0 8px;">What changed:</p>
+    <div style="margin:0 0 16px;padding:12px 16px;background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word;">@Model.ReleaseNotes.Trim()</div>
+}
+@if (Model.CompareLink != null)
+{
+    <p style="margin:0 0 16px;"><a href="@Model.CompareLink" style="color:#2563eb;">All changes between the two versions</a></p>
+}
+@if (Branding.BaseUrl != null)
+{
+    <p style="margin:0 0 16px;">Open <a href="@Branding.BaseUrl" style="color:#2563eb;">@Branding.AppName</a> to see the update.</p>
+}
+<p style="margin:0;font-size:14px;color:#6b7280;">You get this e-mail because <code>@UpdateAvailableEmailTemplate.OptOutKey</code> is "security" or "all". Set it to "off" to stop it.</p>

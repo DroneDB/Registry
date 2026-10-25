@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "instanceId": "a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+  "installedAt": "2026-05-01T10:00:00Z",
+  "version": "3.1.0",
+  "ddbVersion": "2.0.0",
+  "os": "linux",
+  "osCaption": "Ubuntu 22.04.4 LTS",
+  "arch": "x64",
+  "runtime": ".NET 10.0.9",
+  "env": "docker",
+  "instanceType": "default",
+  "db": "sqlite",
+  "baseUrl": "https://registry.acme-survey.com",
+  "hostname": "SRV-GIS-01",
+  "domain": null,
+  "licenseRef": null,
+  "useDeclaration": "commercial_needs_license"
+}

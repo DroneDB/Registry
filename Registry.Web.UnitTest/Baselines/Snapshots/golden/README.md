@@ -41,6 +41,7 @@ A failing case prints an ordered line diff (`- golden`, `+ now`, `@@ line N` of 
 |---|---|---|---|
 | `token` (any casing) | property | `"<token>"` | string |
 | `expires` (any casing): token expiry, epoch seconds = now + `TokenExpirationInDays` | property | `0` | number |
+| `instanceHash` (any casing): the hash of the instance id, random per host | property | `"<instance-hash>"` | string |
 | `registryVersion`, `hubVersion`, `ddbVersion` (any casing) | property | `"<version>"` (also when the value is null: `HubInfo` is process-wide, so null or a version depending on what ran before) | string |
 | The Registry version (read from `GET /sys/version` at start), the fake libddb version (`FakeDdbWrapper.Version`), `HubInfo.CurrentVersion` | whole string value | `"<version>"` | string |
 | The factory temp root (`/tmp/registry-web-factory/<id>`), in any string | substring | `<root>` | string |
@@ -193,3 +194,7 @@ scheme also answers with an empty body (plus `WWW-Authenticate: Bearer`, not rec
   whether it is set is shown (`EmailEndpointTests.ConfigView_ShowsTheSmtpSection_WithoutThePassword`).
 * `sys-features`: `emailEnabled`, whether the server sends e-mail (`AppSettings:Smtp:Enabled`), so clients can hide
   what needs e-mail (`EmailEndpointTests.Features_TellWhetherEmailIsEnabled_ToAnonymousClients`).
+* `sys-config`: an `UpdateCheck` section (the daily update check): its description is the disclosure of what the check
+  sends, with the instance id (`<guid>` here), and its fields are the cron, the e-mail mode, the instance id and the
+  documentation link.
+* `sys-features`: `updateCheckEnabled` (the cron is not disabled) and `instanceHash` (scrubbed: random per host).

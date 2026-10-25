@@ -14,6 +14,9 @@ public static class AtomicFile
     /// <summary>errno of a rename onto a mount point (Linux and macOS): a bind-mounted single file.</summary>
     private const int Ebusy = 16;
 
+    /// <summary>Added to the name of a file that <see cref="CreateOrRead"/> creates: the folder that holds the content of the node that was first.</summary>
+    private const string ClaimSuffix = ".claim";
+
     /// <summary>
     /// Writes <paramref name="content"/> (UTF-8, no BOM) to a temporary file next to <paramref name="path"/>,
     /// flushes it to disk and renames it over <paramref name="path"/>. A file that is itself a mount point
@@ -31,18 +34,11 @@ public static class AtomicFile
         ArgumentNullException.ThrowIfNull(replace);
 
         var fullPath = Path.GetFullPath(path);
-        var folder = Path.GetDirectoryName(fullPath) ?? ".";
-        var temp = Path.Combine(folder, $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
         var bytes = new UTF8Encoding(false).GetBytes(content);
+        var temp = WriteTemporary(fullPath, bytes);
 
         try
         {
-            using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                stream.Write(bytes);
-                stream.Flush(flushToDisk: true);
-            }
-
             try
             {
                 replace(temp, fullPath);
@@ -58,6 +54,121 @@ public static class AtomicFile
         {
             // No-op when the rename consumed it
             File.Delete(temp);
+        }
+    }
+
+    /// <summary>
+    /// The content of <paramref name="path"/>; when the file does not exist yet, <paramref name="content"/> (UTF-8, no
+    /// BOM) is created as its content. Of several nodes that create it together exactly one's content becomes the file's:
+    /// all of them return that one, and a reader never sees a part of it.
+    /// </summary>
+    /// <remarks>
+    /// A move cannot decide who is first (it replaces an existing file), and a file created and then filled shows its
+    /// reader an empty file. A directory cannot be moved onto a non-empty directory, so the content is prepared in a
+    /// staging folder and the move of that folder to <c>{path}.claim</c> picks the winner; the claim is whole from the
+    /// moment it exists. Every node then publishes the winner's content with the atomic write (the same bytes, so the order
+    /// does not matter) and removes the claim, after publishing: whoever finds no claim finds the file.
+    /// </remarks>
+    /// <returns>The content of the file: the content this call gave, or the one a node that was first gave.</returns>
+    public static string CreateOrRead(string path, string content)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(content);
+
+        var fullPath = Path.GetFullPath(path);
+        if (ReadIfExists(fullPath) is { } existing)
+            return existing;
+
+        var claim = fullPath + ClaimSuffix;
+        var refused = Claim(fullPath, claim, content);
+
+        // The claim of the winner (ours, or another node's), else the file the winner published and removed it after
+        var winner = ReadIfExists(Path.Combine(claim, Path.GetFileName(fullPath))) ?? ReadIfExists(fullPath)
+            ?? throw new IOException($"The claim on '{fullPath}' could not be made or read", refused);
+
+        // A node that won the claim after the first one finished must not replace the file that one published
+        if (ReadIfExists(fullPath) is { } published)
+            winner = published;
+        else
+            WriteAllText(fullPath, winner);
+
+        try
+        {
+            Directory.Delete(claim, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Another node is reading it (Windows): the claim stays, holding the content the file now has
+        }
+
+        return winner;
+    }
+
+    /// <summary>
+    /// Moves a staging folder holding <paramref name="content"/> to <paramref name="claim"/>, unless a claim exists.
+    /// </summary>
+    /// <returns>Why the move was refused (a claim exists, as a rule); null when this call made the claim.</returns>
+    private static IOException? Claim(string fullPath, string claim, string content)
+    {
+        var staging = fullPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        Directory.CreateDirectory(staging);
+
+        try
+        {
+            var staged = Path.Combine(staging, Path.GetFileName(fullPath));
+            using (var stream = new FileStream(staged, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                stream.Write(new UTF8Encoding(false).GetBytes(content));
+                stream.Flush(flushToDisk: true);
+            }
+
+            try
+            {
+                Directory.Move(staging, claim);
+                return null;
+            }
+            catch (IOException ex)
+            {
+                // Another node holds the claim (it may have published and removed it by now): its content is the one that counts
+                return ex;
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(staging))
+                Directory.Delete(staging, recursive: true);
+        }
+    }
+
+    private static string? ReadIfExists(string path)
+    {
+        try
+        {
+            return File.ReadAllText(path);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Writes <paramref name="bytes"/> to a new temporary file next to <paramref name="fullPath"/> and flushes it to disk.</summary>
+    private static string WriteTemporary(string fullPath, byte[] bytes)
+    {
+        var folder = Path.GetDirectoryName(fullPath) ?? ".";
+        var temp = Path.Combine(folder, $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
+
+        try
+        {
+            using var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            stream.Write(bytes);
+            stream.Flush(flushToDisk: true);
+            return temp;
+        }
+        catch
+        {
+            File.Delete(temp);
+            throw;
         }
     }
 

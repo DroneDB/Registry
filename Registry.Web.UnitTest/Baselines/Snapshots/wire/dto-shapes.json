@@ -1757,7 +1757,9 @@
       },
       "hubVersion": "HubVersion-text",
       "registryVersion": "RegistryVersion-text",
-      "ddbVersion": "DdbVersion-text"
+      "ddbVersion": "DdbVersion-text",
+      "updateCheckEnabled": true,
+      "instanceHash": "InstanceHash-text"
     },
     "sparse": {
       "organizationMemberManagement": false,
@@ -1777,7 +1779,9 @@
       "hubOptions": null,
       "hubVersion": null,
       "registryVersion": null,
-      "ddbVersion": null
+      "ddbVersion": null,
+      "updateCheckEnabled": false,
+      "instanceHash": null
     }
   },
   "Registry.Web.Models.DTO.FileDescriptorDto": {
@@ -3716,6 +3720,50 @@
     },
     "sparse": {
       "to": null
+    }
+  },
+  "Registry.Web.Models.DTO.UpdateCheckSettingsDto": {
+    "full": {
+      "useDeclaration": "UseDeclaration-text",
+      "contactEmail": "ContactEmail-text",
+      "contactConsent": true
+    },
+    "sparse": {
+      "useDeclaration": null,
+      "contactEmail": null,
+      "contactConsent": false
+    }
+  },
+  "Registry.Web.Models.DTO.UpdateInfoDto": {
+    "full": {
+      "instanceId": "InstanceId-text",
+      "currentVersion": "CurrentVersion-text",
+      "latestVersion": "LatestVersion-text",
+      "isUpdateAvailable": true,
+      "isSecurityUpdate": true,
+      "releaseDate": "ReleaseDate-text",
+      "changelogUrl": "ChangelogUrl-text",
+      "compareUrl": "CompareUrl-text",
+      "releaseNotes": "ReleaseNotes-text",
+      "licenseRequestUrl": "LicenseRequestUrl-text",
+      "useDeclaration": "UseDeclaration-text",
+      "contactEmail": "ContactEmail-text",
+      "lastChecked": "2026-10-21T07:31:17.123Z"
+    },
+    "sparse": {
+      "instanceId": null,
+      "currentVersion": null,
+      "latestVersion": null,
+      "isUpdateAvailable": false,
+      "isSecurityUpdate": false,
+      "releaseDate": null,
+      "changelogUrl": null,
+      "compareUrl": null,
+      "releaseNotes": null,
+      "licenseRequestUrl": null,
+      "useDeclaration": null,
+      "contactEmail": null,
+      "lastChecked": null
     }
   },
   "Registry.Web.Models.DTO.UpdateMemberPermissionsDto": {

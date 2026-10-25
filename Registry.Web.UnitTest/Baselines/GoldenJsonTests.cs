@@ -453,7 +453,9 @@ public sealed class GoldenJsonTests : IDisposable
                     // HubInfo is process-wide: null or a version depending on what ran before
                     ["hubVersion"] = JsonScrubber.VersionPlaceholder,
                     ["registryVersion"] = JsonScrubber.VersionPlaceholder,
-                    ["ddbVersion"] = JsonScrubber.VersionPlaceholder
+                    ["ddbVersion"] = JsonScrubber.VersionPlaceholder,
+                    // Random per host: the hash of the instance id created at its first start
+                    ["instanceHash"] = "<instance-hash>"
                 },
                 substrings: new Dictionary<string, string>
                 {

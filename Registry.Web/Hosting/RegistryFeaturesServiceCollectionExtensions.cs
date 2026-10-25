@@ -116,6 +116,8 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddSingleton<IDownloadLimiter, DownloadLimiter>();
         services.AddSingleton<ClientIpResolver>();
 
+        services.AddUpdateCheckWeb();
+
         return services;
     }
 
@@ -141,6 +143,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IConfigurationSectionBuilder, ProcessingSections>();
         services.AddScoped<IConfigurationSectionBuilder, ImportSections>();
         services.AddScoped<IConfigurationSectionBuilder, HostSections>();
+        services.AddScoped<IConfigurationSectionBuilder, UpdateCheckSections>();
 
         services.AddSingleton<HangfireJobOutcomeReader>();
         services.AddScoped<RemoteImportService>();
@@ -155,6 +158,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IFeatureSection, HubFeatures>();
         services.AddScoped<IFeatureSection, EntryTypeFeatures>();
         services.AddScoped<IFeatureSection, ArchiveFeatures>();
+        services.AddScoped<IFeatureSection, UpdateCheckFeatures>();
         return services;
     }
 

@@ -1,0 +1,22 @@
+{
+  "latestVersion": "3.2.0",
+  "releaseDate": "2027-03-15",
+  "changelogUrl": "https://github.com/DroneDB/Registry/releases/tag/v3.2.0",
+  "compareUrl": "https://github.com/DroneDB/Registry/compare/v3.0.1...v3.2.0",
+  "releases": [
+    {
+      "version": "3.2.0",
+      "date": "2027-03-15",
+      "url": "https://github.com/DroneDB/Registry/releases/tag/v3.2.0",
+      "notes": "## Highlights\n- Faster thumbnail generation for large datasets"
+    },
+    {
+      "version": "3.1.0",
+      "date": "2027-02-01",
+      "url": "https://github.com/DroneDB/Registry/releases/tag/v3.1.0",
+      "notes": "## Fixed\n- Upload of files with non-ASCII names"
+    }
+  ],
+  "releasesTruncated": false,
+  "licenseRequestUrl": "https://dronedb.app/request-license"
+}

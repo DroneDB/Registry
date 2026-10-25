@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Hosting;
+using Registry.Web.Identity;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Builds;
@@ -35,7 +36,7 @@ public static class ProcessingNodeServiceCollectionExtensions
     {
         services.AddRegistryOptions(configuration, configuration.GetInstanceType());
 
-        // Registry database (the identity database belongs to the web host)
+        // Registry database (the identity database belongs to the web host; the node reads only the administrators from it, below)
         services.AddDbContextWithProvider<RegistryContext>(configuration,
             configuration.GetRegistryOptions<DataStoreOptions>().RegistryProvider,
             MagicStrings.RegistryConnectionName, "Data");
@@ -98,6 +99,16 @@ public static class ProcessingNodeServiceCollectionExtensions
 
         // E-mail: a request queues it, the host that runs the job sends it
         services.AddEmail(configuration);
+
+        // The identity of the deployment and the update check (the job runs on whichever node processes the default queue)
+        services.AddUpdateCheck();
+
+        // The update e-mail goes to the administrators, who are in the identity database. The web host registers it with its
+        // authentication; a processing node has no authentication, and reads the same database (the connection string of
+        // the settings file every service of the deployment shares, or the SQLite file of the shared storage folder)
+        if (configuration.GetInstanceType() == InstanceType.ProcessingNode)
+            services.AddDbContextWithProvider<ApplicationDbContext>(configuration,
+                configuration.GetRegistryOptions<DataStoreOptions>().AuthProvider, MagicStrings.IdentityConnectionName, "Identity");
 
         return services;
     }

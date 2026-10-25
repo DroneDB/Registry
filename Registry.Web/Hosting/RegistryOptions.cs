@@ -39,6 +39,7 @@ public static class RegistryOptions
         [typeof(DownloadOptions)] = SectionName,
         [typeof(ShareOptions)] = SectionName,
         [typeof(HostResourceOptions)] = SectionName,
+        [typeof(UpdateCheckOptions)] = SectionName,
         [typeof(ImportSettings)] = Nested("Import"),
         [typeof(ProcessingPlatformSettings)] = Nested("ProcessingPlatform"),
         [typeof(UploadSettings)] = Nested("Uploads"),
@@ -78,6 +79,7 @@ public static class RegistryOptions
         Add<DownloadOptions>(services, configuration);
         Add<ShareOptions, ShareOptionsValidator>(services, configuration);
         Add<HostResourceOptions, HostResourceOptionsValidator>(services, configuration);
+        Add<UpdateCheckOptions, UpdateCheckOptionsValidator>(services, configuration);
         Add<ImportSettings>(services, configuration);
         Add<ProcessingPlatformSettings>(services, configuration);
         Add<UploadSettings>(services, configuration);

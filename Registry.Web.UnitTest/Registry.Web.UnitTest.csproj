@@ -26,6 +26,7 @@
 
     <ItemGroup>
         <PackageReference Include="Hangfire.Core" />
+        <PackageReference Include="JsonSchema.Net" />
         <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
         <PackageReference Include="Microsoft.EntityFrameworkCore" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
@@ -52,6 +53,9 @@
 
     <ItemGroup>
         <None Include="Data\Wfs\**">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Include="UpdateCheck\Fixtures\**">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
         <None Include="Baselines\Snapshots\**">

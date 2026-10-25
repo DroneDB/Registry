@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dronedb.app/schemas/registry/update-check-response.v1.schema.json",
+  "title": "Registry update-check response (schema version 1)",
+  "description": "JSON body that dronedb.app returns for a valid update-check request. It holds only public release data and never data about other deployments. When no release is published yet, latestVersion is null, releases is empty and the other values may be null. Registry ignores keys that it does not know, and a response that is malformed, larger than 1 MB or not a 200 is a failed check: the previous good result stays.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "latestVersion",
+    "releaseDate",
+    "changelogUrl",
+    "compareUrl",
+    "releases",
+    "releasesTruncated",
+    "licenseRequestUrl"
+  ],
+  "$defs": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "date",
+        "url",
+        "notes"
+      ],
+      "properties": {
+        "version": {
+          "description": "Version of the release, with three numeric parts and without a leading v.",
+          "$ref": "#/$defs/version"
+        },
+        "date": {
+          "description": "Publication date of the release (YYYY-MM-DD).",
+          "type": "string",
+          "format": "date"
+        },
+        "url": {
+          "description": "Address of the release page, where the full notes and downloads are.",
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://\\S+$"
+        },
+        "notes": {
+          "description": "Release notes in Markdown. Fixes for security problems are under a level-2 heading named Security. The text comes from outside the deployment, so it must be treated as untrusted input and sanitized before it is shown. The server limits the sum of all notes of one response to 256 KB.",
+          "type": "string",
+          "maxLength": 262144
+        }
+      }
+    }
+  },
+  "properties": {
+    "latestVersion": {
+      "description": "Highest published release that the server offers, with three numeric parts. Null if no release is available. An administrator of the server can hold back a release, so this is not always the newest release on GitHub.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/version"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "releaseDate": {
+      "description": "Publication date of latestVersion (YYYY-MM-DD). Null if latestVersion is null.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date"
+    },
+    "changelogUrl": {
+      "description": "Address of the release page of latestVersion. Null if latestVersion is null.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uri",
+      "pattern": "^https?://\\S+$"
+    },
+    "compareUrl": {
+      "description": "Address of a page that compares the installed version with latestVersion, for the changes that releases does not list. Null if it cannot be built, for example when the installed version is not valid or not older than latestVersion.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uri",
+      "pattern": "^https?://\\S+$"
+    },
+    "releases": {
+      "description": "Published releases with a version greater than the installed version and not greater than latestVersion, newest first, at most 30. Empty if the installed version is not valid, if it is not older than latestVersion, or if no release is available.",
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "$ref": "#/$defs/release"
+      }
+    },
+    "releasesTruncated": {
+      "description": "True if the server left out older releases because of the limit of 30 entries or 256 KB of notes. The Hub then points to compareUrl for the rest.",
+      "type": "boolean"
+    },
+    "licenseRequestUrl": {
+      "description": "Address of the form to request a licence. Registry accepts it only if it is an absolute HTTPS URL, and otherwise uses its built-in address. Null if the server has none.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uri",
+      "pattern": "^https?://\\S+$"
+    }
+  }
+}

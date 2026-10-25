@@ -3,6 +3,8 @@ using System.Text.Json;
 using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Models.DTO;
 using Registry.Web.Models;
+using Registry.Web.Services.Ports;
+using Registry.Web.Services.UpdateCheck;
 
 namespace Registry.Web.Utilities;
 
@@ -84,6 +86,7 @@ namespace Registry.Web.Utilities;
 [JsonSerializable(typeof(ImportResultDto))]
 [JsonSerializable(typeof(ImportVerifyResultDto))]
 [JsonSerializable(typeof(ImportedItemDto))]
+[JsonSerializable(typeof(InstanceIdentity))]
 [JsonSerializable(typeof(JobAcceptedDto))]
 [JsonSerializable(typeof(LoginResultDto))]
 [JsonSerializable(typeof(MaskBordersCheckResponseDto))]
@@ -116,6 +119,7 @@ namespace Registry.Web.Utilities;
 [JsonSerializable(typeof(OgcLayerDto))]
 [JsonSerializable(typeof(OgcServiceMetadataDto))]
 [JsonSerializable(typeof(OkDto))]
+[JsonSerializable(typeof(ObservedBaseUrl))]
 [JsonSerializable(typeof(OrganizationDto))]
 [JsonSerializable(typeof(OrganizationMemberDto))]
 [JsonSerializable(typeof(OrganizationPermissionsDto))]
@@ -170,6 +174,12 @@ namespace Registry.Web.Utilities;
 [JsonSerializable(typeof(TaskToolInfoDto))]
 [JsonSerializable(typeof(TasksClearedDto))]
 [JsonSerializable(typeof(TestEmailRequestDto))]
+[JsonSerializable(typeof(UpdateCheckCache))]
+[JsonSerializable(typeof(UpdateCheckPayload))]
+[JsonSerializable(typeof(UpdateCheckResponse))]
+[JsonSerializable(typeof(UpdateCheckSettings))]
+[JsonSerializable(typeof(UpdateCheckSettingsDto))]
+[JsonSerializable(typeof(UpdateInfoDto))]
 [JsonSerializable(typeof(UpdateMemberPermissionsDto))]
 [JsonSerializable(typeof(UploadNewSessionResultDto))]
 [JsonSerializable(typeof(UploadPartResultDto))]

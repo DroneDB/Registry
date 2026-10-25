@@ -805,6 +805,16 @@ POST /sys/tasks/{id}/delete
   401 application/json ProblemDetails
   403 application/json ProblemDetails
   404 application/json ProblemDetails
+PUT /sys/update-check/settings
+  body application/json UpdateCheckSettingsDto
+  200 application/json UpdateInfoDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+GET /sys/update-info
+  200 application/json UpdateInfoDto
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
 POST /sys/upload-probe
   200 application/json UploadProbeResultDto
   413 application/json ProblemDetails
@@ -955,7 +965,7 @@ schema EntryDto { path:string, hash:string, type:EntryType, properties:map<any>,
 schema EntryType {  }
 schema EntryTypeDto { id:integer(int32), name:string, buildable:boolean, thumbnail:string, sidecarExtensions:array<string>, roles:array<string> }
 schema FaviconOptions { faviconIco:string, favicon16:string, favicon32:string, appleTouchIcon:string, manifest:string, themeColor:string }
-schema FeaturesDto { organizationMemberManagement:boolean, userManagement:boolean, storageLimiter:boolean, maxConcurrentDownloadsPerUser:integer(int32), disableAnonymousBulkDownloads:boolean, emailEnabled:boolean, passwordPolicy:PasswordPolicyDto, datasetThumbnailCandidates:array<string>, maxExportSizeBytes:integer(int64), bulkDownloadAsyncThresholdBytes:integer(int64), taskTools:array<TaskToolInfoDto>, taskStates:array<TaskStateInfoDto>, entryTypes:array<EntryTypeDto>, archiveExtensions:array<string>, hubOptions:HubOptions, hubVersion:string, registryVersion:string, ddbVersion:string }
+schema FeaturesDto { organizationMemberManagement:boolean, userManagement:boolean, storageLimiter:boolean, maxConcurrentDownloadsPerUser:integer(int32), disableAnonymousBulkDownloads:boolean, emailEnabled:boolean, passwordPolicy:PasswordPolicyDto, datasetThumbnailCandidates:array<string>, maxExportSizeBytes:integer(int64), bulkDownloadAsyncThresholdBytes:integer(int64), taskTools:array<TaskToolInfoDto>, taskStates:array<TaskStateInfoDto>, entryTypes:array<EntryTypeDto>, archiveExtensions:array<string>, hubOptions:HubOptions, hubVersion:string, registryVersion:string, ddbVersion:string, updateCheckEnabled:boolean, instanceHash:string }
 schema FileImportErrorDto { organization:string, dataset:string, filePath:string, message:string, retryCount:integer(int32) }
 schema FixInvalidSlugsResultDto { dryRun:boolean, entries:array<SlugFixEntryDto> }
 schema GlobalReportContentDto { extension:string, files:integer(int32), size:integer(int64) }
@@ -1039,6 +1049,8 @@ schema TaskToolDto { id:string, version:string, title:string, requiredAccess:str
 schema TaskToolInfoDto { id:string, version:string, title:string, requiredAccess:string, producesArtifact:boolean, resultExtension:string, hidden:boolean, disabled:boolean, disabledMessage:string }
 schema TasksClearedDto { cleared:integer(int32) }
 schema TestEmailRequestDto { to:string }
+schema UpdateCheckSettingsDto { useDeclaration:string, contactEmail:string, contactConsent:boolean }
+schema UpdateInfoDto { instanceId:string, currentVersion:string, latestVersion:string, isUpdateAvailable:boolean, isSecurityUpdate:boolean, releaseDate:string, changelogUrl:string, compareUrl:string, releaseNotes:string, licenseRequestUrl:string, useDeclaration:string, contactEmail:string, lastChecked:string(date-time) }
 schema UpdateMemberPermissionsDto { permissions:OrganizationPermissions }
 schema UploadPartResultDto { path:string, status:integer(int32), entry:EntryDto, error:string, retryable:boolean }
 schema UploadProbeResultDto { bytes:integer(int64), serverMs:number(double) }

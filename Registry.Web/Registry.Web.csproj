@@ -23,6 +23,14 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- The libddb version this build is pinned to, read at run time (LibddbVersion.Pinned) by the update check -->
+        <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+            <_Parameter1>DdbVersion</_Parameter1>
+            <_Parameter2>$(DdbVersion)</_Parameter2>
+        </AssemblyAttribute>
+    </ItemGroup>
+
+    <ItemGroup>
         <None Remove="ddb-log*.csv" />
         <Content Remove="appsettings-default.json" />
         <EmbeddedResource Include="appsettings-default.json" />

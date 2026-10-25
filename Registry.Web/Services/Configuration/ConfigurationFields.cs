@@ -26,6 +26,7 @@ public static class ConfigurationFields
     {
         var isActive = fields.Any(f =>
         {
+            if (f.FieldType == InfoFieldType) return false;
             if (f.Sensitive) return f.IsSet;
             return f.CurrentValue != null && f.CurrentValue != f.DefaultValue;
         });
@@ -65,6 +66,20 @@ public static class ConfigurationFields
             MaxValue = maxValue,
             Unit = unit
         };
+    }
+
+    // ---------------------------------------------------------------------------
+    // Helper: build an informational field
+    // ---------------------------------------------------------------------------
+
+    /// <summary>The field type of a value the view shows but that is not a setting: read-only, never exported to appsettings.json.</summary>
+    public const string InfoFieldType = "info";
+
+    /// <summary>A value the administrator should see in the section (an identifier, a state) but cannot set.</summary>
+    public static ConfigurationFieldDataDto InfoField(
+        string key, string displayName, string description, string value)
+    {
+        return Field(key, displayName, InfoFieldType, description, value, value);
     }
 
     // ---------------------------------------------------------------------------

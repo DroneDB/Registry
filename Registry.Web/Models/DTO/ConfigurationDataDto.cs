@@ -55,7 +55,7 @@ public class ConfigurationFieldDataDto
     /// <summary>Clear description of what the field does.</summary>
     public string Description { get; set; }
 
-    /// <summary>Input type: "text" | "number" | "bool" | "timespan" | "cron" | "enum" | "password" | "array" | "json".</summary>
+    /// <summary>Input type: "text" | "number" | "bool" | "timespan" | "cron" | "enum" | "password" | "array" | "json", or "info" for a read-only value that is not a setting.</summary>
     public string FieldType { get; set; }
 
     /// <summary>Possible enum values (e.g., ["Sqlite", "Mysql"]). Only set when FieldType is "enum".</summary>

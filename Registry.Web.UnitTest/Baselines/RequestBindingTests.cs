@@ -127,6 +127,10 @@ public sealed class RequestBindingTests : IDisposable
         yield return new BindingCase("sys-rescan", typeof(RescanRequestDto),
             """{"organizationSlug":"o","datasetSlug":null,"types":["image"],"extensions":[".jpg"],"stopOnError":true}""");
         yield return new BindingCase("sys-email-test", typeof(TestEmailRequestDto), """{"to":"admin@example.com"}""");
+        yield return new BindingCase("sys-update-check-settings", typeof(UpdateCheckSettingsDto),
+            """{"useDeclaration":"commercial_needs_license","contactEmail":"it@acme-survey.com","contactConsent":true}""");
+        yield return new BindingCase("sys-update-check-settings-cleared", typeof(UpdateCheckSettingsDto),
+            """{"useDeclaration":null,"contactEmail":null,"contactConsent":false}""");
     }
 
     /// <summary>What the formatter accepts and refuses beyond the Hub's payloads.</summary>

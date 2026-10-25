@@ -148,6 +148,18 @@ internal sealed class HostResourceOptionsValidator : IValidateOptions<HostResour
     }
 }
 
+/// <summary>The update check: an HTTPS endpoint and a known e-mail mode (the cron needs no rule: Hangfire reads it).</summary>
+internal sealed class UpdateCheckOptionsValidator : IValidateOptions<UpdateCheckOptions>
+{
+    public ValidateOptionsResult Validate(string? name, UpdateCheckOptions options) => new OptionsFailures()
+        .Check(Uri.TryCreate(options.UpdateCheckEndpoint, UriKind.Absolute, out var endpoint) &&
+               endpoint.Scheme == Uri.UriSchemeHttps,
+            $"{OptionsFailures.Key(nameof(UpdateCheckOptions.UpdateCheckEndpoint))} is not valid (must be an absolute HTTPS URL)")
+        .Check(options.EmailMode != null,
+            $"{OptionsFailures.Key(nameof(UpdateCheckOptions.UpdateCheckEmail))} is not valid (must be security, all or off)")
+        .Result();
+}
+
 /// <summary>The thumbnail generator fails closed: without the shared token its endpoint would read files for anyone.</summary>
 internal sealed class ThumbnailGeneratorTokenValidator : IValidateOptions<ThumbnailOptions>
 {

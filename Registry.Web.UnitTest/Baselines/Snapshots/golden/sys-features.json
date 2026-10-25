@@ -360,6 +360,8 @@
     },
     "hubVersion": "<version>",
     "registryVersion": "<version>",
-    "ddbVersion": "<version>"
+    "ddbVersion": "<version>",
+    "updateCheckEnabled": true,
+    "instanceHash": "<instance-hash>"
   }
 }

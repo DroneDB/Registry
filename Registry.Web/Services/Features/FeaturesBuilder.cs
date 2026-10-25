@@ -172,15 +172,11 @@ public sealed class HubFeatures : IFeatureSection
         return Task.CompletedTask;
     }
 
-    // libddb answers "<semver> <commit>": the semver only
     private string? DdbVersion()
     {
         try
         {
-            var raw = _ddbWrapper.GetVersion();
-            if (string.IsNullOrWhiteSpace(raw)) return null;
-            var space = raw.IndexOf(' ', StringComparison.Ordinal);
-            return space < 0 ? raw : raw[..space];
+            return LibddbVersion.Semver(_ddbWrapper.GetVersion());
         }
         catch (Exception ex)
         {
@@ -219,6 +215,26 @@ public sealed class ArchiveFeatures : IFeatureSection
     public Task FillAsync(FeaturesDto features)
     {
         features.ArchiveExtensions = [.. _archives.SupportedExtensions.Select(e => e.TrimStart('.'))];
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>The update check: whether it runs, and the hash that proves which deployment answers.</summary>
+public sealed class UpdateCheckFeatures : IFeatureSection
+{
+    private readonly UpdateCheckOptions _options;
+    private readonly IInstanceIdentity _identity;
+
+    public UpdateCheckFeatures(IOptions<UpdateCheckOptions> options, IInstanceIdentity identity)
+    {
+        _options = options.Value;
+        _identity = identity;
+    }
+
+    public Task FillAsync(FeaturesDto features)
+    {
+        features.UpdateCheckEnabled = _options.Enabled;
+        features.InstanceHash = _identity.Current.Hash;
         return Task.CompletedTask;
     }
 }

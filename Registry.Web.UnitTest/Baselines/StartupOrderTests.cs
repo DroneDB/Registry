@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,10 +10,13 @@ using Hangfire.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using NUnit.Framework;
 using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Identity;
+using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Initialization;
 using Registry.Web.Test.Support;
 using Shouldly;
 using Registry.Test.Common;
@@ -72,13 +76,18 @@ public class StartupOrderTests
             "the cache providers must be registered before the first hosted service starts");
         snapshot.RecurringJobIds.ShouldContain("cleanup-expired-jobs",
             "the recurring jobs must be registered before the Hangfire servers start");
+        snapshot.InstanceIdentityFileExists.ShouldBeTrue(
+            "the instance identity must exist before the first hosted service starts");
+        snapshot.RecurringJobIds.ShouldContain(RecurringJobIds.CheckUpdates,
+            "the update check job is defined from the identity, so it is defined with the other recurring jobs");
     }
 
     private sealed record StartupSnapshot(
         string[] PendingRegistryMigrations,
         string[] PendingIdentityMigrations,
         bool ThumbnailCacheRegistered,
-        string[] RecurringJobIds);
+        string[] RecurringJobIds,
+        bool InstanceIdentityFileExists);
 
     /// <summary>
     /// Test-only hosted service that captures the initialization state in its <c>StartAsync</c>.
@@ -112,7 +121,8 @@ public class StartupOrderTests
                 (await registry.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray(),
                 (await identity.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray(),
                 sp.GetRequiredService<ICacheManager>().IsRegistered(MagicStrings.ThumbnailCacheSeed),
-                connection.GetRecurringJobs().Select(j => j.Id).ToArray());
+                connection.GetRecurringJobs().Select(j => j.Id).ToArray(),
+                File.Exists(Path.Combine(sp.GetRequiredService<IOptions<StorageOptions>>().Value.StoragePath!, MagicStrings.InstanceIdFileName)));
         }
 
         public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

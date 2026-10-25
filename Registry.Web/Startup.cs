@@ -71,6 +71,9 @@ public class Startup
         // address and scheme, taken from the headers of a known proxy only
         app.UseForwardedHeaders();
 
+        // Right after it, for the same reason: the public URL requests arrive on, as the update check reports it
+        app.UseMiddleware<ObservedBaseUrlMiddleware>();
+
         // Every native call made while a request is served logs with that request's id
         app.UseDdbRequestOperation();
 

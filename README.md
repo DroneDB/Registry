@@ -114,6 +114,14 @@ libddb looks up ground elevation (OpenTopography global DEM) to compute the rela
 
 Behind a reverse proxy (nginx), the proxy must send `X-Forwarded-For` and `X-Forwarded-Proto` (and pass the original `Host`): the Registry takes the client address (rate and download limits, logs) and the scheme (`Secure` cookies, HSTS) from them. They are trusted only when the peer the Registry sees is listed in `AppSettings:KnownProxies` (IP addresses, default loopback) or inside `AppSettings:KnownNetworks` (CIDR); from any other peer they are ignored. With a host nginx proxying to a port published by Docker (`docker/production`), the peer is the Docker bridge gateway (`172.x.0.1`), not loopback, so the production template sets `"KnownNetworks": [ "172.16.0.0/12" ]` (Docker's default bridge address pool); adjust it if your Docker networks use another range.
 
+### Update check
+
+Registry asks `dronedb.app` once a day which version is the latest, shows an update in the Hub to administrators, and can e-mail them about it (`AppSettings:UpdateCheckEmail`, needs the SMTP settings). At every start it logs what the check sends:
+
+> Update check: enabled (daily). This deployment sends its instance ID (`<instance id>`), Registry/DroneDB versions, platform, public URL, host name, network domain and declared use to dronedb.app, and a contact email only if an admin opted in; dronedb.app also records the source IP address and checks the public URL. Purposes: update notices, release notes and license-compliance verification. Docs: docs.dronedb.app/docs/registry/admin/update-check  ·  Opt out: UpdateCheckCron="disabled"
+
+To switch it off set `AppSettings:UpdateCheckCron` to `disabled` (environment variable `AppSettings__UpdateCheckCron`): nothing is sent and the log says `Update check: disabled`. The same text is in the Hub, under Admin, Configuration, "Update check".
+
 ## 🌍 OGC Services
 
 Every dataset exposes a full suite of OGC-compliant endpoints at

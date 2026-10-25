@@ -65,6 +65,7 @@ public enum ConfigurationSection
     ExportZip,
     Ldap,
     Email,
+    UpdateCheck,
     ProcessingPlatform,
     ToolGating,
     ProcessingBudget,

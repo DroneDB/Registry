@@ -152,7 +152,7 @@ public class HostCompositionTests
         var services = Capture(RegistryHost.CreateProcessingNodeBuilder([]));
 
         HostedServices(services).Take(2).ShouldBe([typeof(DdbRuntimeService), typeof(StartupTaskRunner)]);
-        StartupTasks(services).ShouldBe([typeof(CacheInitializer), typeof(HangfireJobsInitializer)], ignoreOrder: true);
+        StartupTasks(services).ShouldBe([typeof(CacheInitializer), typeof(InstanceIdInitializer), typeof(HangfireJobsInitializer)], ignoreOrder: true);
         services.Count(d => d.ServiceType == typeof(IHostedService)).ShouldBeGreaterThanOrEqualTo(4,
             "the two Hangfire servers come after the runtime and the runner");
     }
@@ -164,7 +164,7 @@ public class HostCompositionTests
 
         HostedServices(services).Take(2).ShouldBe([typeof(DdbRuntimeService), typeof(StartupTaskRunner)]);
         StartupTasks(services).ShouldBe(
-            [typeof(ThreadPoolInitializer), typeof(DatabaseInitializer), typeof(CacheInitializer), typeof(HangfireJobsInitializer)],
+            [typeof(ThreadPoolInitializer), typeof(DatabaseInitializer), typeof(CacheInitializer), typeof(InstanceIdInitializer), typeof(HangfireJobsInitializer)],
             ignoreOrder: true);
         services.Where(d => d.ServiceType == typeof(IBackgroundStartupTask)).Select(d => d.ImplementationType)
             .ShouldBe([typeof(DatasetVisibilityCacheInitializer)]);

@@ -286,6 +286,36 @@ dotnet test Registry.sln /p:CollectCoverage=true
 
 ---
 
+## Release Notes
+
+The notes of a GitHub release are read by the Registry of every deployment that runs the update check: the administrator's Hub shows them as one list, and an update that has a `## Security` section is e-mailed as a security update. So the headings are fixed and level 2 (`##`), spelled as below (case does not matter). Leave out the sections that have no item.
+
+Put every security fix under `## Security`, and nothing else there: say what the flaw allowed and who was affected, not how to exploit it. The other headings are `Highlights`, `Added / Changed`, `Fixed` and `Breaking changes`. One top-level bullet is one change; a bullet under it (for example `Migration:`) belongs to its parent. A heading you add is kept, after these.
+
+Copy this into the release description and fill it in:
+
+```markdown
+## Security
+- A user could read the files of a dataset they had no access to; the check now runs on every download route
+
+## Highlights
+- One sentence about the change a user will notice first
+
+## Added / Changed
+- What is new or behaves differently, and where to find it
+
+## Fixed
+- What was wrong, in the words of the person who saw it
+
+## Breaking changes
+- What stops working
+  - Migration: what to do before or after the upgrade
+
+**Full Changelog**: https://github.com/DroneDB/Registry/compare/v2.7.1...v3.0.0
+```
+
+---
+
 ## Pull Request Guidelines
 
 1. **Fork** the repository and create a feature branch from `master`

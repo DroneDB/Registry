@@ -43,6 +43,18 @@ public static class MagicStrings
     public const string AppSettingsFileName = "appsettings.json";
     public const string AppSettingsDefaultFileName = "appsettings-default.json";
 
+    /// <summary>The identity of the deployment, created at the first start (JSON, in the storage folder all nodes share).</summary>
+    public const string InstanceIdFileName = ".instance-id";
+
+    /// <summary>The public URL a request was served on, for the update check when no external URL is configured.</summary>
+    public const string ObservedBaseUrlFileName = ".observed-base-url";
+
+    /// <summary>What an administrator declared about the use of the deployment (the Hub's "Usage and contact").</summary>
+    public const string UpdateCheckSettingsFileName = ".update-check-settings.json";
+
+    /// <summary>The last update check result, the time of the last failure and the last version e-mailed about.</summary>
+    public const string UpdateCheckCacheFileName = ".update-check-cache.json";
+
     /// <summary>
     /// Marker file dropped inside the embedded Hub archive (and therefore in the
     /// extracted folder) carrying the Hub semantic version. Used by Registry to

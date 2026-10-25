@@ -94,6 +94,8 @@
 
     <!-- Tests -->
     <ItemGroup>
+        <!-- Checks the payload of the update check against its JSON Schema (test only) -->
+        <PackageVersion Include="JsonSchema.Net" Version="9.5.0" />
         <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
         <PackageVersion Include="Moq" Version="4.20.72" />
         <PackageVersion Include="NUnit" Version="4.6.0" />

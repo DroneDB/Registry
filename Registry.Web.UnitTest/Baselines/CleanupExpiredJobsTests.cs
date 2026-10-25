@@ -102,6 +102,8 @@ public class CleanupExpiredJobsTests
     {
         await new HangfireJobsInitializer(new RecurringJobManager(_storage),
                 Microsoft.Extensions.Options.Options.Create(new JobScheduleOptions()),
+                Microsoft.Extensions.Options.Options.Create(new UpdateCheckOptions()),
+                new FixedInstanceIdentity(),
                 NullLogger<HangfireJobsInitializer>.Instance)
             .ExecuteAsync(CancellationToken.None);
 

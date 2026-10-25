@@ -1466,6 +1466,60 @@
         ]
       },
       {
+        "name": "UpdateCheck",
+        "title": "Update check",
+        "description": "Update check: enabled (daily). This deployment sends its instance ID (<guid>), Registry/DroneDB versions, platform, public URL, host name, network domain and declared use to dronedb.app, and a contact email only if an admin opted in; dronedb.app also records the source IP address and checks the public URL. Purposes: update notices, release notes and license-compliance verification. Docs: docs.dronedb.app/docs/registry/admin/update-check  ·  Opt out: UpdateCheckCron=\"disabled\"",
+        "isActive": false,
+        "fields": [
+          {
+            "key": "UpdateCheckCron",
+            "displayName": "Update Check Cron",
+            "currentValue": null,
+            "defaultValue": null,
+            "isSet": false,
+            "description": "Cron expression of the daily update check. Empty: once a day at a time that depends on the instance. Set to 'disabled' to switch the check off: nothing is sent.",
+            "fieldType": "cron",
+            "enumOptions": null,
+            "sensitive": false,
+            "minValue": null,
+            "maxValue": null,
+            "unit": null
+          },
+          {
+            "key": "UpdateCheckEmail",
+            "displayName": "Update E-mail",
+            "currentValue": "security",
+            "defaultValue": "security",
+            "isSet": false,
+            "description": "Which updates are e-mailed to the administrators: 'security' (only updates with security fixes), 'all' or 'off'. E-mail is off (AppSettings:Smtp is not enabled): no update e-mail is sent, whatever this is set to.",
+            "fieldType": "enum",
+            "enumOptions": [
+              "security",
+              "all",
+              "off"
+            ],
+            "sensitive": false,
+            "minValue": null,
+            "maxValue": null,
+            "unit": null
+          },
+          {
+            "key": "InstanceId",
+            "displayName": "Instance ID",
+            "currentValue": "<guid>",
+            "defaultValue": "<guid>",
+            "isSet": false,
+            "description": "The identity of this deployment, to quote in a request to delete the data held about it.",
+            "fieldType": "info",
+            "enumOptions": null,
+            "sensitive": false,
+            "minValue": null,
+            "maxValue": null,
+            "unit": null
+          }
+        ]
+      },
+      {
         "name": "ProcessingPlatform",
         "title": "Processing Platform",
         "description": "Task substrate settings: concurrency limits, dedup, NodeODX nodes, and bulk download thresholds.",
