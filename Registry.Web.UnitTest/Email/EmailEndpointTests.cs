@@ -152,6 +152,22 @@ public class EmailEndpointTests : IDisposable
         _sender.Sent.ShouldBeEmpty();
     }
 
+    /// <summary>Clients read whether the server sends e-mail from the anonymous features, before anyone signs in.</summary>
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task Features_TellWhetherEmailIsEnabled_ToAnonymousClients(bool enabled)
+    {
+        Start(enabled ? Enabled : null);
+
+        using var response = await _client!.GetAsync("/sys/features");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadAsStringAsync();
+        JsonDocument.Parse(body).RootElement.GetProperty("emailEnabled").GetBoolean().ShouldBe(enabled);
+        // Nothing of the server's settings beyond the flag
+        body.ShouldNotContain("smtp.example.org");
+    }
+
     [Test]
     public async Task ConfigView_ShowsTheSmtpSection_WithoutThePassword()
     {

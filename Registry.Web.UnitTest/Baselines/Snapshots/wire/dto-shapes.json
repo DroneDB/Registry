@@ -1687,6 +1687,7 @@
       "storageLimiter": true,
       "maxConcurrentDownloadsPerUser": 42,
       "disableAnonymousBulkDownloads": true,
+      "emailEnabled": true,
       "passwordPolicy": {
         "minLength": 42,
         "requireDigit": true,
@@ -1764,6 +1765,7 @@
       "storageLimiter": false,
       "maxConcurrentDownloadsPerUser": null,
       "disableAnonymousBulkDownloads": false,
+      "emailEnabled": false,
       "passwordPolicy": null,
       "datasetThumbnailCandidates": null,
       "maxExportSizeBytes": null,

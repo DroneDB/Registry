@@ -36,6 +36,12 @@ public class FeaturesDto
     public bool DisableAnonymousBulkDownloads { get; set; }
 
     /// <summary>
+    /// Whether the server sends e-mail (<c>AppSettings:Smtp:Enabled</c>). Clients hide or disable what needs e-mail
+    /// (invitations, notifications, password reset by e-mail) when it is false: the server would drop the e-mail.
+    /// </summary>
+    public bool EmailEnabled { get; set; }
+
+    /// <summary>
     /// Password complexity policy. Null when no policy is enforced.
     /// </summary>
     public PasswordPolicyDto? PasswordPolicy { get; set; }

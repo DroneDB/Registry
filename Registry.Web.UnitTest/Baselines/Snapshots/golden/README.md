@@ -191,3 +191,5 @@ scheme also answers with an empty body (plus `WWW-Authenticate: Bearer`, not rec
 
 * `sys-config`: a `Smtp` section (outgoing e-mail, off by default). Its password is a sensitive field: only
   whether it is set is shown (`EmailEndpointTests.ConfigView_ShowsTheSmtpSection_WithoutThePassword`).
+* `sys-features`: `emailEnabled`, whether the server sends e-mail (`AppSettings:Smtp:Enabled`), so clients can hide
+  what needs e-mail (`EmailEndpointTests.Features_TellWhetherEmailIsEnabled_ToAnonymousClients`).

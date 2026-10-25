@@ -82,6 +82,20 @@ public sealed class AccountFeatures : IFeatureSection
     }
 }
 
+/// <summary>E-mail: whether the server sends it, as <see cref="IEmailService"/> decides.</summary>
+public sealed class EmailFeatures : IFeatureSection
+{
+    private readonly IEmailService _email;
+
+    public EmailFeatures(IEmailService email) => _email = email;
+
+    public Task FillAsync(FeaturesDto features)
+    {
+        features.EmailEnabled = _email.IsEnabled;
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>Downloads and exports: the limits, the bulk download threshold, the dataset thumbnail candidates.</summary>
 public sealed class DownloadFeatures : IFeatureSection
 {

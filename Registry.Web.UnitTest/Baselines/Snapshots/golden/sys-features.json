@@ -10,6 +10,7 @@
     "storageLimiter": false,
     "maxConcurrentDownloadsPerUser": null,
     "disableAnonymousBulkDownloads": false,
+    "emailEnabled": false,
     "passwordPolicy": {
       "minLength": 8,
       "requireDigit": true,
