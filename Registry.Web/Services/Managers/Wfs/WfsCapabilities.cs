@@ -122,14 +122,9 @@ public class WfsCapabilities : OgcManagerBase
                 await w.WriteStartElementAsync("ows", "OperationsMetadata", null);
                 await WriteWfsOperationAsync(w, "GetCapabilities", baseUrl);
                 await WriteWfsOperationAsync(w, "DescribeFeatureType", baseUrl,
-                    ["application/gml+xml; version=3.2", "text/xml; subtype=gml/3.2"]);
-                await WriteWfsOperationAsync(w, "GetFeature", baseUrl,
-                [
-                    "application/gml+xml; version=3.2", "text/xml; subtype=gml/3.2",
-                            "application/json", "application/json; subtype=geojson"
-                ]);
-                await WriteWfsOperationAsync(w, "GetPropertyValue", baseUrl,
-                    ["application/gml+xml; version=3.2", "text/xml; subtype=gml/3.2"]);
+                    [.. WfsConformance.GmlFormats]);
+                await WriteWfsOperationAsync(w, "GetFeature", baseUrl, [.. WfsConformance.FeatureFormats]);
+                await WriteWfsOperationAsync(w, "GetPropertyValue", baseUrl, [.. WfsConformance.GmlFormats]);
                 await WriteWfsOperationAsync(w, "ListStoredQueries", baseUrl);
                 await WriteWfsOperationAsync(w, "DescribeStoredQueries", baseUrl);
                 // Service-level constraints required by WFS 2.0 (Table 13 of OGC 09-025r2).

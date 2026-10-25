@@ -40,6 +40,7 @@ public class WfsFeatureQuery : OgcManagerBase
         double[]? bbox, string? bboxCrs, int count, int startIndex, string outputFormat,
         string? resourceId = null, string? filterXml = null, CancellationToken ct = default)
     {
+        WfsConformance.ValidateOutputFormat(outputFormat, WfsConformance.FeatureFormats);
         if (count <= 0) count = 1000;
         count = Math.Clamp(count, 1, 10000);
         if (startIndex < 0) startIndex = 0;
@@ -181,10 +182,11 @@ public class WfsFeatureQuery : OgcManagerBase
         string valueReference, int count, int startIndex, string outputFormat,
         string? resourceId = null, string? filterXml = null, CancellationToken ct = default)
     {
+        WfsConformance.ValidateOutputFormat(outputFormat, WfsConformance.GmlFormats);
         if (string.IsNullOrWhiteSpace(valueReference))
             throw new OgcException("InvalidParameterValue", "valueReference is required", 400, "valueReference");
         var fc = await GetFeatureAsync(orgSlug, dsSlug, typeName, null, null, count, startIndex,
-            "application/gml+xml; version=3.2", resourceId, filterXml, ct);
+            WfsConformance.DefaultOutputFormat, resourceId, filterXml, ct);
         return TransformToValueCollection(fc, valueReference);
     }
 
@@ -267,6 +269,7 @@ public class WfsFeatureQuery : OgcManagerBase
     public async Task<string> GetFeatureByIdAsync(string orgSlug, string dsSlug, string id, string outputFormat,
         CancellationToken ct = default)
     {
+        WfsConformance.ValidateOutputFormat(outputFormat, WfsConformance.FeatureFormats);
         if (string.IsNullOrWhiteSpace(id))
             throw new OgcException("MissingParameterValue", "id is required", 400, "id");
 
@@ -302,14 +305,8 @@ public class WfsFeatureQuery : OgcManagerBase
         throw new OgcException("NotFound", $"No feature found with id '{id}'", 404, "id");
     }
 
-    /// <summary>Maps a WFS-style output format (e.g. "application/gml+xml; version=3.2") to the
+    /// <summary>Maps a validated WFS output format (e.g. "application/gml+xml; version=3.2") to the
     /// internal DDB vector_query format token ("gml" / "geojson").</summary>
-    private static string MapWfsOutputFormat(string format)
-    {
-        if (string.IsNullOrWhiteSpace(format)) return "gml";
-        var f = format.ToLowerInvariant();
-        if (f.Contains("gml") || f.Contains("subtype=gml") || f.Contains("text/xml")) return "gml";
-        if (f.Contains("json")) return "geojson";
-        return "gml";
-    }
+    private static string MapWfsOutputFormat(string format) =>
+        string.IsNullOrWhiteSpace(format) || WfsConformance.IsGml(format) ? "gml" : "geojson";
 }

@@ -300,4 +300,66 @@ public class WfsFeatureQueryTests
 
         (await CreateFeatures().GetItemAsync(Org, Ds, Layer.Name, "not-a-fid")).ShouldBe("{}");
     }
+
+    [TestCase("application/x-shapefile")]
+    [TestCase("GML3")]
+    [TestCase("text/csv")]
+    public async Task GetFeature_AnOutputFormatThatIsNotAdvertised_IsInvalidParameterValue(string format)
+    {
+        var ex = await Should.ThrowAsync<OgcException>(() =>
+            CreateWfs().GetFeatureAsync(Org, Ds, Layer.Name, null, null, 10, 0, format));
+
+        AssertOutputFormatRefused(ex);
+        _wrapper.Verify(w => w.QueryVector(It.IsAny<string>(), It.IsAny<VectorQuery>()), Times.Never);
+    }
+
+    [Test]
+    public async Task GetFeatureById_AnOutputFormatThatIsNotAdvertised_IsInvalidParameterValue()
+    {
+        var ex = await Should.ThrowAsync<OgcException>(() =>
+            CreateWfs().GetFeatureByIdAsync(Org, Ds, "A010101.shp.2", "application/x-shapefile"));
+
+        AssertOutputFormatRefused(ex);
+    }
+
+    [Test]
+    public async Task GetPropertyValue_GeoJson_IsNotAdvertisedForIt_AndRefused()
+    {
+        // GetFeature advertises GeoJSON, GetPropertyValue (a wfs:ValueCollection) only GML 3.2
+        var ex = await Should.ThrowAsync<OgcException>(() =>
+            CreateWfs().GetPropertyValueAsync(Org, Ds, Layer.Name, "FEATURE_ID", 10, 0, "application/json"));
+
+        AssertOutputFormatRefused(ex);
+    }
+
+    [Test]
+    public async Task EveryOutputFormatTheCapabilitiesAdvertise_IsTheOneTheRequestsAccept()
+    {
+        _catalog.Setup(c => c.CacheKeyAsync(Org, Ds, It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("capabilities-key");
+        _catalog.Setup(c => c.GetLayersAsync(Org, Ds, It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([Layer]);
+        var wfs = CreateWfs();
+        var capabilities = XDocument.Parse(await wfs.GetCapabilitiesAsync(Org, Ds));
+        XNamespace ows = "http://www.opengis.net/ows/1.1";
+
+        string[] Advertised(string operation) => capabilities.Descendants(ows + "Operation")
+            .Single(o => (string?)o.Attribute("name") == operation)
+            .Elements(ows + "Parameter").Single(p => (string?)p.Attribute("name") == "outputFormat")
+            .Descendants(ows + "Value").Select(v => v.Value).ToArray();
+
+        Advertised("GetFeature").ShouldBe(WfsConformance.FeatureFormats);
+        Advertised("GetPropertyValue").ShouldBe(WfsConformance.GmlFormats);
+        Advertised("DescribeFeatureType").ShouldBe(WfsConformance.GmlFormats);
+
+        foreach (var format in Advertised("GetFeature"))
+            (await wfs.GetFeatureAsync(Org, Ds, Layer.Name, null, null, 10, 0, format)).ShouldNotBeNullOrEmpty(format);
+    }
+
+    private static void AssertOutputFormatRefused(OgcException ex)
+    {
+        ex.Code.ShouldBe("InvalidParameterValue");
+        ex.Locator.ShouldBe("outputFormat");
+        ex.HttpStatusCode.ShouldBe(400);
+    }
 }

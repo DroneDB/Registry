@@ -46,9 +46,9 @@ public class OgcApiTilesManager : OgcManagerBase
         var b = baseUrl.TrimEnd('/');
         return new OgcApiTileSetsDto(
         [
-            new OgcApiTileSetDto("http://www.opengis.net/def/tilematrixset/OGC/1.0/WebMercatorQuad",
+            new OgcApiTileSetDto(OgcApiTilesConformance.WebMercatorQuadUri,
             [
-                new OgcApiTileLinkDto($"{b}/collections/{collectionId}/tiles/WebMercatorQuad/{{z}}/{{y}}/{{x}}", "item",
+                new OgcApiTileLinkDto($"{b}/collections/{collectionId}/tiles/{OgcApiTilesConformance.WebMercatorQuad}/{{z}}/{{y}}/{{x}}", "item",
                     layer.EntryType == EntryType.Vector ? "application/vnd.mapbox-vector-tile" : "image/png")
             ])
         ]);
@@ -57,6 +57,7 @@ public class OgcApiTilesManager : OgcManagerBase
     public async Task<byte[]?> GetTileAsync(string orgSlug, string dsSlug, string collectionId,
         string tileMatrixSet, int z, int x, int y, CancellationToken ct = default)
     {
+        OgcApiTilesConformance.Validate(tileMatrixSet);
         var name = Uri.UnescapeDataString(collectionId);
         var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
         var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, ct: ct)

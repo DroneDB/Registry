@@ -78,6 +78,7 @@ public class WfsController : ControllerBaseEx
 
         if (op == "DescribeFeatureType")
         {
+            WfsConformance.ValidateOutputFormat(root.GetAttribute("outputFormat"), WfsConformance.GmlFormats);
             var names = root.GetElementsByTagName("TypeName", nsWfs).Cast<System.Xml.XmlElement>()
                 .Select(e => e.InnerText.Trim()).Where(s => s.Length > 0).ToArray();
             return Content(await _mgr.DescribeFeatureTypeAsync(orgSlug, dsSlug, names, ct: ct), "text/xml; charset=utf-8");
@@ -96,7 +97,7 @@ public class WfsController : ControllerBaseEx
         if (op == "GetFeature" || op == "GetPropertyValue")
         {
             var outputFormat = root.GetAttribute("outputFormat");
-            if (string.IsNullOrWhiteSpace(outputFormat)) outputFormat = "application/gml+xml; version=3.2";
+            if (string.IsNullOrWhiteSpace(outputFormat)) outputFormat = WfsConformance.DefaultOutputFormat;
             var countAttr = root.GetAttribute("count");
             if (string.IsNullOrWhiteSpace(countAttr)) countAttr = root.GetAttribute("maxFeatures");
             var startIndexAttr = root.GetAttribute("startIndex");
@@ -229,6 +230,7 @@ public class WfsController : ControllerBaseEx
                     "text/xml; charset=utf-8");
             case "DESCRIBEFEATURETYPE":
             {
+                WfsConformance.ValidateOutputFormat(OgcRequestParser.Get(q, "OUTPUTFORMAT"), WfsConformance.GmlFormats);
                 var typeNames = OgcRequestParser.GetList(q, "TYPENAMES")
                                 ?? OgcRequestParser.GetList(q, "TYPENAME")
                                 ?? [];
@@ -238,7 +240,7 @@ public class WfsController : ControllerBaseEx
             case "GETFEATURE":
             {
                 var storedQueryId = OgcRequestParser.Get(q, "STOREDQUERY_ID");
-                var format = OgcRequestParser.Get(q, "OUTPUTFORMAT") ?? "application/gml+xml; version=3.2";
+                var format = OgcRequestParser.Get(q, "OUTPUTFORMAT") ?? WfsConformance.DefaultOutputFormat;
 
                 if (!string.IsNullOrWhiteSpace(storedQueryId))
                 {
@@ -318,7 +320,7 @@ public class WfsController : ControllerBaseEx
                 var valueRef = OgcRequestParser.Get(q, "VALUEREFERENCE")
                                ?? throw new OgcException("MissingParameterValue",
                                    "valueReference required", 400, "valueReference");
-                var format = OgcRequestParser.Get(q, "OUTPUTFORMAT") ?? "application/gml+xml; version=3.2";
+                var format = OgcRequestParser.Get(q, "OUTPUTFORMAT") ?? WfsConformance.DefaultOutputFormat;
                 var count = OgcRequestParser.GetInt(q, "COUNT", 1000, 1, 10000);
                 var startIndex = OgcRequestParser.GetInt(q, "STARTINDEX", 0, 0);
                 var resourceId = OgcRequestParser.Get(q, "RESOURCEID")
