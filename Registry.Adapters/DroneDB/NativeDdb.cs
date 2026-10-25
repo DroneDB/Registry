@@ -14,8 +14,8 @@ namespace Registry.Adapters.DroneDB;
 /// generator, freed when the call returns.</item>
 /// <item>Every C <c>bool</c> is 1 byte: <c>[MarshalAs(UnmanagedType.U1)]</c> on each
 /// <see cref="bool"/> (the generator refuses an unannotated one, SYSLIB1051).</item>
-/// <item>Structs are blittable (<see cref="DdbAddOptions"/>, <see cref="DdbAddHint"/>,
-/// <see cref="DdbListEntriesOptions"/>), with their sizes checked by tests.</item>
+/// <item>Structs are blittable (<see cref="DdbAddOptions"/>, <see cref="DdbAddHint"/>), with their sizes
+/// checked by tests.</item>
 /// <item>Outputs (<c>char **</c>, <c>uint8_t **</c>) are written by libddb only on
 /// <see cref="DdbResult.Success"/>; <see cref="NativeCall"/> frees them (<see cref="DDBFree"/>,
 /// <see cref="DDBVSIFree"/>) in a finally block.</item>
@@ -132,10 +132,6 @@ internal static unsafe partial class NativeDdb
     internal static partial DdbResult DDBListEntries(string ddbPath, string folder,
         [MarshalAs(UnmanagedType.U1)] bool recursive, string namePattern, string types,
         [MarshalAs(UnmanagedType.U1)] bool withDetails, out IntPtr output);
-
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBListEntriesEx(string? ddbPath, string? folder, string? namePattern,
-        string? types, in DdbListEntriesOptions options, out IntPtr output);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBGetStamp(string ddbPath, out IntPtr output);
@@ -387,28 +383,4 @@ internal struct DdbAddHint
     internal IntPtr Sha256;
     internal long Size;
     internal double Mtime;
-}
-
-/// <summary>
-/// <c>DDBListEntriesOptions</c> (ABI 2.0): 8 bytes, <c>structSize</c> at 0, then three 1-byte
-/// bools at 4, 5 and 6, and one reserved byte (keep it zero). A later ABI appends fields after
-/// the 8 bytes and raises <c>structSize</c>; a library rejects a struct whose bytes past the size
-/// it knows are not zero (DDBERR_INVALIDARGS).
-/// </summary>
-[StructLayout(LayoutKind.Sequential)]
-internal struct DdbListEntriesOptions
-{
-    internal uint StructSize;
-    internal byte Recursive;
-    internal byte WithDetails;
-    internal byte WithBuild;
-    internal byte Reserved;
-
-    internal static DdbListEntriesOptions Create(bool recursive, bool withDetails, bool withBuild) => new()
-    {
-        StructSize = (uint)System.Runtime.CompilerServices.Unsafe.SizeOf<DdbListEntriesOptions>(),
-        Recursive = recursive ? (byte)1 : (byte)0,
-        WithDetails = withDetails ? (byte)1 : (byte)0,
-        WithBuild = withBuild ? (byte)1 : (byte)0
-    };
 }

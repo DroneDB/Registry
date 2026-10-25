@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace Registry.Ports.DroneDB;
 
 /// <summary>
-/// The build object of an entry (<c>DDBGetBuildArtifacts</c>, <c>DDBListEntriesEx</c>; ddb.h "build
+/// The build object of an entry (<c>DDBGetBuildArtifacts</c>; ddb.h "build
 /// manifest"): libddb's one answer to "is it buildable, what state is its build in and
 /// which artifacts exist".
 /// </summary>

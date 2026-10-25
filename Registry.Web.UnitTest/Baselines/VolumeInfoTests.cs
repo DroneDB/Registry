@@ -25,8 +25,10 @@ public class VolumeInfoTests
 {
     private static readonly string[] Mounts = ["/", "/data", "/data/datasets"];
 
+    private static string? MountOf(string path, params string[] mounts) => VolumeInfo.FindMountRoot(path, mounts);
+
     private static VolumeInfo? For(string path, params string[] mounts) =>
-        VolumeInfo.For(path, () => mounts, root => new VolumeInfo(root, 1000, 100 + root.Length));
+        VolumeInfo.For(path, () => mounts, root => new VolumeInfo(1000, 100 + root.Length));
 
     [Test]
     public void DatasetPath_ResolvesToTheDatasetMount_NotTheRoot()
@@ -34,46 +36,46 @@ public class VolumeInfoTests
         var volume = For("/data/datasets/org/ds", Mounts);
 
         volume.ShouldNotBeNull();
-        volume.RootDirectory.ShouldBe("/data/datasets");
+        VolumeInfo.FindMountRoot("/data/datasets/org/ds", Mounts).ShouldBe("/data/datasets");
         volume.AvailableFreeBytes.ShouldBe(100 + "/data/datasets".Length); // measured on that mount
     }
 
     [Test]
     public void MountTableOrder_DoesNotMatter()
     {
-        For("/data/datasets/org/ds", "/data/datasets", "/", "/data")!.RootDirectory.ShouldBe("/data/datasets");
+        MountOf("/data/datasets/org/ds", "/data/datasets", "/", "/data").ShouldBe("/data/datasets");
     }
 
     [Test]
     public void SiblingWithCommonPrefix_IsNotUnderTheMount()
     {
-        For("/datafoo/x", Mounts)!.RootDirectory.ShouldBe("/");
+        MountOf("/datafoo/x", Mounts).ShouldBe("/");
     }
 
     [Test]
     public void PathEqualToAMountPoint_ResolvesToThatMount()
     {
-        For("/data", Mounts)!.RootDirectory.ShouldBe("/data");
-        For("/data/", Mounts)!.RootDirectory.ShouldBe("/data");
+        MountOf("/data", Mounts).ShouldBe("/data");
+        MountOf("/data/", Mounts).ShouldBe("/data");
     }
 
     [Test]
     public void MountRootWithTrailingSeparator_StillMatches()
     {
-        For("/data/x", "/", "/data/")!.RootDirectory.ShouldBe("/data/");
+        MountOf("/data/x", "/", "/data/").ShouldBe("/data/");
     }
 
     [Test]
     public void RelativeSegments_AreNormalisedFirst()
     {
-        For("/data/datasets/../other/x", Mounts)!.RootDirectory.ShouldBe("/data");
+        MountOf("/data/datasets/../other/x", Mounts).ShouldBe("/data");
     }
 
     [Test]
     public void Case_FollowsTheOs()
     {
         var expected = OperatingSystem.IsWindows() ? "/data/datasets" : "/";
-        For("/DATA/DATASETS/org/ds", Mounts)!.RootDirectory.ShouldBe(expected);
+        MountOf("/DATA/DATASETS/org/ds", Mounts).ShouldBe(expected);
     }
 
     [Test]

@@ -18,7 +18,7 @@ public static class TestHeadroom
     /// <summary>Every path is on one volume with <paramref name="availableBytes"/> free; libddb's floor is <paramref name="floorMb"/>.</summary>
     public static VolumeHeadroom WithFree(long availableBytes, long floorMb = 256) =>
         new(new FloorRuntime(floorMb), NullLogger<VolumeHeadroom>.Instance,
-            _ => new VolumeInfo("/", long.MaxValue, availableBytes));
+            _ => new VolumeInfo(long.MaxValue, availableBytes));
 
     private sealed class FloorRuntime(long floorMb) : FakeDdbRuntime
     {

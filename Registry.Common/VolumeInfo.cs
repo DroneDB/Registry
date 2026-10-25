@@ -17,15 +17,11 @@ namespace Registry.Common;
 /// </summary>
 public sealed class VolumeInfo
 {
-    public VolumeInfo(string rootDirectory, long totalBytes, long availableFreeBytes)
+    public VolumeInfo(long totalBytes, long availableFreeBytes)
     {
-        RootDirectory = rootDirectory ?? throw new ArgumentNullException(nameof(rootDirectory));
         TotalBytes = totalBytes;
         AvailableFreeBytes = availableFreeBytes;
     }
-
-    /// <summary>Mount point (as reported by the mount table) of the volume.</summary>
-    public string RootDirectory { get; }
 
     public long TotalBytes { get; }
 
@@ -97,6 +93,6 @@ public sealed class VolumeInfo
     private static VolumeInfo? MeasureSystemVolume(string root)
     {
         var drive = new DriveInfo(root);
-        return drive.IsReady ? new VolumeInfo(root, drive.TotalSize, drive.AvailableFreeSpace) : null;
+        return drive.IsReady ? new VolumeInfo(drive.TotalSize, drive.AvailableFreeSpace) : null;
     }
 }

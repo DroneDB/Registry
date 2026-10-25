@@ -61,8 +61,7 @@ internal static unsafe class LibddbShutdownProbe
             var file = Path.Combine(folder, "a.txt");
             File.WriteAllText(file, "a");
             wrapper.Add(folder, [file]);
-            Ok(NativeDdb.DDBListEntriesEx(folder, "", "", "", DdbListEntriesOptions.Create(true, false, true),
-                out var listing), "DDBListEntriesEx");
+            Ok(NativeDdb.DDBListEntries(folder, "", true, "", "", false, out var listing), "DDBListEntries");
             TakeString(listing);
             Step("dataset indexed and listed");
 
@@ -92,8 +91,7 @@ internal static unsafe class LibddbShutdownProbe
             Fails(NativeDdb.DDBNormalizePath("a", null, out _), DdbResult.Shutdown, "DDBNormalizePath");
             Fails(NativeDdb.DDBRegisterProcess(false), DdbResult.Shutdown, "DDBRegisterProcess");
             Fails(NativeDdb.DDBConfigure("{}"), DdbResult.Shutdown, "DDBConfigure");
-            Fails(NativeDdb.DDBListEntriesEx(folder, "", "", "", DdbListEntriesOptions.Create(true, false, false),
-                out _), DdbResult.Shutdown, "DDBListEntriesEx");
+            Fails(NativeDdb.DDBListEntries(folder, "", true, "", "", false, out _), DdbResult.Shutdown, "DDBListEntries");
             Should.Throw<DdbException>(() => wrapper.Init(Path.Combine(folder, "late")));
             Step("later calls return DDBERR_SHUTDOWN");
 

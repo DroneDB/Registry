@@ -58,8 +58,8 @@ public class EntryPathNormalizationTests : TestBase
     private static IEnumerable<(string Export, Action Call)> EntryPathCalls(string root, string path)
     {
         yield return (nameof(NativeDdb.DDBGet), () => Wrapper.GetEntry(root, path));
-        yield return (nameof(NativeDdb.DDBListEntriesEx), () => Wrapper.ListEntries(root, new EntryQuery(path)));
-        yield return ("DDBListEntriesEx(summaries)", () => Wrapper.ListEntrySummaries(root, new EntryQuery(path)));
+        yield return (nameof(NativeDdb.DDBListEntries), () => Wrapper.ListEntries(root, new EntryQuery(path)));
+        yield return ("DDBListEntries(summaries)", () => Wrapper.ListEntrySummaries(root, new EntryQuery(path)));
         yield return (nameof(NativeDdb.DDBMoveEntry) + " (source)", () => Wrapper.MoveEntry(root, path, "moved.txt"));
         yield return (nameof(NativeDdb.DDBMoveEntry) + " (dest)", () => Wrapper.MoveEntry(root, "b.txt", path));
         yield return (nameof(NativeDdb.DDBBuild), () => Wrapper.Build(root, path));

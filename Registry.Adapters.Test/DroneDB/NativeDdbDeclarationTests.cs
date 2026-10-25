@@ -40,17 +40,6 @@ public class NativeDdbDeclarationTests
         Marshal.OffsetOf<DdbAddHint>(nameof(DdbAddHint.Mtime)).ShouldBe(24);
     }
 
-    [Test]
-    public void DdbListEntriesOptions_Is8Bytes_AndCarriesItsSize()
-    {
-        Unsafe.SizeOf<DdbListEntriesOptions>().ShouldBe(8);
-        Marshal.OffsetOf<DdbListEntriesOptions>(nameof(DdbListEntriesOptions.Recursive)).ShouldBe(4);
-        Marshal.OffsetOf<DdbListEntriesOptions>(nameof(DdbListEntriesOptions.Reserved)).ShouldBe(7);
-        var options = DdbListEntriesOptions.Create(true, false, true);
-        (options.StructSize, options.Recursive, options.WithDetails, options.WithBuild, options.Reserved)
-            .ShouldBe((8u, (byte)1, (byte)0, (byte)1, (byte)0));
-    }
-
     /// <summary>C's bool is 1 byte: a .NET bool marshalled as the 4-byte BOOL works only by chance.</summary>
     [Test]
     public void EveryBoolParameter_IsMarshalledAsOneByte()

@@ -25,7 +25,7 @@ namespace Registry.Adapters.Ddb.Test;
 /// <summary>
 /// The libddb 2.x contract: one test per export of the ABI that
 /// Registry uses beyond the original wrapper, called through the P/Invoke declarations of <see cref="NativeDdb"/>, the adapter's one
-/// native-methods home (UTF-8 strings, 1-byte bools, <see cref="DdbListEntriesOptions"/>, outputs
+/// native-methods home (UTF-8 strings, 1-byte bools, outputs
 /// freed with DDBFree), with the outputs checked against DroneDB's contract fixtures
 /// (tests/contract/fixtures, named in each test) and the documented error codes.
 /// <para>
@@ -73,7 +73,7 @@ public unsafe class LibddbContractTests : TestBase
         }
         """;
 
-    // fixtures/build-artifacts.json, list-entries-ex.json: the build object of an entry that is not buildable
+    // fixtures/build-artifacts.json: the build object of an entry that is not buildable
     private const string NotBuildableJson = """
         {
           "artifacts": [],
@@ -298,7 +298,7 @@ public unsafe class LibddbContractTests : TestBase
 
     #endregion
 
-    #region Build manifest: DDBGetEntryTypes, DDBGetBuildArtifacts, DDBResolveBuildFile, DDBCopyBuildArtifacts, DDBListEntriesEx
+    #region Build manifest: DDBGetEntryTypes, DDBGetBuildArtifacts, DDBResolveBuildFile, DDBCopyBuildArtifacts
 
     // fixtures/entry-types.json
     [Test]
@@ -507,61 +507,6 @@ public unsafe class LibddbContractTests : TestBase
         {
             Ok(NativeDdb.DDBConfigure("""{"minFreeDiskMb": null}"""), "DDBConfigure(reset)");
         }
-    }
-
-    // fixtures/list-entries-ex.json
-    [Test]
-    public void ListEntriesEx_OptionsLayout_AndTheBuildObjectOfEachEntry()
-    {
-        // ddb.h: sizeof 8, structSize at 0, recursive 4, withDetails 5, withBuild 6
-        Unsafe.SizeOf<DdbListEntriesOptions>().ShouldBe(8);
-        Marshal.SizeOf<DdbListEntriesOptions>().ShouldBe(8);
-        Marshal.OffsetOf<DdbListEntriesOptions>(nameof(DdbListEntriesOptions.StructSize)).ShouldBe(0);
-        Marshal.OffsetOf<DdbListEntriesOptions>(nameof(DdbListEntriesOptions.Recursive)).ShouldBe(4);
-        Marshal.OffsetOf<DdbListEntriesOptions>(nameof(DdbListEntriesOptions.WithDetails)).ShouldBe(5);
-        Marshal.OffsetOf<DdbListEntriesOptions>(nameof(DdbListEntriesOptions.WithBuild)).ShouldBe(6);
-        DdbListEntriesOptions.Create(true, false, true).StructSize.ShouldBe(8u);
-
-        using var area = new TestArea(nameof(ListEntriesEx_OptionsLayout_AndTheBuildObjectOfEachEntry));
-        var root = CreateDataset(area, "dataset", withGeoRaster: true);
-        DdbWrapper.Build(root, GeoRasterName);
-
-        var withBuild = ListEntriesEx(root, DdbListEntriesOptions.Create(true, false, true));
-        withBuild.Select(e => (string?)e["path"]).ShouldBe([TextName, GeoRasterName]);
-        ShouldEqualJson(withBuild[0], ParseJson($$"""
-            {"build": {{NotBuildableJson}}, "depth": 0, "hash": "{{TextHash}}", "mtime": 1700000000,
-             "path": "a.txt", "size": 31, "type": 2}
-            """));
-        ((string?)withBuild[1]["build"]!["state"]).ShouldBe("complete");
-        ShouldEqualJson(withBuild[1]["build"]!["artifacts"]!, new JArray(ParseJson(CogArtifactJson)));
-
-        // withBuild false: DDBListEntries' output, without "build"
-        var withoutBuild = ListEntriesEx(root, DdbListEntriesOptions.Create(true, false, false));
-        ShouldEqualJson(withoutBuild, new JArray(withBuild.Select(e =>
-        {
-            var copy = (JObject)e.DeepClone();
-            copy.Remove("build");
-            return copy;
-        })));
-
-        var tooSmall = DdbListEntriesOptions.Create(true, false, true);
-        tooSmall.StructSize = 4;
-        Fails(NativeDdb.DDBListEntriesEx(root, "", "", "", tooSmall, out _), DdbResult.InvalidArgs,
-            "DDBListEntriesEx(structSize 4)");
-
-        // The struct of a later ABI (structSize 16): accepted while the fields this library does not know are zero
-        var later = new LaterListEntriesOptions { Known = DdbListEntriesOptions.Create(true, false, false) };
-        later.Known.StructSize = (uint)sizeof(LaterListEntriesOptions);
-        Ok(NativeDdb.DDBListEntriesEx(root, "", "", "", in later.Known, out var laterOutput),
-            "DDBListEntriesEx(structSize 16, unknown fields zero)");
-        ShouldEqualJson(TakeJson(laterOutput), withoutBuild);
-        later.Unknown = 1;
-        Fails(NativeDdb.DDBListEntriesEx(root, "", "", "", in later.Known, out _), DdbResult.InvalidArgs,
-            "DDBListEntriesEx(structSize 16, a non-zero unknown field)");
-        Fails(NativeDdb.DDBListEntriesEx(root, "", "", "nonsense", DdbListEntriesOptions.Create(true, false, false),
-            out _), DdbResult.InvalidArgs, "DDBListEntriesEx(unknown type)");
-        Fails(NativeDdb.DDBListEntriesEx("", "", "", "", DdbListEntriesOptions.Create(true, false, false), out _),
-            DdbResult.InvalidArgs, "DDBListEntriesEx(empty ddbPath)");
     }
 
     #endregion
@@ -876,12 +821,6 @@ public unsafe class LibddbContractTests : TestBase
         return artifacts;
     }
 
-    private static JArray ListEntriesEx(string root, DdbListEntriesOptions options)
-    {
-        Ok(NativeDdb.DDBListEntriesEx(root, "", "", "", options, out var output), "DDBListEntriesEx");
-        return (JArray)TakeJson(output);
-    }
-
     /// <summary>
     /// A dataset folder <paramref name="name"/> with the contract's a.txt and, optionally, the
     /// GeoRaster, both with the contract mtime, indexed.
@@ -936,14 +875,6 @@ public unsafe class LibddbContractTests : TestBase
     {
         if (!JToken.DeepEquals(actual, expected))
             Assert.Fail($"{because ?? "JSON differs"}\nexpected: {expected.ToString(Formatting.None)}\nactual:   {actual.ToString(Formatting.None)}");
-    }
-
-    /// <summary>A DDBListEntriesOptions of a later ABI: the ABI 2.0 struct and a field appended after it.</summary>
-    [StructLayout(LayoutKind.Sequential)]
-    private struct LaterListEntriesOptions
-    {
-        public DdbListEntriesOptions Known;
-        public ulong Unknown;
     }
 
     private sealed record LogRecord(int Level, string Message, string Source, ulong OpId);
