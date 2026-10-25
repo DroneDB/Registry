@@ -78,6 +78,32 @@ public class ExitCodeTests
         _harness.Snapshot().ShouldBeEmpty();
     }
 
+    /// <summary>A host without a port is a valid address (it listens on the default port), as are a bare port and host:port.</summary>
+    [TestCase("localhost")]
+    [TestCase("127.0.0.1")]
+    [TestCase("8080")]
+    [TestCase("localhost:8080")]
+    public void Check_ValidAddress_ReturnsSuccess(string address)
+    {
+        _harness.WriteSettings(CommandLineHarness.DefaultSettings());
+
+        var (exitCode, _, error) = Run(_harness.StorageFolder, "--check", "--address", address);
+
+        exitCode.ShouldBe(ExitCodes.Success, error);
+    }
+
+    [TestCase("localhost:0")]
+    [TestCase("localhost:70000")]
+    [TestCase("localhost:abc")]
+    [TestCase("0")]
+    [TestCase("70000")]
+    public void Check_InvalidPort_ReturnsInvalidArguments(string address)
+    {
+        _harness.WriteSettings(CommandLineHarness.DefaultSettings());
+
+        Run(_harness.StorageFolder, "--check", "--address", address).ExitCode.ShouldBe(ExitCodes.InvalidArguments);
+    }
+
     /// <summary>A first-start folder (default settings) is valid; nothing is written, no host starts.</summary>
     [Test]
     public void Check_ValidSettings_ReturnsSuccessAndWritesNothing()

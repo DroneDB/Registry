@@ -220,7 +220,30 @@ public class Program
         if (opts.Address.Length == 0)
             return Invalid("Address not specified");
 
-        var parts = opts.Address.Split(':');
+        if (!TryNormalizeAddress(opts.Address, out var normalized, out var error))
+            return Invalid(error);
+
+        opts.Address = normalized;
+
+        return true;
+
+        static bool Invalid(string message)
+        {
+            StartupLog.Error("{Error}", message);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Normalizes a listen address to "host:port". A bare port keeps the default host, a bare host keeps
+    /// the default port, and a host or port that is not valid is refused with the reason in <paramref name="error"/>.
+    /// </summary>
+    internal static bool TryNormalizeAddress(string address, out string normalized, out string error)
+    {
+        normalized = null;
+        error = null;
+
+        var parts = address.Split(':');
 
         var host = DefaultHost;
         var port = DefaultPort;
@@ -228,49 +251,39 @@ public class Program
         switch (parts.Length)
         {
             case 1:
-                {
-                    if (!int.TryParse(parts[0], out port))
-                    {
-                        // Try to parse as hostname
-                        host = parts[0];
-
-                        if (!IsLocalhostOrAddress(host))
-                            return Invalid("Invalid address");
-                    }
-
-                    if (port is < 1 or > 65535)
-                        return Invalid("Invalid port");
-
-                    break;
-                }
-            case 2:
-                {
+                // A bare port, or else a bare host
+                if (int.TryParse(parts[0], out var barePort))
+                    port = barePort;
+                else
                     host = parts[0];
-
-                    if (!IsLocalhostOrAddress(host))
-                        return Invalid("Invalid address");
-
-                    if (!int.TryParse(parts[1], out port) || port is < 1 or > 65535)
-                        return Invalid("Invalid port");
-
-                    break;
-                }
+                break;
+            case 2:
+                host = parts[0];
+                if (!int.TryParse(parts[1], out port))
+                    port = 0;
+                break;
             default:
-                return Invalid("Invalid address");
+                error = "Invalid address";
+                return false;
         }
 
-        opts.Address = $"{host}:{port}";
+        if (!IsLocalhostOrAddress(host))
+        {
+            error = "Invalid address";
+            return false;
+        }
 
+        if (port is < 1 or > 65535)
+        {
+            error = "Invalid port";
+            return false;
+        }
+
+        normalized = $"{host}:{port}";
         return true;
 
         static bool IsLocalhostOrAddress(string host) =>
             host.Equals("localhost", StringComparison.InvariantCultureIgnoreCase) || IPEndPoint.TryParse(host, out _);
-
-        static bool Invalid(string message)
-        {
-            StartupLog.Error("{Error}", message);
-            return false;
-        }
     }
 
     private static bool SetupStorageFolder(string folder, bool resetSpa = false, bool resetDdb = false,
