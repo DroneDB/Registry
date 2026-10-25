@@ -38,7 +38,7 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
         if (status == null)
         {
             // A new upload: refuse it before its first byte if it cannot be stored
-            uploads.ValidatePath(ctx, chunk.Path);
+            uploads.ValidatePath(chunk.Path);
             using (await quota.ReserveAsync(ctx.User?.Id ?? string.Empty, chunk.TotalFileSize)) { }
         }
         else

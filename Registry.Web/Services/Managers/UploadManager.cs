@@ -97,7 +97,7 @@ public sealed partial class UploadManager
     /// </summary>
     /// <exception cref="Registry.Web.Exceptions.InvalidDatasetPathException">Not a dataset path (NUL, absolute, "..", reserved).</exception>
     /// <exception cref="Registry.Web.Exceptions.ExtensionBlockedException">The import policy blocks the extension.</exception>
-    public string ValidatePath(UploadRequestContext ctx, string path) => _files.ValidatePath(path);
+    public string ValidatePath(string path) => _files.ValidatePath(path);
 
     /// <summary>Streams one file part to a temp file in the dataset, hashing it on the way.</summary>
     public Task<StreamedFile> StreamAsync(UploadRequestContext ctx, Stream body, CancellationToken ct = default) =>

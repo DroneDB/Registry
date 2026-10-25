@@ -68,7 +68,7 @@ public sealed class BuildQueryService
         if (!force && build.HasLiveBuild())
             throw new ConflictException($"A build is already in progress for '{entry.Path}'");
 
-        var jobId = await _builds.QueueAsync(BuildTarget.Of(access, orgSlug, dsSlug), path, entry.Hash, force, ct: ct);
+        var jobId = await _builds.QueueAsync(BuildTarget.Of(access, orgSlug, dsSlug), path, entry.Hash, force);
         _logger.LogInformation("Building '{Path}' asynchronously, background job id is {JobId}", path, jobId);
     }
 

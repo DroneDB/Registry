@@ -117,6 +117,6 @@ public sealed class PushCommit
         // Build the pushed files libddb reports buildable, then what their arrival unblocked
         var dataset = BuildTarget.Of(access, orgSlug, dsSlug);
         await _builds.QueueBuildableAsync(dataset, [.. delta.Adds.Where(item => item.Hash.Length > 0).Select(item => item.Path)], ct: CancellationToken.None);
-        await _builds.QueuePendingAsync(dataset, ct: CancellationToken.None);
+        await _builds.QueuePendingAsync(dataset);
     }
 }

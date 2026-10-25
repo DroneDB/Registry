@@ -77,7 +77,7 @@ public sealed class ParallelFilesImportStrategy : IRemoteImportStrategy
             transfer.DownloadedBytes, transfer.Skipped, transfer.Failed);
 
         if (transfer.Downloaded > 0)
-            await _destinations.QueueBuildAsync(destination, ddb, ct);
+            await _destinations.QueueBuildAsync(destination, ddb);
 
         report.Imported(destination, transfer.DownloadedBytes + transfer.SkippedBytes,
             transfer.Downloaded + transfer.Skipped, transfer.Skipped);

@@ -109,11 +109,11 @@ public sealed class ImportDestinations
         _ddbManager.Get(destination.OrganizationSlug, destination.InternalRef);
 
     /// <summary>Queues the forced build of the whole destination dataset.</summary>
-    public async Task<string> QueueBuildAsync(ImportDestination destination, IDDB ddb, CancellationToken ct)
+    public async Task<string> QueueBuildAsync(ImportDestination destination, IDDB ddb)
     {
         var jobId = await _builds.QueueDatasetAsync(new BuildTarget(ddb,
                 new DatasetKey(destination.OrganizationSlug, destination.InternalRef), destination.OrganizationSlug,
-                destination.DatasetSlug), force: true, ct: ct);
+                destination.DatasetSlug), force: true);
         _logger.LogInformation("Build of the imported dataset {OrgSlug}/{DsSlug} queued as job {JobId}",
             destination.OrganizationSlug, destination.DatasetSlug, jobId);
         return jobId;

@@ -228,23 +228,23 @@ public class UploadManagerTests
         var uploads = CreateManager();
         using var ctx = await uploads.BeginAsync(Org, Ds);
 
-        Should.Throw<ExtensionBlockedException>(() => uploads.ValidatePath(ctx, "setup.exe"));
+        Should.Throw<ExtensionBlockedException>(() => uploads.ValidatePath("setup.exe"));
         // One rule (libddb's) and one 400 for every refused path; a reserved path was a 500
-        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(ctx, ".uploads/x.bin"))
+        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(".uploads/x.bin"))
             .Rejection.ShouldBe(EntryPathRejection.Reserved);
-        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(ctx, "../outside.txt"))
+        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath("../outside.txt"))
             .Rejection.ShouldBe(EntryPathRejection.Traversal);
         // Absolute on every OS (libddb's rule); Path.IsPathRooted accepted these on Linux
-        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(ctx, @"C:\evil.txt"))
+        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(@"C:\evil.txt"))
             .Rejection.ShouldBe(EntryPathRejection.Absolute);
-        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(ctx, @"\\server\share\evil.txt"))
+        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(@"\\server\share\evil.txt"))
             .Rejection.ShouldBe(EntryPathRejection.Absolute);
-        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(ctx, "a\0.txt"))
+        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath("a\0.txt"))
             .Rejection.ShouldBe(EntryPathRejection.Nul);
-        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath(ctx, "sub/.ddb/x.txt"))
+        Should.Throw<InvalidDatasetPathException>(() => uploads.ValidatePath("sub/.ddb/x.txt"))
             .Rejection.ShouldBe(EntryPathRejection.Reserved);
-        uploads.ValidatePath(ctx, "photos/ok.jpg").ShouldBe("photos/ok.jpg");
-        uploads.ValidatePath(ctx, "./photos//ok.jpg").ShouldBe("photos/ok.jpg");
+        uploads.ValidatePath("photos/ok.jpg").ShouldBe("photos/ok.jpg");
+        uploads.ValidatePath("./photos//ok.jpg").ShouldBe("photos/ok.jpg");
     }
 
     [Test]

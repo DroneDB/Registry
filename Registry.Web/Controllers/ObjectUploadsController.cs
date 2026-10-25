@@ -105,7 +105,7 @@ public class ObjectUploadsController : ControllerBaseEx
                 async part =>
                 {
                     // Refuse a destination before its first byte is written
-                    if (part.Path != null) _uploads.ValidatePath(ctx, part.Path);
+                    if (part.Path != null) _uploads.ValidatePath(part.Path);
                     return await _uploads.StreamAsync(ctx, part.Body, ct);
                 }, _uploads.Discard);
         }

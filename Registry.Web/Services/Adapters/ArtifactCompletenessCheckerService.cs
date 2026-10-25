@@ -196,7 +196,7 @@ public class ArtifactCompletenessCheckerService
             try
             {
                 await _builds.QueueAsync(new BuildTarget(ddb, dataset, orgSlug, dsSlug), entry.Path, entry.Hash,
-                    origin: BuildOrigin.Service, ct: ct);
+                    origin: BuildOrigin.Service);
 
                 stats.Queued++;
                 _logger.LogInformation(

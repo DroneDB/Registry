@@ -94,7 +94,7 @@ public sealed class ArchiveImportStrategy : IRemoteImportStrategy
             _logger.LogInformation("Extracted {FileCount} files ({Size:N0} bytes) into {Folder}", files.Length, size,
                 destination.Folder);
 
-            await _destinations.QueueBuildAsync(destination, _destinations.Open(destination), ct);
+            await _destinations.QueueBuildAsync(destination, _destinations.Open(destination));
             report.Imported(destination, size, files.Length);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

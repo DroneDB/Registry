@@ -74,7 +74,7 @@ public sealed class BuildScheduler
     /// </summary>
     /// <returns>The job id.</returns>
     public async Task<string> QueueAsync(BuildTarget target, string path, string? hash, bool force = false,
-        BuildOrigin? origin = null, CancellationToken ct = default)
+        BuildOrigin? origin = null)
     {
         var userId = await UserIdAsync(origin);
         await FlagPendingAsync(target);
@@ -83,8 +83,7 @@ public sealed class BuildScheduler
 
     /// <summary>Queues a build of the whole dataset (an import, a rescan).</summary>
     /// <returns>The job id.</returns>
-    public async Task<string> QueueDatasetAsync(BuildTarget target, bool force, BuildOrigin? origin = null,
-        CancellationToken ct = default)
+    public async Task<string> QueueDatasetAsync(BuildTarget target, bool force, BuildOrigin? origin = null)
     {
         var userId = await UserIdAsync(origin);
         await FlagPendingAsync(target);
@@ -93,8 +92,7 @@ public sealed class BuildScheduler
 
     /// <summary>Queues the pending-build job when libddb reports deferred builds in the dataset.</summary>
     /// <returns>The job id, or null when nothing is deferred.</returns>
-    public async Task<string?> QueuePendingAsync(BuildTarget target, BuildOrigin? origin = null,
-        CancellationToken ct = default)
+    public async Task<string?> QueuePendingAsync(BuildTarget target, BuildOrigin? origin = null)
     {
         if (!target.Ddb.IsBuildPending())
             return null;
