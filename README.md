@@ -73,10 +73,13 @@ Open [http://localhost:5000](http://localhost:5000) in your browser to start usi
 > ```bash
 > docker volume create registry-data
 > docker run -d --name registry --restart unless-stopped \
+>   --platform linux/amd64 \
 >   -p 5000:5000 \
 >   -v registry-data:/data \
 >   dronedb/registry
 > ```
+>
+> The image is built for `linux/amd64` only. On Apple Silicon the `--platform linux/amd64` line is required, otherwise Docker stops with `no matching manifest for linux/arm64/v8`. Docker Desktop then runs the image through emulation (turn on *Use Rosetta for x86_64/amd64 emulation* in Settings → General).
 >
 > See [macOS: use a named volume](https://docs.dronedb.app/docs/registry/getting-started#macos-use-a-named-volume) for details.
 
