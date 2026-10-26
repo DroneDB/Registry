@@ -24,13 +24,13 @@ View orthophotos, point clouds, 3D models, Vector files, 3D Tiles, Gaussian spla
 
 | Category | Formats |
 |----------|---------|
-| Images | JPG, JPEG, DNG, TIF, TIFF, PNG, GIF, WEBP |
+| Images | JPG, JPEG, DNG, TIF, TIFF, JP2, J2K, PNG, GIF, WEBP |
 | Point Clouds | LAS, LAZ, E57, PTS, XYZ, PLY* |
 | 3D Models | OBJ, GLTF, GLB, PLY* |
 | 3D Tiles | 3TZ |
 | Gaussian Splats | SPLAT, SPZ |
-| Rasters | GeoTIFF (orthophotos, DEMs) |
-| Vector | GeoJSON, DXF, DWG, SHP, SHZ, FGB, TopoJSON, KML, KMZ, GPKG |
+| Rasters | GeoTIFF, JPEG 2000 (orthophotos, DEMs) |
+| Vector | GeoJSON, DXF, DWG, SHP, SHZ, FGB, TopoJSON, KML, KMZ, GPKG, GPX |
 | Videos | MP4, MOV, WEBM, M4V, AVI, MKV |
 | Other | Panoramas (360°), Markdown, PDF |
 
