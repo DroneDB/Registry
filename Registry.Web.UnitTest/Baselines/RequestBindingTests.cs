@@ -111,6 +111,9 @@ public sealed class RequestBindingTests : IDisposable
         // users/{user}/meta: a free-form dictionary stored in the user's metadata column (whole numbers are long)
         yield return new BindingCase("user-meta", typeof(Dictionary<string, object>),
             """{"maxStorage":1073741824,"roles":["a","b"],"ratio":0.25,"whole":2.0,"since":"2026-01-01T00:00:00Z","day":"2026-01-01","nested":{"k":[1,{"x":null}]},"flag":true,"none":null,"text":"x"}""");
+        // PATCH users/preferences: sections by name; a null section deletes it (the Hub's preferences store)
+        yield return new BindingCase("hub-patch-preferences", typeof(Dictionary<string, JsonElement>),
+            """{"units":{"measurement":"metric"},"map":{"zoom":12.5,"layers":["osm","sat"],"center":[11.25,45]},"orgs":null}""");
         // STAC search (a STAC client posts the spec's body)
         yield return new BindingCase("stac-search", typeof(StacSearchRequestDto),
             """{"bbox":[11.0,45.0,12.5,46.0],"datetime":"2024-01-01T00:00:00Z/..","limit":10,"collections":["org/ds"],"ids":["a","b"],"token":"next:1","intersects":{"type":"Point","coordinates":[11.5,45.5]}}""");

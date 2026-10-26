@@ -111,7 +111,8 @@ public class UsersManagerTest : TestBase
                 new OrganizationMembershipService(_context, _appContext, new UpperInvariantLookupNormalizer(),
                     NullLogger<OrganizationMembershipService>.Instance), _appContext, _context),
             new UserDeletion(_loginManagerMock.Object, _userManagerMock.Object, _organizationsManagerMock.Object,
-                _context, identity, _logger));
+                _context, identity, _logger),
+            new UserPreferences(_authManagerMock.Object, _appContext));
     }
 
     [TearDown]

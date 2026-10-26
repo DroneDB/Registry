@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Web.Attributes;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
@@ -11,6 +13,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Managers;
+using Registry.Web.Services.Users;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Auth;
 
@@ -243,6 +246,34 @@ public class UsersController : ControllerBaseEx
 
         return Answer(res);
     }
+
+    /// <summary>
+    /// Gets the current user's Hub preferences, one property per section ({} when none).
+    /// </summary>
+    /// <returns>The sections.</returns>
+    [HttpGet("preferences", Name = nameof(GetPreferences))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<Dictionary<string, object>>> GetPreferences(CancellationToken ct) =>
+        await _usersManager.GetPreferences();
+
+    /// <summary>
+    /// Sets the sections in the body and keeps the others; a section set to null is deleted (back to the Hub defaults).
+    /// </summary>
+    /// <param name="patch">The sections to set, by name.</param>
+    /// <returns>All the sections after the change.</returns>
+    [HttpPatch("preferences", Name = nameof(PatchPreferences))]
+    [RequestSizeLimit(UserPreferences.MaxTotalBytes)]
+    [EnforceContentLength(UserPreferences.MaxTotalBytes, "Preferences")]
+    [Consumes("application/json")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status413PayloadTooLarge)]
+    public async Task<ActionResult<Dictionary<string, object>>> PatchPreferences(
+        [FromBody, Required] Dictionary<string, JsonElement> patch, CancellationToken ct) =>
+        await _usersManager.PatchPreferences(patch, ct);
 
     /// <summary>
     /// Gets the storage quota information for the current user.

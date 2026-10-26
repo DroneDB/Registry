@@ -284,6 +284,21 @@ public sealed class ErrorModelTests : IDisposable
         problem["detail"]!.GetValue<string>().ShouldBe($"A chunk can be at most {MaxChunkBytes} bytes");
     }
 
+    [Test]
+    public async Task Preferences_DeclaredLengthAboveTheLimit_Is413ProblemDetailsWithTheSubject()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Patch, "/users/preferences")
+        {
+            Content = new ByteArrayContent(new byte[65536 + 1])
+        };
+        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        var (response, problem) = await SendAsync(request.AsUser(RegularUser));
+
+        ShouldBeProblem(response, problem, StatusCodes.Status413PayloadTooLarge);
+        problem["detail"]!.GetValue<string>().ShouldBe("Preferences can be at most 65536 bytes");
+        problem["noRetry"]!.GetValue<bool>().ShouldBeTrue();
+    }
+
     // ---- 429 from a middleware ----
 
     [Test]

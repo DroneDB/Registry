@@ -345,6 +345,28 @@
       "text": "x"
     }
   },
+  "hub-patch-preferences": {
+    "type": "Dictionary`2",
+    "input": "{\"units\":{\"measurement\":\"metric\"},\"map\":{\"zoom\":12.5,\"layers\":[\"osm\",\"sat\"],\"center\":[11.25,45]},\"orgs\":null}",
+    "outcome": "bound",
+    "model": {
+      "units": {
+        "measurement": "metric"
+      },
+      "map": {
+        "zoom": 12.5,
+        "layers": [
+          "osm",
+          "sat"
+        ],
+        "center": [
+          11.25,
+          45
+        ]
+      },
+      "orgs": null
+    }
+  },
   "stac-search": {
     "type": "StacSearchRequestDto",
     "input": "{\"bbox\":[11.0,45.0,12.5,46.0],\"datetime\":\"2024-01-01T00:00:00Z/..\",\"limit\":10,\"collections\":[\"org/ds\"],\"ids\":[\"a\",\"b\"],\"token\":\"next:1\",\"intersects\":{\"type\":\"Point\",\"coordinates\":[11.5,45.5]}}",

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Common;
@@ -19,9 +20,10 @@ public class UsersManager
     private readonly UserRoles _roles;
     private readonly UserDirectory _directory;
     private readonly UserDeletion _deletion;
+    private readonly UserPreferences _preferences;
 
     public UsersManager(IUserSessions sessions, UserAccounts accounts, UserPasswords passwords, UserRoles roles,
-        UserDirectory directory, UserDeletion deletion)
+        UserDirectory directory, UserDeletion deletion, UserPreferences preferences)
     {
         _sessions = sessions;
         _accounts = accounts;
@@ -29,6 +31,7 @@ public class UsersManager
         _roles = roles;
         _directory = directory;
         _deletion = deletion;
+        _preferences = preferences;
     }
 
     public Task<AuthenticateResponse> Authenticate(string userName, string password) =>
@@ -46,6 +49,11 @@ public class UsersManager
     public Task<Dictionary<string, object>> GetUserMeta(string userName = null) => _accounts.GetUserMeta(userName);
 
     public Task SetUserMeta(string userId, Dictionary<string, object> meta) => _accounts.SetUserMeta(userId, meta);
+
+    public Task<Dictionary<string, object>> GetPreferences() => _preferences.Get();
+
+    public Task<Dictionary<string, object>> PatchPreferences(Dictionary<string, JsonElement> patch, CancellationToken ct) =>
+        _preferences.Patch(patch, ct);
 
     public Task<ChangePasswordResult> ChangePassword(string userName, string currentPassword, string newPassword) =>
         _passwords.ChangePassword(userName, currentPassword, newPassword);

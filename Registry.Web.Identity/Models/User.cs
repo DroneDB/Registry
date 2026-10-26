@@ -9,6 +9,7 @@ namespace Registry.Web.Identity.Models;
 public class User : IdentityUser
 {
     private Dictionary<string, object> _metadata = new();
+    private Dictionary<string, object> _preferences = new();
 
     /*
      *  When updating the entity and changing items in the dictionary,
@@ -26,5 +27,18 @@ public class User : IdentityUser
     {
         get => _metadata ??= new();
         set => _metadata = value ?? new();
+    }
+
+    /// <summary>
+    /// The user's Hub preferences, one property per section ("map", "units", ...): JSON the Hub owns and the
+    /// Registry never reads. Only the user writes it (<c>PATCH /users/preferences</c>); a login provider and the admin
+    /// metadata endpoint never do, which is why it is a column of its own and not a key of <see cref="Metadata"/>.
+    /// Never null, like <see cref="Metadata"/>.
+    /// </summary>
+    [AllowNull]
+    public Dictionary<string, object> Preferences
+    {
+        get => _preferences ??= new();
+        set => _preferences = value ?? new();
     }
 }

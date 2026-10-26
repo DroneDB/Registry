@@ -186,6 +186,8 @@ POST /users/changepwd -> Authorize [authenticated] @ UsersController.ChangePassw
 GET /users/detailed -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.GetAllDetailed
 POST /users/logout -> AllowAnonymous + Authorize [anonymous] @ UsersController.Logout
 GET /users/meta -> Authorize [authenticated] @ UsersController.GetCurrentUserMeta
+GET /users/preferences -> Authorize [authenticated] @ UsersController.GetPreferences
+PATCH /users/preferences -> Authorize [authenticated] @ UsersController.PatchPreferences
 GET /users/roles -> Authorize [authenticated] @ UsersController.GetRoles
 POST /users/roles -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.CreateRole
 DELETE /users/roles/{roleName} -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.DeleteRole

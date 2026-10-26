@@ -860,6 +860,16 @@ GET /users/meta
   200 application/json map<any>
   400 application/json ProblemDetails
   401 application/json ProblemDetails
+GET /users/preferences
+  200 application/json map<any>
+  401 application/json ProblemDetails
+PATCH /users/preferences
+  body application/json map<any>
+  200 application/json map<any>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  409 application/json ProblemDetails
+  413 application/json ProblemDetails
 GET /users/roles
   200 application/json array<string>
   400 application/json ProblemDetails
