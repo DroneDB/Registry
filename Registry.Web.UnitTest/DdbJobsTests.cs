@@ -330,9 +330,11 @@ public class DdbJobsTests
             {
                 var call = (MethodCallExpression)expr.Body;
                 object? Eval(int i) => Expression.Lambda(call.Arguments[i]).Compile().DynamicInvoke();
+                // Build(org, ref, path, force, context); RebuildInBackground(org, ref, path, context) never forces
+                var hasForce = call.Method.Name == nameof(DdbJobs.Build);
                 enqueued.Add(new EnqueuedBuild(call.Method.Name, (string)Eval(0)!, (Guid)Eval(1)!, (string)Eval(2)!,
-                    (bool)Eval(3)!, meta));
-                Eval(4).ShouldBeNull(); // PerformContext is injected by Hangfire at run time
+                    hasForce && (bool)Eval(3)!, meta));
+                Eval(call.Arguments.Count - 1).ShouldBeNull(); // PerformContext is injected by Hangfire at run time
                 return $"job-{enqueued.Count}";
             });
         return jobs;
@@ -404,6 +406,55 @@ public class DdbJobsTests
             "Pending builds: 7; enqueued 3; skipped 4 (1 not yet due, 1 with an active build job, 2 without a path)"));
         Logged.ShouldContain(m => m.Contains("Enqueued build of 'sub/model.obj' (job job-2)"));
         Logged.ShouldContain(m => m.Contains("Done build pending"));
+    }
+
+    private static EntryBuildArtifacts Manifest(string path, bool listsLegacy) => new()
+    {
+        Path = path, Exists = true,
+        Build = new EntryBuild
+        {
+            Buildable = true, State = BuildState.Pending,
+            Artifacts = listsLegacy ? [new BuildArtifact { Role = "model.nexus", Legacy = true }] : []
+        }
+    };
+
+    [Test]
+    public void Pending_EntryWhoseBuildListsALegacyArtifact_IsQueuedAsABackgroundRebuild()
+    {
+        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([
+            PendingEntry("old/model.obj", 600, "h-old"),
+            PendingEntry("ortho.tif", 600, "h-ortho")
+        ]);
+        _ddb.Setup(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()))
+            .Returns([Manifest("old/model.obj", true), Manifest("ortho.tif", false)]);
+        var enqueued = new List<EnqueuedBuild>();
+
+        Pending(MockJobs(enqueued).Object).Run(_ddb.Object, Org, Ds, Console());
+
+        enqueued.Select(e => (e.Method, e.Path)).ShouldBe([
+            (nameof(DdbJobs.RebuildInBackground), "old/model.obj"),
+            (nameof(DdbJobs.Build), "ortho.tif")
+        ]);
+        enqueued.ShouldAllBe(e => e.OrgSlug == Org && e.InternalRef == Ref && !e.Force);
+        enqueued[0].Meta.ShouldBe(new IndexPayload(Org, Ds, "h-old", MagicStrings.AutoBuildServiceUserId, null,
+            "old/model.obj"));
+        Logged.ShouldContain(m => m.Contains("Enqueued background rebuild of 'old/model.obj' (job job-1)"));
+        Logged.ShouldContain(m => m.Contains("Enqueued build of 'ortho.tif' (job job-2)"));
+    }
+
+    [Test]
+    public void Pending_BuildManifestUnavailable_QueuesTheBuildsOnTheBuildsQueueAndSaysWhy()
+    {
+        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingEntry("old/model.obj", 600, "h-old")]);
+        _ddb.Setup(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()))
+            .Throws(new DdbException("cannot read the index"));
+        var enqueued = new List<EnqueuedBuild>();
+
+        Pending(MockJobs(enqueued).Object).Run(_ddb.Object, Org, Ds, Console());
+
+        enqueued.Select(e => (e.Method, e.Path)).ShouldBe([(nameof(DdbJobs.Build), "old/model.obj")]);
+        _log.Entries.ShouldContain(e => e.Level == LogLevel.Warning &&
+                                        e.Message.Contains("Cannot read the build manifest of the pending entries"));
     }
 
     [Test]

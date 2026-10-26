@@ -11,8 +11,8 @@ namespace Registry.Web.Filters;
 
 /// <summary>
 /// Event-driven replacement for the high-frequency "process-pending-builds"
-/// poller. When a build job (<see cref="DdbJobs.Build"/> or <see cref="DdbJobs.BuildPending"/>,
-/// either shape: <see cref="DdbJobDescriptor"/>) reaches a terminal state, this filter asks <see cref="BuildPendingService"/> whether the affected
+/// poller. When a build job (<see cref="DdbJobs.Build"/>, <see cref="DdbJobs.RebuildInBackground"/> or
+/// <see cref="DdbJobs.BuildPending"/>, either shape: <see cref="DdbJobDescriptor"/>) reaches a terminal state, this filter asks <see cref="BuildPendingService"/> whether the affected
 /// dataset still has pending builds and, if so, self-schedules a single delayed
 /// retry with exponential backoff. When nothing remains pending the chain stops,
 /// so idle datasets generate zero recurring Hangfire churn.
@@ -29,8 +29,9 @@ public sealed class BuildRetrySchedulerFilter(
 
             if (DdbJobDescriptor.Of(context.BackgroundJob?.Job) is not { IsBuild: true } job) return;
             var methodName = context.BackgroundJob!.Job.Method.Name;
-            // Only a failed entry with its own retained native marker is recoverable.
-            if (context.NewState is FailedState && job.Kind != DdbJobKind.Build) return;
+            // Only a failed entry build (a build or a background rebuild) with its own retained native marker is
+            // recoverable; the retry re-enqueues it on its own queue (PendingBuildEnqueuer).
+            if (context.NewState is FailedState && !job.BuildsEntry) return;
 
             var jobId = context.BackgroundJob!.Id;
             var conn = context.Connection;

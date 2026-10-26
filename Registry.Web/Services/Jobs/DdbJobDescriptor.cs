@@ -66,6 +66,12 @@ public readonly record struct DdbJobDescriptor(DdbJobKind Kind, string? Path)
     /// <summary>Whether the job builds (an entry, the whole dataset or the pending entries).</summary>
     public bool IsBuild => Kind is DdbJobKind.Build or DdbJobKind.RebuildInBackground or DdbJobKind.BuildPending;
 
+    /// <summary>
+    /// Whether the job builds the entry at <see cref="Path"/> itself (a build, a background rebuild): when it fails
+    /// with an error libddb retries, the entry keeps its pending marker and the pending-build coordinator retries it.
+    /// </summary>
+    public bool BuildsEntry => Kind is DdbJobKind.Build or DdbJobKind.RebuildInBackground;
+
     /// <summary>Whether the job is the low-priority build of an entry of an older layout (the rebuilds queue).</summary>
     public bool IsBackgroundRebuild => Kind is DdbJobKind.RebuildInBackground;
 

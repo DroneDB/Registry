@@ -2,11 +2,14 @@
 using Registry.Web.Services.Jobs;
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using Hangfire;
 using Hangfire.Common;
 using Hangfire.InMemory;
 using Hangfire.States;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
 using Registry.Web.Hosting;
 using Registry.Web.Models.Configuration;
@@ -193,6 +196,18 @@ public class ProcessingBudgetTests
     }
 
     [Test]
+    public void TaskRetry_RequeueOfAFailedBackgroundRebuild_LandsOnRebuildsQueue()
+    {
+        using var storage = new Storage();
+        var id = storage.Client.Create(RebuildJob(), new FailedState(new InvalidOperationException("build failed")));
+
+        // What the task retry and the dashboard do: Failed -> Enqueued on the default queue
+        storage.Client.Requeue(id, FailedState.StateName).ShouldBeTrue();
+
+        storage.QueueOf(id).ShouldBe(JobQueues.Rebuilds);
+    }
+
+    [Test]
     public void BackgroundRebuild_IsABuildForTheFilters_ButNotOneThatRunsOnTheBuildsQueue()
     {
         var descriptor = DdbJobDescriptor.Of(RebuildJob())!.Value;
@@ -226,6 +241,43 @@ public class ProcessingBudgetTests
         jobs.Queues.ShouldNotContain(JobQueues.Builds);
         new[] { rebuilds.ServerName, builds.ServerName, jobs.ServerName }.Distinct().Count().ShouldBe(3);
     }
+
+    [Test]
+    public void AddJobServers_RegistersTheBuildsRebuildsAndJobsServers()
+    {
+        var host = HostResourceBudget.Create(InstanceType.Default, new HostFacts(32, 128 * GiB),
+            new HostResourceOptions(), new DdbRuntimeOptions(), _ => null);
+        var budget = host.Processing!;
+        using var jobStorage = new InMemoryStorage();
+        var services = new ServiceCollection()
+            .AddSingleton(host)
+            .AddSingleton<JobStorage>(jobStorage)
+            // What AddHangfire leaves for the servers to find, without its global configuration side effects
+            .AddSingleton(GlobalConfiguration.Configuration)
+            .AddLogging();
+
+        services.AddJobServers();
+
+        var servers = services.Where(d => d.ServiceType == typeof(IHostedService)).ToArray();
+        servers.Length.ShouldBe(3);
+        using var provider = services.BuildServiceProvider();
+        // Hangfire builds each server's options in its registration callback: read them from the hosted
+        // services it creates (not started)
+        var options = provider.GetServices<IHostedService>().Select(ServerOptions).ToArray();
+        options.Select(o => (string.Join(",", o.Queues), o.WorkerCount)).ShouldBe([
+            (JobQueues.Builds, budget.HeavyWorkers),
+            (JobQueues.Rebuilds, 1),
+            (string.Join(",", JobQueues.Light), budget.LightWorkers)
+        ]);
+        budget.HeavyWorkers.ShouldBeGreaterThan(1, "the rebuilds server must not follow the host");
+        options.Select(o => o.ServerName).Distinct().Count().ShouldBe(3);
+    }
+
+    private static BackgroundJobServerOptions ServerOptions(IHostedService server) =>
+        (BackgroundJobServerOptions)server.GetType()
+            .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
+            .Single(f => f.FieldType == typeof(BackgroundJobServerOptions))
+            .GetValue(server)!;
 
     [Test]
     public void Enqueue_HeavyTaskQueueDependsOnTool()

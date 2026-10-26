@@ -301,13 +301,68 @@ public class PendingBuildCoordinationTests
         _delays.ShouldBeEmpty();
     }
 
-    private ApplyStateContext FilterContext(string path, string hash, IState state)
+    [Test]
+    public void FailedBackgroundRebuildWithItsPendingMarkerIsRetriedAsABackgroundRebuild()
+    {
+        Seed();
+        // A retryable failure: libddb keeps the marker, and the build still lists the legacy model it replaces
+        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingMarkers.Of("model.obj", "model-hash")]);
+        _ddb.Setup(x => x.GetBuildArtifacts(It.Is<IReadOnlyList<string>>(p => p.SequenceEqual(new[] { "model.obj" }))))
+            .Returns([new EntryBuildArtifacts
+            {
+                Path = "model.obj", Exists = true, Hash = "model-hash",
+                Build = new EntryBuild
+                {
+                    Buildable = true, State = BuildState.Pending,
+                    Artifacts = [new BuildArtifact { Role = "model.nexus", Legacy = true }]
+                }
+            }]);
+        Expression<Action<DdbJobs>>? scheduled = null;
+        _jobs.Setup(x => x.ScheduleIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()))
+            .Returns<Expression<Action<DdbJobs>>, IndexPayload, TimeSpan>((job, _, delay) =>
+            {
+                scheduled = job;
+                _delays.Add(delay);
+                return "retry-1";
+            });
+        var enqueued = new List<(Expression<Action<DdbJobs>> Job, IndexPayload Meta)>();
+        _jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()))
+            .Returns<Expression<Action<DdbJobs>>, IndexPayload>((job, meta) =>
+            {
+                enqueued.Add((job, meta));
+                return "rebuild-" + enqueued.Count;
+            });
+        using var provider = new ServiceCollection().AddSingleton(_service).BuildServiceProvider();
+        var failedRebuild = Job.FromExpression<DdbJobs>(j => j.RebuildInBackground(Org, Guid.Empty, "model.obj", null));
+
+        new BuildRetrySchedulerFilter(provider.GetRequiredService<IServiceScopeFactory>(), Mock.Of<ILogger<BuildRetrySchedulerFilter>>())
+            .OnStateApplied(FilterContext("model.obj", "model-hash", new FailedState(new DdbRetryableException("disk full")), failedRebuild),
+                Mock.Of<IWriteOnlyTransaction>());
+
+        // The coordinator retry is scheduled ...
+        _delays.ShouldBe([TimeSpan.FromMinutes(1)]);
+        State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe("retry-1");
+        ((MethodCallExpression)scheduled!.Body).Method.Name.ShouldBe(nameof(DdbJobs.BuildPending));
+
+        // ... and when it runs, it queues the entry again as a background rebuild, which stays on its queue
+        var index = new Mock<IJobIndexQuery>();
+        index.Setup(x => x.GetByOrgDsAsync(Org, Ds, 0, int.MaxValue, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        Enqueuer(_jobs.Object, index.Object, _storage).Run(_ddb.Object, Org, Ds, NoConsole);
+
+        var retried = enqueued.ShouldHaveSingleItem();
+        var retriedJob = Job.FromExpression(retried.Job);
+        DdbJobDescriptor.Of(retriedJob).ShouldBe(new DdbJobDescriptor(DdbJobKind.RebuildInBackground, "model.obj"));
+        new BuildQueueRoutingFilter((_, _) => false).QueueFor(retriedJob).ShouldBe(JobQueues.Rebuilds);
+        retried.Meta.ShouldBe(new IndexPayload(Org, Ds, "model-hash", MagicStrings.AutoBuildServiceUserId, null, "model.obj"));
+    }
+
+    private ApplyStateContext FilterContext(string path, string hash, IState state, Job? job = null)
     {
         var connection = new Mock<JobStorageConnection>();
         connection.Setup(x => x.GetJobParameter("entry-job", JobParamKeys.OrgSlug)).Returns(Org);
         connection.Setup(x => x.GetJobParameter("entry-job", JobParamKeys.DsSlug)).Returns(Ds);
         connection.Setup(x => x.GetJobParameter("entry-job", JobParamKeys.Hash)).Returns(hash);
-        var job = Job.FromExpression<DdbJobs>(j => j.Build(Org, Guid.Empty, path, false, null));
+        job ??= Job.FromExpression<DdbJobs>(j => j.Build(Org, Guid.Empty, path, false, null));
         var background = new BackgroundJob("entry-job", job, DateTime.UtcNow);
         return new ApplyStateContext(_storage, connection.Object, Mock.Of<IWriteOnlyTransaction>(), background, state, "Processing");
     }

@@ -20,7 +20,8 @@ namespace Registry.Web.Services.Jobs;
 /// <summary>
 /// The pending-build job's work (<see cref="DdbJobs.BuildPending"/>): instead of letting libddb
 /// run every due pending build inline (one opaque job for the whole dataset), it enqueues one
-/// indexed <see cref="DdbJobs.Build"/> per due pending entry, so a failure lands on that entry's
+/// indexed <see cref="DdbJobs.Build"/> per due pending entry (a <see cref="DdbJobs.RebuildInBackground"/> for an
+/// entry whose build still lists an artifact of an older layout), so a failure lands on that entry's
 /// own job and the build status shows it as failed. It runs under the dataset's build
 /// coordination lock (<see cref="DatasetBuildCoordinator"/>). Without the organization and
 /// dataset of the job (job parameters set by <see cref="IndexedJobEnqueuer"/>), or a dataset
@@ -126,26 +127,36 @@ public sealed class PendingBuildEnqueuer
                 ? new HashSet<string>()
                 : ActiveBuildPaths(orgSlug, dsSlug, due.Select(p => p.Path).ToHashSet(), connection);
 
-            var enqueued = 0;
+            var toEnqueue = new List<PendingBuildInfo>(due.Length);
             var active = 0;
             foreach (var entry in due)
             {
-                // Add() is false when a job is already active, or was enqueued above for a
+                // Add() is false when a job is already active, or is queued below for a
                 // duplicate path.
-                if (!activePaths.Add(entry.Path))
-                {
+                if (activePaths.Add(entry.Path))
+                    toEnqueue.Add(entry);
+                else
                     active++;
-                    continue;
-                }
+            }
 
+            var inBackground = BackgroundRebuildPaths(ddb, toEnqueue, console);
+            var dataset = new DatasetKey(folderOrg, internalRef);
+            var enqueued = 0;
+            foreach (var entry in toEnqueue)
+            {
                 var path = entry.Path;
                 var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, MagicStrings.AutoBuildServiceUserId,
                     null, path);
-                var jobId = _jobs.EnqueueIndexed<DdbJobs>(j => j.Build(folderOrg, internalRef, path, false, null), meta);
+                var background = inBackground.Contains(path);
+                var jobId = background
+                    ? _jobs.EnqueueRebuild(dataset, path, meta)
+                    : _jobs.EnqueueBuild(dataset, path, false, meta);
                 if (string.IsNullOrWhiteSpace(jobId))
                     throw new InvalidOperationException("Pending build enqueue returned no job ID");
                 enqueued++;
-                console.Debug("Enqueued build of '{Path}' (job {JobId})", path, jobId);
+                console.Debug(background
+                    ? "Enqueued background rebuild of '{Path}' (job {JobId})"
+                    : "Enqueued build of '{Path}' (job {JobId})", path, jobId);
             }
 
             console.Debug("Pending builds: {Pending}; enqueued {Enqueued}; skipped {Skipped} ({NotDue} not yet due, " +
@@ -159,6 +170,40 @@ public sealed class PendingBuildEnqueuer
         }
 
         console.Debug("Done build pending");
+    }
+
+    // The entries whose build still lists an artifact of an older layout: the build that replaces it is a background
+    // rebuild (the rebuilds queue, its thread cap), the rule the artifact completeness check queues it by, so the
+    // retry of a failed background rebuild (it keeps its pending marker) does not come back as a user build on the
+    // builds queue. Without the build manifest the entries are built on the builds queue, as before the rule.
+    private static HashSet<string> BackgroundRebuildPaths(IDDB ddb, IReadOnlyList<PendingBuildInfo> entries,
+        JobConsole console)
+    {
+        var paths = new HashSet<string>(StringComparer.Ordinal);
+        if (entries.Count == 0)
+            return paths;
+
+        try
+        {
+            var builds = ddb.GetBuildArtifacts(entries.Select(e => e.Path).ToArray());
+            if (builds == null || builds.Count != entries.Count)
+            {
+                console.Warning("The build manifest did not answer for {Count} pending entries; building them on " +
+                                "the builds queue", entries.Count);
+                return paths;
+            }
+
+            for (var i = 0; i < entries.Count; i++)
+                if (builds[i].Build?.ListsLegacyArtifact() == true)
+                    paths.Add(entries[i].Path);
+        }
+        catch (Exception ex)
+        {
+            console.Warning("Cannot read the build manifest of the pending entries ({Error}); building them on the " +
+                            "builds queue", JobLogText.Describe(ex));
+        }
+
+        return paths;
     }
 
     // Hangfire is authoritative: a missing/terminal job cannot suppress a pending entry forever
