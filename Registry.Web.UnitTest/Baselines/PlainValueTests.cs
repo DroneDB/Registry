@@ -5,13 +5,15 @@ using System.Text.Json;
 using NUnit.Framework;
 using Registry.Common;
 using Registry.Test.Common;
+using Registry.Web.Identity;
 using Shouldly;
 
 namespace Registry.Web.Test.Baselines;
 
 /// <summary>
 /// <see cref="PlainValue"/>, the value semantics of the free-form dictionaries (<c>User.Metadata</c>): equality and
-/// hash by content, and a deep copy.
+/// hash by content, and a deep copy; and <see cref="PlainValue.From"/> / <see cref="PlainValue.ObjectFrom"/>, which read a
+/// request's or a login provider's JSON into those values and must give the kinds the stored column gives back.
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~PlainValueTests"
 /// </summary>
 [TestFixture]
@@ -129,6 +131,50 @@ public class PlainValueTests
         plain["n"].ShouldBeNull();
         plain["l"].ShouldBeOfType<List<object?>>().Count.ShouldBe(2);
         plain["o"].ShouldBeOfType<Dictionary<string, object?>>()["k"].ShouldBe("v");
+    }
+
+    private static IEnumerable<TestCaseData> Numbers()
+    {
+        yield return new TestCaseData("0", 0L).SetName("From: zero is a long");
+        yield return new TestCaseData("-7", -7L).SetName("From: a negative whole number is a long");
+        yield return new TestCaseData("9223372036854775807", long.MaxValue).SetName("From: the largest long is a long");
+        yield return new TestCaseData("9223372036854775808", 9223372036854775808.0).SetName("From: a whole number above long is a double");
+        yield return new TestCaseData("1.5", 1.5).SetName("From: a fraction is a double");
+        yield return new TestCaseData("2.0", 2.0).SetName("From: a whole number written with a point is a double");
+        yield return new TestCaseData("1e3", 1000.0).SetName("From: an exponent is a double");
+    }
+
+    [TestCaseSource(nameof(Numbers))]
+    public void From_KeepsTheKindOfANumber(string json, object expected)
+    {
+        var plain = PlainValue.From(Json(json));
+
+        plain.ShouldNotBeNull();
+        plain.GetType().ShouldBe(expected.GetType());
+        plain.ShouldBe(expected);
+    }
+
+    [Test]
+    public void AWholeNumberReadWithObjectFrom_IsStoredAsWritten_AndReadBackUnchanged()
+    {
+        var metadata = PlainValue.ObjectFrom(Json("""{"maxStorage":10,"ratio":0.5,"nested":{"count":3}}"""))!;
+
+        var stored = UserMetadataJson.Serialize(metadata);
+
+        stored.ShouldBe("""{"maxStorage":10,"ratio":0.5,"nested":{"count":3}}""");
+        // What EF compares on every load and save: a re-read value must not look changed
+        UserMetadataJson.AreEqual(metadata, UserMetadataJson.Deserialize(stored)!).ShouldBeTrue();
+        metadata["maxStorage"].ShouldBeOfType<long>().ShouldBe(10L);
+    }
+
+    [TestCase("[1,2]")]
+    [TestCase("\"text\"")]
+    [TestCase("3")]
+    [TestCase("true")]
+    [TestCase("null")]
+    public void ObjectFrom_IsNull_ForAValueThatIsNotAnObject(string json)
+    {
+        PlainValue.ObjectFrom(Json(json)).ShouldBeNull();
     }
 
     [Test]

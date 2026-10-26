@@ -105,6 +105,13 @@ public static class PlainValue
         _ => null
     };
 
+    /// <summary>
+    /// The plain dictionary of a JSON object (see <see cref="From"/> for its values), or <c>null</c> when
+    /// <paramref name="element"/> is not an object.
+    /// </summary>
+    public static Dictionary<string, object>? ObjectFrom(JsonElement element) =>
+        element.ValueKind == JsonValueKind.Object ? (Dictionary<string, object>)(object)ObjectOf(element) : null;
+
     // Integers are long, floating-point numbers double, JSON is its plain value: what is compared and hashed
     private static object? Normalize(object? value) => value switch
     {

@@ -47,7 +47,7 @@ public static class UserMetadataJson
         return document.RootElement.ValueKind switch
         {
             JsonValueKind.Null => null,
-            JsonValueKind.Object => (Dictionary<string, object>)(object)PlainValue.From(document.RootElement)!,
+            JsonValueKind.Object => PlainValue.ObjectFrom(document.RootElement),
             var kind => throw new JsonException($"User metadata is a JSON object, not {kind}")
         };
     }

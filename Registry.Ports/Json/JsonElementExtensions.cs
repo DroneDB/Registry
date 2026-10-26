@@ -36,42 +36,4 @@ public static class JsonElementExtensions
     /// <summary>The elements of an array (none for another value).</summary>
     public static IEnumerable<JsonElement> Items(this JsonElement element) =>
         element.ValueKind == JsonValueKind.Array ? element.EnumerateArray() : [];
-
-    /// <summary>
-    /// The value as plain CLR objects: <c>string</c>, <c>long</c> (a whole number that fits), <c>double</c>, <c>bool</c>,
-    /// <c>null</c>, <c>List&lt;object?&gt;</c> and <c>Dictionary&lt;string, object?&gt;</c>. For the places that keep a
-    /// free-form value in an <c>object</c> (a login provider's metadata) and must not hold a JSON library's type.
-    /// </summary>
-    public static object? ToPlain(this JsonElement element)
-    {
-        switch (element.ValueKind)
-        {
-            case JsonValueKind.Object:
-                var dictionary = new Dictionary<string, object?>(StringComparer.Ordinal);
-                foreach (var property in element.EnumerateObject())
-                    dictionary[property.Name] = property.Value.ToPlain();
-                return dictionary;
-            case JsonValueKind.Array:
-                var list = new List<object?>(element.GetArrayLength());
-                foreach (var item in element.EnumerateArray())
-                    list.Add(item.ToPlain());
-                return list;
-            case JsonValueKind.String:
-                return element.GetString();
-            case JsonValueKind.Number:
-                return element.TryGetInt64(out var whole) ? whole : element.GetDouble();
-            case JsonValueKind.True:
-                return true;
-            case JsonValueKind.False:
-                return false;
-            default:
-                return null;
-        }
-    }
-
-    /// <summary>An object as a dictionary of <see cref="ToPlain"/> values (null for another value).</summary>
-    public static Dictionary<string, object>? ToPlainDictionary(this JsonElement element) =>
-        element.ValueKind == JsonValueKind.Object
-            ? (Dictionary<string, object>)(object)((Dictionary<string, object?>)element.ToPlain()!)
-            : null;
 }
