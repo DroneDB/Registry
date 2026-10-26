@@ -60,25 +60,27 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-10-24): DroneDB has ONE version, 2.0.0 (package.json); the libddb ABI follows
+        Pinned now (2026-10-26): DroneDB has ONE version, 2.0.0 (package.json); the libddb ABI follows
         it (ABI 2.0, semver: a removed export is a new major, an added one a new minor) and so does
         the handshake (libddb 2.x). It is not tagged until Registry is proven on it, so Registry pins
-        the CI build of DroneDB fixes-and-optimizations commit 00b6768, run 40117330023 (a pull
+        the CI build of DroneDB fixes-and-optimizations commit 3f7f764, run 40358721352 (a pull
         request run of DroneDB#472, built from the merge with master; the .deb is named after that
-        merge commit, 2.0.0~gitad2e16f0), every job green (Linux and Windows builds and tests,
-        ASan + UBSan, the Docker image). Next: the v2.0.0 release (DdbSource release) once it is
-        tagged.
+        merge commit, 2.0.0~git81f128be), every job green (Linux and Windows builds and tests,
+        ASan + UBSan, the Docker image). It brings DDBBuildEx, a build with a cap on its threads
+        ({"threads": N}), which the background rebuild of models of an older layout calls, GPX and
+        JPEG 2000 files, and the formula mask fix. Next: the v2.0.0 release (DdbSource release) once
+        it is tagged.
     -->
     <PropertyGroup>
         <DdbSource>ci</DdbSource>
         <DdbVersion>2.0.0</DdbVersion>
-        <DdbDebFileVersion>2.0.0~gitad2e16f0</DdbDebFileVersion>
-        <DdbCiCommit>00b6768fcfd4738ea8d4b308b59db959289af875</DdbCiCommit>
-        <DdbCiRunId>40117330023</DdbCiRunId>
-        <DdbDebArtifactId>12571675354</DdbDebArtifactId>
-        <DdbWindowsArtifactId>12570847625</DdbWindowsArtifactId>
-        <DdbDebSha256>fb3d606b2fb3e7019df21362872bc4425533d2a4695e6e00cfe7a32436a3516a</DdbDebSha256>
-        <DdbWindowsZipSha256>dd92f3e93e83ddde7aa6424c6d2a38ffce388843d19214823e76e49ed3b26dc2</DdbWindowsZipSha256>
+        <DdbDebFileVersion>2.0.0~git81f128be</DdbDebFileVersion>
+        <DdbCiCommit>3f7f7649151226ca22fd52523e4b36c35fc563e7</DdbCiCommit>
+        <DdbCiRunId>40358721352</DdbCiRunId>
+        <DdbDebArtifactId>12670531116</DdbDebArtifactId>
+        <DdbWindowsArtifactId>12669946068</DdbWindowsArtifactId>
+        <DdbDebSha256>4ab01c28eb90042f6e679ce9b254431fd51ecb8fe7afa20302b6837a2468a66f</DdbDebSha256>
+        <DdbWindowsZipSha256>e507019409e54872504a366be324005420b2fb87cc55c7b34679f0e6d2168c31</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
