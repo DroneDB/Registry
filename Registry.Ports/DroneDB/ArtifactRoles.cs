@@ -13,6 +13,9 @@ public static class ArtifactRoles
     public const string VectorLocal = "vector.local";
     public const string PointCloudCopc = "pointcloud.copc";
     public const string PointCloudEpt = "pointcloud.ept";
+    public const string ModelBm3d = "model.bm3d";
+
+    /// <summary>The Nexus multiresolution mesh of a model built before bm3d: libddb lists it only while there is no <see cref="ModelBm3d"/>.</summary>
     public const string ModelNexus = "model.nexus";
     public const string Model3DTiles = "model.3dtiles";
     public const string GsplatLod = "gsplat.lod";

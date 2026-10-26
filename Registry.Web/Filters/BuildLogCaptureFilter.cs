@@ -11,7 +11,7 @@ namespace Registry.Web.Filters;
 
 /// <summary>
 /// Hangfire server filter that captures the console output of build/maintenance
-/// jobs (<see cref="DdbJobKind.Build"/>, <see cref="DdbJobKind.BuildPending"/>,
+/// jobs (<see cref="DdbJobKind.Build"/>, <see cref="DdbJobKind.RebuildInBackground"/>, <see cref="DdbJobKind.BuildPending"/>,
 /// <see cref="DdbJobKind.Cleanup"/>, <see cref="DdbJobKind.MaskBorders"/>) into a per-job <see cref="LogRingBuffer"/> and persists it to
 /// <c>JobIndex.LogTailJson</c> when the job finishes. This makes the Task
 /// History "View log" dialog show build logs the same way it already shows

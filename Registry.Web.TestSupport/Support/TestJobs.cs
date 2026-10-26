@@ -6,6 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Registry.Ports;
 using Registry.Web.Data;
+using Registry.Web.Models.Configuration;
+using Registry.Web.Utilities;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
@@ -33,13 +35,20 @@ public static class TestJobs
     /// tool's <c>Builds</c> runs inline.
     /// </summary>
     public static DdbJobs DdbJobs(IDdbManager? ddbManager = null, IBackgroundJobsProcessor? jobs = null,
-        JobStorage? storage = null)
+        JobStorage? storage = null, HostResourceBudget? budget = null)
     {
         var manager = ddbManager ?? Mock.Of<IDdbManager>();
         var pending = new PendingBuildEnqueuer(jobs ?? Mock.Of<IBackgroundJobsProcessor>(), Mock.Of<IJobIndexQuery>(),
             manager, storage ?? NewStorage(), System.TimeProvider.System);
-        return new DdbJobs(manager, pending, new Registry.Adapters.FileSystem(), NullLogger<DdbJobs>.Instance);
+        return new DdbJobs(manager, pending, new Registry.Adapters.FileSystem(), NullLogger<DdbJobs>.Instance,
+            budget ?? Budget());
     }
+
+    /// <summary>The budget of a job host with 8 cores and 16 GB, with these processing settings (defaults when null).</summary>
+    public static HostResourceBudget Budget(ProcessingBudgetSettings? processing = null) =>
+        HostResourceBudget.Create(InstanceType.Default, new HostFacts(8, 16L << 30),
+            new HostResourceOptions { ProcessingBudget = processing ?? new ProcessingBudgetSettings() },
+            new DdbRuntimeOptions(), _ => null);
 
     /// <summary>A heavy-tool execution context for <paramref name="ddb"/> of org/<paramref name="internalRef"/>.</summary>
     public static Services.HeavyTasks.Adapters.HeavyToolExecutionContext ExecutionContext(Registry.Ports.DroneDB.IDDB ddb,

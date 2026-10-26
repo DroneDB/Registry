@@ -65,7 +65,7 @@ public class StartupOrderTests
         // The servers under test are Hangfire's own hosted services, registered by Startup
         var hostedServices = factory.Services.GetServices<IHostedService>().ToArray();
         hostedServices[0].ShouldBeSameAs(probe);
-        hostedServices.OfType<BackgroundJobServerHostedService>().Count().ShouldBe(2);
+        hostedServices.OfType<BackgroundJobServerHostedService>().Count().ShouldBe(3, "builds, rebuilds and the other queues");
 
         var snapshot = probe.Snapshot.ShouldNotBeNull();
         snapshot.PendingRegistryMigrations.ShouldBeEmpty(

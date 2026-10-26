@@ -55,7 +55,7 @@ public sealed class JsonContractTests
         "Registry.Web.Models.DTO.TagConverter", "Registry.Web.Models.ControllerBaseEx", "Registry.Web.Models.JwtDescriptor",
         "Registry.Web.Models.DatasetScope", "Registry.Web.Models.ReadableObject", "Registry.Web.Models.DatasetListQuery",
         "Registry.Web.Models.IndexPayload", "Registry.Web.Models.RescanFilter", "Registry.Web.Models.DTO.IsBatchReadyResult",
-        "Registry.Ports.DroneDB.DdbProcessSettings", "Registry.Ports.DroneDB.EntryQuery", "Registry.Ports.DroneDB.RescanOptions",
+        "Registry.Ports.DroneDB.DdbProcessSettings", "Registry.Ports.DroneDB.EntryQuery", "Registry.Ports.DroneDB.RescanOptions", "Registry.Ports.DroneDB.BuildOptions",
         "Registry.Ports.DroneDB.FileHashHint", "Registry.Ports.DroneDB.AddItem", "Registry.Ports.DroneDB.DdbCapabilities",
         "Registry.Ports.DroneDB.DdbEffectiveConfig", "Registry.Ports.DroneDB.DdbCancellation",
         "Registry.Ports.DroneDB.DdbOperation", "Registry.Ports.DroneDB.BatchAddItemError",

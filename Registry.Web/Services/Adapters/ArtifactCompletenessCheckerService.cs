@@ -15,6 +15,7 @@ using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Builds;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters;
 
@@ -26,6 +27,13 @@ namespace Registry.Web.Services.Adapters;
 /// Authoritative buildability, state and completeness come from the DroneDB C++
 /// library's build manifest (<c>DDBGetBuildArtifacts</c>, one call per dataset): the
 /// service is intentionally thin so that .NET cannot drift from the native layout rules.
+/// <para>
+/// An incomplete entry whose build lists an artifact of an older layout (<see cref="BuildArtifact.Legacy"/>) is
+/// rebuilt in the background (<see cref="JobQueues.Rebuilds"/>: one build at a time on few threads), so the
+/// first sweep after a layout change does not put every old entry in front of the builds users wait for. Every
+/// other incomplete entry is queued on the builds queue. An entry that already has a build job queued, scheduled
+/// or running is left to it.
+/// </para>
 /// </summary>
 /// <remarks>
 /// One run at a time across the hosts (the nightly run and the admin trigger of
@@ -44,6 +52,7 @@ public class ArtifactCompletenessCheckerService
     private readonly DatasetSweep _sweep;
     private readonly IDdbManager _ddbManager;
     private readonly BuildScheduler _builds;
+    private readonly IJobIndexQuery _jobIndex;
     private readonly ILogger<ArtifactCompletenessCheckerService> _logger;
 
     public ArtifactCompletenessCheckerService(
@@ -51,12 +60,14 @@ public class ArtifactCompletenessCheckerService
         DatasetSweep sweep,
         IDdbManager ddbManager,
         BuildScheduler builds,
+        IJobIndexQuery jobIndex,
         ILogger<ArtifactCompletenessCheckerService> logger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _sweep = sweep ?? throw new ArgumentNullException(nameof(sweep));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _builds = builds ?? throw new ArgumentNullException(nameof(builds));
+        _jobIndex = jobIndex ?? throw new ArgumentNullException(nameof(jobIndex));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -128,6 +139,7 @@ public class ArtifactCompletenessCheckerService
         var stats = new DatasetStats();
         var entries = ddb.FindSummaries(EntryQuery.All);
         var candidates = new List<EntrySummary>();
+        var inBackground = new HashSet<string>(StringComparer.Ordinal);
         var builds = GetBuilds(ddb, entries, key);
 
         foreach (var entry in entries)
@@ -163,6 +175,8 @@ public class ArtifactCompletenessCheckerService
                 }
 
                 candidates.Add(entry);
+                if (build.ListsLegacyArtifact())
+                    inBackground.Add(entry.Path);
             }
             catch (Exception ex)
             {
@@ -175,12 +189,21 @@ public class ArtifactCompletenessCheckerService
         if (candidates.Count == 0)
             return stats;
 
+        // One query for the dataset: an entry with a build job queued, scheduled or running is that job's to finish
+        var withJob = await _jobIndex.GetActivePathsAsync(orgSlug, dsSlug, HeavyToolIds.Build,
+            candidates.Select(e => e.Path).ToArray(), ct);
         var history = await GetBuildHistoryAsync(orgSlug, dsSlug, candidates.Select(e => e.Path).ToArray(), ct);
         var now = DateTime.UtcNow;
 
         foreach (var entry in candidates)
         {
             ct.ThrowIfCancellationRequested();
+            if (withJob.Contains(entry.Path))
+            {
+                stats.SkippedActive++;
+                continue;
+            }
+
             if (history.TryGetValue(entry.Path, out var jobs) &&
                 ShouldBackOff(jobs, entry.Hash, now, out var failures, out var retryAt))
             {
@@ -193,13 +216,17 @@ public class ArtifactCompletenessCheckerService
 
             try
             {
-                await _builds.QueueAsync(new BuildTarget(ddb, dataset, orgSlug, dsSlug), entry.Path, entry.Hash,
-                    origin: BuildOrigin.Service);
+                var target = new BuildTarget(ddb, dataset, orgSlug, dsSlug);
+                var background = inBackground.Contains(entry.Path);
+                if (background)
+                    await _builds.QueueRebuildAsync(target, entry.Path, entry.Hash, BuildOrigin.Service);
+                else
+                    await _builds.QueueAsync(target, entry.Path, entry.Hash, origin: BuildOrigin.Service);
 
                 stats.Queued++;
                 _logger.LogInformation(
-                    "Enqueued rebuild for {Key} path={Path} (incomplete artifacts)",
-                    key, entry.Path);
+                    "Enqueued {Queue} rebuild for {Key} path={Path} (incomplete artifacts)",
+                    background ? "background" : "regular", key, entry.Path);
 
                 await Task.Delay(InterEntryDelayMs, ct);
             }

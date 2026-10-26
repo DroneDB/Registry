@@ -42,7 +42,7 @@ public sealed class WireShapeTests : IDisposable
         "Registry.Web.Models.JwtDescriptor", "Registry.Web.Models.DatasetScope", "Registry.Web.Models.ReadableObject",
         "Registry.Web.Models.DatasetListQuery", "Registry.Web.Models.IndexPayload", "Registry.Web.Models.RescanFilter",
         "Registry.Ports.DroneDB.DdbProcessSettings", "Registry.Ports.DroneDB.EntryQuery",
-        "Registry.Ports.DroneDB.RescanOptions", "Registry.Ports.DroneDB.FileHashHint", "Registry.Ports.DroneDB.NormalizedEntryPath",
+        "Registry.Ports.DroneDB.RescanOptions", "Registry.Ports.DroneDB.BuildOptions", "Registry.Ports.DroneDB.FileHashHint", "Registry.Ports.DroneDB.NormalizedEntryPath",
         "Registry.Web.Services.Adapters.BuildPendingService", "Registry.Web.Utilities.DatasetPath"
     ];
 

@@ -11,6 +11,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Builds;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 
@@ -132,7 +133,7 @@ public sealed class EntryJobs
         var jobs = await _jobIndex.GetByOrgDsAsync(orgSlug, dsSlug, 0, 1000, ct);
         var active = jobs.FirstOrDefault(j =>
             j.Path == path &&
-            j.CurrentState is "Enqueued" or "Processing" or "Scheduled" or "Created" &&
+            TaskStateCatalog.Active.Contains(j.CurrentState) &&
             j.MethodDisplay != null && j.MethodDisplay.Contains(methodName, StringComparison.Ordinal));
 
         if (active != null)

@@ -14,6 +14,12 @@ public static class JobQueues
     /// <summary>Jobs that run native builds; served by <see cref="ProcessingBudget.HeavyWorkers"/> workers.</summary>
     public const string Builds = "builds";
 
+    /// <summary>
+    /// The background rebuild of entries built with an older layout; one worker, so it never competes with
+    /// <see cref="Builds"/> for more than one build at a time.
+    /// </summary>
+    public const string Rebuilds = "rebuilds";
+
     /// <summary>Heavy-task substrate jobs that do not run native builds.</summary>
     public const string Tasks = "tasks";
 
@@ -27,7 +33,8 @@ public static class JobQueues
 /// Puts every job that runs a native build on the <see cref="JobQueues.Builds"/> queue, whose
 /// worker count bounds how many builds run at once. Routing happens on every transition to
 /// Enqueued (first enqueue, automatic retry, dashboard requeue), so a retried build cannot land
-/// on the light workers. Heavy-task jobs that do not build go to <see cref="JobQueues.Tasks"/>;
+/// on the light workers. The background rebuild goes to <see cref="JobQueues.Rebuilds"/>, so a user build never waits behind
+/// the rebuilds of a whole instance. Heavy-task jobs that do not build go to <see cref="JobQueues.Tasks"/>;
 /// other jobs keep the queue they were enqueued with.
 /// </summary>
 public sealed class BuildQueueRoutingFilter : JobFilterAttribute, IElectStateFilter
@@ -65,7 +72,7 @@ public sealed class BuildQueueRoutingFilter : JobFilterAttribute, IElectStateFil
             return null;
 
         if (DdbJobDescriptor.Of(job) is { } ddbJob)
-            return ddbJob.RunsNativeBuild ? JobQueues.Builds : null;
+            return ddbJob.IsBackgroundRebuild ? JobQueues.Rebuilds : ddbJob.RunsNativeBuild ? JobQueues.Builds : null;
 
         if (job.Type == typeof(HeavyTaskJobWrapper) && job.Method.Name == nameof(HeavyTaskJobWrapper.Run))
         {

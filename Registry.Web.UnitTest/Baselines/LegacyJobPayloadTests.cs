@@ -105,6 +105,7 @@ public sealed class LegacyJobPayloadTests : IDisposable
         services.AddSingleton(_context);
         services.AddScoped<DatasetCleanupService>();
         services.AddScoped<PendingBuildEnqueuer>();
+        services.AddSingleton(TestJobs.Budget());
         services.AddScoped<DdbJobs>();
         services.AddScoped<FileJobs>();
         services.AddScoped<HealthCheckJob>();

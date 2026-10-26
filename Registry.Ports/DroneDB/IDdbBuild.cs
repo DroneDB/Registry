@@ -15,6 +15,13 @@ public interface IDdbBuild
     IReadOnlyList<string> DerivedFolderPaths { get; }
 
     void Build(string path, string dest = null, bool force = false);
+
+    /// <summary>
+    /// <see cref="Build"/> of <paramref name="path"/> under <paramref name="options"/> (the background rebuild caps
+    /// its threads so it leaves the host to user builds).
+    /// </summary>
+    void BuildWithOptions(string path, BuildOptions options, bool force = false);
+
     void BuildPending(string dest = null, bool force = false);
 
     string GetTmpFolder(string path);

@@ -75,13 +75,6 @@ services:
             - CPL_TMPDIR=/data/temp
             - TMPDIR=/data/temp
             - TEMP=/data/temp
-            # NOTE: Temporary workaround for a Nexus/libnexus bug — qWarning
-            # "QFSFileEngine::map: Mapping a file beyond its size is not
-            # portable" floods stderr (hundreds of MB/h per service) during
-            # builds. Unlike "qt" module categories, qWarning writes to the
-            # "default" category, hence the *.warning wildcard. Remove once
-            # the vendored upstream fix for the mapping is released.
-            - QT_LOGGING_RULES=*.warning=false
         tmpfs:
             - /tmp
         volumes:
@@ -118,13 +111,6 @@ services:
             - CPL_TMPDIR=/data/temp
             - TMPDIR=/data/temp
             - TEMP=/data/temp
-            # NOTE: Temporary workaround for a Nexus/libnexus bug — qWarning
-            # "QFSFileEngine::map: Mapping a file beyond its size is not
-            # portable" floods stderr (hundreds of MB/h per service) during
-            # builds. Unlike "qt" module categories, qWarning writes to the
-            # "default" category, hence the *.warning wildcard. Remove once
-            # the vendored upstream fix for the mapping is released.
-            - QT_LOGGING_RULES=*.warning=false
         tmpfs:
             - /tmp
         volumes:
@@ -159,13 +145,6 @@ services:
             - CPL_TMPDIR=/data/temp
             - TMPDIR=/data/temp
             - TEMP=/data/temp
-            # NOTE: Temporary workaround for a Nexus/libnexus bug — qWarning
-            # "QFSFileEngine::map: Mapping a file beyond its size is not
-            # portable" floods stderr (hundreds of MB/h per service) during
-            # builds. Unlike "qt" module categories, qWarning writes to the
-            # "default" category, hence the *.warning wildcard. Remove once
-            # the vendored upstream fix for the mapping is released.
-            - QT_LOGGING_RULES=*.warning=false
         tmpfs:
             - /tmp
         volumes:

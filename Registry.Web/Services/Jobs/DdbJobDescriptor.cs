@@ -8,6 +8,7 @@ namespace Registry.Web.Services.Jobs;
 public enum DdbJobKind
 {
     Build,
+    RebuildInBackground,
     BuildPending,
     Cleanup,
     MaskBorders,
@@ -35,6 +36,7 @@ public readonly record struct DdbJobDescriptor(DdbJobKind Kind, string? Path)
             return job.Method.Name switch
             {
                 nameof(DdbJobs.Build) => new DdbJobDescriptor(DdbJobKind.Build, Arg(job, 2)),
+                nameof(DdbJobs.RebuildInBackground) => new DdbJobDescriptor(DdbJobKind.RebuildInBackground, Arg(job, 2)),
                 nameof(DdbJobs.BuildPending) => new DdbJobDescriptor(DdbJobKind.BuildPending, null),
                 nameof(DdbJobs.Cleanup) => new DdbJobDescriptor(DdbJobKind.Cleanup, null),
                 nameof(DdbJobs.MaskBorders) => new DdbJobDescriptor(DdbJobKind.MaskBorders, Arg(job, 2)),
@@ -62,9 +64,15 @@ public readonly record struct DdbJobDescriptor(DdbJobKind Kind, string? Path)
     }
 
     /// <summary>Whether the job builds (an entry, the whole dataset or the pending entries).</summary>
-    public bool IsBuild => Kind is DdbJobKind.Build or DdbJobKind.BuildPending;
+    public bool IsBuild => Kind is DdbJobKind.Build or DdbJobKind.RebuildInBackground or DdbJobKind.BuildPending;
 
-    /// <summary>Whether the job runs a native build inline and so belongs on the builds queue.</summary>
+    /// <summary>Whether the job is the low-priority build of an entry of an older layout (the rebuilds queue).</summary>
+    public bool IsBackgroundRebuild => Kind is DdbJobKind.RebuildInBackground;
+
+    /// <summary>
+    /// Whether the job runs a native build inline and so belongs on the builds queue (the background rebuild builds
+    /// too, but on its own queue, <see cref="IsBackgroundRebuild"/>).
+    /// </summary>
     public bool RunsNativeBuild => Kind is DdbJobKind.Build or DdbJobKind.MaskBorders;
 
     private static string? Arg(Job job, int index) => job.Args.Count > index ? job.Args[index] as string : null;

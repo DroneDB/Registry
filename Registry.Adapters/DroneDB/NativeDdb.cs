@@ -168,6 +168,12 @@ internal static unsafe partial class NativeDdb
     internal static partial DdbResult DDBBuild(string ddbPath, string? source, string? dest,
         [MarshalAs(UnmanagedType.U1)] bool force, [MarshalAs(UnmanagedType.U1)] bool pendingOnly);
 
+    /// <summary>DDBBuild with a JSON object of limits (<c>{"threads": N}</c>), null or empty for none.</summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBBuildEx(string ddbPath, string? source, string? dest,
+        [MarshalAs(UnmanagedType.U1)] bool force, [MarshalAs(UnmanagedType.U1)] bool pendingOnly,
+        string? optionsJson);
+
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBCleanup(string ddbPath, out IntPtr output);
 

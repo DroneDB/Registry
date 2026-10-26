@@ -20,6 +20,8 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
 using Registry.Web.Filters;
 using Registry.Web.Models;
+using Registry.Web.Models.Configuration;
+using Registry.Web.Utilities;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.Jobs;
@@ -65,8 +67,9 @@ public class DdbJobsTests
 
     private IEnumerable<string> Logged => _log.Entries.Select(e => e.Message);
 
-    private DdbJobs Jobs(IBackgroundJobsProcessor? jobs = null, IJobIndexQuery? index = null) =>
-        new(_ddbManager.Object, Pending(jobs, index), new FileSystem(), _log);
+    private DdbJobs Jobs(IBackgroundJobsProcessor? jobs = null, IJobIndexQuery? index = null,
+        ProcessingBudgetSettings? processing = null) =>
+        new(_ddbManager.Object, Pending(jobs, index), new FileSystem(), _log, TestJobs.Budget(processing));
 
     private PendingBuildEnqueuer Pending(IBackgroundJobsProcessor? jobs = null, IJobIndexQuery? index = null) =>
         new(jobs ?? new Mock<IBackgroundJobsProcessor>(MockBehavior.Strict).Object, index ?? MockJobIndex().Object,
@@ -152,6 +155,55 @@ public class DdbJobsTests
         _ddb.Verify(x => x.Build("ortho.tif", null!, false), Times.Once);
         Logged.ShouldContain(m => m.Contains("Done build"));
         Logged.ShouldNotContain(m => m.Contains("Build failed:"));
+    }
+
+    [Test]
+    public void Build_UsesNoThreadCap()
+    {
+        Jobs().Build(Org, Ref, "ortho.tif", false, null);
+
+        _ddb.Verify(x => x.BuildWithOptions(It.IsAny<string>(), It.IsAny<BuildOptions>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    [Test]
+    public void RebuildInBackground_BuildsTheEntryOnTheConfiguredNumberOfThreads()
+    {
+        Jobs(processing: new ProcessingBudgetSettings { BackgroundRebuildThreads = 3 })
+            .RebuildInBackground(Org, Ref, "model.obj", null);
+
+        _ddb.Verify(x => x.BuildWithOptions("model.obj", new BuildOptions(3), false), Times.Once);
+        _ddb.Verify(x => x.Build(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+        Logged.ShouldContain(m => m.Contains("Running build on at most 3 thread(s)"));
+        Logged.ShouldContain(m => m.Contains("Done build"));
+    }
+
+    [Test]
+    public void RebuildInBackground_WithoutASetting_UsesTheDefaultCap()
+    {
+        Jobs().RebuildInBackground(Org, Ref, "model.obj", null);
+
+        _ddb.Verify(x => x.BuildWithOptions("model.obj", new BuildOptions(ProcessingBudget.DefaultBackgroundRebuildThreads), false),
+            Times.Once);
+    }
+
+    [Test]
+    public void RebuildInBackground_BuildLockHeldElsewhere_IsSkippedLikeABuild()
+    {
+        _ddb.Setup(x => x.BuildWithOptions("model.obj", It.IsAny<BuildOptions>(), false))
+            .Throws(new DdbBuildInProgressException("locked by pid 42"));
+
+        Should.NotThrow(() => Jobs().RebuildInBackground(Org, Ref, "model.obj", null));
+        Logged.ShouldContain(m => m.Contains("skipping"));
+    }
+
+    [Test]
+    public void RebuildInBackground_Failure_FailsTheJobWithTheBuildErrorInTheLog()
+    {
+        _ddb.Setup(x => x.BuildWithOptions("model.obj", It.IsAny<BuildOptions>(), false))
+            .Throws(new Exception("mesh corrupt"));
+
+        Should.Throw<Exception>(() => Jobs().RebuildInBackground(Org, Ref, "model.obj", null));
+        Logged.ShouldContain(m => m.Contains("Build failed: Exception: mesh corrupt"));
     }
 
     [Test]

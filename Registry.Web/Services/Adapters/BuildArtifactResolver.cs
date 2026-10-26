@@ -26,14 +26,16 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
     private static readonly TimeSpan LocationExpiry = TimeSpan.FromMinutes(30);
 
     /// <summary>
-    /// The roles the renderers read (thumbnails, tiles, raster analysis), in order of preference: the
-    /// first existing one of an entry's own build is its render source. libddb lists the legacy EPT
-    /// output only when there is no COPC, so the order never picks EPT over COPC.
+    /// The roles the renderers read (thumbnails, tiles, raster analysis): the first existing one of an
+    /// entry's own build is its render source. The order does not matter between the roles of a legacy
+    /// pair (EPT and COPC, Nexus and bm3d), because libddb lists the legacy one only when the current
+    /// one is missing and never lists both.
     /// </summary>
     private static readonly string[] RenderRoles =
     [
         ArtifactRoles.RasterCog, ArtifactRoles.PointCloudCopc, ArtifactRoles.PointCloudEpt,
-        ArtifactRoles.VectorGpkg, ArtifactRoles.ModelNexus, ArtifactRoles.GsplatLod
+        ArtifactRoles.VectorGpkg, ArtifactRoles.ModelBm3d, ArtifactRoles.ModelNexus,
+        ArtifactRoles.GsplatLod
     ];
 
     private readonly Lazy<FrozenSet<EntryType>> _renderedTypes;
@@ -236,6 +238,12 @@ public static class BuildManifestExtensions
 
     /// <summary>A live build holds the entry's build lock.</summary>
     public static bool HasLiveBuild(this EntryBuildArtifacts build) => build.Build?.State == BuildState.Building;
+
+    /// <summary>
+    /// The build lists an artifact of an older layout (<see cref="BuildArtifact.Legacy"/>): libddb lists it only
+    /// while the current artifact of its role is missing, so the entry is incomplete and a rebuild replaces it.
+    /// </summary>
+    public static bool ListsLegacyArtifact(this EntryBuild build) => build.Artifacts.Any(a => a.Legacy);
 
     /// <summary>The existing artifact with <paramref name="role"/>, or null.</summary>
     public static BuildArtifact? Find(this EntryBuild build, string role) =>

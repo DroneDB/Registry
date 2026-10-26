@@ -378,7 +378,7 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual void MoveEntry(string ddbPath, string source, string dest) => throw Unsupported();
 
     public virtual void Build(string ddbPath, string? source = null, string? dest = null, bool force = false,
-        bool pendingOnly = false) => throw Unsupported();
+        bool pendingOnly = false, BuildOptions? options = null) => throw Unsupported();
 
     public virtual DdbCleanupResult Cleanup(string ddbPath) => throw Unsupported();
     public virtual List<RescanResult> RescanIndex(string ddbPath, RescanOptions? options = null) => throw Unsupported();

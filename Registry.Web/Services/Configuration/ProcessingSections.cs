@@ -198,6 +198,12 @@ public sealed class ProcessingSections : IConfigurationSectionBuilder
                     $"Threads per native build (DDB_BUILD_THREADS). Effective: {effective.BuildThreads}.",
                     pb.BuildThreads, db.BuildThreads, minValue: 0),
 
+                NumberField("BackgroundRebuildThreads", "Background Rebuild Threads",
+                    "Threads of the background rebuild of entries built with an older layout (\"rebuilds\" queue, " +
+                    $"one build at a time; 0 = {ProcessingBudget.DefaultBackgroundRebuildThreads}). Effective: {effective.BackgroundRebuildThreads}.",
+                    pb.BackgroundRebuildThreads, db.BackgroundRebuildThreads, minValue: 0,
+                    maxValue: ProcessingBudget.MaxBackgroundRebuildThreads),
+
                 NumberField("BuildCacheMb", "Build Cache",
                     $"GDAL block cache during a raster build (DDB_COG_CACHE_MB). Effective: {effective.BuildCacheMb} MB.",
                     pb.BuildCacheMb, db.BuildCacheMb, minValue: 0, unit: "MB"),

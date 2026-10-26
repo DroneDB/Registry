@@ -1860,7 +1860,7 @@
       {
         "name": "ProcessingBudget",
         "title": "Processing Budget",
-        "description": "Background job concurrency and per-build native limits. 0 = derived from the host. Effective: 1 heavy worker(s) x 2 build thread(s), 2 light worker(s), build cache 1024 MB, warp memory 512 MB.",
+        "description": "Background job concurrency and per-build native limits. 0 = derived from the host. Effective: 1 heavy worker(s) x 2 build thread(s), 2 light worker(s), 1 background rebuild x 2 thread(s), build cache 1024 MB, warp memory 512 MB.",
         "isActive": true,
         "fields": [
           {
@@ -1903,6 +1903,20 @@
             "sensitive": false,
             "minValue": 0,
             "maxValue": null,
+            "unit": null
+          },
+          {
+            "key": "BackgroundRebuildThreads",
+            "displayName": "Background Rebuild Threads",
+            "currentValue": "0",
+            "defaultValue": "0",
+            "isSet": false,
+            "description": "Threads of the background rebuild of entries built with an older layout (\"rebuilds\" queue, one build at a time; 0 = 2). Effective: 2.",
+            "fieldType": "number",
+            "enumOptions": null,
+            "sensitive": false,
+            "minValue": 0,
+            "maxValue": 4096,
             "unit": null
           },
           {

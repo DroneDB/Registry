@@ -83,6 +83,14 @@ public class NativeDdbDeclarationTests
     }
 
     [Test]
+    public void BuildJson_SendsOnlyTheLimitsThatAreSet()
+    {
+        NativeDdbWrapper.ToBuildJson(null).ShouldBeNull();
+        NativeDdbWrapper.ToBuildJson(new Ports.DroneDB.BuildOptions()).ShouldBeNull();
+        NativeDdbWrapper.ToBuildJson(Ports.DroneDB.BuildOptions.Capped(2)).ShouldBe("""{"threads":2}""");
+    }
+
+    [Test]
     public void ConfigureJson_SendsOnlyTheSettingsThatAreSet()
     {
         NativeDdbRuntime.ToConfigureJson(new Ports.DroneDB.DdbProcessSettings()).ShouldBe("{}");

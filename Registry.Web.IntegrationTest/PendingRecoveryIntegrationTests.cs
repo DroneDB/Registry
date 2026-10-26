@@ -160,7 +160,18 @@ public class PendingRecoveryIntegrationTests
                 return await new JobIndexQuery(scope.ServiceProvider.GetRequiredService<RegistryContext>())
                     .GetByOrgDsAsync(org, ds, skip, take, ct);
             });
+        // The completeness sweep asks which entries already have a build job: the real index answers
+        query.Setup(x => x.GetActivePathsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<System.Collections.Generic.IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()))
+            .Returns<string, string, string, System.Collections.Generic.IReadOnlyCollection<string>, CancellationToken>(
+                async (org, ds, tool, paths, ct) =>
+                {
+                    using var scope = _provider.CreateScope();
+                    return await new JobIndexQuery(scope.ServiceProvider.GetRequiredService<RegistryContext>())
+                        .GetActivePathsAsync(org, ds, tool, paths, ct);
+                });
         services.AddSingleton(query.Object);
+        services.AddSingleton(TestJobs.Budget());
         _provider = services.BuildServiceProvider();
         Cache.Register(MagicStrings.BuildPendingTrackerCacheSeed, _ => Task.FromResult(Encoding.UTF8.GetBytes("{}")));
         using (var scope = _provider.CreateScope())

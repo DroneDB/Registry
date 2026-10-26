@@ -62,8 +62,8 @@ public static class TestBuilds
 
     /// <summary>A file artifact.</summary>
     public static BuildArtifact File(string role, string path, string mediaType = "application/octet-stream",
-        string? downloadName = null) =>
-        new() { Role = role, Path = path, Kind = "file", MediaType = mediaType, DownloadName = downloadName };
+        string? downloadName = null, bool legacy = false) =>
+        new() { Role = role, Path = path, Kind = "file", MediaType = mediaType, DownloadName = downloadName, Legacy = legacy };
 
     /// <summary>A directory artifact read through its descriptor.</summary>
     public static BuildArtifact Directory(string role, string path, string index, bool legacy = false) =>

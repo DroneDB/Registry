@@ -90,8 +90,9 @@ public interface IDdbWrapper
 
     public void MoveEntry(string ddbPath, string source, string dest);
 
+    /// <param name="options">Limits of this build (DDBBuildEx); null: none, the plain DDBBuild.</param>
     public void Build(string ddbPath, string? source = null, string? dest = null, bool force = false,
-        bool pendingOnly = false);
+        bool pendingOnly = false, BuildOptions? options = null);
 
     /// <summary>
     /// The build state and the existing artifacts of several entries with one index open

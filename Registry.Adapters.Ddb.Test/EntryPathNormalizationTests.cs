@@ -63,6 +63,7 @@ public class EntryPathNormalizationTests : TestBase
         yield return (nameof(NativeDdb.DDBMoveEntry) + " (source)", () => Wrapper.MoveEntry(root, path, "moved.txt"));
         yield return (nameof(NativeDdb.DDBMoveEntry) + " (dest)", () => Wrapper.MoveEntry(root, "b.txt", path));
         yield return (nameof(NativeDdb.DDBBuild), () => Wrapper.Build(root, path));
+        yield return (nameof(NativeDdb.DDBBuildEx), () => Wrapper.Build(root, path, options: BuildOptions.Capped(1)));
         yield return (nameof(NativeDdb.DDBGetBuildArtifacts), () => Wrapper.GetBuildArtifacts(root, [path]));
         yield return (nameof(NativeDdb.DDBMetaAdd), () => Wrapper.MetaAdd(root, "annotations", "123", path));
         yield return (nameof(NativeDdb.DDBMetaSet), () => Wrapper.MetaSet(root, "test", "abc", path));

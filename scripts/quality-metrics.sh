@@ -177,7 +177,7 @@ OBJECTS_SLICE=(Registry.Web/Services/Managers/ObjectsManager.cs Registry.Web/Ser
 slice() { printf '%s\0' "${OBJECTS_SLICE[@]}"; }
 
 # Build-layout literals: libddb's build folder and file names, its marker suffixes, the build folder members.
-BUILD_LAYOUT='"(cog|copc|ept|vec|mvt|nxs|gsplat|3dtiles)"|(cog\.tif|cloud\.copc\.laz|source\.gpkg|model\.nxz|model\.rad|model\.spz|ept\.json|tileset\.json|georef\.json|local\.json|bounds\.json)|\.pending\b|\.building\b|BuildFolderName|BuildFolderPath'
+BUILD_LAYOUT='"(cog|copc|ept|vec|mvt|nxs|bm3d|gsplat|3dtiles)"|(cog\.tif|cloud\.copc\.laz|source\.gpkg|model\.nxz|model\.bm3d|model\.rad|model\.spz|ept\.json|tileset\.json|georef\.json|local\.json|bounds\.json)|\.pending\b|\.building\b|BuildFolderName|BuildFolderPath'
 
 # The native raster calls of the objects slice: all of them, and those made through INativeWorkGate
 # (RunAsync(NativeLane.X, () => ...), or a service's own RunAsync(() => ...) over the gate).

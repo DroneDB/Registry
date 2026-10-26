@@ -5,6 +5,7 @@ using Hangfire.Server;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Jobs;
 
@@ -23,13 +24,16 @@ public class DdbJobs : DdbRetriedJob
     private readonly PendingBuildEnqueuer _pending;
     private readonly IFileSystem _fs;
     private readonly ILogger<DdbJobs> _logger;
+    private readonly HostResourceBudget _budget;
 
-    public DdbJobs(IDdbManager ddbManager, PendingBuildEnqueuer pending, IFileSystem fs, ILogger<DdbJobs> logger)
+    public DdbJobs(IDdbManager ddbManager, PendingBuildEnqueuer pending, IFileSystem fs, ILogger<DdbJobs> logger,
+        HostResourceBudget budget)
     {
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _pending = pending ?? throw new ArgumentNullException(nameof(pending));
         _fs = fs ?? throw new ArgumentNullException(nameof(fs));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _budget = budget ?? throw new ArgumentNullException(nameof(budget));
     }
 
     /// <summary>Builds <paramref name="path"/> (null: the whole dataset).</summary>
@@ -45,6 +49,23 @@ public class DdbJobs : DdbRetriedJob
         OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
     public void Build(string orgSlug, Guid internalRef, string? path, bool force, PerformContext? context) =>
         BuildNow(_ddbManager.Open(orgSlug, internalRef), path, force, context);
+
+    /// <summary>
+    /// Builds <paramref name="path"/> in the background: the build of an entry made with an older layout, which no
+    /// user waits for. It runs on its own queue, one at a time, and uses at most
+    /// <see cref="ProcessingBudget.BackgroundRebuildThreads"/> threads so the builds of users keep the host.
+    /// </summary>
+    /// <remarks>
+    /// The retry policy and the failure handling of <see cref="Build"/>. An entry a user build completed meanwhile is
+    /// already complete: libddb returns without building.
+    /// </remarks>
+    [AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
+        OnAttemptsExceeded = AttemptsExceededAction.Fail,
+        OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
+    public void RebuildInBackground(string orgSlug, Guid internalRef, string path, PerformContext? context) =>
+        BuildNow(_ddbManager.Open(orgSlug, internalRef), path, false, context,
+            BuildOptions.Capped(_budget.Processing?.BackgroundRebuildThreads ??
+                                ProcessingBudget.DefaultBackgroundRebuildThreads));
 
     /// <summary>Enqueues one build per due pending entry (<see cref="PendingBuildEnqueuer"/>).</summary>
     public void BuildPending(string orgSlug, Guid internalRef, PerformContext? context) =>
@@ -115,18 +136,25 @@ public class DdbJobs : DdbRetriedJob
     /// failure is written to the job log tail and rethrown (Hangfire's Failed state, the retry
     /// policy, the failure filters).
     /// </summary>
-    public void BuildNow(IDDB ddb, string? path, bool force, PerformContext? context)
+    public void BuildNow(IDDB ddb, string? path, bool force, PerformContext? context, BuildOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(ddb);
         var console = JobConsole.For(_logger, context, ddb.DatasetFolderPath);
 
         console.Debug("In Build({Dataset}, {Path}, {Force})", ddb.DatasetFolderPath, path, force);
 
-        console.Debug("Running build");
+        if (options?.Threads is { } threads)
+            console.Debug("Running build on at most {Threads} thread(s)", threads);
+        else
+            console.Debug("Running build");
         var skipped = false;
         try
         {
-            ddb.Build(path!, force: force); // null: the whole dataset (the port predates annotations)
+            // null: the whole dataset (the port predates annotations)
+            if (options == null)
+                ddb.Build(path!, force: force);
+            else
+                ddb.BuildWithOptions(path!, options, force);
         }
         catch (DdbBuildInProgressException ex)
         {

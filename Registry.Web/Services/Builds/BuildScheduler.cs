@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -73,22 +74,23 @@ public sealed class BuildScheduler
     /// are the caller's, as for the build endpoint).
     /// </summary>
     /// <returns>The job id.</returns>
-    public async Task<string> QueueAsync(BuildTarget target, string path, string? hash, bool force = false,
-        BuildOrigin? origin = null)
-    {
-        var userId = await UserIdAsync(origin);
-        await FlagPendingAsync(target);
-        return _jobs.EnqueueBuild(target.Dataset, path, force, Payload(target, userId, origin, path, hash));
-    }
+    public Task<string> QueueAsync(BuildTarget target, string path, string? hash, bool force = false,
+        BuildOrigin? origin = null) =>
+        EnqueueAsync(target, origin, path, hash, payload => _jobs.EnqueueBuild(target.Dataset, path, force, payload));
+
+    /// <summary>
+    /// Queues the build of <paramref name="path"/> on the background queue, for an entry nobody waits for (the check
+    /// for entries of an older layout): the same bookkeeping as <see cref="QueueAsync"/>, another queue and a
+    /// capped number of threads.
+    /// </summary>
+    /// <returns>The job id.</returns>
+    public Task<string> QueueRebuildAsync(BuildTarget target, string path, string? hash, BuildOrigin? origin = null) =>
+        EnqueueAsync(target, origin, path, hash, payload => _jobs.EnqueueRebuild(target.Dataset, path, payload));
 
     /// <summary>Queues a build of the whole dataset (an import, a rescan).</summary>
     /// <returns>The job id.</returns>
-    public async Task<string> QueueDatasetAsync(BuildTarget target, bool force, BuildOrigin? origin = null)
-    {
-        var userId = await UserIdAsync(origin);
-        await FlagPendingAsync(target);
-        return _jobs.EnqueueBuild(target.Dataset, null, force, Payload(target, userId, origin, null, null));
-    }
+    public Task<string> QueueDatasetAsync(BuildTarget target, bool force, BuildOrigin? origin = null) =>
+        EnqueueAsync(target, origin, null, null, payload => _jobs.EnqueueBuild(target.Dataset, null, force, payload));
 
     /// <summary>Queues the pending-build job when libddb reports deferred builds in the dataset.</summary>
     /// <returns>The job id, or null when nothing is deferred.</returns>
@@ -107,7 +109,15 @@ public sealed class BuildScheduler
     private async Task<string?> UserIdAsync(BuildOrigin? origin) =>
         origin != null ? origin.UserId : await _requester.UserIdAsync();
 
-    // Before the job: a build that fails at once must find the dataset flagged
+    // The dataset is flagged before the job: a build that fails at once must find it flagged
+    private async Task<string> EnqueueAsync(BuildTarget target, BuildOrigin? origin, string? path, string? hash,
+        Func<IndexPayload, string> enqueue)
+    {
+        var userId = await UserIdAsync(origin);
+        await FlagPendingAsync(target);
+        return enqueue(Payload(target, userId, origin, path, hash));
+    }
+
     private Task FlagPendingAsync(BuildTarget target) =>
         _pending.SetDatasetHasPendingBuilds(target.OrgSlug, target.DsSlug, true);
 

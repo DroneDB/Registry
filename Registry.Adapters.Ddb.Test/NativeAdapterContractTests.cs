@@ -62,6 +62,21 @@ public class NativeAdapterContractTests : TestBase
     }
 
     [Test]
+    public void Build_WithAThreadCap_BuildsTheEntry_AndRefusesACapLibddbRefuses()
+    {
+        using var area = new TestArea(nameof(Build_WithAThreadCap_BuildsTheEntry_AndRefusesACapLibddbRefuses));
+        var root = CreateDataset(Wrapper, area, "dataset", _geoRaster);
+
+        // libddb names the problem and builds nothing
+        Should.Throw<DdbException>(() => Wrapper.Build(root, GeoRasterName, options: BuildOptions.Capped(0)))
+            .Message.ShouldContain("threads");
+        Wrapper.GetBuildArtifacts(root, [GeoRasterName]).Single().Build!.State.ShouldNotBe(BuildState.Complete);
+
+        Wrapper.Build(root, GeoRasterName, options: BuildOptions.Capped(1));
+        Wrapper.GetBuildArtifacts(root, [GeoRasterName]).Single().Build!.State.ShouldBe(BuildState.Complete);
+    }
+
+    [Test]
     public void BuildArtifacts_ResolveBuildFile_OfABuiltGeoRaster()
     {
         using var area = new TestArea(nameof(BuildArtifacts_ResolveBuildFile_OfABuiltGeoRaster));

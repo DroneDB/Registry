@@ -20,6 +20,18 @@ public static class QueueDdbJobs
         return jobs.EnqueueIndexed<DdbJobs>(j => j.Build(orgSlug, internalRef, path, force, null), meta);
     }
 
+    /// <summary>
+    /// Queues the background rebuild of <paramref name="path"/>: a build no user waits for, on its own queue
+    /// (<see cref="DdbJobs.RebuildInBackground"/>).
+    /// </summary>
+    /// <returns>The job id.</returns>
+    public static string EnqueueRebuild(this IBackgroundJobsProcessor jobs, DatasetKey dataset, string path,
+        IndexPayload meta)
+    {
+        var (orgSlug, internalRef) = Target(dataset);
+        return jobs.EnqueueIndexed<DdbJobs>(j => j.RebuildInBackground(orgSlug, internalRef, path, null), meta);
+    }
+
     /// <summary>Queues the pending-build job.</summary>
     public static string EnqueueBuildPending(this IBackgroundJobsProcessor jobs, DatasetKey dataset, IndexPayload meta)
     {

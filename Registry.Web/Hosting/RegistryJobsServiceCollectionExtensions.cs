@@ -68,31 +68,46 @@ public static class RegistryJobsServiceCollectionExtensions
     /// <summary>
     /// The Hangfire servers of a job-executing host, sized by the host budget
     /// (<see cref="HostResourceBudget.Processing"/>): one for the <see cref="JobQueues.Builds"/> queue with
-    /// the heavy workers, one for the other queues with the light workers.
+    /// the heavy workers, one for the <see cref="JobQueues.Rebuilds"/> queue with a single worker, one for the other
+    /// queues with the light workers.
     /// </summary>
     public static IServiceCollection AddJobServers(this IServiceCollection services)
     {
-        services.AddHangfireServer((sp, options) =>
-        {
-            var budget = JobBudget(sp);
-            options.ShutdownTimeout = ShutdownTimeouts.HangfireServer;
-            options.ServerName = $"{Environment.MachineName}:builds";
-            options.WorkerCount = budget.HeavyWorkers;
-            options.Queues = [JobQueues.Builds];
-        });
-
-        services.AddHangfireServer((sp, options) =>
-        {
-            var budget = JobBudget(sp);
-            options.ShutdownTimeout = ShutdownTimeouts.HangfireServer;
-            options.ServerName = $"{Environment.MachineName}:jobs";
-            options.WorkerCount = budget.LightWorkers;
-            // "tasks" carries the heavy-task substrate jobs that do not build (exports run on
-            // "builds"); without it here those jobs would never run.
-            options.Queues = JobQueues.Light;
-        });
-
+        services.AddHangfireServer((sp, options) => ConfigureBuildsServer(options, JobBudget(sp)));
+        services.AddHangfireServer((sp, options) => ConfigureRebuildsServer(options));
+        services.AddHangfireServer((sp, options) => ConfigureJobsServer(options, JobBudget(sp)));
         return services;
+    }
+
+    /// <summary>The workers the <see cref="JobQueues.Rebuilds"/> queue gets: one build at a time, whatever the host.</summary>
+    internal const int RebuildWorkers = 1;
+
+    internal static void ConfigureBuildsServer(BackgroundJobServerOptions options, ProcessingBudget budget)
+    {
+        options.ShutdownTimeout = ShutdownTimeouts.HangfireServer;
+        options.ServerName = $"{Environment.MachineName}:builds";
+        options.WorkerCount = budget.HeavyWorkers;
+        options.Queues = [JobQueues.Builds];
+    }
+
+    // Its own server: the rebuilds never take a worker of the builds queue, and one worker bounds them to one
+    // build at a time (its thread cap is ProcessingBudget.BackgroundRebuildThreads)
+    internal static void ConfigureRebuildsServer(BackgroundJobServerOptions options)
+    {
+        options.ShutdownTimeout = ShutdownTimeouts.HangfireServer;
+        options.ServerName = $"{Environment.MachineName}:rebuilds";
+        options.WorkerCount = RebuildWorkers;
+        options.Queues = [JobQueues.Rebuilds];
+    }
+
+    internal static void ConfigureJobsServer(BackgroundJobServerOptions options, ProcessingBudget budget)
+    {
+        options.ShutdownTimeout = ShutdownTimeouts.HangfireServer;
+        options.ServerName = $"{Environment.MachineName}:jobs";
+        options.WorkerCount = budget.LightWorkers;
+        // "tasks" carries the heavy-task substrate jobs that do not build (exports run on
+        // "builds"); without it here those jobs would never run.
+        options.Queues = JobQueues.Light;
     }
 
     /// <summary>The filters every host installs, in order (<see cref="InstallJobFilters"/>).</summary>

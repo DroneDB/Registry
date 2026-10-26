@@ -16,6 +16,12 @@ public class ProcessingBudgetSettings
     /// <summary>Threads one native build may use (DDB_BUILD_THREADS).</summary>
     public int BuildThreads { get; set; }
 
+    /// <summary>
+    /// Threads one background rebuild may use (the <c>rebuilds</c> queue: builds the nightly check queues for entries
+    /// built with an older layout); 0 or unset is <see cref="Utilities.ProcessingBudget.DefaultBackgroundRebuildThreads"/>.
+    /// </summary>
+    public int BackgroundRebuildThreads { get; set; }
+
     /// <summary>GDAL block cache during a raster build, in MB (DDB_COG_CACHE_MB).</summary>
     public int BuildCacheMb { get; set; }
 

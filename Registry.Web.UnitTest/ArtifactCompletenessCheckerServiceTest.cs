@@ -38,12 +38,16 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _logger = CreateTestLogger<ArtifactCompletenessCheckerService>();
     }
 
+    private ArtifactCompletenessCheckerService Service(RegistryContext context, IJobIndexQuery jobIndex = null) =>
+        new(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object),
+            jobIndex ?? new JobIndexQuery(context), _logger);
+
     [Test]
     public async Task CheckAndQueueAsync_EmptyDatabase_DoesNothing()
     {
         await using var context = GetEmptyContext();
 
-        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger);
+        var service = Service(context);
 
         await service.CheckAndQueueAsync(null, CancellationToken.None);
 
@@ -65,7 +69,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger);
+        var service = Service(context);
 
         await service.CheckAndQueueAsync(null, CancellationToken.None);
 
@@ -87,7 +91,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger);
+        var service = Service(context);
 
         await service.CheckAndQueueAsync(null, CancellationToken.None);
 
@@ -114,8 +118,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object),
-            _logger).CheckAndQueueAsync(null, CancellationToken.None);
+        await Service(context).CheckAndQueueAsync(null, CancellationToken.None);
 
         _backgroundJobMock.Verify(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(),
             It.Is<IndexPayload>(p => p.Path == "layer.fgb" && p.Hash == "h3")), Times.Once);
@@ -137,7 +140,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger);
+        var service = Service(context);
 
         await service.CheckAndQueueAsync(null, CancellationToken.None);
 
@@ -159,7 +162,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger);
+        var service = Service(context);
 
         await service.CheckAndQueueAsync(null, CancellationToken.None);
 
@@ -193,7 +196,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger);
+        var service = Service(context);
 
         await service.CheckAndQueueAsync(null, CancellationToken.None);
 
@@ -215,7 +218,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Throws(new InvalidOperationException("boom"));
 
-        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger);
+        var service = Service(context);
 
         // Should not throw, just log
         await service.CheckAndQueueAsync(null, CancellationToken.None);
@@ -246,7 +249,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
-        var service = new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger);
+        var service = Service(context);
 
         await service.CheckAndQueueAsync(null, CancellationToken.None);
 
@@ -270,7 +273,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         // as incomplete, while ordinary Nexus output is complete
         ddb.SetupBuilds(Build("interrupted.obj", BuildState.None), Build("nexus-only.obj", BuildState.Complete));
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
-        await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger)
+        await Service(context)
             .CheckAndQueueAsync(null, CancellationToken.None);
         _backgroundJobMock.Verify(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(),
             It.Is<IndexPayload>(meta => meta.Path == "interrupted.obj" && meta.Hash == "swap-hash")), Times.Once);
@@ -325,7 +328,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         await using var context = GetTest1Context();
         SingleIncompleteEntry("site.dwg", "h1", ["site.prj"]);
 
-        await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger)
+        await Service(context)
             .CheckAndQueueAsync(null, CancellationToken.None);
 
         EnqueuedCount().ShouldBe(0);
@@ -338,7 +341,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         SingleIncompleteEntry("bad.dwg", "h1");
         AddBuildJob(context, "bad.dwg", "h1", "Failed", DateTime.UtcNow.AddHours(-2), "InvalidOperationException");
 
-        await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger)
+        await Service(context)
             .CheckAndQueueAsync(null, CancellationToken.None);
 
         EnqueuedCount().ShouldBe(0);
@@ -351,10 +354,108 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         SingleIncompleteEntry("bad.dwg", "h2"); // re-uploaded: new hash
         AddBuildJob(context, "bad.dwg", "h1", "Failed", DateTime.UtcNow.AddHours(-2), "InvalidOperationException");
 
-        await new ArtifactCompletenessCheckerService(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object), _logger)
+        await Service(context)
             .CheckAndQueueAsync(null, CancellationToken.None);
 
         EnqueuedCount().ShouldBe(1);
+    }
+
+    // ---- background rebuilds: an entry of an older layout is not queued in front of the builds users wait for ----
+
+    /// <summary>The job method and entry path of each build job the sweep queued, in order.</summary>
+    private List<(string Method, string Path)> QueuedJobs() => _backgroundJobMock.Invocations
+        .Where(i => i.Method.Name == "EnqueueIndexed")
+        .Select(i => (Method: ((MethodCallExpression)((LambdaExpression)i.Arguments[0]).Body).Method.Name,
+            Path: ((IndexPayload)i.Arguments[1]).Path))
+        .ToList();
+
+    private static EntryBuildArtifacts LegacyBuild(string path) =>
+        TestBuilds.Build(Folder, path, EntryType.Model, "h-" + path, BuildState.None,
+            TestBuilds.File(ArtifactRoles.ModelNexus, "nxs/model.nxz", legacy: true),
+            TestBuilds.Directory(ArtifactRoles.Model3DTiles, "3dtiles", "tileset.json"));
+
+    private void Dataset(params EntryBuildArtifacts[] builds)
+    {
+        var ddb = new Mock<IDDB>();
+        ddb.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>()))
+            .Returns(builds.Select(b => new DdbEntry { Path = b.Path, Hash = b.Hash }).ToArray());
+        ddb.SetupBuilds(builds);
+        _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
+    }
+
+    [Test]
+    public async Task CheckAndQueueAsync_IncompleteEntryListingALegacyArtifact_IsRebuiltInTheBackground()
+    {
+        await using var context = GetTest1Context();
+        Dataset(LegacyBuild("old.obj"), Build("layer.fgb", BuildState.None), Build("ortho.tif", BuildState.Complete));
+
+        await Service(context).CheckAndQueueAsync(null, CancellationToken.None);
+
+        QueuedJobs().ShouldBe([(nameof(DdbJobs.RebuildInBackground), "old.obj"), (nameof(DdbJobs.Build), "layer.fgb")],
+            ignoreOrder: true);
+        // The same bookkeeping as any queued build: the sweep is the user, the hash names the content
+        _backgroundJobMock.Verify(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(),
+            It.Is<IndexPayload>(p => p.Path == "old.obj" && p.Hash == "h-old.obj" &&
+                                     p.UserId == MagicStrings.AutoBuildServiceUserId && p.ToolId == "build")), Times.Once);
+    }
+
+    [Test]
+    public async Task CheckAndQueueAsync_CompleteEntryListingALegacyArtifact_IsLeftAlone()
+    {
+        await using var context = GetTest1Context();
+        var complete = LegacyBuild("old.obj");
+        complete.Build!.State = BuildState.Complete;
+        Dataset(complete);
+
+        await Service(context).CheckAndQueueAsync(null, CancellationToken.None);
+
+        QueuedJobs().ShouldBeEmpty();
+    }
+
+    [TestCase("Enqueued")]
+    [TestCase("Scheduled")]
+    [TestCase("Processing")]
+    public async Task CheckAndQueueAsync_EntryWithAnActiveBuildJob_GetsNoSecondJob(string state)
+    {
+        await using var context = GetTest1Context();
+        Dataset(LegacyBuild("old.obj"), Build("layer.fgb", BuildState.None), Build("other.tif", BuildState.None));
+        AddBuildJob(context, "old.obj", "h-old.obj", state, DateTime.UtcNow.AddMinutes(-5));
+        AddBuildJob(context, "layer.fgb", "h-layer.fgb", state, DateTime.UtcNow.AddMinutes(-5));
+        // A finished job says nothing about the next one
+        AddBuildJob(context, "other.tif", "h-other.tif", "Succeeded", DateTime.UtcNow.AddMinutes(-5));
+
+        await Service(context).CheckAndQueueAsync(null, CancellationToken.None);
+
+        QueuedJobs().ShouldBe([(nameof(DdbJobs.Build), "other.tif")]);
+    }
+
+    [Test]
+    public async Task CheckAndQueueAsync_ActiveJobsAreReadOnceForTheDataset()
+    {
+        await using var context = GetTest1Context();
+        Dataset(LegacyBuild("a.obj"), LegacyBuild("b.obj"), Build("c.tif", BuildState.None));
+        var jobIndex = new Mock<IJobIndexQuery>(MockBehavior.Strict);
+        jobIndex.Setup(x => x.GetActivePathsAsync("public", "default", "build",
+                It.Is<IReadOnlyCollection<string>>(p => p.Count == 3), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(["b.obj"]);
+
+        await Service(context, jobIndex.Object).CheckAndQueueAsync(null, CancellationToken.None);
+
+        QueuedJobs().ShouldBe([(nameof(DdbJobs.RebuildInBackground), "a.obj"), (nameof(DdbJobs.Build), "c.tif")],
+            ignoreOrder: true);
+        jobIndex.VerifyAll();
+    }
+
+    [Test]
+    public async Task CheckAndQueueAsync_FailureBackoffAppliesToABackgroundRebuild()
+    {
+        await using var context = GetTest1Context();
+        Dataset(LegacyBuild("old.obj"));
+        AddBuildJob(context, "old.obj", "h-old.obj", "Failed", DateTime.UtcNow.AddHours(-2), "InvalidOperationException");
+
+        await Service(context).CheckAndQueueAsync(null, CancellationToken.None);
+
+        QueuedJobs().ShouldBeEmpty();
     }
 
     [Test]

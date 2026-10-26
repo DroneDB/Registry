@@ -30,7 +30,7 @@ public class DdbBuildBusyPassthroughTests
 
     private static void SetupBuildThrow(Mock<IDdbWrapper> wrapper, Exception ex) =>
         wrapper.Setup(w => w.Build(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(),
-                It.IsAny<bool>(), It.IsAny<bool>()))
+                It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<BuildOptions?>()))
             .Throws(ex);
 
     [Test]
@@ -41,6 +41,35 @@ public class DdbBuildBusyPassthroughTests
 
         var ex = Assert.Throws<DdbBusyException>(() => ddb.Build("src.tif"));
         ex.Message.ShouldBe("locked");
+    }
+
+    [Test]
+    public void Build_AsksTheWrapperForNoLimit()
+    {
+        var (ddb, wrapper) = CreateDdb();
+
+        ddb.Build("src.tif", force: true);
+
+        wrapper.Verify(w => w.Build(It.IsAny<string>(), "src.tif", null, true, false, null), Times.Once);
+    }
+
+    [Test]
+    public void BuildWithOptions_PassesTheOptionsOfThatBuildToTheWrapper()
+    {
+        var (ddb, wrapper) = CreateDdb();
+
+        ddb.BuildWithOptions("src.tif", BuildOptions.Capped(2), force: true);
+
+        wrapper.Verify(w => w.Build(It.IsAny<string>(), "src.tif", null, true, false, BuildOptions.Capped(2)), Times.Once);
+    }
+
+    [Test]
+    public void BuildWithOptions_DdbBusyException_PassesThroughUnwrapped()
+    {
+        var (ddb, wrapper) = CreateDdb();
+        SetupBuildThrow(wrapper, new DdbBusyException("locked"));
+
+        Assert.Throws<DdbBusyException>(() => ddb.BuildWithOptions("src.tif", BuildOptions.Capped(2)));
     }
 
     [Test]

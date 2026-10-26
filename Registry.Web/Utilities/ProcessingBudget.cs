@@ -27,10 +27,21 @@ public sealed record ProcessingBudget(
     int LightWorkers,
     int BuildThreads,
     int BuildCacheMb,
-    int BuildWarpMemoryMb)
+    int BuildWarpMemoryMb,
+    int BackgroundRebuildThreads = ProcessingBudget.DefaultBackgroundRebuildThreads)
 {
     public const int DefaultBuildCacheMb = 1024;
     public const int DefaultBuildWarpMemoryMb = 512;
+
+    /// <summary>
+    /// Threads of a background rebuild when none is set: the rebuild queue runs one build at a time all day, so it
+    /// takes a small part of the host and leaves the rest to the builds users wait for.
+    /// </summary>
+    public const int DefaultBackgroundRebuildThreads = 2;
+
+    /// <summary>libddb refuses a build thread cap above this (<c>DDBBuildEx</c>).</summary>
+    public const int MaxBackgroundRebuildThreads = 4096;
+
     private const long BytesPerHeavyWorker = 4L * 1024 * 1024 * 1024;
 
     /// <param name="host">Cores and memory of the host.</param>
@@ -60,10 +71,13 @@ public sealed record ProcessingBudget(
 
         return new ProcessingBudget(heavy, light, threads,
             settings.BuildCacheMb > 0 ? settings.BuildCacheMb : DefaultBuildCacheMb,
-            settings.BuildWarpMemoryMb > 0 ? settings.BuildWarpMemoryMb : DefaultBuildWarpMemoryMb);
+            settings.BuildWarpMemoryMb > 0 ? settings.BuildWarpMemoryMb : DefaultBuildWarpMemoryMb,
+            settings.BackgroundRebuildThreads > 0
+                ? Math.Min(settings.BackgroundRebuildThreads, MaxBackgroundRebuildThreads)
+                : DefaultBackgroundRebuildThreads);
     }
 
     public override string ToString() =>
         $"{HeavyWorkers} heavy worker(s) x {BuildThreads} build thread(s), {LightWorkers} light worker(s), " +
-        $"build cache {BuildCacheMb} MB, warp memory {BuildWarpMemoryMb} MB";
+        $"1 background rebuild x {BackgroundRebuildThreads} thread(s), build cache {BuildCacheMb} MB, warp memory {BuildWarpMemoryMb} MB";
 }

@@ -1,12 +1,14 @@
 #nullable enable
 using Registry.Web.Services.Jobs;
 using System;
+using System.Linq;
 using System.Threading;
 using Hangfire;
 using Hangfire.Common;
 using Hangfire.InMemory;
 using Hangfire.States;
 using NUnit.Framework;
+using Registry.Web.Hosting;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Utilities;
@@ -49,7 +51,29 @@ public class ProcessingBudgetTests
         };
 
         ProcessingBudget.Derive(new HostFacts(64, 256 * GiB), settings, 12)
-            .ShouldBe(new ProcessingBudget(3, 5, 6, 256, 128));
+            .ShouldBe(new ProcessingBudget(3, 5, 6, 256, 128, ProcessingBudget.DefaultBackgroundRebuildThreads));
+    }
+
+    [TestCase(0, 2)]   // unset: the default
+    [TestCase(-1, 2)]  // not a thread count: the default, never a build without threads
+    [TestCase(1, 1)]
+    [TestCase(6, 6)]
+    [TestCase(4096, 4096)]
+    [TestCase(100000, 4096)] // libddb refuses a cap above 4096: the job would fail every night
+    public void Derive_BackgroundRebuildThreads_DefaultsToTwoAndStaysWithinWhatLibddbAccepts(int setting, int expected)
+    {
+        var budget = ProcessingBudget.Derive(new HostFacts(16, 64 * GiB),
+            new ProcessingBudgetSettings { BackgroundRebuildThreads = setting }, -1);
+
+        budget.BackgroundRebuildThreads.ShouldBe(expected);
+    }
+
+    [Test]
+    public void Derive_BackgroundRebuildThreads_DoNotFollowTheHost()
+    {
+        // A small host and a large one: the cap is a setting, not a share of the cores
+        ProcessingBudget.Derive(new HostFacts(1, GiB), null, -1).BackgroundRebuildThreads.ShouldBe(2);
+        ProcessingBudget.Derive(new HostFacts(64, 256 * GiB), null, -1).BackgroundRebuildThreads.ShouldBe(2);
     }
 
     [Test]
@@ -76,6 +100,9 @@ public class ProcessingBudgetTests
 
     private static Job BuildJob() => Job.FromExpression<DdbJobs>(j => j.Build("org", Ref, "o.tif", false, null));
 
+    private static Job RebuildJob() =>
+        Job.FromExpression<DdbJobs>(j => j.RebuildInBackground("org", Ref, "m.obj", null));
+
     // The shape stored by earlier releases routes the same way
     private static Job LegacyBuildJob() =>
         Job.FromExpression<HangfireUtils>(u => u.BuildWrapper(null!, "o.tif", false, null!));
@@ -92,6 +119,7 @@ public class ProcessingBudgetTests
             .ShouldBe(JobQueues.Builds);
         Filter.QueueFor(Job.FromExpression<HangfireUtils>(u => u.MaskBordersWrapper(null!, "a", "b", 15, false, null!)))
             .ShouldBe(JobQueues.Builds);
+        Filter.QueueFor(RebuildJob()).ShouldBe(JobQueues.Rebuilds);
         Filter.QueueFor(Job.FromExpression<DdbJobs>(j => j.Cleanup("org", Ref, null))).ShouldBeNull();
         Filter.QueueFor(TaskJob("build")).ShouldBe(JobQueues.Builds);
         Filter.QueueFor(TaskJob("raster-export")).ShouldBe(JobQueues.Builds);
@@ -141,6 +169,62 @@ public class ProcessingBudgetTests
         storage.Client.ChangeState(id, new EnqueuedState(), ScheduledState.StateName).ShouldBeTrue();
 
         storage.QueueOf(id).ShouldBe(JobQueues.Builds);
+    }
+
+    [Test]
+    public void Enqueue_BackgroundRebuildGoesToRebuildsQueue_NotToBuilds()
+    {
+        using var storage = new Storage();
+
+        storage.QueueOf(storage.Client.Create(RebuildJob(), new EnqueuedState(JobQueues.Default)))
+            .ShouldBe(JobQueues.Rebuilds);
+        storage.QueueOf(storage.Client.Create(RebuildJob(), new EnqueuedState(JobQueues.Builds)))
+            .ShouldBe(JobQueues.Rebuilds);
+    }
+
+    [Test]
+    public void Retry_RequeuesBackgroundRebuildOnRebuildsQueue()
+    {
+        using var storage = new Storage();
+        var id = storage.Client.Create(RebuildJob(), new ScheduledState(TimeSpan.FromHours(1)));
+        storage.Client.ChangeState(id, new EnqueuedState(), ScheduledState.StateName).ShouldBeTrue();
+
+        storage.QueueOf(id).ShouldBe(JobQueues.Rebuilds);
+    }
+
+    [Test]
+    public void BackgroundRebuild_IsABuildForTheFilters_ButNotOneThatRunsOnTheBuildsQueue()
+    {
+        var descriptor = DdbJobDescriptor.Of(RebuildJob())!.Value;
+
+        descriptor.Path.ShouldBe("m.obj");
+        descriptor.IsBuild.ShouldBeTrue("its failures are recorded like a build's, for the back-off");
+        descriptor.RunsNativeBuild.ShouldBeFalse();
+        descriptor.IsBackgroundRebuild.ShouldBeTrue();
+        DdbJobDescriptor.Of(BuildJob())!.Value.IsBackgroundRebuild.ShouldBeFalse();
+    }
+
+    // ---- Hangfire servers ------------------------------------------------------------------
+
+    [Test]
+    public void Servers_RebuildsHaveTheirOwnQueueAndOneWorker_WhateverTheBudget()
+    {
+        var budget = ProcessingBudget.Derive(new HostFacts(64, 256 * GiB), null, -1);
+
+        var rebuilds = new BackgroundJobServerOptions();
+        RegistryJobsServiceCollectionExtensions.ConfigureRebuildsServer(rebuilds);
+        var builds = new BackgroundJobServerOptions();
+        RegistryJobsServiceCollectionExtensions.ConfigureBuildsServer(builds, budget);
+        var jobs = new BackgroundJobServerOptions();
+        RegistryJobsServiceCollectionExtensions.ConfigureJobsServer(jobs, budget);
+
+        budget.HeavyWorkers.ShouldBeGreaterThan(1);
+        rebuilds.WorkerCount.ShouldBe(1);
+        rebuilds.Queues.ShouldBe([JobQueues.Rebuilds]);
+        builds.Queues.ShouldBe([JobQueues.Builds]);
+        jobs.Queues.ShouldNotContain(JobQueues.Rebuilds);
+        jobs.Queues.ShouldNotContain(JobQueues.Builds);
+        new[] { rebuilds.ServerName, builds.ServerName, jobs.ServerName }.Distinct().Count().ShouldBe(3);
     }
 
     [Test]

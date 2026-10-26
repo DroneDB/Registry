@@ -58,7 +58,7 @@ public class NativeCancellationTests : TestBase
 
         foreach (var export in new[]
                  {
-                     nameof(NativeDdb.DDBBuild), nameof(NativeDdb.DDBExportRaster), nameof(NativeDdb.DDBExportRaster2),
+                     nameof(NativeDdb.DDBBuild), nameof(NativeDdb.DDBBuildEx), nameof(NativeDdb.DDBExportRaster), nameof(NativeDdb.DDBExportRaster2),
                      nameof(NativeDdb.DDBGenerateMemoryThumbnail), nameof(NativeDdb.DDBGenerateMemoryThumbnailEx),
                      nameof(NativeDdb.DDBMemoryTileEx), nameof(NativeDdb.DDBMemoryTileFmt),
                      nameof(NativeDdb.DDBRenderRasterIndex), nameof(NativeDdb.DDBRenderRasterRegionEx)
@@ -107,6 +107,27 @@ public class NativeCancellationTests : TestBase
             .ShouldNotBe(BuildState.Complete, "a canceled build leaves no artifact");
 
         Wrapper.Build(root, GeoRasterName, force: true);
+        Wrapper.GetBuildArtifacts(root, [GeoRasterName]).ShouldHaveSingleItem().Build!.State
+            .ShouldBe(BuildState.Complete);
+    }
+
+    [Test]
+    public void CanceledToken_StopsDDBBuildEx_AndTheNextCappedBuildRuns()
+    {
+        using var area = new TestArea(nameof(CanceledToken_StopsDDBBuildEx_AndTheNextCappedBuildRuns));
+        var root = CreateDataset(Wrapper, area, "dataset", _geoRaster);
+        var capped = BuildOptions.Capped(2);
+        using var canceled = new CancellationTokenSource();
+        canceled.Cancel();
+
+        using (DdbCancellation.Enter(canceled.Token))
+            Should.Throw<DdbCanceledException>(() => Wrapper.Build(root, GeoRasterName, force: true, options: capped))
+                .Message.ShouldContain(CanceledByToken);
+
+        Wrapper.GetBuildArtifacts(root, [GeoRasterName]).ShouldHaveSingleItem().Build!.State
+            .ShouldNotBe(BuildState.Complete, "a canceled build leaves no artifact");
+
+        Wrapper.Build(root, GeoRasterName, force: true, options: capped);
         Wrapper.GetBuildArtifacts(root, [GeoRasterName]).ShouldHaveSingleItem().Build!.State
             .ShouldBe(BuildState.Complete);
     }

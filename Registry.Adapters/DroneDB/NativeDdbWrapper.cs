@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
 using System.Threading;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
@@ -245,13 +246,28 @@ public class NativeDdbWrapper : IDdbWrapper
     // ---------------------------------------------------------------- build
 
     public void Build(string ddbPath, string? source = null, string? dest = null, bool force = false,
-        bool pendingOnly = false)
+        bool pendingOnly = false, BuildOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(ddbPath);
         var normalizedSource = source == null ? null : NormalizeSeparators(source);
         var normalizedDest = dest == null ? null : NormalizeSeparators(dest);
-        NativeCall.Invoke(nameof(NativeDdb.DDBBuild), () => AcceptDeferred(
-            NativeDdb.DDBBuild(ddbPath, normalizedSource, normalizedDest, force, pendingOnly)));
+
+        // DDBBuildEx only when a limit is set: a build without one stays the call it always was
+        if (ToBuildJson(options) is not { } optionsJson)
+            NativeCall.Invoke(nameof(NativeDdb.DDBBuild), () => AcceptDeferred(
+                NativeDdb.DDBBuild(ddbPath, normalizedSource, normalizedDest, force, pendingOnly)));
+        else
+            NativeCall.Invoke(nameof(NativeDdb.DDBBuildEx), () => AcceptDeferred(
+                NativeDdb.DDBBuildEx(ddbPath, normalizedSource, normalizedDest, force, pendingOnly, optionsJson)));
+    }
+
+    /// <summary>The <c>DDBBuildEx</c> JSON of <paramref name="options"/>: only the limits that are set, null for none.</summary>
+    public static string? ToBuildJson(BuildOptions? options)
+    {
+        if (options?.Threads is not { } threads)
+            return null;
+
+        return new JsonObject { ["threads"] = threads }.ToJsonString(NativeJson.Options);
     }
 
     // BuildDependencyMissing: a dependency is not indexed yet, so the build is deferred (a pending

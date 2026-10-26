@@ -71,6 +71,20 @@ public class BuildArtifactResolverTests
             .ShouldBe($".ddb/build/{Hash}/ept/ept.json");
     }
 
+    [TestCase(ArtifactRoles.ModelBm3d, "bm3d/model.bm3d", false)]
+    [TestCase(ArtifactRoles.ModelNexus, "nxs/model.nxz", true)]
+    public void RenderSource_OfAModel_IsTheMeshItsBuildListsWhicheverLayoutBuiltIt(string role, string path,
+        bool legacy)
+    {
+        // libddb lists the Nexus mesh of an older build only while there is no bm3d one, and never both
+        _ddb.SetupBuilds(Built("model.obj", EntryType.Model,
+            TestBuilds.File(role, path, legacy: legacy),
+            TestBuilds.Directory(ArtifactRoles.Model3DTiles, "3dtiles", "tileset.json")));
+
+        _resolver.GetRenderSource(_ddb.Object, Entry("model.obj", EntryType.Model))
+            .ShouldBe($".ddb/build/{Hash}/{path}");
+    }
+
     [Test]
     public void RenderSource_WithoutTheRenderedArtifactYet_IsNotAvailable()
     {
