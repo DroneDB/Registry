@@ -70,7 +70,7 @@ Pending-build backoff copies	0
 Zip-slip normalizer copies	0
 Direct Path.GetTempPath()	0
 Ad-hoc backslash->slash normalizations	1
-Static File./Directory. calls	115
+Static File./Directory. calls	114
 DateTime.Now (local)	0
 Archive key normalization call sites (zip-slip)	1
 Archive extraction loops	1

@@ -294,13 +294,8 @@ public class Program
 
         Directory.CreateDirectory(folder);
 
-        if (deployHub)
-        {
-            // The branding folder hosts user-supplied logos / favicons / manifest.
-            // It is created (empty) on first run and is NEVER touched by SetupHub(),
-            // so customizations survive Hub upgrades.
-            Directory.CreateDirectory(Path.Combine(folder, MagicStrings.BrandingFolder));
-        }
+        // The branding folder is not made here: it lives under StoragePath (Startup creates and serves it), which is
+        // not this folder with the default "./data", and an empty folder here would be the wrong place to drop logos.
 
         if (deployDdb && !SetupDdb(folder, resetDdb))
         {
