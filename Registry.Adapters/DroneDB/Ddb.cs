@@ -199,7 +199,7 @@ public class DDB : IDDB
         RunBuild(path, null, force, options);
     }
 
-    private void RunBuild(string path, string dest, bool force, BuildOptions options)
+    private void RunBuild(string path, string? dest, bool force, BuildOptions? options)
     {
         Wrap(() => Wrapper.Build(DatasetFolderPath, path?.ToDdbPath(), dest, force, options: options),
             ex => $"Cannot build '{path}' from ddb '{DatasetFolderPath}'");

@@ -30,7 +30,7 @@ public class DdbBuildBusyPassthroughTests
 
     private static void SetupBuildThrow(Mock<IDdbWrapper> wrapper, Exception ex) =>
         wrapper.Setup(w => w.Build(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(),
-                It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<BuildOptions?>()))
+                It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<BuildOptions>()))
             .Throws(ex);
 
     [Test]

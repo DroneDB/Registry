@@ -307,7 +307,7 @@ public class PendingBuildCoordinationTests
         Seed();
         // A retryable failure: libddb keeps the marker, and the build still lists the legacy model it replaces
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingMarkers.Of("model.obj", "model-hash")]);
-        _ddb.Setup(x => x.GetBuildArtifacts(It.Is<IReadOnlyList<string>>(p => p.SequenceEqual(new[] { "model.obj" }))))
+        _ddb.Setup(x => x.GetBuildArtifacts(It.Is<IReadOnlyList<string>>(p => p.SequenceEqual(ModelObjOnly))))
             .Returns([new EntryBuildArtifacts
             {
                 Path = "model.obj", Exists = true, Hash = "model-hash",
@@ -361,7 +361,7 @@ public class PendingBuildCoordinationTests
     private DdbJobDescriptor RetryOfLegacyModel(params JobIndex[] failedJobs)
     {
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingMarkers.Of("model.obj", "model-hash")]);
-        _ddb.Setup(x => x.GetBuildArtifacts(It.Is<IReadOnlyList<string>>(p => p.SequenceEqual(new[] { "model.obj" }))))
+        _ddb.Setup(x => x.GetBuildArtifacts(It.Is<IReadOnlyList<string>>(p => p.SequenceEqual(ModelObjOnly))))
             .Returns([new EntryBuildArtifacts
             {
                 Path = "model.obj", Exists = true, Hash = "model-hash",
@@ -392,6 +392,7 @@ public class PendingBuildCoordinationTests
         CurrentState = "Failed", CreatedAtUtc = createdAt, MethodDisplay = Job.FromExpression(job).ToString()
     };
 
+    private static readonly string[] ModelObjOnly = ["model.obj"];
     private static readonly Expression<Action<DdbJobs>> UserBuild = j => j.Build(Org, Guid.Empty, "model.obj", false, null);
     private static readonly Expression<Action<DdbJobs>> BackgroundRebuild = j => j.RebuildInBackground(Org, Guid.Empty, "model.obj", null);
 

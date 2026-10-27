@@ -180,7 +180,7 @@ public sealed class PendingBuildEnqueuer
     // artifact of an older layout is a background rebuild, the rule the artifact completeness check queues it by.
     // Without the build manifest those entries are built on the builds queue.
     private static HashSet<string> BackgroundRebuildPaths(IDDB ddb, IReadOnlyList<PendingBuildInfo> entries,
-        IReadOnlyDictionary<string, bool> originIsBackground, JobConsole console)
+        Dictionary<string, bool> originIsBackground, JobConsole console)
     {
         var paths = entries.Where(e => originIsBackground.GetValueOrDefault(e.Path)).Select(e => e.Path)
             .ToHashSet(StringComparer.Ordinal);
@@ -223,7 +223,7 @@ public sealed class PendingBuildEnqueuer
                 StringComparer.Ordinal);
 
     // The build jobs the job index has of the given entries, whatever their state
-    private IReadOnlyList<JobIndex> BuildJobsOf(string orgSlug, string dsSlug, HashSet<string> paths) =>
+    private JobIndex[] BuildJobsOf(string orgSlug, string dsSlug, HashSet<string> paths) =>
         _jobIndex.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue).GetAwaiter().GetResult()
             .Where(j => j.ToolId == HeavyToolIds.Build && j.Path != null && paths.Contains(j.Path))
             .ToArray();
