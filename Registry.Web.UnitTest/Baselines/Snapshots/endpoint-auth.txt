@@ -173,8 +173,8 @@ GET /sys/report -> Authorize + Authorize(Policy=Admin) [admin] @ SystemControlle
 POST /sys/rescan -> Authorize + Authorize(Policy=Admin) [admin] @ BuildMaintenanceController.Rescan
 GET /sys/tasks -> Authorize + Authorize(Policy=Admin) [admin] @ AdminTasksController.List
 POST /sys/tasks/{id}/delete -> Authorize + Authorize(Policy=Admin) [admin] @ AdminTasksController.Delete
-PUT /sys/update-check/settings -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.PutUpdateCheckSettings
-GET /sys/update-info -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.GetUpdateInfo
+PUT /sys/update-check/settings -> Authorize + Authorize(Policy=Admin) [admin] @ UpdateCheckController.PutUpdateCheckSettings
+GET /sys/update-info -> Authorize + Authorize(Policy=Admin) [admin] @ UpdateCheckController.GetUpdateInfo
 POST /sys/upload-probe -> Authorize [authenticated] @ UploadProbeController.Probe
 GET /sys/version -> Authorize [authenticated] @ SystemController.GetVersion
 DELETE /users -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.DeleteUser

@@ -11,7 +11,6 @@ using Registry.Web.Services.Configuration;
 using Registry.Web.Services.Maintenance;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
-using Registry.Web.Services.UpdateCheck;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Auth;
 
@@ -20,7 +19,7 @@ namespace Registry.Web.Controllers;
 /// <summary>
 /// System administration: the version, the data maintenance (upload batches, empty datasets, visibility, slugs),
 /// moving datasets and merging organizations, the global report and the configuration. The build
-/// maintenance, the remote import, the processing nodes and the features have their own controllers (same routes,
+/// maintenance, the remote import, the processing nodes, the features and the update check have their own controllers (same routes,
 /// same route names: <see cref="SystemRoutes"/>).
 /// </summary>
 [Authorize]
@@ -35,12 +34,9 @@ public class SystemController : ControllerBaseEx
     private readonly IDatasetsManager _datasets;
     private readonly IOrganizationsManager _organizations;
     private readonly ConfigurationDataBuilder _configuration;
-    private readonly IUpdateCheckService _updateCheck;
-    private readonly UpdateCheckSettingsUpdater _updateCheckSettings;
 
     public SystemController(SystemManager systemManager, DatasetSlugRepair slugs, GlobalReportBuilder report,
-        IDatasetsManager datasets, IOrganizationsManager organizations, ConfigurationDataBuilder configuration,
-        IUpdateCheckService updateCheck, UpdateCheckSettingsUpdater updateCheckSettings)
+        IDatasetsManager datasets, IOrganizationsManager organizations, ConfigurationDataBuilder configuration)
     {
         _systemManager = systemManager;
         _slugs = slugs;
@@ -48,8 +44,6 @@ public class SystemController : ControllerBaseEx
         _datasets = datasets;
         _organizations = organizations;
         _configuration = configuration;
-        _updateCheck = updateCheck;
-        _updateCheckSettings = updateCheckSettings;
     }
 
     /// <summary>
@@ -202,43 +196,5 @@ public class SystemController : ControllerBaseEx
     public ActionResult<ConfigurationDataDto> GetConfig()
     {
         return _configuration.Build();
-    }
-
-    /// <summary>
-    /// What the update check knows: the installed and the latest version, whether an update is available and
-    /// whether it carries security fixes, the merged release notes (Markdown from the update check service: render it
-    /// sanitized), the link to request a licence, and what the administrator declared. The version fields are null until
-    /// a check succeeded.
-    /// </summary>
-    /// <returns>The update information.</returns>
-    [HttpGet("update-info", Name = SystemRoutes.Prefix + nameof(GetUpdateInfo))]
-    [Authorize(Policy = Policies.Admin)]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public ActionResult<UpdateInfoDto> GetUpdateInfo()
-    {
-        return _updateCheck.GetUpdateInfo();
-    }
-
-    /// <summary>
-    /// Saves how the deployment is used and, with the administrator's consent, the address to send security and release
-    /// news to. A change queues one update check (at most one every 10 minutes, none while the check is disabled), so
-    /// the declaration reaches the update check service the same day.
-    /// </summary>
-    /// <param name="request">The declaration, the address and the consent.</param>
-    /// <returns>The update information after the change.</returns>
-    /// <response code="400">The declaration is unknown, the address is not valid, or an address came without consent.</response>
-    [HttpPut("update-check/settings", Name = SystemRoutes.Prefix + nameof(PutUpdateCheckSettings))]
-    [Authorize(Policy = Policies.Admin)]
-    [Consumes("application/json")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public ActionResult<UpdateInfoDto> PutUpdateCheckSettings([FromBody, Required] UpdateCheckSettingsDto request)
-    {
-        _updateCheckSettings.Apply(request);
-        return _updateCheck.GetUpdateInfo();
     }
 }
