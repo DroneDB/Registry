@@ -44,7 +44,9 @@ public class DdbJobs : DdbRetriedJob
     /// the artifact completeness check does not count it as a content failure. A second retry loop
     /// here would keep the job from failing.
     /// </remarks>
-    [AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
+    [AutomaticRetry(Attempts = DdbRetryPolicy.Attempts,
+        DelaysInSeconds = [DdbRetryPolicy.Delay1, DdbRetryPolicy.Delay2, DdbRetryPolicy.Delay3, DdbRetryPolicy.Delay4,
+            DdbRetryPolicy.Delay5],
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
         OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
     public void Build(string orgSlug, Guid internalRef, string? path, bool force, PerformContext? context) =>
@@ -59,7 +61,9 @@ public class DdbJobs : DdbRetriedJob
     /// The retry policy and the failure handling of <see cref="Build"/>. An entry a user build completed meanwhile is
     /// already complete: libddb returns without building.
     /// </remarks>
-    [AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
+    [AutomaticRetry(Attempts = DdbRetryPolicy.Attempts,
+        DelaysInSeconds = [DdbRetryPolicy.Delay1, DdbRetryPolicy.Delay2, DdbRetryPolicy.Delay3, DdbRetryPolicy.Delay4,
+            DdbRetryPolicy.Delay5],
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
         OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
     public void RebuildInBackground(string orgSlug, Guid internalRef, string path, PerformContext? context) =>

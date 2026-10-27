@@ -13,7 +13,9 @@ namespace Registry.Web.Services.Jobs;
 /// from its class (inherited) and its method; a method attribute overrides this one
 /// (<see cref="DdbJobs.Build"/>).
 /// </summary>
-[AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
+[AutomaticRetry(Attempts = DdbRetryPolicy.Attempts,
+    DelaysInSeconds = [DdbRetryPolicy.Delay1, DdbRetryPolicy.Delay2, DdbRetryPolicy.Delay3, DdbRetryPolicy.Delay4,
+        DdbRetryPolicy.Delay5],
     OnAttemptsExceeded = AttemptsExceededAction.Fail,
     OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException), typeof(DdbRetryableException),
         typeof(PendingBuildCoordinatorContentionException)])]

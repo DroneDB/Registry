@@ -42,7 +42,9 @@ public sealed class HangfireUtils : DdbRetriedJob
     }
 
     /// <summary>Stored <see cref="DdbJobs.Build"/>, with its policy (no retry of a retryable build failure).</summary>
-    [AutomaticRetry(Attempts = 5, DelaysInSeconds = [15, 60, 180, 600, 1800],
+    [AutomaticRetry(Attempts = DdbRetryPolicy.Attempts,
+        DelaysInSeconds = [DdbRetryPolicy.Delay1, DdbRetryPolicy.Delay2, DdbRetryPolicy.Delay3, DdbRetryPolicy.Delay4,
+            DdbRetryPolicy.Delay5],
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
         OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
     public void BuildWrapper(IDDB ddb, string path, bool force, PerformContext context)
