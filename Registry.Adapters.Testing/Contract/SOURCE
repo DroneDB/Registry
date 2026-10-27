@@ -1,7 +1,7 @@
 # libddb contract fixtures vendored from DroneDB. Do not edit the vendored files:
 # run Registry.Adapters.Testing/update-contract.sh <DroneDB clone> <commit> instead.
 repository: https://github.com/DroneDB/DroneDB
-commit: 17d323a1ff79e0e4b76ad104075365f83d1cb3c4
+commit: a7de68dcdc2a80166cda7110a7476c2fb69c89ed
 path: tests/contract
 # sha256 and path relative to Contract/ (sha256sum format), one line per vendored file
 f63ea3dc73de3af03967fd227e1dd18dd976c2ca14794a4735143a82e4e17390  README.md
