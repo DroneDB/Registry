@@ -15,10 +15,10 @@
 }
 @if (Model.CompareLink != null)
 {
-    <p style="margin:0 0 16px;"><a href="@Model.CompareLink" style="color:#2563eb;">All changes between the two versions</a></p>
+    <p style="margin:0 0 16px;"><EmailLink Href="@Model.CompareLink" Branding="@Branding">All changes between the two versions</EmailLink></p>
 }
 @if (Branding.BaseUrl != null)
 {
-    <p style="margin:0 0 16px;">Open <a href="@Branding.BaseUrl" style="color:#2563eb;">@Branding.AppName</a> to see the update.</p>
+    <p style="margin:0 0 16px;">Open <EmailLink Href="@Branding.BaseUrl" Branding="@Branding">@Branding.AppName</EmailLink> to see the update.</p>
 }
 <p style="margin:0;font-size:14px;color:#6b7280;">You get this e-mail because <code>@UpdateAvailableEmailTemplate.OptOutKey</code> is "security" or "all". Set it to "off" to stop it.</p>

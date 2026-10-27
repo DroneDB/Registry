@@ -69,7 +69,8 @@ public static class StartupBanner
 
     /// <summary>
     /// The warning to log when e-mail is enabled without a public URL: the e-mails then have no link to the
-    /// instance and no logo (a mail client cannot resolve a relative address). Null when there is nothing to warn.
+    /// instance and no logo or icon, not even the built-in one (a mail client cannot resolve a relative address). Null
+    /// when there is nothing to warn.
     /// </summary>
     public static string? EmailLinksWarning(SmtpSettings smtp, HttpHostOptions http)
     {
@@ -77,7 +78,8 @@ public static class StartupBanner
         ArgumentNullException.ThrowIfNull(http);
 
         return smtp.Enabled && string.IsNullOrWhiteSpace(http.ExternalUrlOverride)
-            ? "E-mail is enabled but AppSettings:ExternalUrlOverride is not set: e-mails will have no link to this instance and no logo"
+            ? "E-mail is enabled but AppSettings:ExternalUrlOverride is not set: e-mails will have no link to this instance " +
+              "(no dataset links, no link to the notification settings) and no logo or icon, not even the built-in one"
             : null;
     }
 }

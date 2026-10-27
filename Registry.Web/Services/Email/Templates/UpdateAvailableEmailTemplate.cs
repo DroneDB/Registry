@@ -22,10 +22,7 @@ public sealed record UpdateAvailableEmailModel(string? InstalledVersion, string 
     /// <see cref="CompareUrl"/> when it is an absolute http or https address, otherwise null: the address comes from the
     /// update check service and is put in a link, where a <c>javascript:</c> address must not end up.
     /// </summary>
-    public Uri? CompareLink =>
-        Uri.TryCreate(CompareUrl, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
-            ? uri
-            : null;
+    public Uri? CompareLink => EmailLinks.WebUrl(CompareUrl);
 }
 
 /// <summary>
