@@ -65,6 +65,39 @@ public static partial class EmailStyles
         return withLight >= withDark ? LightText : DarkText;
     }
 
+    /// <summary>The contrast that text needs on its background to be readable (WCAG AA, normal text).</summary>
+    public const double ReadableContrast = 4.5;
+
+    /// <summary>
+    /// <paramref name="color"/> (a <c>#rrggbb</c> colour) as text on the white body of an e-mail: the colour itself when it
+    /// is readable there, else the same hue darkened just enough to be (a light theme colour such as yellow is a fine
+    /// button or bar, but unreadable as link text).
+    /// </summary>
+    public static string ReadableOnWhite(string color)
+    {
+        var hex = NormalizeHex(color) ?? throw new ArgumentException($"'{color}' is not a hex colour", nameof(color));
+        var white = Luminance(LightText);
+
+        for (var shade = 1.0; shade > 0; shade -= 0.05)
+        {
+            var candidate = Scaled(hex, shade);
+            if (Contrast(white, Luminance(candidate)) >= ReadableContrast)
+                return candidate;
+        }
+
+        return DarkText;
+    }
+
+    // hex with each channel multiplied by factor (towards black)
+    private static string Scaled(string hex, double factor)
+    {
+        static int Channel(string hex, int index, double factor) =>
+            (int)Math.Round(int.Parse(hex.AsSpan(index, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture) * factor);
+
+        return string.Create(CultureInfo.InvariantCulture,
+            $"#{Channel(hex, 1, factor):x2}{Channel(hex, 3, factor):x2}{Channel(hex, 5, factor):x2}");
+    }
+
     private static double Contrast(double lighter, double darker) => (lighter + 0.05) / (darker + 0.05);
 
     private static double Luminance(string hex)

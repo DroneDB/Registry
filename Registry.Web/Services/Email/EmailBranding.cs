@@ -47,6 +47,9 @@ public sealed record EmailBranding(string AppName, Uri? BaseUrl, Uri? LogoUrl)
     /// <summary>The text colour on <see cref="AccentColor"/> (a button label): white or near-black, whichever reads best.</summary>
     public string AccentTextColor => EmailStyles.TextOn(AccentColor);
 
+    /// <summary>The colour of link text on the white body: <see cref="AccentColor"/>, darkened when it is too light to read.</summary>
+    public string LinkColor => EmailStyles.ReadableOnWhite(AccentColor);
+
     /// <summary>
     /// A small icon shown beside the application name when there is no raster logo: the apple-touch icon or the 32 px
     /// favicon (<see cref="FaviconOptions"/>), absolute and raster like the logo. Null when there is a logo.

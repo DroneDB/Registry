@@ -196,6 +196,29 @@ public class EmailMessageTests
     public void Branding_ButtonText_ReadsOnTheAccent(string accent, string text) =>
         Brand(Themed(accent)).AccentTextColor.ShouldBe(text);
 
+    [TestCase("#0070e0")]
+    [TestCase("#000000")]
+    [TestCase("#7c3aed")]
+    public void Branding_ADarkAccent_IsTheLinkColourAsItIs(string accent) =>
+        Brand(Themed(accent)).LinkColor.ShouldBe(accent);
+
+    [TestCase("#f2c200")]
+    [TestCase("#ffff00")]
+    [TestCase("#7dd3fc")]
+    [TestCase("#ffffff")]
+    public void Branding_ALightAccent_IsDarkenedForLinkText_UntilItReadsOnWhite(string accent)
+    {
+        var link = Brand(Themed(accent)).LinkColor;
+
+        link.ShouldNotBe(accent);
+        // A colour that is readable on white comes back unchanged
+        EmailStyles.ReadableOnWhite(link).ShouldBe(link);
+    }
+
+    [Test]
+    public void Branding_ALinkColourIsAlwaysHex() =>
+        EmailStyles.NormalizeHex(EmailStyles.ReadableOnWhite("#f2c200")).ShouldNotBeNull();
+
     [Test]
     public void Branding_TheBrandBlue_IsThePrimaryColourOfTheHubPalette()
     {
@@ -305,7 +328,8 @@ public class EmailMessageTests
                 h => h.ShouldContain("<img src=\"https://hub.example.org/branding/apple-touch-icon.png\""),
                 h => h.ShouldContain(">Acme</td>"),
                 h => h.ShouldNotContain("email-logo.png"));
-        update.HtmlBody!.ShouldContain("style=\"color:#ff6600;");
+        // Orange is too light for link text on white: links use the same hue, darkened until it reads
+        update.HtmlBody!.ShouldContain($"style=\"color:{EmailStyles.ReadableOnWhite("#ff6600")};");
         update.HtmlBody!.ShouldNotContain("#2563eb");
     }
 
