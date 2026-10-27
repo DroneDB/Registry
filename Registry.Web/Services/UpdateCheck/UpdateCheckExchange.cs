@@ -2,6 +2,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Web.Services.Storage;
 
 namespace Registry.Web.Services.UpdateCheck;
 

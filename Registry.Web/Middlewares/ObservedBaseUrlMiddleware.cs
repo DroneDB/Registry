@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
+using Registry.Web.Services.Storage;
 using Registry.Web.Services.UpdateCheck;
 
 namespace Registry.Web.Middlewares;

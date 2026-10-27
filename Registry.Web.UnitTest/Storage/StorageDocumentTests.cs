@@ -5,10 +5,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
 using Registry.Ports;
-using Registry.Web.Services.UpdateCheck;
+using Registry.Web.Services.Storage;
+using Registry.Web.Test.UpdateCheck;
 using Shouldly;
 
-namespace Registry.Web.Test.UpdateCheck;
+namespace Registry.Web.Test.Storage;
 
 /// <summary>
 /// The JSON file in the storage folder: read leniently, written through <see cref="IFileSystem"/>, and a write the disk

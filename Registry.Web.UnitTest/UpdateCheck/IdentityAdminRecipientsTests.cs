@@ -10,13 +10,15 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
+using Registry.Web.Models.Email;
 using Registry.Web.Services.Adapters;
 using Shouldly;
 
 namespace Registry.Web.Test.UpdateCheck;
 
 /// <summary>
-/// The recipients of the update e-mail, read from a real (SQLite) identity database: the admin role, an address, nobody twice.
+/// The recipients read from a real (SQLite) identity database: the administrators of the update e-mail (the admin role, an
+/// address, nobody twice) and one user (<see cref="IdentityUserRecipients"/>), with the same rules for both.
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~IdentityAdminRecipientsTests"
 /// </summary>
 [TestFixture]
@@ -110,5 +112,33 @@ public class IdentityAdminRecipientsTests : IDisposable
     public async Task AHostWithoutAnIdentityDatabase_HasNoRecipient()
     {
         (await Recipients(null)).ShouldBeEmpty();
+    }
+
+    private static Task<EmailAddress?> RecipientOf(ApplicationDbContext? identity, string userId) =>
+        new IdentityUserRecipients(NullLogger<IdentityUserRecipients>.Instance, identity).FindAsync(userId, CancellationToken.None);
+
+    [Test]
+    public async Task OneUser_IsTheirAddress_NamedAfterThem()
+    {
+        await AddUser("bob", " bob@example.com ");
+
+        await using var identity = new ApplicationDbContext(Options());
+
+        (await RecipientOf(identity, "bob")).ShouldBe(new EmailAddress("bob@example.com", "bob"));
+    }
+
+    [Test]
+    public async Task OneUser_FollowsTheSameRules_AsTheAdministrators()
+    {
+        await AddUser("gone", "gone@example.com", "deactivated");
+        await AddUser("nobody", null);
+        await AddUser("blank", " ");
+        await AddUser("list", "a@example.com, b@example.com");
+
+        await using var identity = new ApplicationDbContext(Options());
+
+        foreach (var id in new[] { "gone", "nobody", "blank", "list", "no-such-user", "" })
+            (await RecipientOf(identity, id)).ShouldBeNull(id);
+        (await RecipientOf(null, "gone")).ShouldBeNull();
     }
 }

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Hub;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Shares;
@@ -65,8 +66,7 @@ public sealed class ShareBatches
 
         return new CommitResultDto
         {
-            // NOTE: This url structure is so buried in the code that it's hard to find it, we should consider a better way to expose it
-            Url = $"/r/{batch.Dataset.Organization.Slug}/{batch.Dataset.Slug}",
+            Url = HubLinks.DatasetPath(batch.Dataset.Organization.Slug, batch.Dataset.Slug),
             Tag = new TagDto(batch.Dataset.Organization.Slug, batch.Dataset.Slug)
         };
     }

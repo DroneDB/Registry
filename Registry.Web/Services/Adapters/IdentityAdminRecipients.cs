@@ -15,8 +15,8 @@ namespace Registry.Web.Services.Adapters;
 /// <summary>
 /// <see cref="IAdminRecipients"/> from the identity database: one query on the roles tables, which every host that runs
 /// jobs can make because the web host and the processing nodes read the same database (the same connection string, or
-/// the SQLite file in the storage folder they share). A deactivated user is not told. A host with no identity database
-/// gives no recipient.
+/// the SQLite file in the storage folder they share), with the recipient rules of <see cref="IdentityRecipientQuery"/>. A
+/// host with no identity database gives no recipient.
 /// </summary>
 public sealed class IdentityAdminRecipients : IAdminRecipients
 {
@@ -41,29 +41,23 @@ public sealed class IdentityAdminRecipients : IAdminRecipients
         }
 
         var admin = ApplicationDbContext.AdminRoleName.ToUpperInvariant();
-        var deactivated = ApplicationDbContext.DeactivatedRoleName.ToUpperInvariant();
 
         var addresses = await (
-                from user in _identity.Users
+                from user in IdentityRecipientQuery.ActiveWithEmail(_identity)
                 join userRole in _identity.UserRoles on user.Id equals userRole.UserId
                 join role in _identity.Roles on userRole.RoleId equals role.Id
-                where role.NormalizedName == admin && user.Email != null &&
-                      !(from other in _identity.UserRoles
-                        join otherRole in _identity.Roles on other.RoleId equals otherRole.Id
-                        where other.UserId == user.Id && otherRole.NormalizedName == deactivated
-                        select other).Any()
+                where role.NormalizedName == admin
                 orderby user.Email
                 select user.Email!)
             .AsNoTracking()
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
-        // One bare mailbox each: the e-mail service refuses a message with a malformed recipient, which would stop all of them
+        // One mailbox each, and each once
         return addresses
-            .Select(a => a.Trim())
-            .Where(EmailAddress.IsValid)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(a => new EmailAddress(a))
+            .Select(address => IdentityRecipientQuery.Mailbox(address))
+            .OfType<EmailAddress>()
+            .DistinctBy(a => a.Address, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 }

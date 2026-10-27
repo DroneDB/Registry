@@ -8,7 +8,7 @@ using Registry.Ports;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Utilities;
 
-namespace Registry.Web.Services.UpdateCheck;
+namespace Registry.Web.Services.Storage;
 
 /// <summary>
 /// One small JSON file in the storage folder, which every node of the deployment shares: written atomically (a reader

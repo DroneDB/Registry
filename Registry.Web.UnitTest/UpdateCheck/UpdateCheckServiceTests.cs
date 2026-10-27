@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NUnit.Framework;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Storage;
 using Registry.Web.Services.UpdateCheck;
 using Registry.Web.Utilities;
 using Shouldly;

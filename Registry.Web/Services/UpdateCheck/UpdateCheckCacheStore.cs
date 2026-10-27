@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Registry.Ports;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
+using Registry.Web.Services.Storage;
 
 namespace Registry.Web.Services.UpdateCheck;
 

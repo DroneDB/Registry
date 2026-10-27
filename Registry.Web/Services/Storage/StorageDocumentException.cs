@@ -2,7 +2,7 @@
 using System.IO;
 using System;
 
-namespace Registry.Web.Services.UpdateCheck;
+namespace Registry.Web.Services.Storage;
 
 /// <summary>
 /// A <see cref="StorageDocument{T}"/> that could not be written: the disk refused it (an I/O error, or no permission on
