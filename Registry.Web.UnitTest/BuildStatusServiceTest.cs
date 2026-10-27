@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
+using Hangfire.Common;
 using Hangfire.InMemory;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -85,13 +86,19 @@ public class BuildStatusServiceTest : TestBase
     private void NativePending(string path, params string[] missing) =>
         _native[path] = TestBuilds.Pending(Folder, path, EntryType.Vector, "h-" + path, missing);
 
+    // The method text the job index keeps for each job (Hangfire's own, as the enqueuer stores it)
+    private static readonly string BuildJobText =
+        Job.FromExpression<DdbJobs>(j => j.Build(OrgSlug, Guid.Empty, "m.obj", false, null)).ToString();
+    private static readonly string RebuildJobText =
+        Job.FromExpression<DdbJobs>(j => j.RebuildInBackground(OrgSlug, Guid.Empty, "m.obj", null)).ToString();
+
     private JobIndex AddJob(string path, string state, DateTime? createdAt = null, string toolId = "build",
-        string dsSlug = DsSlug)
+        string dsSlug = DsSlug, string methodDisplay = null)
     {
         var job = new JobIndex
         {
             JobId = "j" + ++_jobSeq, OrgSlug = OrgSlug, DsSlug = dsSlug, Path = path, ToolId = toolId,
-            CurrentState = state, CreatedAtUtc = createdAt ?? DateTime.UtcNow
+            CurrentState = state, CreatedAtUtc = createdAt ?? DateTime.UtcNow, MethodDisplay = methodDisplay
         };
         _context.JobIndices.Add(job);
         _context.SaveChanges();
@@ -121,6 +128,85 @@ public class BuildStatusServiceTest : TestBase
 
         entry.BuildStatus.ShouldBe("building");
         entry.BuildMissingDependencies.ShouldBeNull();
+    }
+
+    // A model of the older layout that still opens: its background rebuild may wait for days on a queue of one worker
+    [TestCase("Enqueued")]
+    [TestCase("Scheduled")]
+    [TestCase("Created")]
+    public async Task AnnotateAsync_BackgroundRebuildThatOnlyWaits_ShowsNoStatus(string state)
+    {
+        var entry = Entry("model.obj", EntryType.Model);
+        Native("model.obj");
+        AddJob("model.obj", state, methodDisplay: RebuildJobText);
+
+        await CreateService().AnnotateAsync(OrgSlug, DsSlug, _ddbMock.Object, [entry]);
+
+        entry.BuildStatus.ShouldBeNull("the model is usable: neither building nor queued");
+        entry.BuildMissingDependencies.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task AnnotateAsync_BackgroundRebuildThatOnlyWaits_AfterAFailedOne_ShowsNoStatus()
+    {
+        var entry = Entry("model.obj", EntryType.Model);
+        Native("model.obj");
+        AddJob("model.obj", "Failed", DateTime.UtcNow.AddHours(-3), methodDisplay: RebuildJobText);
+        AddJob("model.obj", "Enqueued", DateTime.UtcNow, methodDisplay: RebuildJobText);
+
+        await CreateService().AnnotateAsync(OrgSlug, DsSlug, _ddbMock.Object, [entry]);
+
+        entry.BuildStatus.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task AnnotateAsync_BackgroundRebuildThatProcesses_IsBuilding()
+    {
+        var entry = Entry("model.obj", EntryType.Model);
+        Native("model.obj");
+        AddJob("model.obj", "Processing", methodDisplay: RebuildJobText);
+
+        await CreateService().AnnotateAsync(OrgSlug, DsSlug, _ddbMock.Object, [entry]);
+
+        entry.BuildStatus.ShouldBe("building");
+    }
+
+    [Test]
+    public async Task AnnotateAsync_EnqueuedPlainBuild_IsBuilding()
+    {
+        var entry = Entry("model.obj", EntryType.Model);
+        Native("model.obj");
+        AddJob("model.obj", "Enqueued", methodDisplay: BuildJobText);
+
+        await CreateService().AnnotateAsync(OrgSlug, DsSlug, _ddbMock.Object, [entry]);
+
+        entry.BuildStatus.ShouldBe("building");
+    }
+
+    [Test]
+    public async Task AnnotateAsync_WaitingRebuildBesideAUsersBuild_IsBuilding()
+    {
+        var entry = Entry("model.obj", EntryType.Model);
+        Native("model.obj");
+        AddJob("model.obj", "Enqueued", methodDisplay: RebuildJobText);
+        AddJob("model.obj", "Enqueued", methodDisplay: BuildJobText);
+
+        await CreateService().AnnotateAsync(OrgSlug, DsSlug, _ddbMock.Object, [entry]);
+
+        entry.BuildStatus.ShouldBe("building", "the user's build is the one in progress");
+    }
+
+    [Test]
+    public async Task AnnotateAsync_WaitingRebuildOfAnEntryOnHold_ShowsPendingAsWithoutAJob()
+    {
+        var entry = Entry("layer.shp", EntryType.Vector);
+        NativePending("layer.shp", "layer.dbf");
+        AddJob("layer.shp", "Enqueued", methodDisplay: RebuildJobText);
+
+        await CreateService().AnnotateAsync(OrgSlug, DsSlug, _ddbMock.Object, [entry]);
+
+        entry.BuildStatus.ShouldBe("pending");
+        entry.BuildMissingDependencies.ShouldBe(["layer.dbf"]);
     }
 
     [Test]

@@ -24,6 +24,13 @@ public interface IJobIndexQuery
         IReadOnlyCollection<string> paths, CancellationToken ct = default);
 
     /// <summary>
+    /// The not-yet-finished jobs of <paramref name="toolId"/> of the given paths (a path may have several), with
+    /// what tells a waiting background rebuild from a running build. Reads only the active rows of those paths.
+    /// </summary>
+    Task<IReadOnlyList<ActiveJob>> GetActiveJobsAsync(string orgSlug, string dsSlug, string toolId,
+        IReadOnlyCollection<string> paths, CancellationToken ct = default);
+
+    /// <summary>
     /// State of the most recent <paramref name="toolId"/> job of each given path that has one.
     /// Reads only the jobs of those paths, never the whole dataset history.
     /// </summary>
@@ -55,6 +62,9 @@ public interface IJobIndexQuery
     Task<long> CountActiveAsync(string? orgSlug = null, string? userId = null,
         string? toolId = null, CancellationToken ct = default);
 }
+
+/// <summary>A job of an entry that has not finished: its Hangfire state and the method text of its row.</summary>
+public readonly record struct ActiveJob(string Path, string State, string? MethodDisplay);
 
 public sealed record JobIndexQueryFilter(
     string OrgSlug, string DsSlug,

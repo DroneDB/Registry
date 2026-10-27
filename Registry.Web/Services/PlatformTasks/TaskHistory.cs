@@ -13,6 +13,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Caching;
 using Registry.Web.Services.HeavyTasks.Adapters;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.PlatformTasks;
@@ -141,7 +142,8 @@ public sealed class TaskHistory
     private TaskSummaryDto ToSummary(JobIndex j) => new(
         j.JobId, j.ToolId, j.ToolVersion, j.CurrentState, j.ProgressPercent, j.PhaseMessage,
         j.CreatedAtUtc, j.ProcessingAtUtc, TaskJobHelpers.FinishedAt(j), j.Path, j.ParentJobId,
-        j.WorkflowExecutionId, j.ErrorType, TaskJobHelpers.ArtifactExpiresAt(j, _settings.ArtifactTtlHours));
+        j.WorkflowExecutionId, j.ErrorType, TaskJobHelpers.ArtifactExpiresAt(j, _settings.ArtifactTtlHours),
+        DdbJobDescriptor.IsBackgroundRebuildDisplay(j.MethodDisplay));
 
     private TaskArtifactDto? BuildArtifactDto(JobIndex j, string orgSlug, string dsSlug) =>
         j.CurrentState == "Succeeded" && j.ArtifactSizeBytes is { } size

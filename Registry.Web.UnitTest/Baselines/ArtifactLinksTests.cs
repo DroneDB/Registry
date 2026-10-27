@@ -77,8 +77,8 @@ public sealed class ArtifactLinksTests
             new() { Path = "img.jpg", Type = EntryType.Image }
         };
         var service = new BuildStatusService(Mock.Of<IJobIndexQuery>(q =>
-                q.GetActivePathsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
-                    It.IsAny<IReadOnlyCollection<string>>(), default) == Task.FromResult(new HashSet<string>()) &&
+                q.GetActiveJobsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+                    It.IsAny<IReadOnlyCollection<string>>(), default) == Task.FromResult<IReadOnlyList<ActiveJob>>(System.Array.Empty<ActiveJob>()) &&
                 q.GetLatestStatesByPathAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
                     It.IsAny<IReadOnlyCollection<string>>(), default) == Task.FromResult(new Dictionary<string, string>())),
             TestPorts.Artifacts(), Urls,

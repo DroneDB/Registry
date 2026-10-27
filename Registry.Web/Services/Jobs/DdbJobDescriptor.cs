@@ -58,6 +58,10 @@ public readonly record struct DdbJobDescriptor(DdbJobKind Kind, string? Path)
             : null;
     }
 
+    /// <summary>Whether <paramref name="methodDisplay"/> (see <see cref="OfDisplay"/>) names a background rebuild.</summary>
+    public static bool IsBackgroundRebuildDisplay(string? methodDisplay) =>
+        OfDisplay(methodDisplay) is { IsBackgroundRebuild: true };
+
     private static DdbJobKind? KindOf(Type type, string method)
     {
         if (type == typeof(DdbJobs))

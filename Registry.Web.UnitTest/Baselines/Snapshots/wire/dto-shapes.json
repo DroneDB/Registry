@@ -3628,7 +3628,8 @@
       "parentJobId": "ParentJobId-text",
       "workflowExecutionId": "WorkflowExecutionId-text",
       "errorType": "ErrorType-text",
-      "artifactExpiresAt": "2026-10-21T07:31:17.123Z"
+      "artifactExpiresAt": "2026-10-21T07:31:17.123Z",
+      "background": true
     },
     "sparse": {
       "taskId": null,
@@ -3644,7 +3645,8 @@
       "parentJobId": null,
       "workflowExecutionId": null,
       "errorType": null,
-      "artifactExpiresAt": null
+      "artifactExpiresAt": null,
+      "background": false
     }
   },
   "Registry.Web.Models.DTO.TaskToolDto": {

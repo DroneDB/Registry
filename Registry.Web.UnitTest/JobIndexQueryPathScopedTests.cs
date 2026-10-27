@@ -6,6 +6,7 @@ using NUnit.Framework;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Ports;
 using Shouldly;
 using Registry.Web.Test.Support;
 
@@ -56,6 +57,25 @@ public class JobIndexQueryPathScopedTests
         var active = await _query.GetActivePathsAsync("org", "ds", "build", paths);
 
         active.OrderBy(p => p).ShouldBe(["p1.tif", "p1100.tif", "p700.tif"]);
+    }
+
+    [Test]
+    public async Task GetActiveJobs_ListsEveryActiveJobOfThePathsWithItsStateAndMethodText()
+    {
+        Add("a", "p1.tif", "Enqueued");
+        Add("b", "p1.tif", "Processing");
+        Add("c", "p2.tif", "Failed");
+        Add("d", "p3.tif", "Processing", tool: "raster-export");
+        await _context.SaveChangesAsync();
+        (await _context.JobIndices.FindAsync("a"))!.MethodDisplay = "DdbJobs.RebuildInBackground";
+        await _context.SaveChangesAsync();
+
+        var jobs = await _query.GetActiveJobsAsync("org", "ds", "build", ["p1.tif", "p2.tif", "p3.tif"]);
+
+        jobs.OrderBy(j => j.State).ShouldBe([
+            new ActiveJob("p1.tif", "Enqueued", "DdbJobs.RebuildInBackground"),
+            new ActiveJob("p1.tif", "Processing", null)
+        ]);
     }
 
     [Test]

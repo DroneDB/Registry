@@ -45,7 +45,10 @@ public sealed record TaskProgressDto(int? Percent, string? Phase, string? Messag
 /// <summary>Artifact descriptor of a completed task.</summary>
 public sealed record TaskArtifactDto(long SizeBytes, string? Sha256, string ResultUrl, DateTime? ExpiresAt);
 
-/// <summary>Single-row summary for TaskHistory (GET /tasks).</summary>
+/// <summary>
+/// Single-row summary for TaskHistory (GET /tasks). <c>Background</c> is set for the rebuild of an entry made with an
+/// older layout, which runs when its queue has a free worker, not when somebody asked for it.
+/// </summary>
 public sealed record TaskSummaryDto(
     string TaskId,
     string ToolId,
@@ -60,7 +63,8 @@ public sealed record TaskSummaryDto(
     string? ParentJobId,
     string? WorkflowExecutionId,
     string? ErrorType,
-    DateTime? ArtifactExpiresAt);
+    DateTime? ArtifactExpiresAt,
+    bool Background = false);
 
 /// <summary>Full status (GET /tasks/{id}).</summary>
 public sealed record TaskStatusDto(

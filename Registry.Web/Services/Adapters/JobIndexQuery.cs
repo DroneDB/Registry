@@ -28,9 +28,13 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
     private const int PathChunkSize = 500;
 
     public async Task<HashSet<string>> GetActivePathsAsync(string orgSlug, string dsSlug, string toolId,
+        IReadOnlyCollection<string> paths, CancellationToken ct = default) =>
+        (await GetActiveJobsAsync(orgSlug, dsSlug, toolId, paths, ct)).Select(j => j.Path).ToHashSet();
+
+    public async Task<IReadOnlyList<ActiveJob>> GetActiveJobsAsync(string orgSlug, string dsSlug, string toolId,
         IReadOnlyCollection<string> paths, CancellationToken ct = default)
     {
-        var result = new HashSet<string>();
+        var result = new List<ActiveJob>();
 
         foreach (var chunk in paths.Distinct().Chunk(PathChunkSize))
         {
@@ -38,11 +42,10 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
                 .AsNoTracking()
                 .Where(x => x.OrgSlug == orgSlug && x.DsSlug == dsSlug && x.ToolId == toolId &&
                             chunk.Contains(x.Path!) && ActiveStates.Contains(x.CurrentState))
-                .Select(x => x.Path!)
-                .Distinct()
+                .Select(x => new { Path = x.Path!, x.CurrentState, x.MethodDisplay })
                 .ToArrayAsync(ct);
 
-            result.UnionWith(active);
+            result.AddRange(active.Select(x => new ActiveJob(x.Path, x.CurrentState, x.MethodDisplay)));
         }
 
         return result;

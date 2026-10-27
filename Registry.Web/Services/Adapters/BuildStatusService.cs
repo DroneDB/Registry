@@ -3,10 +3,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Hangfire.States;
 using Microsoft.Extensions.Logging;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.HeavyTasks;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
@@ -18,7 +20,8 @@ namespace Registry.Web.Services.Adapters;
 /// and completeness for the default "ready" state) into a single per-entry status,
 /// and lists the artifacts that exist (<see cref="EntryDto.Artifacts"/>).
 /// A listing costs one native call (the manifest of the listed entries) and two
-/// job index queries scoped to the listed paths, whatever the number of entries.
+/// job index queries scoped to the listed paths, whatever the number of entries. A background rebuild that has not
+/// started processing gives no status (see <see cref="AnnotateAsync"/>).
 /// </summary>
 public class BuildStatusService : IBuildStatusService
 {
@@ -64,10 +67,14 @@ public class BuildStatusService : IBuildStatusService
         if (buildable.Count == 0)
             return;
 
-        var activePaths = await _jobIndexQuery.GetActivePathsAsync(orgSlug, dsSlug, BuildToolId,
+        // A background rebuild that only waits for its turn is not a build in progress: the entry is usable and is
+        // judged as if no job were active (and it is not "queued" either: nothing waits for it)
+        var activeJobs = await _jobIndexQuery.GetActiveJobsAsync(orgSlug, dsSlug, BuildToolId,
             buildable.Select(e => e.Path).ToArray());
+        var buildingPaths = activeJobs.Where(j => !IsWaitingBackgroundRebuild(j)).Select(j => j.Path).ToHashSet();
+        var waitingPaths = activeJobs.Select(j => j.Path).Except(buildingPaths).ToHashSet();
 
-        var notBuilding = buildable.Where(e => !activePaths.Contains(e.Path)).ToList();
+        var notBuilding = buildable.Where(e => !buildingPaths.Contains(e.Path)).ToList();
         foreach (var entry in buildable.Except(notBuilding))
             entry.BuildStatus = "building";
 
@@ -85,7 +92,7 @@ public class BuildStatusService : IBuildStatusService
                 entry.BuildStatus = "pending";
                 entry.BuildMissingDependencies = [.. build.MissingDependencies];
             }
-            else if (build.State != BuildState.Complete)
+            else if (build.State != BuildState.Complete && !waitingPaths.Contains(entry.Path))
                 unfinished.Add(entry);
             // else ready: the default state, nothing to transmit
         }
@@ -101,6 +108,11 @@ public class BuildStatusService : IBuildStatusService
                 ? "failed"
                 : "queued";
     }
+
+    // The background rebuild of an entry made with an older layout (the rebuilds queue serves one at a time, so it
+    // can wait for days) that has not started: an entry that opens fine has no build to show
+    private static bool IsWaitingBackgroundRebuild(ActiveJob job) =>
+        job.State != ProcessingState.StateName && DdbJobDescriptor.IsBackgroundRebuildDisplay(job.MethodDisplay);
 
     // A pending marker: libddb reports "pending", or "building" (the lock wins) with the marker's
     // missing dependencies while a build that was deferred runs again outside a build job
