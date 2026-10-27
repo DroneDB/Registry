@@ -42,7 +42,7 @@ public class InstanceIdentityTests : IDisposable
     }
 
     private InstanceIdentityStore NewNode() =>
-        new(_storage.Storage, _time, NullLogger<InstanceIdentityStore>.Instance);
+        new(_storage.Storage, UpdateCheckTestKit.Disk, _time, NullLogger<InstanceIdentityStore>.Instance);
 
     [Test]
     public void FirstStart_CreatesAUuid_AndTheJsonFile()
@@ -141,6 +141,7 @@ public class InstanceIdentityTests : IDisposable
 [TestFixture]
 public class AtomicFileCreateOrReadTests : IDisposable
 {
+    private readonly AtomicFile _atomic = new(UpdateCheckTestKit.Disk);
     private TempStorage _storage = null!;
 
     [SetUp]
@@ -158,7 +159,7 @@ public class AtomicFileCreateOrReadTests : IDisposable
     {
         var path = _storage.File("created.json");
 
-        AtomicFile.CreateOrRead(path, "first").ShouldBe("first");
+        _atomic.CreateOrRead(path, "first").ShouldBe("first");
 
         File.ReadAllText(path).ShouldBe("first");
         Directory.GetFileSystemEntries(_storage.Folder).ShouldBe([path]);
@@ -170,7 +171,7 @@ public class AtomicFileCreateOrReadTests : IDisposable
         var path = _storage.File("existing.json");
         File.WriteAllText(path, "winner");
 
-        AtomicFile.CreateOrRead(path, "loser").ShouldBe("winner");
+        _atomic.CreateOrRead(path, "loser").ShouldBe("winner");
 
         File.ReadAllText(path).ShouldBe("winner");
         Directory.GetFileSystemEntries(_storage.Folder).ShouldBe([path]);
@@ -184,7 +185,7 @@ public class AtomicFileCreateOrReadTests : IDisposable
             var path = _storage.File($"race-{round}.json");
 
             var results = await Task.WhenAll(Enumerable.Range(0, 16)
-                .Select(i => Task.Run(() => AtomicFile.CreateOrRead(path, $"writer-{i}"))));
+                .Select(i => Task.Run(() => _atomic.CreateOrRead(path, $"writer-{i}"))));
 
             results.Distinct().Count().ShouldBe(1, $"round {round}: {string.Join(", ", results.Distinct())}");
             File.ReadAllText(path).ShouldBe(results[0]);
@@ -200,7 +201,7 @@ public class AtomicFileCreateOrReadTests : IDisposable
         Directory.CreateDirectory(path + ".claim");
         File.WriteAllText(Path.Combine(path + ".claim", "crashed.json"), "claimed");
 
-        AtomicFile.CreateOrRead(path, "newcomer").ShouldBe("claimed");
+        _atomic.CreateOrRead(path, "newcomer").ShouldBe("claimed");
 
         File.ReadAllText(path).ShouldBe("claimed");
         Directory.Exists(path + ".claim").ShouldBeFalse();
@@ -214,6 +215,6 @@ public class AtomicFileCreateOrReadTests : IDisposable
         Directory.CreateDirectory(path + ".claim");
         File.WriteAllText(Path.Combine(path + ".claim", "published.json"), "stale");
 
-        AtomicFile.CreateOrRead(path, "newcomer").ShouldBe("published");
+        _atomic.CreateOrRead(path, "newcomer").ShouldBe("published");
     }
 }

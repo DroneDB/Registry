@@ -21,6 +21,7 @@ namespace Registry.Web.Test.Baselines;
 [Category(TestCategories.Baseline)]
 public class AtomicFileTests
 {
+    private readonly AtomicFile _atomic = new(new Registry.Adapters.FileSystem());
     private string _folder = null!;
 
     [SetUp]
@@ -39,7 +40,7 @@ public class AtomicFileTests
         var path = Path.Combine(_folder, "appsettings.json");
         File.WriteAllText(path, "old");
 
-        AtomicFile.WriteAllText(path, "new").ShouldBeTrue();
+        _atomic.WriteAllText(path, "new").ShouldBeTrue();
 
         File.ReadAllText(path).ShouldBe("new");
         Directory.GetFiles(_folder).ShouldBe([path]);
@@ -77,7 +78,7 @@ public class AtomicFileTests
         });
 
         for (var i = 0; i < 200; i++)
-            AtomicFile.WriteAllText(path, contents[(i + 1) % 2]);
+            _atomic.WriteAllText(path, contents[(i + 1) % 2]);
 
         await done.CancelAsync();
         (await reader).ShouldBeGreaterThan(0);
@@ -93,7 +94,7 @@ public class AtomicFileTests
         if (OperatingSystem.IsWindows())
             Assert.Ignore("EBUSY is the POSIX errno of a rename onto a mount point");
 
-        AtomicFile.WriteAllText(path, "new", (_, _) => throw busy).ShouldBeFalse();
+        _atomic.WriteAllText(path, "new", (_, _) => throw busy).ShouldBeFalse();
 
         File.ReadAllText(path).ShouldBe("new");
         Directory.GetFiles(_folder).ShouldBe([path]);
@@ -105,7 +106,7 @@ public class AtomicFileTests
         var path = Path.Combine(_folder, "appsettings.json");
         File.WriteAllText(path, "old");
 
-        Should.Throw<IOException>(() => AtomicFile.WriteAllText(path, "new", (_, _) => throw new IOException("disk full", 28)));
+        Should.Throw<IOException>(() => _atomic.WriteAllText(path, "new", (_, _) => throw new IOException("disk full", 28)));
 
         File.ReadAllText(path).ShouldBe("old");
         Directory.GetFiles(_folder).ShouldBe([path]);

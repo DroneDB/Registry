@@ -74,9 +74,16 @@ public sealed class UpdateCheckClient
         }
         catch (HttpRequestException ex)
         {
-            throw new UpdateCheckException("The update check service could not be reached", ex);
+            throw Unreachable(ex);
+        }
+        catch (IOException ex)
+        {
+            // The connection broke while the answer was read
+            throw Unreachable(ex);
         }
     }
+
+    private static UpdateCheckException Unreachable(Exception ex) => new("The update check service could not be reached", ex);
 
     private static async Task<byte[]> ReadCappedAsync(HttpContent content, CancellationToken ct)
     {

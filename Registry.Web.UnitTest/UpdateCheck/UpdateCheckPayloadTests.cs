@@ -37,8 +37,8 @@ public class UpdateCheckPayloadTests : IDisposable
     public void SetUp()
     {
         _storage = new TempStorage();
-        _settings = new UpdateCheckSettingsStore(_storage.Storage, NullLogger<UpdateCheckSettingsStore>.Instance);
-        _observed = new ObservedBaseUrlStore(_storage.Storage, TimeProvider.System, NullLogger<ObservedBaseUrlStore>.Instance);
+        _settings = new UpdateCheckSettingsStore(_storage.Storage, UpdateCheckTestKit.Disk, NullLogger<UpdateCheckSettingsStore>.Instance);
+        _observed = new ObservedBaseUrlStore(_storage.Storage, UpdateCheckTestKit.Disk, TimeProvider.System, NullLogger<ObservedBaseUrlStore>.Instance);
         _snapshot = new PlatformSnapshot("linux", "Ubuntu 22.04.4 LTS", "x64", ".NET 10.0.9", true, "SRV-GIS-01", "acme.internal");
         _platform = new Mock<IPlatformFacts>();
         _platform.Setup(p => p.Capture()).Returns(() => _snapshot);
@@ -79,7 +79,7 @@ public class UpdateCheckPayloadTests : IDisposable
 
     [Test]
     public void ThePayload_OfARealMachine_MatchesTheCanonicalSchema() =>
-        ShouldMatchTheContract(Json(Builder(platform: new PlatformFacts()).Build()));
+        ShouldMatchTheContract(Json(Builder(platform: new PlatformFacts(UpdateCheckTestKit.Disk)).Build()));
 
     [Test]
     public void TheExampleOfTheContract_MatchesTheCanonicalSchema() =>

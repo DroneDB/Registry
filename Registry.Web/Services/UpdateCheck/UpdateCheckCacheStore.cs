@@ -3,6 +3,7 @@ using System;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Ports;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
 
@@ -14,8 +15,8 @@ public sealed class UpdateCheckCacheStore : IUpdateCheckCache
     private readonly StorageDocument<UpdateCheckCache> _file;
     private readonly Lock _gate = new();
 
-    public UpdateCheckCacheStore(IOptions<StorageOptions> storage, ILogger<UpdateCheckCacheStore> logger) =>
-        _file = new StorageDocument<UpdateCheckCache>(storage, MagicStrings.UpdateCheckCacheFileName, logger);
+    public UpdateCheckCacheStore(IOptions<StorageOptions> storage, IFileSystem fs, ILogger<UpdateCheckCacheStore> logger) =>
+        _file = new StorageDocument<UpdateCheckCache>(storage, fs, MagicStrings.UpdateCheckCacheFileName, logger);
 
     /// <inheritdoc />
     public UpdateCheckCache Read() => _file.Read() ?? UpdateCheckCache.Empty;

@@ -9,6 +9,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Registry.Common;
+using Registry.Ports;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Utilities;
@@ -63,31 +64,32 @@ public static class SettingsFile
     /// </summary>
     /// <returns>What was done, for the log.</returns>
     /// <exception cref="JsonException">The file is not valid JSON.</exception>
-    public static SettingsFileChanges Prepare(string storageFolder)
+    public static SettingsFileChanges Prepare(string storageFolder, IFileSystem fs)
     {
+        var atomicFile = new AtomicFile(fs);
         var path = PathIn(storageFolder);
         var created = false;
 
-        if (!File.Exists(path))
+        if (!fs.Exists(path))
         {
-            AtomicFile.WriteAllText(path, DefaultContent());
+            atomicFile.WriteAllText(path, DefaultContent());
             created = true;
         }
 
-        var settings = Read(path);
+        var settings = Read(path, fs);
         var generated = AddMissingSecrets(settings);
         var atomic = true;
 
         if (generated.Count > 0)
-            atomic = AtomicFile.WriteAllText(path, settings.ToJsonString(WriteOptions));
+            atomic = atomicFile.WriteAllText(path, settings.ToJsonString(WriteOptions));
 
         return new SettingsFileChanges(path, created, generated, atomic);
     }
 
     /// <summary>The file's JSON.</summary>
     /// <exception cref="JsonException">The file is not valid JSON or not an object.</exception>
-    public static JsonObject Read(string path) =>
-        JsonNode.Parse(File.ReadAllText(path), documentOptions: ReadOptions)?.AsObject() ??
+    public static JsonObject Read(string path, IFileSystem fs) =>
+        JsonNode.Parse(fs.ReadAllText(path), documentOptions: ReadOptions)?.AsObject() ??
         throw new JsonException($"{path} is empty");
 
     /// <summary>
@@ -126,14 +128,14 @@ public static class SettingsFile
     /// </summary>
     /// <exception cref="FileNotFoundException">The folder has no settings file.</exception>
     /// <exception cref="JsonException">The file is not valid JSON.</exception>
-    public static IConfiguration LoadConfiguration(string storageFolder)
+    public static IConfiguration LoadConfiguration(string storageFolder, IFileSystem fs)
     {
         var path = PathIn(storageFolder);
-        if (!File.Exists(path))
+        if (!fs.Exists(path))
             throw new FileNotFoundException(
                 $"'{path}' not found: run the Registry once on this storage folder to create it", path);
 
-        var settings = Read(path);
+        var settings = Read(path, fs);
         AddMissingSecrets(settings);
 
         return new ConfigurationBuilder()

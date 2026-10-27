@@ -14,8 +14,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Registry.Adapters;
 using Registry.Adapters.DroneDB;
 using Registry.Common;
+using Registry.Ports;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Hosting;
 using Registry.Web.Identity.Models;
@@ -41,6 +43,9 @@ public class Program
     public const string AdminPasswordEnvironmentVariable = "REGISTRY_ADMIN_PASSWORD";
 
     private static ILogger StartupLog => RegistryHost.StartupLog;
+
+    // The disk the startup steps before the container exists work on
+    private static readonly IFileSystem Disk = new FileSystem();
 
     /// <summary>Entry point; the process exit code is one of <see cref="ExitCodes"/>.</summary>
     public static int Main(string[] args)
@@ -314,7 +319,7 @@ public class Program
 
         try
         {
-            var changes = SettingsFile.Prepare(folder);
+            var changes = SettingsFile.Prepare(folder, Disk);
 
             if (changes.Created)
                 StartupLog.Information("Created the default settings {SettingsFile}", changes.Path);
@@ -324,7 +329,7 @@ public class Program
                     changes.Atomic ? "" : " (a mount point: written in place)");
 
             // The folder libddb's cache and the scratch files live in; the hosts check the settings
-            Directory.CreateDirectory(SettingsFile.LoadConfiguration(folder).GetRegistryOptions<StorageOptions>().TempPath!);
+            Directory.CreateDirectory(SettingsFile.LoadConfiguration(folder, Disk).GetRegistryOptions<StorageOptions>().TempPath!);
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -363,7 +368,7 @@ public class Program
         IConfiguration configuration;
         try
         {
-            configuration = SettingsFile.LoadConfiguration(storageFolder);
+            configuration = SettingsFile.LoadConfiguration(storageFolder, Disk);
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {

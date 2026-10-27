@@ -38,6 +38,7 @@ public static class UpdateCheckServiceCollectionExtensions
         services.AddScoped<UpdateCheckPayloadBuilder>();
         services.AddScoped<UpdateInfoBuilder>();
         services.AddScoped<UpdateCheckClient>();
+        services.AddScoped<UpdateCheckExchange>();
         services.AddScoped<IUpdateCheckService, UpdateCheckService>();
 
         // The e-mail to the administrators about a new version. The recipients come from the identity database, which the

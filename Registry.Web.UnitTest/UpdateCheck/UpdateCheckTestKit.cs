@@ -17,6 +17,9 @@ namespace Registry.Web.Test.UpdateCheck;
 /// <summary>Builders shared by the update check tests.</summary>
 internal static class UpdateCheckTestKit
 {
+    /// <summary>The real disk, as the stores see it in production.</summary>
+    public static Registry.Ports.IFileSystem Disk { get; } = new Registry.Adapters.FileSystem();
+
     public static IOptions<StorageOptions> Storage(string folder) => Microsoft.Extensions.Options.Options.Create(new StorageOptions { StoragePath = folder });
 
     public static IOptions<UpdateCheckOptions> Configure(UpdateCheckOptions? options = null) =>
@@ -172,19 +175,19 @@ internal sealed class UpdateCheckHarness : IDisposable
         var ddb = new Mock<Registry.Ports.IDdbWrapper>();
         ddb.Setup(d => d.GetVersion()).Returns("2.0.0 1f171e5");
         Identity = new Registry.Web.Test.Support.FixedInstanceIdentity();
-        Settings = new UpdateCheckSettingsStore(Storage.Storage, Microsoft.Extensions.Logging.Abstractions.NullLogger<UpdateCheckSettingsStore>.Instance);
-        Observed = new ObservedBaseUrlStore(Storage.Storage, Time, Microsoft.Extensions.Logging.Abstractions.NullLogger<ObservedBaseUrlStore>.Instance);
+        Settings = new UpdateCheckSettingsStore(Storage.Storage, UpdateCheckTestKit.Disk, Microsoft.Extensions.Logging.Abstractions.NullLogger<UpdateCheckSettingsStore>.Instance);
+        Observed = new ObservedBaseUrlStore(Storage.Storage, UpdateCheckTestKit.Disk, Time, Microsoft.Extensions.Logging.Abstractions.NullLogger<ObservedBaseUrlStore>.Instance);
         BaseUrl = new InstanceBaseUrl(Microsoft.Extensions.Options.Options.Create(http ?? new HttpHostOptions()), Observed);
-        Cache = new UpdateCheckCacheStore(Storage.Storage, Microsoft.Extensions.Logging.Abstractions.NullLogger<UpdateCheckCacheStore>.Instance);
+        Cache = new UpdateCheckCacheStore(Storage.Storage, UpdateCheckTestKit.Disk, Microsoft.Extensions.Logging.Abstractions.NullLogger<UpdateCheckCacheStore>.Instance);
 
-        var payloads = new UpdateCheckPayloadBuilder(Identity, Settings, BaseUrl, new PlatformFacts(),
+        var payloads = new UpdateCheckPayloadBuilder(Identity, Settings, BaseUrl, new PlatformFacts(UpdateCheckTestKit.Disk),
             Microsoft.Extensions.Options.Options.Create(new Registry.Web.Models.Configuration.DataStoreOptions()),
             HostResourceBudget.Create(InstanceType.Default, new HostFacts(4, 8L << 30), new HostResourceOptions(), new DdbRuntimeOptions(), _ => null), ddb.Object);
         Info = new UpdateInfoBuilder(Identity, Settings, BaseUrl);
         Client = new UpdateCheckClient(Factory(handler), Microsoft.Extensions.Options.Options.Create(Options), Time);
         Logs = new RecordingLoggerFactory();
-        Service = new UpdateCheckService(Microsoft.Extensions.Options.Options.Create(Options), payloads, Client, Cache, Info,
-            Notifier, Time, new Microsoft.Extensions.Logging.Logger<UpdateCheckService>(Logs));
+        Service = new UpdateCheckService(Microsoft.Extensions.Options.Options.Create(Options), new UpdateCheckExchange(payloads, Client),
+            Cache, Info, Notifier, Time, new Microsoft.Extensions.Logging.Logger<UpdateCheckService>(Logs));
     }
 
     public TempStorage Storage { get; }

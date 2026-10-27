@@ -11,6 +11,16 @@ public interface IFileSystem
     #region Synchronous File Operations
 
     void WriteAllBytes(string path, byte[] bytes);
+
+    /// <summary>
+    /// Writes <paramref name="bytes"/> to <paramref name="path"/> and flushes them to the disk before it returns, so a
+    /// file renamed over another one right after is whole after a crash. <paramref name="mode"/> decides what an existing
+    /// file means (<see cref="FileMode.CreateNew"/> refuses it), <paramref name="share"/> what a reader may do meanwhile.
+    /// </summary>
+    void WriteAllBytesDurable(string path, byte[] bytes, FileMode mode = FileMode.Create, FileShare share = FileShare.None);
+
+    /// <summary>The whole file as text (UTF-8, a BOM is honoured).</summary>
+    string ReadAllText(string path);
     void Copy(string sourceFileName, string destFileName, bool overwrite = true);
     void Move(string sourceFileName, string destFileName);
 

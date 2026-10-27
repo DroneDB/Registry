@@ -20,6 +20,18 @@ public class FileSystem : IFileSystem
         File.WriteAllBytes(path, bytes);
     }
 
+    public void WriteAllBytesDurable(string path, byte[] bytes, FileMode mode = FileMode.Create, FileShare share = FileShare.None)
+    {
+        using var stream = new FileStream(path, mode, FileAccess.Write, share);
+        stream.Write(bytes);
+        stream.Flush(flushToDisk: true);
+    }
+
+    public string ReadAllText(string path)
+    {
+        return File.ReadAllText(path);
+    }
+
     public void Copy(string sourceFileName, string destFileName, bool overwrite = true)
     {
         File.Copy(sourceFileName, destFileName, overwrite);

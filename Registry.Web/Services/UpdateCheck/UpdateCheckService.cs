@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -19,21 +20,18 @@ namespace Registry.Web.Services.UpdateCheck;
 public sealed class UpdateCheckService : IUpdateCheckService
 {
     private readonly UpdateCheckOptions _options;
-    private readonly UpdateCheckPayloadBuilder _payloads;
-    private readonly UpdateCheckClient _client;
+    private readonly UpdateCheckExchange _exchange;
     private readonly IUpdateCheckCache _cache;
     private readonly UpdateInfoBuilder _info;
     private readonly IUpdateNotifier _notifier;
     private readonly TimeProvider _time;
     private readonly ILogger<UpdateCheckService> _logger;
 
-    public UpdateCheckService(IOptions<UpdateCheckOptions> options, UpdateCheckPayloadBuilder payloads, UpdateCheckClient client,
-        IUpdateCheckCache cache, UpdateInfoBuilder info, IUpdateNotifier notifier, TimeProvider time,
-        ILogger<UpdateCheckService> logger)
+    public UpdateCheckService(IOptions<UpdateCheckOptions> options, UpdateCheckExchange exchange, IUpdateCheckCache cache,
+        UpdateInfoBuilder info, IUpdateNotifier notifier, TimeProvider time, ILogger<UpdateCheckService> logger)
     {
         _options = options.Value;
-        _payloads = payloads;
-        _client = client;
+        _exchange = exchange;
         _cache = cache;
         _info = info;
         _notifier = notifier;
@@ -54,7 +52,7 @@ public sealed class UpdateCheckService : IUpdateCheckService
         UpdateCheckResult result;
         try
         {
-            var response = await _client.PostAsync(_payloads.Build(), ct).ConfigureAwait(false);
+            var response = await _exchange.RunAsync(ct).ConfigureAwait(false);
             result = new UpdateCheckResult(response, _time.GetUtcNow().UtcDateTime);
             _cache.Update(cache => cache with { LastResult = result, LastFailureAt = null });
         }
@@ -62,7 +60,12 @@ public sealed class UpdateCheckService : IUpdateCheckService
         {
             throw;
         }
-        catch (Exception ex)
+        catch (UpdateCheckException ex)
+        {
+            Failed(ex);
+            return;
+        }
+        catch (StorageDocumentException ex)
         {
             Failed(ex);
             return;
@@ -84,11 +87,15 @@ public sealed class UpdateCheckService : IUpdateCheckService
             var now = _time.GetUtcNow().UtcDateTime;
             _cache.Update(cache => cache with { LastFailureAt = now });
         }
-        catch (Exception cacheEx)
+        catch (StorageDocumentException cacheEx)
         {
             _logger.LogDebug(cacheEx, "Cannot record the failure of the update check");
         }
     }
+
+    // The check itself succeeded; a notification that fails is retried by the next check
+    private void NotificationFailed(Exception ex) =>
+        _logger.LogWarning(ex, "Cannot notify about the result of the update check");
 
     private async Task NotifyAsync(UpdateCheckResult result, CancellationToken ct)
     {
@@ -100,10 +107,13 @@ public sealed class UpdateCheckService : IUpdateCheckService
         {
             throw;
         }
-        catch (Exception ex)
+        catch (StorageDocumentException ex)
         {
-            // The check itself succeeded; a notification that fails is retried by the next check
-            _logger.LogWarning(ex, "Cannot notify about the result of the update check");
+            NotificationFailed(ex);
+        }
+        catch (DbException ex)
+        {
+            NotificationFailed(ex);
         }
     }
 }

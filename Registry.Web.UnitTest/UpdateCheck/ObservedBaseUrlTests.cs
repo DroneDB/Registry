@@ -40,7 +40,7 @@ public class ObservedBaseUrlTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private ObservedBaseUrlStore NewStore() => new(_storage.Storage, _time, NullLogger<ObservedBaseUrlStore>.Instance);
+    private ObservedBaseUrlStore NewStore() => new(_storage.Storage, UpdateCheckTestKit.Disk, _time, NullLogger<ObservedBaseUrlStore>.Instance);
 
     private string ObservedFile => _storage.File(MagicStrings.ObservedBaseUrlFileName);
 

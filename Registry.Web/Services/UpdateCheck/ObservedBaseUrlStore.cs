@@ -3,6 +3,7 @@ using System;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Ports;
 using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Services.UpdateCheck;
@@ -29,9 +30,9 @@ public sealed class ObservedBaseUrlStore
     private string? _lastValue;
     private DateTime _lastWriteAt = DateTime.MinValue;
 
-    public ObservedBaseUrlStore(IOptions<StorageOptions> storage, TimeProvider time, ILogger<ObservedBaseUrlStore> logger)
+    public ObservedBaseUrlStore(IOptions<StorageOptions> storage, IFileSystem fs, TimeProvider time, ILogger<ObservedBaseUrlStore> logger)
     {
-        _file = new StorageDocument<ObservedBaseUrl>(storage, MagicStrings.ObservedBaseUrlFileName, logger);
+        _file = new StorageDocument<ObservedBaseUrl>(storage, fs, MagicStrings.ObservedBaseUrlFileName, logger);
         _time = time;
     }
 

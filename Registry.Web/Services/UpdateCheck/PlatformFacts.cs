@@ -6,6 +6,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using Registry.Ports;
 
 namespace Registry.Web.Services.UpdateCheck;
 
@@ -39,6 +40,10 @@ public sealed partial class PlatformFacts : IPlatformFacts
     private const string DockerMarkerFile = "/.dockerenv";
     private const string ControlGroupFile = "/proc/1/cgroup";
 
+    private readonly IFileSystem _fs;
+
+    public PlatformFacts(IFileSystem fs) => _fs = fs;
+
     [GeneratedRegex("docker|kubepods|containerd", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ContainerControlGroup();
 
@@ -49,40 +54,57 @@ public sealed partial class PlatformFacts : IPlatformFacts
         RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant(),
         RuntimeInformation.FrameworkDescription,
         InContainer(),
-        Safe(Dns.GetHostName),
-        Safe(DomainName));
+        HostName(),
+        DomainName());
 
-    private static bool InContainer()
+    private bool InContainer()
     {
         if (!OperatingSystem.IsLinux())
             return false;
 
         try
         {
-            return File.Exists(DockerMarkerFile) ||
-                   File.Exists(ControlGroupFile) && ContainerControlGroup().IsMatch(File.ReadAllText(ControlGroupFile));
+            return _fs.Exists(DockerMarkerFile) ||
+                   _fs.Exists(ControlGroupFile) && ContainerControlGroup().IsMatch(_fs.ReadAllText(ControlGroupFile));
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
         {
             return false;
         }
     }
 
-    // The DNS domain (Linux answers "(none)" for a machine without one), else the Active Directory one that Windows sets
-    // in the environment
-    private static string? DomainName() =>
-        IPGlobalProperties.GetIPGlobalProperties().DomainName is { Length: > 0 } domain && domain != "(none)"
-            ? domain
-            : Environment.GetEnvironmentVariable("USERDNSDOMAIN");
-
     // A machine that cannot say is reported as not saying: the update check never fails for it
-    private static string? Safe(Func<string?> read)
+    private static string? HostName()
     {
         try
         {
-            return read();
+            return Dns.GetHostName();
         }
-        catch (Exception ex) when (ex is SocketException or NetworkInformationException or PlatformNotSupportedException or IOException)
+        catch (SocketException)
+        {
+            return null;
+        }
+    }
+
+    // The DNS domain (Linux answers "(none)" for a machine without one), else the Active Directory one that Windows sets
+    // in the environment
+    private static string? DomainName()
+    {
+        try
+        {
+            return IPGlobalProperties.GetIPGlobalProperties().DomainName is { Length: > 0 } domain && domain != "(none)"
+                ? domain
+                : Environment.GetEnvironmentVariable("USERDNSDOMAIN");
+        }
+        catch (NetworkInformationException)
+        {
+            return null;
+        }
+        catch (PlatformNotSupportedException)
         {
             return null;
         }

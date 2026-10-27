@@ -4,6 +4,7 @@ using System.Threading;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Ports;
 using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Services.UpdateCheck;
@@ -39,8 +40,8 @@ public sealed class UpdateCheckSettingsStore
     private readonly StorageDocument<UpdateCheckSettings> _file;
     private readonly Lock _gate = new();
 
-    public UpdateCheckSettingsStore(IOptions<StorageOptions> storage, ILogger<UpdateCheckSettingsStore> logger) =>
-        _file = new StorageDocument<UpdateCheckSettings>(storage, MagicStrings.UpdateCheckSettingsFileName, logger);
+    public UpdateCheckSettingsStore(IOptions<StorageOptions> storage, IFileSystem fs, ILogger<UpdateCheckSettingsStore> logger) =>
+        _file = new StorageDocument<UpdateCheckSettings>(storage, fs, MagicStrings.UpdateCheckSettingsFileName, logger);
 
     /// <summary>The settings; <see cref="UpdateCheckSettings.Empty"/> when none were saved.</summary>
     public UpdateCheckSettings Read() => _file.Read() ?? UpdateCheckSettings.Empty;

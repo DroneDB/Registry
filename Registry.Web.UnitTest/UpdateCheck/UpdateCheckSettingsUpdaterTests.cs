@@ -34,7 +34,7 @@ public class UpdateCheckSettingsUpdaterTests : IDisposable
     {
         _storage = new TempStorage();
         _time = new FakeTime(new DateTime(2026, 10, 25, 8, 0, 0, DateTimeKind.Utc));
-        _store = new UpdateCheckSettingsStore(_storage.Storage, NullLogger<UpdateCheckSettingsStore>.Instance);
+        _store = new UpdateCheckSettingsStore(_storage.Storage, UpdateCheckTestKit.Disk, NullLogger<UpdateCheckSettingsStore>.Instance);
         _jobs = new Mock<IBackgroundJobClient>();
         _jobs.Setup(j => j.Create(It.IsAny<Job>(), It.IsAny<IState>())).Returns("1");
     }
@@ -183,7 +183,7 @@ public class UpdateCheckSettingsUpdaterTests : IDisposable
         _time.Advance(UpdateCheckSettingsUpdater.PingWindow);
         UpdateCheckSettings? seenByWorker = null;
         _jobs.Setup(j => j.Create(It.IsAny<Job>(), It.IsAny<IState>()))
-            .Callback(() => seenByWorker = new UpdateCheckSettingsStore(_storage.Storage, NullLogger<UpdateCheckSettingsStore>.Instance).Read())
+            .Callback(() => seenByWorker = new UpdateCheckSettingsStore(_storage.Storage, UpdateCheckTestKit.Disk, NullLogger<UpdateCheckSettingsStore>.Instance).Read())
             .Returns("2");
 
         Updater().Apply(Body("commercial_needs_license", "it@acme-survey.com", consent: true));
@@ -200,12 +200,27 @@ public class UpdateCheckSettingsUpdaterTests : IDisposable
         Updater().Apply(Body("personal"));
         var queuedAt = _time.Now;
         _time.Advance(UpdateCheckSettingsUpdater.PingWindow);
-        _jobs.Setup(j => j.Create(It.IsAny<Job>(), It.IsAny<IState>())).Throws(new InvalidOperationException("storage down"));
+        _jobs.Setup(j => j.Create(It.IsAny<Job>(), It.IsAny<IState>())).Throws(new BackgroundJobClientException("storage down", new InvalidOperationException("storage down")));
 
         Updater().Apply(Body("nonprofit"));
 
         _store.Read().UseDeclaration.ShouldBe("nonprofit");
         _store.Read().LastPingEnqueuedAt.ShouldBe(queuedAt);
+    }
+
+    [Test]
+    public void AJobStorageThatFails_SurfacesAsTheExceptionTheUpdaterHandles()
+    {
+        // The real client: the updater handles what Hangfire reports, not the failure of one storage driver
+        var storage = new Mock<JobStorage>();
+        storage.Setup(s => s.GetConnection()).Throws(new InvalidOperationException("storage down"));
+        var updater = new UpdateCheckSettingsUpdater(_store, new BackgroundJobClient(storage.Object),
+            Microsoft.Extensions.Options.Options.Create(new UpdateCheckOptions()), _time, NullLogger<UpdateCheckSettingsUpdater>.Instance);
+
+        updater.Apply(Body("personal"));
+
+        _store.Read().UseDeclaration.ShouldBe("personal");
+        _store.Read().LastPingEnqueuedAt.ShouldBeNull();
     }
 
     [Test]
@@ -235,7 +250,7 @@ public class UpdateCheckSettingsUpdaterTests : IDisposable
     public void TheLimit_IsSharedBetweenNodes_ThroughTheFile()
     {
         Updater().Apply(Body("personal"));
-        var otherNode = new UpdateCheckSettingsStore(_storage.Storage, NullLogger<UpdateCheckSettingsStore>.Instance);
+        var otherNode = new UpdateCheckSettingsStore(_storage.Storage, UpdateCheckTestKit.Disk, NullLogger<UpdateCheckSettingsStore>.Instance);
         var otherJobs = new Mock<IBackgroundJobClient>();
 
         new UpdateCheckSettingsUpdater(otherNode, otherJobs.Object, Microsoft.Extensions.Options.Options.Create(new UpdateCheckOptions()), _time,
@@ -268,7 +283,7 @@ public class UpdateCheckSettingsUpdaterTests : IDisposable
     [Test]
     public void ACheckThatCannotBeQueued_DoesNotFailTheSave_NorUseUpTheWindow()
     {
-        _jobs.Setup(j => j.Create(It.IsAny<Job>(), It.IsAny<IState>())).Throws(new InvalidOperationException("storage down"));
+        _jobs.Setup(j => j.Create(It.IsAny<Job>(), It.IsAny<IState>())).Throws(new BackgroundJobClientException("storage down", new InvalidOperationException("storage down")));
 
         Updater().Apply(Body("personal"));
 

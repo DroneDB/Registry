@@ -141,7 +141,7 @@ public class UpdateCheckServiceTests
         using var harness = Harness(Answering(UpdateCheckTestKit.Answer(Newer)));
         await harness.Service.CheckForUpdatesAsync(CancellationToken.None);
 
-        var restarted = new UpdateCheckCacheStore(harness.Storage.Storage,
+        var restarted = new UpdateCheckCacheStore(harness.Storage.Storage, UpdateCheckTestKit.Disk,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<UpdateCheckCacheStore>.Instance);
 
         restarted.Read().LastResult.ShouldNotBeNull().Response.LatestVersion.ShouldBe(Newer);
@@ -177,6 +177,8 @@ public class UpdateCheckServiceTests
         yield return new TestCaseData(Status(HttpStatusCode.InternalServerError, "{}")).SetName("a 500");
         yield return new TestCaseData(Status(HttpStatusCode.BadGateway, "<html>")).SetName("a 502");
         yield return new TestCaseData((Responder)((_, _) => throw new HttpRequestException("no route"))).SetName("an unreachable host");
+        yield return new TestCaseData((Responder)((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            { Content = new StreamContent(new BrokenStream()) }))).SetName("a connection that breaks while the answer is read");
         yield return new TestCaseData(Status(HttpStatusCode.OK, "<html>maintenance</html>", "text/html")).SetName("a page that is not JSON");
         yield return new TestCaseData(Status(HttpStatusCode.OK, "{\"latestVersion\": ")).SetName("truncated JSON");
         yield return new TestCaseData(Status(HttpStatusCode.OK, "[]")).SetName("a JSON array");
@@ -474,17 +476,43 @@ public class UpdateCheckServiceTests
         harness.Notifier.Calls.ShouldBeEmpty();
     }
 
-    [Test]
-    public async Task ANotifierThatFails_DoesNotFailTheCheck_NorLoseTheResult()
+    /// <summary>What a notifier meets on a deployment: the database that holds the administrators, the storage folder.</summary>
+    public static System.Collections.Generic.IEnumerable<TestCaseData> NotifierFailures()
+    {
+        yield return new TestCaseData(new StubDbException()).SetName("the identity database is down");
+        yield return new TestCaseData(new StorageDocumentException("Cannot store the cache", new System.IO.IOException("disk full")))
+            .SetName("the storage folder refuses the record");
+    }
+
+    [TestCaseSource(nameof(NotifierFailures))]
+    public async Task ANotifierThatFails_DoesNotFailTheCheck_NorLoseTheResult(Exception failure)
     {
         using var harness = Harness(Answering(UpdateCheckTestKit.Answer(Newer)));
-        harness.Notifier.Failure = new InvalidOperationException("mail server down");
+        harness.Notifier.Failure = failure;
 
         await Should.NotThrowAsync(() => harness.Service.CheckForUpdatesAsync(CancellationToken.None));
 
         harness.Cache.Read().LastResult.ShouldNotBeNull();
         harness.Cache.Read().LastFailureAt.ShouldBeNull();
         harness.Logs.Entries.ShouldContain(entry => entry.Level == LogLevel.Warning);
+    }
+
+    [Test]
+    public async Task ABugInTheNotifier_IsNotSwallowed()
+    {
+        using var harness = Harness(Answering(UpdateCheckTestKit.Answer(Newer)));
+        harness.Notifier.Failure = new InvalidOperationException("a bug");
+
+        await Should.ThrowAsync<InvalidOperationException>(() => harness.Service.CheckForUpdatesAsync(CancellationToken.None));
+
+        harness.Cache.Read().LastResult.ShouldNotBeNull("the result was remembered before the notifier ran");
+    }
+
+    private sealed class StubDbException : System.Data.Common.DbException
+    {
+        public StubDbException() : base("database down")
+        {
+        }
     }
 
     [Test]
@@ -504,6 +532,24 @@ public class UpdateCheckServiceTests
             JsonSerializer.Serialize(x) == JsonSerializer.Serialize(y);
 
         public int GetHashCode(Registry.Web.Models.DTO.UpdateInfoDto obj) => JsonSerializer.Serialize(obj).GetHashCode(StringComparison.Ordinal);
+    }
+
+    /// <summary>A body whose connection breaks as soon as it is read.</summary>
+    private sealed class BrokenStream : System.IO.Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new System.IO.IOException("connection reset");
+        public override long Seek(long offset, System.IO.SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            throw new System.IO.IOException("connection reset");
     }
 
     /// <summary>A body that sends nothing until the exchange is canceled.</summary>

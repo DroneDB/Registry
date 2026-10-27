@@ -91,7 +91,7 @@ public sealed class UpdateCheckSettingsUpdater
         {
             _jobs.Enqueue<IUpdateCheckService>(service => service.CheckForUpdatesAsync(CancellationToken.None));
         }
-        catch (Exception ex)
+        catch (BackgroundJobClientException ex)
         {
             // The settings are saved and the daily check carries them; the window was not used, so give it back
             // unless another save has taken it since

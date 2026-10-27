@@ -3,6 +3,7 @@ using System;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Ports;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
 
@@ -21,9 +22,9 @@ public sealed class InstanceIdentityStore : IInstanceIdentity
     private readonly Lock _gate = new();
     private InstanceIdentity? _current;
 
-    public InstanceIdentityStore(IOptions<StorageOptions> storage, TimeProvider time, ILogger<InstanceIdentityStore> logger)
+    public InstanceIdentityStore(IOptions<StorageOptions> storage, IFileSystem fs, TimeProvider time, ILogger<InstanceIdentityStore> logger)
     {
-        _file = new StorageDocument<InstanceIdentity>(storage, MagicStrings.InstanceIdFileName, logger);
+        _file = new StorageDocument<InstanceIdentity>(storage, fs, MagicStrings.InstanceIdFileName, logger);
         _time = time;
         _logger = logger;
     }

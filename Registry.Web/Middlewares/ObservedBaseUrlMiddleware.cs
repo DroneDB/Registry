@@ -39,7 +39,7 @@ public sealed class ObservedBaseUrlMiddleware : IMiddleware
             {
                 _store.Observe(_urls.GetLocalHost());
             }
-            catch (Exception ex)
+            catch (StorageDocumentException ex)
             {
                 // A request never fails because of this
                 _logger.LogDebug(ex, "Cannot record the public URL of the deployment");

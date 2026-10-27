@@ -2,20 +2,28 @@
 using System;
 using System.IO;
 using System.Text;
+using Registry.Ports;
 
 namespace Registry.Web.Utilities;
 
 /// <summary>
 /// Writes a file so that a reader sees the old content or the new one, never a part (the storage
-/// folder's <c>appsettings.json</c>, read by every Registry container sharing the folder).
+/// folder's <c>appsettings.json</c>, read by every Registry container sharing the folder). Every disk operation goes
+/// through <see cref="IFileSystem"/>.
 /// </summary>
-public static class AtomicFile
+public sealed class AtomicFile
 {
     /// <summary>errno of a rename onto a mount point (Linux and macOS): a bind-mounted single file.</summary>
     private const int Ebusy = 16;
 
     /// <summary>Added to the name of a file that <see cref="CreateOrRead"/> creates: the folder that holds the content of the node that was first.</summary>
     private const string ClaimSuffix = ".claim";
+
+    private static readonly UTF8Encoding Utf8 = new(false);
+
+    private readonly IFileSystem _fs;
+
+    public AtomicFile(IFileSystem fs) => _fs = fs;
 
     /// <summary>
     /// Writes <paramref name="content"/> (UTF-8, no BOM) to a temporary file next to <paramref name="path"/>,
@@ -24,17 +32,17 @@ public static class AtomicFile
     /// (<c>EBUSY</c>): only then the prepared content is copied into it in place.
     /// </summary>
     /// <returns>True when the file was replaced atomically, false when it was written in place.</returns>
-    public static bool WriteAllText(string path, string content) => WriteAllText(path, content, Replace);
+    public bool WriteAllText(string path, string content) => WriteAllText(path, content, Replace);
 
     /// <summary><see cref="WriteAllText(string,string)"/> with the rename step injected (tests).</summary>
-    internal static bool WriteAllText(string path, string content, Action<string, string> replace)
+    internal bool WriteAllText(string path, string content, Action<string, string> replace)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(content);
         ArgumentNullException.ThrowIfNull(replace);
 
         var fullPath = Path.GetFullPath(path);
-        var bytes = new UTF8Encoding(false).GetBytes(content);
+        var bytes = Utf8.GetBytes(content);
         var temp = WriteTemporary(fullPath, bytes);
 
         try
@@ -53,7 +61,7 @@ public static class AtomicFile
         finally
         {
             // No-op when the rename consumed it
-            File.Delete(temp);
+            _fs.Delete(temp);
         }
     }
 
@@ -70,7 +78,7 @@ public static class AtomicFile
     /// does not matter) and removes the claim, after publishing: whoever finds no claim finds the file.
     /// </remarks>
     /// <returns>The content of the file: the content this call gave, or the one a node that was first gave.</returns>
-    public static string CreateOrRead(string path, string content)
+    public string CreateOrRead(string path, string content)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(content);
@@ -94,11 +102,15 @@ public static class AtomicFile
 
         try
         {
-            Directory.Delete(claim, recursive: true);
+            _fs.FolderDelete(claim, recursive: true);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (IOException)
         {
             // Another node is reading it (Windows): the claim stays, holding the content the file now has
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Same: a file that is open on Windows refuses to be deleted
         }
 
         return winner;
@@ -108,23 +120,19 @@ public static class AtomicFile
     /// Moves a staging folder holding <paramref name="content"/> to <paramref name="claim"/>, unless a claim exists.
     /// </summary>
     /// <returns>Why the move was refused (a claim exists, as a rule); null when this call made the claim.</returns>
-    private static IOException? Claim(string fullPath, string claim, string content)
+    private IOException? Claim(string fullPath, string claim, string content)
     {
         var staging = fullPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        Directory.CreateDirectory(staging);
+        _fs.FolderCreate(staging);
 
         try
         {
             var staged = Path.Combine(staging, Path.GetFileName(fullPath));
-            using (var stream = new FileStream(staged, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                stream.Write(new UTF8Encoding(false).GetBytes(content));
-                stream.Flush(flushToDisk: true);
-            }
+            _fs.WriteAllBytesDurable(staged, Utf8.GetBytes(content), FileMode.CreateNew);
 
             try
             {
-                Directory.Move(staging, claim);
+                _fs.FolderMove(staging, claim);
                 return null;
             }
             catch (IOException ex)
@@ -135,49 +143,46 @@ public static class AtomicFile
         }
         finally
         {
-            if (Directory.Exists(staging))
-                Directory.Delete(staging, recursive: true);
+            if (_fs.FolderExists(staging))
+                _fs.FolderDelete(staging, recursive: true);
         }
     }
 
-    private static string? ReadIfExists(string path)
+    private string? ReadIfExists(string path)
     {
         try
         {
-            return File.ReadAllText(path);
+            return _fs.ReadAllText(path);
         }
-        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+        catch (DirectoryNotFoundException)
         {
             return null;
         }
     }
 
     /// <summary>Writes <paramref name="bytes"/> to a new temporary file next to <paramref name="fullPath"/> and flushes it to disk.</summary>
-    private static string WriteTemporary(string fullPath, byte[] bytes)
+    private string WriteTemporary(string fullPath, byte[] bytes)
     {
         var folder = Path.GetDirectoryName(fullPath) ?? ".";
         var temp = Path.Combine(folder, $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
 
         try
         {
-            using var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-            stream.Write(bytes);
-            stream.Flush(flushToDisk: true);
+            _fs.WriteAllBytesDurable(temp, bytes, FileMode.CreateNew);
             return temp;
         }
         catch
         {
-            File.Delete(temp);
+            _fs.Delete(temp);
             throw;
         }
     }
 
-    private static void Replace(string source, string destination) => File.Move(source, destination, overwrite: true);
+    private void Replace(string source, string destination) => _fs.Move(source, destination, overwrite: true);
 
-    private static void WriteInPlace(string path, byte[] bytes)
-    {
-        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
-        stream.Write(bytes);
-        stream.Flush(flushToDisk: true);
-    }
+    private void WriteInPlace(string path, byte[] bytes) => _fs.WriteAllBytesDurable(path, bytes, FileMode.Create, FileShare.Read);
 }
