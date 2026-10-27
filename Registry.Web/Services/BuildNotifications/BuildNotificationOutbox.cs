@@ -132,6 +132,41 @@ public sealed class BuildNotificationOutbox
             .ExecuteUpdateAsync(s => s.SetProperty(n => n.SentAtUtc, now).SetProperty(n => n.PendingKey, (string?)null), ct);
     }
 
+    /// <summary>
+    /// Marks the lines of the run <paramref name="claimId"/> sent and hands them over with <paramref name="handOver"/> (the
+    /// e-mail queued) as one unit: the mark is written in a transaction, the hand-over runs inside it, and the lines count
+    /// as sent only when that transaction commits. A failure before the hand-over is done leaves the lines unsent and
+    /// nothing handed over, so a retry sends them once; a mark that fails never follows a queued e-mail. A transient
+    /// failure of the commit is replayed by the execution strategy (MySQL), which writes the mark again but never runs
+    /// <paramref name="handOver"/> a second time.
+    /// </summary>
+    /// <remarks>
+    /// Not cancellable once started: a stop between the hand-over and the commit would leave an e-mail queued for lines
+    /// still unsent. The one case left is a commit that fails for good after the hand-over: the caller must then keep the
+    /// claim (never give the lines back), so its own retry cannot send them again.
+    /// </remarks>
+    public Task HandOverAsync(string claimId, Func<Task> handOver)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(claimId);
+        ArgumentNullException.ThrowIfNull(handOver);
+
+        var handedOver = false;
+        // A retrying strategy refuses a transaction it does not own: it runs the whole unit, and replays it after a
+        // transient failure (verifying first whether the commit went through)
+        return _db.Database.CreateExecutionStrategy().ExecuteInTransactionAsync(
+            async ct =>
+            {
+                await MarkSentAsync(claimId, ct).ConfigureAwait(false);
+                if (handedOver)
+                    return;
+                await handOver().ConfigureAwait(false);
+                handedOver = true;
+            },
+            async ct => !await _db.BuildNotifications.AsNoTracking()
+                .AnyAsync(n => n.ClaimId == claimId && n.SentAtUtc == null, ct).ConfigureAwait(false),
+            CancellationToken.None);
+    }
+
     /// <summary>Gives the unsent lines of the run <paramref name="claimId"/> back, for the next run.</summary>
     public Task ReleaseAsync(string claimId, CancellationToken ct) =>
         _db.BuildNotifications

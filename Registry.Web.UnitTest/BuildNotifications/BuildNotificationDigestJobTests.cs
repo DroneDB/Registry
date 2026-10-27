@@ -78,9 +78,9 @@ public class BuildNotificationDigestJobTests : IDisposable
         // another host, runs to its end. Without the claim the second would read the same unsent lines and send them too.
         var secondRan = false;
         var first = _h.DigestJob();
-        _h.WhileQueueing = async () =>
+        _h.WhileComposing = async () =>
         {
-            _h.WhileQueueing = null;
+            _h.WhileComposing = null;
             await _h.DigestJob().SendAsync("jane", CancellationToken.None);
             secondRan = true;
         };
@@ -156,9 +156,9 @@ public class BuildNotificationDigestJobTests : IDisposable
     {
         await TwoLines();
         _h.Scheduled.Clear();
-        _h.WhileQueueing = async () =>
+        _h.WhileComposing = async () =>
         {
-            _h.WhileQueueing = null;
+            _h.WhileComposing = null;
             _h.Time.Advance(TimeSpan.FromMinutes(1));
             await _h.Record("jane", "c.obj", BuildOutcome.Completed, "j3");
             // The run sending the others is still on: the recorder leaves the next digest to it
@@ -192,6 +192,39 @@ public class BuildNotificationDigestJobTests : IDisposable
         _h.WhileQueueing = null;
         await Digest();
         _h.Sent.ShouldHaveSingleItem().Model.Builds.Count.ShouldBe(2);
+    }
+
+    [Test]
+    public async Task AMarkThatFails_QueuesNoEmail_AndTheRetrySendsItOnce()
+    {
+        await TwoLines();
+        _h.Faults.FailNextMark = true;
+
+        await Should.ThrowAsync<Microsoft.Data.Sqlite.SqliteException>(Digest);
+
+        // The lines are marked sent before their e-mail is queued: a mark that fails leaves nothing queued
+        _h.Sent.ShouldBeEmpty();
+        _h.Rows().ShouldAllBe(r => r.SentAtUtc == null && r.ClaimId == null);
+
+        await Digest();
+        _h.Sent.ShouldHaveSingleItem().Model.Builds.Count.ShouldBe(2);
+        _h.Rows().ShouldAllBe(r => r.SentAtUtc != null);
+    }
+
+    [Test]
+    public async Task ACommitThatFailsAfterTheEmailIsQueued_KeepsTheClaim_SoTheRetrySendsNothingAgain()
+    {
+        await TwoLines();
+        _h.Faults.FailNextCommit = true;
+
+        await Should.ThrowAsync<Microsoft.Data.Sqlite.SqliteException>(Digest);
+
+        _h.Sent.ShouldHaveSingleItem();
+        // The mark is rolled back with the commit, but the lines are not given back: their e-mail is out
+        _h.Rows().ShouldAllBe(r => r.SentAtUtc == null && r.ClaimId != null);
+
+        await Digest();
+        _h.Sent.ShouldHaveSingleItem();
     }
 
     // --- Cleanup ---

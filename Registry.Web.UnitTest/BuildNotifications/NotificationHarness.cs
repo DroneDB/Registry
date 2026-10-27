@@ -2,12 +2,15 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Hangfire.Common;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Registry.Web.Data;
@@ -31,7 +34,10 @@ internal sealed class NotificationHarness : IDisposable
     public const string Org = "org";
     public const string Ds = "ds";
 
-    private readonly TestDb<RegistryContext> _db = TestDb.CreateFile<RegistryContext>();
+    /// <summary>Database failures to inject: the mark of lines sent, the commit of a transaction.</summary>
+    public OutboxFaults Faults { get; } = new();
+
+    private readonly TestDb<RegistryContext> _db;
 
     public FakeTime Time { get; } = new(new DateTime(2026, 10, 27, 8, 0, 0, DateTimeKind.Utc));
 
@@ -51,8 +57,11 @@ internal sealed class NotificationHarness : IDisposable
     /// <summary>The models of the e-mails queued, with their recipient.</summary>
     public ConcurrentQueue<(EmailAddress To, BuildNotificationModel Model)> Sent { get; } = new();
 
-    /// <summary>Runs inside the queueing of an e-mail, before it is recorded as sent (to act while a digest sends).</summary>
+    /// <summary>Runs inside the queueing of an e-mail (in the unit that marks its lines sent).</summary>
     public Func<Task>? WhileQueueing { get; set; }
+
+    /// <summary>Runs when a digest composes its e-mail: its lines are claimed, not yet sent (to act while a digest sends).</summary>
+    public Func<Task>? WhileComposing { get; set; }
 
     private readonly Mock<IBackgroundJobsProcessor> _jobs = new();
     private readonly Mock<IBuildNotificationLevels> _levels = new();
@@ -61,6 +70,8 @@ internal sealed class NotificationHarness : IDisposable
 
     public NotificationHarness()
     {
+        _db = TestDb.CreateFile<RegistryContext>(o => o.AddInterceptors(Faults.Interceptors));
+
         Email.SetupGet(e => e.IsEnabled).Returns(true);
         Email.Setup(e => e.QueueAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
             .Returns<EmailMessage, CancellationToken>(async (message, _) =>
@@ -82,8 +93,10 @@ internal sealed class NotificationHarness : IDisposable
             .ReturnsAsync((string userId, CancellationToken _) =>
                 WithoutAddress.Contains(userId) ? null : new EmailAddress($"{userId}@example.com", userId));
         _composer.Setup(c => c.ComposeAsync(It.IsAny<EmailAddress>(), It.IsAny<BuildNotificationModel>()))
-            .ReturnsAsync((EmailAddress to, BuildNotificationModel model) =>
+            .Returns(async (EmailAddress to, BuildNotificationModel model) =>
             {
+                if (WhileComposing != null)
+                    await WhileComposing();
                 var message = new EmailMessage([to], model.Summary, model.Summary);
                 _models[message] = model;
                 return message;
@@ -161,4 +174,50 @@ internal sealed class NotificationHarness : IDisposable
     }
 
     public void Dispose() => _db.Dispose();
+}
+
+/// <summary>
+/// Fails the outbox's writes on demand, as a database that goes away would: the statement that marks lines sent, or the
+/// commit of a transaction. Each armed fault fires once.
+/// </summary>
+internal sealed class OutboxFaults
+{
+    public bool FailNextMark { get; set; }
+
+    public bool FailNextCommit { get; set; }
+
+    /// <summary>The interceptors to add to the contexts.</summary>
+    public IInterceptor[] Interceptors => [new Commands(this), new Transactions(this)];
+
+    private static SqliteException Lost() => new("connection lost", 10);
+
+    private sealed class Commands(OutboxFaults faults) : DbCommandInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (faults.FailNextMark && command.CommandText.Contains("\"SentAtUtc\" = ", StringComparison.Ordinal))
+            {
+                faults.FailNextMark = false;
+                throw Lost();
+            }
+
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
+
+    private sealed class Transactions(OutboxFaults faults) : DbTransactionInterceptor
+    {
+        public override ValueTask<InterceptionResult> TransactionCommittingAsync(DbTransaction transaction,
+            TransactionEventData eventData, InterceptionResult result, CancellationToken cancellationToken = default)
+        {
+            if (faults.FailNextCommit)
+            {
+                faults.FailNextCommit = false;
+                throw Lost();
+            }
+
+            return base.TransactionCommittingAsync(transaction, eventData, result, cancellationToken);
+        }
+    }
 }
