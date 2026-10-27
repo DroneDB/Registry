@@ -214,6 +214,7 @@ SPLIT_CLASSES=(Registry.Web/Services/Managers/SystemManager.cs Registry.Web/Cont
     Registry.Web/Services/Managers/ShareManager.cs Registry.Web/Services/Managers/LocalLoginManager.cs
     Registry.Web/Controllers/ProcessingNodesController.cs Registry.Web/Controllers/FeaturesController.cs
     Registry.Web/Controllers/RemoteImportController.cs Registry.Web/Controllers/BuildMaintenanceController.cs
+    Registry.Web/Controllers/UpdateCheckController.cs
     ':(glob)Registry.Web/Services/RemoteImport/**/*.cs' ':(glob)Registry.Web/Services/Maintenance/**/*.cs'
     ':(glob)Registry.Web/Services/Configuration/**/*.cs' ':(glob)Registry.Web/Services/Stac/**/*.cs'
     ':(glob)Registry.Web/Services/Users/**/*.cs' ':(glob)Registry.Web/Services/Datasets/**/*.cs'

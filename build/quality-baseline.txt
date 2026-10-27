@@ -52,7 +52,7 @@ Console helper calls in Program+Startup	0
 HostFacts.Current() call sites	1
 [DllImport] in production code	4
 EntryPointNotFoundException catches	0
-Copied DDB AutomaticRetry attribute	3
+Copied DDB AutomaticRetry attribute	0
 Recurring-job local WriteLine copies	0
 ReadString(JsonElement) copies	0
 Recurring jobs without CancellationToken	0
@@ -70,7 +70,7 @@ Pending-build backoff copies	0
 Zip-slip normalizer copies	0
 Direct Path.GetTempPath()	0
 Ad-hoc backslash->slash normalizations	1
-Static File./Directory. calls	119
+Static File./Directory. calls	115
 DateTime.Now (local)	0
 Archive key normalization call sites (zip-slip)	1
 Archive extraction loops	1
