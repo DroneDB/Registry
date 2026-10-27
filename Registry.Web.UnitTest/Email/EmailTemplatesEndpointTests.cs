@@ -329,6 +329,53 @@ public class EmailTemplatesEndpointTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
+    // ---- 413 ----
+
+    private const int Limit = Registry.Web.Services.Email.ParsedEmailTemplate.MaxRequestBytes;
+
+    // A request of the text whose JSON is exactly bytes long
+    private async Task<(HttpStatusCode Status, JsonNode? Body)> SendOfSize(HttpMethod method, string path, int bytes)
+    {
+        const string prefix = "{\"subject\":\"Builds\",\"body\":\"";
+        const string suffix = "\"}";
+        var json = prefix + new string('x', bytes - prefix.Length - suffix.Length) + suffix;
+        System.Text.Encoding.UTF8.GetByteCount(json).ShouldBe(bytes);
+
+        using var request = new HttpRequestMessage(method, path)
+        {
+            Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+        }.AsUser(RegistryWebFactory.AdminUserName, isAdmin: true);
+        using var response = await _client!.SendAsync(request);
+        var text = await response.Content.ReadAsStringAsync();
+        return (response.StatusCode, text.Length == 0 ? null : JsonNode.Parse(text));
+    }
+
+    [TestCase("PUT", "", TestName = "Saving a text one byte over the request limit is 413")]
+    [TestCase("POST", "/preview", TestName = "Previewing a text one byte over the request limit is 413")]
+    [TestCase("POST", "/test", TestName = "Testing a text one byte over the request limit is 413")]
+    public async Task ARequestOneByteOverTheLimit_Is413_NamingTheTemplate_AndSavesOrSendsNothing(string method, string action)
+    {
+        Start(Enabled);
+
+        var (status, body) = await SendOfSize(new HttpMethod(method), $"{Url}/{Name}{action}", Limit + 1);
+
+        status.ShouldBe(HttpStatusCode.RequestEntityTooLarge, body?.ToJsonString());
+        Detail(body).ShouldBe($"E-mail template can be at most {Limit} bytes");
+        (await Send(HttpMethod.Get, $"{Url}/{Name}")).Body!["isDefault"]!.GetValue<bool>().ShouldBeTrue();
+        _sender.Sent.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task ARequestOfExactlyTheLimit_IsRead_AndItsTooLongBodyIs400()
+    {
+        Start(Enabled);
+
+        var (status, body) = await SendOfSize(HttpMethod.Put, $"{Url}/{Name}", Limit);
+
+        status.ShouldBe(HttpStatusCode.BadRequest, body?.ToJsonString());
+        Detail(body).ShouldContain("The body is longer than");
+    }
+
     private async Task ClearEmail(string userName)
     {
         using var scope = _factory.Services.CreateScope();

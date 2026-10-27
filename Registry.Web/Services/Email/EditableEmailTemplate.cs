@@ -23,6 +23,13 @@ public sealed record ParsedEmailTemplate(PlaceholderTemplate Subject, Placeholde
     /// <summary>Longest body an administrator can save.</summary>
     public const int MaxBodyLength = 16 * 1024;
 
+    /// <summary>
+    /// Largest request that carries a text to save, preview or test: the longest subject and body even when a client
+    /// escapes every character as <c>\uXXXX</c> (6 bytes each), with room for the JSON around them. A larger request is
+    /// refused before it is read.
+    /// </summary>
+    public const int MaxRequestBytes = 128 * 1024;
+
     /// <summary>Checks <paramref name="text"/> against the placeholders of <paramref name="template"/> and the limits.</summary>
     /// <exception cref="PlaceholderTemplateException">The text is empty, too long, or has a bad placeholder; the message says which.</exception>
     public static ParsedEmailTemplate Parse(IEditableEmailTemplate template, EmailTemplateText text)

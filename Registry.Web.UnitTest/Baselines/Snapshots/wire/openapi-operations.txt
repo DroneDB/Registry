@@ -744,6 +744,7 @@ PUT /sys/email/templates/{name}
   401 application/json ProblemDetails
   403 application/json ProblemDetails
   404 application/json ProblemDetails
+  413 application/json ProblemDetails
 POST /sys/email/templates/{name}/preview
   body application/json EmailTemplateTextDto
   200 application/json EmailTemplatePreviewDto
@@ -751,6 +752,7 @@ POST /sys/email/templates/{name}/preview
   401 application/json ProblemDetails
   403 application/json ProblemDetails
   404 application/json ProblemDetails
+  413 application/json ProblemDetails
 POST /sys/email/templates/{name}/test
   body application/json EmailTemplateTextDto
   204
@@ -758,6 +760,7 @@ POST /sys/email/templates/{name}/test
   401 application/json ProblemDetails
   403 application/json ProblemDetails
   404 application/json ProblemDetails
+  413 application/json ProblemDetails
   502 application/json ProblemDetails
 POST /sys/email/test
   body application/json TestEmailRequestDto

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Registry.Web.Attributes;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
@@ -77,6 +78,8 @@ public class EmailTemplatesController : ControllerBaseEx
     /// <response code="400">The text is not valid (an empty or too long field, an unknown or unclosed placeholder, a body-only placeholder in the subject); the message names it.</response>
     /// <response code="404">There is no template with that name.</response>
     [HttpPut("email/templates/{name}", Name = SystemRoutes.Prefix + nameof(PutEmailTemplate))]
+    [RequestSizeLimit(ParsedEmailTemplate.MaxRequestBytes)]
+    [EnforceContentLength(ParsedEmailTemplate.MaxRequestBytes, "E-mail template")]
     [Authorize(Policy = Policies.Admin)]
     [Consumes("application/json")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -84,6 +87,7 @@ public class EmailTemplatesController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status413PayloadTooLarge)]
     public ActionResult<EmailTemplateDto> PutEmailTemplate([FromRoute] string name, [FromBody] EmailTemplateTextDto request)
     {
         var template = _templates.Find(name);
@@ -118,6 +122,8 @@ public class EmailTemplatesController : ControllerBaseEx
     /// <response code="400">The text is not valid; the message names the problem.</response>
     /// <response code="404">There is no template with that name.</response>
     [HttpPost("email/templates/{name}/preview", Name = SystemRoutes.Prefix + nameof(PreviewEmailTemplate))]
+    [RequestSizeLimit(ParsedEmailTemplate.MaxRequestBytes)]
+    [EnforceContentLength(ParsedEmailTemplate.MaxRequestBytes, "E-mail template")]
     [Authorize(Policy = Policies.Admin)]
     [Consumes("application/json")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -125,6 +131,7 @@ public class EmailTemplatesController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status413PayloadTooLarge)]
     public async Task<ActionResult<EmailTemplatePreviewDto>> PreviewEmailTemplate([FromRoute] string name,
         [FromBody] EmailTemplateTextDto request, CancellationToken ct)
     {
@@ -152,6 +159,8 @@ public class EmailTemplatesController : ControllerBaseEx
     /// <response code="404">There is no template with that name.</response>
     /// <response code="502">The mail server refused the e-mail or could not be reached; the message says why.</response>
     [HttpPost("email/templates/{name}/test", Name = SystemRoutes.Prefix + nameof(SendEmailTemplateTest))]
+    [RequestSizeLimit(ParsedEmailTemplate.MaxRequestBytes)]
+    [EnforceContentLength(ParsedEmailTemplate.MaxRequestBytes, "E-mail template")]
     [Authorize(Policy = Policies.Admin)]
     [Consumes("application/json")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -160,6 +169,7 @@ public class EmailTemplatesController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status413PayloadTooLarge)]
     public async Task<IActionResult> SendEmailTemplateTest([FromRoute] string name, [FromBody] EmailTemplateTextDto request,
         CancellationToken ct)
     {

@@ -1,8 +1,10 @@
 #nullable enable
 using System;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using Registry.Web.Models.Configuration;
@@ -198,6 +200,35 @@ public class BuildNotificationEmailTests
 
         store.Remove(BuildNotificationEmailTemplate.TemplateName);
         store.Get(BuildNotificationEmailTemplate.TemplateName).ShouldBeNull();
+    }
+
+    [TestCase("subject", null, TestName = "A saved text without a subject is read back as the built-in text, with a warning")]
+    [TestCase("body", null, TestName = "A saved text without a body is read back as the built-in text, with a warning")]
+    [TestCase("subject", ParsedEmailTemplate.MaxSubjectLength + 1, TestName = "A saved subject over the limit is read back as the built-in text, with a warning")]
+    [TestCase("body", ParsedEmailTemplate.MaxBodyLength + 1, TestName = "A saved body over the limit is read back as the built-in text, with a warning")]
+    public void ASavedFileWithAFieldMissingOrTooLong_IsReadAsTheBuiltInText_WithAWarning(string field, int? length)
+    {
+        // The file is shared by every node and can be edited by hand, or written by another version
+        using var storage = new TempStorage();
+        var store = new EditableEmailTemplateStore(storage.Storage, UpdateCheckTestKit.Disk, NullLogger<EditableEmailTemplateStore>.Instance);
+        store.Set(BuildNotificationEmailTemplate.TemplateName, new EmailTemplateText("Builds", "Hi {{user}}"));
+        var path = storage.File(MagicStrings.EmailTemplatesFileName);
+        var file = System.Text.Json.Nodes.JsonNode.Parse(System.IO.File.ReadAllText(path))!;
+        var saved = file[BuildNotificationEmailTemplate.TemplateName]!.AsObject();
+        var key = saved.Select(p => p.Key).Single(k => string.Equals(k, field, StringComparison.OrdinalIgnoreCase));
+        saved[key] = length == null ? null : new string('x', length.Value);
+        System.IO.File.WriteAllText(path, file.ToJsonString());
+        var logs = new RecordingLoggerFactory();
+        var templates = new EditableEmailTemplates([BuildNotificationEmailTemplate.Instance], store,
+            logs.CreateLogger<EditableEmailTemplates>());
+
+        var current = templates.Current(BuildNotificationEmailTemplate.Instance);
+
+        current.IsDefault.ShouldBeTrue();
+        current.Text.ShouldBe(BuildNotificationEmailTemplate.Instance.BuiltInText);
+        logs.Entries.ShouldContain(e => e.Level == Microsoft.Extensions.Logging.LogLevel.Warning &&
+                                        e.Message.Contains(BuildNotificationEmailTemplate.TemplateName) &&
+                                        e.Message.Contains("the built-in text is used"));
     }
 
     [Test]
