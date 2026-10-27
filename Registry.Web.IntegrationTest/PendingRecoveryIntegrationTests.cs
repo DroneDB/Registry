@@ -95,7 +95,7 @@ public class PendingRecoveryIntegrationTests
         _environment = new NativeEnvironmentScope("DDB_MIN_FREE_DISK_MB", "DDB_OBJ2TILES_PATH");
         _environment.Set("DDB_MIN_FREE_DISK_MB", "0");
         // Tiles are optional here; the real bundled converter is exercised by
-        // the native regression suite. Nexus remains a real native build.
+        // the native regression suite. The bm3d mesh remains a real native build.
         _environment.Set("DDB_OBJ2TILES_PATH", Path.Combine(_root, "missing-Obj2Tiles"));
         _initialized = true;
 
@@ -474,7 +474,7 @@ public class PendingRecoveryIntegrationTests
     }
 
     [Test]
-    public async Task CompletenessSweep_RecoversOldTilesThroughForceFalseAndPreservesNexus()
+    public async Task CompletenessSweep_RecoversOldTilesThroughForceFalseAndPreservesBm3d()
     {
         var ddb = await Dataset("tiles");
         Add(ddb, "recover.obj", GridObj());
@@ -483,9 +483,9 @@ public class PendingRecoveryIntegrationTests
         ddb.Build("ordinary.obj");
         var hash = ddb.GetEntry("recover.obj")!.Hash;
         var root = Path.Combine(ddb.DerivedFolderPaths.Single(), hash);
-        var nexus = Path.Combine(root, "nxs", "model.nxz");
-        var bytes = await File.ReadAllBytesAsync(nexus);
-        var modified = File.GetLastWriteTimeUtc(nexus);
+        var mesh = Path.Combine(root, "bm3d", "model.bm3d");
+        var bytes = await File.ReadAllBytesAsync(mesh);
+        var modified = File.GetLastWriteTimeUtc(mesh);
         foreach (var path in new[] { "recover.obj", "ordinary.obj" })
         {
             var tiles = Path.Combine(ddb.DerivedFolderPaths.Single(), ddb.GetEntry(path)!.Hash, "3dtiles");
@@ -507,8 +507,8 @@ public class PendingRecoveryIntegrationTests
         StartWorkers();
         await WaitForState(row.JobId, "Succeeded");
         ddb.IsBuildComplete("recover.obj").ShouldBeTrue();
-        (await File.ReadAllBytesAsync(nexus)).ShouldBe(bytes);
-        File.GetLastWriteTimeUtc(nexus).ShouldBe(modified);
+        (await File.ReadAllBytesAsync(mesh)).ShouldBe(bytes);
+        File.GetLastWriteTimeUtc(mesh).ShouldBe(modified);
         (await File.ReadAllTextAsync(Path.Combine(root, "3dtiles", "tileset.json"))).ShouldBe(tileset);
         File.Exists(Path.Combine(root, "3dtiles", "old.b3dm")).ShouldBeTrue();
         Directory.Exists(old).ShouldBeFalse();

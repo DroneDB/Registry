@@ -20,8 +20,8 @@ namespace Registry.Web.Test.E2eFixes;
 
 /// <summary>
 /// End-to-end check: <c>GET thumb?path=model/x.obj</c> was a 500 with
-/// an ERR stack (<c>nxs/model.nxz not recognized as being in a supported file format</c>): the thumbnail source of a
-/// model is its Nexus artifact, which GDAL cannot open. libddb says per type whether it has a thumbnail
+/// an ERR stack (<c>bm3d/model.bm3d not recognized as being in a supported file format</c>): the thumbnail source of a
+/// model is its bm3d artifact, which GDAL cannot open. libddb says per type whether it has a thumbnail
 /// (<c>DDBGetEntryTypes</c>: <c>thumbnail: none|file|build</c>); the thumbnail path asks that one rule and answers
 /// 404 (the entry has no thumbnail) before any native render, without an error log. 404 and not 415: the
 /// request is fine, the thumbnail resource does not exist; the Hub loads thumbnails as images and treats any

@@ -261,17 +261,18 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
     }
 
     [Test]
-    public async Task CheckAndQueueAsync_ModelSwapRecoveryQueuedAndOrdinaryNexusOnlyModelSkipped()
+    public async Task CheckAndQueueAsync_ModelSwapRecoveryQueuedAndCompleteBm3dModelSkipped()
     {
         await using var context = GetTest1Context();
         var ddb = new Mock<IDDB>();
         ddb.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([
             new DdbEntry { Path = "interrupted.obj", Hash = "swap-hash" },
-            new DdbEntry { Path = "nexus-only.obj", Hash = "ordinary-hash" }
+            new DdbEntry { Path = "complete-model.obj", Hash = "ordinary-hash" }
         ]);
         // libddb's manifest is read-only and reports only the identifiable interrupted tiles swap
-        // as incomplete, while ordinary Nexus output is complete
-        ddb.SetupBuilds(Build("interrupted.obj", BuildState.None), Build("nexus-only.obj", BuildState.Complete));
+        // as incomplete, while a model with its bm3d mesh is complete
+        ddb.SetupBuilds(ModelBuild("interrupted.obj", BuildState.None),
+            ModelBuild("complete-model.obj", BuildState.Complete));
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
         await Service(context)
             .CheckAndQueueAsync(null, CancellationToken.None);
@@ -280,6 +281,12 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _backgroundJobMock.Verify(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(),
             It.IsAny<IndexPayload>()), Times.Once);
     }
+
+    /// <summary>A model with its bm3d mesh and 3D Tiles, as libddb lists a model built by the current layout.</summary>
+    private static EntryBuildArtifacts ModelBuild(string path, BuildState state) =>
+        TestBuilds.Build(Folder, path, EntryType.Model, "h-" + path, state,
+            TestBuilds.File(ArtifactRoles.ModelBm3d, "bm3d/model.bm3d", "application/vnd.dronedb.bm3d"),
+            TestBuilds.Directory(ArtifactRoles.Model3DTiles, "3dtiles", "tileset.json"));
 
     // ---- pending entries and repeated failures are not re-enqueued every night ----
 
@@ -371,7 +378,8 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
 
     private static EntryBuildArtifacts LegacyBuild(string path) =>
         TestBuilds.Build(Folder, path, EntryType.Model, "h-" + path, BuildState.None,
-            TestBuilds.File(ArtifactRoles.ModelNexus, "nxs/model.nxz", legacy: true),
+            TestBuilds.File(ArtifactRoles.ModelNexus, "nxs/model.nxz", legacy: true,
+                fallbackFor: ArtifactRoles.ModelBm3d),
             TestBuilds.Directory(ArtifactRoles.Model3DTiles, "3dtiles", "tileset.json"));
 
     private void Dataset(params EntryBuildArtifacts[] builds)
@@ -403,9 +411,11 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
     public async Task CheckAndQueueAsync_CompleteEntryListingALegacyArtifact_IsLeftAlone()
     {
         await using var context = GetTest1Context();
-        var complete = LegacyBuild("old.obj");
-        complete.Build!.State = BuildState.Complete;
-        Dataset(complete);
+        // A model with only the legacy Nexus mesh is incomplete (the case above); a point cloud with only EPT
+        // is complete, and libddb lists the legacy artifact for it all the same
+        Dataset(TestBuilds.Build(Folder, "old.laz", EntryType.PointCloud, "h-old.laz", BuildState.Complete,
+            TestBuilds.Directory(ArtifactRoles.PointCloudEpt, "ept", "ept.json", legacy: true,
+                fallbackFor: ArtifactRoles.PointCloudCopc)));
 
         await Service(context).CheckAndQueueAsync(null, CancellationToken.None);
 
