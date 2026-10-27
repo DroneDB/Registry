@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Windows manifest of Registry.Web.exe. libddb runs inside this process, so whether its builds
+  can use paths longer than 260 characters (a dataset under a deep folder) is decided here: Windows
+  allows them only to a process whose manifest declares longPathAware, and only when long paths are
+  enabled in the system (LongPathsEnabled). It does not apply when Registry is started through
+  another host (dotnet Registry.Web.dll, IIS): then that host's manifest decides.
+  The rest is the manifest the .NET SDK embeds when a project sets none.
+-->
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="Registry.Web.app"/>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
+    <security>
+      <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+    </windowsSettings>
+  </application>
+</assembly>

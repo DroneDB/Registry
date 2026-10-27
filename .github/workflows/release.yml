@@ -49,6 +49,16 @@ jobs:
           dotnet publish -p:PublishProfile=linux-arm64.pubxml Registry.Web
           dotnet publish -p:PublishProfile=osx-x64.pubxml Registry.Web
 
+      # Registry.Web/app.manifest makes the Windows executable long path aware; the manifest is stored
+      # as plain XML in the executable's resources
+      - name: Check that the Windows executables are long path aware
+        run: |
+          for exe in registry/Registry.Web/bin/Release/net10.0/publish/win-*/Registry.Web.exe; do
+            grep -aq '<longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>' "$exe" \
+              || { echo "::error::$exe does not declare longPathAware"; exit 1; }
+            echo "ok: $exe is long path aware"
+          done
+
       - name: Set version env
         run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_ENV
 
