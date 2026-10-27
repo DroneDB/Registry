@@ -33,10 +33,12 @@ public static class DuplicateDatasetSlugs
     public const string Gamma = "gamma";
 
     /// <summary>The migration the tests start from: the last one before the unique index.</summary>
-    public static string PreviousMigration(DbContext context) => context.Database.GetMigrations().Reverse().Skip(1).First();
+    public static string PreviousMigration(DbContext context) =>
+        context.Database.GetMigrations().TakeWhile(m => m != IndexMigration(context)).Last();
 
-    /// <summary>The migration that adds the unique index and repairs the data.</summary>
-    public static string IndexMigration(DbContext context) => context.Database.GetMigrations().Last();
+    /// <summary>The migration that adds the unique index and repairs the data (by name: later migrations follow it).</summary>
+    public static string IndexMigration(DbContext context) =>
+        context.Database.GetMigrations().Single(m => m.EndsWith("_DatasetSlugUnique", StringComparison.Ordinal));
 
     /// <summary>Migrates an empty database to <see cref="PreviousMigration"/> and writes the rows.</summary>
     public static async Task SeedAsync(RegistryContext context)

@@ -109,6 +109,25 @@ public class JobHistoryFollowsSlugTests
     }
 
     [Test]
+    public async Task Rename_TheBuildNotificationsOfTheDataset_FollowItsSlug_SoTheEmailNamesItAsItIsCalled()
+    {
+        await using var context = Seeded();
+        context.BuildNotifications.AddRange(Notification("source", "moving"), Notification("other", "moving"));
+        await context.SaveChangesAsync();
+
+        await TestDatasets.AdminManager(context).Rename("source", "moving", "renamed");
+
+        context.BuildNotifications.AsNoTracking().OrderBy(n => n.Id).Select(n => n.OrgSlug + "/" + n.DsSlug).ToArray()
+            .ShouldBe(["source/renamed", "other/moving"]);
+    }
+
+    private static BuildNotification Notification(string org, string dataset) => new()
+    {
+        UserId = "jane", OrgSlug = org, DsSlug = dataset, Path = "a.laz", Hash = "a-hash", Outcome = "Completed",
+        FinishedAtUtc = DateTime.UtcNow, PendingKey = org + dataset, RequestJobId = org + dataset
+    };
+
+    [Test]
     public async Task DatasetThenOrganization_ComposeInOneSave_AsTheRepairUsesThem()
     {
         await using var context = Seeded();
@@ -126,7 +145,7 @@ public class JobHistoryFollowsSlugTests
     }
 
     /// <summary>
-    /// Only the task index names a dataset by its slugs. A table with a slug column that is not in this list needs a rule
+    /// Only the task index and the build notification outbox name a dataset by its slugs. A table with a slug column that is not in this list needs a rule
     /// in <see cref="SlugKeyedRows"/> (and a place in this list), or its rows lose their dataset on a rename or a move.
     /// </summary>
     [Test]
@@ -143,7 +162,7 @@ public class JobHistoryFollowsSlugTests
             // the keys themselves and the foreign keys that point at them (changed with their row)
             "Organization.Slug", "Dataset.Slug", "Dataset.OrganizationSlug", "OrganizationUser.OrganizationSlug",
             // the rows named by slug, followed by SlugKeyedRows
-            "JobIndex.OrgSlug", "JobIndex.DsSlug"
+            "JobIndex.OrgSlug", "JobIndex.DsSlug", "BuildNotification.OrgSlug", "BuildNotification.DsSlug"
         ], ignoreOrder: true);
     }
 }

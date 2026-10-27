@@ -12,6 +12,7 @@ public interface IBackgroundJobsProcessor
 {
     public string Enqueue<T>(Expression<Func<T, Task>> methodCall);
     public string Schedule<T>(Expression<Action<T>> methodCall, TimeSpan delay);
+    public string Schedule<T>(Expression<Func<T, Task>> methodCall, TimeSpan delay);
 
     public bool Delete(string jobId);
     public bool Requeue(string jobId);

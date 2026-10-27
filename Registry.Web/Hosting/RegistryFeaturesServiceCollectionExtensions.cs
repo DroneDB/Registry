@@ -138,6 +138,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<ConfigurationDataBuilder>();
         services.AddScoped<IConfigurationSectionBuilder, IdentitySections>();
         services.AddScoped<IConfigurationSectionBuilder, EmailSections>();
+        services.AddScoped<IConfigurationSectionBuilder, BuildNotificationSections>();
         services.AddScoped<IConfigurationSectionBuilder, DataStoreSections>();
         services.AddScoped<IConfigurationSectionBuilder, TransferSections>();
         services.AddScoped<IConfigurationSectionBuilder, JobScheduleSections>();

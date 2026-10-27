@@ -1466,6 +1466,28 @@
         ]
       },
       {
+        "name": "BuildNotifications",
+        "title": "Build notifications",
+        "description": "E-mails to the users who asked for them in their preferences (none by default, all, or only failed builds) when their builds complete or fail for good. Needs the e-mail server (AppSettings:Smtp). The text is edited under E-mail templates.",
+        "isActive": false,
+        "fields": [
+          {
+            "key": "DigestMinutes",
+            "displayName": "Digest Window",
+            "currentValue": "5",
+            "defaultValue": "5",
+            "isSet": false,
+            "description": "How long the first finished build of a user waits for the others: one e-mail lists every build of that user that ended in the window.",
+            "fieldType": "number",
+            "enumOptions": null,
+            "sensitive": false,
+            "minValue": 1,
+            "maxValue": 60,
+            "unit": "minutes"
+          }
+        ]
+      },
+      {
         "name": "UpdateCheck",
         "title": "Update check",
         "description": "Update check: enabled (daily). This deployment sends its instance ID (<guid>), Registry/DroneDB versions, platform, public URL, host name, network domain and declared use to dronedb.app, and a contact email only if an admin opted in; dronedb.app also records the source IP address and checks the public URL. Purposes: update notices, release notes and license-compliance verification. Docs: docs.dronedb.app/docs/registry/admin/update-check  ·  Opt out: UpdateCheckCron=\"disabled\"",

@@ -10,9 +10,10 @@ namespace Registry.Web.Data;
 
 /// <summary>
 /// The rows that name a dataset by its organization and dataset slugs instead of pointing at its <c>Datasets</c> row
-/// (today only the task index, <see cref="JobIndex"/>: <c>OrgSlug</c>, <c>DsSlug</c>) follow it when it takes a new slug
-/// or moves to another organization, so that its job history is still its own afterwards. The one rule for the slug
-/// repair, the dataset rename and the move to another organization.
+/// (<see cref="IDatasetSlugKeyed"/>: the task index, <see cref="JobIndex"/>, and the build notifications waiting to be
+/// sent, <see cref="BuildNotification"/>) follow it when it takes a new slug or moves to another organization, so that its
+/// job history is still its own afterwards and an e-mail names the dataset as it is called when it is sent. The one rule
+/// for the slug repair, the dataset rename and the move to another organization.
 /// </summary>
 /// <remarks>
 /// Both methods only change the rows the context tracks: the caller saves them in the same
@@ -35,7 +36,12 @@ public static class SlugKeyedRows
     /// rules), and it names the dataset's <paramref name="internalRef"/>, so the cleanup that runs later acts on the rows of
     /// the dataset that was deleted and never on those of whoever holds its slug by then (a rename or a move into it).
     /// </summary>
-    public static string TombstoneSlug(Guid internalRef) => "~deleted-" + internalRef.ToString("N");
+    public static string TombstoneSlug(Guid internalRef) => TombstonePrefix + internalRef.ToString("N");
+
+    /// <summary>Whether <paramref name="dsSlug"/> is a <see cref="TombstoneSlug"/>: its dataset was deleted.</summary>
+    public static bool IsTombstone(string? dsSlug) => dsSlug?.StartsWith(TombstonePrefix, StringComparison.Ordinal) == true;
+
+    private const string TombstonePrefix = "~deleted-";
 
     /// <summary>The datasets (organization slug, dataset slug) that have a job in a <see cref="BlockingJobStates"/> state.</summary>
     public static async Task<HashSet<(string OrgSlug, string DsSlug)>> BusyDatasetsAsync(this RegistryContext context,
@@ -62,31 +68,43 @@ public static class SlugKeyedRows
     /// <summary>The rows of dataset <paramref name="dsSlug"/> of <paramref name="orgSlug"/> become those of
     /// <paramref name="newDsSlug"/> of <paramref name="newOrgSlug"/>. Rows already changed through this context keep
     /// the new slugs, so renames of datasets and of their organization compose.</summary>
-    public static Task FollowDatasetAsync(this RegistryContext context, string orgSlug, string dsSlug,
-        string newOrgSlug, string newDsSlug, CancellationToken ct = default) =>
-        FollowAsync(context,
-            context.JobIndices.Where(j => j.OrgSlug == orgSlug && j.DsSlug == dsSlug),
-            j => j.OrgSlug == orgSlug && j.DsSlug == dsSlug,
-            j => { j.OrgSlug = newOrgSlug; j.DsSlug = newDsSlug; }, ct);
-
-    /// <summary>The rows of every dataset of <paramref name="orgSlug"/> become those of
-    /// <paramref name="newOrgSlug"/>.</summary>
-    public static Task FollowOrganizationAsync(this RegistryContext context, string orgSlug, string newOrgSlug,
-        CancellationToken ct = default) =>
-        FollowAsync(context,
-            context.JobIndices.Where(j => j.OrgSlug == orgSlug),
-            j => j.OrgSlug == orgSlug,
-            j => j.OrgSlug = newOrgSlug, ct);
-
-    // The query narrows the rows in the database; the slugs are compared again in memory, ordinally and on the
-    // values the row has now: case-insensitive collations (MySQL) match "abc" and "ABC" in SQL, and a row this context
-    // already moved still matches its old slugs in the database
-    private static async Task FollowAsync(RegistryContext context, IQueryable<JobIndex> candidates,
-        Func<JobIndex, bool> isOurs, Action<JobIndex> follow, CancellationToken ct)
+    public static async Task FollowDatasetAsync(this RegistryContext context, string orgSlug, string dsSlug,
+        string newOrgSlug, string newDsSlug, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        foreach (var row in (await candidates.AsTracking().ToArrayAsync(ct)).Where(isOurs))
-            follow(row);
+        await FollowAsync(context.JobIndices, orgSlug, dsSlug, newOrgSlug, newDsSlug, ct);
+        await FollowAsync(context.BuildNotifications, orgSlug, dsSlug, newOrgSlug, newDsSlug, ct);
+    }
+
+    /// <summary>The rows of every dataset of <paramref name="orgSlug"/> become those of
+    /// <paramref name="newOrgSlug"/>.</summary>
+    public static async Task FollowOrganizationAsync(this RegistryContext context, string orgSlug, string newOrgSlug,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        await FollowAsync(context.JobIndices, orgSlug, null, newOrgSlug, null, ct);
+        await FollowAsync(context.BuildNotifications, orgSlug, null, newOrgSlug, null, ct);
+    }
+
+    // The rows of the dataset dsSlug of orgSlug (every dataset of it when dsSlug is null) take the new slugs (the dataset
+    // slug only when one is given). The query narrows the rows in the database; the slugs are compared again in memory,
+    // ordinally and on the values the row has now: case-insensitive collations (MySQL) match "abc" and "ABC" in SQL, and
+    // a row this context already moved still matches its old slugs in the database
+    private static async Task FollowAsync<TRow>(IQueryable<TRow> rows, string orgSlug, string? dsSlug,
+        string newOrgSlug, string? newDsSlug, CancellationToken ct) where TRow : class, IDatasetSlugKeyed
+    {
+        var candidates = dsSlug == null
+            ? rows.Where(r => r.OrgSlug == orgSlug)
+            : rows.Where(r => r.OrgSlug == orgSlug && r.DsSlug == dsSlug);
+
+        foreach (var row in (await candidates.AsTracking().ToArrayAsync(ct))
+                 .Where(r => r.OrgSlug == orgSlug && (dsSlug == null || r.DsSlug == dsSlug)))
+        {
+            row.OrgSlug = newOrgSlug;
+            if (newDsSlug != null)
+                row.DsSlug = newDsSlug;
+        }
     }
 }

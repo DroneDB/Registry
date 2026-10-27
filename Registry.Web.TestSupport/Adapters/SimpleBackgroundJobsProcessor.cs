@@ -38,6 +38,11 @@ public class SimpleBackgroundJobsProcessor : IBackgroundJobsProcessor
         throw new NotImplementedException();
     }
 
+    public string Schedule<T>(Expression<Func<T, Task>> methodCall, TimeSpan delay)
+    {
+        throw new NotImplementedException();
+    }
+
     public bool Delete(string jobId)
     {
         if (!_jobs.TryGetValue(int.Parse(jobId), out var status))

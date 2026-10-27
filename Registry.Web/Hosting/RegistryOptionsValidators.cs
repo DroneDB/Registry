@@ -208,6 +208,16 @@ internal sealed class SmtpSettingsValidator : IValidateOptions<SmtpSettings>
     }
 }
 
+/// <summary>The build notification e-mails: the digest window stays between one minute and one hour.</summary>
+internal sealed class BuildNotificationOptionsValidator : IValidateOptions<BuildNotificationOptions>
+{
+    public ValidateOptionsResult Validate(string? name, BuildNotificationOptions options) => new OptionsFailures()
+        .Check(options.DigestMinutes is >= BuildNotificationOptions.MinDigestMinutes and <= BuildNotificationOptions.MaxDigestMinutes,
+            $"{OptionsFailures.Key("BuildNotifications")}:{nameof(BuildNotificationOptions.DigestMinutes)} is not valid " +
+            $"(must be between {BuildNotificationOptions.MinDigestMinutes} and {BuildNotificationOptions.MaxDigestMinutes})")
+        .Result();
+}
+
 /// <summary>The reverse proxies whose forwarded headers are trusted (<see cref="HttpHostOptions"/>).</summary>
 public static class TrustedProxies
 {

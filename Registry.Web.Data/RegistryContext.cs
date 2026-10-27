@@ -25,4 +25,7 @@ public class RegistryContext : DbContext
 
     public DbSet<JobIndex> JobIndices => Set<JobIndex>();
 
+    /// <summary>The lines of the build notification e-mails, waiting or sent (the outbox).</summary>
+    public DbSet<BuildNotification> BuildNotifications => Set<BuildNotification>();
+
 }

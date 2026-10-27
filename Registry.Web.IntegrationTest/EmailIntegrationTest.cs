@@ -21,6 +21,7 @@ using Registry.Web.HealthChecks;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Models.Email;
+using Registry.Web.Services.BuildNotifications;
 using Registry.Web.Services.Email;
 using Registry.Web.Services.Email.Templates;
 using Registry.Web.Services.Jobs;
@@ -34,8 +35,8 @@ namespace Registry.Web.Test;
 /// <summary>
 /// E-mail against a real SMTP server: Mailpit in a throw-away Docker container, which requires STARTTLS (with a
 /// self-signed certificate for <c>localhost</c>) and a login, and shows what it received through its HTTP API.
-/// Covers the MailKit sender, the failure kinds, the SMTP health check, the admin test endpoint and a queued
-/// e-mail read back from the job storage and run.
+/// Covers the MailKit sender, the failure kinds, the SMTP health check, the admin test endpoint, a queued
+/// e-mail read back from the job storage and run, and the digest of the build notifications from end to end.
 /// Explicit: it needs a Docker daemon and pulls the <c>axllent/mailpit</c> image.
 /// </summary>
 [TestFixture]
@@ -273,5 +274,51 @@ public class EmailIntegrationTest : IDisposable
         html.ShouldContain("white-space:pre-wrap");
         html.ShouldNotContain("<script>");
         scope.ServiceProvider.GetRequiredService<IUpdateCheckCache>().Read().LastNotifiedVersion.ShouldBe("3.1.0");
+    }
+
+    [Test]
+    public async Task BuildNotifications_OneEmailListsTheBuildsOfTheWindow_WithTheOptOutLink()
+    {
+        var settings = HostSettings();
+        settings["AppSettings:BuildNotifications:DigestMinutes"] = "1";
+        using var factory = new RegistryWebFactory(settings);
+        var jane = await factory.CreateUserAsync("jane");
+        using var client = factory.CreateClient();
+        var patch = new HttpRequestMessage(HttpMethod.Patch, "/users/preferences")
+        {
+            Content = JsonContent.Create(new { notifications = new { builds = "all" } })
+        };
+        patch.AsUser("jane");
+        (await client.SendAsync(patch)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Two builds of jane end in the window, as the state filter reports them
+        using var scope = factory.Services.CreateScope();
+        var recorder = scope.ServiceProvider.GetRequiredService<IBuildNotificationRecorder>();
+        await recorder.RecordAsync(new BuildReport("public", "default", "cloud.laz", "cloud-hash", BuildOutcome.Completed,
+            null, new BuildRequest(jane.Id, "build-1")), CancellationToken.None);
+        await recorder.RecordAsync(new BuildReport("public", "default", "broken.tif", "broken-hash", BuildOutcome.Failed,
+            "DdbException: cannot open <broken.tif>", new BuildRequest(jane.Id, "build-2")), CancellationToken.None);
+
+        // The factory runs Hangfire without servers: run the one digest scheduled, then the e-mail it queued
+        var storage = scope.ServiceProvider.GetRequiredService<JobStorage>();
+        var digest = storage.GetMonitoringApi().ScheduledJobs(0, 10).Select(j => j.Value.Job)
+            .Where(j => j.Type == typeof(BuildNotificationDigestJob)).ShouldHaveSingleItem();
+        await (Task)digest.Method.Invoke(scope.ServiceProvider.GetRequiredService<BuildNotificationDigestJob>(),
+            [digest.Args[0], CancellationToken.None])!;
+        var send = storage.GetMonitoringApi().EnqueuedJobs("default", 0, 10).Select(j => j.Value.Job)
+            .Where(j => j.Type == typeof(SendEmailJob)).ShouldHaveSingleItem();
+        await (Task)send.Method.Invoke(scope.ServiceProvider.GetRequiredService<SendEmailJob>(),
+            [send.Args[0], CancellationToken.None])!;
+
+        var received = await ReceivedMessage();
+        Addresses(received, "To").ShouldBe(["jane@example.com"]);
+        received.GetProperty("Subject").GetString().ShouldNotBeNull().ShouldContain("1 build failed, 1 completed");
+        received.GetProperty("Text").GetString().ShouldNotBeNull().ShouldSatisfyAllConditions(
+            t => t.ShouldContain("cloud.laz"),
+            t => t.ShouldContain("broken.tif"),
+            t => t.ShouldContain("https://hub.example.org/r?preferences=notifications"));
+        var html = received.GetProperty("HTML").GetString().ShouldNotBeNull();
+        html.ShouldContain("href=\"https://hub.example.org/r?preferences=notifications\"");
+        html.ShouldNotContain("<broken.tif>");
     }
 }

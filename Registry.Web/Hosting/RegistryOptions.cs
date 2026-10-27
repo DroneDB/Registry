@@ -46,7 +46,8 @@ public static class RegistryOptions
         [typeof(IndexQueueSettings)] = Nested("IndexQueue"),
         [typeof(ReconciliationSettings)] = Nested("Reconciliation"),
         [typeof(HubOptions)] = Nested("HubOptions"),
-        [typeof(SmtpSettings)] = Nested("Smtp")
+        [typeof(SmtpSettings)] = Nested("Smtp"),
+        [typeof(BuildNotificationOptions)] = Nested("BuildNotifications")
     };
 
     private static string Nested(string name) => SectionName + ":" + name;
@@ -87,6 +88,7 @@ public static class RegistryOptions
         Add<ReconciliationSettings>(services, configuration);
         Add<HubOptions>(services, configuration);
         Add<SmtpSettings, SmtpSettingsValidator>(services, configuration);
+        Add<BuildNotificationOptions, BuildNotificationOptionsValidator>(services, configuration);
 
         // Rules of one role only
         switch (role)

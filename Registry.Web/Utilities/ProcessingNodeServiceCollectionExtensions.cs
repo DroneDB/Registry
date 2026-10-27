@@ -105,6 +105,9 @@ public static class ProcessingNodeServiceCollectionExtensions
         // E-mail: a request queues it, the host that runs the job sends it
         services.AddEmail(configuration);
 
+        // The build notification e-mails: reported where a build ends, sent by whichever host runs the digest
+        services.AddBuildNotifications();
+
         // The identity of the deployment and the update check (the job runs on whichever node processes the default queue)
         services.AddUpdateCheck();
 

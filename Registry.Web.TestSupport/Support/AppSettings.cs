@@ -402,6 +402,9 @@ public class AppSettings
     /// <summary>The outgoing e-mail server. When null, e-mail is off.</summary>
     public SmtpSettings? Smtp { get; set; }
 
+    /// <summary>The build notification e-mails to users. When null, defaults apply.</summary>
+    public BuildNotificationOptions? BuildNotifications { get; set; }
+
     /// <summary>
     /// Cron expression for the recurring index reconciliation sweep. Re-enqueues unindexed
     /// on-disk files, reports (never deletes) indexed entries missing on disk, and ages out

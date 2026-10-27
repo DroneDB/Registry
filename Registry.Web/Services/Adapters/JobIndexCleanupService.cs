@@ -7,6 +7,7 @@ using Hangfire.Server;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.BuildNotifications;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 
@@ -14,7 +15,8 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Periodic cleanup service for the JobIndices table.
-/// Removes terminal (Succeeded/Failed/Deleted) records older than the configured retention period.
+/// Removes terminal (Succeeded/Failed/Deleted) records older than the configured retention period, then takes care of
+/// the build notification outbox (<see cref="BuildNotificationCleanup"/>), the other history of the builds.
 /// </summary>
 /// <remarks>
 /// One run at a time across the hosts: two would run the same DELETE (harmless but wasted on a
@@ -25,6 +27,7 @@ namespace Registry.Web.Services.Adapters;
 public class JobIndexCleanupService
 {
     private readonly IJobIndexWriter _jobIndexWriter;
+    private readonly BuildNotificationCleanup _notifications;
     private readonly JobScheduleOptions _settings;
     private readonly ILogger<JobIndexCleanupService> _logger;
 
@@ -32,10 +35,12 @@ public class JobIndexCleanupService
 
     public JobIndexCleanupService(
         IJobIndexWriter jobIndexWriter,
+        BuildNotificationCleanup notifications,
         IOptions<JobScheduleOptions> settings,
         ILogger<JobIndexCleanupService> logger)
     {
         _jobIndexWriter = jobIndexWriter ?? throw new ArgumentNullException(nameof(jobIndexWriter));
+        _notifications = notifications ?? throw new ArgumentNullException(nameof(notifications));
         _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -66,6 +71,8 @@ public class JobIndexCleanupService
         {
             var deleted = await _jobIndexWriter.DeleteTerminalBeforeAsync(cutoff, cancellationToken);
             console.Info("JobIndex cleanup completed: {Deleted} records removed", deleted);
+
+            await _notifications.RunAsync(console, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

@@ -15,6 +15,9 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.BuildNotifications;
+using Registry.Web.Services.Ports;
+using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 using Registry.Web.Test.Support;
 using Registry.Web.Services.Caching;
@@ -279,7 +282,7 @@ public class JobIndexCleanupServiceTest : TestBase
         await using var context = GetContextWithMixedRecords();
         var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var settings = CreateSettings(retentionDays: 30);
-        var service = new JobIndexCleanupService(writer, TestSettings.Options<JobScheduleOptions>(settings), _cleanupLogger);
+        var service = NewService(context, writer, TestSettings.Options<JobScheduleOptions>(settings));
 
         var totalBefore = await context.JobIndices.CountAsync();
 
@@ -321,7 +324,7 @@ public class JobIndexCleanupServiceTest : TestBase
 
         var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var settings = CreateSettings(retentionDays: 1);
-        var service = new JobIndexCleanupService(writer, TestSettings.Options<JobScheduleOptions>(settings), _cleanupLogger);
+        var service = NewService(context, writer, TestSettings.Options<JobScheduleOptions>(settings));
 
         // Act
         await service.CleanupOldJobIndicesAsync(null, CancellationToken.None);
@@ -338,7 +341,7 @@ public class JobIndexCleanupServiceTest : TestBase
         await using var context = GetContextWithMixedRecords();
         var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var settings = CreateSettings(retentionDays: 0); // Should fall back to 60
-        var service = new JobIndexCleanupService(writer, TestSettings.Options<JobScheduleOptions>(settings), _cleanupLogger);
+        var service = NewService(context, writer, TestSettings.Options<JobScheduleOptions>(settings));
 
         // Act - Should not throw and should use 60-day default
         await Should.NotThrowAsync(async () =>
@@ -352,7 +355,7 @@ public class JobIndexCleanupServiceTest : TestBase
         await using var context = GetContextWithMixedRecords();
         var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var settings = CreateSettings(retentionDays: -5); // Should fall back to 60
-        var service = new JobIndexCleanupService(writer, TestSettings.Options<JobScheduleOptions>(settings), _cleanupLogger);
+        var service = NewService(context, writer, TestSettings.Options<JobScheduleOptions>(settings));
 
         // Act - Should not throw
         await Should.NotThrowAsync(async () =>
@@ -366,7 +369,7 @@ public class JobIndexCleanupServiceTest : TestBase
         await using var context = GetEmptyContext();
         var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
         var settings = CreateSettings(retentionDays: 60);
-        var service = new JobIndexCleanupService(writer, TestSettings.Options<JobScheduleOptions>(settings), _cleanupLogger);
+        var service = NewService(context, writer, TestSettings.Options<JobScheduleOptions>(settings));
 
         // Act & Assert
         await Should.NotThrowAsync(async () =>
@@ -438,7 +441,7 @@ public class JobIndexCleanupServiceTest : TestBase
     {
         await using var context = GetContextWithMixedRecords(new FailFirstDeleteInterceptor());
         var writer = new JobIndexWriter(context, _writerLogger, _cache.Object);
-        var service = new JobIndexCleanupService(writer, TestSettings.Options<JobScheduleOptions>(CreateSettings(30)), _cleanupLogger);
+        var service = NewService(context, writer, TestSettings.Options<JobScheduleOptions>(CreateSettings(30)));
 
         await Should.ThrowAsync<SqliteException>(() => service.CleanupOldJobIndicesAsync(null, CancellationToken.None));
     }
@@ -446,6 +449,18 @@ public class JobIndexCleanupServiceTest : TestBase
     #endregion
 
     #region Helpers
+
+    // The outbox cleanup runs on the same database; nothing is waiting there, so it schedules nothing
+    private JobIndexCleanupService NewService(RegistryContext context, JobIndexWriter writer,
+        IOptions<JobScheduleOptions> settings)
+    {
+        var digests = new BuildNotificationDigests(Mock.Of<IBackgroundJobsProcessor>(),
+            Microsoft.Extensions.Options.Options.Create(new BuildNotificationOptions()), TimeProvider.System,
+            NullLogger<BuildNotificationDigests>.Instance);
+        var notifications = new BuildNotificationCleanup(new BuildNotificationOutbox(context, TimeProvider.System),
+            digests, TimeProvider.System);
+        return new JobIndexCleanupService(writer, notifications, settings, _cleanupLogger);
+    }
 
     private static IOptions<AppSettings> CreateSettings(int retentionDays)
     {

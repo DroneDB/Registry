@@ -28,6 +28,8 @@ public class BackgroundJobsProcessor : IBackgroundJobsProcessor
 
     public string Schedule<T>(Expression<Action<T>> methodCall, TimeSpan delay) => _client.Schedule(methodCall, delay);
 
+    public string Schedule<T>(Expression<Func<T, Task>> methodCall, TimeSpan delay) => _client.Schedule(methodCall, delay);
+
     public bool Delete(string jobId) => _client.Delete(jobId);
 
     /// <summary>
