@@ -178,6 +178,9 @@ slice() { printf '%s\0' "${OBJECTS_SLICE[@]}"; }
 
 # Build-layout literals: libddb's build folder and file names, its marker suffixes, the build folder members.
 BUILD_LAYOUT='"(cog|copc|ept|vec|mvt|nxs|bm3d|gsplat|3dtiles)"|(cog\.tif|cloud\.copc\.laz|source\.gpkg|model\.nxz|model\.bm3d|model\.rad|model\.spz|ept\.json|tileset\.json|georef\.json|local\.json|bounds\.json)|\.pending\b|\.building\b|BuildFolderName|BuildFolderPath'
+# The role ids are defined once, in ArtifactRoles, and a role id is a name of the build manifest, not a place
+# in the build folder, so that file is not counted (model.bm3d there is the role, not the layout).
+ROLE_IDS_FILE=':(exclude)Registry.Ports/DroneDB/ArtifactRoles.cs'
 
 # The native raster calls of the objects slice: all of them, and those made through INativeWorkGate
 # (RunAsync(NativeLane.X, () => ...), or a service's own RunAsync(() => ...) over the gate).
@@ -391,7 +394,7 @@ metrics() {
     m "Task.Run native calls in the objects slice"   "$(slice | lines 'Task\.Run\(\(\)\s*=>\s*(?:\w+\.)*[Dd]db\.')"
     m "Native raster calls outside INativeWorkGate (objects slice)" "$(ungated_native_calls)"
     m "Build-layout literals in the objects slice"   "$(slice | matches "$BUILD_LAYOUT")"
-    m "Build-layout literals in production C#"       "$(prod '' | matches "$BUILD_LAYOUT")"
+    m "Build-layout literals in production C#"       "$({ prod ''; printf '%s\0' "$ROLE_IDS_FILE"; } | matches "$BUILD_LAYOUT")"
     m "Per-entry build probe calls"                  "$(prod Registry.Web | lines '\.(IsBuildable|IsBuildActive|IsBuildComplete|GetBuildStatus)\(')"
 
     # Other large classes and shared services: no god class in the set, one owner for
