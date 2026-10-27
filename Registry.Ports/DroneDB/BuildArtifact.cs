@@ -41,7 +41,8 @@ public sealed class BuildArtifact
 
     /// <summary>
     /// Legacy artifacts only: the role this one stands in for. libddb lists the artifact only while that role is
-    /// not listed (<c>model.nexus</c> for <c>model.bm3d</c>, <c>pointcloud.ept</c> for <c>pointcloud.copc</c>).
+    /// not listed (<see cref="ArtifactRoles.ModelNexus"/> for <see cref="ArtifactRoles.ModelBm3d"/>,
+    /// <see cref="ArtifactRoles.PointCloudEpt"/> for <see cref="ArtifactRoles.PointCloudCopc"/>).
     /// </summary>
     [JsonPropertyName("fallbackFor")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

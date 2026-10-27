@@ -53,7 +53,7 @@ public class DDB : IDDB
     [OnDeserialized]
     internal void OnDeserializedMethod(StreamingContext context)
     {
-        BuildFolderPath = Path.Combine(DatasetFolderPath, IDDB.DatabaseFolderName, BuildFolderName);
+        BuildFolderPath = BuildFolderOf(DatasetFolderPath);
     }
 
     public DDB(string ddbPath, IDdbWrapper ddbWrapper)
@@ -67,9 +67,13 @@ public class DDB : IDDB
             throw new ArgumentException($"Path '{ddbPath}' does not exist");
 
         DatasetFolderPath = ddbPath;
-        BuildFolderPath = Path.Combine(ddbPath, IDDB.DatabaseFolderName, BuildFolderName);
+        BuildFolderPath = BuildFolderOf(ddbPath);
         Meta = new MetaManager(this, ddbWrapper);
     }
+
+    // The one place the build folder of a dataset folder is composed (a new DDB and one read from job data)
+    private static string BuildFolderOf(string datasetFolder) =>
+        Path.Combine(datasetFolder, IDDB.DatabaseFolderName, BuildFolderName);
 
     public byte[] GenerateTile(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash, string outputFormat)
     {
