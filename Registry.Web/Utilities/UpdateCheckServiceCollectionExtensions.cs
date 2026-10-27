@@ -3,15 +3,19 @@ using System;
 using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Registry.Web.Hosting;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Initialization;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.UpdateCheck;
-using Registry.Web.Utilities;
 
-namespace Registry.Web.Hosting;
+namespace Registry.Web.Utilities;
 
-/// <summary>The update check, for every host that runs jobs: the job runs on whichever node processes the default queue.</summary>
+/// <summary>
+/// The update check, for every host that runs jobs: the job runs on whichever node processes the default queue. Part of the
+/// shared job services (<see cref="ProcessingNodeServiceCollectionExtensions"/>); the web host adds its own part with
+/// <c>AddUpdateCheckWeb</c>.
+/// </summary>
 public static class UpdateCheckServiceCollectionExtensions
 {
     /// <summary>
@@ -37,7 +41,7 @@ public static class UpdateCheckServiceCollectionExtensions
         services.AddScoped<IUpdateCheckService, UpdateCheckService>();
 
         // The e-mail to the administrators about a new version. The recipients come from the identity database, which the
-        // web host registers with its authentication and the processing node registers for this (AddProcessingNodeServices)
+        // shared job services register for every host that runs jobs (AddProcessingNodeServices)
         services.AddScoped<IAdminRecipients, IdentityAdminRecipients>();
         services.AddScoped<IUpdateNotifier, UpdateNotifier>();
 
@@ -51,14 +55,6 @@ public static class UpdateCheckServiceCollectionExtensions
             })
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 
-        return services;
-    }
-
-    /// <summary>What only the web host needs: saving the administrator's declarations, and remembering the public URL requests arrive on.</summary>
-    public static IServiceCollection AddUpdateCheckWeb(this IServiceCollection services)
-    {
-        services.AddScoped<UpdateCheckSettingsUpdater>();
-        services.AddTransient<Middlewares.ObservedBaseUrlMiddleware>();
         return services;
     }
 }

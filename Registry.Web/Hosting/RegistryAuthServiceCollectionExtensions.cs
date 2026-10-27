@@ -26,7 +26,8 @@ namespace Registry.Web.Hosting;
 public static class RegistryAuthServiceCollectionExtensions
 {
     /// <summary>
-    /// The identity database and store (one Identity builder; the sign-in manager for local accounts
+    /// The identity store over the identity database, which the shared job services register
+    /// (<c>AddProcessingNodeServices</c>) for every host that runs jobs (one Identity builder; the sign-in manager for local accounts
     /// only), the login manager of the configured provider (LDAP, external or local), JWT bearer
     /// authentication, the authorization policies and handlers, the token manager and the auth
     /// middlewares, the cached auth facts, the dataset access resolver and the membership service.
@@ -35,11 +36,7 @@ public static class RegistryAuthServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
-        var store = configuration.GetRegistryOptions<DataStoreOptions>();
         var identity = configuration.GetRegistryOptions<IdentityProviderOptions>();
-
-        services.AddDbContextWithProvider<ApplicationDbContext>(configuration, store.AuthProvider,
-            MagicStrings.IdentityConnectionName, "Identity");
 
         var identityBuilder = services.AddIdentityCore<User>()
             .AddUserManager<RegistryUserManager>()

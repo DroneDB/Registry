@@ -36,10 +36,15 @@ public static class ProcessingNodeServiceCollectionExtensions
     {
         services.AddRegistryOptions(configuration, configuration.GetInstanceType());
 
-        // Registry database (the identity database belongs to the web host; the node reads only the administrators from it, below)
-        services.AddDbContextWithProvider<RegistryContext>(configuration,
-            configuration.GetRegistryOptions<DataStoreOptions>().RegistryProvider,
+        // Registry database, and the identity database, once for every host that runs jobs: the web host's authentication
+        // (AddRegistryAuth) and the update e-mail to the administrators, which the job sends from whichever node serves
+        // the default queue, read the same one (the connection string of the settings file every service of the
+        // deployment shares, or the SQLite file of the shared storage folder)
+        var store = configuration.GetRegistryOptions<DataStoreOptions>();
+        services.AddDbContextWithProvider<RegistryContext>(configuration, store.RegistryProvider,
             MagicStrings.RegistryConnectionName, "Data");
+        services.AddDbContextWithProvider<ApplicationDbContext>(configuration, store.AuthProvider,
+            MagicStrings.IdentityConnectionName, "Identity");
 
         // Caches (required by BuildPendingService and the managers)
         services.AddMemoryCache();
@@ -102,13 +107,6 @@ public static class ProcessingNodeServiceCollectionExtensions
 
         // The identity of the deployment and the update check (the job runs on whichever node processes the default queue)
         services.AddUpdateCheck();
-
-        // The update e-mail goes to the administrators, who are in the identity database. The web host registers it with its
-        // authentication; a processing node has no authentication, and reads the same database (the connection string of
-        // the settings file every service of the deployment shares, or the SQLite file of the shared storage folder)
-        if (configuration.GetInstanceType() == InstanceType.ProcessingNode)
-            services.AddDbContextWithProvider<ApplicationDbContext>(configuration,
-                configuration.GetRegistryOptions<DataStoreOptions>().AuthProvider, MagicStrings.IdentityConnectionName, "Identity");
 
         return services;
     }

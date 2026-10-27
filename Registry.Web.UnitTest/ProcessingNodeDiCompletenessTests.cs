@@ -223,13 +223,20 @@ public class ProcessingNodeDiCompletenessTests
 
     [TestCase(InstanceType.Default)]
     [TestCase(InstanceType.WebServer)]
-    public void WebHost_LeavesTheIdentityDatabaseToItsAuthentication(InstanceType role)
+    [TestCase(InstanceType.ProcessingNode)]
+    public void EveryJobHost_RegistersTheIdentityDatabaseOnce(InstanceType role)
     {
-        // The web host registers the context with AddRegistryAuth: a second registration would configure it twice
-        using var provider = BuildNodeProvider(s => s.AddSingleton(Mock.Of<IBackgroundJobClient>()), role);
+        // The web host's authentication (AddRegistryAuth) reuses this registration: a second one would configure the context twice
+        var registrations = 0;
+        using var provider = BuildNodeProvider(s =>
+        {
+            registrations = s.Count(d => d.ServiceType == typeof(DbContextOptions<Registry.Web.Identity.ApplicationDbContext>));
+            s.AddSingleton(Mock.Of<IBackgroundJobClient>());
+        }, role);
         using var scope = provider.CreateScope();
 
-        scope.ServiceProvider.GetService<Registry.Web.Identity.ApplicationDbContext>().ShouldBeNull();
+        registrations.ShouldBe(1);
+        scope.ServiceProvider.GetService<Registry.Web.Identity.ApplicationDbContext>().ShouldNotBeNull();
         scope.ServiceProvider.GetRequiredService<IAdminRecipients>().ShouldBeOfType<Registry.Web.Services.Adapters.IdentityAdminRecipients>();
     }
 }

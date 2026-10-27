@@ -20,6 +20,7 @@ using Registry.Web.Services.Initialization;
 using Registry.Web.Services.Import;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.UpdateCheck;
+using Registry.Web.Utilities;
 using Registry.Web.Test.Support;
 using Shouldly;
 
