@@ -60,27 +60,30 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-10-26): DroneDB has ONE version, 2.0.0 (package.json); the libddb ABI follows
+        Pinned now (2026-10-27): DroneDB has ONE version, 2.0.0 (package.json); the libddb ABI follows
         it (ABI 2.0, semver: a removed export is a new major, an added one a new minor) and so does
         the handshake (libddb 2.x). It is not tagged until Registry is proven on it, so Registry pins
-        the CI build of DroneDB fixes-and-optimizations commit 3f7f764, run 40358721352 (a pull
+        the CI build of DroneDB fixes-and-optimizations commit 17d323a, run 40452472536 (a pull
         request run of DroneDB#472, built from the merge with master; the .deb is named after that
-        merge commit, 2.0.0~git81f128be), every job green (Linux and Windows builds and tests,
-        ASan + UBSan, the Docker image). It brings DDBBuildEx, a build with a cap on its threads
-        ({"threads": N}), which the background rebuild of models of an older layout calls, GPX and
-        JPEG 2000 files, and the formula mask fix. Next: the v2.0.0 release (DdbSource release) once
-        it is tagged.
+        merge commit, 2.0.0~git466ac7e2), every job green (Linux and Windows builds and tests,
+        ASan + UBSan, the Docker image). It builds 3D models with the bm3d program from vendor/bm3d
+        at release v1.1.0 instead of Nexus: the output is bm3d/model.bm3d (role model.bm3d), and the
+        Nexus build nxs/model.nxz is the legacy role model.nexus with fallbackFor model.bm3d, served
+        while the bm3d model is missing and removed once bm3d/ is published. STL files are Models.
+        DDBBuildEx (a build with a cap on its threads, {"threads": N}, which the background rebuild
+        of models of an older layout calls) stays, with GPX and JPEG 2000 files and the formula mask
+        fix of the previous pin. Next: the v2.0.0 release (DdbSource release) once it is tagged.
     -->
     <PropertyGroup>
         <DdbSource>ci</DdbSource>
         <DdbVersion>2.0.0</DdbVersion>
-        <DdbDebFileVersion>2.0.0~git81f128be</DdbDebFileVersion>
-        <DdbCiCommit>3f7f7649151226ca22fd52523e4b36c35fc563e7</DdbCiCommit>
-        <DdbCiRunId>40358721352</DdbCiRunId>
-        <DdbDebArtifactId>12670531116</DdbDebArtifactId>
-        <DdbWindowsArtifactId>12669946068</DdbWindowsArtifactId>
-        <DdbDebSha256>4ab01c28eb90042f6e679ce9b254431fd51ecb8fe7afa20302b6837a2468a66f</DdbDebSha256>
-        <DdbWindowsZipSha256>e507019409e54872504a366be324005420b2fb87cc55c7b34679f0e6d2168c31</DdbWindowsZipSha256>
+        <DdbDebFileVersion>2.0.0~git466ac7e2</DdbDebFileVersion>
+        <DdbCiCommit>17d323a1ff79e0e4b76ad104075365f83d1cb3c4</DdbCiCommit>
+        <DdbCiRunId>40452472536</DdbCiRunId>
+        <DdbDebArtifactId>12711319118</DdbDebArtifactId>
+        <DdbWindowsArtifactId>12712712034</DdbWindowsArtifactId>
+        <DdbDebSha256>57819e738a216231823524ac1810c2ea9a08766c5a769c8e1914c090af6c5586</DdbDebSha256>
+        <DdbWindowsZipSha256>3b34891bc926aa96aaba2fc7560d598fa7196587bf7dff601e28b34f6e75a0bb</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
