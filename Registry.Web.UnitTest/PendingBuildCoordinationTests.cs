@@ -356,6 +356,94 @@ public class PendingBuildCoordinationTests
         retried.Meta.ShouldBe(new IndexPayload(Org, Ds, "model-hash", MagicStrings.AutoBuildServiceUserId, null, "model.obj"));
     }
 
+    // The pending-build job of "model.obj" (a pending marker, due) over the given build jobs of the job index; the
+    // build manifest lists the legacy model the build replaces. Returns the job it queues.
+    private DdbJobDescriptor RetryOfLegacyModel(params JobIndex[] failedJobs)
+    {
+        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingMarkers.Of("model.obj", "model-hash")]);
+        _ddb.Setup(x => x.GetBuildArtifacts(It.Is<IReadOnlyList<string>>(p => p.SequenceEqual(new[] { "model.obj" }))))
+            .Returns([new EntryBuildArtifacts
+            {
+                Path = "model.obj", Exists = true, Hash = "model-hash",
+                Build = new EntryBuild
+                {
+                    Buildable = true, State = BuildState.Pending,
+                    Artifacts = [new BuildArtifact { Role = "model.nexus", Legacy = true }]
+                }
+            }]);
+        Expression<Action<DdbJobs>>? queued = null;
+        _jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()))
+            .Callback<Expression<Action<DdbJobs>>, IndexPayload>((job, _) => queued = job)
+            .Returns("retry-job");
+        var index = new Mock<IJobIndexQuery>();
+        index.Setup(x => x.GetByOrgDsAsync(Org, Ds, 0, int.MaxValue, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(failedJobs);
+
+        Enqueuer(_jobs.Object, index.Object, _storage).Run(_ddb.Object, Org, Ds, NoConsole);
+
+        queued.ShouldNotBeNull();
+        return DdbJobDescriptor.Of(Job.FromExpression(queued)).ShouldNotBeNull();
+    }
+
+    // A build job of the index, in the state Hangfire left it in (the storage has no such job: not active)
+    private static JobIndex FailedJob(Expression<Action<DdbJobs>> job, DateTime createdAt) => new()
+    {
+        JobId = "failed-" + createdAt.Ticks, OrgSlug = Org, DsSlug = Ds, Path = "model.obj", ToolId = "build",
+        CurrentState = "Failed", CreatedAtUtc = createdAt, MethodDisplay = Job.FromExpression(job).ToString()
+    };
+
+    private static readonly Expression<Action<DdbJobs>> UserBuild = j => j.Build(Org, Guid.Empty, "model.obj", false, null);
+    private static readonly Expression<Action<DdbJobs>> BackgroundRebuild = j => j.RebuildInBackground(Org, Guid.Empty, "model.obj", null);
+
+    [Test]
+    public void FailedUserBuildOfALegacyEntryIsRetriedOnTheBuildsQueue()
+    {
+        Seed();
+
+        var retried = RetryOfLegacyModel(FailedJob(UserBuild, DateTime.UtcNow));
+
+        retried.ShouldBe(new DdbJobDescriptor(DdbJobKind.Build, "model.obj"));
+        _ddb.Verify(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()), Times.Never,
+            "the origin is known: the build manifest is not consulted");
+    }
+
+    [Test]
+    public void FailedBackgroundRebuildIsRetriedOnTheRebuildsQueueWithoutReadingTheBuildManifest()
+    {
+        Seed();
+
+        var retried = RetryOfLegacyModel(FailedJob(BackgroundRebuild, DateTime.UtcNow));
+
+        retried.ShouldBe(new DdbJobDescriptor(DdbJobKind.RebuildInBackground, "model.obj"));
+        _ddb.Verify(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()), Times.Never);
+    }
+
+    [Test]
+    public void TheLatestBuildJobDecidesTheQueueOfTheRetry()
+    {
+        Seed();
+        var now = DateTime.UtcNow;
+
+        // A user build after the background rebuild that failed: the user's retry waits for no old model
+        RetryOfLegacyModel(FailedJob(BackgroundRebuild, now.AddHours(-2)), FailedJob(UserBuild, now))
+            .ShouldBe(new DdbJobDescriptor(DdbJobKind.Build, "model.obj"));
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("HeavyTaskJobWrapper.Run")]
+    public void BuildJobWithoutAKnownOriginKeepsTheLegacyArtifactRule(string? display)
+    {
+        Seed();
+
+        // The row does not say how the work started, so the build decides: it lists the legacy model
+        var row = FailedJob(UserBuild, DateTime.UtcNow);
+        row.MethodDisplay = display;
+        RetryOfLegacyModel(row).ShouldBe(
+            new DdbJobDescriptor(DdbJobKind.RebuildInBackground, "model.obj"));
+        _ddb.Verify(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()), Times.Once);
+    }
+
     private ApplyStateContext FilterContext(string path, string hash, IState state, Job? job = null)
     {
         var connection = new Mock<JobStorageConnection>();

@@ -9,6 +9,7 @@ using Hangfire.Storage;
 using Microsoft.Extensions.Configuration;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
+using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Builds;
@@ -22,7 +23,7 @@ namespace Registry.Web.Services.Jobs;
 /// The pending-build job's work (<see cref="DdbJobs.BuildPending"/>): instead of letting libddb
 /// run every due pending build inline (one opaque job for the whole dataset), it enqueues one
 /// indexed <see cref="DdbJobs.Build"/> per due pending entry (a <see cref="DdbJobs.RebuildInBackground"/> for an
-/// entry whose build still lists an artifact of an older layout), so a failure lands on that entry's
+/// entry whose pending work came from a background rebuild), so a failure lands on that entry's
 /// own job and the build status shows it as failed. It runs under the dataset's build
 /// coordination lock (<see cref="DatasetBuildCoordinator"/>). Without the organization and
 /// dataset of the job (job parameters set by <see cref="IndexedJobEnqueuer"/>), or a dataset
@@ -124,9 +125,10 @@ public sealed class PendingBuildEnqueuer
             var due = withPath.Where(p => now >= p.RetryAfter).ToArray();
             var notDue = withPath.Length - due.Length;
 
-            var activePaths = due.Length == 0
-                ? new HashSet<string>()
-                : ActiveBuildPaths(orgSlug, dsSlug, due.Select(p => p.Path).ToHashSet(), connection);
+            IReadOnlyList<JobIndex> buildJobs = due.Length == 0
+                ? []
+                : BuildJobsOf(orgSlug, dsSlug, due.Select(p => p.Path).ToHashSet());
+            var activePaths = ActiveBuildPaths(buildJobs, connection);
 
             var toEnqueue = new List<PendingBuildInfo>(due.Length);
             var active = 0;
@@ -140,7 +142,7 @@ public sealed class PendingBuildEnqueuer
                     active++;
             }
 
-            var inBackground = BackgroundRebuildPaths(ddb, toEnqueue, console);
+            var inBackground = BackgroundRebuildPaths(ddb, toEnqueue, OriginsOf(buildJobs), console);
             var dataset = new DatasetKey(folderOrg, internalRef);
             var enqueued = 0;
             foreach (var entry in toEnqueue)
@@ -171,30 +173,34 @@ public sealed class PendingBuildEnqueuer
         console.Debug("Done build pending");
     }
 
-    // The entries whose build still lists an artifact of an older layout: the build that replaces it is a background
-    // rebuild (the rebuilds queue, its thread cap), the rule the artifact completeness check queues it by, so the
-    // retry of a failed background rebuild (it keeps its pending marker) does not come back as a user build on the
-    // builds queue. Without the build manifest the entries are built on the builds queue, as before the rule.
+    // The entries to queue as a background rebuild: those whose pending work came from one, so the retry of a failed
+    // background rebuild (it keeps its pending marker) stays on the rebuilds queue and the retry of a build a user
+    // started does not wait behind every old model. An entry the job index has no build job of (its origin is
+    // unknown: rows stored before the origin was told apart) is judged by its build: one that still lists an
+    // artifact of an older layout is a background rebuild, the rule the artifact completeness check queues it by.
+    // Without the build manifest those entries are built on the builds queue.
     private static HashSet<string> BackgroundRebuildPaths(IDDB ddb, IReadOnlyList<PendingBuildInfo> entries,
-        JobConsole console)
+        IReadOnlyDictionary<string, bool> originIsBackground, JobConsole console)
     {
-        var paths = new HashSet<string>(StringComparer.Ordinal);
-        if (entries.Count == 0)
+        var paths = entries.Where(e => originIsBackground.GetValueOrDefault(e.Path)).Select(e => e.Path)
+            .ToHashSet(StringComparer.Ordinal);
+        var unknown = entries.Where(e => !originIsBackground.ContainsKey(e.Path)).ToArray();
+        if (unknown.Length == 0)
             return paths;
 
         try
         {
-            var builds = ddb.GetBuildArtifacts(entries.Select(e => e.Path).ToArray());
-            if (builds == null || builds.Count != entries.Count)
+            var builds = ddb.GetBuildArtifacts(unknown.Select(e => e.Path).ToArray());
+            if (builds == null || builds.Count != unknown.Length)
             {
                 console.Warning("The build manifest did not answer for {Count} pending entries; building them on " +
-                                "the builds queue", entries.Count);
+                                "the builds queue", unknown.Length);
                 return paths;
             }
 
-            for (var i = 0; i < entries.Count; i++)
+            for (var i = 0; i < unknown.Length; i++)
                 if (builds[i].Build?.ListsLegacyArtifact() == true)
-                    paths.Add(entries[i].Path);
+                    paths.Add(unknown[i].Path);
         }
         catch (DdbException ex)
         {
@@ -205,19 +211,35 @@ public sealed class PendingBuildEnqueuer
         return paths;
     }
 
+    // Whether the latest build job of each entry that has one was a background rebuild: the origin of the pending
+    // work (the failed job left the marker this job found). The rows of a job that is not a dataset build (another
+    // tool's, or one stored without its method) say nothing about it.
+    private static Dictionary<string, bool> OriginsOf(IEnumerable<JobIndex> buildJobs) =>
+        buildJobs
+            .Select(j => (j.Path, j.CreatedAtUtc, Job: DdbJobDescriptor.OfDisplay(j.MethodDisplay)))
+            .Where(j => j.Job is { BuildsEntry: true })
+            .GroupBy(j => j.Path!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.MaxBy(j => j.CreatedAtUtc).Job!.Value.IsBackgroundRebuild,
+                StringComparer.Ordinal);
+
+    // The build jobs the job index has of the given entries, whatever their state
+    private IReadOnlyList<JobIndex> BuildJobsOf(string orgSlug, string dsSlug, HashSet<string> paths) =>
+        _jobIndex.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue).GetAwaiter().GetResult()
+            .Where(j => j.ToolId == HeavyToolIds.Build && j.Path != null && paths.Contains(j.Path))
+            .ToArray();
+
     // Hangfire is authoritative: a missing/terminal job cannot suppress a pending entry forever
     // through a stale Created/Indexing index row, while a live Indexing job (publication in progress
     // or awaiting recovery) is active and blocks a duplicate build.
-    private HashSet<string> ActiveBuildPaths(string orgSlug, string dsSlug, HashSet<string> duePaths,
-        IStorageConnection? connection)
+    private HashSet<string> ActiveBuildPaths(IReadOnlyList<JobIndex> buildJobs, IStorageConnection? connection)
     {
         var active = new HashSet<string>();
-        var indexed = _jobIndex.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue).GetAwaiter().GetResult()
-            .Where(j => j.ToolId == HeavyToolIds.Build && j.Path != null && duePaths.Contains(j.Path));
+        if (buildJobs.Count == 0)
+            return active;
 
         using var owned = connection == null ? _storage.GetConnection() : null;
         var states = connection ?? owned!;
-        foreach (var row in indexed)
+        foreach (var row in buildJobs)
         {
             var actualState = states.GetStateData(row.JobId)?.Name;
             if (actualState != null && TaskStateCatalog.Active.Contains(actualState))

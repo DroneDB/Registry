@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using Hangfire.Common;
 using Registry.Web.Utilities;
 
@@ -27,41 +28,70 @@ public readonly record struct DdbJobDescriptor(DdbJobKind Kind, string? Path)
     /// <summary>The descriptor of <paramref name="job"/>, or null when it is not a dataset job.</summary>
     public static DdbJobDescriptor? Of(Job? job)
     {
-        if (job?.Method == null)
+        if (job?.Method == null || KindOf(job.Type, job.Method.Name) is not { } kind)
             return null;
 
-        if (job.Type == typeof(DdbJobs))
+        // DdbJobs: (orgSlug, internalRef, path, ...); the jobs of earlier releases: (IDDB ddb, path, ...)
+        return new DdbJobDescriptor(kind, HasPath(kind) ? Arg(job, job.Type == typeof(DdbJobs) ? 2 : 1) : null);
+    }
+
+    /// <summary>
+    /// The descriptor of the job named by the <paramref name="methodDisplay"/> of its job index row (Hangfire's
+    /// <c>Type.Method</c> text of the job), without a path (the row has its own), or null when the text names no
+    /// dataset job: the row of another tool, or one that stored no text. It knows the same jobs as <see cref="Of"/>,
+    /// whichever shape the job was stored in.
+    /// </summary>
+    public static DdbJobDescriptor? OfDisplay(string? methodDisplay)
+    {
+        var dot = methodDisplay?.LastIndexOf('.') ?? -1;
+        if (dot < 0)
+            return null;
+
+        var type = methodDisplay![..dot] switch
         {
-            // (orgSlug, internalRef, path, ...)
-            return job.Method.Name switch
+            nameof(DdbJobs) => typeof(DdbJobs),
+            nameof(HangfireUtils) => typeof(HangfireUtils),
+            _ => null
+        };
+        return type != null && KindOf(type, methodDisplay[(dot + 1)..]) is { } kind
+            ? new DdbJobDescriptor(kind, null)
+            : null;
+    }
+
+    private static DdbJobKind? KindOf(Type type, string method)
+    {
+        if (type == typeof(DdbJobs))
+        {
+            return method switch
             {
-                nameof(DdbJobs.Build) => new DdbJobDescriptor(DdbJobKind.Build, Arg(job, 2)),
-                nameof(DdbJobs.RebuildInBackground) => new DdbJobDescriptor(DdbJobKind.RebuildInBackground, Arg(job, 2)),
-                nameof(DdbJobs.BuildPending) => new DdbJobDescriptor(DdbJobKind.BuildPending, null),
-                nameof(DdbJobs.Cleanup) => new DdbJobDescriptor(DdbJobKind.Cleanup, null),
-                nameof(DdbJobs.MaskBorders) => new DdbJobDescriptor(DdbJobKind.MaskBorders, Arg(job, 2)),
-                nameof(DdbJobs.GenerateThumbnail) => new DdbJobDescriptor(DdbJobKind.GenerateThumbnail, Arg(job, 2)),
+                nameof(DdbJobs.Build) => DdbJobKind.Build,
+                nameof(DdbJobs.RebuildInBackground) => DdbJobKind.RebuildInBackground,
+                nameof(DdbJobs.BuildPending) => DdbJobKind.BuildPending,
+                nameof(DdbJobs.Cleanup) => DdbJobKind.Cleanup,
+                nameof(DdbJobs.MaskBorders) => DdbJobKind.MaskBorders,
+                nameof(DdbJobs.GenerateThumbnail) => DdbJobKind.GenerateThumbnail,
                 _ => null
             };
         }
 
-        if (job.Type == typeof(HangfireUtils))
+        if (type == typeof(HangfireUtils))
         {
-            // (IDDB ddb, path, ...)
-            return job.Method.Name switch
+            return method switch
             {
-                nameof(HangfireUtils.BuildWrapper) => new DdbJobDescriptor(DdbJobKind.Build, Arg(job, 1)),
-                nameof(HangfireUtils.BuildPendingWrapper) => new DdbJobDescriptor(DdbJobKind.BuildPending, null),
-                nameof(HangfireUtils.CleanupWrapper) => new DdbJobDescriptor(DdbJobKind.Cleanup, null),
-                nameof(HangfireUtils.MaskBordersWrapper) => new DdbJobDescriptor(DdbJobKind.MaskBorders, Arg(job, 1)),
-                nameof(HangfireUtils.GenerateThumbnailWrapper) =>
-                    new DdbJobDescriptor(DdbJobKind.GenerateThumbnail, Arg(job, 1)),
+                nameof(HangfireUtils.BuildWrapper) => DdbJobKind.Build,
+                nameof(HangfireUtils.BuildPendingWrapper) => DdbJobKind.BuildPending,
+                nameof(HangfireUtils.CleanupWrapper) => DdbJobKind.Cleanup,
+                nameof(HangfireUtils.MaskBordersWrapper) => DdbJobKind.MaskBorders,
+                nameof(HangfireUtils.GenerateThumbnailWrapper) => DdbJobKind.GenerateThumbnail,
                 _ => null
             };
         }
 
         return null;
     }
+
+    // The jobs of one entry; the pending-build job and the cleanup work on the whole dataset
+    private static bool HasPath(DdbJobKind kind) => kind is not (DdbJobKind.BuildPending or DdbJobKind.Cleanup);
 
     /// <summary>Whether the job builds (an entry, the whole dataset or the pending entries).</summary>
     public bool IsBuild => Kind is DdbJobKind.Build or DdbJobKind.RebuildInBackground or DdbJobKind.BuildPending;
