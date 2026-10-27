@@ -78,6 +78,18 @@ internal sealed class StubHandler : HttpMessageHandler
 
 internal sealed record RecordedRequest(HttpMethod Method, Uri Uri, string? ContentType, string Body);
 
+/// <summary>An exchange that never answers on its own.</summary>
+internal static class Stall
+{
+    /// <summary>Completes (as canceled) only when the token is canceled: a stalled peer, without a clock.</summary>
+    public static async Task UntilCanceledAsync(CancellationToken cancellationToken)
+    {
+        var never = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var registration = cancellationToken.Register(() => never.TrySetCanceled(cancellationToken));
+        await never.Task;
+    }
+}
+
 /// <summary>A temporary storage folder, deleted with the object.</summary>
 internal sealed class TempStorage : IDisposable
 {

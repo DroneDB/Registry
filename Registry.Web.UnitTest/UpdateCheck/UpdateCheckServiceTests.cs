@@ -241,7 +241,7 @@ public class UpdateCheckServiceTests
     {
         var hang = new StubHandler(async (_, ct) =>
         {
-            await Task.Delay(Timeout.Infinite, ct);
+            await Stall.UntilCanceledAsync(ct);
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
         using var harness = Harness(hang);
@@ -282,7 +282,7 @@ public class UpdateCheckServiceTests
     {
         var hang = new StubHandler(async (_, ct) =>
         {
-            await Task.Delay(Timeout.Infinite, ct);
+            await Stall.UntilCanceledAsync(ct);
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
         using var harness = Harness(hang);
@@ -522,7 +522,7 @@ public class UpdateCheckServiceTests
 
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
-            await Task.Delay(Timeout.Infinite, cancellationToken);
+            await Stall.UntilCanceledAsync(cancellationToken);
             return 0;
         }
     }
