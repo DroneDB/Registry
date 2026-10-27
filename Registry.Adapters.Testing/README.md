@@ -115,3 +115,7 @@ when a file is missing or when an unlisted file is added, so the fixtures change
 * 2026-10-25: DroneDB `345cd5c2ef80ea6bd6ade3ab5f16a090d24d0193`: the artifact role `gsplat.georef` is gone from the `entry-types`
   fixture (the roles of `GaussianSplat` are `gsplat.lod`, `gsplat.spz`, `gsplat.bounds`); the contract files carry no planning
   identifiers any more, so `update-contract.sh` copies them verbatim.
+* 2026-10-27: DroneDB `1bedffa8b723992a0ee4d889d664e91c92b0b228`: the `Model` roles in the `entry-types` fixture start with
+  `model.bm3d` (`bm3d/model.bm3d`, `application/vnd.dronedb.bm3d`; the legacy `model.nexus` stays, listed only while
+  `model.bm3d` is missing); `capabilities` lists `DDBBuildEx`; `build-artifacts.schema.json` allows `fallbackFor` on an
+  artifact (`BuildArtifact.FallbackFor`). No other fixture changed (none lists a legacy artifact).

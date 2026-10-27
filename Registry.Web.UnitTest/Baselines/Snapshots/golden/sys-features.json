@@ -275,6 +275,7 @@
         "thumbnail": "none",
         "sidecarExtensions": [],
         "roles": [
+          "model.bm3d",
           "model.nexus",
           "model.3dtiles"
         ]

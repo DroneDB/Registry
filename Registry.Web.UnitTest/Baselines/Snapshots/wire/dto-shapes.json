@@ -238,7 +238,8 @@
       "mediaType": "MediaType-text",
       "downloadName": "DownloadName-text",
       "index": "Index-text",
-      "legacy": true
+      "legacy": true,
+      "fallbackFor": "FallbackFor-text"
     },
     "sparse": {
       "role": null,
@@ -258,7 +259,8 @@
           "mediaType": "MediaType-text",
           "downloadName": "DownloadName-text",
           "index": "Index-text",
-          "legacy": true
+          "legacy": true,
+          "fallbackFor": "FallbackFor-text"
         }
       ],
       "pending": true
@@ -434,7 +436,8 @@
           "mediaType": "MediaType-text",
           "downloadName": "DownloadName-text",
           "index": "Index-text",
-          "legacy": true
+          "legacy": true,
+          "fallbackFor": "FallbackFor-text"
         }
       ]
     },
@@ -475,7 +478,8 @@
             "mediaType": "MediaType-text",
             "downloadName": "DownloadName-text",
             "index": "Index-text",
-            "legacy": true
+            "legacy": true,
+            "fallbackFor": "FallbackFor-text"
           }
         ]
       }

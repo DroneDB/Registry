@@ -38,4 +38,12 @@ public sealed class BuildArtifact
     [JsonPropertyName("legacy")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Legacy { get; set; }
+
+    /// <summary>
+    /// Legacy artifacts only: the role this one stands in for. libddb lists the artifact only while that role is
+    /// not listed (<c>model.nexus</c> for <c>model.bm3d</c>, <c>pointcloud.ept</c> for <c>pointcloud.copc</c>).
+    /// </summary>
+    [JsonPropertyName("fallbackFor")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? FallbackFor { get; set; }
 }
