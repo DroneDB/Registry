@@ -199,8 +199,21 @@ public class BuildNotificationFilterTests
 
         var report = _reports.ShouldHaveSingleItem();
         report.Outcome.ShouldBe(BuildOutcome.Failed);
-        report.Error.ShouldBe($"DdbException: cannot read the file {JobLogText.DatasetPlaceholder}/{Path}");
+        report.Error.ShouldBe($"cannot read the file {JobLogText.DatasetPlaceholder}/{Path}");
         report.Request.ShouldBe(new BuildRequest(User, JobId));
+    }
+
+    [Test]
+    public void EntryBuild_FailedByAWrappedNativeError_TellsTheNativeCauseOnly()
+    {
+        Entry(BuildState.None);
+
+        // The build adapter wraps the native error; the user is told what is wrong with the file, not the wrapper.
+        Apply(BuildJob(), new FailedState(new InvalidOperationException($"Cannot build '{Path}' from ddb '{Folder}'",
+            new DdbException("COPC build failed: readers.las: Invalid version 989819808 found in LAZ chunk table."))));
+
+        _reports.ShouldHaveSingleItem().Error
+            .ShouldBe("COPC build failed: readers.las: Invalid version 989819808 found in LAZ chunk table.");
     }
 
     [Test]

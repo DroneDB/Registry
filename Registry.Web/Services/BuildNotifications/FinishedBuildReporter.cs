@@ -63,7 +63,7 @@ public sealed class FinishedBuildReporter
         }
 
         var error = classified.Outcome == BuildOutcome.Failed
-            ? BuildReport.ShortError(JobLogText.Describe(build.Failure), ddb.DatasetFolderPath)
+            ? BuildReport.ShortError(JobLogText.Cause(build.Failure), ddb.DatasetFolderPath)
             : null;
         await _recorder.RecordAsync(new BuildReport(build.OrgSlug, build.DsSlug, build.Path, classified.Hash,
             classified.Outcome, error, new BuildRequest(build.UserId, build.JobId)), ct).ConfigureAwait(false);

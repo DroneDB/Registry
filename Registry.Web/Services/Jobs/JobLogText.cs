@@ -41,6 +41,30 @@ public static class JobLogText
     }
 
     /// <summary>
+    /// The cause of <paramref name="ex"/> for a reader who is not an administrator: the message of the innermost
+    /// exception (the native error, which says what is wrong with the file), as one line of at most 500 chars, without
+    /// type names. Falls back to the outer messages when the inner ones are blank.
+    /// </summary>
+    public static string Cause(Exception? ex)
+    {
+        for (var current = ex?.GetBaseException(); current != null; current = Outer(ex!, current))
+        {
+            var message = SanitizeSingleLine(current.Message);
+            if (message.Length > 0) return Truncate(message, 500);
+        }
+
+        return "Unknown error";
+    }
+
+    // The exception that wraps inner in the chain that starts at ex; null when inner is ex.
+    private static Exception? Outer(Exception ex, Exception inner)
+    {
+        for (var current = ex; current.InnerException != null; current = current.InnerException)
+            if (ReferenceEquals(current.InnerException, inner)) return current;
+        return null;
+    }
+
+    /// <summary>
     /// <paramref name="value"/> with <paramref name="datasetFolderPath"/> replaced by
     /// <see cref="DatasetPlaceholder"/>. Native messages may use either separator style, so both
     /// variants are replaced.

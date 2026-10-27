@@ -569,6 +569,23 @@ public class DdbJobsTests
     // ---- Text helpers ----
 
     [Test]
+    public void Cause_Null_ReturnsUnknownError() => JobLogText.Cause(null).ShouldBe("Unknown error");
+
+    [Test]
+    public void Cause_IsTheInnermostMessage_WithoutTypeNames() =>
+        JobLogText.Cause(new InvalidOperationException("Cannot build 'a.laz' from ddb '[dataset]'",
+                new DdbException("COPC build failed:\nInvalid LAZ chunk table")))
+            .ShouldBe("COPC build failed: Invalid LAZ chunk table");
+
+    [Test]
+    public void Cause_BlankInnerMessage_FallsBackToTheOuterOne() =>
+        JobLogText.Cause(new Exception("outer", new TimeoutException(" "))).ShouldBe("outer");
+
+    [Test]
+    public void Cause_TruncatesLongMessagesTo500Chars() =>
+        JobLogText.Cause(new Exception(new string('x', 600))).ShouldBe(new string('x', 500) + "...");
+
+    [Test]
     public void Describe_Null_ReturnsUnknownError() => JobLogText.Describe(null).ShouldBe("Unknown error");
 
     [Test]
