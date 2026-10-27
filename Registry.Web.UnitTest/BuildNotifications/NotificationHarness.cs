@@ -106,9 +106,33 @@ internal sealed class NotificationHarness : IDisposable
         new(_jobs.Object, Microsoft.Extensions.Options.Options.Create(Options), Time,
             NullLogger<BuildNotificationDigests>.Instance);
 
+    /// <summary>Whether the recorder finds who asked in the job index (the real resolver) instead of the job's user.</summary>
+    public bool RequestersFromJobIndex { get; set; }
+
     public BuildNotificationRecorder Recorder() =>
-        new(Email.Object, Requesters.Object, _levels.Object, Outbox(), Digests(),
-            NullLogger<BuildNotificationRecorder>.Instance);
+        new(Email.Object, RequestersFromJobIndex ? new BuildRequesterResolver(_db.NewContext()) : Requesters.Object,
+            _levels.Object, Outbox(), Digests(), NullLogger<BuildNotificationRecorder>.Instance);
+
+    /// <summary>The reporter of the ends of builds; only the path that needs no dataset (the retries gave up) works.</summary>
+    public FinishedBuildReporter Reporter()
+    {
+        var db = _db.NewContext();
+        return new FinishedBuildReporter(Email.Object, new Services.Jobs.DatasetSweep(db), Mock.Of<Registry.Ports.IDdbManager>(),
+            Mock.Of<IBuildOutcomeClassifier>(), Recorder(), new BuildNotificationOutbox(db, Time),
+            NullLogger<FinishedBuildReporter>.Instance);
+    }
+
+    /// <summary>Adds the job index row of a build of <paramref name="path"/> that ended <paramref name="minute"/> minutes after now.</summary>
+    public void IndexedBuild(string jobId, string userId, string state, int minute, string path, string hash)
+    {
+        var at = Time.Now.AddMinutes(minute);
+        Change(db => db.JobIndices.Add(new JobIndex
+        {
+            JobId = jobId, OrgSlug = Org, DsSlug = Ds, Path = path, Hash = hash, UserId = userId, CurrentState = state,
+            CreatedAtUtc = at, FailedAtUtc = state == "Failed" ? at.AddSeconds(30) : null,
+            SucceededAtUtc = state == "Succeeded" ? at.AddSeconds(30) : null
+        }));
+    }
 
     public BuildNotificationDigestJob DigestJob() =>
         new(Outbox(), _levels.Object, _recipients.Object, _composer.Object, Email.Object, Digests(),

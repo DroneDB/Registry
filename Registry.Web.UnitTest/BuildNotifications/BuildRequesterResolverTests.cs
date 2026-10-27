@@ -50,10 +50,14 @@ public class BuildRequesterResolverTests
         db.SaveChanges();
     }
 
-    private Task<BuildRequester?> Resolve(string? userId, string? jobId) =>
+    private Task<BuildRequester?> Resolve(string? userId, string? jobId) => Resolve(new BuildRequest(userId, jobId));
+
+    private Task<BuildRequester?> Resolve(BuildRequest request) =>
         new BuildRequesterResolver(_db.NewContext()).ResolveAsync(
-            new BuildReport(Org, Ds, Path, Hash, BuildOutcome.Completed, null, new BuildRequest(userId, jobId)),
-            CancellationToken.None);
+            new BuildReport(Org, Ds, Path, Hash, BuildOutcome.Completed, null, request), CancellationToken.None);
+
+    // The pending entries whose automatic retries ran out (FinishedBuildReporter.ReportGivenUpAsync)
+    private Task<BuildRequester?> ResolveGivenUp() => Resolve(BuildRequest.RetriesGivenUp);
 
     [Test]
     public async Task AUsersBuild_GoesToThatUser()
@@ -133,5 +137,66 @@ public class BuildRequesterResolverTests
         Job("retry-1", Auto, "Failed", 0);
 
         (await Resolve(Auto, "retry-2")).ShouldBeNull();
+    }
+
+    // --- The retries gave up ---
+
+    [Test]
+    public async Task GivenUp_AfterAFailedUserBuild_GoesToThatUser()
+    {
+        Job("user-build", "jane", "Failed", 0);
+        Job("retry-1", Auto, "Failed", 2);
+
+        (await ResolveGivenUp()).ShouldBe(new BuildRequester("jane", "user-build"));
+    }
+
+    [Test]
+    public async Task GivenUp_AfterAUserBuildThatSucceededWaitingForAMissingFile_GoesToThatUser()
+    {
+        // The user's build succeeded but left the entry pending (a companion file is missing); the retries of a missing
+        // file succeed too, without building it, until the budget runs out
+        Job("user-build", "jane", "Succeeded", 0);
+        Job("retry-1", Auto, "Succeeded", 2);
+        Job("retry-2", Auto, "Succeeded", 5);
+
+        (await ResolveGivenUp()).ShouldBe(new BuildRequester("jane", "user-build"));
+    }
+
+    [Test]
+    public async Task GivenUp_OfAnEntryNoUserAskedFor_GoesToNobody()
+    {
+        // A rescan or a completeness sweep found the entry; its retries ran out
+        Job("sweep-build", Auto, "Succeeded", 0);
+        Job("retry-1", Auto, "Succeeded", 2);
+
+        (await ResolveGivenUp()).ShouldBeNull();
+    }
+
+    [Test]
+    public async Task GivenUp_OfOtherContent_GoesToNobody()
+    {
+        // The user's build was of the file before it was replaced
+        Job("user-build", "jane", "Succeeded", 0, hash: "old-hash");
+
+        (await ResolveGivenUp()).ShouldBeNull();
+    }
+
+    [Test]
+    public async Task GivenUp_AfterAFailedUserBuildThatWasBuiltSince_GoesToNobody()
+    {
+        Job("user-build", "jane", "Failed", 0);
+        Job("retry-1", Auto, "Succeeded", 5);
+
+        (await ResolveGivenUp()).ShouldBeNull();
+    }
+
+    [Test]
+    public async Task ARetryJob_AfterAUserBuildThatSucceeded_GoesToNobody()
+    {
+        // Only the end of the retries credits a success: a retry job that ends cannot tell a success that left the entry
+        // pending from one that built it
+        Job("user-build", "jane", "Succeeded", 0);
+
+        (await Resolve(Auto, "retry-1")).ShouldBeNull();
     }
 }

@@ -153,4 +153,44 @@ public class BuildNotificationRecorderTests : IDisposable
         _h.Rows().ShouldBeEmpty();
         _h.Scheduled.ShouldBeEmpty();
     }
+
+    [Test]
+    public async Task TheRetriesGivingUp_OnAUserBuildThatWaitsForAMissingFile_TellThatUserItFailed_AndWhatIsMissing_Once()
+    {
+        _h.Levels["jane"] = BuildNotificationLevel.Failed;
+        _h.RequestersFromJobIndex = true;
+        // The user's build succeeded but left the entry pending; the retries succeed without building it too
+        _h.IndexedBuild("user-build", "jane", "Succeeded", 0, "a.obj", "a-hash");
+        _h.IndexedBuild("retry-1", MagicStrings.AutoBuildServiceUserId, "Succeeded", 2, "a.obj", "a-hash");
+        _h.Time.Advance(TimeSpan.FromMinutes(10));
+        Registry.Ports.DroneDB.PendingBuildInfo[] pending =
+            [Registry.Adapters.Testing.PendingMarkers.Of("a.obj", "a-hash", 0, "a.mtl")];
+
+        await _h.Reporter().ReportGivenUpAsync(NotificationHarness.Org, NotificationHarness.Ds, pending, CancellationToken.None);
+
+        var row = _h.Rows().ShouldHaveSingleItem();
+        (row.UserId, row.Path, row.Outcome, row.Error, row.RequestJobId).ShouldBe(
+            ("jane", "a.obj", "Failed", "Not built after the automatic retries; missing: a.mtl", "user-build"));
+        await _h.DigestJob().SendAsync("jane", CancellationToken.None);
+        _h.Sent.ShouldHaveSingleItem();
+
+        // The safety-net sweep starts the retries again and they give up again: the user was already told
+        _h.Time.Advance(TimeSpan.FromHours(6));
+        await _h.Reporter().ReportGivenUpAsync(NotificationHarness.Org, NotificationHarness.Ds, pending, CancellationToken.None);
+
+        _h.Rows().ShouldHaveSingleItem();
+    }
+
+    [Test]
+    public async Task TheRetriesGivingUp_OnAnEntryNoUserAskedFor_TellNobody()
+    {
+        _h.Levels["jane"] = BuildNotificationLevel.All;
+        _h.RequestersFromJobIndex = true;
+        _h.IndexedBuild("sweep-build", MagicStrings.AutoBuildServiceUserId, "Succeeded", 0, "a.obj", "a-hash");
+
+        await _h.Reporter().ReportGivenUpAsync(NotificationHarness.Org, NotificationHarness.Ds,
+            [Registry.Adapters.Testing.PendingMarkers.Of("a.obj", "a-hash", 0, "a.mtl")], CancellationToken.None);
+
+        _h.Rows().ShouldBeEmpty();
+    }
 }

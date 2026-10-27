@@ -8,7 +8,14 @@ namespace Registry.Web.Services.BuildNotifications;
 /// <summary>Who asked for a build, as its job records it.</summary>
 /// <param name="UserId">The user id the job carries: a user, the automatic build service, or null (a task output).</param>
 /// <param name="JobId">The build job; null when the report does not come from one job (the retries gave up).</param>
-public sealed record BuildRequest(string? UserId, string? JobId);
+public sealed record BuildRequest(string? UserId, string? JobId)
+{
+    /// <summary>The request of an entry whose automatic retries ran out: no job ended, the build service gave up.</summary>
+    public static BuildRequest RetriesGivenUp { get; } = new(MagicStrings.AutoBuildServiceUserId, null);
+
+    /// <summary>Whether this is <see cref="RetriesGivenUp"/>.</summary>
+    public bool IsRetriesGivenUp => this == RetriesGivenUp;
+}
 
 /// <summary>The final outcome of the build of one entry, and the request it answers.</summary>
 /// <param name="OrgSlug">The organization of the dataset.</param>

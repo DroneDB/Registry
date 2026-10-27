@@ -78,7 +78,8 @@ public sealed class FinishedBuildReporter
 
     /// <summary>
     /// Reports the pending builds of <paramref name="orgSlug"/>/<paramref name="dsSlug"/> whose automatic retries ran out
-    /// as failed. They were retried as the build service: each goes to the user whose build of that content failed.
+    /// as failed. They were retried as the build service: each goes to the user whose build of that content failed, or
+    /// succeeded but left the entry waiting for a missing file (the error names what is missing).
     /// </summary>
     public async Task ReportGivenUpAsync(string orgSlug, string dsSlug, IReadOnlyList<PendingBuildInfo> pending,
         CancellationToken ct)
@@ -91,7 +92,7 @@ public sealed class FinishedBuildReporter
         foreach (var entry in pending.Where(p => !string.IsNullOrWhiteSpace(p.Path) && !string.IsNullOrWhiteSpace(p.Hash)))
         {
             await _recorder.RecordAsync(new BuildReport(orgSlug, dsSlug, entry.Path, entry.Hash, BuildOutcome.Failed,
-                    GivenUpError(entry), new BuildRequest(MagicStrings.AutoBuildServiceUserId, null)), ct)
+                    GivenUpError(entry), BuildRequest.RetriesGivenUp), ct)
                 .ConfigureAwait(false);
         }
     }
