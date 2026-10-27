@@ -45,6 +45,9 @@ internal sealed class NotificationHarness : IDisposable
 
     public HashSet<string> WithoutAddress { get; } = [];
 
+    /// <summary>The datasets (<c>user/org/ds</c>) a user can no longer read.</summary>
+    public HashSet<string> Unreadable { get; } = [];
+
     public BuildNotificationOptions Options { get; } = new();
 
     public Mock<IEmailService> Email { get; } = new();
@@ -67,6 +70,7 @@ internal sealed class NotificationHarness : IDisposable
     private readonly Mock<IBuildNotificationLevels> _levels = new();
     private readonly Mock<IUserRecipients> _recipients = new();
     private readonly Mock<IBuildNotificationComposer> _composer = new();
+    private readonly Mock<IUserDatasetAccess> _datasets = new();
 
     public NotificationHarness()
     {
@@ -92,6 +96,10 @@ internal sealed class NotificationHarness : IDisposable
         _recipients.Setup(r => r.FindAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string userId, CancellationToken _) =>
                 WithoutAddress.Contains(userId) ? null : new EmailAddress($"{userId}@example.com", userId));
+        _datasets.Setup(d => d.CanReadAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string userId, string org, string ds, CancellationToken _) =>
+                !Unreadable.Contains($"{userId}/{org}/{ds}"));
         _composer.Setup(c => c.ComposeAsync(It.IsAny<EmailAddress>(), It.IsAny<BuildNotificationModel>()))
             .Returns(async (EmailAddress to, BuildNotificationModel model) =>
             {
@@ -147,8 +155,12 @@ internal sealed class NotificationHarness : IDisposable
         }));
     }
 
+    /// <summary>How often a digest asked whether a user may read a dataset.</summary>
+    public int AccessChecks => _datasets.Invocations.Count;
+
     public BuildNotificationDigestJob DigestJob() =>
-        new(Outbox(), _levels.Object, _recipients.Object, _composer.Object, Email.Object, Digests(),
+        new(Outbox(), new BuildNotificationAudience(_levels.Object, _recipients.Object, _datasets.Object,
+                NullLogger<BuildNotificationAudience>.Instance), _composer.Object, Email.Object, Digests(),
             NullLogger<BuildNotificationDigestJob>.Instance);
 
     public BuildNotificationCleanup Cleanup() => new(Outbox(), Digests(), Time);

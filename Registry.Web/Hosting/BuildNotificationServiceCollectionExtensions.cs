@@ -23,6 +23,9 @@ public static class BuildNotificationServiceCollectionExtensions
         services.AddScoped<IBuildRequesterResolver, BuildRequesterResolver>();
         // From the identity database every host that runs jobs shares (no UserManager needed)
         services.AddScoped<IBuildNotificationLevels, IdentityBuildNotificationLevels>();
+        // Which datasets a user may still read when the digest is sent, by the API's rules (no request needed)
+        services.AddScoped<IUserDatasetAccess, IdentityUserDatasetAccess>();
+        services.AddScoped<BuildNotificationAudience>();
         services.AddScoped<BuildNotificationOutbox>();
         services.AddScoped<BuildNotificationDigests>();
         services.AddScoped<IBuildNotificationRecorder, BuildNotificationRecorder>();

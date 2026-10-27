@@ -150,6 +150,7 @@ public class ProcessingNodeDiCompletenessTests
     [TestCase(typeof(HangfireUtils))]
     [TestCase(typeof(Registry.Web.Services.HeavyTasks.Adapters.HeavyTaskJobWrapper))]
     [TestCase(typeof(Registry.Web.Services.RemoteImport.RemoteImportJob))] // Queued by the web host
+    [TestCase(typeof(Registry.Web.Services.BuildNotifications.BuildNotificationDigestJob))] // With the dataset access check
     public void ProcessingNode_ActivatesTheJobClasses(Type jobClass)
     {
         // Hangfire's activator creates a job's class from the job scope: the stored shapes too

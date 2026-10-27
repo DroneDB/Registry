@@ -17,13 +17,9 @@ internal static class IdentityRecipientQuery
     /// <summary>The users that are not deactivated and have an address (not yet checked, see <see cref="Mailbox(string?)"/>).</summary>
     public static IQueryable<User> ActiveWithEmail(ApplicationDbContext identity)
     {
-        var deactivated = ApplicationDbContext.DeactivatedRoleName.ToUpperInvariant();
+        var deactivated = IdentityRoleQuery.UserIdsIn(identity, ApplicationDbContext.DeactivatedRoleName);
 
-        return identity.Users.Where(user => user.Email != null &&
-                                            !(from other in identity.UserRoles
-                                              join otherRole in identity.Roles on other.RoleId equals otherRole.Id
-                                              where other.UserId == user.Id && otherRole.NormalizedName == deactivated
-                                              select other).Any());
+        return identity.Users.Where(user => user.Email != null && !deactivated.Contains(user.Id));
     }
 
     /// <summary>The address as a recipient, or null when it is not one bare mailbox.</summary>

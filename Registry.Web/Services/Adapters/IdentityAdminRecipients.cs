@@ -40,13 +40,11 @@ public sealed class IdentityAdminRecipients : IAdminRecipients
             return [];
         }
 
-        var admin = ApplicationDbContext.AdminRoleName.ToUpperInvariant();
+        var admins = IdentityRoleQuery.UserIdsIn(_identity, ApplicationDbContext.AdminRoleName);
 
         var addresses = await (
                 from user in IdentityRecipientQuery.ActiveWithEmail(_identity)
-                join userRole in _identity.UserRoles on user.Id equals userRole.UserId
-                join role in _identity.Roles on userRole.RoleId equals role.Id
-                where role.NormalizedName == admin
+                where admins.Contains(user.Id)
                 orderby user.Email
                 select user.Email!)
             .AsNoTracking()

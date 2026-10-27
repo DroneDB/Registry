@@ -140,6 +140,38 @@ public class BuildNotificationDigestJobTests : IDisposable
     }
 
     [Test]
+    public async Task ALineOfADatasetTheUserCanNoLongerRead_IsLeftOut_AndEachDatasetIsAskedOnce()
+    {
+        // Removed from the organization (or the dataset made private) since the build ended
+        await TwoLines();
+        await _h.Record("jane", "c.laz", BuildOutcome.Completed, "j3");
+        _h.Change(db =>
+        {
+            foreach (var row in db.BuildNotifications.Where(r => r.Path != "a.laz"))
+                row.DsSlug = "secret";
+        });
+        _h.Unreadable.Add("jane/org/secret");
+
+        await Digest();
+
+        _h.Sent.ShouldHaveSingleItem().Model.Builds.ShouldHaveSingleItem().Path.ShouldBe("a.laz");
+        _h.AccessChecks.ShouldBe(2);
+        _h.Rows().ShouldAllBe(r => r.SentAtUtc != null);
+    }
+
+    [Test]
+    public async Task NoDatasetTheUserCanStillRead_SendsNothing_AndDropsTheLines()
+    {
+        await TwoLines();
+        _h.Unreadable.Add("jane/org/ds");
+
+        await Digest();
+
+        _h.Sent.ShouldBeEmpty();
+        _h.Rows().ShouldAllBe(r => r.SentAtUtc != null);
+    }
+
+    [Test]
     public async Task EmailTurnedOffBeforeTheDigest_SendsNothing()
     {
         await TwoLines();
