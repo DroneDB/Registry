@@ -55,6 +55,9 @@ public static class MagicStrings
     /// <summary>The last update check result, the time of the last failure and the last version e-mailed about.</summary>
     public const string UpdateCheckCacheFileName = ".update-check-cache.json";
 
+    /// <summary>The texts administrators gave to the editable e-mails, by template name (JSON, in the storage folder all nodes share).</summary>
+    public const string EmailTemplatesFileName = ".email-templates.json";
+
     /// <summary>
     /// Marker file dropped inside the embedded Hub archive (and therefore in the
     /// extracted folder) carrying the Hub semantic version. Used by Registry to

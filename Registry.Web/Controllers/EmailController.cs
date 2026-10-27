@@ -5,10 +5,10 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Models.Email;
+using Registry.Web.Services.Email;
 using Registry.Web.Services.Email.Templates;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -50,8 +50,7 @@ public class EmailController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway)]
     public async Task<IActionResult> SendTestEmail([FromBody] TestEmailRequestDto request, CancellationToken ct)
     {
-        if (!_email.IsEnabled)
-            throw new BadRequestException("E-mail is disabled: configure AppSettings:Smtp and set Enabled to true", noRetry: true);
+        _email.EnsureEnabled();
 
         var model = new TestEmailModel(await _auth.SafeGetCurrentUserName(), DateTimeOffset.UtcNow);
         await _email.SendNowAsync(TestEmailTemplate.Instance, model, [new EmailAddress(request.To.Trim())], ct);

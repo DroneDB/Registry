@@ -114,6 +114,9 @@ public sealed class RequestBindingTests : IDisposable
         // PATCH users/preferences: sections by name; a null section deletes it (the Hub's preferences store)
         yield return new BindingCase("hub-patch-preferences", typeof(Dictionary<string, JsonElement>),
             """{"units":{"measurement":"metric"},"map":{"zoom":12.5,"layers":["osm","sat"],"center":[11.25,45]},"orgs":null}""");
+        // the notifications section the server reads, as the Hub's preferences store sends it
+        yield return new BindingCase("hub-patch-preferences-notifications", typeof(Dictionary<string, JsonElement>),
+            """{"notifications":{"builds":"failed"}}""");
         // STAC search (a STAC client posts the spec's body)
         yield return new BindingCase("stac-search", typeof(StacSearchRequestDto),
             """{"bbox":[11.0,45.0,12.5,46.0],"datetime":"2024-01-01T00:00:00Z/..","limit":10,"collections":["org/ds"],"ids":["a","b"],"token":"next:1","intersects":{"type":"Point","coordinates":[11.5,45.5]}}""");
@@ -130,6 +133,9 @@ public sealed class RequestBindingTests : IDisposable
         yield return new BindingCase("sys-rescan", typeof(RescanRequestDto),
             """{"organizationSlug":"o","datasetSlug":null,"types":["image"],"extensions":[".jpg"],"stopOnError":true}""");
         yield return new BindingCase("sys-email-test", typeof(TestEmailRequestDto), """{"to":"admin@example.com"}""");
+        // PUT sys/email/templates/{name} and its preview and test: the editor's subject and body
+        yield return new BindingCase("sys-email-template", typeof(EmailTemplateTextDto),
+            """{"subject":"{{appName}}: {{summary}}","body":"Hello {{user}},\n\n{{builds}}\n\n{{link}}"}""");
         yield return new BindingCase("sys-update-check-settings", typeof(UpdateCheckSettingsDto),
             """{"useDeclaration":"commercial_needs_license","contactEmail":"it@acme-survey.com","contactConsent":true}""");
         yield return new BindingCase("sys-update-check-settings-cleared", typeof(UpdateCheckSettingsDto),

@@ -30,11 +30,13 @@ public class UsersController : ControllerBaseEx
 {
     private readonly UsersManager _usersManager;
     private readonly AuthTokenOptions _tokens;
+    private readonly NotificationStatus _notificationStatus;
 
-    public UsersController(UsersManager usersManager, IOptions<AuthTokenOptions> tokens)
+    public UsersController(UsersManager usersManager, IOptions<AuthTokenOptions> tokens, NotificationStatus notificationStatus)
     {
         _usersManager = usersManager;
         _tokens = tokens.Value;
+        _notificationStatus = notificationStatus;
     }
 
     /// <summary>
@@ -274,6 +276,17 @@ public class UsersController : ControllerBaseEx
     public async Task<ActionResult<Dictionary<string, object>>> PatchPreferences(
         [FromBody, Required] Dictionary<string, JsonElement> patch, CancellationToken ct) =>
         await _usersManager.PatchPreferences(patch, ct);
+
+    /// <summary>
+    /// Whether the current user can get notification e-mails: <c>reason</c> is <c>emailDisabled</c> (the server sends
+    /// no e-mail) or <c>noAddress</c> (the account has no valid address), null when they can.
+    /// </summary>
+    /// <returns>The status.</returns>
+    [HttpGet("notifications/status", Name = nameof(GetNotificationStatus))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<NotificationStatusDto>> GetNotificationStatus(CancellationToken ct) =>
+        await _notificationStatus.GetAsync(ct);
 
     /// <summary>
     /// Gets the storage quota information for the current user.

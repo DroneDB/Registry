@@ -30,8 +30,9 @@ public class User : IdentityUser
     }
 
     /// <summary>
-    /// The user's Hub preferences, one property per section ("map", "units", ...): JSON the Hub owns and the
-    /// Registry never reads. Only the user writes it (<c>PATCH /users/preferences</c>); a login provider and the admin
+    /// The user's Hub preferences, one property per section ("map", "units", ...): JSON the Hub owns. The Registry
+    /// reads only the "notifications" section (which build e-mails the user wants) and checks its shape when it is
+    /// written; the other sections are free-form. Only the user writes it (<c>PATCH /users/preferences</c>); a login provider and the admin
     /// metadata endpoint never do, which is why it is a column of its own and not a key of <see cref="Metadata"/>.
     /// Never null, like <see cref="Metadata"/>.
     /// </summary>

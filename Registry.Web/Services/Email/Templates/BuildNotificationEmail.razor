@@ -1,0 +1,77 @@
+@*
+    The HTML body of the build notification e-mail, made from the parsed template text: a blank line is a paragraph, a
+    line break is a <br>, {{builds}} is a table and {{link}} alone in its paragraph is a button. Every value and every
+    word of the administrator's text goes through Razor, which encodes it: the text cannot add markup. Only http(s)
+    addresses become links (EmailLink, EmailButton).
+*@
+@using Registry.Web.Services.BuildNotifications
+@inherits EmailBody<BuildNotificationEmailModel>
+
+@foreach (var block in Model.Text.Body.Blocks(_values.Has))
+{
+    @switch (block)
+    {
+        case TemplateBlockValue { Name: BuildNotificationValues.Builds }:
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;border-collapse:collapse;font-size:14px;line-height:1.4;">
+                <tr>
+                    <th align="left" style="padding:8px;border-bottom:2px solid #e5e7eb;font-family:@EmailStyles.FontStack;">Dataset</th>
+                    <th align="left" style="padding:8px;border-bottom:2px solid #e5e7eb;font-family:@EmailStyles.FontStack;">File</th>
+                    <th align="left" style="padding:8px;border-bottom:2px solid #e5e7eb;font-family:@EmailStyles.FontStack;">Result</th>
+                </tr>
+                @foreach (var line in _values.Lines)
+                {
+                    <tr>
+                        <td style="padding:8px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-family:@EmailStyles.FontStack;">
+                            <EmailLink Href="@_values.DatasetUrl(line)" Branding="@Branding">@line.Dataset</EmailLink>
+                        </td>
+                        <td style="padding:8px;border-bottom:1px solid #e5e7eb;vertical-align:top;word-break:break-all;font-family:@EmailStyles.FontStack;">
+                            @line.Path
+                            @if (!string.IsNullOrWhiteSpace(line.Error))
+                            {
+                                <div style="margin-top:4px;font-size:13px;color:@EmailStyles.Failed;word-break:break-word;">@line.Error.Trim()</div>
+                            }
+                        </td>
+                        <td style="padding:8px;border-bottom:1px solid #e5e7eb;vertical-align:top;white-space:nowrap;font-weight:600;color:@BuildNotificationValues.OutcomeColor(line.Outcome);font-family:@EmailStyles.FontStack;">
+                            @BuildNotificationValues.OutcomeText(line.Outcome)
+                        </td>
+                    </tr>
+                }
+            </table>
+            break;
+        case TemplateParagraph { Alone: BuildNotificationValues.Link }:
+            <EmailButton Href="@_values.LinkUrl" Label="@_values.LinkLabel" Branding="@Branding" />
+            break;
+        case TemplateParagraph paragraph:
+            <p style="margin:0 0 16px;">
+                @for (var i = 0; i < paragraph.Lines.Count; i++)
+                {
+                    if (i > 0)
+                    {
+                        <br>
+                    }
+                    foreach (var part in paragraph.Lines[i])
+                    {
+                        if (part is TemplateText text)
+                        {
+                            @text.Text
+                        }
+                        else if (part is TemplateValue { Name: var name } && BuildNotificationValues.IsLink(name))
+                        {
+                            <EmailLink Href="@_values.LinkOf(name)" Branding="@Branding">@_values.LinkOf(name)</EmailLink>
+                        }
+                        else if (part is TemplateValue value)
+                        {
+                            @_values.Text(value.Name)
+                        }
+                    }
+                }
+            </p>
+            break;
+    }
+}
+
+@code {
+    private BuildNotificationValues _values;
+
+    protected override void OnParametersSet() => _values = new BuildNotificationValues(Model.Data, Branding);
+}

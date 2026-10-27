@@ -723,6 +723,42 @@ GET /sys/config
   200 application/json ConfigurationDataDto
   401 application/json ProblemDetails
   403 application/json ProblemDetails
+GET /sys/email/templates
+  200 application/json array<EmailTemplateSummaryDto>
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+DELETE /sys/email/templates/{name}
+  200 application/json EmailTemplateDto
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+  404 application/json ProblemDetails
+GET /sys/email/templates/{name}
+  200 application/json EmailTemplateDto
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+  404 application/json ProblemDetails
+PUT /sys/email/templates/{name}
+  body application/json EmailTemplateTextDto
+  200 application/json EmailTemplateDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /sys/email/templates/{name}/preview
+  body application/json EmailTemplateTextDto
+  200 application/json EmailTemplatePreviewDto
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /sys/email/templates/{name}/test
+  body application/json EmailTemplateTextDto
+  204
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  403 application/json ProblemDetails
+  404 application/json ProblemDetails
+  502 application/json ProblemDetails
 POST /sys/email/test
   body application/json TestEmailRequestDto
   204
@@ -860,6 +896,9 @@ GET /users/meta
   200 application/json map<any>
   400 application/json ProblemDetails
   401 application/json ProblemDetails
+GET /users/notifications/status
+  200 application/json NotificationStatusDto
+  401 application/json ProblemDetails
 GET /users/preferences
   200 application/json map<any>
   401 application/json ProblemDetails
@@ -971,6 +1010,11 @@ schema DeleteBatchResponse { deleted:array<string>, failed:map<string> }
 schema DeleteUserResultDto { userName:string, successor:string, organizationsTransferred:integer(int32), organizationsDeleted:integer(int32), datasetsTransferred:integer(int32), datasetsDeleted:integer(int32), batchesDeleted:integer(int32), datasetResults:array<MoveDatasetResultDto> }
 schema DeletedDto { deleted:boolean }
 schema EditUserRequestDto { email:string, roles:array<string> }
+schema EmailTemplateDto { name:string, title:string, subject:string, body:string, isDefault:boolean, defaultSubject:string, defaultBody:string, placeholders:array<EmailTemplatePlaceholderDto> }
+schema EmailTemplatePlaceholderDto { name:string, description:string, inSubject:boolean }
+schema EmailTemplatePreviewDto { subject:string, text:string, html:string }
+schema EmailTemplateSummaryDto { name:string, title:string, isDefault:boolean }
+schema EmailTemplateTextDto { subject:string, body:string }
 schema EntryDto { path:string, hash:string, type:EntryType, properties:map<any>, mtime:string(date-time), size:integer(int64), depth:integer(int32), point_geom:any, polygon_geom:any, buildStatus:string, buildMissingDependencies:array<string>, artifacts:array<ArtifactLinkDto> }
 schema EntryType {  }
 schema EntryTypeDto { id:integer(int32), name:string, buildable:boolean, thumbnail:string, sidecarExtensions:array<string>, roles:array<string> }
@@ -1005,6 +1049,7 @@ schema MigrateVisibilityEntryDTO { organizationSlug:string, datasetSlug:string, 
 schema MoveDatasetDto { sourceOrgSlug:string, datasetSlugs:array<string>, destinationOrgSlug:string, conflictResolution:ConflictResolutionStrategy }
 schema MoveDatasetResultDto { originalSlug:string, newSlug:string, success:boolean, error:string }
 schema NodeOdxOptionDto { name:string, type:string, domain:any, help:string, value:any }
+schema NotificationStatusDto { canReceiveEmail:boolean, reason:string }
 schema OgcApiCollectionDto { id:string, title:string, description:string, itemType:string, crs:array<string>, extent:OgcApiExtentDto, links:array<OgcApiLinkDto> }
 schema OgcApiCollectionsDto { links:array<OgcApiLinkDto>, collections:array<OgcApiCollectionDto> }
 schema OgcApiExtentDto { spatial:OgcApiSpatialExtentDto }

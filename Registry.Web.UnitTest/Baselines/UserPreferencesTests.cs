@@ -21,6 +21,7 @@ using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.BuildNotifications;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Users;
 using Registry.Web.Test.Support;
@@ -38,6 +39,8 @@ namespace Registry.Web.Test.Baselines;
 /// preferences;</item>
 /// <item>limits: sections, names, depth, size and non-finite numbers are refused with a 400 and write nothing;</item>
 /// <item>a row changed between the load and the save of the <c>Patch</c> is a 409, and nothing is written.</item>
+/// <item>the <c>notifications</c> section, the one the server reads: its values are checked on write, and what is read
+/// back from the column (or is missing, or unknown) gives the build notification setting.</item>
 /// </list>
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~UserPreferencesTests"
 /// </summary>
@@ -688,6 +691,91 @@ public sealed class UserPreferencesTests
     }
 
     // ---- helpers ----
+
+    // ---- the notifications section (the one the server reads) ----
+
+    [TestCase("none", BuildNotificationLevel.None)]
+    [TestCase("all", BuildNotificationLevel.All)]
+    [TestCase("failed", BuildNotificationLevel.Failed)]
+    public async Task Patch_TheBuildNotificationSetting_IsStored_AndReadBackFromTheColumn(string value, BuildNotificationLevel expected)
+    {
+        var userId = await CreateUser();
+        using (var request = Open(userId))
+            await request.Service.Patch(Body($$$"""{"notifications":{"builds":"{{{value}}}"}}"""), default);
+
+        using var fresh = Open(userId);
+        BuildNotificationPreference.Of(new User { Preferences = await fresh.Service.Get() }).ShouldBe(expected);
+    }
+
+    [Test]
+    public async Task TheBuildNotificationSetting_IsNone_ForANewUser_AndAfterTheHubResetsTheSection()
+    {
+        var userId = await CreateUser();
+        using (var request = Open(userId))
+            BuildNotificationPreference.Of(new User { Preferences = await request.Service.Get() }).ShouldBe(BuildNotificationLevel.None);
+
+        using (var request = Open(userId))
+            await request.Service.Patch(Body("""{"notifications":{"builds":"all"}}"""), default);
+        using (var request = Open(userId))
+            await request.Service.Patch(Body("""{"notifications":null}"""), default);
+
+        using var fresh = Open(userId);
+        var preferences = await fresh.Service.Get();
+        preferences.ShouldNotContainKey("notifications");
+        BuildNotificationPreference.Of(new User { Preferences = preferences }).ShouldBe(BuildNotificationLevel.None);
+    }
+
+    [TestCase("""{"notifications":{"builds":"weekly"}}""", "\"weekly\"")]
+    [TestCase("""{"notifications":{"builds":"ALL"}}""", "\"ALL\"")]
+    [TestCase("""{"notifications":{"builds":true}}""", "true")]
+    [TestCase("""{"notifications":{"builds":null}}""", "null")]
+    [TestCase("""{"notifications":{"builds":"all","digest":5}}""", "'digest'")]
+    [TestCase("""{"notifications":"all"}""", "is an object")]
+    [TestCase("""{"notifications":["all"]}""", "is an object")]
+    public async Task Patch_ABadNotificationsSection_IsRefused_AndWritesNothing(string json, string messagePart)
+    {
+        var userId = await CreateUser();
+
+        await ShouldBeRefused(userId, Body(json), messagePart);
+    }
+
+    [Test]
+    public async Task Patch_AnEmptyNotificationsSection_IsAccepted_AndMeansNone()
+    {
+        var userId = await CreateUser();
+        using (var request = Open(userId))
+            await request.Service.Patch(Body("""{"notifications":{}}"""), default);
+
+        using var fresh = Open(userId);
+        BuildNotificationPreference.Of(new User { Preferences = await fresh.Service.Get() }).ShouldBe(BuildNotificationLevel.None);
+    }
+
+    [Test]
+    public void TheBuildNotificationSetting_ReadsUnknownOrMalformedStoredValuesAsNone()
+    {
+        static BuildNotificationLevel Of(object? section) =>
+            BuildNotificationPreference.Of(new User
+            {
+                Preferences = section == null ? new() : new Dictionary<string, object> { ["notifications"] = section }
+            });
+
+        Of(null).ShouldBe(BuildNotificationLevel.None);
+        Of("all").ShouldBe(BuildNotificationLevel.None);
+        Of(new Dictionary<string, object?> { ["builds"] = "sometimes" }).ShouldBe(BuildNotificationLevel.None);
+        Of(new Dictionary<string, object?> { ["builds"] = 1L }).ShouldBe(BuildNotificationLevel.None);
+        Of(new Dictionary<string, object?> { ["builds"] = "failed" }).ShouldBe(BuildNotificationLevel.Failed);
+        // A value set in this request, not yet read back from the column
+        Of(JsonDocument.Parse("""{"builds":"all"}""").RootElement).ShouldBe(BuildNotificationLevel.All);
+    }
+
+    [TestCase(BuildNotificationLevel.None, BuildOutcome.Completed, false)]
+    [TestCase(BuildNotificationLevel.None, BuildOutcome.Failed, false)]
+    [TestCase(BuildNotificationLevel.Failed, BuildOutcome.Completed, false)]
+    [TestCase(BuildNotificationLevel.Failed, BuildOutcome.Failed, true)]
+    [TestCase(BuildNotificationLevel.All, BuildOutcome.Completed, true)]
+    [TestCase(BuildNotificationLevel.All, BuildOutcome.Failed, true)]
+    public void TheBuildNotificationSetting_SaysWhichOutcomesAreSent(BuildNotificationLevel level, BuildOutcome outcome, bool sent) =>
+        level.Wants(outcome).ShouldBe(sent);
 
     private async Task ShouldBeRefused(string userId, Dictionary<string, JsonElement> patch, string messagePart,
         string[]? expectStored = null)

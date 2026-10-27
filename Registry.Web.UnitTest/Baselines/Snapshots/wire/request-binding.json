@@ -367,6 +367,16 @@
       "orgs": null
     }
   },
+  "hub-patch-preferences-notifications": {
+    "type": "Dictionary`2",
+    "input": "{\"notifications\":{\"builds\":\"failed\"}}",
+    "outcome": "bound",
+    "model": {
+      "notifications": {
+        "builds": "failed"
+      }
+    }
+  },
   "stac-search": {
     "type": "StacSearchRequestDto",
     "input": "{\"bbox\":[11.0,45.0,12.5,46.0],\"datetime\":\"2024-01-01T00:00:00Z/..\",\"limit\":10,\"collections\":[\"org/ds\"],\"ids\":[\"a\",\"b\"],\"token\":\"next:1\",\"intersects\":{\"type\":\"Point\",\"coordinates\":[11.5,45.5]}}",
@@ -481,6 +491,15 @@
     "outcome": "bound",
     "model": {
       "to": "admin@example.com"
+    }
+  },
+  "sys-email-template": {
+    "type": "EmailTemplateTextDto",
+    "input": "{\"subject\":\"{{appName}}: {{summary}}\",\"body\":\"Hello {{user}},\\n\\n{{builds}}\\n\\n{{link}}\"}",
+    "outcome": "bound",
+    "model": {
+      "subject": "{{appName}}: {{summary}}",
+      "body": "Hello {{user}},\n\n{{builds}}\n\n{{link}}"
     }
   },
   "sys-update-check-settings": {

@@ -53,6 +53,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IUserSessions, UserSessions>();
         services.AddScoped<UserAccounts>();
         services.AddScoped<UserPreferences>();
+        services.AddScoped<NotificationStatus>();
         services.AddScoped<UserPasswords>();
         services.AddScoped<UserRoles>();
         services.AddScoped<UserDirectory>();

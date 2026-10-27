@@ -1564,6 +1564,80 @@
       "roles": null
     }
   },
+  "Registry.Web.Models.DTO.EmailTemplateDto": {
+    "full": {
+      "name": "Name-text",
+      "title": "Title-text",
+      "subject": "Subject-text",
+      "body": "Body-text",
+      "isDefault": true,
+      "defaultSubject": "DefaultSubject-text",
+      "defaultBody": "DefaultBody-text",
+      "placeholders": [
+        {
+          "name": "Name-text",
+          "description": "Description-text",
+          "inSubject": true
+        }
+      ]
+    },
+    "sparse": {
+      "name": null,
+      "title": null,
+      "subject": null,
+      "body": null,
+      "isDefault": false,
+      "defaultSubject": null,
+      "defaultBody": null,
+      "placeholders": null
+    }
+  },
+  "Registry.Web.Models.DTO.EmailTemplatePlaceholderDto": {
+    "full": {
+      "name": "Name-text",
+      "description": "Description-text",
+      "inSubject": true
+    },
+    "sparse": {
+      "name": null,
+      "description": null,
+      "inSubject": false
+    }
+  },
+  "Registry.Web.Models.DTO.EmailTemplatePreviewDto": {
+    "full": {
+      "subject": "Subject-text",
+      "text": "Text-text",
+      "html": "Html-text"
+    },
+    "sparse": {
+      "subject": null,
+      "text": null,
+      "html": null
+    }
+  },
+  "Registry.Web.Models.DTO.EmailTemplateSummaryDto": {
+    "full": {
+      "name": "Name-text",
+      "title": "Title-text",
+      "isDefault": true
+    },
+    "sparse": {
+      "name": null,
+      "title": null,
+      "isDefault": false
+    }
+  },
+  "Registry.Web.Models.DTO.EmailTemplateTextDto": {
+    "full": {
+      "subject": "Subject-text",
+      "body": "Body-text"
+    },
+    "sparse": {
+      "subject": null,
+      "body": null
+    }
+  },
   "Registry.Web.Models.DTO.EntryDto": {
     "full": {
       "path": "Path-text",
@@ -2468,6 +2542,16 @@
       "domain": null,
       "help": null,
       "value": null
+    }
+  },
+  "Registry.Web.Models.DTO.NotificationStatusDto": {
+    "full": {
+      "canReceiveEmail": true,
+      "reason": "Reason-text"
+    },
+    "sparse": {
+      "canReceiveEmail": false,
+      "reason": null
     }
   },
   "Registry.Web.Models.DTO.Ogc.MvtMetadataDto": {

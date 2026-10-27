@@ -156,6 +156,12 @@ POST /sys/cleanup-jobindices -> Authorize + Authorize(Policy=Admin) [admin] @ Bu
 POST /sys/cleanupbatches -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.CleanupBatches
 POST /sys/cleanupdatasets -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.CleanupDatasets
 GET /sys/config -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.GetConfig
+GET /sys/email/templates -> Authorize + Authorize(Policy=Admin) [admin] @ EmailTemplatesController.GetEmailTemplates
+DELETE /sys/email/templates/{name} -> Authorize + Authorize(Policy=Admin) [admin] @ EmailTemplatesController.ResetEmailTemplate
+GET /sys/email/templates/{name} -> Authorize + Authorize(Policy=Admin) [admin] @ EmailTemplatesController.GetEmailTemplate
+PUT /sys/email/templates/{name} -> Authorize + Authorize(Policy=Admin) [admin] @ EmailTemplatesController.PutEmailTemplate
+POST /sys/email/templates/{name}/preview -> Authorize + Authorize(Policy=Admin) [admin] @ EmailTemplatesController.PreviewEmailTemplate
+POST /sys/email/templates/{name}/test -> Authorize + Authorize(Policy=Admin) [admin] @ EmailTemplatesController.SendEmailTemplateTest
 POST /sys/email/test -> Authorize + Authorize(Policy=Admin) [admin] @ EmailController.SendTestEmail
 GET /sys/features -> AllowAnonymous + Authorize [anonymous] @ FeaturesController.GetFeatures
 POST /sys/fix-invalid-slugs -> Authorize + Authorize(Policy=Admin) [admin] @ SystemController.FixInvalidSlugs
@@ -186,6 +192,7 @@ POST /users/changepwd -> Authorize [authenticated] @ UsersController.ChangePassw
 GET /users/detailed -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.GetAllDetailed
 POST /users/logout -> AllowAnonymous + Authorize [anonymous] @ UsersController.Logout
 GET /users/meta -> Authorize [authenticated] @ UsersController.GetCurrentUserMeta
+GET /users/notifications/status -> Authorize [authenticated] @ UsersController.GetNotificationStatus
 GET /users/preferences -> Authorize [authenticated] @ UsersController.GetPreferences
 PATCH /users/preferences -> Authorize [authenticated] @ UsersController.PatchPreferences
 GET /users/roles -> Authorize [authenticated] @ UsersController.GetRoles

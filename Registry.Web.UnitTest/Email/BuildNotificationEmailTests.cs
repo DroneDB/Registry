@@ -1,0 +1,215 @@
+#nullable enable
+using System;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using NUnit.Framework;
+using Registry.Web.Models.Configuration;
+using Registry.Web.Models.Email;
+using Registry.Web.Services.BuildNotifications;
+using Registry.Web.Services.Email;
+using Registry.Web.Services.Email.Templates;
+using Registry.Web.Test.UpdateCheck;
+using Shouldly;
+
+namespace Registry.Web.Test.Email;
+
+/// <summary>
+/// The build notification e-mail composed with the real Razor renderer, from the built-in text and from texts an
+/// administrator could write: both parts, the escaping of every value, the links, and the composer that reads the
+/// saved text.
+/// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~BuildNotificationEmailTests"
+/// </summary>
+[TestFixture]
+public class BuildNotificationEmailTests
+{
+    private const string BaseUrl = "https://hub.example.org";
+    private static readonly EmailAddress Jane = new("jane@example.com", "jane");
+    private static readonly DateTime Now = new(2026, 10, 27, 10, 0, 0, DateTimeKind.Utc);
+
+    private static EmailComposer Composer(string? externalUrl = BaseUrl) =>
+        new(new ServiceCollection().BuildServiceProvider(), NullLoggerFactory.Instance,
+            Microsoft.Extensions.Options.Options.Create(new HubOptions { AppName = "My Hub" }),
+            Microsoft.Extensions.Options.Options.Create(new HttpHostOptions { ExternalUrlOverride = externalUrl }));
+
+    private static BuildNotificationModel Model(string error = "Out of memory", string ds = "site-a") =>
+        new("jane",
+        [
+            new BuildNotificationLine("acme", ds, "ortho.tif", BuildOutcome.Completed, null, Now),
+            new BuildNotificationLine("acme", ds, "cloud.laz", BuildOutcome.Failed, error, Now.AddMinutes(1))
+        ]);
+
+    private static ParsedEmailTemplate Text(EmailTemplateText? text = null) =>
+        ParsedEmailTemplate.Parse(BuildNotificationEmailTemplate.Instance, text ?? BuildNotificationEmailTemplate.Instance.BuiltInText);
+
+    private static Task<EmailMessage> Compose(BuildNotificationModel model, ParsedEmailTemplate? text = null, string? externalUrl = BaseUrl) =>
+        Composer(externalUrl).ComposeAsync(BuildNotificationEmailTemplate.Instance,
+            new BuildNotificationEmailModel(model, text ?? Text()), [Jane]);
+
+    [Test]
+    public async Task BuiltInText_SubjectAndTextPart()
+    {
+        var message = await Compose(Model());
+
+        message.Subject.ShouldBe("My Hub: 1 build failed, 1 completed");
+        message.TextBody.ShouldBe(
+            """
+            Hello jane,
+
+            1 build failed, 1 completed on My Hub.
+
+            - Failed: cloud.laz (acme/site-a)
+              Reason: Out of memory
+            - Completed: ortho.tif (acme/site-a)
+
+            https://hub.example.org/r/acme/site-a
+
+            To change which build e-mails you get, open your notification settings: https://hub.example.org/r?preferences=notifications
+
+            -- 
+            My Hub
+            https://hub.example.org/
+
+            """.ReplaceLineEndings("\n"));
+    }
+
+    [Test]
+    public async Task BuiltInText_HtmlPart_HasTheTable_TheButton_AndTheOptOutLink()
+    {
+        var html = (await Compose(Model())).HtmlBody.ShouldNotBeNull();
+
+        html.ShouldSatisfyAllConditions(
+            h => h.ShouldContain("<title>My Hub: 1 build failed, 1 completed</title>"),
+            h => h.ShouldContain("Hello jane,"),
+            h => h.ShouldContain(">Dataset</th>"),
+            h => h.ShouldContain("cloud.laz"),
+            h => h.ShouldContain("Out of memory"),
+            // Fixed semantic colours, not the accent
+            h => h.ShouldContain($"color:{EmailStyles.Failed};"),
+            h => h.ShouldContain($"color:{EmailStyles.Completed};"),
+            // One dataset: the button opens it, in the accent with readable text
+            h => h.ShouldContain($"bgcolor=\"{EmailStyles.BrandBlue}\""),
+            h => h.ShouldMatch("href=\"https://hub.example.org/r/acme/site-a\" style=\"display:inline-block;[^\"]*color:#ffffff;"),
+            h => h.ShouldContain(">Open the dataset</a>"),
+            h => h.ShouldContain("href=\"https://hub.example.org/r?preferences=notifications\""));
+    }
+
+    [Test]
+    public async Task SeveralDatasets_TheLinkIsTheHub()
+    {
+        var model = Model() with
+        {
+            Builds = [.. Model().Builds, new BuildNotificationLine("acme", "site-b", "dem.tif", BuildOutcome.Completed, null, Now)]
+        };
+
+        var message = await Compose(model);
+
+        message.HtmlBody.ShouldNotBeNull().ShouldContain(">Open My Hub</a>");
+        message.TextBody.ShouldContain("\n\nhttps://hub.example.org/\n\n");
+        message.Subject.ShouldBe("My Hub: 1 build failed, 2 completed");
+    }
+
+    [Test]
+    public async Task WithoutAPublicUrl_ThereIsNoLink_AndTheParagraphsAroundTheLinksAreLeftOut()
+    {
+        var message = await Compose(Model(), externalUrl: null);
+
+        message.HtmlBody.ShouldNotBeNull().ShouldNotContain("href=");
+        message.HtmlBody.ShouldNotContain("notification settings");
+        message.HtmlBody.ShouldContain("acme/site-a");
+        message.TextBody.ShouldNotContain("http");
+        message.TextBody.ShouldNotContain("notification settings");
+        message.TextBody.ShouldContain("- Failed: cloud.laz (acme/site-a)");
+    }
+
+    [Test]
+    public async Task AdministratorText_IsEncoded_InTheHtmlPart()
+    {
+        var text = Text(new EmailTemplateText("<b>{{summary}}</b>",
+            "<script>alert(1)</script> <a href=\"javascript:alert(2)\">x</a> {{user}}\n\n<img src=x onerror=alert(3)>"));
+
+        var message = await Compose(Model(), text);
+
+        message.HtmlBody.ShouldNotBeNull().ShouldSatisfyAllConditions(
+            h => h.ShouldNotContain("<script"),
+            h => h.ShouldNotContain("<img src=x"),
+            h => h.ShouldNotContain("href=\"javascript:"),
+            h => h.ShouldContain("&lt;script&gt;alert(1)&lt;/script&gt;"),
+            h => h.ShouldContain("&lt;img src=x onerror=alert(3)&gt;"),
+            h => h.ShouldContain("<title>&lt;b&gt;1 build failed, 1 completed&lt;/b&gt;</title>"));
+        // The plain part and the subject are text already
+        message.Subject.ShouldBe("<b>1 build failed, 1 completed</b>");
+        message.TextBody.ShouldStartWith("<script>alert(1)</script>");
+    }
+
+    [Test]
+    public async Task BuildErrorsAndNames_AreEncoded_AndNeverLinks()
+    {
+        var model = Model(error: "<script>steal()</script> javascript:alert(1)", ds: "site-a") with { UserName = "<i>jane</i>" };
+
+        var html = (await Compose(model)).HtmlBody.ShouldNotBeNull();
+
+        html.ShouldNotContain("<script>steal()");
+        html.ShouldContain("&lt;script&gt;steal()&lt;/script&gt; javascript:alert(1)");
+        html.ShouldNotContain("<i>jane</i>");
+        html.ShouldNotContain("href=\"javascript:");
+    }
+
+    [Test]
+    public async Task TheBuiltInText_AndTheSameTextSavedByAnAdministrator_RenderTheSame()
+    {
+        var builtIn = BuildNotificationEmailTemplate.Instance.BuiltInText;
+
+        var asDefault = await Compose(Model());
+        var asCustom = await Compose(Model(), Text(builtIn with { }));
+
+        asCustom.ShouldBe(asDefault);
+    }
+
+    [Test]
+    public async Task ALinkInsideText_IsAnAnchorShowingTheAddress_NotAButton()
+    {
+        var html = (await Compose(Model(), Text(new EmailTemplateText("s", "See {{link}} or {{preferencesLink}}")))).HtmlBody!;
+
+        html.ShouldContain(">https://hub.example.org/r/acme/site-a</a>");
+        html.ShouldNotContain("display:inline-block");
+    }
+
+    [Test]
+    public async Task Composer_UsesTheSavedText_AndFallsBackToTheBuiltInOne_WhenItIsNoLongerValid()
+    {
+        using var storage = new TempStorage();
+        var store = new EditableEmailTemplateStore(storage.Storage, UpdateCheckTestKit.Disk, NullLogger<EditableEmailTemplateStore>.Instance);
+        var templates = new EditableEmailTemplates([BuildNotificationEmailTemplate.Instance], store, NullLogger<EditableEmailTemplates>.Instance);
+        var composer = new BuildNotificationComposer(Composer(), templates);
+
+        (await composer.ComposeAsync(Jane, Model())).Subject.ShouldBe("My Hub: 1 build failed, 1 completed");
+
+        store.Set(BuildNotificationEmailTemplate.TemplateName, new EmailTemplateText("{{failedCount}} failed", "Hi {{user}}"));
+        var custom = await composer.ComposeAsync(Jane, Model());
+        custom.Subject.ShouldBe("1 failed");
+        custom.To.ShouldHaveSingleItem().ShouldBe(Jane);
+
+        // A text saved by an older version with a placeholder this one does not know
+        store.Set(BuildNotificationEmailTemplate.TemplateName, new EmailTemplateText("{{gone}}", "Hi"));
+        (await composer.ComposeAsync(Jane, Model())).Subject.ShouldBe("My Hub: 1 build failed, 1 completed");
+        templates.Current(BuildNotificationEmailTemplate.Instance).IsDefault.ShouldBeTrue();
+
+        store.Remove(BuildNotificationEmailTemplate.TemplateName);
+        store.Get(BuildNotificationEmailTemplate.TemplateName).ShouldBeNull();
+    }
+
+    [Test]
+    public void Summary_CountsInWords()
+    {
+        var failed = new BuildNotificationLine("o", "d", "a", BuildOutcome.Failed, "x", Now);
+        var done = failed with { Outcome = BuildOutcome.Completed, Error = null };
+
+        new BuildNotificationModel("u", [failed]).Summary.ShouldBe("1 build failed");
+        new BuildNotificationModel("u", [failed, failed]).Summary.ShouldBe("2 builds failed");
+        new BuildNotificationModel("u", [done, done, done]).Summary.ShouldBe("3 builds completed");
+        new BuildNotificationModel("u", [failed, failed, done, done, done]).Summary.ShouldBe("2 builds failed, 3 completed");
+        Regex.IsMatch(new BuildNotificationModel("u", [done, failed]).Ordered[0].Outcome.ToString(), "Failed").ShouldBeTrue();
+    }
+}

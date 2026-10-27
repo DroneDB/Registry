@@ -14,9 +14,11 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Users;
 
 /// <summary>
-/// The signed-in user's Hub preferences (<see cref="User.Preferences"/>): free-form JSON sections the server never
-/// reads, with structural limits only. It writes that one column and never touches <see cref="User.Metadata"/> or
-/// the roles, so a section named "roles" is just a section.
+/// The signed-in user's Hub preferences (<see cref="User.Preferences"/>): JSON sections with structural limits. The
+/// server reads one section, <c>notifications</c> (which build e-mails the user wants, see
+/// <see cref="BuildNotificationPreference"/>), and checks its shape when a patch sends it; every other section is
+/// free-form. It writes that one column and never touches <see cref="User.Metadata"/> or the roles, so a section named
+/// "roles" is just a section.
 /// </summary>
 public sealed partial class UserPreferences
 {
@@ -101,6 +103,10 @@ public sealed partial class UserPreferences
 
             if (CheckedDepth(value, section) > MaxDepth)
                 throw new BadRequestException($"Section '{section}' is nested deeper than {MaxDepth} levels");
+
+            // The section the server acts on: a bad value must be refused now, not silently read as "none" later
+            if (section == BuildNotificationPreference.Section && value.ValueKind != JsonValueKind.Null)
+                BuildNotificationPreference.Validate(value);
         }
     }
 

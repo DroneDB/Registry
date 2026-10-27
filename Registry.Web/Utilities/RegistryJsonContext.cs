@@ -3,6 +3,7 @@ using System.Text.Json;
 using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Models.DTO;
 using Registry.Web.Models;
+using Registry.Web.Services.Email;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.UpdateCheck;
 
@@ -69,6 +70,11 @@ namespace Registry.Web.Utilities;
 [JsonSerializable(typeof(DeltaDto))]
 [JsonSerializable(typeof(DownloadPackageDto))]
 [JsonSerializable(typeof(EditUserRequestDto))]
+[JsonSerializable(typeof(EmailTemplateDto))]
+[JsonSerializable(typeof(EmailTemplatePlaceholderDto))]
+[JsonSerializable(typeof(EmailTemplatePreviewDto))]
+[JsonSerializable(typeof(EmailTemplateSummaryDto))]
+[JsonSerializable(typeof(EmailTemplateTextDto))]
 [JsonSerializable(typeof(EntryDto))]
 [JsonSerializable(typeof(FeaturesDto))]
 [JsonSerializable(typeof(FileDescriptorDto))]
@@ -105,6 +111,7 @@ namespace Registry.Web.Utilities;
 [JsonSerializable(typeof(MvtMetadataDto))]
 [JsonSerializable(typeof(MvtVectorLayerDto))]
 [JsonSerializable(typeof(NodeOdxOptionDto))]
+[JsonSerializable(typeof(NotificationStatusDto))]
 [JsonSerializable(typeof(OgcApiCollectionDto))]
 [JsonSerializable(typeof(OgcApiCollectionsDto))]
 [JsonSerializable(typeof(OgcApiExtentDto))]
@@ -196,4 +203,6 @@ namespace Registry.Web.Utilities;
 [JsonSerializable(typeof(VerifyImportRequestDto))]
 [JsonSerializable(typeof(VolumeCalculationRequestDto))]
 [JsonSerializable(typeof(JsonElement))]
+// The texts of the editable e-mails (EditableEmailTemplateStore)
+[JsonSerializable(typeof(System.Collections.Generic.Dictionary<string, EmailTemplateText>))]
 public sealed partial class RegistryJsonContext : JsonSerializerContext;
