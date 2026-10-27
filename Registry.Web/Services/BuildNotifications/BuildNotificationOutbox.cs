@@ -83,6 +83,18 @@ public sealed class BuildNotificationOutbox
             n.PendingKey == line.PendingKey ||
             (line.RequestJobId != null && n.RequestJobId == line.RequestJobId && n.Outcome == line.Outcome), ct);
 
+    /// <summary>
+    /// Makes the lines that answer the job <paramref name="jobId"/> answer no request any more: the job runs again from
+    /// its failure (a user's retry), and the end of that run is a new request's news, even when it is the outcome already
+    /// sent. A line still waiting keeps its <see cref="BuildNotification.PendingKey"/>, so the same news is not added twice.
+    /// </summary>
+    public Task RenewRequestAsync(string jobId, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(jobId);
+        return _db.BuildNotifications.Where(n => n.RequestJobId == jobId)
+            .ExecuteUpdateAsync(s => s.SetProperty(n => n.RequestJobId, (string?)null), ct);
+    }
+
     /// <summary>Whether <paramref name="userId"/> has an unsent line other than <paramref name="exceptId"/> (claimed or not).</summary>
     public Task<bool> HasOtherUnsentAsync(string userId, long exceptId, CancellationToken ct) =>
         _db.BuildNotifications.AsNoTracking()

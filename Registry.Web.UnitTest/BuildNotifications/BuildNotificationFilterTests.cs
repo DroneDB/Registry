@@ -97,6 +97,8 @@ public class BuildNotificationFilterTests
         services.AddSingleton(_recorder.Object);
         services.AddSingleton<DatasetSweep>();
         services.AddSingleton<IBuildOutcomeClassifier, BuildOutcomeClassifier>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<BuildNotificationOutbox>();
         services.AddScoped<FinishedBuildReporter>();
         _provider = services.BuildServiceProvider();
         _filter = new BuildNotificationFilter(_provider.GetRequiredService<IServiceScopeFactory>(),
@@ -116,7 +118,8 @@ public class BuildNotificationFilterTests
 
     private static Job BuildJob() => Job.FromExpression<DdbJobs>(j => j.Build(Org, Guid.Empty, Path, false, null));
 
-    private void Apply(Job job, IState state, string? userId = User, string? hash = Hash, string? path = null)
+    private void Apply(Job job, IState state, string? userId = User, string? hash = Hash, string? path = null,
+        string? oldState = null)
     {
         var connection = new Mock<JobStorageConnection>();
         connection.Setup(c => c.GetJobParameter(JobId, JobParamKeys.OrgSlug)).Returns(Org);
@@ -125,7 +128,7 @@ public class BuildNotificationFilterTests
         connection.Setup(c => c.GetJobParameter(JobId, JobParamKeys.UserId)).Returns(userId!);
         connection.Setup(c => c.GetJobParameter(JobId, JobParamKeys.Path)).Returns(path!);
         var context = new ApplyStateContext(new InMemoryStorage(), connection.Object, Mock.Of<IWriteOnlyTransaction>(),
-            new BackgroundJob(JobId, job, DateTime.UtcNow), state, ProcessingState.StateName);
+            new BackgroundJob(JobId, job, DateTime.UtcNow), state, oldState ?? ProcessingState.StateName);
 
         _filter.OnStateApplied(context, Mock.Of<IWriteOnlyTransaction>());
     }
@@ -297,6 +300,81 @@ public class BuildNotificationFilterTests
         Apply(BuildJob(), new ScheduledState(TimeSpan.FromMinutes(1)));
 
         _reports.ShouldBeEmpty();
+    }
+
+    // --- A user's retry of the same job ---
+
+    private BuildNotificationOutbox Outbox() => new(_context, TimeProvider.System);
+
+    private static BuildReport FailedReport() =>
+        new(Org, Ds, Path, Hash, BuildOutcome.Failed, "it broke", new BuildRequest(User, JobId));
+
+    private static readonly BuildRequester Requester = new(User, JobId);
+
+    // The failure of the job is told and sent: its request is answered
+    private async Task FailureSent()
+    {
+        var outbox = Outbox();
+        (await outbox.AddAsync(FailedReport(), Requester, CancellationToken.None)).ShouldNotBeNull();
+        (await outbox.ClaimAsync(User, "digest", CancellationToken.None)).ShouldHaveSingleItem();
+        await outbox.MarkSentAsync("digest", CancellationToken.None);
+        (await outbox.AddAsync(FailedReport(), Requester, CancellationToken.None))
+            .ShouldBeNull("the same request is answered once (a retry chain giving up again repeats nothing)");
+    }
+
+    [Test]
+    public async Task AFailedBuildRunAgain_IsANewRequest_SoItsNextFailureIsToldAgain()
+    {
+        await FailureSent();
+
+        // The retry of the task (TaskRetry: the same job id, queued again from Failed)
+        Apply(BuildJob(), new EnqueuedState(), oldState: FailedState.StateName);
+
+        (await Outbox().AddAsync(FailedReport(), Requester, CancellationToken.None)).ShouldNotBeNull();
+    }
+
+    [Test]
+    public async Task AFailedBuildTaskRunAgain_IsANewRequest()
+    {
+        await FailureSent();
+
+        Apply(Job.FromExpression<HeavyTaskJobWrapper>(w => w.Run(HeavyToolIds.Build, "1", "{}", null!, CancellationToken.None)),
+            new ScheduledState(TimeSpan.FromMinutes(1)), path: Path, oldState: FailedState.StateName);
+
+        (await Outbox().AddAsync(FailedReport(), Requester, CancellationToken.None)).ShouldNotBeNull();
+    }
+
+    [TestCase("Processing", TestName = "An attempt Hangfire retries stays the same request")]
+    [TestCase("Scheduled", TestName = "The retry of an attempt, queued when due, stays the same request")]
+    public async Task ARunThatDoesNotComeFromAFailure_KeepsTheRequest(string oldState)
+    {
+        await FailureSent();
+
+        Apply(BuildJob(), oldState == ProcessingState.StateName ? new ScheduledState(TimeSpan.FromMinutes(1)) : new EnqueuedState(),
+            oldState: oldState);
+
+        (await Outbox().AddAsync(FailedReport(), Requester, CancellationToken.None)).ShouldBeNull();
+    }
+
+    [Test]
+    public async Task AFailedJobThatBuildsNoEntry_RunAgain_ChangesNothing()
+    {
+        await FailureSent();
+
+        Apply(Job.FromExpression<DdbJobs>(j => j.Build(Org, Guid.Empty, null, false, null)), new EnqueuedState(),
+            oldState: FailedState.StateName);
+
+        (await Outbox().AddAsync(FailedReport(), Requester, CancellationToken.None)).ShouldBeNull();
+    }
+
+    [Test]
+    public async Task AFailedBuildDeleted_IsNotRunAgain_AndKeepsTheRequest()
+    {
+        await FailureSent();
+
+        Apply(BuildJob(), new DeletedState(), oldState: FailedState.StateName);
+
+        (await Outbox().AddAsync(FailedReport(), Requester, CancellationToken.None)).ShouldBeNull();
     }
 
     // --- Guards ---

@@ -25,16 +25,19 @@ public sealed class FinishedBuildReporter
     private readonly IDdbManager _ddbManager;
     private readonly IBuildOutcomeClassifier _classifier;
     private readonly IBuildNotificationRecorder _recorder;
+    private readonly BuildNotificationOutbox _outbox;
     private readonly ILogger<FinishedBuildReporter> _logger;
 
     public FinishedBuildReporter(IEmailService email, DatasetSweep datasets, IDdbManager ddbManager,
-        IBuildOutcomeClassifier classifier, IBuildNotificationRecorder recorder, ILogger<FinishedBuildReporter> logger)
+        IBuildOutcomeClassifier classifier, IBuildNotificationRecorder recorder, BuildNotificationOutbox outbox,
+        ILogger<FinishedBuildReporter> logger)
     {
         _email = email ?? throw new ArgumentNullException(nameof(email));
         _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _classifier = classifier ?? throw new ArgumentNullException(nameof(classifier));
         _recorder = recorder ?? throw new ArgumentNullException(nameof(recorder));
+        _outbox = outbox ?? throw new ArgumentNullException(nameof(outbox));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -65,6 +68,13 @@ public sealed class FinishedBuildReporter
         await _recorder.RecordAsync(new BuildReport(build.OrgSlug, build.DsSlug, build.Path, classified.Hash,
             classified.Outcome, error, new BuildRequest(build.UserId, build.JobId)), ct).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// The failed entry build <paramref name="jobId"/> runs again (a user's retry keeps the job id): its end answers a new
+    /// request, so it is told even when it repeats the outcome already sent. Done whether e-mail is on or not, so lines
+    /// kept from a time it was on never hide the end of the new run.
+    /// </summary>
+    public Task ReportRunAgainAsync(string jobId, CancellationToken ct) => _outbox.RenewRequestAsync(jobId, ct);
 
     /// <summary>
     /// Reports the pending builds of <paramref name="orgSlug"/>/<paramref name="dsSlug"/> whose automatic retries ran out

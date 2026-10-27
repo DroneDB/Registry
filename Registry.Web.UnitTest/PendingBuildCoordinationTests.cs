@@ -279,6 +279,7 @@ public class PendingBuildCoordinationTests
         using var provider = new ServiceCollection().AddLogging().AddSingleton(_service).AddSingleton(_context)
             .AddSingleton<DatasetSweep>().AddSingleton(_manager.Object).AddSingleton(email.Object)
             .AddSingleton(recorder.Object).AddSingleton(Mock.Of<IBuildOutcomeClassifier>())
+            .AddSingleton(TimeProvider.System).AddScoped<BuildNotificationOutbox>()
             .AddScoped<FinishedBuildReporter>().BuildServiceProvider();
         var filter = new BuildRetrySchedulerFilter(provider.GetRequiredService<IServiceScopeFactory>(),
             Mock.Of<ILogger<BuildRetrySchedulerFilter>>());

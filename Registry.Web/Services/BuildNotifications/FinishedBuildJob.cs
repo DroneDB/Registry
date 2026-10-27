@@ -49,25 +49,33 @@ public sealed record FinishedBuildJob(
         if (job?.Job == null || newState is not (SucceededState or FailedState))
             return null;
 
-        string? path;
-        if (DdbJobDescriptor.Of(job.Job) is { } descriptor)
-        {
-            if (!descriptor.BuildsEntry)
-                return null;
-            path = descriptor.Path;
-        }
-        else if (IsBuildTask(job.Job))
-            path = connection.GetJobParameter(job.Id, JobParamKeys.Path);
-        else
+        var path = EntryOf(job, connection);
+        if (string.IsNullOrWhiteSpace(path))
             return null;
 
         var orgSlug = connection.GetJobParameter(job.Id, JobParamKeys.OrgSlug);
         var dsSlug = connection.GetJobParameter(job.Id, JobParamKeys.DsSlug);
-        if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(orgSlug) || string.IsNullOrWhiteSpace(dsSlug))
+        if (string.IsNullOrWhiteSpace(orgSlug) || string.IsNullOrWhiteSpace(dsSlug))
             return null;
 
         return new FinishedBuildJob(job.Id, orgSlug, dsSlug, path, NullIfBlank(connection.GetJobParameter(job.Id, JobParamKeys.Hash)),
             NullIfBlank(connection.GetJobParameter(job.Id, JobParamKeys.UserId)), (newState as FailedState)?.Exception);
+    }
+
+    /// <summary>Whether <paramref name="job"/> builds one entry, whatever its state: a job whose end <see cref="Of"/> reports.</summary>
+    public static bool BuildsEntry(BackgroundJob? job, IStorageConnection connection)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        return job?.Job != null && !string.IsNullOrWhiteSpace(EntryOf(job, connection));
+    }
+
+    // The entry the job builds; null when it builds none (another job, the whole dataset, a task without a path)
+    private static string? EntryOf(BackgroundJob job, IStorageConnection connection)
+    {
+        if (DdbJobDescriptor.Of(job.Job) is { } descriptor)
+            return descriptor.BuildsEntry ? descriptor.Path : null;
+
+        return IsBuildTask(job.Job) ? connection.GetJobParameter(job.Id, JobParamKeys.Path) : null;
     }
 
     // HeavyTaskJobWrapper.Run(toolId, toolVersion, requestJson, ...)

@@ -40,7 +40,8 @@ public class BuildNotification : IDatasetSlugKeyed
     /// <summary>
     /// The job of the request the line answers: the build job itself, or, for an automatic retry, the user's build it
     /// retries. One line per request and outcome (a unique key), so a retry chain that gives up again, or a rebuild of the
-    /// same content, does not repeat it.
+    /// same content, does not repeat it. Cleared when that job is run again from its failure (a user's retry): the run
+    /// is a new request, whose end is news again.
     /// </summary>
     public string? RequestJobId { get; set; }
 
