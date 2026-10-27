@@ -4,6 +4,7 @@ using Hangfire.States;
 using Hangfire.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Registry.Web.Filters;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
@@ -13,19 +14,13 @@ namespace Registry.Web.Services.Adapters;
 /// </summary>
 public sealed class JobIndexStateFilter(IServiceScopeFactory scopes, ILogger<JobIndexStateFilter> log) : IApplyStateFilter
 {
-    public void OnStateApplied(ApplyStateContext context, IWriteOnlyTransaction transaction)
-    {
-        try
+    public void OnStateApplied(ApplyStateContext context, IWriteOnlyTransaction transaction) =>
+        StateFilterGuard.Run(log, context, "updating the job index", () =>
         {
             using var scope = scopes.CreateScope();
             var writer = scope.ServiceProvider.GetRequiredService<IJobIndexWriter>();
             writer.UpdateStateAsync(context.BackgroundJob.Id, context.NewState.Name, DateTime.UtcNow).GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            log.LogError(ex, "JobIndexStateFilter.OnStateApplied: error while updating state for job {JobId}", context.BackgroundJob.Id);
-        }
-    }
+        });
 
     public void OnStateUnapplied(ApplyStateContext context, IWriteOnlyTransaction transaction)
     {

@@ -16,7 +16,7 @@ Mock<IOptions<AppSettings>> in tests	0
 Test helpers in Registry.Common/Test	0
 Category string literals (use TestCategories)	0
 Controller log+rethrow catch blocks	0
-catch (Exception ...) total	166
+catch (Exception ...) total	164
 new ErrorResponse( in controllers	0
 ErrorResponse references	0
 Controller entry debug traces	0

@@ -110,11 +110,16 @@ public static class RegistryJobsServiceCollectionExtensions
         options.Queues = JobQueues.Light;
     }
 
-    /// <summary>The filters every host installs, in order (<see cref="InstallJobFilters"/>).</summary>
+    /// <summary>
+    /// The filters every host installs, in order (<see cref="InstallJobFilters"/>): Hangfire runs the state filters in
+    /// this order, so <see cref="JobIndexStateFilter"/> has written the job's state before the build filters read the
+    /// job index.
+    /// </summary>
     internal static readonly Type[] JobFilterTypes =
     [
         typeof(JobIndexStateFilter), typeof(BuildJobFailureFilter), typeof(BuildLogCaptureFilter),
-        typeof(BuildRetrySchedulerFilter), typeof(BuildQueueRoutingFilter), typeof(JobOperationFilter)
+        typeof(BuildRetrySchedulerFilter), typeof(BuildNotificationFilter), typeof(BuildQueueRoutingFilter),
+        typeof(JobOperationFilter)
     ];
 
     /// <summary>

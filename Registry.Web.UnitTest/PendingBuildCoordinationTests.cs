@@ -28,6 +28,7 @@ using Registry.Web.Filters;
 using Registry.Web.Models;
 using Registry.Web.Services;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.BuildNotifications;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Shouldly;
@@ -247,6 +248,49 @@ public class PendingBuildCoordinationTests
         await _service.ProcessPendingBuilds(null, CancellationToken.None);
         _enqueued.ShouldBe(1);
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(0);
+    }
+
+    [Test]
+    public async Task TheSpentBudget_ReturnsThePendingEntries_WhoseFailureIsNowFinal()
+    {
+        PendingBuildInfo[] pending = [PendingMarkers.Of("a.laz", "a-hash"), PendingMarkers.Of("b.obj", "b-hash")];
+        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns(pending);
+
+        Seed(11);
+        (await _service.ScheduleRetryIfPending(Org, Ds, null, null, null)).ShouldBeEmpty("a retry is left");
+        _statuses["retry-1"] = JobStatus.Succeeded;
+
+        (await _service.ScheduleRetryIfPending(Org, Ds, "retry-1", null, null)).ShouldBe(pending);
+        _delays.Count.ShouldBe(1);
+    }
+
+    [Test]
+    public void TheRetryFilter_ReportsTheEntriesWhoseRetriesRanOut_AsFailedForTheirRequester()
+    {
+        Seed(12);
+        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingMarkers.Of("a.laz", "a-hash", 0, "a.prj")]);
+        var reports = new List<BuildReport>();
+        var recorder = new Mock<IBuildNotificationRecorder>();
+        recorder.Setup(r => r.RecordAsync(It.IsAny<BuildReport>(), It.IsAny<CancellationToken>()))
+            .Callback<BuildReport, CancellationToken>((report, _) => reports.Add(report))
+            .Returns(Task.CompletedTask);
+        var email = new Mock<IEmailService>();
+        email.SetupGet(e => e.IsEnabled).Returns(true);
+        using var provider = new ServiceCollection().AddLogging().AddSingleton(_service).AddSingleton(_context)
+            .AddSingleton<DatasetSweep>().AddSingleton(_manager.Object).AddSingleton(email.Object)
+            .AddSingleton(recorder.Object).AddSingleton(Mock.Of<IBuildOutcomeClassifier>())
+            .AddScoped<FinishedBuildReporter>().BuildServiceProvider();
+        var filter = new BuildRetrySchedulerFilter(provider.GetRequiredService<IServiceScopeFactory>(),
+            Mock.Of<ILogger<BuildRetrySchedulerFilter>>());
+
+        filter.OnStateApplied(FilterContext("unused", "unused", new SucceededState(null, 0, 0),
+            Job.FromExpression<DdbJobs>(j => j.BuildPending(Org, Guid.Empty, null))), Mock.Of<IWriteOnlyTransaction>());
+
+        // Retried as the build service: the recorder finds the user whose build of that content failed
+        reports.ShouldHaveSingleItem().ShouldBe(new BuildReport(Org, Ds, "a.laz", "a-hash",
+            BuildOutcome.Failed, "Not built after the automatic retries; missing: a.prj",
+            new BuildRequest(MagicStrings.AutoBuildServiceUserId, null)));
+        _delays.ShouldBeEmpty();
     }
 
     [Test]

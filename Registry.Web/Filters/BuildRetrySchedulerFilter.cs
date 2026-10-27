@@ -1,10 +1,11 @@
 #nullable enable
-using System;
+using System.Threading;
 using Hangfire.States;
 using Hangfire.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.BuildNotifications;
 using Registry.Web.Services.Jobs;
 
 namespace Registry.Web.Filters;
@@ -15,15 +16,15 @@ namespace Registry.Web.Filters;
 /// <see cref="DdbJobs.BuildPending"/>, either shape: <see cref="DdbJobDescriptor"/>) reaches a terminal state, this filter asks <see cref="BuildPendingService"/> whether the affected
 /// dataset still has pending builds and, if so, self-schedules a single delayed
 /// retry with exponential backoff. When nothing remains pending the chain stops,
-/// so idle datasets generate zero recurring Hangfire churn.
+/// so idle datasets generate zero recurring Hangfire churn. When the retry budget runs out, the pending entries failed for
+/// good: their requesters' build notifications get them (<see cref="FinishedBuildReporter.ReportGivenUpAsync"/>).
 /// </summary>
 public sealed class BuildRetrySchedulerFilter(
     IServiceScopeFactory scopes,
     ILogger<BuildRetrySchedulerFilter> log) : IApplyStateFilter
 {
-    public void OnStateApplied(ApplyStateContext context, IWriteOnlyTransaction transaction)
-    {
-        try
+    public void OnStateApplied(ApplyStateContext context, IWriteOnlyTransaction transaction) =>
+        StateFilterGuard.Run(log, context, "scheduling the pending-build retry", () =>
         {
             if (context.NewState is not SucceededState && context.NewState is not FailedState) return;
 
@@ -55,16 +56,14 @@ public sealed class BuildRetrySchedulerFilter(
                 failedHash = conn.GetJobParameter(jobId, JobParamKeys.Hash);
                 if (string.IsNullOrWhiteSpace(failedPath) || string.IsNullOrWhiteSpace(failedHash)) return;
             }
-            buildPending.ScheduleRetryIfPending(orgSlug, dsSlug, jobId, failedPath, failedHash, context.Storage)
-                .GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            log.LogError(ex,
-                "BuildRetrySchedulerFilter.OnStateApplied: error scheduling pending-build retry for job {JobId}",
-                context.BackgroundJob?.Id);
-        }
-    }
+            var givenUp = buildPending.ScheduleRetryIfPending(orgSlug, dsSlug, jobId, failedPath, failedHash,
+                context.Storage).GetAwaiter().GetResult();
+
+            // The retries of these entries ran out: their failure is final, so their requesters are told now
+            if (givenUp.Count > 0)
+                scope.ServiceProvider.GetRequiredService<FinishedBuildReporter>()
+                    .ReportGivenUpAsync(orgSlug, dsSlug, givenUp, CancellationToken.None).GetAwaiter().GetResult();
+        });
 
     public void OnStateUnapplied(ApplyStateContext context, IWriteOnlyTransaction transaction)
     {

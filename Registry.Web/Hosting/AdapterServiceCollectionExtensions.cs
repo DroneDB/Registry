@@ -58,17 +58,18 @@ public static class AdapterServiceCollectionExtensions
                 options.Url = thumbnails.Value.RemoteThumbnailGeneratorUrl!;
                 options.Token = thumbnails.Value.ThumbnailGeneratorToken;
             });
-            services.AddSingleton<RemoteThumbnailGenerator>();
-            services.AddSingleton<IThumbnailGenerator>(sp => new GatedThumbnailGenerator(
-                sp.GetRequiredService<RemoteThumbnailGenerator>(), sp.GetRequiredService<INativeWorkGate>()));
+            AddGatedThumbnailGenerator<RemoteThumbnailGenerator>(services);
         }
         else
-        {
-            services.AddSingleton<LocalThumbnailGenerator>();
-            services.AddSingleton<IThumbnailGenerator>(sp => new GatedThumbnailGenerator(
-                sp.GetRequiredService<LocalThumbnailGenerator>(), sp.GetRequiredService<INativeWorkGate>()));
-        }
+            AddGatedThumbnailGenerator<LocalThumbnailGenerator>(services);
 
         return services;
     }
+
+    // The generator behind the native work gate (GatedThumbnailGenerator), whichever renders. The inner one exists only
+    // behind the gate, so it is built with it and is no service of its own: nothing can reach it around the gate.
+    private static void AddGatedThumbnailGenerator<TGenerator>(IServiceCollection services)
+        where TGenerator : class, IThumbnailGenerator =>
+        services.AddSingleton<IThumbnailGenerator>(sp =>
+            ActivatorUtilities.CreateInstance<GatedThumbnailGenerator>(sp, ActivatorUtilities.CreateInstance<TGenerator>(sp)));
 }

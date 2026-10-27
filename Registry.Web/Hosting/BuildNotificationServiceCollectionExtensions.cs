@@ -19,12 +19,14 @@ public static class BuildNotificationServiceCollectionExtensions
     {
         services.TryAddSingleton(TimeProvider.System);
 
+        services.AddSingleton<IBuildOutcomeClassifier, BuildOutcomeClassifier>();
         services.AddScoped<IBuildRequesterResolver, BuildRequesterResolver>();
         // From the identity database every host that runs jobs shares (no UserManager needed)
         services.AddScoped<IBuildNotificationLevels, IdentityBuildNotificationLevels>();
         services.AddScoped<BuildNotificationOutbox>();
         services.AddScoped<BuildNotificationDigests>();
         services.AddScoped<IBuildNotificationRecorder, BuildNotificationRecorder>();
+        services.AddScoped<FinishedBuildReporter>();
         services.AddScoped<BuildNotificationCleanup>();
 
         // The job class, registered like the others so a missing dependency fails the container validation

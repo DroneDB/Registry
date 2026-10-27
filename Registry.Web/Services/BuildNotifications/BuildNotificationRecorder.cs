@@ -14,7 +14,7 @@ namespace Registry.Web.Services.BuildNotifications;
 /// <see cref="IBuildNotificationRecorder"/>: the line goes to the outbox when e-mail is on, somebody asked for the build
 /// and their preference wants the outcome; the first waiting line of a user schedules their digest
 /// (<see cref="BuildNotificationDigestJob"/>) <see cref="BuildNotificationOptions.DigestMinutes"/> later. A line added
-/// while a digest is sending is picked up by that digest, which schedules the next one.
+/// while a digest is sending waits for the next digest, which the sending run schedules when it is done.
 /// </summary>
 public sealed class BuildNotificationRecorder : IBuildNotificationRecorder
 {

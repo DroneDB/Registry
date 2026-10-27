@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -221,21 +222,22 @@ public class BuildPendingService : Builds.IPendingBuildFlag
     // A terminal job's state is still Processing in storage until OnStateApplied's
     // transaction commits. Exclude precisely that ID from live-coordinator dedup.
     // Failed entry jobs additionally require their own path/hash pending marker.
-    internal async Task ScheduleRetryIfPending(string orgSlug, string dsSlug, string? terminalJobId,
-        string? requiredPendingPath, string? requiredPendingHash, JobStorage? storage = null)
+    // Returns the pending entries whose retry budget is spent (empty while retries remain): their failure is final.
+    internal async Task<IReadOnlyList<PendingBuildInfo>> ScheduleRetryIfPending(string orgSlug, string dsSlug,
+        string? terminalJobId, string? requiredPendingPath, string? requiredPendingHash, JobStorage? storage = null)
     {
         try
         {
             using var coordination = DatasetBuildCoordinator.Acquire(orgSlug, dsSlug, storage ?? _storage,
             mysqlConnectionString: _mysqlConnectionString);
             var ds = await _sweep.FindAsync(orgSlug, dsSlug);
-            if (ds?.Organization == null) return;
+            if (ds?.Organization == null) return [];
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             if (requiredPendingPath != null &&
                 (string.IsNullOrWhiteSpace(requiredPendingPath) || string.IsNullOrWhiteSpace(requiredPendingHash) ||
                  !(ddb.GetPendingBuildInfo() ?? []).Any(p =>
                      p.Path == requiredPendingPath && p.Hash == requiredPendingHash)))
-                return;
+                return [];
 
             var hasPending = ddb.IsBuildPending();
             var state = await ReadState(orgSlug, dsSlug, storage);
@@ -244,13 +246,13 @@ public class BuildPendingService : Builds.IPendingBuildFlag
             {
                 ClearRetryControls(state);
                 await SaveState(orgSlug, dsSlug, state, storage);
-                return;
+                return [];
             }
 
             if (HasLiveCoordinator(state, terminalJobId))
             {
                 await SaveState(orgSlug, dsSlug, state, storage);
-                return;
+                return [];
             }
 
             state.ScheduledRetryJobId = null;
@@ -259,7 +261,7 @@ public class BuildPendingService : Builds.IPendingBuildFlag
                 await SaveState(orgSlug, dsSlug, state, storage);
                 _logger.LogInformation("Pending retry budget exhausted for {Org}/{Ds}; awaiting safety-net sweep",
                     orgSlug, dsSlug);
-                return;
+                return ddb.GetPendingBuildInfo() ?? [];
             }
 
             var delayMinutes = RetryBackoffMinutes[Math.Min(state.RetryAttempt, RetryBackoffMinutes.Length - 1)];
@@ -279,6 +281,7 @@ public class BuildPendingService : Builds.IPendingBuildFlag
         {
             _logger.LogWarning(ex, "ScheduleRetryIfPending failed for {Org}/{Ds}", orgSlug, dsSlug);
         }
+        return [];
     }
 
     /// <summary>

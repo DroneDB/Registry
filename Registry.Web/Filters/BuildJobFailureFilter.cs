@@ -1,5 +1,4 @@
 #nullable enable
-using System;
 using Hangfire.States;
 using Hangfire.Storage;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,9 +19,8 @@ public sealed class BuildJobFailureFilter(
     IServiceScopeFactory scopes,
     ILogger<BuildJobFailureFilter> log) : IApplyStateFilter
 {
-    public void OnStateApplied(ApplyStateContext context, IWriteOnlyTransaction transaction)
-    {
-        try
+    public void OnStateApplied(ApplyStateContext context, IWriteOnlyTransaction transaction) =>
+        StateFilterGuard.Run(log, context, "recording the failure or refreshing the pending observations", () =>
         {
             if (context.NewState is not FailedState failedState) return;
 
@@ -53,8 +51,8 @@ public sealed class BuildJobFailureFilter(
             // class (native failures surface as DdbException). Synchronous filter ->
             // GetAwaiter().GetResult() like the observation refresh below.
             // Runs only when org/ds params are present (above early return): the writer
-            // also busts the org/ds-scoped tasks-list cache. Errors stay inside the outer
-            // try/catch so logging-path failures never break state transitions.
+            // also busts the org/ds-scoped tasks-list cache. Errors stay inside the guard
+            // so logging-path failures never break state transitions.
             var errorType = failedState.Exception?.GetType().Name ?? "Failed";
             var writer = scope.ServiceProvider.GetRequiredService<IJobIndexWriter>();
             writer.UpdateErrorAsync(jobId, errorType).GetAwaiter().GetResult();
@@ -64,14 +62,7 @@ public sealed class BuildJobFailureFilter(
 
             var pending = scope.ServiceProvider.GetRequiredService<BuildPendingService>();
             pending.RefreshPendingStatus(orgSlug, dsSlug, context.Storage).GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            log.LogError(ex,
-                "BuildJobFailureFilter.OnStateApplied: error recording failure or refreshing pending observations for job {JobId}",
-                context.BackgroundJob?.Id);
-        }
-    }
+        });
 
     public void OnStateUnapplied(ApplyStateContext context, IWriteOnlyTransaction transaction)
     {
