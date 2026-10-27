@@ -719,7 +719,7 @@ public class PendingRecoveryIntegrationTests
 
     // The production enqueue path with the clock at unixSeconds and the MySQL coordinator lock
     private PendingBuildEnqueuer Enqueuer(IBackgroundJobsProcessor jobs, IJobIndexQuery index, long unixSeconds) =>
-        new(jobs, index, _provider.GetRequiredService<IDdbManager>(), _storage,
+        new(TestJobs.Scheduler(jobs), index, _provider.GetRequiredService<IDdbManager>(), _storage,
             new FakeTime(DateTimeOffset.FromUnixTimeSeconds(unixSeconds).UtcDateTime),
             _provider.GetRequiredService<IConfiguration>());
 

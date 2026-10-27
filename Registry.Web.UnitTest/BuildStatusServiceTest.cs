@@ -309,7 +309,7 @@ public class BuildStatusServiceTest : TestBase
         var folderOrg = OrgSlug;
         var internalRef = Guid.NewGuid();
         manager.Setup(m => m.TryParseDatasetFolder(It.IsAny<string>(), out folderOrg, out internalRef)).Returns(true);
-        new PendingBuildEnqueuer(jobs.Object, _jobIndexQuery, manager.Object, new InMemoryStorage(),
+        new PendingBuildEnqueuer(TestJobs.Scheduler(jobs.Object), _jobIndexQuery, manager.Object, new InMemoryStorage(),
                 new FakeTime(DateTimeOffset.FromUnixTimeSeconds(1_800_000_000).UtcDateTime))
             .Run(_ddbMock.Object, OrgSlug, DsSlug,
                 JobConsole.For(Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, null));

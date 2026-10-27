@@ -117,4 +117,22 @@ public class BuildSchedulerTests
         _order.ShouldBe(["flag", "job"]);
         _payloads.Single().Path.ShouldBeNull();
     }
+
+    [TestCase(false, nameof(DdbJobs.Build))]
+    [TestCase(true, nameof(DdbJobs.RebuildInBackground))]
+    public void QueueDeferred_QueuesABuildOrABackgroundRebuild_WithoutTouchingTheFlag(bool background, string method)
+    {
+        var payload = new IndexPayload("org", "ds", "h", "service", null, "a.tif");
+        var methods = new List<string>();
+        _jobs.Setup(j => j.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), payload))
+            .Callback<Expression<Action<DdbJobs>>, IndexPayload>((job, _) =>
+                methods.Add(((MethodCallExpression)job.Body).Method.Name))
+            .Returns("job-1");
+
+        Scheduler().QueueDeferred(new DatasetKey("org", Guid.NewGuid()), "a.tif", background, payload).ShouldBe("job-1");
+
+        methods.ShouldBe([method]);
+        _pending.Verify(p => p.SetDatasetHasPendingBuilds(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()),
+            Times.Never, "the entry was found through the flag");
+    }
 }

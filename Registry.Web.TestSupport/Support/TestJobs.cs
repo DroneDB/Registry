@@ -38,7 +38,7 @@ public static class TestJobs
         JobStorage? storage = null, HostResourceBudget? budget = null)
     {
         var manager = ddbManager ?? Mock.Of<IDdbManager>();
-        var pending = new PendingBuildEnqueuer(jobs ?? Mock.Of<IBackgroundJobsProcessor>(), Mock.Of<IJobIndexQuery>(),
+        var pending = new PendingBuildEnqueuer(Scheduler(jobs), Mock.Of<IJobIndexQuery>(),
             manager, storage ?? NewStorage(), System.TimeProvider.System);
         return new DdbJobs(manager, pending, new Registry.Adapters.FileSystem(), NullLogger<DdbJobs>.Instance,
             budget ?? Budget());

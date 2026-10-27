@@ -78,6 +78,7 @@ public sealed class LegacyJobStorageIntegrationTests : IDisposable
         services.AddScoped<IDdbManager, DdbManager>();
         services.AddSingleton(Mock.Of<IBackgroundJobsProcessor>());
         services.AddSingleton(Mock.Of<IJobIndexQuery>());
+        services.AddSingleton(TestJobs.Scheduler());
         services.AddScoped<PendingBuildEnqueuer>();
         services.AddSingleton(TestJobs.Budget());
         services.AddScoped<DdbJobs>();

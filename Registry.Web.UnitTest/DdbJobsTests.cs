@@ -72,7 +72,7 @@ public class DdbJobsTests
         new(_ddbManager.Object, Pending(jobs, index), new FileSystem(), _log, TestJobs.Budget(processing));
 
     private PendingBuildEnqueuer Pending(IBackgroundJobsProcessor? jobs = null, IJobIndexQuery? index = null) =>
-        new(jobs ?? new Mock<IBackgroundJobsProcessor>(MockBehavior.Strict).Object, index ?? MockJobIndex().Object,
+        new(TestJobs.Scheduler(jobs ?? new Mock<IBackgroundJobsProcessor>(MockBehavior.Strict).Object), index ?? MockJobIndex().Object,
             _ddbManager.Object, _storage, new FakeTime(DateTimeOffset.FromUnixTimeSeconds(Now).UtcDateTime));
 
     // A job context with org/ds parameters (or not) and the build log tail BuildLogCaptureFilter attaches
@@ -455,6 +455,20 @@ public class DdbJobsTests
         enqueued.Select(e => (e.Method, e.Path)).ShouldBe([(nameof(DdbJobs.Build), "old/model.obj")]);
         _log.Entries.ShouldContain(e => e.Level == LogLevel.Warning &&
                                         e.Message.Contains("Cannot read the build manifest of the pending entries"));
+    }
+
+    [Test]
+    public void Pending_BuildManifestFailureThatIsNotLibddbs_IsNotSwallowed()
+    {
+        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingEntry("old/model.obj", 600, "h-old")]);
+        _ddb.Setup(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()))
+            .Throws(new InvalidOperationException("a bug, not a manifest that cannot be read"));
+        var enqueued = new List<EnqueuedBuild>();
+
+        Should.Throw<InvalidOperationException>(() =>
+            Pending(MockJobs(enqueued).Object).Run(_ddb.Object, Org, Ds, Console()));
+
+        enqueued.ShouldBeEmpty();
     }
 
     [Test]

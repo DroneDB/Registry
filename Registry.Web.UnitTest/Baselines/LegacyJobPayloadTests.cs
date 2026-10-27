@@ -104,6 +104,7 @@ public sealed class LegacyJobPayloadTests : IDisposable
         _context = TestDb.CreateContext<Registry.Web.Data.RegistryContext>();
         services.AddSingleton(_context);
         services.AddScoped<DatasetCleanupService>();
+        services.AddSingleton(TestJobs.Scheduler());
         services.AddScoped<PendingBuildEnqueuer>();
         services.AddSingleton(TestJobs.Budget());
         services.AddScoped<DdbJobs>();

@@ -112,7 +112,7 @@ public class PendingBuildCoordinationTests
     }
 
     private PendingBuildEnqueuer Enqueuer(IBackgroundJobsProcessor jobs, IJobIndexQuery index, JobStorage storage) =>
-        new(jobs, index, _manager.Object, storage, new FakeTime(DateTimeOffset.FromUnixTimeSeconds(1_800_000_000).UtcDateTime));
+        new(TestJobs.Scheduler(jobs), index, _manager.Object, storage, new FakeTime(DateTimeOffset.FromUnixTimeSeconds(1_800_000_000).UtcDateTime));
 
     private static JobConsole NoConsole => JobConsole.For(Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, null);
 

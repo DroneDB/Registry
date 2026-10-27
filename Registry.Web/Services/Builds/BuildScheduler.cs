@@ -60,7 +60,7 @@ public sealed class BuildScheduler
         foreach (var build in buildable)
         {
             ct.ThrowIfCancellationRequested();
-            var jobId = _jobs.EnqueueBuild(target.Dataset, build.Path, false,
+            var jobId = Enqueue(target.Dataset, build.Path, false, background: false,
                 Payload(target, userId, origin, build.Path, build.Hash));
             queued.Add(new QueuedBuild(build.Path, build.Hash, jobId));
         }
@@ -76,7 +76,8 @@ public sealed class BuildScheduler
     /// <returns>The job id.</returns>
     public Task<string> QueueAsync(BuildTarget target, string path, string? hash, bool force = false,
         BuildOrigin? origin = null) =>
-        EnqueueAsync(target, origin, path, hash, payload => _jobs.EnqueueBuild(target.Dataset, path, force, payload));
+        EnqueueAsync(target, origin, path, hash,
+            payload => Enqueue(target.Dataset, path, force, background: false, payload));
 
     /// <summary>
     /// Queues the build of <paramref name="path"/> on the background queue, for an entry nobody waits for (the check
@@ -85,12 +86,24 @@ public sealed class BuildScheduler
     /// </summary>
     /// <returns>The job id.</returns>
     public Task<string> QueueRebuildAsync(BuildTarget target, string path, string? hash, BuildOrigin? origin = null) =>
-        EnqueueAsync(target, origin, path, hash, payload => _jobs.EnqueueRebuild(target.Dataset, path, payload));
+        EnqueueAsync(target, origin, path, hash,
+            payload => Enqueue(target.Dataset, path, false, background: true, payload));
 
     /// <summary>Queues a build of the whole dataset (an import, a rescan).</summary>
     /// <returns>The job id.</returns>
     public Task<string> QueueDatasetAsync(BuildTarget target, bool force, BuildOrigin? origin = null) =>
-        EnqueueAsync(target, origin, null, null, payload => _jobs.EnqueueBuild(target.Dataset, null, force, payload));
+        EnqueueAsync(target, origin, null, null,
+            payload => Enqueue(target.Dataset, null, force, background: false, payload));
+
+    /// <summary>
+    /// Queues the build of an entry whose build libddb deferred (the pending-build coordinator, which runs inside a
+    /// job under the dataset's build lock): on the background queue when <paramref name="background"/> is set, as
+    /// <see cref="QueueRebuildAsync"/> does. The dataset is already flagged as having pending builds, which is
+    /// how the entry was found, and <paramref name="payload"/> is the one the coordinator built for the entry.
+    /// </summary>
+    /// <returns>The job id.</returns>
+    public string QueueDeferred(DatasetKey dataset, string path, bool background, IndexPayload payload) =>
+        Enqueue(dataset, path, false, background, payload);
 
     /// <summary>Queues the pending-build job when libddb reports deferred builds in the dataset.</summary>
     /// <returns>The job id, or null when nothing is deferred.</returns>
@@ -116,6 +129,16 @@ public sealed class BuildScheduler
         var userId = await UserIdAsync(origin);
         await FlagPendingAsync(target);
         return enqueue(Payload(target, userId, origin, path, hash));
+    }
+
+    // The one place that picks the job of a build: a build, or the background rebuild of an entry nobody waits for
+    private string Enqueue(DatasetKey dataset, string? path, bool force, bool background, IndexPayload payload)
+    {
+        if (!background)
+            return _jobs.EnqueueBuild(dataset, path, force, payload);
+
+        ArgumentNullException.ThrowIfNull(path); // a background rebuild is always of an entry
+        return _jobs.EnqueueRebuild(dataset, path, payload);
     }
 
     private Task FlagPendingAsync(BuildTarget target) =>

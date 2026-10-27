@@ -11,6 +11,7 @@ using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -31,17 +32,17 @@ namespace Registry.Web.Services.Jobs;
 /// </summary>
 public sealed class PendingBuildEnqueuer
 {
-    private readonly IBackgroundJobsProcessor _jobs;
+    private readonly BuildScheduler _builds;
     private readonly IJobIndexQuery _jobIndex;
     private readonly IDdbManager _ddbManager;
     private readonly JobStorage _storage;
     private readonly TimeProvider _time;
     private readonly string? _mysqlConnectionString;
 
-    public PendingBuildEnqueuer(IBackgroundJobsProcessor jobs, IJobIndexQuery jobIndex, IDdbManager ddbManager,
+    public PendingBuildEnqueuer(BuildScheduler builds, IJobIndexQuery jobIndex, IDdbManager ddbManager,
         JobStorage storage, TimeProvider time, IConfiguration? configuration = null)
     {
-        _jobs = jobs ?? throw new ArgumentNullException(nameof(jobs));
+        _builds = builds ?? throw new ArgumentNullException(nameof(builds));
         _jobIndex = jobIndex ?? throw new ArgumentNullException(nameof(jobIndex));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
@@ -148,9 +149,7 @@ public sealed class PendingBuildEnqueuer
                 var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, MagicStrings.AutoBuildServiceUserId,
                     null, path);
                 var background = inBackground.Contains(path);
-                var jobId = background
-                    ? _jobs.EnqueueRebuild(dataset, path, meta)
-                    : _jobs.EnqueueBuild(dataset, path, false, meta);
+                var jobId = _builds.QueueDeferred(dataset, path, background, meta);
                 if (string.IsNullOrWhiteSpace(jobId))
                     throw new InvalidOperationException("Pending build enqueue returned no job ID");
                 enqueued++;
@@ -197,7 +196,7 @@ public sealed class PendingBuildEnqueuer
                 if (builds[i].Build?.ListsLegacyArtifact() == true)
                     paths.Add(entries[i].Path);
         }
-        catch (Exception ex)
+        catch (DdbException ex)
         {
             console.Warning("Cannot read the build manifest of the pending entries ({Error}); building them on the " +
                             "builds queue", JobLogText.Describe(ex));
