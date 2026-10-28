@@ -207,14 +207,16 @@ public class UploadPipelineComponentTests
 
     // ---- several file parts in one request (C.2)
 
-    private static HttpRequest Multipart(params (string Name, string? FileName, string Content)[] parts)
+    // A null name leaves the name parameter out of the part's Content-Disposition.
+    private static HttpRequest Multipart(params (string? Name, string? FileName, string Content)[] parts)
     {
         const string boundary = "----uploadboundary";
         var sb = new StringBuilder();
         foreach (var (name, fileName, content) in parts)
         {
             sb.Append("--").Append(boundary).Append("\r\n");
-            sb.Append("Content-Disposition: form-data; name=\"").Append(name).Append('"');
+            sb.Append("Content-Disposition: form-data");
+            if (name != null) sb.Append("; name=\"").Append(name).Append('"');
             if (fileName != null) sb.Append("; filename=\"").Append(fileName).Append('"');
             sb.Append("\r\n\r\n").Append(content).Append("\r\n");
         }
@@ -259,6 +261,26 @@ public class UploadPipelineComponentTests
             }, temp => new FileSystem().TryDelete(temp)));
 
         temps.Count.ShouldBe(2);
+        temps.ShouldAllBe(t => !File.Exists(t));
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    public async Task ReadFilesFormAsync_FieldWithoutName_IsABadRequest_AndDeletesWhatWasWritten(string? name)
+    {
+        var temps = new List<string>();
+        var ex = await Should.ThrowAsync<BadRequestException>(() => MultipartRequestHelper.ReadFilesFormAsync(
+            Multipart(("file", "1.jpg", "one"), (name, null, "value")),
+            70, 8, async part =>
+            {
+                var temp = Path.GetTempFileName();
+                await using (var f = File.Create(temp)) await part.Body.CopyToAsync(f);
+                temps.Add(temp);
+                return temp;
+            }, temp => new FileSystem().TryDelete(temp)));
+
+        ex.Message.ShouldContain("no name");
+        temps.Count.ShouldBe(1);
         temps.ShouldAllBe(t => !File.Exists(t));
     }
 

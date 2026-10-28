@@ -68,7 +68,7 @@ public static class MultipartRequestHelper
     /// <param name="streamFile">Writes the file part body to a temp file and returns its path and size.</param>
     /// <param name="discard">Deletes a temp file written by <paramref name="streamFile"/> (on failure).</param>
     /// <returns>The form fields and the temp file (null when the body has no file part).</returns>
-    /// <exception cref="BadRequestException">The body has more than one file part.</exception>
+    /// <exception cref="BadRequestException">The body has more than one file part, or a form field without a name.</exception>
     public static async Task<StreamedMultipartForm> ReadSingleFileFormAsync(HttpRequest request,
         int boundaryLengthLimit, Func<Stream, Task<(string TempPath, long Bytes)>> streamFile, Action<string> discard)
     {
@@ -90,7 +90,8 @@ public static class MultipartRequestHelper
     /// checked before the first byte of the file is written. The form fields are collected whatever
     /// their order. On failure every file already written is handed to <paramref name="discard"/>.
     /// </summary>
-    /// <exception cref="BadRequestException">The body has more than <paramref name="maxFiles"/> file parts.</exception>
+    /// <exception cref="BadRequestException">The body has more than <paramref name="maxFiles"/> file parts, or a
+    /// form field without a name.</exception>
     public static async Task<StreamedMultipartFiles<TFile>> ReadFilesFormAsync<TFile>(HttpRequest request,
         int boundaryLengthLimit, int maxFiles, Func<MultipartFilePart, Task<TFile>> streamFile,
         Action<TFile> discard)
@@ -122,10 +123,11 @@ public static class MultipartRequestHelper
                 else if (HasFormDataContentDisposition(contentDisposition))
                 {
                     var key = HeaderUtilities.RemoveQuotes(contentDisposition.Name).Value;
+                    if (string.IsNullOrEmpty(key))
+                        throw new BadRequestException("A form field of the upload has no name");
                     using var sr = new StreamReader(section.Body, Encoding.UTF8);
                     var value = await sr.ReadToEndAsync();
-                    // A part with no name has a null key, which the dictionary refuses (ArgumentNullException)
-                    form.Fields[key!] = value;
+                    form.Fields[key] = value;
                     if (string.Equals(key, "path", StringComparison.OrdinalIgnoreCase))
                         pendingPath = value;
                 }
