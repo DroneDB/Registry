@@ -32,7 +32,7 @@ public sealed class VolumeInfo
     /// The volume backing <paramref name="path"/> according to the system mount table, or
     /// <see langword="null"/> when no mount contains it or that mount is not ready.
     /// </summary>
-    public static VolumeInfo? For(string path) => For(path, SystemMountRoots, MeasureSystemVolume);
+    public static VolumeInfo? For(string? path) => For(path, SystemMountRoots, MeasureSystemVolume);
 
     /// <summary>
     /// The volume backing <paramref name="path"/>: <paramref name="measure"/> applied to the mount point,
@@ -40,10 +40,10 @@ public sealed class VolumeInfo
     /// <see cref="FindMountRoot"/>). <see langword="null"/> when no mount contains the path or
     /// <paramref name="measure"/> returns <see langword="null"/>.
     /// </summary>
-    /// <param name="path">Any path on the volume; need not exist. Relative paths are taken from the current directory.</param>
+    /// <param name="path">Any path on the volume; need not exist. Relative paths are taken from the current directory; null or blank has no volume.</param>
     /// <param name="mountRoots">Mount table (mount point paths).</param>
     /// <param name="measure">Reads size and free space of a mount point; <see langword="null"/> when not ready.</param>
-    public static VolumeInfo? For(string path, Func<IEnumerable<string>> mountRoots,
+    public static VolumeInfo? For(string? path, Func<IEnumerable<string>> mountRoots,
         Func<string, VolumeInfo?> measure)
     {
         ArgumentNullException.ThrowIfNull(mountRoots);
@@ -60,7 +60,7 @@ public sealed class VolumeInfo
     /// are not resolved.
     /// </summary>
     /// <returns>The matching entry as given, or <see langword="null"/>.</returns>
-    public static string? FindMountRoot(string path, IEnumerable<string> mountRoots)
+    public static string? FindMountRoot(string? path, IEnumerable<string> mountRoots)
     {
         ArgumentNullException.ThrowIfNull(mountRoots);
 

@@ -1,4 +1,3 @@
-#nullable disable
 namespace Registry.Web;
 
 // This class is the definition of a bad idea

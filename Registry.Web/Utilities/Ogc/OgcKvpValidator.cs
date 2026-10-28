@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using Microsoft.AspNetCore.Http;
 using Registry.Web.Exceptions;

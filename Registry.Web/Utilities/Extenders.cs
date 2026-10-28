@@ -1,7 +1,7 @@
-#nullable disable
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -45,7 +45,8 @@ public static class Extenders
         };
     }
 
-    public static StampDto ToDto(this Stamp stamp)
+    [return: NotNullIfNotNull(nameof(stamp))]
+    public static StampDto? ToDto(this Stamp? stamp)
     {
         if (stamp == null) return null;
 
@@ -57,7 +58,8 @@ public static class Extenders
         };
     }
 
-    public static MetaDto ToDto(this Meta meta)
+    [return: NotNullIfNotNull(nameof(meta))]
+    public static MetaDto? ToDto(this Meta? meta)
     {
         if (meta == null) return null;
 
@@ -69,7 +71,8 @@ public static class Extenders
         };
     }
 
-    public static MetaListItemDto ToDto(this MetaListItem listItem)
+    [return: NotNullIfNotNull(nameof(listItem))]
+    public static MetaListItemDto? ToDto(this MetaListItem? listItem)
     {
         if (listItem == null) return null;
 
@@ -81,7 +84,8 @@ public static class Extenders
         };
     }
 
-    public static MetaDumpDto ToDto(this MetaDump md)
+    [return: NotNullIfNotNull(nameof(md))]
+    public static MetaDumpDto? ToDto(this MetaDump? md)
     {
         if (md == null) return null;
 
@@ -95,7 +99,8 @@ public static class Extenders
         };
     }
 
-    public static EntryDto ToDto(this Entry entry)
+    [return: NotNullIfNotNull(nameof(entry))]
+    public static EntryDto? ToDto(this Entry? entry)
     {
         if (entry == null) return null;
 
@@ -226,7 +231,7 @@ public static class Extenders
     /// </summary>
     /// <param name="tag"></param>
     /// <returns>A TagDto containing the organization and dataset slugs, or null if the tag string is null, empty, or whitespace.</returns>
-    public static TagDto ToTag(this string tag)
+    public static TagDto? ToTag(this string? tag)
     {
         if (string.IsNullOrWhiteSpace(tag))
             return null;
@@ -249,13 +254,13 @@ public static class Extenders
         return new TagDto(org, ds);
     }
 
-    public static T ToObject<T>(this Dictionary<string, object> obj)
+    public static T? ToObject<T>(this Dictionary<string, object> obj)
     {
         // The dictionary the configuration binder made (strings, numbers): as the type it describes
         return JsonSerializer.SerializeToElement(obj, ApiJson.Options).Deserialize<T>(ApiJson.Options);
     }
 
-    public static string ToErrorString(this IEnumerable<IdentityError> results)
+    public static string ToErrorString(this IEnumerable<IdentityError>? results)
     {
         if (results == null || !results.Any()) return "No error details";
         return string.Join(", ", results.Select(item => $"[{item.Code}: '{item.Description}']"));

@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.IO;
 using System.Reflection;
@@ -217,7 +216,7 @@ public class Startup
             var spaFiles = builder.ApplicationServices
                 .GetService<Microsoft.AspNetCore.SpaServices.StaticFiles.ISpaStaticFileProvider>();
             builder.UseMiddleware<PrecompressedStaticFilesMiddleware>(
-                new Func<Microsoft.Extensions.FileProviders.IFileProvider>(() => spaFiles?.FileProvider));
+                new Func<Microsoft.Extensions.FileProviders.IFileProvider?>(() => spaFiles?.FileProvider));
 
             // Hashed files immutable, index.html revalidated
             var hubStaticFiles = HubCachePolicy.StaticFileOptions();

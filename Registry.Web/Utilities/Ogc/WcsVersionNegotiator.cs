@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Linq;
 using Registry.Web.Exceptions;

@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Linq;
 using System.Security.Cryptography;
@@ -25,7 +24,7 @@ public static class AuthorizationExtensions
 
     /// <summary>Whether the request carries <paramref name="monitorToken"/> (bearer header, else the "token"
     /// query parameter).</summary>
-    internal static bool HasMonitorToken(HttpContext httpContext, string monitorToken)
+    internal static bool HasMonitorToken(HttpContext httpContext, string? monitorToken)
     {
         var authHeader = httpContext.Request.Headers.Authorization.FirstOrDefault();
         var token = !string.IsNullOrEmpty(authHeader) && authHeader.StartsWith(BearerPrefix, StringComparison.Ordinal)
@@ -39,7 +38,7 @@ public static class AuthorizationExtensions
     /// Constant-time comparison of a presented token with the expected one; a missing or empty token
     /// (presented or configured) never matches.
     /// </summary>
-    internal static bool TokensMatch(string presented, string expected) =>
+    internal static bool TokensMatch(string? presented, string? expected) =>
         !string.IsNullOrEmpty(presented) && !string.IsNullOrEmpty(expected) &&
         CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(presented), Encoding.UTF8.GetBytes(expected));
 }

@@ -1,4 +1,3 @@
-#nullable disable
 using System.Text;
 using System.Xml;
 
@@ -12,7 +11,7 @@ public static class OgcExceptionFormatter
 {
     public const string ContentType = "text/xml; charset=utf-8";
 
-    public static string FormatWms111(string code, string message)
+    public static string FormatWms111(string? code, string? message)
     {
         using var sw = new Utf8StringWriter();
         using var w = XmlWriter.Create(sw, new XmlWriterSettings
@@ -33,7 +32,7 @@ public static class OgcExceptionFormatter
     }
 
     /// <summary>WMS 1.3.0 ServiceExceptionReport (namespace http://www.opengis.net/ogc).</summary>
-    public static string FormatWms130(string code, string message)
+    public static string FormatWms130(string? code, string? message)
     {
         using var sw = new Utf8StringWriter();
         using var w = XmlWriter.Create(sw, new XmlWriterSettings
@@ -62,7 +61,7 @@ public static class OgcExceptionFormatter
     /// OWS 1.1. CITE schema validation rejects responses whose ExceptionReport element resolves
     /// to the wrong namespace ("Cannot find the declaration of element 'ows:ExceptionReport'").
     /// </summary>
-    public static string FormatOws(string code, string message, string version = "2.0.0",
+    public static string FormatOws(string? code, string? message, string version = "2.0.0",
         string? locator = null, string owsNamespace = "http://www.opengis.net/ows/1.1")
     {
         using var sw = new Utf8StringWriter();
@@ -89,7 +88,7 @@ public static class OgcExceptionFormatter
     /// <summary>WCS 1.0.0 ServiceExceptionReport (OGC 03-065r6 §A.4.1 - namespace
     /// <c>http://www.opengis.net/ogc</c>, version <c>1.2.0</c>). Note: WCS 1.0 inherited
     /// the WMS-like envelope and predates OWS Common entirely.</summary>
-    public static string FormatWcs10(string code, string message)
+    public static string FormatWcs10(string? code, string? message)
     {
         using var sw = new Utf8StringWriter();
         using var w = XmlWriter.Create(sw, new XmlWriterSettings

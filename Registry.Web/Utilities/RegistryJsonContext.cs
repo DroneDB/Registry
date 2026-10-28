@@ -1,4 +1,3 @@
-#nullable disable
 using System.Text.Json.Serialization;
 using System.Text.Json;
 using Registry.Web.Models.DTO.Ogc;

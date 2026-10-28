@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
@@ -22,7 +21,7 @@ public static class DistributedCacheExtensions
         await cache.SetStringAsync(recordId, jsonData, options);
     }
 
-    public static async Task<T> GetRecordAsync<T>(this IDistributedCache cache, string recordId)
+    public static async Task<T?> GetRecordAsync<T>(this IDistributedCache cache, string recordId)
     {
         var jsonData = await cache.GetStringAsync(recordId);
         return jsonData is null ? default : ApiJson.Deserialize<T>(jsonData);

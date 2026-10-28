@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -23,7 +22,7 @@ public class OrganizationAccessControl : AccessControlBase
     }
 
     /// <param name="userId">Id of an existing user, or null for anonymous access</param>
-    public async Task<bool> CanAccessOrganization(Organization org, AccessType access, string userId)
+    public async Task<bool> CanAccessOrganization(Organization org, AccessType access, string? userId)
     {
         ArgumentNullException.ThrowIfNull(org);
 

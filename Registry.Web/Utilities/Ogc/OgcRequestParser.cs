@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -80,7 +79,7 @@ public static class OgcRequestParser
     /// <param name="crsOverride">Optional CRS forced from CRS/SRS parameter.</param>
     /// <param name="wmsVersion">WMS version: "1.3.0" honors axis-order swap for EPSG:4326-family.</param>
     /// <returns>[minLon, minLat, maxLon, maxLat] always in lon/lat order, plus resolved CRS.</returns>
-    public static (double[] Bbox, string Crs) ParseBbox(string bboxStr, string? crsOverride = null, string? wmsVersion = null)
+    public static (double[] Bbox, string Crs) ParseBbox(string? bboxStr, string? crsOverride = null, string? wmsVersion = null)
     {
         if (string.IsNullOrWhiteSpace(bboxStr))
             throw new OgcException("MissingParameterValue", "Missing BBOX", 400, "BBOX");
@@ -118,7 +117,7 @@ public static class OgcRequestParser
     /// True if the OGC version + CRS pair requires lat,lon axis order
     /// (WMS 1.3.0 + WFS 2.0.0 for geographic CRSs).
     /// </summary>
-    public static bool IsLatLonOrder(string crs, string? version)
+    public static bool IsLatLonOrder(string? crs, string? version)
     {
         if (string.IsNullOrWhiteSpace(version)) return false;
         if (!IsGeographicCrs(crs)) return false;
@@ -134,7 +133,7 @@ public static class OgcRequestParser
         "EPSG:4269", "urn:ogc:def:crs:EPSG::4269"
     };
 
-    public static bool IsGeographicCrs(string crs)
+    public static bool IsGeographicCrs(string? crs)
     {
         if (string.IsNullOrWhiteSpace(crs)) return false;
         if (string.Equals(crs, "CRS:84", StringComparison.OrdinalIgnoreCase)) return false;

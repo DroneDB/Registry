@@ -1,4 +1,3 @@
-#nullable disable
 using System.Globalization;
 using System.Linq;
 using System.Security.Claims;
