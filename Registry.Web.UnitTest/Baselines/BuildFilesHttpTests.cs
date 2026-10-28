@@ -98,11 +98,12 @@ public sealed class BuildFilesHttpTests : IDisposable
         return await _client.SendAsync(request);
     }
 
-    private void Resolves(string relative, string content, string? mediaType = null)
+    private string Resolves(string relative, string content, string? mediaType = null)
     {
         var file = BuildFile(relative, content);
         _factory.DdbWrapper.Setup(d => d.ResolveBuildFile(_datasetFolder, Hash, relative))
             .Returns(new ResolvedBuildFile(file, mediaType));
+        return file;
     }
 
     private static string BuildFileUrl(string relative) => $"/orgs/{Org}/ds/{Ds}/build/{Hash}/{relative}";
@@ -254,6 +255,25 @@ public sealed class BuildFilesHttpTests : IDisposable
         after.StatusCode.ShouldBe(HttpStatusCode.OK);
         after.Headers.ETag.ShouldNotBe(oldEtag);
         (await after.Content.ReadAsStringAsync()).ShouldBe("rebuilt with more bytes");
+    }
+
+    // A rebuild that writes as many bytes as before still moves the write time: the tag must follow the time too,
+    // not the length alone
+    [Test]
+    public async Task BuildFile_RewrittenWithTheSameLength_HasANewEtag()
+    {
+        var written = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(Resolves("gsplat/model.rad", "0123456789"), written);
+        using var before = await SendAsync(HttpMethod.Get, BuildFileUrl("gsplat/model.rad"));
+        var oldEtag = before.Headers.ETag!;
+
+        File.SetLastWriteTimeUtc(Resolves("gsplat/model.rad", "9876543210"), written.AddMinutes(1));
+        using var after = await SendAsync(HttpMethod.Get, BuildFileUrl("gsplat/model.rad"),
+            r => r.Headers.IfNoneMatch.Add(oldEtag));
+
+        after.StatusCode.ShouldBe(HttpStatusCode.OK);
+        after.Headers.ETag.ShouldNotBe(oldEtag);
+        (await after.Content.ReadAsStringAsync()).ShouldBe("9876543210");
     }
 
     private static IEnumerable<TestCaseData> Downloads()
