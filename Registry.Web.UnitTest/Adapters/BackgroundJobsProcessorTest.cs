@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using Hangfire;
 using Hangfire.Storage;
@@ -43,9 +42,9 @@ public class BackgroundJobsProcessorTest
     /// A <paramref name="stateName"/> of null models a job no longer present in Hangfire
     /// (<c>GetStateData</c> returns null).
     /// </summary>
-    private void SetLiveState(string jobId, string stateName)
+    private void SetLiveState(string jobId, string? stateName)
     {
-        _connection.Setup(x => x.GetStateData(jobId)).Returns(stateName is null ? null :
+        _connection.Setup(x => x.GetStateData(jobId)).Returns(stateName is null ? (StateData)null! :
             new StateData { Name = stateName, Data = new Dictionary<string, string>() });
     }
 
@@ -87,8 +86,8 @@ public class BackgroundJobsProcessorTest
         // apply an EnqueuedState to the SAME job id, transitioning FROM its current Failed state.
         const string jobId = "job-1";
         SetLiveState(jobId, FailedState.StateName);
-        IState applied = null;
-        string appliedFrom = null;
+        IState? applied = null;
+        string? appliedFrom = null;
         _client.Setup(x => x.ChangeState(jobId, It.IsAny<IState>(), It.IsAny<string>()))
             .Callback<string, IState, string>((id, state, from) => { applied = state; appliedFrom = from; })
             .Returns(true);
@@ -135,7 +134,7 @@ public class BackgroundJobsProcessorTest
     public void Delete_ArchivesTheSameIdToDeleted_NotEnqueued()
     {
         const string jobId = "job-del";
-        IState applied = null;
+        IState? applied = null;
         _client.Setup(x => x.ChangeState(jobId, It.IsAny<IState>(), It.IsAny<string>()))
             .Callback<string, IState, string>((id, state, from) => applied = state)
             .Returns(true);

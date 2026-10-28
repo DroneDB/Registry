@@ -1,4 +1,3 @@
-#nullable disable
 using Registry.Adapters.Testing;
 using System;
 using System.Collections.Generic;
@@ -34,7 +33,7 @@ namespace Registry.Web.Test;
 public class ProcessingNodeDiCompletenessTests
 {
     private static ServiceProvider BuildNodeProvider(Action<IServiceCollection>? configure = null,
-        InstanceType? role = null, string identityConnection = null)
+        InstanceType? role = null, string? identityConnection = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>

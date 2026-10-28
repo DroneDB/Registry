@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,7 +23,7 @@ namespace Registry.Web.Test;
 public class DatasetIndexQueueTests
 {
     internal static (DatasetIndexQueue Queue, Mock<IDDB> Ddb) CreateQueue(IndexQueueSettings? opts = null,
-        TimeProvider time = null)
+        TimeProvider? time = null)
     {
         var ddb = new Mock<IDDB>();
         var ddbManager = new Mock<IDdbManager>();

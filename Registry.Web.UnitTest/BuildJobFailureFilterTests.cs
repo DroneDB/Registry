@@ -182,7 +182,7 @@ public class BuildJobFailureFilterTests
     {
         // Models the pre-existing early return: without org/ds slugs neither cache
         // invalidation nor the ErrorType write runs (the writer busts org/ds caches).
-        _connMock.Setup(c => c.GetJobParameter(JobId, JobParamKeys.OrgSlug)).Returns((string?)null);
+        _connMock.Setup(c => c.GetJobParameter(JobId, JobParamKeys.OrgSlug)).Returns((string)null!);
 
         var ctx = BuildContext(nameof(HangfireUtils.BuildWrapper),
             new FailedState(new DdbException("gdal cannot open")));

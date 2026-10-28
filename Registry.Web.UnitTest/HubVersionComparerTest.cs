@@ -1,4 +1,3 @@
-#nullable disable
 using NUnit.Framework;
 using Registry.Web.Services.Hub;
 using Shouldly;
@@ -22,7 +21,7 @@ public class HubVersionComparerTest
     [TestCase("1.0.0-beta", "2.0.0", true, TestName = "Older with pre-release suffix -> upgrade")]
     [TestCase("2", "2.0.0", false, TestName = "Single component padded -> equal")]
     [TestCase("1.5", "2.0.0", true, TestName = "Two components padded older -> upgrade")]
-    public void ShouldUpgrade_Cases(string onDisk, string embedded, bool expected)
+    public void ShouldUpgrade_Cases(string? onDisk, string embedded, bool expected)
     {
         HubVersionComparer.ShouldUpgrade(onDisk, embedded).ShouldBe(expected);
     }

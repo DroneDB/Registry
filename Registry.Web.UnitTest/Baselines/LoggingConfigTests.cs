@@ -102,9 +102,9 @@ public class LoggingConfigTests
             using (var logger = new LoggerConfiguration().ReadFrom.Configuration(configuration).CreateLogger())
                 logger.Warning("loggingconfig rolling file sink");
 
-            var written = Directory.GetFiles(folder).Select(Path.GetFileName).ToArray();
+            var written = Directory.GetFiles(folder).Select(f => Path.GetFileName(f)).ToArray();
             written.ShouldHaveSingleItem().ShouldMatch(@"^registry\d{8}\.txt$");
-            File.ReadAllText(Path.Combine(folder, written[0]!)).ShouldContain("loggingconfig rolling file sink");
+            File.ReadAllText(Path.Combine(folder, written[0])).ShouldContain("loggingconfig rolling file sink");
         }
         finally
         {

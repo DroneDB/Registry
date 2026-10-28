@@ -1,4 +1,3 @@
-#nullable disable
 using NUnit.Framework;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
@@ -256,7 +255,7 @@ public class PasswordPolicyValidatorTest
 
     #region Helper
 
-    private static PasswordPolicyValidator CreateValidator(PasswordPolicy policy)
+    private static PasswordPolicyValidator CreateValidator(PasswordPolicy? policy)
     {
         var appSettings = new AppSettings
         {

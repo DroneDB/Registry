@@ -89,7 +89,8 @@ public class RescanIndexToolTest
         await Execute(new { });
 
         _ddb.Verify(x => x.ClearBuildCache(), Times.Once);
-        _ddb.Verify(x => x.Build(null, null, true), Times.Once);
+        // A null path builds the whole dataset; the port declares the parameter non-nullable.
+        _ddb.Verify(x => x.Build(null!, null, true), Times.Once);
         _ddb.Verify(x => x.Build("a.tif", It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
         _cacheInvalidator.Verify(x => x.InvalidateAllDatasetCachesAsync("org", "ds"), Times.Once);
     }

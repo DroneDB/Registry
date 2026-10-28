@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Threading;
 using System.Collections.Generic;
@@ -61,7 +60,9 @@ public class OgcLayerCatalogTests
             NullLogger<OgcLayerCatalog>.Instance);
     }
 
-    private static Entry VectorEntry(string path = "layer.geojson", string hash = "h1") => new()
+    private const string EntryHash = "h1";
+
+    private static Entry VectorEntry(string path = "layer.geojson", string hash = EntryHash) => new()
     {
         Path = path,
         Hash = hash,
@@ -74,7 +75,7 @@ public class OgcLayerCatalogTests
         var entry = VectorEntry();
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
 
-        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), entry.Hash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), EntryHash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
             .Returns("/tmp/source.gpkg");
         _wrapper.Setup(w => w.DescribeVector("/tmp/source.gpkg", null)).Returns(
             "{\"layers\":[" +
@@ -101,7 +102,7 @@ public class OgcLayerCatalogTests
     {
         var entry = VectorEntry("site.dwg");
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
-        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), entry.Hash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), EntryHash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
             .Returns("/tmp/source.gpkg");
         _wrapper.Setup(w => w.DescribeVector("/tmp/source.gpkg", null)).Returns(
             "{\"layers\":[{\"name\":\"entities\",\"geometryType\":\"LineString\",\"srs\":\"\"," +
@@ -122,7 +123,7 @@ public class OgcLayerCatalogTests
     public async Task LocalEntryWithoutArtifact_FlaggedFromIndexProperties()
     {
         var entry = VectorEntry("site.dwg");
-        entry.Properties = TestJson.Props(new Dictionary<string, object> { ["georeferenced"] = false });
+        entry.Properties = TestJson.Props(new Dictionary<string, object?> { ["georeferenced"] = false });
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
 
         (await _catalog.GetLayersAsync(Org, Ds)).ShouldBeEmpty();
@@ -134,7 +135,7 @@ public class OgcLayerCatalogTests
     {
         var entry = VectorEntry("site.dwg");
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
-        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), entry.Hash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), EntryHash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
             .Returns("/tmp/source.gpkg");
         _wrapper.Setup(w => w.DescribeVector("/tmp/source.gpkg", null)).Returns(
             "{\"layers\":[{\"name\":\"entities\",\"srs\":\"EPSG:4326\",\"extent\":[9.1,45.4,9.2,45.5]}]}");
@@ -150,8 +151,8 @@ public class OgcLayerCatalogTests
         var entry = VectorEntry();
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
         // The build has no GeoPackage (yet): the resolver finds no file for the role
-        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), entry.Hash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
-            .Returns((string)null);
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), EntryHash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+            .Returns((string?)null);
 
         var result = await _catalog.GetLayersAsync(Org, Ds);
 
@@ -167,7 +168,7 @@ public class OgcLayerCatalogTests
     {
         var entry = VectorEntry();
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
-        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), entry.Hash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), EntryHash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
             .Returns("/tmp/source.gpkg");
         _wrapper.Setup(w => w.DescribeVector(It.IsAny<string>(), It.IsAny<string>()))
             .Throws(new InvalidOperationException("native failure"));
@@ -185,7 +186,7 @@ public class OgcLayerCatalogTests
     {
         var entry = VectorEntry();
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
-        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), entry.Hash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), EntryHash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
             .Returns("/tmp/source.gpkg");
         _wrapper.Setup(w => w.DescribeVector(It.IsAny<string>(), It.IsAny<string>()))
             .Returns("{\"layers\":[]}");
@@ -270,7 +271,7 @@ public class OgcLayerCatalogTests
     {
         var entry = VectorEntry();
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
-        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), entry.Hash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), EntryHash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
             .Returns("/tmp/source.gpkg");
         _wrapper.Setup(w => w.DescribeVector(It.IsAny<string>(), It.IsAny<string>()))
             .Returns("{\"layers\":[{\"name\":\"roads\"},{\"name\":\"poi\"}]}");
@@ -286,7 +287,7 @@ public class OgcLayerCatalogTests
     {
         var entry = VectorEntry();
         _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
-        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), entry.Hash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), EntryHash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
             .Returns("/tmp/source.gpkg");
         _wrapper.Setup(w => w.DescribeVector(It.IsAny<string>(), It.IsAny<string>()))
             .Returns("{\"layers\":[{\"name\":\"roads\"},{\"name\":\"poi\"}]}");

@@ -582,7 +582,7 @@ public class PushPipelineTests : TestBase
         form.GetField("path").ShouldBe("photos/IMG.JPG");
         form.GetField("TOKEN").ShouldBe("t");
         form.Bytes.ShouldBe(4);
-        File.ReadAllText(form.TempFile).ShouldBe("jpeg");
+        File.ReadAllText(form.TempFile.ShouldNotBeNull()).ShouldBe("jpeg");
 
         await Should.ThrowAsync<BadRequestException>(() => MultipartRequestHelper.ReadSingleFileFormAsync(
             MultipartRequest(("file", "a.jpg", "a"), ("file2", "b.jpg", "b")), 70, streamFile,

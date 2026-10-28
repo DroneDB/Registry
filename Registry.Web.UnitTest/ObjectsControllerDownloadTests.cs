@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -88,7 +87,7 @@ public class ObjectsControllerDownloadTests
         }
 
         Assert.Fail("DownloadStream was never invoked: the controller did not reach the download path.");
-        return null;
+        return null!; // unreachable: Assert.Fail throws
     }
 
     [Test]
