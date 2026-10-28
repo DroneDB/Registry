@@ -107,9 +107,8 @@ public sealed class PushCommit
         // Delete temp folder
         _fileSystem.FolderDelete(baseTempFolder);
 
-        // Build the pushed files libddb reports buildable, then what their arrival unblocked
-        var dataset = BuildTarget.Of(access, orgSlug, dsSlug);
-        await _builds.QueueBuildableAsync(dataset, [.. delta.Adds.Where(item => item.Hash.Length > 0).Select(item => item.Path)], ct: CancellationToken.None);
-        await _builds.QueuePendingAsync(dataset);
+        // Build the pushed files libddb reports buildable, then retry what their arrival (or a rename) unblocked
+        await _builds.QueueAddedAsync(BuildTarget.Of(access, orgSlug, dsSlug),
+            [.. delta.Adds.Where(item => item.Hash.Length > 0).Select(item => item.Path)], ct: CancellationToken.None);
     }
 }

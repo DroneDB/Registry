@@ -17,24 +17,51 @@ namespace Registry.Web.Services.Builds;
 /// deferred builds comes from libddb (the build manifest); the scheduler only queues. Before the first
 /// job of a call is queued, the dataset is flagged as having pending builds, so a build that fails at once is
 /// retried by the pending-build coordinator (the flag must precede the job, or a quick failure is missed).
+/// Entries that arrive in a dataset (<see cref="QueueAddedAsync"/>) also start the retry of the pending builds
+/// that waited for them (<see cref="RetryPendingAsync"/>).
 /// </summary>
 public sealed class BuildScheduler
 {
     private readonly IBuildArtifactResolver _artifacts;
     private readonly IBackgroundJobsProcessor _jobs;
     private readonly IPendingBuildFlag _pending;
+    private readonly IPendingBuildRetry _retries;
     private readonly IBuildRequester _requester;
     private readonly ILogger<BuildScheduler> _logger;
 
     public BuildScheduler(IBuildArtifactResolver artifacts, IBackgroundJobsProcessor jobs, IPendingBuildFlag pending,
-        IBuildRequester requester, ILogger<BuildScheduler> logger)
+        IPendingBuildRetry retries, IBuildRequester requester, ILogger<BuildScheduler> logger)
     {
         _artifacts = artifacts;
         _jobs = jobs;
         _pending = pending;
+        _retries = retries;
         _requester = requester;
         _logger = logger;
     }
+
+    /// <summary>
+    /// What the arrival of <paramref name="paths"/> in the dataset calls for: a build of each buildable one
+    /// (<see cref="QueueBuildableAsync"/>), then the retry of the pending builds that waited for one of them
+    /// (<see cref="RetryPendingAsync"/>), as the one call of every path that adds entries.
+    /// </summary>
+    /// <returns>The builds queued (the buildable paths).</returns>
+    public async Task<IReadOnlyList<QueuedBuild>> QueueAddedAsync(BuildTarget target, IReadOnlyList<string> paths,
+        BuildOrigin? origin = null, CancellationToken ct = default)
+    {
+        var queued = await QueueBuildableAsync(target, paths, origin, ct);
+        await RetryPendingAsync(target);
+        return queued;
+    }
+
+    /// <summary>
+    /// Starts the pending-build coordinator when libddb reports pending work a retry can progress and none is live:
+    /// libddb makes a build that waited for missing files due when one of them is added or moved into the dataset,
+    /// and a non-buildable file (an .mtl, a .dbf) queues no build whose end would start the retry. One native call
+    /// when nothing is retryable; never throws.
+    /// </summary>
+    /// <returns>The coordinator's job id, or null when none was started.</returns>
+    public Task<string?> RetryPendingAsync(BuildTarget target) => _retries.StartIfRetryableAsync(target);
 
     /// <summary>
     /// Queues a build of each of <paramref name="paths"/> libddb reports buildable (one manifest call), in order.
@@ -104,20 +131,6 @@ public sealed class BuildScheduler
     /// <returns>The job id.</returns>
     public string QueueDeferred(DatasetKey dataset, string path, bool background, IndexPayload payload) =>
         Enqueue(dataset, path, false, background, payload);
-
-    /// <summary>Queues the pending-build job when libddb reports deferred builds in the dataset.</summary>
-    /// <returns>The job id, or null when nothing is deferred.</returns>
-    public async Task<string?> QueuePendingAsync(BuildTarget target, BuildOrigin? origin = null)
-    {
-        if (!target.Ddb.IsBuildPending())
-            return null;
-
-        var userId = await UserIdAsync(origin);
-        var jobId = _jobs.EnqueueBuildPending(target.Dataset, Payload(target, userId, origin, null, null));
-        _logger.LogInformation("Deferred builds in {Org}/{Ds}: pending-build job {JobId}", target.OrgSlug,
-            target.DsSlug, jobId);
-        return jobId;
-    }
 
     private async Task<string?> UserIdAsync(BuildOrigin? origin) =>
         origin != null ? origin.UserId : await _requester.UserIdAsync();

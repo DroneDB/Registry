@@ -403,7 +403,7 @@ public class DdbJobsTests
         _ddb.Verify(x => x.BuildPending(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
         _ddb.Verify(x => x.Build(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
         Logged.ShouldContain(m => m.Contains(
-            "Pending builds: 7; enqueued 3; skipped 4 (1 not yet due, 1 with an active build job, 2 without a path)"));
+            "Pending builds: 7; enqueued 3; skipped 4 (0 awaiting files, 1 not yet due, 1 with an active build job, 2 without a path)"));
         Logged.ShouldContain(m => m.Contains("Enqueued build of 'sub/model.obj' (job job-2)"));
         Logged.ShouldContain(m => m.Contains("Done build pending"));
     }
@@ -486,7 +486,27 @@ public class DdbJobsTests
         Pending(MockJobs(enqueued).Object).Run(_ddb.Object, Org, Ds, Console());
 
         enqueued.Select(e => e.Path).ShouldBe(["short.obj", "now.obj"]);
-        Logged.ShouldContain(m => m.Contains("Pending builds: 3; enqueued 2; skipped 1 (1 not yet due"));
+        Logged.ShouldContain(m => m.Contains("Pending builds: 3; enqueued 2; skipped 1 (0 awaiting files, 1 not yet due"));
+    }
+
+    /// <summary>
+    /// A build that waits for missing files is not retried on a timer, however long ago it was attempted: it runs again
+    /// when one of them is added, which libddb marks by clearing the flag (red before: every coordinator run built the
+    /// .obj again, which ended in half a second without building).
+    /// </summary>
+    [Test]
+    public void Pending_EntryAwaitingFiles_IsNotEnqueued_AndIsCountedApart()
+    {
+        var waiting = PendingEntry("waiting.obj", 3600, "h-waiting");
+        waiting.AwaitingFiles = true;
+        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([waiting, PendingEntry("due.obj", 3600, "h-due")]);
+        var enqueued = new List<EnqueuedBuild>();
+
+        Pending(MockJobs(enqueued).Object).Run(_ddb.Object, Org, Ds, Console());
+
+        enqueued.Select(e => e.Path).ShouldBe(["due.obj"]);
+        Logged.ShouldContain(m => m.Contains(
+            "Pending builds: 2; enqueued 1; skipped 1 (1 awaiting files, 0 not yet due, 0 with an active build job, 0 without a path)"));
     }
 
     [Test]

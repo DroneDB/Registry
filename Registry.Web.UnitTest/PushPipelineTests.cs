@@ -200,6 +200,36 @@ public class PushPipelineTests : TestBase
         order[0].ShouldBe("flag");
     }
 
+    /// <summary>
+    /// A push retries the pending builds its files unblocked through the same path as an upload: one coordinator,
+    /// none while it is live (red before: every push queued another pending-build job beside the live one).
+    /// </summary>
+    [Test]
+    public async Task Commit_StartsThePendingRetryOnce_AndNoneWhileACoordinatorIsLive()
+    {
+        _ddb.Setup(d => d.IsBuildPending()).Returns(true);
+        var methods = new List<string>();
+        var statuses = new Dictionary<string, JobStatus>();
+        _jobs.Setup(j => j.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<DdbJobs>>>(),
+                It.IsAny<IndexPayload>()))
+            .Returns<System.Linq.Expressions.Expression<Action<DdbJobs>>, IndexPayload>((job, _) =>
+            {
+                methods.Add(((System.Linq.Expressions.MethodCallExpression)job.Body).Method.Name);
+                var id = "job-" + methods.Count;
+                statuses[id] = JobStatus.Enqueued;
+                return id;
+            });
+        _jobs.Setup(j => j.GetJobStatus(It.IsAny<string>()))
+            .Returns<string>(id => statuses.GetValueOrDefault(id, JobStatus.Unknown));
+        var mgr = CreateManager();
+
+        await mgr.Commit("org", "ds", await InitAndStage(mgr));
+        await mgr.Commit("org", "ds", await InitAndStage(mgr));
+
+        methods.Count(m => m == nameof(DdbJobs.BuildPending)).ShouldBe(1);
+        methods.Count(m => m == nameof(DdbJobs.Build)).ShouldBe(2 * Adds / 10, "the buildable pushed files");
+    }
+
     [Test]
     public async Task Commit_ReusesInitDelta()
     {

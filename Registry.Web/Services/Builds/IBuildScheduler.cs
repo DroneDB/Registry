@@ -38,6 +38,20 @@ public interface IPendingBuildFlag
     Task SetDatasetHasPendingBuilds(string orgSlug, string dsSlug, bool hasPending);
 }
 
+/// <summary>
+/// The start of the pending-build retries of a dataset (<see cref="BuildPendingService"/>) when entries arrive:
+/// libddb makes the builds that waited for an added file due, and nothing else would retry them before the sweep.
+/// </summary>
+public interface IPendingBuildRetry
+{
+    /// <summary>
+    /// Starts the pending-build coordinator of <paramref name="target"/> when libddb reports pending work a retry can
+    /// progress and no coordinator of the dataset is live. Never throws: a failure is logged and the sweep retries.
+    /// </summary>
+    /// <returns>The coordinator's job id, or null when none was started.</returns>
+    Task<string?> StartIfRetryableAsync(BuildTarget target);
+}
+
 /// <summary>The default requester of builds queued without a <see cref="BuildOrigin"/>.</summary>
 public interface IBuildRequester
 {

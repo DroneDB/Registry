@@ -127,7 +127,7 @@ public sealed class ObjectServicesBuilder
         services.AddSingleton(Mock.Of<IBuildStatusService>());
         services.AddSingleton(_nativeGate ?? NativeWorkGate.Default);
         var artifacts = _buildArtifactResolver ?? TestPorts.Artifacts();
-        var scheduler = new BuildScheduler(artifacts, backgroundJobs, buildPendingService,
+        var scheduler = new BuildScheduler(artifacts, backgroundJobs, buildPendingService, buildPendingService,
             new CurrentUserBuildRequester(authManager), NullLogger<BuildScheduler>.Instance);
         services.AddSingleton<BuildScheduler>(scheduler);
         services.AddSingleton<IUrlBuilder>(new UrlBuilder(TestSettings.Options<HttpHostOptions>(settings),

@@ -117,6 +117,6 @@ public class RescanManager
 
         public Task BuildEntry(RescanResult entry) => builds.QueueAsync(target, entry.Path, entry.Hash, force: true, origin);
 
-        public Task BuildPending() => builds.QueuePendingAsync(target, origin);
+        public Task BuildPending() => builds.RetryPendingAsync(target);
     }
 }

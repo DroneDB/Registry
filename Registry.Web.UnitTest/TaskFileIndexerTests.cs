@@ -9,6 +9,7 @@ using Moq;
 using NUnit.Framework;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.Jobs;
@@ -75,6 +76,31 @@ public class TaskFileIndexerTests
         queued.ShouldBe(0);
         jobs.VerifyNoOtherCalls();
         caches.Verify(c => c.InvalidateAllDatasetCachesAsync("org", "ds"), Times.Once);
+    }
+
+    /// <summary>
+    /// The files a task wrote may be what pending builds waited for (an extracted .mtl): their arrival starts the
+    /// pending-build retry once for the whole task, not once per chunk (red before: only the hourly sweep did).
+    /// </summary>
+    [Test]
+    public async Task IndexAsync_StartsThePendingRetryOnce_AfterEveryChunkIsQueued()
+    {
+        var paths = Enumerable.Range(0, TaskFileIndexer.ChunkSize + 10).Select(i => $"f{i}.mtl").ToArray();
+        var ddb = new Mock<IDDB>();
+        ddb.Setup(d => d.AddRawBatch(It.IsAny<IReadOnlyList<string>>())).Returns((IReadOnlyList<string> chunk) =>
+            chunk.Select(p => new Entry { Path = p, Hash = "h-" + p, Type = EntryType.Generic }).ToArray());
+        ddb.Setup(d => d.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>())).Returns((IReadOnlyList<string> chunk) =>
+            chunk.Select(p => TestBuilds.NotBuildable(p)).ToArray());
+        var dataset = new DatasetKey("org", Guid.NewGuid());
+        var retries = new Mock<IPendingBuildRetry>();
+
+        await TestJobs.FileIndexer().IndexAsync(
+            new TaskFiles(ddb.Object, dataset, "org", "ds", paths,
+                TestJobs.Scheduler(Mock.Of<IBackgroundJobsProcessor>(), retries: retries.Object), "task-1", "extracted files"),
+            new InlineProgress(_ => { }), CancellationToken.None);
+
+        retries.Verify(r => r.StartIfRetryableAsync(It.Is<BuildTarget>(t =>
+            t.Ddb == ddb.Object && t.Dataset == dataset && t.OrgSlug == "org" && t.DsSlug == "ds")), Times.Once);
     }
 
     private sealed class InlineProgress(Action<HeavyToolProgress> report) : IProgress<HeavyToolProgress>

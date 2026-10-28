@@ -9,15 +9,17 @@ namespace Registry.Web.Services.Builds;
 public static class BuildSchedulingServiceCollectionExtensions
 {
     /// <summary>
-    /// libddb's build manifest by role, the one place that queues builds and the pending flag it
-    /// sets; builds queued without an origin run as the service (the web host replaces the requester with the
-    /// signed-in user). Needs the job services (<see cref="IBackgroundJobsProcessor"/>, <see cref="BuildPendingService"/>).
+    /// libddb's build manifest by role, the one place that queues builds, the pending flag it sets and the
+    /// pending-build retry it starts (both <see cref="BuildPendingService"/>); builds queued without an
+    /// origin run as the service (the web host replaces the requester with the signed-in user). Needs the job
+    /// services (<see cref="IBackgroundJobsProcessor"/>, <see cref="BuildPendingService"/>).
     /// </summary>
     public static IServiceCollection AddBuildScheduling(this IServiceCollection services)
     {
         services.AddSingleton<IBuildArtifactResolver, BuildArtifactResolver>();
         services.AddScoped<BuildScheduler>();
         services.AddScoped<IPendingBuildFlag, BuildPendingService>();
+        services.AddScoped<IPendingBuildRetry, BuildPendingService>();
         services.AddScoped<IBuildRequester, ServiceBuildRequester>();
         return services;
     }

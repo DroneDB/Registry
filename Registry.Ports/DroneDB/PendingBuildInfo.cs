@@ -34,4 +34,12 @@ public class PendingBuildInfo
     [JsonPropertyName("retryAfter")]
     [JsonRequired]
     public long RetryAfter { get; set; }
+
+    /// <summary>
+    /// The build waits for missing files (a companion such as the .mtl of an .obj): no timed retry can
+    /// progress it, so it runs again when one of those files is added to the dataset (libddb then makes
+    /// it due) and never on a timer. Absent from an older libddb, which reads as false.
+    /// </summary>
+    [JsonPropertyName("awaitingFiles")]
+    public bool AwaitingFiles { get; set; }
 }

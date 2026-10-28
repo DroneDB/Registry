@@ -89,7 +89,8 @@ public sealed class EntryCommandService : IEntryCommandService
             await _jobs.RebuildIfBuildableAsync(access, orgSlug, dsSlug, updatedEntry))
             _logger.LogInformation("Extension changed and file is buildable, triggered a build of '{Path}'", dest);
 
-        await _changes.EntriesChangedAsync(orgSlug, dsSlug, [source, dest]);
+        // A companion renamed to the name its main file expects unblocks the build that waited for it
+        await _changes.EntriesArrivedAsync(access, orgSlug, dsSlug, [source, dest]);
 
         return updatedEntry.ToDto();
     }

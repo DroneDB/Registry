@@ -102,6 +102,23 @@ public sealed class JsonContractTests
         NativeJson.Deserialize<List<Entry>>(nul.Pointer).ShouldBeNull();
     }
 
+    /// <summary>
+    /// libddb flags a pending build that waits for missing files; a libddb from before the flag leaves it out, which
+    /// reads as a build a retry can progress (as every pending build was then).
+    /// </summary>
+    [Test]
+    public void APendingBuild_WaitsForFilesOnlyWhenLibddbSaysSo()
+    {
+        using var output = new NativeOutput(
+            "[{\"hash\":\"h1\",\"path\":\"model.obj\",\"missingDependencies\":[\"model.mtl\"],\"lastAttempt\":1," +
+            "\"retryAfter\":61,\"awaitingFiles\":true}," +
+            "{\"hash\":\"h2\",\"path\":\"roads.shp\",\"missingDependencies\":[],\"lastAttempt\":1,\"retryAfter\":61}]");
+
+        var pending = NativeJson.Deserialize<PendingBuildInfo[]>(output.Pointer)!;
+
+        pending.Select(p => (p.Path, p.AwaitingFiles)).ShouldBe([("model.obj", true), ("roads.shp", false)]);
+    }
+
     [Test]
     public void ALibddbDocument_OutlivesTheNativeBuffer()
     {

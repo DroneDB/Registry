@@ -27,8 +27,10 @@ public interface IDdbBuild
     string GetTmpFolder(string path);
 
     /// <summary>
-    /// Whether the dataset has pending (deferred) builds: a dataset-wide question the build
-    /// manifest (<see cref="GetBuildArtifacts"/>, per entry) does not answer.
+    /// Whether the dataset has pending (deferred) builds a retry can progress: a dataset-wide question
+    /// the build manifest (<see cref="GetBuildArtifacts"/>, per entry) does not answer. A build that only
+    /// waits for missing files (<see cref="PendingBuildInfo.AwaitingFiles"/>) does not count: it runs
+    /// again when one of them is added, not on a timer.
     /// </summary>
     bool IsBuildPending();
 

@@ -182,6 +182,7 @@ public sealed class BuildQueryService
             Hash = p.Hash,
             MissingDependencies = p.MissingDependencies,
             LastAttempt = DateTimeOffset.FromUnixTimeSeconds(p.LastAttempt).UtcDateTime,
+            AwaitingFiles = p.AwaitingFiles,
             Artifacts = _urls.ArtifactLinks(orgSlug, dsSlug, builds[i]) is { Count: > 0 } links ? [.. links] : null
         }).ToArray();
     }

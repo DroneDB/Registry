@@ -220,7 +220,8 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual PendingBuildInfo[] GetPendingBuildInfo(string ddbPath) =>
         Serve<PendingBuildInfo[]>("pending-build-info-none", $"GetPendingBuildInfo({ddbPath})");
 
-    public virtual bool IsBuildPending(string ddbPath) => GetPendingBuildInfo(ddbPath).Length > 0;
+    /// <summary>As libddb answers it: a pending build that only waits for missing files does not count.</summary>
+    public virtual bool IsBuildPending(string ddbPath) => GetPendingBuildInfo(ddbPath).Any(p => !p.AwaitingFiles);
 
     // ---------------------------------------------------------------- meta
 

@@ -1069,7 +1069,7 @@ schema OrganizationMemberDto { userName:string, email:string, permissions:Organi
 schema OrganizationPermissions {  }
 schema OrganizationPermissionsDto { canRead:boolean, canWrite:boolean, canDelete:boolean, canManageMembers:boolean }
 schema PasswordPolicyDto { minLength:integer(int32), requireDigit:boolean, requireUppercase:boolean, requireLowercase:boolean, requireNonAlphanumeric:boolean }
-schema PendingBuildInfoDto { path:string, hash:string, missingDependencies:array<string>, lastAttempt:string(date-time), artifacts:array<ArtifactLinkDto> }
+schema PendingBuildInfoDto { path:string, hash:string, missingDependencies:array<string>, lastAttempt:string(date-time), awaitingFiles:boolean, artifacts:array<ArtifactLinkDto> }
 schema ProblemDetails { type:string, title:string, status:integer(int32), detail:string, instance:string }
 schema ProcessingNodeDto { id:string, title:string }
 schema ProcessingNodeStatusDto { id:string, reachable:boolean, version:string, engine:string, engineVersion:string, taskQueueCount:integer(int32), maxParallelTasks:integer(int32), errorMessage:string }

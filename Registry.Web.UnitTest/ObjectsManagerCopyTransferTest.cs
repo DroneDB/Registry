@@ -3,6 +3,7 @@ using System;
 using System.Threading;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -31,6 +32,7 @@ namespace Registry.Web.Test;
 ///   - atomic overwrite ordering (move-to-trash before DDB index removal)
 ///   - keepSource semantics in Transfer
 ///   - build folder copy semantics (always copy, never move)
+///   - the pending-build retry an entry that arrives starts (copy, transfer, move)
 /// </summary>
 [TestFixture]
 public class ObjectsManagerCopyTransferTest : TestBase
@@ -123,7 +125,9 @@ public class ObjectsManagerCopyTransferTest : TestBase
     }
 
     // The build-pending service is the builder default: a real one on the SUT context and these mocks.
-    private IEntryTransferService CreateManager() =>
+    private IEntryTransferService CreateManager() => CreateServices().Transfers;
+
+    private ObjectServices CreateServices() =>
         new ObjectServicesBuilder(TestDb.CreateContext<RegistryContext>())
             .WithLogger(_logger)
             .WithSettings(TestSettings.Options(_settings))
@@ -137,7 +141,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
             .WithDdbWrapper(_ddbWrapperMock.Object)
             .WithThumbnailGenerator(_thumbsMock.Object)
             .WithJobIndexQuery(_jobIndexQueryMock.Object)
-            .Build().Transfers;
+            .Build();
 
     // ---------------------------------------------------------------------
     // Copy
@@ -343,5 +347,111 @@ public class ObjectsManagerCopyTransferTest : TestBase
         _fsMock.Verify(x => x.FolderCopy(It.Is<string>(s => s.Contains(hash)), It.IsAny<string>(),
             It.IsAny<bool>(), It.IsAny<bool>()), Times.Never);
         _fsMock.Verify(x => x.FolderMove(It.Is<string>(s => s.Contains(hash)), It.IsAny<string>()), Times.Never);
+    }
+
+    // ---------------------------------------------------------------------
+    // The pending-build retry of an entry that arrives
+    // ---------------------------------------------------------------------
+
+    // The datasets of the pending-build coordinators queued (DdbJobs.BuildPending)
+    private List<string> RecordCoordinators()
+    {
+        var coordinators = new List<string>();
+        _backgroundJobMock.Setup(j => j.EnqueueIndexed(
+                It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
+                It.IsAny<Registry.Web.Models.IndexPayload>()))
+            .Returns<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>,
+                Registry.Web.Models.IndexPayload>((job, meta) =>
+            {
+                if (((System.Linq.Expressions.MethodCallExpression)job.Body).Method.Name ==
+                    nameof(Registry.Web.Services.Jobs.DdbJobs.BuildPending))
+                    coordinators.Add(meta.DsSlug);
+                return "job-" + Guid.NewGuid().ToString("N");
+            });
+        return coordinators;
+    }
+
+    /// <summary>
+    /// The transferred file may be what a pending build of the destination waited for (libddb makes that build due
+    /// when the file is indexed): the destination's coordinator starts (red before: only the hourly sweep found it).
+    /// </summary>
+    [Test]
+    public async Task Transfer_IntoADatasetWithRetryableWork_StartsTheDestinationsCoordinator()
+    {
+        _ddbMock.Setup(x => x.GetEntry("model.mtl"))
+            .Returns(new Entry { Path = "model.mtl", Type = EntryType.Generic, Size = 10, Hash = "hh" });
+        _otherDdbMock.Setup(x => x.GetEntry("model.mtl")).Returns((Entry?)null);
+        _otherDdbMock.Setup(x => x.EntryExists("model.mtl")).Returns(true);
+        _otherDdbMock.Setup(x => x.IsBuildPending()).Returns(true);
+        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(true);
+        var coordinators = RecordCoordinators();
+
+        await CreateManager().TransferAsync(OrgSlug, DsSlug, "model.mtl", OrgSlug, OtherDsSlug, keepSource: true);
+
+        coordinators.ShouldBe([OtherDsSlug]);
+    }
+
+    [Test]
+    public async Task Copy_IntoADatasetWithRetryableWork_StartsItsCoordinator()
+    {
+        _ddbMock.Setup(x => x.GetEntry("old/model.mtl"))
+            .Returns(new Entry { Path = "old/model.mtl", Type = EntryType.Generic, Size = 10, Hash = "hh" });
+        _ddbMock.SetupSequence(x => x.GetEntry("model.mtl"))
+            .Returns((Entry?)null)
+            .Returns(new Entry { Path = "model.mtl", Type = EntryType.Generic, Size = 10, Hash = "hh" });
+        _ddbMock.Setup(x => x.IsBuildPending()).Returns(true);
+        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(true);
+        var coordinators = RecordCoordinators();
+
+        await CreateManager().CopyAsync(OrgSlug, DsSlug, "old/model.mtl", "model.mtl");
+
+        coordinators.ShouldBe([DsSlug]);
+    }
+
+    /// <summary>A companion renamed to the name its main file expects unblocks the build that waited for it.</summary>
+    [Test]
+    public async Task Move_InADatasetWithRetryableWork_StartsItsCoordinator()
+    {
+        _ddbMock.Setup(x => x.GetEntry("model.mtl.txt"))
+            .Returns(new Entry { Path = "model.mtl.txt", Type = EntryType.Generic, Size = 10, Hash = "hh" });
+        _ddbMock.SetupSequence(x => x.GetEntry("model.mtl"))
+            .Returns((Entry?)null)
+            .Returns(new Entry { Path = "model.mtl", Type = EntryType.Generic, Size = 10, Hash = "hh" });
+        _ddbMock.Setup(x => x.IsBuildPending()).Returns(true);
+        var coordinators = RecordCoordinators();
+
+        await CreateServices().Commands.MoveAsync(OrgSlug, DsSlug, "model.mtl.txt", "model.mtl");
+
+        coordinators.ShouldBe([DsSlug]);
+    }
+
+    [Test]
+    public async Task Move_InADatasetWithNothingToRetry_StartsNoCoordinator()
+    {
+        _ddbMock.Setup(x => x.GetEntry("a.txt"))
+            .Returns(new Entry { Path = "a.txt", Type = EntryType.Generic, Size = 10, Hash = "hh" });
+        _ddbMock.SetupSequence(x => x.GetEntry("b.txt"))
+            .Returns((Entry?)null)
+            .Returns(new Entry { Path = "b.txt", Type = EntryType.Generic, Size = 10, Hash = "hh" });
+        var coordinators = RecordCoordinators();
+
+        await CreateServices().Commands.MoveAsync(OrgSlug, DsSlug, "a.txt", "b.txt");
+
+        coordinators.ShouldBeEmpty();
+        _ddbMock.Verify(x => x.IsBuildPending(), Times.Once);
+    }
+
+    /// <summary>The pending builds listing says which builds wait for files, so a client can tell them apart.</summary>
+    [Test]
+    public async Task PendingBuilds_TellWhichBuildsWaitForFiles()
+    {
+        var waiting = Registry.Adapters.Testing.PendingMarkers.Of("model.obj", "h1", 0, "model.mtl");
+        waiting.AwaitingFiles = true;
+        _ddbMock.Setup(x => x.GetPendingBuildInfo())
+            .Returns([waiting, Registry.Adapters.Testing.PendingMarkers.Of("cloud.laz", "h2")]);
+
+        var pending = (await CreateServices().Builds.GetPendingBuildsAsync(OrgSlug, DsSlug)).ToArray();
+
+        pending.Select(p => (p.Path, p.AwaitingFiles)).ShouldBe([("model.obj", true), ("cloud.laz", false)]);
     }
 }

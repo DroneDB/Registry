@@ -117,13 +117,13 @@ public class UploadManagerTests
         protected override void OnEnded() { }
     }
 
-    private UploadManager CreateManager()
+    private UploadManager CreateManager(IBackgroundJobsProcessor? backgroundJobs = null)
     {
         var ddbManager = new Mock<IDdbManager>();
         ddbManager.Setup(m => m.Get(Org, _dataset.InternalRef)).Returns(_ddb.Object);
         var options = Microsoft.Extensions.Options.Options.Create(_settings);
         var context = TestDb.CreateContext<RegistryContext>();
-        var jobs = Mock.Of<IBackgroundJobsProcessor>();
+        var jobs = backgroundJobs ?? Mock.Of<IBackgroundJobsProcessor>();
         var buildPending = new BuildPendingService(new DatasetSweep(context), ddbManager.Object, jobs, Mock.Of<ICacheManager>(), TestJobs.NewStorage(), NullLogger<BuildPendingService>.Instance);
 
         return TestUploads.Create(_auth.Object,
@@ -156,6 +156,55 @@ public class UploadManagerTests
         _enqueues.ShouldBe(1);
         _evaluations.ShouldBe(1);
         _changes.Verify(c => c.FilesAdded(Org, Ds, It.Is<IEnumerable<string>>(p => p.Count() == 3)), Times.Once);
+    }
+
+    /// <summary>
+    /// The .mtl an .obj waited for is uploaded on its own: nothing builds an .mtl, so no build ends to retry the .obj.
+    /// The upload starts the pending-build coordinator itself, once, and not again while it is live (red before: the
+    /// .obj waited for the hourly sweep).
+    /// </summary>
+    [Test]
+    public async Task UploadOfAFileNothingBuilds_IntoADatasetWithRetryableWork_StartsExactlyOneCoordinator()
+    {
+        _ddb.Setup(d => d.IsBuildPending()).Returns(true);
+        var methods = new List<string>();
+        var statuses = new Dictionary<string, JobStatus>();
+        var jobs = new Mock<IBackgroundJobsProcessor>();
+        jobs.Setup(j => j.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<DdbJobs>>>(),
+                It.IsAny<Registry.Web.Models.IndexPayload>()))
+            .Returns<System.Linq.Expressions.Expression<Action<DdbJobs>>, Registry.Web.Models.IndexPayload>((job, _) =>
+            {
+                methods.Add(((System.Linq.Expressions.MethodCallExpression)job.Body).Method.Name);
+                var id = "job-" + methods.Count;
+                statuses[id] = JobStatus.Enqueued;
+                return id;
+            });
+        jobs.Setup(j => j.GetJobStatus(It.IsAny<string>()))
+            .Returns<string>(id => statuses.GetValueOrDefault(id, JobStatus.Unknown));
+        var uploads = CreateManager(jobs.Object);
+
+        foreach (var path in new[] { "model.mtl", "texture.txt" })
+        {
+            using var ctx = await uploads.BeginAsync(Org, Ds);
+            (await uploads.CommitAsync(ctx, await Stream(uploads, ctx, path))).Single().Status
+                .ShouldBe(StatusCodes.Status201Created);
+        }
+
+        methods.ShouldBe([nameof(DdbJobs.BuildPending)], "one coordinator; the second upload found it live");
+    }
+
+    [Test]
+    public async Task UploadIntoADatasetWithNothingToRetry_StartsNoCoordinator()
+    {
+        var jobs = new Mock<IBackgroundJobsProcessor>();
+        var uploads = CreateManager(jobs.Object);
+        using var ctx = await uploads.BeginAsync(Org, Ds);
+
+        await uploads.CommitAsync(ctx, await Stream(uploads, ctx, "model.mtl"));
+
+        _ddb.Verify(d => d.IsBuildPending(), Times.Once);
+        jobs.Verify(j => j.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<DdbJobs>>>(),
+            It.IsAny<Registry.Web.Models.IndexPayload>()), Times.Never);
     }
 
     [Test]

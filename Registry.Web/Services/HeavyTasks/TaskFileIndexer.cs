@@ -16,7 +16,8 @@ namespace Registry.Web.Services.HeavyTasks;
 /// <summary>
 /// What a task does after it wrote files into a dataset (the sequence was copied in the
 /// archive-extract, photogrammetry and dataset-import tools): index the files in chunks, queue a
-/// build of every buildable one as a child job of the task, invalidate the dataset's caches.
+/// build of every buildable one as a child job of the task, start the retry of the pending builds
+/// that waited for one of them, invalidate the dataset's caches.
 /// </summary>
 /// <remarks>
 /// Chunks bound the lock time of one index transaction and let progress be reported between them;
@@ -74,6 +75,10 @@ public sealed class TaskFileIndexer
             ct.ThrowIfCancellationRequested();
             queued += (await files.Builds.QueueBuildableAsync(target, [.. chunk.Select(e => e.Path)], origin, ct)).Count;
         }
+
+        // Once for all the files (not per chunk): the builds that waited for one of them are due now
+        if (indexed.Count > 0)
+            await files.Builds.RetryPendingAsync(target);
 
         _logger.LogInformation("Enqueued {Count} build job(s) for {What} in {Org}/{Ds}",
             queued, files.What, files.OrgSlug, files.DsSlug);

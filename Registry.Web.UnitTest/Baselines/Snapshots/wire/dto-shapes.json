@@ -610,14 +610,16 @@
         "MissingDependencies-text"
       ],
       "lastAttempt": 1234567890123,
-      "retryAfter": 1234567890123
+      "retryAfter": 1234567890123,
+      "awaitingFiles": true
     },
     "sparse": {
       "hash": null,
       "path": null,
       "missingDependencies": null,
       "lastAttempt": 0,
-      "retryAfter": 0
+      "retryAfter": 0,
+      "awaitingFiles": false
     }
   },
   "Registry.Ports.DroneDB.RemoveAction": {
@@ -3017,6 +3019,7 @@
         "MissingDependencies-text"
       ],
       "lastAttempt": "2026-10-21T07:31:17.123Z",
+      "awaitingFiles": true,
       "artifacts": [
         {
           "role": "Role-text",
@@ -3029,7 +3032,8 @@
       "path": null,
       "hash": null,
       "missingDependencies": null,
-      "lastAttempt": "0001-01-01T00:00:00Z"
+      "lastAttempt": "0001-01-01T00:00:00Z",
+      "awaitingFiles": false
     }
   },
   "Registry.Web.Models.DTO.PresetDto": {

@@ -52,7 +52,8 @@ public sealed class EntryTransferService : IEntryTransferService
             throw new BadRequestException("Source and destination cannot be the same");
 
         var sourceDdb = (await _access.ResolveAsync(sourceOrgSlug, sourceDsSlug, AccessType.Read, ct: ct)).Ddb;
-        var destDdb = (await _access.ResolveAsync(destOrgSlug, destDsSlug, AccessType.Write, ct: ct)).Ddb;
+        var destAccess = await _access.ResolveAsync(destOrgSlug, destDsSlug, AccessType.Write, ct: ct);
+        var destDdb = destAccess.Ddb;
 
         var sourceEntry = sourceDdb.GetEntry(sourcePath)
                           ?? throw new NotFoundException("Cannot find source entry: '" + sourcePath + "'");
@@ -120,7 +121,8 @@ public sealed class EntryTransferService : IEntryTransferService
                 await _changes.EntriesChangedAsync(sourceOrgSlug, sourceDsSlug, [sourcePath]);
             }
 
-            await _changes.EntriesChangedAsync(destOrgSlug, destDsSlug, [destPath]);
+            // The transferred files may be what pending builds of the destination waited for
+            await _changes.EntriesArrivedAsync(destAccess, destOrgSlug, destDsSlug, [destPath]);
 
             _logger.LogInformation("Transfer OK");
         }
@@ -141,7 +143,8 @@ public sealed class EntryTransferService : IEntryTransferService
     public async Task<EntryDto> CopyAsync(string orgSlug, string dsSlug, string source, string dest,
         bool overwrite = false, CancellationToken ct = default)
     {
-        var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct)).Ddb;
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
+        var ddb = access.Ddb;
 
         _logger.LogInformation("Copy in '{OrgSlug}/{DsSlug}': '{Source}' -> '{Dest}', overwrite={Overwrite}",
             orgSlug, dsSlug, source, dest, overwrite);
@@ -248,7 +251,8 @@ public sealed class EntryTransferService : IEntryTransferService
 
             // Builds are named by content hash: the copy's content is the source's, its build serves both
 
-            await _changes.EntriesChangedAsync(orgSlug, dsSlug, [dest]);
+            // The copy may be what pending builds waited for (a companion copied under its expected name)
+            await _changes.EntriesArrivedAsync(access, orgSlug, dsSlug, [dest]);
 
             _logger.LogInformation("Copy OK");
             return copiedEntry.ToDto();

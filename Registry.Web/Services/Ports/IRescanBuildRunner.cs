@@ -16,6 +16,6 @@ public interface IRescanBuildRunner
     /// <summary>Rebuilds one rescanned entry.</summary>
     Task BuildEntry(RescanResult entry);
 
-    /// <summary>Retries the builds that wait for a dependency.</summary>
+    /// <summary>Retries the pending builds a retry can progress (not those that wait for missing files).</summary>
     Task BuildPending();
 }

@@ -60,12 +60,15 @@ public static class TestJobs
 
     /// <summary>
     /// The build scheduler over <paramref name="jobs"/> (loose mocks unless given), libddb's manifest through the
-    /// fake's entry types; builds queued without an origin run as <paramref name="userId"/>.
+    /// fake's entry types; builds queued without an origin run as <paramref name="userId"/>. A
+    /// <paramref name="pending"/> flag that also starts the pending-build retry (the <see cref="BuildPendingService"/>,
+    /// as DI wires it) is the retry unless <paramref name="retries"/> is given.
     /// </summary>
     public static BuildScheduler Scheduler(IBackgroundJobsProcessor? jobs = null, IPendingBuildFlag? pending = null,
-        IBuildArtifactResolver? artifacts = null, string? userId = null) =>
+        IBuildArtifactResolver? artifacts = null, string? userId = null, IPendingBuildRetry? retries = null) =>
         new(artifacts ?? TestPorts.Artifacts(),
             jobs ?? Mock.Of<IBackgroundJobsProcessor>(), pending ?? Mock.Of<IPendingBuildFlag>(),
+            retries ?? pending as IPendingBuildRetry ?? Mock.Of<IPendingBuildRetry>(),
             Mock.Of<IBuildRequester>(r => r.UserIdAsync() == System.Threading.Tasks.Task.FromResult(userId)),
             NullLogger<BuildScheduler>.Instance);
 

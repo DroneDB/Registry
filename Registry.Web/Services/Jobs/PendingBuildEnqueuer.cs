@@ -28,8 +28,9 @@ namespace Registry.Web.Services.Jobs;
 /// coordination lock (<see cref="DatasetBuildCoordinator"/>). Without the organization and
 /// dataset of the job (job parameters set by <see cref="IndexedJobEnqueuer"/>), or a dataset
 /// folder Registry cannot map, libddb runs the due builds inline (the native fallback).
-/// An entry is due when the current time is at or past its <see cref="PendingBuildInfo.RetryAfter"/>:
-/// libddb owns the retry rule, so the enqueue path and <c>buildPending</c> agree.
+/// An entry is due when it does not wait for missing files (<see cref="PendingBuildInfo.AwaitingFiles"/>: it runs again
+/// when one of them is added, which libddb marks due) and the current time is at or past its
+/// <see cref="PendingBuildInfo.RetryAfter"/>: libddb owns the retry rule, so the enqueue path and <c>buildPending</c> agree.
 /// </summary>
 public sealed class PendingBuildEnqueuer
 {
@@ -122,8 +123,9 @@ public sealed class PendingBuildEnqueuer
 
             var emptyPath = pending.Count(p => string.IsNullOrWhiteSpace(p.Path));
             var withPath = pending.Where(p => !string.IsNullOrWhiteSpace(p.Path)).ToArray();
-            var due = withPath.Where(p => now >= p.RetryAfter).ToArray();
-            var notDue = withPath.Length - due.Length;
+            var awaiting = withPath.Count(p => p.AwaitingFiles);
+            var due = withPath.Where(p => !p.AwaitingFiles && now >= p.RetryAfter).ToArray();
+            var notDue = withPath.Length - awaiting - due.Length;
 
             IReadOnlyList<JobIndex> buildJobs = due.Length == 0
                 ? []
@@ -160,9 +162,9 @@ public sealed class PendingBuildEnqueuer
                     : "Enqueued build of '{Path}' (job {JobId})", path, jobId);
             }
 
-            console.Debug("Pending builds: {Pending}; enqueued {Enqueued}; skipped {Skipped} ({NotDue} not yet due, " +
-                          "{Active} with an active build job, {EmptyPath} without a path)",
-                pending.Length, enqueued, notDue + active + emptyPath, notDue, active, emptyPath);
+            console.Debug("Pending builds: {Pending}; enqueued {Enqueued}; skipped {Skipped} ({Awaiting} awaiting " +
+                          "files, {NotDue} not yet due, {Active} with an active build job, {EmptyPath} without a path)",
+                pending.Length, enqueued, awaiting + notDue + active + emptyPath, awaiting, notDue, active, emptyPath);
         }
         catch (Exception ex)
         {

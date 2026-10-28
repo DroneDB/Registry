@@ -38,8 +38,9 @@ public sealed class UploadFinalizer
         if (parts.Count == 0)
             return;
 
-        // The buildable parts are built (one manifest call); the others get their thumbnail
-        var queued = await _builds.QueueBuildableAsync(new BuildTarget(ctx.Ddb, ctx.Key, ctx.OrgSlug, ctx.DsSlug),
+        // The buildable parts are built (one manifest call), and the pending builds that waited for a part retried;
+        // the others get their thumbnail
+        var queued = await _builds.QueueAddedAsync(new BuildTarget(ctx.Ddb, ctx.Key, ctx.OrgSlug, ctx.DsSlug),
             [.. parts.Select(p => p.Entry!.Path)], new BuildOrigin(ctx.User?.Id));
         var built = queued.Select(b => b.Path).ToHashSet(StringComparer.Ordinal);
 

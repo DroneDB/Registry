@@ -139,9 +139,11 @@ public interface IDdbWrapper
     public CopiedBuildArtifacts CopyBuildArtifacts(string sourceDdbPath, string destinationDdbPath, string hash);
 
     /// <summary>
-    /// Whether the dataset has pending (deferred) builds (DDBIsBuildPending, deprecated in libddb
-    /// 2.x). Kept for the pending-build scheduling until libddb answers it through
-    /// DDBBuild pendingOnly: libddb 2.x has no other dataset-wide pending query.
+    /// Whether the dataset has pending (deferred) builds a retry can progress (DDBIsBuildPending,
+    /// deprecated in libddb 2.x): a build that only waits for missing files
+    /// (<see cref="PendingBuildInfo.AwaitingFiles"/>) does not count. Kept for the pending-build
+    /// scheduling until libddb answers it through DDBBuild pendingOnly: libddb 2.x has no other
+    /// dataset-wide pending query.
     /// </summary>
     public bool IsBuildPending(string ddbPath);
 

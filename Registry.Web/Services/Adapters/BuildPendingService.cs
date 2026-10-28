@@ -15,6 +15,7 @@ using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Attributes;
 using Registry.Web.Models;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -23,8 +24,11 @@ using static Registry.Web.Services.CacheCategories;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Service for processing pending builds across all datasets.
-/// Uses cache optimization to reduce unnecessary filesystem scans.
+/// The retries of the pending (deferred) builds of the datasets: one coordinator job per dataset
+/// (<see cref="DdbJobs.BuildPending"/>) at a time, in bounded epochs. A retry runs only for pending work a
+/// retry can progress (<see cref="Registry.Ports.DroneDB.IDdbBuild.IsBuildPending"/>): a build that only waits
+/// for missing files is never retried on a timer; it runs again when one of them is added to the dataset
+/// (<see cref="StartIfRetryableAsync"/>, after libddb made it due).
 /// </summary>
 /// <remarks>
 /// The recurring sweep (<see cref="ProcessPendingBuilds(PerformContext, CancellationToken)"/>) is not
@@ -35,7 +39,7 @@ namespace Registry.Web.Services.Adapters;
 [AutomaticRetry(Attempts = 0)]
 [JobExpiration(ExpirationTimeoutInMinutes = 60)]
 [DisableConcurrentExecution(timeoutInSeconds: 0)]
-public class BuildPendingService : Builds.IPendingBuildFlag
+public class BuildPendingService : IPendingBuildFlag, IPendingBuildRetry
 {
     private readonly DatasetSweep _sweep;
     private readonly IDdbManager _ddbManager;
@@ -176,20 +180,82 @@ public class BuildPendingService : Builds.IPendingBuildFlag
     /// Failures are logged and do not fail the upload.
     /// </summary>
     /// <returns>A task representing the observation update.</returns>
-    public async Task SetDatasetHasPendingBuilds(string orgSlug, string dsSlug, bool hasPending)
-    {
-        try
+    public Task SetDatasetHasPendingBuilds(string orgSlug, string dsSlug, bool hasPending) =>
+        NeverFailingAsync(orgSlug, dsSlug, async () =>
         {
-            using var coordination = DatasetBuildCoordinator.Acquire(orgSlug, dsSlug, _storage, mysqlConnectionString: _mysqlConnectionString);
+            using var coordination = DatasetBuildCoordinator.Acquire(orgSlug, dsSlug, _storage,
+                mysqlConnectionString: _mysqlConnectionString);
             var state = await ReadState(orgSlug, dsSlug);
             // Uploads invalidate the stamp observation, including companion uploads.
             Observe(state, hasPending, null);
             await SaveState(orgSlug, dsSlug, state);
+            return null;
+        });
+
+    /// <summary>
+    /// Starts a bounded retry epoch of the coordinator of <paramref name="target"/> when libddb reports pending work a
+    /// retry can progress and no coordinator of the dataset is live: what an added or moved entry calls for, since
+    /// libddb makes the builds that waited for that file due. Failures are logged and do not fail the caller (its
+    /// entries are in the index already); the sweep starts the retry then.
+    /// </summary>
+    /// <returns>The coordinator's job id, or null when none was started.</returns>
+    public Task<string?> StartIfRetryableAsync(BuildTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return NeverFailingAsync(target.OrgSlug, target.DsSlug, async () =>
+        {
+            // Outside the lock: an add into a dataset with nothing to retry costs this one native call
+            if (!target.Ddb.IsBuildPending())
+                return null;
+
+            using var coordination = DatasetBuildCoordinator.Acquire(target.OrgSlug, target.DsSlug, _storage,
+                mysqlConnectionString: _mysqlConnectionString);
+            var state = await ReadState(target.OrgSlug, target.DsSlug);
+            // The add changed the stamp: the observation is pending without one, so the sweep reads it again
+            Observe(state, true, null);
+            return await StartEpochUnlessLiveAsync(state, target.Dataset, target.OrgSlug, target.DsSlug);
+        });
+    }
+
+    // Work on behalf of entries the index holds already (an upload, a queued build, an entry that arrived): a failure
+    // is logged and never fails the caller; the sweep reads the dataset again.
+    private async Task<string?> NeverFailingAsync(string orgSlug, string dsSlug, Func<Task<string?>> work)
+    {
+        try
+        {
+            return await work();
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to update pending observation for {Org}/{Ds}", orgSlug, dsSlug);
+            _logger.LogWarning(ex, "Cannot record the pending builds of {Org}/{Ds}; the sweep reads the dataset again",
+                orgSlug, dsSlug);
+            return null;
         }
+    }
+
+    // Under the dataset's coordination lock, with retryable pending work observed in state: a fresh bounded epoch of the
+    // coordinator, enqueued now, unless one is live (it reaches the work itself). Returns the job id, or null.
+    private async Task<string?> StartEpochUnlessLiveAsync(CacheState state, DatasetKey dataset, string orgSlug,
+        string dsSlug)
+    {
+        if (HasLiveCoordinator(state))
+        {
+            await SaveState(orgSlug, dsSlug, state);
+            return null;
+        }
+
+        // Restart one bounded epoch only after the previous coordinator
+        // is missing/terminal, irrespective of an unchanged database stamp.
+        var meta = new IndexPayload(orgSlug, dsSlug, null, MagicStrings.AutoBuildServiceUserId);
+        var jobId = _backgroundJob.EnqueueBuildPending(dataset, meta);
+        if (string.IsNullOrWhiteSpace(jobId))
+            throw new InvalidOperationException("Pending coordinator enqueue returned no job ID");
+        state.RetryAttempt = 0;
+        state.RetryEpoch = Guid.NewGuid().ToString("N");
+        state.ScheduledRetryJobId = jobId;
+        await SaveState(orgSlug, dsSlug, state);
+        _logger.LogInformation("Started pending recovery epoch for {Org}/{Ds}: {JobId}", orgSlug, dsSlug, jobId);
+        return jobId;
     }
 
     internal async Task RefreshPendingStatus(string orgSlug, string dsSlug, JobStorage? storage)
@@ -261,7 +327,8 @@ public class BuildPendingService : Builds.IPendingBuildFlag
                 await SaveState(orgSlug, dsSlug, state, storage);
                 _logger.LogInformation("Pending retry budget exhausted for {Org}/{Ds}; awaiting safety-net sweep",
                     orgSlug, dsSlug);
-                return ddb.GetPendingBuildInfo() ?? [];
+                // A build waiting for missing files was not retried: its retries did not run out
+                return [.. (ddb.GetPendingBuildInfo() ?? []).Where(p => !p.AwaitingFiles)];
             }
 
             var delayMinutes = RetryBackoffMinutes[Math.Min(state.RetryAttempt, RetryBackoffMinutes.Length - 1)];
@@ -310,10 +377,11 @@ public class BuildPendingService : Builds.IPendingBuildFlag
     public Task ProcessPendingBuilds(PerformContext? context) => ProcessPendingBuilds(context, JobCancellation.Of(context));
 
     /// <summary>
-    /// Low-frequency safety-net sweep that scans every dataset for pending builds.
-    /// Day-to-day retries are event-driven (see <see cref="ScheduleRetryIfPending"/>);
-    /// this recurring job only backstops retries lost to restarts or left over from
-    /// before the event-driven mechanism existed.
+    /// Low-frequency safety-net sweep that scans every dataset for pending builds a retry can progress.
+    /// Day-to-day retries are event-driven: the end of a build schedules the next one
+    /// (<see cref="ScheduleRetryIfPending"/>) and an added or moved entry starts one
+    /// (<see cref="StartIfRetryableAsync"/>); this recurring job only backstops retries lost to restarts
+    /// and the entries added by a path that does not start one (a raster tool's output, the index reconciliation).
     /// </summary>
     public async Task ProcessPendingBuilds(PerformContext? context, CancellationToken cancellationToken)
     {
@@ -359,25 +427,9 @@ public class BuildPendingService : Builds.IPendingBuildFlag
                 }
                 stats.PendingFound++;
 
-                if (HasLiveCoordinator(state))
-                {
-                    await SaveState(ds.OrgSlug, ds.DsSlug, state);
-                    return;
-                }
-
-                // Restart one bounded epoch only after the previous coordinator
-                // is missing/terminal, irrespective of an unchanged database stamp.
-                var meta = new IndexPayload(ds.OrgSlug, ds.DsSlug, null, MagicStrings.AutoBuildServiceUserId);
-                var jobId = _backgroundJob.EnqueueBuildPending(new DatasetKey(ds.OrgSlug, ds.InternalRef), meta);
-                if (string.IsNullOrWhiteSpace(jobId))
-                    throw new InvalidOperationException("Pending coordinator enqueue returned no job ID");
-                state.RetryAttempt = 0;
-                state.RetryEpoch = Guid.NewGuid().ToString("N");
-                state.ScheduledRetryJobId = jobId;
-                await SaveState(ds.OrgSlug, ds.DsSlug, state);
-                stats.JobsEnqueued++;
-                _logger.LogInformation("Started pending recovery epoch for {Org}/{Ds}: {JobId}",
-                    ds.OrgSlug, ds.DsSlug, jobId);
+                if (await StartEpochUnlessLiveAsync(state, new DatasetKey(ds.OrgSlug, ds.InternalRef), ds.OrgSlug,
+                        ds.DsSlug) != null)
+                    stats.JobsEnqueued++;
             }, cancellationToken);
 
             stats.TotalProcessed = result.Datasets;

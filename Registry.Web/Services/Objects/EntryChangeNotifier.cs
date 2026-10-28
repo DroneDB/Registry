@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Ports;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using static Registry.Web.Services.CacheCategories;
@@ -13,23 +14,37 @@ using static Registry.Web.Services.CacheCategories;
 namespace Registry.Web.Services.Objects;
 
 /// <summary>
-/// The caches an entry command invalidates at once (uploads coalesce theirs, <see cref="IDatasetChangeCoalescer"/>):
-/// the dataset thumbnail when a thumbnail candidate changed, and the dataset's OGC documents.
+/// What an entry command changes beyond its entries, at once (uploads coalesce their caches,
+/// <see cref="IDatasetChangeCoalescer"/>): the dataset thumbnail when a thumbnail candidate changed, the dataset's OGC
+/// documents, and, for entries that arrive, the pending builds that waited for them.
 /// </summary>
 public sealed class EntryChangeNotifier
 {
     private readonly ICacheManager _cache;
     private readonly IOgcLayerCatalog _ogcCatalog;
+    private readonly BuildScheduler _builds;
     private readonly string[] _thumbnailCandidates;
     private readonly ILogger<EntryChangeNotifier> _logger;
 
-    public EntryChangeNotifier(ICacheManager cache, IOgcLayerCatalog ogcCatalog, IOptions<ThumbnailOptions> thumbnails,
-        ILogger<EntryChangeNotifier> logger)
+    public EntryChangeNotifier(ICacheManager cache, IOgcLayerCatalog ogcCatalog, BuildScheduler builds,
+        IOptions<ThumbnailOptions> thumbnails, ILogger<EntryChangeNotifier> logger)
     {
         _cache = cache;
         _ogcCatalog = ogcCatalog;
+        _builds = builds;
         _thumbnailCandidates = thumbnails.Value.Candidates;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Entries at <paramref name="paths"/> arrived in the dataset (moved, copied or transferred into it): the caches of
+    /// <see cref="EntriesChangedAsync"/>, then the retry of the pending builds that waited for a file of that name
+    /// (<see cref="BuildScheduler.RetryPendingAsync"/>, which libddb made due; it never throws).
+    /// </summary>
+    public async Task EntriesArrivedAsync(DatasetAccess access, string orgSlug, string dsSlug, IEnumerable<string> paths)
+    {
+        await EntriesChangedAsync(orgSlug, dsSlug, paths);
+        await _builds.RetryPendingAsync(BuildTarget.Of(access, orgSlug, dsSlug));
     }
 
     /// <summary>Entries at <paramref name="paths"/> were added, changed or removed.</summary>

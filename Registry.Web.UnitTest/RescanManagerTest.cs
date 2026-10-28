@@ -203,9 +203,9 @@ public class RescanManagerTest : TestBase
     }
 
     /// <summary>
-    /// The pending-build job is queued when libddb reports deferred builds (BuildScheduler), not after every
-    /// rescan; a rebuild that is deferred later is retried by the pending-build coordinator, which the scheduler
-    /// flags before it queues the rebuild.
+    /// The pending-build coordinator starts when libddb reports pending work a retry can progress
+    /// (BuildScheduler.RetryPendingAsync), not after every rescan; a rebuild that is deferred later is retried by the
+    /// pending-build coordinator, which the scheduler flags before it queues the rebuild.
     /// </summary>
     [Test]
     public async Task RescanDatasetIndex_NothingDeferred_QueuesNoPendingBuildJob()
@@ -335,7 +335,9 @@ public class RescanManagerTest : TestBase
     private RescanManager CreateRescanManager(RegistryContext context) =>
         new(new CurrentUserBuildRequester(_authManagerMock.Object),
             new DatasetAccessResolver(Mock.Of<IDatasetResolver>(), _authManagerMock.Object, _ddbManagerMock.Object, TestPaths.Policy),
-            context, _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object),
+            context, _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object,
+                TestJobs.BuildPendingService(context, _ddbManagerMock.Object, _backgroundJobMock.Object,
+                    Mock.Of<ICacheManager>())),
             new RescanRebuild(_cacheInvalidatorMock.Object, CreateTestLogger<RescanRebuild>()),
             CreateTestLogger<RescanManager>());
 

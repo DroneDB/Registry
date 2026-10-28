@@ -17,9 +17,9 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// <see cref="BuildScheduler"/> is the one place that queues builds: buildability and deferred builds come
-/// from libddb (the build manifest, <see cref="IDdbBuild.IsBuildPending"/>), the dataset is flagged pending before
-/// the first job, and the user a build runs as is resolved once (no site writes <c>user.Id</c> any more).
+/// <see cref="BuildScheduler"/> is the one place that queues builds: buildability comes from libddb (the build
+/// manifest), the dataset is flagged pending before the first job, entries that arrive start the pending-build retry,
+/// and the user a build runs as is resolved once (no site writes <c>user.Id</c> any more).
 /// </summary>
 [TestFixture]
 public class BuildSchedulerTests
@@ -30,6 +30,7 @@ public class BuildSchedulerTests
     private readonly List<IndexPayload> _payloads = [];
     private Mock<IBackgroundJobsProcessor> _jobs = null!;
     private Mock<IPendingBuildFlag> _pending = null!;
+    private Mock<IPendingBuildRetry> _retries = null!;
     private Mock<IDDB> _ddb = null!;
 
     [SetUp]
@@ -48,6 +49,9 @@ public class BuildSchedulerTests
         _pending = new Mock<IPendingBuildFlag>();
         _pending.Setup(p => p.SetDatasetHasPendingBuilds("org", "ds", true))
             .Callback(() => _order.Add("flag")).Returns(Task.CompletedTask);
+        _retries = new Mock<IPendingBuildRetry>();
+        _retries.Setup(r => r.StartIfRetryableAsync(It.IsAny<BuildTarget>()))
+            .Callback(() => _order.Add("retry")).ReturnsAsync("coordinator");
         _ddb = new Mock<IDDB>();
         _ddb.SetupGet(d => d.DatasetFolderPath).Returns(Folder);
         _ddb.Setup(d => d.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()))
@@ -61,7 +65,7 @@ public class BuildSchedulerTests
     private BuildTarget Target => new(_ddb.Object, new DatasetKey("org", Guid.NewGuid()), "org", "ds");
 
     private BuildScheduler Scheduler(string? requester = "u") =>
-        TestJobs.Scheduler(_jobs.Object, _pending.Object, userId: requester);
+        TestJobs.Scheduler(_jobs.Object, _pending.Object, userId: requester, retries: _retries.Object);
 
     [Test]
     public async Task QueueBuildable_QueuesTheBuildableOnes_AfterOneFlag()
@@ -100,13 +104,38 @@ public class BuildSchedulerTests
     }
 
     [Test]
-    public async Task QueuePending_OnlyWhenLibddbReportsDeferredBuilds()
+    public async Task QueueAdded_QueuesTheBuildableOnes_ThenStartsThePendingRetryOnce()
     {
-        (await Scheduler().QueuePendingAsync(Target)).ShouldBeNull();
+        var target = Target;
 
-        _ddb.Setup(d => d.IsBuildPending()).Returns(true);
-        (await Scheduler().QueuePendingAsync(Target)).ShouldNotBeNull();
-        _payloads.Single().Path.ShouldBeNull();
+        var queued = await Scheduler().QueueAddedAsync(target, ["a.tif", "b.jpg"]);
+
+        queued.Select(b => b.Path).ShouldBe(["a.tif"]);
+        _order.ShouldBe(["flag", "job", "retry"]);
+        _retries.Verify(r => r.StartIfRetryableAsync(target), Times.Once);
+    }
+
+    /// <summary>
+    /// A file nothing builds (the .mtl of an .obj that waits for it) queues no build whose end would retry the pending
+    /// builds: its arrival starts the retry itself (red before: only the hourly sweep found it).
+    /// </summary>
+    [Test]
+    public async Task QueueAdded_NothingBuildable_StillStartsThePendingRetry()
+    {
+        (await Scheduler().QueueAddedAsync(Target, ["model.mtl"])).ShouldBeEmpty();
+
+        _order.ShouldBe(["retry"]);
+    }
+
+    [Test]
+    public async Task RetryPending_IsTheRetryOfTheDataset()
+    {
+        var target = Target;
+
+        (await Scheduler().RetryPendingAsync(target)).ShouldBe("coordinator");
+
+        _retries.Verify(r => r.StartIfRetryableAsync(target), Times.Once);
+        _payloads.ShouldBeEmpty("the retry queues its own coordinator");
     }
 
     [Test]

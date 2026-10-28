@@ -29,6 +29,7 @@ using Registry.Web.Models;
 using Registry.Web.Services;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.BuildNotifications;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Shouldly;
@@ -262,6 +263,108 @@ public class PendingBuildCoordinationTests
 
         (await _service.ScheduleRetryIfPending(Org, Ds, "retry-1", null, null)).ShouldBe(pending);
         _delays.Count.ShouldBe(1);
+    }
+
+    /// <summary>
+    /// A build that waits for missing files was never retried on a timer, so the end of the budget is not its failure:
+    /// only the entries a retry could progress are given up (red before: the waiting .obj was reported as failed after
+    /// the automatic retries).
+    /// </summary>
+    [Test]
+    public async Task TheSpentBudget_LeavesOutTheEntriesThatWaitForFiles()
+    {
+        var retried = PendingMarkers.Of("a.laz", "a-hash");
+        var waiting = PendingMarkers.Of("b.obj", "b-hash", 0, "b.mtl");
+        waiting.AwaitingFiles = true;
+        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([retried, waiting]);
+        Seed(12);
+
+        (await _service.ScheduleRetryIfPending(Org, Ds, null, null, null)).ShouldBe([retried]);
+    }
+
+    /// <summary>
+    /// libddb leaves a build that only waits for missing files out of <see cref="IDdbBuild.IsBuildPending"/>: the sweep
+    /// starts no coordinator for it and ends the retry chain it had, and the end of a coordinator schedules no next one.
+    /// </summary>
+    [Test]
+    public async Task ADatasetWhosePendingBuildsOnlyWaitForFiles_GetsNoCoordinator_AndItsRetryChainStops()
+    {
+        var waiting = PendingMarkers.Of("model.obj", "model-hash", 0, "model.mtl");
+        waiting.AwaitingFiles = true;
+        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([waiting]);
+        _ddb.Setup(x => x.IsBuildPending()).Returns(false);
+        Seed(5, "old-job");
+        _statuses["old-job"] = JobStatus.Succeeded;
+
+        await _service.ProcessPendingBuilds(null, CancellationToken.None);
+        await _service.ScheduleRetryIfPending(Org, Ds, "old-job", null, null);
+
+        _enqueued.ShouldBe(0);
+        _delays.ShouldBeEmpty();
+        State().GetProperty("RetryAttempt").GetInt32().ShouldBe(0);
+        State().GetProperty("ScheduledRetryJobId").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    private BuildTarget AddTarget => new(_ddb.Object, new DatasetKey(Org, Guid.NewGuid()), Org, Ds);
+
+    /// <summary>
+    /// An entry added to a dataset with pending work a retry can progress starts one coordinator, now and with a fresh
+    /// budget; the next add finds it live and starts none (red before: nothing but the hourly sweep started one).
+    /// </summary>
+    [Test]
+    public async Task AnAddedEntry_StartsOneCoordinator_AndNoneWhileItIsLive()
+    {
+        Seed(12, "spent");
+        _statuses["spent"] = JobStatus.Succeeded;
+
+        (await _service.StartIfRetryableAsync(AddTarget)).ShouldBe("sweep-1");
+        (await _service.StartIfRetryableAsync(AddTarget)).ShouldBeNull();
+
+        _enqueued.ShouldBe(1);
+        _delays.ShouldBeEmpty("enqueued now, not after a backoff");
+        State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe("sweep-1");
+        State().GetProperty("RetryAttempt").GetInt32().ShouldBe(0);
+        State().GetProperty("RetryEpoch").GetString().ShouldNotBe("old-epoch");
+        State().GetProperty("StampChecksum").ValueKind.ShouldBe(JsonValueKind.Null, "the sweep reads the dataset again");
+    }
+
+    [TestCase(JobStatus.Scheduled)]
+    [TestCase(JobStatus.Enqueued)]
+    [TestCase(JobStatus.Processing)]
+    public async Task AnAddedEntry_KeepsTheLiveCoordinatorItsBudgetAndEpoch(JobStatus status)
+    {
+        Seed(8, "live");
+        _statuses["live"] = status;
+
+        (await _service.StartIfRetryableAsync(AddTarget)).ShouldBeNull();
+
+        _enqueued.ShouldBe(0);
+        State().GetProperty("RetryAttempt").GetInt32().ShouldBe(8);
+        State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe("live");
+        State().GetProperty("RetryEpoch").GetString().ShouldBe("old-epoch");
+    }
+
+    /// <summary>An add into a dataset with nothing to retry costs one native call: no lock, no state read, no job.</summary>
+    [Test]
+    public async Task AnAddedEntry_WithNothingRetryable_OnlyAsksLibddb()
+    {
+        _ddb.Setup(x => x.IsBuildPending()).Returns(false);
+
+        (await _service.StartIfRetryableAsync(AddTarget)).ShouldBeNull();
+
+        _ddb.Verify(x => x.IsBuildPending(), Times.Once);
+        _cache.Invocations.ShouldBeEmpty("no state is read");
+        _enqueued.ShouldBe(0);
+    }
+
+    [Test]
+    public async Task AnAddedEntry_WhoseRetryCannotStart_DoesNotFailTheCaller()
+    {
+        _ddb.Setup(x => x.IsBuildPending()).Throws(new DdbException("index locked"));
+
+        (await _service.StartIfRetryableAsync(AddTarget)).ShouldBeNull();
+
+        _enqueued.ShouldBe(0);
     }
 
     [Test]
