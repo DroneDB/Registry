@@ -36,7 +36,8 @@ public sealed class ImportTargetDatasets
     {
         try
         {
-            return _urls.GenerateDatasetUrl(await _datasets.GetDatasetAsync(orgSlug, dsSlug, ct: ct));
+            // Without safe the lookup throws when the dataset is missing: never null
+            return _urls.GenerateDatasetUrl((await _datasets.GetDatasetAsync(orgSlug, dsSlug, ct: ct))!);
         }
         catch (Exception ex)
         {

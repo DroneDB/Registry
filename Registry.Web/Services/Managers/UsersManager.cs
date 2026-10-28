@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading;
@@ -35,19 +34,19 @@ public class UsersManager
         _preferences = preferences;
     }
 
-    public Task<AuthenticateResponse> Authenticate(string userName, string password) =>
+    public Task<AuthenticateResponse?> Authenticate(string userName, string password) =>
         _sessions.Authenticate(userName, password);
 
-    public Task<AuthenticateResponse> Authenticate(string token) => _sessions.Authenticate(token);
+    public Task<AuthenticateResponse?> Authenticate(string token) => _sessions.Authenticate(token);
 
     public Task<AuthenticateResponse> Refresh() => _sessions.Refresh();
 
-    public Task<UserDto> CreateUser(string userName, string email, string password, string[] roles) =>
+    public Task<UserDto> CreateUser(string userName, string? email, string password, string[]? roles) =>
         _accounts.CreateUser(userName, email, password, roles);
 
-    public Task UpdateUser(string userName, string email) => _accounts.UpdateUser(userName, email);
+    public Task UpdateUser(string userName, string? email) => _accounts.UpdateUser(userName, email);
 
-    public Task<Dictionary<string, object>> GetUserMeta(string userName = null) => _accounts.GetUserMeta(userName);
+    public Task<Dictionary<string, object>> GetUserMeta(string? userName = null) => _accounts.GetUserMeta(userName);
 
     public Task SetUserMeta(string userId, Dictionary<string, object> meta) => _accounts.SetUserMeta(userId, meta);
 
@@ -74,7 +73,7 @@ public class UsersManager
 
     public Task<IEnumerable<UserDetailDto>> GetAllDetailed(CancellationToken ct = default) => _directory.GetAllDetailed(ct: ct);
 
-    public Task<UserStorageInfo> GetUserStorageInfo(string userName = null) => _directory.GetUserStorageInfo(userName);
+    public Task<UserStorageInfo> GetUserStorageInfo(string? userName = null) => _directory.GetUserStorageInfo(userName);
 
     public Task<UserOrganizationMembershipDto[]> GetUserOrganizations(string userName, CancellationToken ct = default) =>
         _directory.GetUserOrganizations(userName, ct: ct);
@@ -96,7 +95,7 @@ public class UsersManager
     /// <param name="successor">The username of the successor to transfer data to. If null, all data is deleted.</param>
     /// <param name="conflictResolution">How to handle conflicts when transferring datasets.</param>
     /// <returns>Result of the deletion operation.</returns>
-    public Task<DeleteUserResultDto> DeleteUser(string userName, string successor = null,
+    public Task<DeleteUserResultDto> DeleteUser(string userName, string? successor = null,
         ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.Rename) =>
         _deletion.DeleteUser(userName, successor, conflictResolution);
 }

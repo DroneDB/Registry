@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -35,7 +34,7 @@ public class DownloadLimiter : IDownloadLimiter
     /// Test seam: runs in <see cref="ReleaseSlot"/> after the counter reached 0 and before the empty
     /// entry is removed, so a test can interleave a concurrent acquire there deterministically.
     /// </summary>
-    internal Action<string> BeforeRemoveEmptyEntry { get; set; }
+    internal Action<string>? BeforeRemoveEmptyEntry { get; set; }
 
     /// <inheritdoc />
     public bool IsEnabled => _maxConcurrentDownloads is > 0;

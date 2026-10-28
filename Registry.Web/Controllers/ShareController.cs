@@ -1,4 +1,3 @@
-#nullable disable
 using Registry.Ports;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -102,7 +101,7 @@ public class ShareController : ControllerBaseEx
         // Resolve the dataset target so the file can be streamed straight onto its storage volume
         var (orgSlug, dsSlug) = await _shareManager.GetUploadTarget(token, ct: ct);
 
-        StreamedFile file = null;
+        StreamedFile? file = null;
         var form = await MultipartRequestHelper.ReadSingleFileFormAsync(Request,
             _formOptions.MultipartBoundaryLengthLimit,
             async body =>
@@ -176,8 +175,8 @@ public class ShareController : ControllerBaseEx
         if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType))
             throw new BadRequestException("Expected a multipart/form-data request");
 
-        ChunkUploadDto chunkInfo = null;
-        ChunkUploadResultDto result = null;
+        ChunkUploadDto? chunkInfo = null;
+        ChunkUploadResultDto? result = null;
         await MultipartRequestHelper.ReadFilesFormAsync(Request, _formOptions.MultipartBoundaryLengthLimit, 1,
             async part =>
             {

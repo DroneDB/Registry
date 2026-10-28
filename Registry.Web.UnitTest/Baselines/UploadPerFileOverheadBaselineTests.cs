@@ -73,14 +73,14 @@ public class UploadPerFileOverheadBaselineTests : TestBase
             .Returns(() =>
             {
                 Interlocked.Increment(ref _quotaEvaluations);
-                return Task.FromResult(new UserStorageInfo { Used = 0, Total = long.MaxValue });
+                return Task.FromResult<UserStorageInfo?>(new UserStorageInfo { Used = 0, Total = long.MaxValue });
             });
 
         _auth = new Mock<IAuthManager>();
         _auth.Setup(a => a.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(() => { Interlocked.Increment(ref _requestAccessCalls); return Task.FromResult(true); });
         _auth.Setup(a => a.GetCurrentUser())
-            .Returns(() => { Interlocked.Increment(ref _getCurrentUserCalls); return Task.FromResult(new User { Id = "u1", UserName = "u1" }); });
+            .Returns(() => { Interlocked.Increment(ref _getCurrentUserCalls); return Task.FromResult<User?>(new User { Id = "u1", UserName = "u1" }); });
 
         _ddb = new Mock<IDDB>();
         _ddb.SetupGet(d => d.DatasetFolderPath).Returns(_root);

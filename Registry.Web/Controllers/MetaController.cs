@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
@@ -6,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Utilities;
@@ -47,8 +47,9 @@ public class MetaController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string key,
-        [FromBody] string data,
-        [FromQuery] string path = null, CancellationToken ct = default)
+        // Nullable so that an empty JSON string is not rejected as missing; an empty body is still rejected
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Disallow)] string? data,
+        [FromQuery] string? path = null, CancellationToken ct = default)
     {
         var res = await _metaManager.Add(orgSlug, dsSlug, key, data, path, ct: ct);
 
@@ -75,11 +76,11 @@ public class MetaController : ControllerBaseEx
     public async Task<ActionResult<MetaDto>> AddAlt(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromForm(Name = "key")] string keyFromForm,
-        [FromForm] string data,
-        [FromForm(Name = "path")] string pathFromForm = null,
-        [FromQuery(Name = "path")] string pathFromQuery = null,
-        [FromQuery(Name = "key")] string keyFromQuery = null, CancellationToken ct = default)
+        [FromForm(Name = "key")] string? keyFromForm,
+        [FromForm] string? data,
+        [FromForm(Name = "path")] string? pathFromForm = null,
+        [FromQuery(Name = "path")] string? pathFromQuery = null,
+        [FromQuery(Name = "key")] string? keyFromQuery = null, CancellationToken ct = default)
     {
         // C# magics, precedence to form parameter
         var path = pathFromForm ?? pathFromQuery;
@@ -108,8 +109,9 @@ public class MetaController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string key,
-        [FromBody] string data,
-        [FromQuery] string path = null, CancellationToken ct = default)
+        // Nullable so that an empty JSON string is not rejected as missing; an empty body is still rejected
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Disallow)] string? data,
+        [FromQuery] string? path = null, CancellationToken ct = default)
     {
         var res = await _metaManager.Set(orgSlug, dsSlug, key, data, path, ct: ct);
 
@@ -136,11 +138,11 @@ public class MetaController : ControllerBaseEx
     public async Task<ActionResult<MetaDto>> SetAlt(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromForm(Name = "key")] string keyFromForm,
-        [FromForm] string data,
-        [FromForm(Name = "path")] string pathFromForm = null,
-        [FromQuery(Name = "path")] string pathFromQuery = null,
-        [FromQuery(Name = "key")] string keyFromQuery = null, CancellationToken ct = default)
+        [FromForm(Name = "key")] string? keyFromForm,
+        [FromForm] string? data,
+        [FromForm(Name = "path")] string? pathFromForm = null,
+        [FromQuery(Name = "path")] string? pathFromQuery = null,
+        [FromQuery(Name = "key")] string? keyFromQuery = null, CancellationToken ct = default)
     {
         // C# magics, precedence to form parameter
         var path = pathFromForm ?? pathFromQuery;
@@ -213,7 +215,7 @@ public class MetaController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string key,
-        [FromQuery] string path = null, CancellationToken ct = default)
+        [FromQuery] string? path = null, CancellationToken ct = default)
     {
         var res = await _metaManager.Unset(orgSlug, dsSlug, key, path, ct: ct);
 
@@ -239,10 +241,10 @@ public class MetaController : ControllerBaseEx
     public async Task<ActionResult<RemoveResponse>> UnsetAlt(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromForm(Name = "key")] string keyFromForm,
-        [FromForm(Name = "path")] string pathFromForm = null,
-        [FromQuery(Name = "path")] string pathFromQuery = null,
-        [FromQuery(Name = "key")] string keyFromQuery = null, CancellationToken ct = default)
+        [FromForm(Name = "key")] string? keyFromForm,
+        [FromForm(Name = "path")] string? pathFromForm = null,
+        [FromQuery(Name = "path")] string? pathFromQuery = null,
+        [FromQuery(Name = "key")] string? keyFromQuery = null, CancellationToken ct = default)
     {
         // C# magics, precedence to form parameter
         var path = pathFromForm ?? pathFromQuery;
@@ -268,7 +270,7 @@ public class MetaController : ControllerBaseEx
     public async Task<ActionResult<IEnumerable<MetaListItemDto>>> List(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromQuery] string path = null, CancellationToken ct = default)
+        [FromQuery] string? path = null, CancellationToken ct = default)
     {
         var res = await _metaManager.List(orgSlug, dsSlug, path, ct: ct);
 
@@ -292,7 +294,7 @@ public class MetaController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string key,
-        [FromQuery] string path = null, CancellationToken ct = default)
+        [FromQuery] string? path = null, CancellationToken ct = default)
     {
         return await _metaManager.Get(orgSlug, dsSlug, key, path, ct: ct);
     }
@@ -313,7 +315,7 @@ public class MetaController : ControllerBaseEx
     public async Task<ActionResult<IEnumerable<MetaDumpDto>>> Dump(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromForm] string ids = null, CancellationToken ct = default)
+        [FromForm] string? ids = null, CancellationToken ct = default)
     {
         var res = await _metaManager.Dump(orgSlug, dsSlug, ids, ct: ct);
 

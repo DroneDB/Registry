@@ -47,8 +47,9 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         var tool = _registry.Resolve(request.ToolId, request.Version)
                    ?? throw new HeavyToolNotFoundException($"Tool '{request.ToolId}' is not available.");
 
-        // The callers authorized the request (dataset or organization write access) before submitting
-        var ds = await _datasets.GetDatasetAsync(request.OrgSlug, request.DsSlug, ct: ct);
+        // The callers authorized the request (dataset or organization write access) before submitting; without
+        // safe the lookup throws when the dataset is missing
+        var ds = (await _datasets.GetDatasetAsync(request.OrgSlug, request.DsSlug, ct: ct))!;
 
         var ddb = _ddbManager.Get(request.OrgSlug, ds.InternalRef);
 

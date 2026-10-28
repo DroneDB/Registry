@@ -1,4 +1,3 @@
-#nullable disable
 using System.Threading.Tasks;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.DTO;
@@ -15,7 +14,7 @@ public interface IStorageQuota
     /// The storage use and limit of the current user, or null when no limit applies (storage
     /// limiter off, administrator, or no limit set).
     /// </summary>
-    Task<UserStorageInfo> GetCurrentUserStorageLimit();
+    Task<UserStorageInfo?> GetCurrentUserStorageLimit();
 
     /// <summary>
     /// Throws <c>QuotaExceededException</c> when <paramref name="size"/> more bytes would exceed

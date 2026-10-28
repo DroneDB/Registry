@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.DirectoryServices.Protocols;
@@ -52,8 +51,8 @@ public class LdapLoginManager : ILoginManager
 
         try
         {
-            string userEmail;
-            string displayName;
+            string? userEmail;
+            string? displayName;
             List<string> memberOf;
 
             if (!string.IsNullOrWhiteSpace(_settings.UserDnFormat))
@@ -71,7 +70,7 @@ public class LdapLoginManager : ILoginManager
             else
             {
                 // Path B: service account search to locate the user DN, then user bind to verify password
-                string userDn;
+                string? userDn;
 
                 using (var svcConn = CreateConnection())
                 {
@@ -162,7 +161,7 @@ public class LdapLoginManager : ILoginManager
     // Private helpers
     // -------------------------------------------------------------------------
 
-    private (string dn, string email, string displayName, List<string> groups) SearchUser(
+    private (string? dn, string? email, string? displayName, List<string> groups) SearchUser(
         LdapConnection conn, string safeUserName)
     {
         var filter = string.Format(CultureInfo.InvariantCulture, _settings.SearchFilter, safeUserName);
@@ -193,7 +192,7 @@ public class LdapLoginManager : ILoginManager
         );
     }
 
-    private (string email, string displayName, List<string> groups) FetchUserAttributes(
+    private (string? email, string? displayName, List<string> groups) FetchUserAttributes(
         LdapConnection conn, string safeUserName)
     {
         var (_, email, displayName, groups) = SearchUser(conn, safeUserName);
@@ -213,7 +212,7 @@ public class LdapLoginManager : ILoginManager
         return false;
     }
 
-    private static string GetAttribute(SearchResultEntry entry, string attributeName)
+    private static string? GetAttribute(SearchResultEntry entry, string? attributeName)
     {
         if (string.IsNullOrEmpty(attributeName) || !entry.Attributes.Contains(attributeName))
             return null;
@@ -222,7 +221,7 @@ public class LdapLoginManager : ILoginManager
         return values.Length > 0 ? values[0] as string : null;
     }
 
-    private static List<string> GetMultiValueAttribute(SearchResultEntry entry, string attributeName)
+    private static List<string> GetMultiValueAttribute(SearchResultEntry entry, string? attributeName)
     {
         if (string.IsNullOrEmpty(attributeName) || !entry.Attributes.Contains(attributeName))
             return [];

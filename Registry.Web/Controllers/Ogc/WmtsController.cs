@@ -43,7 +43,7 @@ public class WmtsController : ControllerBaseEx
     [HttpGet("wmts/p/{*folder}")]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "text/xml", "application/xml", "image/png", "image/jpeg", "application/vnd.mapbox-vector-tile")]
     public async Task<IActionResult> KvpFolder([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] string folder, CancellationToken ct) => await Dispatch(orgSlug, dsSlug, folder, ct);
+        [FromRoute] string? folder, CancellationToken ct) => await Dispatch(orgSlug, dsSlug, folder, ct);
 
     private static readonly string[] SupportedRequests =
         ["GetCapabilities", "GetTile", "GetFeatureInfo"];

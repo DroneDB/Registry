@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -45,7 +44,7 @@ public class WcsController : ControllerBaseEx
     [HttpGet("wcs/p/{*folder}")]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "text/xml", "application/xml", "image/tiff", "image/png", "image/jpeg")]
     public Task<IActionResult> KvpFolder([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] string folder, CancellationToken ct) => Dispatch(orgSlug, dsSlug, folder, ct);
+        [FromRoute] string? folder, CancellationToken ct) => Dispatch(orgSlug, dsSlug, folder, ct);
 
     private async Task<IActionResult> Dispatch(string orgSlug, string dsSlug, string? folderPath, CancellationToken ct)
     {

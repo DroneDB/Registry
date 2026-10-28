@@ -75,7 +75,7 @@ public class UploadManagerTests
         _quota.Setup(u => u.GetCurrentUserStorageLimit()).Returns(() =>
         {
             Interlocked.Increment(ref _evaluations);
-            return Task.FromResult(new UserStorageInfo { Used = _used, Total = _limit });
+            return Task.FromResult<UserStorageInfo?>(new UserStorageInfo { Used = _used, Total = _limit });
         });
 
         _auth = new Mock<IAuthManager>();

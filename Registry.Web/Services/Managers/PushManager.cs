@@ -1,4 +1,3 @@
-#nullable disable
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -41,7 +40,7 @@ public class PushManager
     /// </summary>
     /// <exception cref="Exceptions.BadRequestException">The delta adds no file at that path, or the
     /// bytes received are not the delta's (the file is not moved).</exception>
-    public Task UploadAsync(PushUpload upload, string filePath, string token, CancellationToken ct = default) =>
+    public Task UploadAsync(PushUpload upload, string? filePath, string? token, CancellationToken ct = default) =>
         _uploads.UploadAsync(upload, filePath, token, ct: ct);
 
     public Task SaveMeta(string orgSlug, string dsSlug, string token, string meta, CancellationToken ct = default) =>

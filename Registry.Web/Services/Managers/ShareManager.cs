@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -46,7 +45,7 @@ public class ShareManager
     /// <returns>The organization and dataset slugs of the running batch.</returns>
     public Task<(string OrgSlug, string DsSlug)> GetUploadTarget(string token, CancellationToken ct = default) => _uploads.GetUploadTarget(token, ct: ct);
 
-    public Task<UploadResultDto> UploadStreamed(string token, string path, StreamedFile file, CancellationToken ct = default) =>
+    public Task<UploadResultDto> UploadStreamed(string token, string? path, StreamedFile file, CancellationToken ct = default) =>
         _uploads.UploadStreamed(token, path, file, ct: ct);
 
     public Task<ChunkUploadResultDto> UploadChunk(string token, ChunkUploadDto chunkInfo, Stream chunkStream, CancellationToken ct = default) =>

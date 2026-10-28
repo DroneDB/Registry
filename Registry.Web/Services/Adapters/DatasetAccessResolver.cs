@@ -58,8 +58,9 @@ public sealed class DatasetAccessResolver : IDatasetAccessResolver
     public async Task<Organization> ResolveOrganizationAsync(string orgSlug, AccessType access,
         bool withTracking = false, bool withDatasets = false, CancellationToken ct = default)
     {
-        var organization = await _datasets.GetOrganizationAsync(orgSlug, withTracking: withTracking,
-            withDatasets: withDatasets, ct: ct);
+        // Without safe the lookup throws when the organization is missing: never null
+        var organization = (await _datasets.GetOrganizationAsync(orgSlug, withTracking: withTracking,
+            withDatasets: withDatasets, ct: ct))!;
         await EnsureAccessAsync(organization, access);
         return organization;
     }
@@ -77,7 +78,8 @@ public sealed class DatasetAccessResolver : IDatasetAccessResolver
         if (_grants.TryGetValue(key, out var granted))
             return granted;
 
-        var dataset = await _datasets.GetDatasetAsync(orgSlug, dsSlug, ct: ct);
+        // Without safe the lookup throws when the dataset is missing: never null
+        var dataset = (await _datasets.GetDatasetAsync(orgSlug, dsSlug, ct: ct))!;
         await EnsureAccessAsync(dataset, access);
         _grants[key] = dataset;
         return dataset;

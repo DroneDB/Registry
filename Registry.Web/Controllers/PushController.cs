@@ -1,4 +1,3 @@
-#nullable disable
 using Registry.Ports;
 using System.ComponentModel.DataAnnotations;
 using System.Threading;
@@ -60,7 +59,8 @@ public class PushController : ControllerBaseEx
         [FromForm, Required] string checksum,
         [FromForm(Name="stamp"), Required] string stampJson, CancellationToken ct)
     {
-        var stamp = ApiJson.Deserialize<StampDto>(stampJson);
+        // A JSON null is no stamp: without this check the push would create the dataset and then fail
+        var stamp = ApiJson.Deserialize<StampDto>(stampJson) ?? throw new BadRequestException("The stamp is not valid");
 
         var res = await _pushManager.Init(orgSlug, dsSlug, checksum, stamp, ct: ct);
 
@@ -88,7 +88,7 @@ public class PushController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug, CancellationToken ct)
     {
-        PushUpload upload = null;
+        PushUpload? upload = null;
         try
         {
             if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType))

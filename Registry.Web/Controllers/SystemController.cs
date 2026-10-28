@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Threading;
@@ -55,7 +54,7 @@ public class SystemController : ControllerBaseEx
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public ActionResult<string> GetVersion()
+    public ActionResult<string?> GetVersion()
     {
         return RegistryVersion.Current;
     }
@@ -135,10 +134,10 @@ public class SystemController : ControllerBaseEx
         [FromBody, Required] MoveDatasetDto request, CancellationToken ct)
     {
         var results = await _datasets.MoveToOrganization(
-            request?.SourceOrgSlug,
-            request?.DatasetSlugs,
-            request?.DestinationOrgSlug,
-            request!.ConflictResolution, ct: ct);
+            request.SourceOrgSlug,
+            request.DatasetSlugs,
+            request.DestinationOrgSlug,
+            request.ConflictResolution, ct: ct);
 
         return Answer(results);
     }
@@ -161,10 +160,10 @@ public class SystemController : ControllerBaseEx
         [FromBody, Required] MergeOrganizationDto request, CancellationToken ct)
     {
         var result = await _organizations.Merge(
-            request?.SourceOrgSlug,
-            request?.DestinationOrgSlug,
-            request!.ConflictResolution,
-            request!.DeleteSourceOrganization, ct: ct);
+            request.SourceOrgSlug,
+            request.DestinationOrgSlug,
+            request.ConflictResolution,
+            request.DeleteSourceOrganization, ct: ct);
 
         return result;
     }

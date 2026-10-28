@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
@@ -75,8 +74,9 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult Logout()
     {
-        // Same name and attributes (Path, Secure, SameSite) it was set with, or the browser keeps it
-        Response.Cookies.Delete(_tokens.AuthCookieName, AuthCookieOptions.For(Request));
+        // Same name and attributes (Path, Secure, SameSite) it was set with, or the browser keeps it; the options
+        // validator refuses to start without a cookie name
+        Response.Cookies.Delete(_tokens.AuthCookieName!, AuthCookieOptions.For(Request));
         return Ok();
     }
 
@@ -127,7 +127,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<AuthenticateResponse>> ChangePasswordPost(
+    public async Task<ActionResult<AuthenticateResponse?>> ChangePasswordPost(
         [FromForm, Required] string oldPassword,
         [FromForm, Required] string newPassword, CancellationToken ct)
     {
@@ -174,7 +174,7 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<DeleteUserResultDto>> DeleteUserRoute(
         [FromRoute, Required] string userName,
-        [FromQuery] string successor = null,
+        [FromQuery] string? successor = null,
         [FromQuery] ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.Rename, CancellationToken ct = default)
     {
         var result = await _usersManager.DeleteUser(userName, successor, conflictResolution);

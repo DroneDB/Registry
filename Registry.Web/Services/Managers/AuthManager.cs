@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.ComponentModel;
 using System.Linq;
@@ -32,7 +31,7 @@ public class AuthManager : IAuthManager
     private readonly DatasetAccessControl _datasetAccess;
 
     // Request-scoped lazy cache for current user (AuthManager is Scoped)
-    private readonly Lazy<Task<User>> _currentUserLazy;
+    private readonly Lazy<Task<User?>> _currentUserLazy;
 
     public AuthManager(
         UserManager<User> usersManager,
@@ -51,17 +50,17 @@ public class AuthManager : IAuthManager
         _datasetAccess = new DatasetAccessControl(snapshots, context, logger, ddbManager, cacheManager);
 
         // Initialize lazy - evaluated once per request (AuthManager is Scoped)
-        _currentUserLazy = new Lazy<Task<User>>(LoadCurrentUserAsync);
-        _currentUserIdLazy = new Lazy<Task<string>>(LoadCurrentUserIdAsync);
+        _currentUserLazy = new Lazy<Task<User?>>(LoadCurrentUserAsync);
+        _currentUserIdLazy = new Lazy<Task<string?>>(LoadCurrentUserIdAsync);
     }
 
     // Request-scoped lazy cache for the id of the current user (null when anonymous)
-    private readonly Lazy<Task<string>> _currentUserIdLazy;
+    private readonly Lazy<Task<string?>> _currentUserIdLazy;
 
-    private string CurrentUserIdClaim => _httpContextAccessor.HttpContext?.User.Claims
+    private string? CurrentUserIdClaim => _httpContextAccessor.HttpContext?.User.Claims
         .FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
 
-    private async Task<User> LoadCurrentUserAsync()
+    private async Task<User?> LoadCurrentUserAsync()
     {
         var userId = CurrentUserIdClaim;
         return userId == null ? null : await _usersManager.FindByIdAsync(userId);
@@ -70,15 +69,15 @@ public class AuthManager : IAuthManager
     // Access checks only need the id: resolved from the token and the cached snapshot, so a
     // request does not load the user. A token of a deleted user is anonymous, as in
     // GetCurrentUser().
-    private async Task<string> LoadCurrentUserIdAsync()
+    private async Task<string?> LoadCurrentUserIdAsync()
     {
         var userId = CurrentUserIdClaim;
         return userId != null && (await _snapshots.GetAsync(userId)).Exists ? userId : null;
     }
 
-    public Task<User> GetCurrentUser() => _currentUserLazy.Value;
+    public Task<User?> GetCurrentUser() => _currentUserLazy.Value;
 
-    public Task<string> GetCurrentUserId() => _currentUserIdLazy.Value;
+    public Task<string?> GetCurrentUserId() => _currentUserIdLazy.Value;
 
     public async Task<string> SafeGetCurrentUserName()
     {
@@ -113,19 +112,19 @@ public class AuthManager : IAuthManager
         return await RequestAccessById(obj, access, await _currentUserIdLazy.Value);
     }
 
-    public async Task<bool> CanListOrganizations(User user)
+    public async Task<bool> CanListOrganizations(User? user)
     {
         // User can list organizations if it's not null and not deactivated
         return user != null && !await _resourceAccess.IsUserDeactivated(user.Id);
     }
 
-    public async Task<bool> CanRefreshToken(User user)
+    public async Task<bool> CanRefreshToken(User? user)
     {
         // Read the identity store, not the snapshot: a refresh extends the token's life
         return user != null && !await _usersManager.IsInRoleAsync(user, ApplicationDbContext.DeactivatedRoleName);
     }
 
-    private async Task<bool> RequestAccessById<T>(T obj, AccessType access, string userId) where T : IRequestAccess
+    private async Task<bool> RequestAccessById<T>(T obj, AccessType access, string? userId) where T : IRequestAccess
     {
         ArgumentNullException.ThrowIfNull(obj);
 

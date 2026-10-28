@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -64,7 +63,7 @@ public class StacManager
         _logger = logger;
     }
 
-    public async Task<JsonNode> GetStacChild(string orgSlug, string dsSlug, string path = null,
+    public async Task<JsonNode> GetStacChild(string orgSlug, string dsSlug, string? path = null,
         CancellationToken ct = default)
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
@@ -202,8 +201,8 @@ public class StacManager
         return Collection(access.Dataset, access.Ddb);
     }
 
-    public async Task<JsonNode> GetCollectionItems(string orgSlug, string dsSlug, double[] bbox = null,
-        string datetime = null, int? limit = null, int? offset = null, CancellationToken ct = default)
+    public async Task<JsonNode> GetCollectionItems(string orgSlug, string dsSlug, double[]? bbox = null,
+        string? datetime = null, int? limit = null, int? offset = null, CancellationToken ct = default)
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
         var ds = access.Dataset;
@@ -245,7 +244,7 @@ public class StacManager
         return StacDocuments.ApiItem(ItemData(access.Ddb, path), access.Dataset, _urls);
     }
 
-    public async Task<JsonNode> Search(StacSearchRequestDto request, CancellationToken ct = default)
+    public async Task<JsonNode> Search(StacSearchRequestDto? request, CancellationToken ct = default)
     {
         request ??= new StacSearchRequestDto();
 
@@ -319,7 +318,7 @@ public class StacManager
         return FeatureCollection(features, links);
     }
 
-    private JsonObject SearchByIds(List<Dataset> datasets, string[] ids, string bboxStr, string datetime,
+    private JsonObject SearchByIds(List<Dataset> datasets, string[] ids, string? bboxStr, string? datetime,
         CancellationToken ct)
     {
         var wantedIds = new HashSet<string>(ids);
@@ -368,6 +367,6 @@ public class StacManager
     private static JsonObject ItemData(IDDB ddb, string path) =>
         StacDocuments.Mutable(ddb.GetStacData(path), "STAC item");
 
-    private static JsonObject ItemCollectionData(IDDB ddb, string bbox, string datetime, int limit, int offset) =>
+    private static JsonObject ItemCollectionData(IDDB ddb, string? bbox, string? datetime, int limit, int offset) =>
         StacDocuments.Mutable(ddb.GetStacItemCollectionData(bbox, datetime, limit, offset), "STAC item collection");
 }
