@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;

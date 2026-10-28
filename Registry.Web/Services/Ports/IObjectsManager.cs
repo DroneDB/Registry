@@ -1,4 +1,3 @@
-#nullable disable
 using System.IO;
 using System.Threading.Tasks;
 using Registry.Web.Models.DTO;
@@ -19,7 +18,7 @@ public interface IObjectsManager
     /// atomic move, index, quarantine on index failure, quota), or creates the folder <paramref name="path"/>
     /// when there is no stream.
     /// </summary>
-    Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null);
+    Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, Stream? stream = null);
 
     /// <summary>
     /// Streams a forward-only upload body to a temporary file on the dataset's storage volume,

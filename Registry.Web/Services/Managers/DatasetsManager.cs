@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -48,7 +47,7 @@ public class DatasetsManager : IDatasetsManager
     public Task Rename(string orgSlug, string dsSlug, string newSlug, CancellationToken ct = default) => _commands.Rename(orgSlug, dsSlug, newSlug, ct: ct);
 
     [Obsolete("Use meta")]
-    public Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, AttributesDto attributes, CancellationToken ct = default) =>
+    public Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, AttributesDto? attributes, CancellationToken ct = default) =>
         _commands.ChangeAttributes(orgSlug, dsSlug, attributes, ct: ct);
 
     public Task<IEnumerable<MoveDatasetResultDto>> MoveToOrganization(string sourceOrgSlug, string[] datasetSlugs,

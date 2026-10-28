@@ -1,4 +1,3 @@
-#nullable disable
 using Microsoft.AspNetCore.Http;
 using Registry.Ports;
 using Registry.Web.Services.Caching;

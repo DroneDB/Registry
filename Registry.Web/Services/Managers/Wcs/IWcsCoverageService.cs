@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 
 namespace Registry.Web.Services.Managers.Wcs;

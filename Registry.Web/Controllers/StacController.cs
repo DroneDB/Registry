@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading;
@@ -104,8 +103,8 @@ public class StacController : ControllerBaseEx
     public async Task<IActionResult> GetCollectionItems(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromQuery] string bbox = null,
-        [FromQuery] string datetime = null,
+        [FromQuery] string? bbox = null,
+        [FromQuery] string? datetime = null,
         [FromQuery] int? limit = null,
         [FromQuery] int? offset = null, CancellationToken ct = default)
     {
@@ -148,13 +147,13 @@ public class StacController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> SearchGet(
-        [FromQuery] string bbox = null,
-        [FromQuery] string intersects = null,
-        [FromQuery] string datetime = null,
+        [FromQuery] string? bbox = null,
+        [FromQuery] string? intersects = null,
+        [FromQuery] string? datetime = null,
         [FromQuery] int? limit = null,
-        [FromQuery] string collections = null,
-        [FromQuery] string ids = null,
-        [FromQuery] string token = null, CancellationToken ct = default)
+        [FromQuery] string? collections = null,
+        [FromQuery] string? ids = null,
+        [FromQuery] string? token = null, CancellationToken ct = default)
     {
         var hasBbox = !string.IsNullOrWhiteSpace(bbox);
         var hasIntersects = !string.IsNullOrWhiteSpace(intersects);
@@ -172,7 +171,7 @@ public class StacController : ControllerBaseEx
             throw new BadRequestException(DatetimeError);
 
         JsonElement? parsedIntersects = null;
-        if (hasIntersects)
+        if (!string.IsNullOrWhiteSpace(intersects))
         {
             try
             {
@@ -285,7 +284,7 @@ public class StacController : ControllerBaseEx
     /// Validates a STAC / OGC API Features datetime query value: a single RFC 3339 instant,
     /// or an interval "start/end" where exactly one side may be open (empty string or "..").
     /// </summary>
-    private static bool IsValidDatetime(string datetime)
+    private static bool IsValidDatetime(string? datetime)
     {
         if (string.IsNullOrWhiteSpace(datetime))
             return true;
@@ -340,7 +339,7 @@ public class StacController : ControllerBaseEx
         return minY <= maxY;
     }
 
-    private static bool TryParseBbox(string bbox, out double[] result)
+    private static bool TryParseBbox(string? bbox, out double[]? result)
     {
         result = null;
 
@@ -395,7 +394,7 @@ public class StacController : ControllerBaseEx
     public async Task<IActionResult> GetStacChild(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromRoute] string pathBase64 = null, CancellationToken ct = default)
+        [FromRoute] string? pathBase64 = null, CancellationToken ct = default)
     {
         return Ok(await _stacManager.GetStacChild(orgSlug, dsSlug, DecodePath(pathBase64), ct: ct));
     }
@@ -404,7 +403,7 @@ public class StacController : ControllerBaseEx
     /// The item path of a STAC child URL, Base64 in either alphabet (the links of paths whose standard Base64 holds
     /// '/' or '+' are URL-safe); a segment that is not Base64 is the client's error.
     /// </summary>
-    private static string DecodePath(string pathBase64)
+    private static string? DecodePath(string? pathBase64)
     {
         if (pathBase64 == null)
             return null;

@@ -33,7 +33,7 @@ public static class MultipartRequestHelper
         return boundary;
     }
 
-    public static bool IsMultipartContentType(string contentType)
+    public static bool IsMultipartContentType(string? contentType)
     {
         return !string.IsNullOrEmpty(contentType)
                && contentType.Contains("multipart/", StringComparison.OrdinalIgnoreCase);

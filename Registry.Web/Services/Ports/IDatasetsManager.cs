@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,7 +26,7 @@ public interface IDatasetsManager
     public Task Delete(string orgSlug, string dsSlug, CancellationToken ct = default);
 
     public Task Rename(string orgSlug, string dsSlug, string newSlug, CancellationToken ct = default);
-    Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, AttributesDto attributes, CancellationToken ct = default);
+    Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, AttributesDto? attributes, CancellationToken ct = default);
     public Task<StampDto> GetStamp(string orgSlug, string dsSlug, CancellationToken ct = default);
 
     /// <summary>

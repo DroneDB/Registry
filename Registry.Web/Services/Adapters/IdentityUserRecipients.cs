@@ -28,7 +28,7 @@ public sealed class IdentityUserRecipients : IUserRecipients
     }
 
     /// <inheritdoc />
-    public async Task<EmailAddress?> FindAsync(string userId, CancellationToken ct)
+    public async Task<EmailAddress?> FindAsync(string? userId, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(userId))
             return null;

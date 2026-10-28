@@ -1,5 +1,5 @@
-#nullable disable
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -38,7 +38,7 @@ public class MetaManager : IMetaManager
     /// The dataset's visibility or name (root meta) may decide who lists it and how: their caches go
     /// (<see cref="IDatasetListingInvalidator"/>).
     /// </summary>
-    private async Task OnDatasetMetaChanged(Data.Models.Dataset ds, string key, string path)
+    private async Task OnDatasetMetaChanged(Data.Models.Dataset ds, string key, string? path)
     {
         if (key == SafeMetaManager.VisibilityField)
         {
@@ -51,7 +51,7 @@ public class MetaManager : IMetaManager
         }
     }
 
-    public async Task<MetaDto> Add(string orgSlug, string dsSlug, string key, string data, string path = null, CancellationToken ct = default)
+    public async Task<MetaDto> Add(string orgSlug, string dsSlug, string? key, string? data, string? path = null, CancellationToken ct = default)
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
 
@@ -67,7 +67,7 @@ public class MetaManager : IMetaManager
         return ddb.Meta.Add(key, data, path).ToDto();
     }
 
-    public async Task<MetaDto> Set(string orgSlug, string dsSlug, string key, string data, string path = null, CancellationToken ct = default)
+    public async Task<MetaDto> Set(string orgSlug, string dsSlug, string? key, string? data, string? path = null, CancellationToken ct = default)
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
         var ds = access.Dataset;
@@ -100,7 +100,7 @@ public class MetaManager : IMetaManager
         return ddb.Meta.Remove(id);
     }
 
-    public async Task<JsonElement> Get(string orgSlug, string dsSlug, string key, string path = null, CancellationToken ct = default)
+    public async Task<JsonElement> Get(string orgSlug, string dsSlug, string key, string? path = null, CancellationToken ct = default)
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
 
@@ -131,7 +131,7 @@ public class MetaManager : IMetaManager
     /// <paramref name="kind"/> (<see cref="MetaKeyRule"/>: a refused key is a 400 with the rule's message, not a
     /// 500 from the native call).
     /// </summary>
-    private static void RequireWritableKey(string key, string data, MetaKeyKind kind)
+    private static void RequireWritableKey([NotNull] string? key, [NotNull] string? data, MetaKeyKind kind)
     {
         if (string.IsNullOrWhiteSpace(key))
             throw new BadRequestException("Key should not be null or empty");
@@ -143,10 +143,10 @@ public class MetaManager : IMetaManager
             throw new BadRequestException(violation, noRetry: true);
     }
 
-    private static bool HasKey(IDDB ddb, string key, string path) =>
+    private static bool HasKey(IDDB ddb, string key, string? path) =>
         ddb.Meta.List(path).Any(item => item.Key == key && item.Path == (path ?? ""));
 
-    public async Task<int> Unset(string orgSlug, string dsSlug, string key, string path = null, CancellationToken ct = default)
+    public async Task<int> Unset(string orgSlug, string dsSlug, string? key, string? path = null, CancellationToken ct = default)
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
         var ds = access.Dataset;
@@ -167,7 +167,7 @@ public class MetaManager : IMetaManager
 
     }
 
-    public async Task<IEnumerable<MetaListItemDto>> List(string orgSlug, string dsSlug, string path = null, CancellationToken ct = default)
+    public async Task<IEnumerable<MetaListItemDto>> List(string orgSlug, string dsSlug, string? path = null, CancellationToken ct = default)
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
 
@@ -181,7 +181,7 @@ public class MetaManager : IMetaManager
         return ddb.Meta.List(path).Select(item => item.ToDto());
     }
 
-    public async Task<IEnumerable<MetaDumpDto>> Dump(string orgSlug, string dsSlug, string ids = null, CancellationToken ct = default)
+    public async Task<IEnumerable<MetaDumpDto>> Dump(string orgSlug, string dsSlug, string? ids = null, CancellationToken ct = default)
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
 

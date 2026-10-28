@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.IO;
 using Microsoft.Extensions.Logging;
@@ -29,6 +28,9 @@ public class DdbManager : IDdbManager
         _settings = settings.Value;
         _initialized = initialized ?? new InitializedDatasetFolders();
     }
+
+    // The options validator refuses to start without a datasets path
+    private string DatasetsPath => _settings.DatasetsPath!;
 
     public IDDB Get(string orgSlug, Guid internalRef)
     {
@@ -66,7 +68,7 @@ public class DdbManager : IDdbManager
         throw new DirectoryNotFoundException($"Dataset {orgSlug}/{internalRef} has no index (deleted?)");
     }
 
-    public bool TryParseDatasetFolder(string datasetFolderPath, out string orgSlug, out Guid internalRef)
+    public bool TryParseDatasetFolder(string? datasetFolderPath, out string orgSlug, out Guid internalRef)
     {
         orgSlug = string.Empty;
         internalRef = Guid.Empty;
@@ -102,7 +104,7 @@ public class DdbManager : IDdbManager
 
     public void Delete(string orgSlug)
     {
-        var orgPath = Path.Combine(_settings.DatasetsPath, orgSlug);
+        var orgPath = Path.Combine(DatasetsPath, orgSlug);
 
         if (!Directory.Exists(orgPath)) {
             _logger.LogWarning("Asked to remove the folder '{OrgPath}' but it does not exist", orgPath);
@@ -139,7 +141,7 @@ public class DdbManager : IDdbManager
         if (string.IsNullOrWhiteSpace(orgSlug))
             throw new ArgumentException("Organization slug cannot be null or empty");
 
-        return Path.Combine(_settings.DatasetsPath, orgSlug, internalRef.ToString());
+        return Path.Combine(DatasetsPath, orgSlug, internalRef.ToString());
 
     }
 }

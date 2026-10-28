@@ -1,4 +1,3 @@
-#nullable disable
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Data.Models;
@@ -17,7 +16,7 @@ public interface IDatasetResolver
     /// <paramref name="safe"/> (then null). Untracked unless <paramref name="withTracking"/>; its datasets
     /// are loaded only with <paramref name="withDatasets"/>.
     /// </summary>
-    Task<Organization> GetOrganizationAsync(string orgSlug, bool safe = false, bool withTracking = false,
+    Task<Organization?> GetOrganizationAsync(string orgSlug, bool safe = false, bool withTracking = false,
         bool withDatasets = false, CancellationToken ct = default);
 
     /// <summary>
@@ -25,7 +24,7 @@ public interface IDatasetResolver
     /// errors as <see cref="GetOrganizationAsync"/>. A read-only lookup (the default) may come from the
     /// short-lived lookup cache, with the organization's members; a tracked one always queries.
     /// </summary>
-    Task<Dataset> GetDatasetAsync(string orgSlug, string dsSlug, bool safe = false, bool withTracking = false,
+    Task<Dataset?> GetDatasetAsync(string orgSlug, string dsSlug, bool safe = false, bool withTracking = false,
         CancellationToken ct = default);
 
     /// <summary>The slug of <paramref name="orgName"/>, with a numeric suffix when an organization has it.</summary>

@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -66,8 +65,8 @@ public class DatasetsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<IEnumerable<DatasetDto>>> GetAll([FromRoute, Required] string orgSlug, [FromQuery] bool includeThumbnailCheck = false,
-        [FromQuery] int? skip = null, [FromQuery] int? take = null, [FromQuery] string q = null,
-        [FromQuery] string sort = null, [FromQuery] bool desc = false, [FromQuery] string slugs = null, CancellationToken ct = default)
+        [FromQuery] int? skip = null, [FromQuery] int? take = null, [FromQuery] string? q = null,
+        [FromQuery] string? sort = null, [FromQuery] bool desc = false, [FromQuery] string? slugs = null, CancellationToken ct = default)
     {
         // Without paging parameters: the whole list, as before
         if (skip == null && take == null && q == null && sort == null && slugs == null)
@@ -196,7 +195,7 @@ public class DatasetsController : ControllerBaseEx
     public async Task<ActionResult<Dictionary<string, object>>> ChangeAttributes(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromForm(Name = "attrs")] string rawAttributes, CancellationToken ct)
+        [FromForm(Name = "attrs")] string? rawAttributes, CancellationToken ct)
     {
         var attributes = string.IsNullOrWhiteSpace(rawAttributes) ?
             new AttributesDto() :

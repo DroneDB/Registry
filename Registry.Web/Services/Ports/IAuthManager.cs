@@ -1,4 +1,3 @@
-#nullable disable
 using System.Threading.Tasks;
 using Registry.Common;
 using Registry.Web.Data.Models;
@@ -13,11 +12,11 @@ namespace Registry.Web.Services.Ports;
 /// </summary>
 public interface IAuthManager
 {
-    public Task<User> GetCurrentUser();
+    public Task<User?> GetCurrentUser();
 
     /// <summary>Id of the current user (null when anonymous), from the token and the cached
     /// authorization snapshot: no database query.</summary>
-    public Task<string> GetCurrentUserId();
+    public Task<string?> GetCurrentUserId();
     public Task<bool> IsUserAdmin();
     public Task<bool> IsUserInRole(string roleName);
 
@@ -34,8 +33,8 @@ public interface IAuthManager
     public Task<bool> UserExists(string userId);
     public Task<bool> RequestAccess<T>(T obj, AccessType access) where T : IRequestAccess;
 
-    public Task<bool> CanListOrganizations(User user);
-    public Task<bool> CanRefreshToken(User user);
+    public Task<bool> CanListOrganizations(User? user);
+    public Task<bool> CanRefreshToken(User? user);
 
     public Task<DatasetPermissionsDto> GetDatasetPermissions(Dataset dataset);
 }

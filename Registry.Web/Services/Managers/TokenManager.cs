@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Linq;
 using Microsoft.AspNetCore.Http;
@@ -29,12 +28,12 @@ public class TokenManager : ITokenManager
         return IsActive(GetCurrent());
     }
 
-    public bool IsActive(string token)
+    public bool IsActive(string? token)
     {
         return _appSettings.RevokedTokens?.FirstOrDefault(item => item == token) == null;
     }
 
-    private string GetCurrent()
+    private string? GetCurrent()
     {
         var request = _httpContextAccessor?.HttpContext?.Request;
 
@@ -43,10 +42,12 @@ public class TokenManager : ITokenManager
 
         var authorizationHeader = request.Headers["authorization"];
 
+
+        // The options validator refuses to start without a cookie name
         return
             authorizationHeader == StringValues.Empty ?
-                request.Cookies[_appSettings.AuthCookieName] :
-                authorizationHeader.SingleOrDefault(h => h.StartsWith("Bearer", StringComparison.OrdinalIgnoreCase), "").Split(" ").Last();
+                request.Cookies[_appSettings.AuthCookieName!] :
+                (authorizationHeader.SingleOrDefault(h => h?.StartsWith("Bearer", StringComparison.OrdinalIgnoreCase) == true) ?? "").Split(" ").Last();
     }
 
 }

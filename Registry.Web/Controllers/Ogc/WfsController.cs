@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -42,7 +41,7 @@ public class WfsController : ControllerBaseEx
     [HttpGet("wfs/p/{*folder}")]
     [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "text/xml", "application/xml", "application/gml+xml", "application/geo+json", "application/json")]
     public Task<IActionResult> KvpFolder([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] string folder, CancellationToken ct) => Dispatch(orgSlug, dsSlug, folder, ct);
+        [FromRoute] string? folder, CancellationToken ct) => Dispatch(orgSlug, dsSlug, folder, ct);
 
     /// <summary>WFS 2.0.0 XML request (POST).</summary>
     [HttpPost("wfs")]

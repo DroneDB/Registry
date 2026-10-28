@@ -59,8 +59,9 @@ public class ObjectsManager : IObjectsManager
     /// </summary>
     public async Task<StreamedFile> StreamToTempAsync(string orgSlug, string dsSlug, Stream source)
     {
-        // No access check here: the commit checks write access and deletes this file when refused
-        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug);
+        // No access check here: the commit checks write access and deletes this file when refused. Without safe the
+        // lookup throws when the dataset is missing: never null
+        var ds = (await _datasets.GetDatasetAsync(orgSlug, dsSlug))!;
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         return await DatasetUploads.StreamToTempAsync(_scratch, _fs, ddb.DatasetFolderPath, source);

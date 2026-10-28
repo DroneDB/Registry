@@ -545,6 +545,15 @@ public class PushPipelineTests : TestBase
     }
 
     [Test]
+    public async Task InitAction_RejectsANullStamp()
+    {
+        var controller = new PushController(CreateManager(),
+            Microsoft.Extensions.Options.Options.Create(new Microsoft.AspNetCore.Http.Features.FormOptions()), new FileSystem());
+
+        await Should.ThrowAsync<BadRequestException>(() => controller.Init("org", "ds", "c1", "null", CancellationToken.None));
+    }
+
+    [Test]
     public void InitAction_AcceptsLargeStamps()
     {
         // A 50k-entry stamp is ~4.4 MiB, above the default 4 MiB form value limit

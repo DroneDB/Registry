@@ -1,4 +1,3 @@
-#nullable disable
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Services.Ports;

@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -133,7 +132,7 @@ public abstract class OgcManagerBase
             400, "typeNames");
 
     /// <summary>The local file of an MVT tile of a vector layer, or null when it does not exist.</summary>
-    protected string MvtTile(IDDB ddb, OgcLayerDto layer, int z, int x, int y) =>
+    protected string? MvtTile(IDDB ddb, OgcLayerDto layer, int z, int x, int y) =>
         Builds.FindArtifactFile(ddb, layer.EntryHash, ArtifactRoles.VectorMvt, MvtTiles.Tile(z, x, y), layer.EntryPath);
 
     /// <summary>
