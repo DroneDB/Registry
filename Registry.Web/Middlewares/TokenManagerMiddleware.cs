@@ -1,4 +1,3 @@
-#nullable disable
 using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;

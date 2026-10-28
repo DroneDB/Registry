@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Net.Http.Headers;
 using Registry.Web.Exceptions;
 
-#nullable enable
 namespace Registry.Web.Utilities;
 // Ref https://docs.microsoft.com/it-IT/aspnet/core/mvc/models/file-uploads?view=aspnetcore-3.1#upload-large-files-with-streaming
 
@@ -125,7 +124,8 @@ public static class MultipartRequestHelper
                     var key = HeaderUtilities.RemoveQuotes(contentDisposition.Name).Value;
                     using var sr = new StreamReader(section.Body, Encoding.UTF8);
                     var value = await sr.ReadToEndAsync();
-                    form.Fields[key] = value;
+                    // A part with no name has a null key, which the dictionary refuses (ArgumentNullException)
+                    form.Fields[key!] = value;
                     if (string.Equals(key, "path", StringComparison.OrdinalIgnoreCase))
                         pendingPath = value;
                 }

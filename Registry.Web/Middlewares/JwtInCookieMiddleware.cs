@@ -1,4 +1,3 @@
-#nullable disable
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
@@ -19,7 +18,8 @@ public class JwtInCookieMiddleware : IMiddleware
 
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
-        var cookie = context.Request.Cookies[_settings.AuthCookieName];
+        // The startup validation refuses an empty AuthCookieName
+        var cookie = context.Request.Cookies[_settings.AuthCookieName!];
 
         if (cookie != null)
         {

@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,12 +8,12 @@ namespace Registry.Web.HealthChecks;
 
 public class DiskSpaceHealthCheck : IHealthCheck
 {
-    private readonly string _path;
+    private readonly string? _path;
     private readonly float _freeSpacePercWarningThreshold;
 
     public const float DefaultFreeSpacePercWarningThreshold = 0.1f;
 
-    public DiskSpaceHealthCheck(string path, float freeSpacePercWarningThreshold = DefaultFreeSpacePercWarningThreshold)
+    public DiskSpaceHealthCheck(string? path, float freeSpacePercWarningThreshold = DefaultFreeSpacePercWarningThreshold)
     {
         _path = path;
         _freeSpacePercWarningThreshold = freeSpacePercWarningThreshold;
@@ -27,12 +26,13 @@ public class DiskSpaceHealthCheck : IHealthCheck
         var volume = VolumeInfo.For(_path);
         float? freePerc = volume is { TotalBytes: > 0 } ? (float)volume.AvailableFreeBytes / volume.TotalBytes : null;
 
-        var data = new Dictionary<string, object>
+        // The sizes are null when the volume is not found: the health report shows them as null
+        IReadOnlyDictionary<string, object> data = new Dictionary<string, object?>
         {
             {"StorageTotalSize", volume?.TotalBytes},
             {"StorageFreeSpace", volume?.AvailableFreeBytes},
             {"StorageFreeSpacePerc", freePerc}
-        };
+        }!;
 
         if (freePerc <= _freeSpacePercWarningThreshold)
             return Task.FromResult(HealthCheckResult.Degraded("Low on available disk space", null, data));

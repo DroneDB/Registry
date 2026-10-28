@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -51,7 +50,7 @@ public class DatasetAccessControl : AccessControlBase
     }
 
     /// <param name="userId">Id of an existing user, or null for anonymous access</param>
-    public async Task<bool> CanAccessDataset(Dataset dataset, AccessType access, string userId)
+    public async Task<bool> CanAccessDataset(Dataset dataset, AccessType access, string? userId)
     {
         ArgumentNullException.ThrowIfNull(dataset);
         var org = dataset.Organization;

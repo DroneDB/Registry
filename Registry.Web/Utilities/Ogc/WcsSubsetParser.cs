@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -20,7 +19,7 @@ public static class WcsSubsetParser
     private static readonly HashSet<string> LongAliases = new(StringComparer.OrdinalIgnoreCase) { "Long", "long", "lon", "x", "E", "Easting" };
     private static readonly HashSet<string> LatAliases  = new(StringComparer.OrdinalIgnoreCase) { "Lat", "lat", "y", "N", "Northing" };
 
-    public static double[]? Parse(IReadOnlyCollection<string> rawSubsets, double[] coverageBboxWgs84)
+    public static double[]? Parse(IReadOnlyCollection<string?>? rawSubsets, double[] coverageBboxWgs84)
     {
         if (rawSubsets == null || rawSubsets.Count == 0) return null;
 

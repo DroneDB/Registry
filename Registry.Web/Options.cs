@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using CommandLine;
 using CommandLine.Text;
@@ -9,10 +8,11 @@ public class Options
 {
     [Value(0, MetaName = "Storage folder",
         HelpText = "Points to a directory on a filesystem where to store Registry data.", Required = true)]
-    public string StorageFolder { get; set; }
+    // Required by the parser, so set on every parsed command line (VerifyOptions still refuses a missing one)
+    public string StorageFolder { get; set; } = null!;
 
     [Option('a', "address", Default = "localhost:5000", HelpText = "Address to listen on")]
-    public string Address { get; set; }
+    public string? Address { get; set; }
 
     [Option('t', "instance-type", HelpText = "Instance type to run as. (0: Default, 1: ProcessingNode, 2: WebServer, 3: Thumbnail generator)",
         Default = InstanceType.Default, Required = false)]

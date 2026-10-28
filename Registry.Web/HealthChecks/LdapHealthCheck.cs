@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.DirectoryServices.Protocols;
 using System.Net;
@@ -17,7 +16,7 @@ namespace Registry.Web.HealthChecks;
 /// </summary>
 public class LdapHealthCheck : IHealthCheck
 {
-    private readonly LdapSettings _settings;
+    private readonly LdapSettings? _settings;
 
     public LdapHealthCheck(IOptions<IdentityProviderOptions> identity)
     {

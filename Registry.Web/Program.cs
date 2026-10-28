@@ -1,5 +1,5 @@
-#nullable disable
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -61,7 +61,7 @@ public class Program
     /// <param name="args">The command line.</param>
     /// <param name="startInstance">Runs the host of the instance type until shutdown (injectable in tests).</param>
     /// <param name="readAdminPassword">Reads the new password for <c>--reset-admin-password</c>; <c>null</c> = none.</param>
-    internal static int Run(string[] args, Func<Options, int> startInstance, Func<string> readAdminPassword)
+    internal static int Run(string[] args, Func<Options, int> startInstance, Func<string?> readAdminPassword)
     {
         RegistryHost.UseBootstrapLogger();
 
@@ -92,7 +92,7 @@ public class Program
         return true;
     }
 
-    private static int RunOptions(Options opts, Func<Options, int> startInstance, Func<string> readAdminPassword)
+    private static int RunOptions(Options opts, Func<Options, int> startInstance, Func<string?> readAdminPassword)
     {
         var appVersion = typeof(Program).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version;
 
@@ -240,7 +240,8 @@ public class Program
     /// Normalizes a listen address to "host:port". A bare port keeps the default host, a bare host keeps
     /// the default port, and a host or port that is not valid is refused with the reason in <paramref name="error"/>.
     /// </summary>
-    internal static bool TryNormalizeAddress(string address, out string normalized, out string error)
+    internal static bool TryNormalizeAddress(string address, [NotNullWhen(true)] out string? normalized,
+        [NotNullWhen(false)] out string? error)
     {
         normalized = null;
         error = null;
@@ -384,14 +385,14 @@ public class Program
     /// configured identity database, without starting the web host. The password comes from
     /// <paramref name="readAdminPassword"/> (environment variable or stdin), never from the command line.
     /// </summary>
-    private static int ResetAdminPassword(string storageFolder, Func<string> readAdminPassword)
+    private static int ResetAdminPassword(string storageFolder, Func<string?> readAdminPassword)
     {
         using var log = RegistryHost.CreateCommandLineLogger();
 
         if (!TryLoadStorageConfiguration(storageFolder, InstanceType.WebServer, log))
             return ExitCodes.Failure;
 
-        string password;
+        string? password;
         try
         {
             password = readAdminPassword();
@@ -478,7 +479,7 @@ public class Program
     /// The new admin password: <see cref="AdminPasswordEnvironmentVariable"/> when set, otherwise one line
     /// from <paramref name="readLine"/>; <c>null</c> when neither has one.
     /// </summary>
-    internal static string ReadAdminPassword(Func<string, string> getEnvironmentVariable, Func<string> readLine)
+    internal static string? ReadAdminPassword(Func<string, string?> getEnvironmentVariable, Func<string?> readLine)
     {
         var fromEnvironment = getEnvironmentVariable(AdminPasswordEnvironmentVariable);
         if (!string.IsNullOrEmpty(fromEnvironment))
@@ -488,7 +489,7 @@ public class Program
         return string.IsNullOrEmpty(line) ? null : line;
     }
 
-    private static string ReadAdminPasswordFromConsole() =>
+    private static string? ReadAdminPasswordFromConsole() =>
         ReadAdminPassword(Environment.GetEnvironmentVariable,
             Console.IsInputRedirected ? Console.In.ReadLine : ReadHiddenLine);
 
@@ -563,7 +564,7 @@ public class Program
     /// Reads the Hub version stamped inside the embedded ClientApp.zip.
     /// Returns <c>null</c> if the marker file is missing (older ZIPs).
     /// </summary>
-    private static string ReadEmbeddedHubVersion()
+    private static string? ReadEmbeddedHubVersion()
     {
         try
         {
@@ -583,7 +584,7 @@ public class Program
         }
     }
 
-    private static string ReadOnDiskHubVersion(string hubRoot)
+    private static string? ReadOnDiskHubVersion(string hubRoot)
     {
         var path = Path.Combine(hubRoot, MagicStrings.HubVersionFile);
         if (!File.Exists(path)) return null;
@@ -660,7 +661,7 @@ public class Program
         return true;
     }
 
-    private static bool ExtractHub(string folder, string embeddedVersion = null)
+    private static bool ExtractHub(string folder, string? embeddedVersion = null)
     {
         if (!ExtractEmbeddedArchive(MagicStrings.SpaRoot, folder)) return false;
 

@@ -1,4 +1,3 @@
-#nullable disable
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Data;
@@ -22,7 +21,7 @@ public abstract class AccessControlBase
     /// <summary>
     /// Checks if a user is deactivated
     /// </summary>
-    public async Task<bool> IsUserDeactivated(string userId)
+    public async Task<bool> IsUserDeactivated(string? userId)
     {
         if (userId == null) return false;
         return (await Snapshots.GetAsync(userId)).IsDeactivated;
@@ -31,7 +30,7 @@ public abstract class AccessControlBase
     /// <summary>
     /// Checks if a user has admin privileges
     /// </summary>
-    public async Task<bool> IsUserAdmin(string userId)
+    public async Task<bool> IsUserAdmin(string? userId)
     {
         if (userId == null) return false;
         return (await Snapshots.GetAsync(userId)).IsAdmin;
@@ -40,7 +39,7 @@ public abstract class AccessControlBase
     /// <summary>
     /// Checks that a resource owner exists and is not deactivated
     /// </summary>
-    protected async Task<bool> IsOwnerActive(string ownerId)
+    protected async Task<bool> IsOwnerActive(string? ownerId)
     {
         return ownerId != null && (await Snapshots.GetAsync(ownerId)).IsActive;
     }

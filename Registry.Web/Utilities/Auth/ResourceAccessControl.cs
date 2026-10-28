@@ -1,4 +1,3 @@
-#nullable disable
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Data;
@@ -17,7 +16,7 @@ public class ResourceAccessControl : AccessControlBase
     /// <summary>
     /// Checks if a user has elevated privileges (admin or owner)
     /// </summary>
-    public async Task<bool> HasElevatedPrivileges(string userId, string ownerId)
+    public async Task<bool> HasElevatedPrivileges(string? userId, string? ownerId)
     {
         if (userId == null) return false;
         return ownerId == userId || await IsUserAdmin(userId);

@@ -1,4 +1,3 @@
-#nullable disable
 using System.Text;
 
 namespace Registry.Web.Utilities.Ogc;
@@ -16,7 +15,7 @@ public static class OgcNames
     /// prefixes with '_' when the first character is not a letter or underscore
     /// (NCNameStartChar forbids digits, '-' and '.').
     /// </summary>
-    public static string ToNcName(string name)
+    public static string ToNcName(string? name)
     {
         if (string.IsNullOrEmpty(name)) return "_unnamed";
         var sb = new StringBuilder(name.Length + 1);

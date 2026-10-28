@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -34,7 +33,7 @@ public static class StartupExtenders
         DbProvider provider,
         string connectionStringName,
         string migrationsNamespace,
-        MySqlServerVersionCache mySqlVersions = null) where T : DbContext
+        MySqlServerVersionCache? mySqlVersions = null) where T : DbContext
     {
         var connectionString = configuration.GetConnectionString(connectionStringName);
         mySqlVersions ??= MySqlServerVersionCache.FromConfiguration(configuration);
@@ -47,7 +46,8 @@ public static class StartupExtenders
         {
             // Hooks on saved changes (e.g. DatasetChangeInterceptor) registered by the host
             options.AddInterceptors(sp.GetServices<Microsoft.EntityFrameworkCore.Diagnostics.ISaveChangesInterceptor>());
-            DbProviderConfigurator.Configure(options, provider, connectionString, migrationsAssembly, mySqlVersions.Resolve);
+            // A missing connection string is not refused here: as before, EF reports it when a context first connects
+            DbProviderConfigurator.Configure(options, provider, connectionString!, migrationsAssembly, mySqlVersions.Resolve);
         }, DbContextPoolSize);
     }
 

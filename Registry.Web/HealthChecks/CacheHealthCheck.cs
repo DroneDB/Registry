@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -21,7 +20,8 @@ public class CacheHealthCheck : IHealthCheck
     {
         var testKey = Guid.NewGuid().ToString();
 
-        var data = new Dictionary<string, object> { { "TestKey", testKey }, { "Provider", _cache.GetType().FullName } };
+        // The runtime type of an object always has a full name (only generic parameters have none)
+        var data = new Dictionary<string, object> { { "TestKey", testKey }, { "Provider", _cache.GetType().FullName! } };
 
         try
         {

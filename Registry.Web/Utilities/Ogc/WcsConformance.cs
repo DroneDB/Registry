@@ -1,4 +1,3 @@
-#nullable disable
 using Registry.Web.Services.Managers.Wcs;
 
 namespace Registry.Web.Utilities.Ogc;
@@ -40,7 +39,7 @@ public static class WcsConformance
     ];
 
     /// <summary>Translate a WCS 1.0 short format name (or pass-through MIME) into a MIME type.</summary>
-    public static string NormalizeWcs10Format(string format)
+    public static string NormalizeWcs10Format(string? format)
     {
         if (string.IsNullOrWhiteSpace(format)) return "image/tiff";
         return format.Trim().ToLowerInvariant() switch
