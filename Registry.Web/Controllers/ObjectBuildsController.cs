@@ -121,7 +121,9 @@ public class ObjectBuildsController : ControllerBaseEx
 
     /// <summary>
     /// Downloads a pre-built visualization artifact (COG, COPC, or GPKG) for a given entry.
-    /// The entry type determines which artifact is served. Zero-copy streaming via PhysicalFileResult.
+    /// The entry type determines which artifact is served, unless <paramref name="role"/> names one (for example the
+    /// <c>gsplat.export</c> <c>.spz</c> of a splat, once its export task has made it), which is then served under the
+    /// entry's name. Zero-copy streaming via PhysicalFileResult.
     /// </summary>
     [HttpGet("build-artifact", Name = nameof(ObjectsController) + "." + nameof(DownloadBuildArtifact))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
@@ -131,9 +133,9 @@ public class ObjectBuildsController : ControllerBaseEx
     public async Task<IActionResult> DownloadBuildArtifact(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromQuery] DatasetPath? path, CancellationToken ct)
+        [FromQuery] DatasetPath? path, [FromQuery] string? role, CancellationToken ct)
     {
-        var artifact = await _builds.GetBuildArtifactAsync(orgSlug, dsSlug, path, ct: ct);
+        var artifact = await _builds.GetBuildArtifactAsync(orgSlug, dsSlug, path, role, ct);
 
         return PhysicalFile(artifact.LocalPath, artifact.MediaType, artifact.FileName, enableRangeProcessing: true);
     }

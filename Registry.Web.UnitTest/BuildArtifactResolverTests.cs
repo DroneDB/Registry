@@ -214,6 +214,47 @@ public class BuildArtifactResolverTests
             artifact.Path.Replace('/', Path.DirectorySeparatorChar))));
     }
 
+    private static readonly BuildArtifact SplatModel = TestBuilds.File(ArtifactRoles.GsplatLod, "gsplat/model.rad",
+        "application/octet-stream", "model.rad");
+
+    private static readonly BuildArtifact SplatExport = TestBuilds.File(ArtifactRoles.GsplatExport, "gsplat/export.spz",
+        "application/octet-stream", "export.spz");
+
+    [Test]
+    public void Download_ByRole_IsThatArtifact_NamedAfterTheEntryWithTheExtensionOfItsDownloadName()
+    {
+        var build = Built("flights/scene.ply", EntryType.GaussianSplat, SplatModel, SplatExport);
+
+        var download = _resolver.GetDownload(build, ArtifactRoles.GsplatExport)!;
+
+        download.FileName.ShouldBe("scene.spz", "the manifest's export.spz is the same for every entry");
+        download.MediaType.ShouldBe("application/octet-stream");
+        download.LocalPath.ShouldBe(Path.GetFullPath(Path.Combine(Folder, ".ddb", "build", Hash, "gsplat", "export.spz")));
+        _resolver.GetDownload(build, ArtifactRoles.GsplatLod)!.FileName.ShouldBe("scene.rad");
+    }
+
+    [Test]
+    public void Download_WithoutARole_IsStillTheFirstArtifactWithADownloadName_UnderItsOwnName()
+    {
+        var build = Built("scene.ply", EntryType.GaussianSplat, SplatModel, SplatExport);
+
+        var download = _resolver.GetDownload(build)!;
+
+        download.FileName.ShouldBe("model.rad");
+        download.LocalPath.ShouldEndWith(Path.Combine("gsplat", "model.rad"));
+    }
+
+    [Test]
+    public void Download_ByRole_OfAnArtifactThatDoesNotExistOrHasNoDownloadName_IsNone()
+    {
+        // The export is made on demand: until then the build lists the model alone
+        _resolver.GetDownload(Built("scene.ply", EntryType.GaussianSplat, SplatModel), ArtifactRoles.GsplatExport)
+            .ShouldBeNull();
+        _resolver.GetDownload(Built("scene.ply", EntryType.GaussianSplat, SplatModel,
+            TestBuilds.File(ArtifactRoles.GsplatBounds, "gsplat/bounds.json", "application/json")),
+            ArtifactRoles.GsplatBounds).ShouldBeNull("only an artifact libddb names a download is offered");
+    }
+
     [Test]
     public void Download_WithoutADownloadableArtifactOrOfAnotherEntrysBuild_IsNone()
     {

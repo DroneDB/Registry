@@ -106,12 +106,15 @@ public sealed class BuildQueryService
         }
     }
 
-    /// <summary>The downloadable artifact of the entry at <paramref name="entryPath"/> (COG, COPC, GeoPackage).</summary>
+    /// <summary>
+    /// The downloadable artifact of the entry at <paramref name="entryPath"/> (COG, COPC, GeoPackage), or with
+    /// <paramref name="role"/> the existing downloadable artifact of that role (the <c>.spz</c> a splat is exported to).
+    /// </summary>
     /// <exception cref="Exceptions.InvalidDatasetPathException">The path is not a dataset path (no path: empty).</exception>
     /// <exception cref="Exceptions.BadRequestException">The entry has no downloadable artifact.</exception>
-    /// <exception cref="Exceptions.NotFoundException">No such entry, or it is not built yet.</exception>
+    /// <exception cref="Exceptions.NotFoundException">No such entry, it is not built yet or has no artifact of the role.</exception>
     public async Task<BuildDownload> GetBuildArtifactAsync(string orgSlug, string dsSlug, string? entryPath,
-        CancellationToken ct = default)
+        string? role = null, CancellationToken ct = default)
     {
         // libddb's path rule first (a refused path is a 400 whoever asks), then read access
         entryPath = _paths.Normalize(entryPath);
@@ -122,8 +125,13 @@ public sealed class BuildQueryService
 
         // The artifact libddb offers as a download (manifest: downloadName), served with Registry's media type
         var build = _artifacts.GetBuild(ddb, entry.Path);
-        if (_artifacts.GetDownload(build) is { } download)
+        if (_artifacts.GetDownload(build, role) is { } download)
             return download;
+
+        // The artifact of a role that is made on demand (the .spz export) does not exist until a task made it
+        if (role != null && build.IsOwnBuild() && build.Build!.State == BuildState.Complete)
+            throw new NotFoundException(
+                $"Entry '{entryPath}' has no downloadable '{role}' artifact. It is made on demand: run its export first.");
 
         // A build that is complete without a downloadable artifact, or no build of its own: nothing to download
         if (!build.IsOwnBuild() || build.Build!.State == BuildState.Complete)

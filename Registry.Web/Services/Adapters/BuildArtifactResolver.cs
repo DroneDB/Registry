@@ -114,18 +114,22 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
         return Path.GetRelativePath(Path.GetFullPath(ddb.DatasetFolderPath), local).ToDdbPath();
     }
 
-    public BuildDownload? GetDownload(EntryBuildArtifacts build)
+    public BuildDownload? GetDownload(EntryBuildArtifacts build, string? role = null)
     {
         ArgumentNullException.ThrowIfNull(build);
 
         if (!build.IsOwnBuild())
             return null;
 
-        var artifact = build.Build!.Artifacts.FirstOrDefault(a => !string.IsNullOrEmpty(a.DownloadName));
+        var artifact = build.Build!.Artifacts.FirstOrDefault(a => !string.IsNullOrEmpty(a.DownloadName) &&
+            (role == null || string.Equals(a.Role, role, StringComparison.Ordinal)));
         if (artifact == null)
             return null;
 
-        return new BuildDownload(build.Build.LocalPathOf(artifact), artifact.DownloadName!, artifact.MediaType);
+        var name = role == null
+            ? artifact.DownloadName!
+            : Path.GetFileNameWithoutExtension(build.Path) + Path.GetExtension(artifact.DownloadName);
+        return new BuildDownload(build.Build.LocalPathOf(artifact), name, artifact.MediaType);
     }
 
     public string? FindArtifactFile(IDDB ddb, string hash, string role, string? relativePath = null,

@@ -49,11 +49,14 @@ public interface IBuildArtifactResolver
     string? GetRenderSource(IDDB ddb, Entry entry);
 
     /// <summary>
-    /// The artifact of <paramref name="build"/> offered as a download (the first one with a download
-    /// name), with the local file, the name and the media type it is served with.
+    /// The artifact of <paramref name="build"/> offered as a download, with the local file, the name and the media
+    /// type it is served with: the first one with a download name, or with <paramref name="role"/> the existing
+    /// artifact of that role when it has one. An artifact asked for by role is named after the entry, with the
+    /// extension of its download name (a splat <c>scene.ply</c> exported for other tools is <c>scene.spz</c>, not the
+    /// manifest's <c>export.spz</c>): the manifest's name is the same for every entry.
     /// </summary>
-    /// <returns>The download, or null when the entry's own build has no downloadable artifact.</returns>
-    BuildDownload? GetDownload(EntryBuildArtifacts build);
+    /// <returns>The download, or null when the entry's own build has no such downloadable artifact.</returns>
+    BuildDownload? GetDownload(EntryBuildArtifacts build, string? role = null);
 
     /// <summary>
     /// The artifact with <paramref name="role"/> of the build named by <paramref name="hash"/>, when it exists: what
