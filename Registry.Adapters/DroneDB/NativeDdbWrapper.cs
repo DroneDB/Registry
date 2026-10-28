@@ -571,6 +571,49 @@ public class NativeDdbWrapper : IDdbWrapper
                 callback?.UserData ?? IntPtr.Zero)));
     }
 
+    public unsafe SplatTrainingExport ExportSplatTrainingData(string ddbPath, string folder, string outFolder,
+        SplatTrainingOptions? options, Action<double, string?>? progress, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ddbPath);
+        ArgumentNullException.ThrowIfNull(folder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outFolder);
+        var optionsJson = ToTrainingJson(options);
+
+        // As ExportRaster: the callback reports and stops the call, the token stops it at its next checkpoint
+        using var callback = NativeProgressCallback.Create(progress, cancellationToken);
+        using var cancellation = DdbCancellation.Enter(cancellationToken);
+
+        return NativeCall.Invoke<SplatTrainingExport>(nameof(NativeDdb.DDBExportSplatTrainingData),
+            (out IntPtr output) => NativeProgressCallback.Completed(callback,
+                NativeDdb.DDBExportSplatTrainingData(ddbPath, folder, outFolder, optionsJson,
+                    callback == null ? null : NativeProgressCallback.FunctionPointer,
+                    callback?.UserData ?? IntPtr.Zero, out output)));
+    }
+
+    /// <summary>The <c>DDBExportSplatTrainingData</c> JSON of <paramref name="options"/>: only the members that are set, null for none.</summary>
+    public static string? ToTrainingJson(SplatTrainingOptions? options)
+    {
+        if (options is not { } o || (o.MaxImageSize == null && o.MaxPoints == null))
+            return null;
+
+        var json = new JsonObject();
+        if (o.MaxImageSize is { } size)
+            json["maxImageSize"] = size;
+        if (o.MaxPoints is { } points)
+            json["maxPoints"] = points;
+        return json.ToJsonString(NativeJson.Options);
+    }
+
+    public SplatSpzExport ExportSplatSpz(string ddbPath, string entryPath, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ddbPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(entryPath);
+
+        using var cancellation = DdbCancellation.Enter(cancellationToken);
+        return NativeCall.Invoke<SplatSpzExport>(nameof(NativeDdb.DDBExportSplatSpz),
+            (out IntPtr output) => NativeDdb.DDBExportSplatSpz(ddbPath, entryPath, out output));
+    }
+
     public string GetRasterValueInfo(string path)
     {
         ArgumentNullException.ThrowIfNull(path);

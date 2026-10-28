@@ -119,3 +119,9 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   `model.bm3d` (`bm3d/model.bm3d`, `application/vnd.dronedb.bm3d`; the legacy `model.nexus` stays, listed only while
   `model.bm3d` is missing); `capabilities` lists `DDBBuildEx`; `build-artifacts.schema.json` allows `fallbackFor` on an
   artifact (`BuildArtifact.FallbackFor`). No other fixture changed (none lists a legacy artifact).
+* 2026-10-28: DroneDB `c75d5442e97f258980adcfb141e604db31cfd866`: `resolve-build-file` is the object `{"path", "mediaType"}`
+  (`build-file.schema.json` is an object schema; `ParseResolvedBuildFile` reads both shapes); `entry-types` lists the role
+  `gsplat.export` of a Gaussian splat (`ArtifactRoles.GsplatExport`, the `.spz` made on demand); `capabilities` lists
+  `DDBExportSplatSpz` and `DDBExportSplatTrainingData` in `symbols` and in `cancellable`; `entry.schema.json` describes
+  the `georeferenced` and `georef` properties of a splat or model. The two exports are `IDdbWrapper` and `IDDB` members
+  (`FakeDdbWrapper` records no fixture for them: a test configures them on a `Mock<FakeDdbWrapper>`).

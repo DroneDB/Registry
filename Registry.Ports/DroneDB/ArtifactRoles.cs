@@ -21,4 +21,10 @@ public static class ArtifactRoles
     public const string GsplatLod = "gsplat.lod";
     public const string GsplatSpz = "gsplat.spz";
     public const string GsplatBounds = "gsplat.bounds";
+
+    /// <summary>
+    /// The <c>.spz</c> a splat is exported to for other tools (<c>DDBExportSplatSpz</c>): made on demand, listed
+    /// only while the file exists, never a render source.
+    /// </summary>
+    public const string GsplatExport = "gsplat.export";
 }

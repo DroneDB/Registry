@@ -89,7 +89,7 @@ public unsafe class LibddbContractTests : TestBase
 
     // fixtures/capabilities.json: entries of lists that only ever grow
     private static readonly string[] ErrorReasons = ["idleTimeout", "lowDiskSpace", "noSpaceOnDevice"];
-    private static readonly string[] CancellableExports = ["DDBBuild", "DDBBuildEx", "DDBExportRaster2"];
+    private static readonly string[] CancellableExports = ["DDBBuild", "DDBBuildEx", "DDBExportRaster2", "DDBExportSplatSpz", "DDBExportSplatTrainingData"];
 
     private static readonly NativeDdbWrapper DdbWrapper = new();
 

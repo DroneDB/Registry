@@ -536,6 +536,22 @@ public class DDB : IDDB
             ex => $"Cannot export raster '{inputPath}'");
     }
 
+    public SplatTrainingExport ExportSplatTrainingData(string folder, string outFolder, SplatTrainingOptions? options,
+        Action<double, string?>? progress, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+        return Wrap(() => Wrapper.ExportSplatTrainingData(DatasetFolderPath, folder.ToDdbPath(), outFolder, options,
+                progress, cancellationToken),
+            ex => $"Cannot export the training data of '{folder}': {ex.Message}");
+    }
+
+    public SplatSpzExport ExportSplatSpz(string entryPath, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(entryPath);
+        return Wrap(() => Wrapper.ExportSplatSpz(DatasetFolderPath, entryPath.ToDdbPath(), cancellationToken),
+            ex => $"Cannot export '{entryPath}' as a .spz file: {ex.Message}");
+    }
+
     public string GetRasterValueInfo(string path)
     {
         return Wrap(() =>

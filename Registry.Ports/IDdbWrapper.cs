@@ -269,6 +269,24 @@ public interface IDdbWrapper
         System.Threading.CancellationToken cancellationToken);
 
     /// <summary>
+    /// Writes the training data of the ODM project in the dataset folder <paramref name="folder"/> to
+    /// <paramref name="outFolder"/> (DDBExportSplatTrainingData): a COLMAP sparse model, the images and
+    /// the georeference of the project. Reports the fraction done and the phase; a canceled call raises
+    /// <c>DdbCanceledException</c>.
+    /// </summary>
+    public SplatTrainingExport ExportSplatTrainingData(string ddbPath, string folder, string outFolder,
+        SplatTrainingOptions? options, System.Action<double, string?>? progress,
+        System.Threading.CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Makes the <c>.spz</c> of the splat <paramref name="entryPath"/> in the build folder of the entry, or
+    /// returns the file that is there (DDBExportSplatSpz). Raises <c>DdbBuildInProgressException</c> while a build
+    /// or another export of the entry holds its build lock.
+    /// </summary>
+    public SplatSpzExport ExportSplatSpz(string ddbPath, string entryPath,
+        System.Threading.CancellationToken cancellationToken);
+
+    /// <summary>
     /// Get raster value info (min/max/unit/dimensions), including thermal calibration if applicable
     /// </summary>
     public string GetRasterValueInfo(string path);

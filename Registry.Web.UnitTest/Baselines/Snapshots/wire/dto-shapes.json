@@ -644,6 +644,42 @@
       "error": null
     }
   },
+  "Registry.Ports.DroneDB.SplatSpzExport": {
+    "full": {
+      "path": "Path-text",
+      "role": "Role-text",
+      "cached": true
+    },
+    "sparse": {
+      "path": null,
+      "role": null,
+      "cached": false
+    }
+  },
+  "Registry.Ports.DroneDB.SplatTrainingExport": {
+    "full": {
+      "warnings": [
+        "Warnings-text"
+      ],
+      "images": 42,
+      "points": 42
+    },
+    "sparse": {
+      "warnings": null,
+      "images": 0,
+      "points": 0
+    }
+  },
+  "Registry.Ports.DroneDB.SplatTrainingOptions": {
+    "full": {
+      "maxImageSize": 42,
+      "maxPoints": 42
+    },
+    "sparse": {
+      "maxImageSize": null,
+      "maxPoints": null
+    }
+  },
   "Registry.Ports.DroneDB.Stamp": {
     "full": {
       "checksum": "Checksum-text",

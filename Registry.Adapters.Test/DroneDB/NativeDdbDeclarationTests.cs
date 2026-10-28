@@ -61,6 +61,9 @@ public class NativeDdbDeclarationTests
         DdbAbi.RequiredSymbols.ShouldBe(Imports.Select(m => m.Name).Order(StringComparer.Ordinal).ToArray());
         DdbAbi.RequiredSymbols.ShouldContain("DDBGetAbiVersion");
         DdbAbi.RequiredSymbols.ShouldContain("DDBShutdown");
+        // The splat exports are imports like the rest: a libddb without them fails the startup handshake
+        DdbAbi.RequiredSymbols.ShouldContain("DDBExportSplatSpz");
+        DdbAbi.RequiredSymbols.ShouldContain("DDBExportSplatTrainingData");
         DdbAbi.RequiredSymbols.ShouldAllBe(s => s.StartsWith("DDB"));
         Imports.ShouldAllBe(m => m.GetCustomAttribute<LibraryImportAttribute>()!.EntryPoint == null);
     }
@@ -88,6 +91,16 @@ public class NativeDdbDeclarationTests
         NativeDdbWrapper.ToBuildJson(null).ShouldBeNull();
         NativeDdbWrapper.ToBuildJson(new Ports.DroneDB.BuildOptions()).ShouldBeNull();
         NativeDdbWrapper.ToBuildJson(Ports.DroneDB.BuildOptions.Capped(2)).ShouldBe("""{"threads":2}""");
+    }
+
+    [Test]
+    public void TrainingJson_SendsOnlyTheOptionsThatAreSet()
+    {
+        NativeDdbWrapper.ToTrainingJson(null).ShouldBeNull();
+        NativeDdbWrapper.ToTrainingJson(new Ports.DroneDB.SplatTrainingOptions()).ShouldBeNull();
+        NativeDdbWrapper.ToTrainingJson(new Ports.DroneDB.SplatTrainingOptions(MaxPoints: 0)).ShouldBe("""{"maxPoints":0}""");
+        NativeDdbWrapper.ToTrainingJson(new Ports.DroneDB.SplatTrainingOptions(1600, 50000))
+            .ShouldBe("""{"maxImageSize":1600,"maxPoints":50000}""");
     }
 
     [Test]

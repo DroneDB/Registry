@@ -92,7 +92,7 @@ with ddb).
 | `build-artifacts` | `DDBBuild(<root>, "ortho.tif")`, then `DDBGetBuildArtifacts` of a built (COG), two buildable and not built, a non-buildable file, a folder and a missing path (see [Build manifest](#build-manifest)) | `build-artifacts` | - |
 | `build-artifacts-pending` | The `pending-build-info` dataset (`roads.shp` deferred), then `DDBGetBuildArtifacts(<root>, ["roads.shp"])` | `build-artifacts` | `lastAttempt`, `retryAfter` |
 | `list-entries-ex` | `DDBBuild(<root>, "ortho.tif")`, then `DDBListEntriesEx(<root>, "", "", "", {recursive=true, withDetails=false, withBuild=true})` | `list-entries-ex` | - |
-| `resolve-build-file` | `DDBResolveBuildFile(<root>, <hash of ortho.tif>, "cog/cog.tif")` after its build: a path, held as a JSON string | `build-file` | - |
+| `resolve-build-file` | `DDBResolveBuildFile(<root>, <hash of ortho.tif>, "cog/cog.tif")` after its build: an object with the absolute `path` and the artifact's `mediaType` | `build-file` | - |
 | `copy-build-artifacts` | `DDBCopyBuildArtifacts(<root>, <root2>, <hash of ortho.tif>)` after its build, `<root2>` a dataset with `ortho.tif` | `copy-build-artifacts` | - |
 | `entry-types` | `DDBGetEntryTypes()` (no dataset) | `entry-types` | - |
 | `capabilities` | `DDBGetCapabilities()` (no dataset): ABI version, error codes, error reasons, cancellable exports, the symbol manifest | `capabilities` | `version` |
@@ -149,10 +149,11 @@ entry, also embedded by `DDBListEntriesEx`) and `$defs/artifact`.
   `pointcloud.copc` `application/vnd.laszip+copc`, `vector.gpkg`
   `application/geopackage+sqlite3` (the IANA registration), `model.bm3d`
   `application/vnd.dronedb.bm3d`, `model.nexus`, `gsplat.lod`,
-  `gsplat.spz` `application/octet-stream`, the JSON artifacts and directory indexes
+  `gsplat.spz`, `gsplat.export` `application/octet-stream`, the JSON artifacts and directory indexes
   `application/json`.
-* `downloadName` is set for the three artifacts a download offers today: `cog.tif`,
-  `cloud.copc.laz`, `source.gpkg`.
+* `downloadName` is set for the artifacts a download offers: `cog.tif`, `cloud.copc.laz`,
+  `source.gpkg`, and for a Gaussian splat `model.rad` (`gsplat.lod`), `model.spz` (the legacy
+  `gsplat.spz`) and `export.spz` (`gsplat.export`).
 * `state` reads the build lock without reclaiming it (`BuildLock::isHeld`), so a listing never
   changes the dataset.
 * `retryAfter` is the Unix second from which a pending build is retried by `DDBBuild` with
@@ -161,8 +162,10 @@ entry, also embedded by `DDBListEntriesEx`) and `$defs/artifact`.
   time is at or past it. `DDBGetPendingBuildInfo` reports the same value. A host compares it with
   its clock and keeps no copy of the backoff.
 
-`DDBResolveBuildFile` returns a plain string, not JSON: its fixture holds it as a JSON string
-under the `<root>` placeholder.
+`DDBResolveBuildFile` returns a JSON object, `{"path": "<absolute path>", "mediaType": "<type>"}`:
+`mediaType` is the one of the manifest when the file is a declared artifact (a file artifact, or
+the index of a directory artifact) and is absent for any other file of a directory artifact (its
+tiles). The path sits under the `<root>` placeholder in the fixture.
 
 ## Path vectors
 
@@ -352,3 +355,64 @@ Registry has to adopt first.
   is listed while that role is missing, as before for a point cloud; the rule no longer depends
   on whether other current artifacts of the type exist. No fixture changed (none lists a legacy
   artifact).
+
+* 2026-10-28: the artifact `gsplat.spz` is legacy (`"fallbackFor": "gsplat.lod"`): a splat build
+  made before the RAD layout lists it while `gsplat.lod` is missing, and a build that publishes
+  `gsplat/model.rad` removes `gsplat/model.spz` alone (the folder is shared). The roles of
+  `entry-types` and every fixture are unchanged: none of them lists the `legacy` or `fallbackFor`
+  of an artifact for this type.
+
+* 2026-10-28: `DDBResolveBuildFile` returns an object `{"path", "mediaType"?}` instead of a plain
+  path string (still 2.0.0, ABI 2.0: the export is new in 2.0 and no release carries the string).
+  `mediaType` is the manifest's type of the artifact when the file is a file artifact or the index
+  of a directory artifact, and absent otherwise (tiles). A host that serves the file with the
+  manifest's type reads it from here and falls back to its own mapping when it is absent; a host
+  built for the string reads `path` when the output starts with `{`. `resolve-build-file` and its
+  schema `build-file.schema.json` changed; no other fixture did.
+  STAC names the `.spz`, `.splat` and `.ksplat` data asset `application/octet-stream`, the media
+  type of the manifest (it said `application/x-spz` for `.spz`).
+
+* 2026-10-28: the `properties` of an entry may carry `georef` (additive), with `georeferenced: true`
+  and the origin of the local frame as the point geometry of the entry: `{"kind": "enu", "origin":
+  [latitude, longitude, altitude]}` or `{"kind": "projected", "crs": "<EPSG:xxxx, PROJ string or
+  WKT>", "offset": [x, y, z]}` (a point of the file plus `offset` is in `crs`). A Gaussian splat
+  with a georeferencing sidecar (`<stem>.geo.json`, `georef.json`, `reference_lla.json` or the
+  ODM `coords.txt`, see `detectLocalFrameGeoref`) now has them, as a georeferenced model has the
+  first two (a model gains `georef`); a splat without one still carries neither, as noted on
+  2026-10-25. The `bounds.json` of the built splat gains `up: [0, 0, 1]`, `upConfidence: 1` and
+  `upSource: "georef"` and `wgs84Footprint`, a GeoJSON Polygon geometry (`[longitude, latitude]`
+  ring) of its bounding box. `entry.schema.json` describes the two members; no fixture changed.
+
+* 2026-10-28: the export `DDBExportSplatTrainingData(ddbPath, folder, outFolder, optionsJson,
+  progress, progressUserData, output)` is new in 2.0.0 (ABI 2.0, no bump). It writes the training
+  data of a Gaussian splat (a COLMAP sparse model, the images and `georef.json`) from the ODM
+  project that is in `folder` of the dataset. Its output is `{"warnings": [string], "images": n,
+  "points": n}`; the options are `{"maxImageSize"?: n, "maxPoints"?: n}` (whole numbers from 0, 0 for
+  the originals and for no points). It returns `DDBERR_INVALIDARGS` for an option that is not usable,
+  `DDBERR_NOTFOUND` for a folder that is not in the dataset, `DDBERR_EXCEPTION` for a file of the
+  project that is missing or unusable (the message names `coords.txt`, `cameras.json`... ) and
+  `DDBERR_CANCELED` when
+  the token is canceled or the progress callback returns non-zero. `capabilities` lists the export in
+  `symbols` and in `cancellable`; no other fixture changed.
+
+* 2026-10-28: a Gaussian splat has a new artifact role, `gsplat.export` (`gsplat/export.spz`,
+  `application/octet-stream`, `downloadName` `export.spz`): the splat as one `.spz` file for other
+  tools, made on demand and never by a build. It is listed (last) only while the file exists, is not
+  `legacy` and has no `fallbackFor`, is not part of the completeness of a build (`complete` still
+  means `gsplat/model.rad`), and goes with `gsplat/` when the entry is built again. The artifacts
+  `gsplat.lod` and `gsplat.spz` gain a `downloadName` (`model.rad`, `model.spz`), so a host that
+  offers the first artifact with a `downloadName` as the download of an entry (Registry's
+  `build-artifact`) serves a splat. The `entry-types` fixture lists the new role; no other fixture
+  changed (none lists a splat build).
+
+* 2026-10-28: the export `DDBExportSplatSpz(ddbPath, entryPath, output)` is new in 2.0.0 (ABI 2.0, no
+  bump). It makes the `.spz` of a Gaussian splat for other tools in the build folder of the entry
+  (`gsplat/export.spz`, role `gsplat.export`) with the build lock of the entry held, and returns
+  `{"path": string, "role": "gsplat.export", "cached": bool}`: the absolute path of the file, and
+  whether it was there already (it exists, is not empty and is not older than the dataset file).
+  It returns `DDBERR_INVALIDARGS` for an entry that is not a splat or whose format (`.ksplat`,
+  `.sog`, `.rad`) is not converted, `DDBERR_NOTFOUND` for an entry that is not in the dataset or
+  whose build is not complete (the message says it is not built), `DDBERR_BUILDINPROGRESS` while a
+  build (or another export) of the entry holds the lock, `DDBERR_RETRYABLE` on a full disk and
+  `DDBERR_CANCELED` when its cancel token is canceled. `capabilities` lists the export in `symbols` and
+  in `cancellable`; no other fixture changed.

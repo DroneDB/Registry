@@ -31,6 +31,7 @@ public sealed class ArtifactRoleVocabularyTests
     {
         LibddbRoles().ShouldContain(ArtifactRoles.RasterCog);
         LibddbRoles().ShouldContain(ArtifactRoles.GsplatLod);
+        LibddbRoles().ShouldContain(ArtifactRoles.GsplatExport);
     }
 
     [Test]

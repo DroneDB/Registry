@@ -420,6 +420,13 @@ public class FakeDdbWrapper : IDdbWrapper
         int tileSize, Action<double, string?>? progress,
         CancellationToken cancellationToken) => throw Unsupported();
 
+    public virtual SplatTrainingExport ExportSplatTrainingData(string ddbPath, string folder, string outFolder,
+        SplatTrainingOptions? options, Action<double, string?>? progress, CancellationToken cancellationToken) =>
+        throw Unsupported();
+
+    public virtual SplatSpzExport ExportSplatSpz(string ddbPath, string entryPath,
+        CancellationToken cancellationToken) => throw Unsupported();
+
     public virtual string GetRasterValueInfo(string path) => throw Unsupported();
     public virtual string GetRasterPointValue(string path, int x, int y) => throw Unsupported();
     public virtual string GetRasterAreaStats(string path, int x0, int y0, int x1, int y1) => throw Unsupported();

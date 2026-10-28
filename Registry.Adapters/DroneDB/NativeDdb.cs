@@ -294,6 +294,19 @@ internal static unsafe partial class NativeDdb
         string? bands, string? formula, string? bandFilter, string? colormap, string? rescale, int tileSize,
         delegate* unmanaged[Cdecl]<double, byte*, IntPtr, int> progress, IntPtr progressUserData);
 
+    /// <summary>
+    /// The training data of an ODM project. <paramref name="optionsJson"/> is null for the defaults, else
+    /// <c>{"maxImageSize": N, "maxPoints": N}</c>; the progress callback is the one of <see cref="DDBExportRaster2"/>.
+    /// </summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBExportSplatTrainingData(string ddbPath, string folder, string outFolder,
+        string? optionsJson, delegate* unmanaged[Cdecl]<double, byte*, IntPtr, int> progress, IntPtr progressUserData,
+        out IntPtr output);
+
+    /// <summary>The <c>.spz</c> of a splat, in its build folder: <c>{"path", "role", "cached"}</c>.</summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBExportSplatSpz(string ddbPath, string entryPath, out IntPtr output);
+
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBGetRasterValueInfo(string filePath, out IntPtr output);
 
