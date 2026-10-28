@@ -1,4 +1,3 @@
-#nullable disable
 using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.DTO;
@@ -7,8 +6,8 @@ namespace Registry.Web.Models.DTO;
 public class MetaDumpDto : MetaDto
 {
     [JsonPropertyName("path")]
-    public string Path { get; set; }
+    public string? Path { get; set; }
 
     [JsonPropertyName("key")]
-    public string Key { get; set; }
+    public string? Key { get; set; }
 }

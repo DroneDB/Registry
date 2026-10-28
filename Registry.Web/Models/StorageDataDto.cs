@@ -1,4 +1,3 @@
-#nullable disable
 namespace Registry.Web.Models;
 
 /// <summary>
@@ -6,8 +5,8 @@ namespace Registry.Web.Models;
 /// </summary>
 public class StorageDataDto
 {
-    public byte[] Data { get; set; }
-    public string ContentType { get; set; }
+    public required byte[] Data { get; set; }
+    public required string ContentType { get; set; }
     
-    public string Name { get; set; }
+    public required string Name { get; set; }
 }

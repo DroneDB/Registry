@@ -1,7 +1,6 @@
-#nullable disable
 namespace Registry.Web.Models.DTO;
 
 public class CleanupResult
 {
-    public int[] RemovedSessions { get; set; }
+    public int[]? RemovedSessions { get; set; }
 }

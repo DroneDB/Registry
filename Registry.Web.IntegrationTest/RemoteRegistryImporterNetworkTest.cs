@@ -102,8 +102,8 @@ public class RemoteRegistryImporterNetworkTest : TestBase
 
         // Assert
         result.ShouldNotBeNull();
-        result.Errors.ShouldBeEmpty($"Import should succeed without errors. Errors: {string.Join(", ", result.Errors.Select(e => e.Message))}");
-        result.ImportedItems.Length.ShouldBe(1);
+        result.Errors.ShouldBeEmpty($"Import should succeed without errors. Errors: {string.Join(", ", result.Errors?.Select(e => e.Message) ?? [])}");
+        result.ImportedItems.ShouldNotBeNull().Length.ShouldBe(1);
         result.ImportedItems[0].Organization.ShouldBe("imported-org");
         result.ImportedItems[0].Dataset.ShouldBe("imported-dataset");
         result.TotalFiles.ShouldBeGreaterThan(0);
@@ -144,9 +144,9 @@ public class RemoteRegistryImporterNetworkTest : TestBase
 
         // Assert
         result.ShouldNotBeNull();
-        result.Errors.ShouldBeEmpty($"Import should succeed without errors. Errors: {string.Join(", ", result.Errors.Select(e => e.Message))}");
+        result.Errors.ShouldBeEmpty($"Import should succeed without errors. Errors: {string.Join(", ", result.Errors?.Select(e => e.Message) ?? [])}");
         result.FileErrors.ShouldBeEmpty($"File imports should succeed. File errors: {string.Join(", ", result.FileErrors?.Select(e => $"{e.FilePath}: {e.Message}") ?? [])}");
-        result.ImportedItems.Length.ShouldBe(1);
+        result.ImportedItems.ShouldNotBeNull().Length.ShouldBe(1);
         result.ImportedItems[0].Organization.ShouldBe("imported-org-parallel");
         result.ImportedItems[0].Dataset.ShouldBe("imported-dataset-parallel");
         result.TotalFiles.ShouldBeGreaterThan(0);

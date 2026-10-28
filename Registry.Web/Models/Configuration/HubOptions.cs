@@ -1,4 +1,3 @@
-#nullable disable
 using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.Configuration;
@@ -20,21 +19,21 @@ public class HubOptions
     /// file dropped in <c>{StoragePath}/branding/</c>, or any absolute URL.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string AppLogo { get; set; }
+    public string? AppLogo { get; set; }
 
     /// <summary>
     /// Display name used as the document title and as fallback when no logo is set.
     /// When null, the frontend defaults to <c>DroneDB</c>.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string AppName { get; set; }
+    public string? AppName { get; set; }
 
     /// <summary>
     /// Optional CSS icon class shown next to the app name when no logo is configured.
     /// When null, the frontend defaults to <c>icon-dronedb</c>.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string AppIcon { get; set; }
+    public string? AppIcon { get; set; }
 
     /// <summary>
     /// Whether to show the registration link on the login page. Default is <c>true</c>.
@@ -61,7 +60,7 @@ public class HubOptions
     /// (typical of self-hosted single-tenant deployments).
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string SingleOrganization { get; set; }
+    public string? SingleOrganization { get; set; }
 
     /// <summary>
     /// Hides organization-creation/edit entry-points when <c>true</c>.
@@ -73,5 +72,5 @@ public class HubOptions
     /// back to whatever default favicon ships with the embedded ClientApp.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public FaviconOptions Favicon { get; set; }
+    public FaviconOptions? Favicon { get; set; }
 }

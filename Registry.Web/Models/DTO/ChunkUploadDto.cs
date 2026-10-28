@@ -1,4 +1,3 @@
-#nullable disable
 namespace Registry.Web.Models.DTO;
 
 public class ChunkUploadDto
@@ -6,7 +5,7 @@ public class ChunkUploadDto
     /// <summary>
     /// The unique identifier for the file being uploaded
     /// </summary>
-    public string FileId { get; set; }
+    public string? FileId { get; set; }
     
     /// <summary>
     /// The index of the current chunk (0-based)
@@ -26,12 +25,12 @@ public class ChunkUploadDto
     /// <summary>
     /// The original filename
     /// </summary>
-    public string FileName { get; set; }
+    public string? FileName { get; set; }
     
     /// <summary>
     /// Path where the file should be stored
     /// </summary>
-    public string Path { get; set; }
+    public string? Path { get; set; }
     
     /// <summary>
     /// Size of every chunk but the last (required when the file has more than one chunk): chunks
@@ -45,7 +44,7 @@ public class ChunkUploadResultDto
     /// <summary>
     /// The unique identifier for the file being uploaded
     /// </summary>
-    public string FileId { get; set; }
+    public string? FileId { get; set; }
     
     /// <summary>
     /// The index of the received chunk
@@ -65,7 +64,7 @@ public class ChunkUploadResultDto
     /// <summary>
     /// Hash of the complete file (only returned when IsComplete is true)
     /// </summary>
-    public string Hash { get; set; }
+    public string? Hash { get; set; }
     
     /// <summary>
     /// Size of the complete file (only returned when IsComplete is true)

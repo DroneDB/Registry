@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -11,18 +10,20 @@ namespace Registry.Web.Models.DTO;
 
 public class EntryDto
 {
+    // Every entry has a path: DroneDB writes it in each entry it lists (a Registry answers it as such), and the code
+    // that builds an entry sets it
     [JsonPropertyName("path")]
-    public string Path { get; set; }
+    public string Path { get; set; } = null!;
 
     [JsonPropertyName("hash")]
-    public string Hash { get; set; }
+    public string? Hash { get; set; }
 
     [JsonPropertyName("type")]
     public EntryType Type { get; set; }
 
     [JsonPropertyName("properties")]
     [JsonConverter(typeof(SharedDocumentMapConverter))]
-    public Dictionary<string, JsonElement> Properties { get; set; }
+    public Dictionary<string, JsonElement>? Properties { get; set; }
 
     [JsonPropertyName("mtime")]
     [JsonConverter(typeof(SecondEpochConverter))]
@@ -50,7 +51,7 @@ public class EntryDto
     /// </summary>
     [JsonPropertyName("buildStatus")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string BuildStatus { get; set; }
+    public string? BuildStatus { get; set; }
 
     /// <summary>
     /// Names of the dependencies (companion/sidecar files or external tools)
@@ -59,7 +60,7 @@ public class EntryDto
     /// </summary>
     [JsonPropertyName("buildMissingDependencies")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string[] BuildMissingDependencies { get; set; }
+    public string[]? BuildMissingDependencies { get; set; }
 
     /// <summary>
     /// The pending build waits for files the dataset lacks (<see cref="BuildMissingDependencies"/>): it runs
@@ -76,5 +77,5 @@ public class EntryDto
     /// </summary>
     [JsonPropertyName("artifacts")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public ArtifactLinkDto[] Artifacts { get; set; }
+    public ArtifactLinkDto[]? Artifacts { get; set; }
 }

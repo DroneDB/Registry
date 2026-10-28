@@ -1,4 +1,3 @@
-#nullable disable
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -14,7 +13,7 @@ public class StacSearchRequestDto
     /// Bounding box filter [minX, minY, maxX, maxY] in WGS84.
     /// </summary>
     [JsonPropertyName("bbox")]
-    public double[] Bbox { get; set; }
+    public double[]? Bbox { get; set; }
 
     /// <summary>
     /// GeoJSON geometry filter. Mutually exclusive with <see cref="Bbox"/>.
@@ -26,7 +25,7 @@ public class StacSearchRequestDto
     /// Single RFC 3339 datetime or an interval "start/end" (".." for open ends).
     /// </summary>
     [JsonPropertyName("datetime")]
-    public string Datetime { get; set; }
+    public string? Datetime { get; set; }
 
     /// <summary>
     /// Limit of items returned per page.
@@ -38,17 +37,17 @@ public class StacSearchRequestDto
     /// Restrict the search to specific collection ids.
     /// </summary>
     [JsonPropertyName("collections")]
-    public string[] Collections { get; set; }
+    public string[]? Collections { get; set; }
 
     /// <summary>
     /// Restrict the search to specific item ids.
     /// </summary>
     [JsonPropertyName("ids")]
-    public string[] Ids { get; set; }
+    public string[]? Ids { get; set; }
 
     /// <summary>
     /// Opaque pagination token returned in the "next" link of a previous response.
     /// </summary>
     [JsonPropertyName("token")]
-    public string Token { get; set; }
+    public string? Token { get; set; }
 }

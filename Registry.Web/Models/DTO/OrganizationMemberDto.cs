@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using Registry.Common;
 
@@ -12,12 +11,12 @@ public class OrganizationMemberDto
     /// <summary>
     /// User's display name (unique identifier)
     /// </summary>
-    public string UserName { get; set; }
+    public string? UserName { get; set; }
 
     /// <summary>
     /// User's email address
     /// </summary>
-    public string Email { get; set; }
+    public string? Email { get; set; }
 
     /// <summary>
     /// Permission level (0=ReadOnly, 1=ReadWrite, 2=ReadWriteDelete, 3=Admin)
@@ -32,7 +31,7 @@ public class OrganizationMemberDto
     /// <summary>
     /// Username of who granted the membership
     /// </summary>
-    public string GrantedBy { get; set; }
+    public string? GrantedBy { get; set; }
 }
 
 /// <summary>
@@ -43,7 +42,7 @@ public class AddOrganizationMemberDto
     /// <summary>
     /// Username to add as member
     /// </summary>
-    public string UserName { get; set; }
+    public string? UserName { get; set; }
 
     /// <summary>
     /// Permission level. Default is ReadWrite
@@ -70,17 +69,17 @@ public class UserOrganizationMembershipDto
     /// <summary>
     /// Organization slug (unique identifier)
     /// </summary>
-    public string Slug { get; set; }
+    public string? Slug { get; set; }
 
     /// <summary>
     /// Organization display name
     /// </summary>
-    public string Name { get; set; }
+    public string? Name { get; set; }
 
     /// <summary>
     /// Organization description
     /// </summary>
-    public string Description { get; set; }
+    public string? Description { get; set; }
 
     /// <summary>
     /// Whether the organization is public
@@ -105,7 +104,7 @@ public class UserOrganizationMembershipDto
     /// <summary>
     /// Username of who granted the membership (null for owners)
     /// </summary>
-    public string GrantedBy { get; set; }
+    public string? GrantedBy { get; set; }
 }
 
 /// <summary>
@@ -116,7 +115,7 @@ public class AddUserToOrganizationDto
     /// <summary>
     /// Organization slug to add the user to
     /// </summary>
-    public string OrgSlug { get; set; }
+    public string? OrgSlug { get; set; }
 
     /// <summary>
     /// Permission level. Default is ReadWrite

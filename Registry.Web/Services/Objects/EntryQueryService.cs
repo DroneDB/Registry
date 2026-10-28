@@ -126,7 +126,7 @@ public sealed class EntryQueryService : IEntryQueryService
         // One file asked for by its own path: the file itself; anything else: a ZIP archive
         var descriptor = files.Length == 1 && paths?.Length == 1 && files[0] == paths[0]
             ? new FileStreamDescriptor(Path.GetFileName(files[0]), MimeUtility.GetMimeMapping(files[0]), ddb, files,
-                null!, FileDescriptorType.Single, _logger, _zip)
+                null, FileDescriptorType.Single, _logger, _zip)
             : new FileStreamDescriptor($"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip", "application/zip", ddb,
                 files, folders, includeDdb ? FileDescriptorType.Dataset : FileDescriptorType.Multiple, _logger, _zip);
 

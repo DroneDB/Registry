@@ -1,4 +1,3 @@
-#nullable disable
 using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.DTO;
@@ -9,8 +8,8 @@ public class MetaListItemDto
     public int Count { get; set; }
 
     [JsonPropertyName("key")]
-    public string Key { get; set; }
+    public string? Key { get; set; }
 
     [JsonPropertyName("path")]
-    public string Path { get; set; }
+    public string? Path { get; set; }
 }

@@ -1,4 +1,3 @@
-#nullable disable
 using System.ComponentModel.DataAnnotations;
 
 namespace Registry.Web.Models.DTO;
@@ -11,14 +10,15 @@ public class DeleteUserDto
     /// <summary>
     /// The username of the user to delete.
     /// </summary>
+    /// <remarks>Never null in an action: [ApiController] answers 400 before it runs when it is missing.</remarks>
     [Required]
-    public string UserName { get; set; }
+    public string UserName { get; set; } = null!;
 
     /// <summary>
     /// The username of the successor to transfer data to.
     /// If null, all user data (organizations, datasets, batches) will be deleted.
     /// </summary>
-    public string Successor { get; set; }
+    public string? Successor { get; set; }
 
     /// <summary>
     /// How to handle conflicts when transferring datasets to the successor's organizations.
@@ -35,12 +35,12 @@ public class DeleteUserResultDto
     /// <summary>
     /// The username of the deleted user.
     /// </summary>
-    public string UserName { get; set; }
+    public string? UserName { get; set; }
 
     /// <summary>
     /// The username of the successor (if any).
     /// </summary>
-    public string Successor { get; set; }
+    public string? Successor { get; set; }
 
     /// <summary>
     /// Number of organizations transferred to the successor.
@@ -70,5 +70,5 @@ public class DeleteUserResultDto
     /// <summary>
     /// Details of dataset move operations (when transferring to successor).
     /// </summary>
-    public MoveDatasetResultDto[] DatasetResults { get; set; }
+    public MoveDatasetResultDto[]? DatasetResults { get; set; }
 }

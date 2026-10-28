@@ -1,11 +1,10 @@
-#nullable disable
 using System.Collections.Generic;
 
 namespace Registry.Web.Models.DTO;
 
 public class LoginResultDto
 {
-    public string UserName { get; set; }
+    public string? UserName { get; set; }
     public bool Success { get; set; }
-    public Dictionary<string, object> Metadata { get; set; }
+    public Dictionary<string, object>? Metadata { get; set; }
 }

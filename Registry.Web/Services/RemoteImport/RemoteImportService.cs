@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports.Import;
@@ -97,7 +98,8 @@ public sealed class RemoteImportService
 
     // The source Registry: an http(s) scheme and host only, not a private or reserved address (the SSRF guard),
     // and an organization
-    private async Task EnsureSourceAsync(string? registryUrl, string? organization, CancellationToken ct)
+    private async Task EnsureSourceAsync([NotNull] string? registryUrl, [NotNull] string? organization,
+        CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(registryUrl))
             throw new BadRequestException("SourceRegistryUrl is required");
