@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -33,7 +32,7 @@ public class DownloadLimitMiddlewareTest : TestBase
             new ClientIpResolver(), _logger);
     }
 
-    private static DefaultHttpContext CreateContext(string path, string userId = null)
+    private static DefaultHttpContext CreateContext(string path, string? userId = null)
     {
         var context = new DefaultHttpContext();
         context.Request.Path = path;

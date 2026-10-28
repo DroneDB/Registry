@@ -1,4 +1,3 @@
-#nullable disable
 using NUnit.Framework;
 using Registry.Web.Services;
 using Shouldly;

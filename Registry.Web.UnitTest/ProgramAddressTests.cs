@@ -1,4 +1,3 @@
-#nullable disable
 using NUnit.Framework;
 using Shouldly;
 

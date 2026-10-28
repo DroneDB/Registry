@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using Registry.Adapters.Testing;
 using Registry.Ports;
@@ -94,7 +93,7 @@ public class BuildStatusServiceTest : TestBase
         Job.FromExpression<DdbJobs>(j => j.RebuildInBackground(OrgSlug, Guid.Empty, "m.obj", null)).ToString();
 
     private JobIndex AddJob(string path, string state, DateTime? createdAt = null, string toolId = "build",
-        string dsSlug = DsSlug, string methodDisplay = null)
+        string dsSlug = DsSlug, string? methodDisplay = null)
     {
         var job = new JobIndex
         {
@@ -416,7 +415,7 @@ public class BuildStatusServiceTest : TestBase
             PendingMarkers.Of(path, "h1", 0, "sub/model.mtl")
         ]);
 
-        IndexPayload retryMeta = null;
+        IndexPayload? retryMeta = null;
         var jobs = new Mock<IBackgroundJobsProcessor>();
         jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()))
             .Callback<Expression<Action<DdbJobs>>, IndexPayload>((_, meta) => retryMeta = meta)

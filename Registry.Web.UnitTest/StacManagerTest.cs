@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Threading;
 using System.Linq;
@@ -51,7 +50,7 @@ public class StacManagerTest : TestBase
 
         landing.Type.ShouldBe("Catalog");
         landing.StacVersion.ShouldBe("1.1.0");
-        landing.Links.Single(l => l.Relationship == "self").Href.ShouldBe("http://localhost/stac");
+        landing.Links.ShouldNotBeNull().Single(l => l.Relationship == "self").Href.ShouldBe("http://localhost/stac");
         landing.Links.Single(l => l.Relationship == "root").Href.ShouldBe("http://localhost/stac");
         var child = landing.Links.Single(l => l.Relationship == "child");
         child.Href.ShouldBe("http://localhost/stac/collections/public/default");
@@ -67,7 +66,7 @@ public class StacManagerTest : TestBase
 
         var result = await stacManager.GetCollections();
 
-        result.Collections.Cast<JsonObject>().Select(c => (string)c["id"]!)
+        result.Collections.ShouldNotBeNull().Cast<JsonObject>().Select(c => (string)c["id"]!)
             .ShouldBe(["public/listed"]);
         utilsMock.Verify(o => o.GetDatasetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(),
             It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -81,7 +80,7 @@ public class StacManagerTest : TestBase
 
         var result = await stacManager.GetCollections();
 
-        result.Collections.Cast<JsonObject>().Select(c => (string)c["id"]!)
+        result.Collections.ShouldNotBeNull().Cast<JsonObject>().Select(c => (string)c["id"]!)
             .ShouldBe(["public/good-1", "public/good-2"]);
     }
 
@@ -93,19 +92,19 @@ public class StacManagerTest : TestBase
 
         var first = await stacManager.GetCollections(limit: 2);
 
-        first.Collections.Cast<JsonObject>().Select(c => (string)c["id"]!)
+        first.Collections.ShouldNotBeNull().Cast<JsonObject>().Select(c => (string)c["id"]!)
             .ShouldBe(["public/ds-a", "public/ds-b"]);
         first.NumberMatched.ShouldBe(3);
         first.NumberReturned.ShouldBe(2);
-        first.Links.Single(l => l.Relationship == "next").Href
+        first.Links.ShouldNotBeNull().Single(l => l.Relationship == "next").Href
             .ShouldBe("http://localhost/stac/collections?limit=2&offset=2");
         first.Links.ShouldNotContain(l => l.Relationship == "prev");
 
         var second = await stacManager.GetCollections(limit: 2, offset: 2);
 
-        second.Collections.Cast<JsonObject>().Select(c => (string)c["id"]!)
+        second.Collections.ShouldNotBeNull().Cast<JsonObject>().Select(c => (string)c["id"]!)
             .ShouldBe(["public/ds-c"]);
-        second.Links.ShouldNotContain(l => l.Relationship == "next");
+        second.Links.ShouldNotBeNull().ShouldNotContain(l => l.Relationship == "next");
         second.Links.Single(l => l.Relationship == "prev").Href
             .ShouldBe("http://localhost/stac/collections?limit=2&offset=0");
     }
@@ -125,14 +124,14 @@ public class StacManagerTest : TestBase
         var second = await stacManager.GetLandingPage();
 
         _ddbManagerMock.Verify(o => o.Get(It.IsAny<string>(), It.IsAny<Guid>()), Times.Never);
-        second.Links.Where(l => l.Relationship == "child").Select(l => l.Title)
-            .ShouldBe(first.Links.Where(l => l.Relationship == "child").Select(l => l.Title));
+        second.Links.ShouldNotBeNull().Where(l => l.Relationship == "child").Select(l => l.Title)
+            .ShouldBe(first.Links.ShouldNotBeNull().Where(l => l.Relationship == "child").Select(l => l.Title));
         second.Links.Where(l => l.Relationship == "child").Select(l => l.Title)
             .ShouldBe(["Name ds-a", "Name ds-b", "Name ds-c"]);
     }
 
     private (StacManager manager, Mock<IDatasetResolver> utils, MemoryDistributedCache cache) CreateCollectionsManager(
-        RegistryContext context, string brokenSlug = null, Func<string, string> names = null)
+        RegistryContext context, string? brokenSlug = null, Func<string, string>? names = null)
     {
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), AccessType.Read)).ReturnsAsync(true);
         _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).ReturnsAsync("user");

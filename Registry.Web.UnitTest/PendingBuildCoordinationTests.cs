@@ -845,7 +845,7 @@ public class PendingBuildCoordinationTests
         var storage = new Mock<JobStorage>();
         var connection = new Mock<IStorageConnection>();
         connection.Setup(x => x.AcquireDistributedLock(It.IsAny<string>(), It.IsAny<TimeSpan>())).Returns(Mock.Of<IDisposable>());
-        connection.Setup(x => x.GetStateData("stale-job")).Returns(actualState == "Missing" ? null :
+        connection.Setup(x => x.GetStateData("stale-job")).Returns(actualState == "Missing" ? (StateData)null! :
             new StateData { Name = actualState, Data = new Dictionary<string, string>() });
         storage.Setup(x => x.GetConnection()).Returns(connection.Object);
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingMarkers.Of("model.obj", "h")]);

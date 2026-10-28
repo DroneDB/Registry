@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Threading;
 using System.Collections.Generic;
@@ -39,7 +38,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         _logger = CreateTestLogger<ArtifactCompletenessCheckerService>();
     }
 
-    private ArtifactCompletenessCheckerService Service(RegistryContext context, IJobIndexQuery jobIndex = null) =>
+    private ArtifactCompletenessCheckerService Service(RegistryContext context, IJobIndexQuery? jobIndex = null) =>
         new(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object),
             jobIndex ?? new JobIndexQuery(context), _logger);
 
@@ -296,7 +295,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
     private static EntryBuildArtifacts Build(string path, BuildState state) =>
         TestBuilds.Build(Folder, path, EntryType.GeoRaster, "h-" + path, state);
 
-    private Mock<IDDB> SingleIncompleteEntry(string path, string hash, string[] missingDependencies = null)
+    private Mock<IDDB> SingleIncompleteEntry(string path, string hash, string[]? missingDependencies = null)
     {
         var ddb = new Mock<IDDB>();
         ddb.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([new DdbEntry { Path = path, Hash = hash }]);
@@ -308,7 +307,7 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
     }
 
     private static void AddBuildJob(RegistryContext context, string path, string hash, string state,
-        DateTime at, string errorType = null)
+        DateTime at, string? errorType = null)
     {
         var ds = context.Datasets.Include(d => d.Organization).First();
         context.JobIndices.Add(new JobIndex
@@ -371,10 +370,12 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
     // ---- background rebuilds: an entry of an older layout is not queued in front of the builds users wait for ----
 
     /// <summary>The job method and entry path of each build job the sweep queued, in order.</summary>
-    private List<(string Method, string Path)> QueuedJobs() => _backgroundJobMock.Invocations
+    private List<(string Method, string? Path)> QueuedJobs() => _backgroundJobMock.Invocations
         .Where(i => i.Method.Name == "EnqueueIndexed")
-        .Select(i => (Method: ((MethodCallExpression)((LambdaExpression)i.Arguments[0]).Body).Method.Name,
-            Path: ((IndexPayload)i.Arguments[1]).Path))
+        .Select(i => (
+            Method: ((MethodCallExpression)i.Arguments[0].ShouldBeAssignableTo<LambdaExpression>().ShouldNotBeNull().Body)
+                .Method.Name,
+            Path: i.Arguments[1].ShouldBeOfType<IndexPayload>().Path))
         .ToList();
 
     private static EntryBuildArtifacts LegacyBuild(string path) =>

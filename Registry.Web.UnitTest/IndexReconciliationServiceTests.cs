@@ -1,4 +1,3 @@
-#nullable disable
 using Registry.Adapters;
 using Registry.Web.Services.Jobs;
 using System;
@@ -208,7 +207,7 @@ public class IndexReconciliationServiceTests
             var ddb = new Mock<IDDB>();
             ddb.Setup(d => d.FindSummaries(EntryQuery.All)).Returns([]);
 
-            IReadOnlyList<string> enqueued = null;
+            IReadOnlyList<string>? enqueued = null;
             var indexQueue = new Mock<IDatasetIndexQueue>();
             indexQueue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<string>>(),
                     It.IsAny<CancellationToken>()))

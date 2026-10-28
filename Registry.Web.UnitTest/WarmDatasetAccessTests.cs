@@ -127,7 +127,9 @@ public class WarmDatasetAccessTests
     {
         var utils = new DatasetResolver(context, _lookups);
         var access = new DatasetAccessControl(new Snapshots(), context, NullLogger.Instance, _ddb, _cache);
-        return await access.CanAccessDataset(await utils.GetDatasetAsync(Org, Ds), AccessType.Read, userId);
+        var dataset = await utils.GetDatasetAsync(Org, Ds);
+        dataset.ShouldNotBeNull();
+        return await access.CanAccessDataset(dataset, AccessType.Read, userId);
     }
 
     [TearDown]

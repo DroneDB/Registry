@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Net;
 using System.Net.Http;
@@ -135,7 +134,7 @@ public class RegistryWebFactoryTests
             (await response.Content.ReadAsStringAsync()).ShouldBe(EchoPeerStartupFilter.NoPeer);
     }
 
-    private static async Task<string> ReadUserNameAsync(HttpResponseMessage response)
+    private static async Task<string?> ReadUserNameAsync(HttpResponseMessage response)
     {
         var body = JObject.Parse(await response.Content.ReadAsStringAsync());
         return body.GetValue("username", StringComparison.OrdinalIgnoreCase)?.Value<string>();

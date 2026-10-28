@@ -1,4 +1,3 @@
-#nullable disable
 using Registry.Web.Test.Support;
 using System.Collections.Generic;
 using System.Security.Claims;
@@ -65,7 +64,7 @@ public class OgcAuthorizationFilterTest
         ctx.Result.ShouldBeOfType<ContentResult>();
         var r = (ContentResult)ctx.Result!;
         r.StatusCode.ShouldBe(400);
-        r.Content.ShouldContain("MissingParameterValue");
+        r.Content.ShouldNotBeNull().ShouldContain("MissingParameterValue");
     }
 
     [Test]
@@ -77,7 +76,7 @@ public class OgcAuthorizationFilterTest
         await _filter.OnAuthorizationAsync(ctx);
         var r = (ContentResult)ctx.Result!;
         r.StatusCode.ShouldBe(404);
-        r.Content.ShouldContain("NotFound");
+        r.Content.ShouldNotBeNull().ShouldContain("NotFound");
     }
 
     [Test]
@@ -90,7 +89,7 @@ public class OgcAuthorizationFilterTest
         await _filter.OnAuthorizationAsync(ctx);
         var r = (ContentResult)ctx.Result!;
         r.StatusCode.ShouldBe(401);
-        r.Content.ShouldContain("AuthenticationFailed");
+        r.Content.ShouldNotBeNull().ShouldContain("AuthenticationFailed");
         ctx.HttpContext.Response.Headers.ContainsKey("WWW-Authenticate").ShouldBeTrue();
     }
 
@@ -106,7 +105,7 @@ public class OgcAuthorizationFilterTest
         await _filter.OnAuthorizationAsync(ctx);
         var r = (ContentResult)ctx.Result!;
         r.StatusCode.ShouldBe(403);
-        r.Content.ShouldContain("AccessDenied");
+        r.Content.ShouldNotBeNull().ShouldContain("AccessDenied");
         ctx.HttpContext.Response.Headers.ContainsKey("WWW-Authenticate").ShouldBeFalse();
     }
 
@@ -120,7 +119,7 @@ public class OgcAuthorizationFilterTest
         await _filter.OnAuthorizationAsync(ctx);
         var r = (ContentResult)ctx.Result!;
         r.StatusCode.ShouldBe(400);
-        r.Content.ShouldContain("InvalidParameterValue");
+        r.Content.ShouldNotBeNull().ShouldContain("InvalidParameterValue");
         r.Content.ShouldContain("Invalid organization id");
     }
 
@@ -133,7 +132,7 @@ public class OgcAuthorizationFilterTest
         await _filter.OnAuthorizationAsync(ctx);
         var r = (ContentResult)ctx.Result!;
         r.StatusCode.ShouldBe(500);
-        r.Content.ShouldNotContain("secret");
+        r.Content.ShouldNotBeNull().ShouldNotContain("secret");
     }
 
     [Test]

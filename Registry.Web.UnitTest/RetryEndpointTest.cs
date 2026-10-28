@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -115,7 +114,7 @@ public class RetryEndpointTest : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private static JobIndex NewRow(string jobId, string state, string toolId = null) => new()
+    private static JobIndex NewRow(string jobId, string state, string? toolId = null) => new()
     {
         JobId = jobId,
         OrgSlug = Org,
@@ -152,9 +151,9 @@ public class RetryEndpointTest : IDisposable
     /// Reports the given live Hangfire state for the given job id via a fabricated JobStorage.
     /// A <paramref name="stateName"/> of null models a job no longer present in Hangfire.
     /// </summary>
-    private void SetLiveState(string jobId, string stateName)
+    private void SetLiveState(string jobId, string? stateName)
     {
-        _connection.Setup(x => x.GetStateData(jobId)).Returns(stateName is null ? null :
+        _connection.Setup(x => x.GetStateData(jobId)).Returns(stateName is null ? (StateData)null! :
             new StateData { Name = stateName, Data = new Dictionary<string, string>() });
     }
 

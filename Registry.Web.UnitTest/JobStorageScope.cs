@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using Hangfire;
 
@@ -11,7 +10,7 @@ namespace Registry.Web.Test;
 /// </summary>
 internal sealed class JobStorageScope : IDisposable
 {
-    private readonly JobStorage _saved;
+    private readonly JobStorage? _saved;
     private bool _disposed;
 
     public JobStorageScope(JobStorage storage)

@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Http;
@@ -48,7 +47,7 @@ public class OgcExceptionFilterTest
         NewFilter().OnException(ctx);
         var r = (ContentResult)ctx.Result!;
         r.StatusCode.ShouldBe(503);
-        r.Content.ShouldContain("ServiceUnavailable");
+        r.Content.ShouldNotBeNull().ShouldContain("ServiceUnavailable");
     }
 
     [Test]
@@ -59,7 +58,7 @@ public class OgcExceptionFilterTest
         NewFilter().OnException(ctx);
         var r = (ContentResult)ctx.Result!;
         r.StatusCode.ShouldBe(503);
-        r.Content.ShouldContain("ServiceUnavailable");
+        r.Content.ShouldNotBeNull().ShouldContain("ServiceUnavailable");
     }
 
     [Test]
@@ -69,7 +68,7 @@ public class OgcExceptionFilterTest
         NewFilter().OnException(ctx);
         var r = (ContentResult)ctx.Result!;
         r.StatusCode.ShouldBe(500);
-        r.Content.ShouldContain("NoApplicableCode");
+        r.Content.ShouldNotBeNull().ShouldContain("NoApplicableCode");
     }
 
     /// <summary>The typed libddb errors take the API's status in the OGC envelope.</summary>
@@ -84,7 +83,7 @@ public class OgcExceptionFilterTest
         NewFilter().OnException(ctx);
         var r = (ContentResult)ctx.Result!;
         r.StatusCode.ShouldBe(status);
-        r.Content.ShouldContain(code);
+        r.Content.ShouldNotBeNull().ShouldContain(code);
     }
 
     [Test]
@@ -105,7 +104,7 @@ public class OgcExceptionFilterTest
         NewFilter().OnException(ctx);
         var r = (ContentResult)ctx.Result!;
         // ows:ExceptionReport is used for WMTS, not ServiceExceptionReport.
-        r.Content.ShouldNotContain("ServiceExceptionReport");
+        r.Content.ShouldNotBeNull().ShouldNotContain("ServiceExceptionReport");
         r.Content.ShouldContain("ExceptionReport");
     }
 
@@ -117,7 +116,7 @@ public class OgcExceptionFilterTest
         NewFilter().OnException(ctx);
         var r = (ContentResult)ctx.Result!;
         r.StatusCode.ShouldBe(400);
-        r.Content.ShouldContain("InvalidCRS");
+        r.Content.ShouldNotBeNull().ShouldContain("InvalidCRS");
     }
 
     [Test]
@@ -128,6 +127,6 @@ public class OgcExceptionFilterTest
             ("VERSION", "1.1.1"));
         NewFilter().OnException(ctx);
         var r = (ContentResult)ctx.Result!;
-        r.Content.ShouldContain("ServiceExceptionReport");
+        r.Content.ShouldNotBeNull().ShouldContain("ServiceExceptionReport");
     }
 }

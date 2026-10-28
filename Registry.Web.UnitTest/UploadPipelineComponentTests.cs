@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -386,10 +385,10 @@ public class UploadPipelineComponentTests
     {
         var cache = new DatasetLookupCache(new MemoryCache(new MemoryCacheOptions()), TimeSpan.FromMinutes(1));
         var loads = 0;
-        Task<Data.Models.Dataset> Load(CancellationToken _)
+        Task<Data.Models.Dataset?> Load(CancellationToken _)
         {
             loads++;
-            return Task.FromResult<Data.Models.Dataset>(new Data.Models.Dataset
+            return Task.FromResult<Data.Models.Dataset?>(new Data.Models.Dataset
             {
                 Slug = "ds", InternalRef = Guid.NewGuid(),
                 Organization = new Data.Models.Organization { Slug = "org", OwnerId = "u1" }
@@ -412,7 +411,7 @@ public class UploadPipelineComponentTests
         loads.ShouldBe(2);
 
         // Misses are not cached
-        (await cache.GetOrLoadAsync("org", "missing", _ => Task.FromResult<Data.Models.Dataset>(null))).ShouldBeNull();
+        (await cache.GetOrLoadAsync("org", "missing", _ => Task.FromResult<Data.Models.Dataset?>(null))).ShouldBeNull();
         (await cache.GetOrLoadAsync("org", "missing", Load)).ShouldNotBeNull();
     }
 
@@ -426,12 +425,12 @@ public class UploadPipelineComponentTests
         {
             loads++;
             cache.InvalidateOrganization("org"); // the row changes while it is being read
-            return Task.FromResult<Data.Models.Dataset>(new Data.Models.Dataset { Slug = "ds", Organization = new Data.Models.Organization { Slug = "org" } });
+            return Task.FromResult<Data.Models.Dataset?>(new Data.Models.Dataset { Slug = "ds", Organization = new Data.Models.Organization { Slug = "org" } });
         });
         await cache.GetOrLoadAsync("org", "ds", _ =>
         {
             loads++;
-            return Task.FromResult<Data.Models.Dataset>(new Data.Models.Dataset { Slug = "ds", Organization = new Data.Models.Organization { Slug = "org" } });
+            return Task.FromResult<Data.Models.Dataset?>(new Data.Models.Dataset { Slug = "ds", Organization = new Data.Models.Organization { Slug = "org" } });
         });
 
         loads.ShouldBe(2);
