@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Hangfire.States;
 using Microsoft.EntityFrameworkCore;
 using Registry.Web.Data;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.BuildNotifications;
@@ -23,17 +24,13 @@ public sealed class BuildRequesterResolver : IBuildRequesterResolver
         _db = db ?? throw new ArgumentNullException(nameof(db));
     }
 
-    /// <summary>Whether <paramref name="userId"/> names a user, not the automatic build service or nobody.</summary>
-    public static bool IsUser(string? userId) =>
-        !string.IsNullOrEmpty(userId) && userId != MagicStrings.AutoBuildServiceUserId;
-
     /// <inheritdoc />
     public async Task<BuildRequester?> ResolveAsync(BuildReport report, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(report);
         var request = report.Request;
 
-        if (IsUser(request.UserId))
+        if (UserTasks.IsUser(request.UserId))
             return new BuildRequester(request.UserId!, request.JobId);
 
         // A task output (an archive extract builds its files): the user of the task
@@ -51,14 +48,14 @@ public sealed class BuildRequesterResolver : IBuildRequesterResolver
             .Select(j => new { j.UserId, j.ParentJobId }).FirstOrDefaultAsync(ct).ConfigureAwait(false);
         if (job == null)
             return null;
-        if (IsUser(job.UserId))
+        if (UserTasks.IsUser(job.UserId))
             return new BuildRequester(job.UserId!, requestJobId);
         if (!string.IsNullOrEmpty(job.UserId) || job.ParentJobId == null)
             return null;
 
         var parentUser = await _db.JobIndices.AsNoTracking().Where(j => j.JobId == job.ParentJobId)
             .Select(j => j.UserId).FirstOrDefaultAsync(ct).ConfigureAwait(false);
-        return IsUser(parentUser) ? new BuildRequester(parentUser!, requestJobId) : null;
+        return UserTasks.IsUser(parentUser) ? new BuildRequester(parentUser!, requestJobId) : null;
     }
 
     // The latest request of a user (or of a task) to build this content, when it failed and nothing built it since: the

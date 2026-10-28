@@ -344,30 +344,47 @@ public class ProcessingPlatformTests
     }
 
     [Test]
-    public async Task CountActiveAsync_CountsOnlyActiveStates()
+    public async Task CountActiveUserTasksAsync_CountsOnlyActiveStates()
     {
         await using var ctx = NewContext(
-            Job("a", "Created"),
-            Job("b", "Enqueued"),
-            Job("c", "Scheduled"),
-            Job("d", "Processing"),
-            Job("e", "Succeeded"),
-            Job("f", "Failed"));
+            Job("a", "Created", "raster-export", "u1"),
+            Job("b", "Enqueued", "raster-export", "u1"),
+            Job("c", "Scheduled", "raster-export", "u1"),
+            Job("d", "Processing", "raster-export", "u1"),
+            Job("e", "Succeeded", "raster-export", "u1"),
+            Job("f", "Failed", "raster-export", "u1"));
         var query = new JobIndexQuery(ctx);
 
-        (await query.CountActiveAsync()).ShouldBe(4);
+        (await query.CountActiveUserTasksAsync()).ShouldBe(4);
     }
 
     [Test]
-    public async Task CountActiveAsync_ScopesByUser()
+    public async Task CountActiveUserTasksAsync_ScopesByUser()
     {
         await using var ctx = NewContext(
-            Job("a", "Processing", userId: "u1"),
-            Job("b", "Processing", userId: "u1"),
-            Job("c", "Processing", userId: "u2"));
+            Job("a", "Processing", "raster-export", "u1"),
+            Job("b", "Processing", "raster-export", "u1"),
+            Job("c", "Processing", "raster-export", "u2"));
         var query = new JobIndexQuery(ctx);
 
-        (await query.CountActiveAsync(userId: "u1")).ShouldBe(2);
+        (await query.CountActiveUserTasksAsync(userId: "u1")).ShouldBe(2);
+    }
+
+    [Test]
+    public async Task CountActiveUserTasksAsync_SkipsBuildsAndJobsOfNoUser()
+    {
+        await using var ctx = NewContext(
+            Job("a", "Processing", "raster-export", "u1"),
+            Job("b", "Scheduled", "build", MagicStrings.AutoBuildServiceUserId),
+            Job("c", "Enqueued", "build", "u1"),
+            Job("d", "Enqueued", "rescan-index", MagicStrings.AutoBuildServiceUserId),
+            Job("e", "Enqueued", "rescan-index"),
+            Job("f", "Enqueued", "rescan-index", ""));
+        var query = new JobIndexQuery(ctx);
+
+        (await query.CountActiveUserTasksAsync()).ShouldBe(1);
+        (await query.CountActiveUserTasksAsync(userId: "u1")).ShouldBe(1);
+        (await query.CountActiveUserTasksAsync(userId: "u1", toolId: "build")).ShouldBe(0);
     }
 
     [Test]

@@ -10,8 +10,8 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.HeavyTasks.Adapters;
 
 /// <summary>
-/// Quota and concurrency guard evaluated before enqueueing a heavy task
-/// task. First failure wins.
+/// Quota and concurrency guard evaluated before enqueueing a heavy task. First failure wins.
+/// Every concurrency limit counts only the active tasks of users (<see cref="UserTasks"/>).
 /// </summary>
 public sealed class HeavyTaskQuota
 {
@@ -34,13 +34,13 @@ public sealed class HeavyTaskQuota
                 $"({_settings.MaxEstimatedOutputBytesPerSubmit} bytes).");
 
         // 2. Global concurrency.
-        var global = await _query.CountActiveAsync(null, null, ct: ct);
+        var global = await _query.CountActiveUserTasksAsync(null, null, ct: ct);
         if (global >= _settings.MaxConcurrentTasksGlobal)
             return new HeavyTaskQuotaResult(HeavyTaskQuotaCode.Exceeded,
                 "The platform is at maximum task concurrency; please retry shortly.");
 
         // 3. Per-org concurrency.
-        var perOrg = await _query.CountActiveAsync(request.OrgSlug, null, ct: ct);
+        var perOrg = await _query.CountActiveUserTasksAsync(request.OrgSlug, null, ct: ct);
         if (perOrg >= _settings.MaxConcurrentTasksPerOrg)
             return new HeavyTaskQuotaResult(HeavyTaskQuotaCode.Exceeded,
                 "Your organization has reached its concurrent task limit.");
@@ -48,7 +48,7 @@ public sealed class HeavyTaskQuota
         // 4. Per-user concurrency / queue.
         if (!string.IsNullOrEmpty(request.UserId))
         {
-            var perUser = await _query.CountActiveAsync(null, request.UserId, ct: ct);
+            var perUser = await _query.CountActiveUserTasksAsync(null, request.UserId, ct: ct);
             if (perUser >= _settings.MaxQueuedTasksPerUser)
                 return new HeavyTaskQuotaResult(HeavyTaskQuotaCode.Exceeded,
                     "You have too many queued or running tasks; wait for some to finish.");
@@ -59,7 +59,7 @@ public sealed class HeavyTaskQuota
             //    queueing multiple simultaneous ZIP compressions.
             if (request.ToolId == "bulk-download")
             {
-                var perUserPerTool = await _query.CountActiveAsync(null, request.UserId, "bulk-download", ct);
+                var perUserPerTool = await _query.CountActiveUserTasksAsync(null, request.UserId, "bulk-download", ct);
                 if (perUserPerTool >= _settings.MaxConcurrentBulkDownloadsPerUser)
                     return new HeavyTaskQuotaResult(HeavyTaskQuotaCode.Exceeded,
                         "You already have an active download archive being prepared. " +
@@ -71,7 +71,7 @@ public sealed class HeavyTaskQuota
             //    (default 2) so a user cannot saturate outbound bandwidth / disk.
             if (request.ToolId == "import-file")
             {
-                var perUserPerTool = await _query.CountActiveAsync(null, request.UserId, "import-file", ct);
+                var perUserPerTool = await _query.CountActiveUserTasksAsync(null, request.UserId, "import-file", ct);
                 if (perUserPerTool >= _settings.MaxConcurrentUrlImportsPerUser)
                     return new HeavyTaskQuotaResult(HeavyTaskQuotaCode.Exceeded,
                         "You already have the maximum number of active URL imports. " +

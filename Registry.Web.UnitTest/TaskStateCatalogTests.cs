@@ -78,17 +78,18 @@ public class TaskStateCatalogTests
     }
 
     [Test]
-    public async Task ActiveCount_CountsIndexing_ScopedByOrgUserAndTool()
+    public async Task ActiveUserTaskCount_CountsIndexing_ScopedByOrgUserAndTool()
     {
-        _env.SeedRow("1", Created, "Indexing", PublicationEnv.Payload(tool: "build"));
+        _env.SeedRow("1", Created, "Indexing", PublicationEnv.Payload(tool: "tool-x"));
         _env.SeedRow("2", Created, "Enqueued", PublicationEnv.Payload(tool: "tool-y"));
-        _env.SeedRow("3", Created, "Succeeded", PublicationEnv.Payload(tool: "build"));
-        _env.SeedRow("4", Created, "Indexing", PublicationEnv.Payload(org: "other", tool: "build"));
+        _env.SeedRow("3", Created, "Succeeded", PublicationEnv.Payload(tool: "tool-x"));
+        _env.SeedRow("4", Created, "Indexing", PublicationEnv.Payload(org: "other", tool: "tool-x"));
+        _env.SeedRow("5", Created, "Indexing", PublicationEnv.Payload(tool: "build"));
 
-        (await _query.CountActiveAsync()).ShouldBe(3);
-        (await _query.CountActiveAsync("org")).ShouldBe(2);
-        (await _query.CountActiveAsync(userId: "user-1", toolId: "build")).ShouldBe(2);
-        (await _query.CountActiveAsync("org", toolId: "tool-y")).ShouldBe(1);
+        (await _query.CountActiveUserTasksAsync()).ShouldBe(3);
+        (await _query.CountActiveUserTasksAsync("org")).ShouldBe(2);
+        (await _query.CountActiveUserTasksAsync(userId: "user-1", toolId: "tool-x")).ShouldBe(2);
+        (await _query.CountActiveUserTasksAsync("org", toolId: "tool-y")).ShouldBe(1);
     }
 
     [Test]

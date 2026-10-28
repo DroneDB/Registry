@@ -156,11 +156,10 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
             .FirstOrDefaultAsync(ct);
     }
 
-    public async Task<long> CountActiveAsync(string? orgSlug = null, string? userId = null,
+    public async Task<long> CountActiveUserTasksAsync(string? orgSlug = null, string? userId = null,
         string? toolId = null, CancellationToken ct = default)
     {
-        var q = db.JobIndices.AsNoTracking()
-            .Where(x => ActiveStates.Contains(x.CurrentState));
+        var q = db.JobIndices.AsNoTracking().Where(UserTasks.CountTowardLimits);
 
         if (!string.IsNullOrEmpty(orgSlug))
             q = q.Where(x => x.OrgSlug == orgSlug);

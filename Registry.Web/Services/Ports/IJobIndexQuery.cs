@@ -58,8 +58,11 @@ public interface IJobIndexQuery
         string orgSlug, string dsSlug, string toolId, string requestHash,
         int lookbackHours, CancellationToken ct = default);
 
-    /// <summary>Counts active (non-terminal) tasks, optionally scoped by org, user and/or tool.</summary>
-    Task<long> CountActiveAsync(string? orgSlug = null, string? userId = null,
+    /// <summary>
+    /// Counts the active tasks of users (<see cref="HeavyTasks.UserTasks.CountTowardLimits"/>: no builds, no
+    /// jobs of the automatic build service or of no user), optionally scoped by org, user and/or tool.
+    /// </summary>
+    Task<long> CountActiveUserTasksAsync(string? orgSlug = null, string? userId = null,
         string? toolId = null, CancellationToken ct = default);
 }
 
