@@ -29,13 +29,15 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
     /// The roles the renderers read (thumbnails, tiles, raster analysis): the first existing one of an
     /// entry's own build is its render source. The order does not matter between the roles of a legacy
     /// pair (EPT and COPC, Nexus and bm3d), because libddb lists the legacy one only when the current
-    /// one is missing and never lists both.
+    /// one is missing and never lists both. The exception is the SPZ file of a Gaussian splat: a libddb that does not
+    /// yet flag it as legacy can list it beside the streamed model, so it comes after <see cref="ArtifactRoles.GsplatLod"/>
+    /// and is read only when there is no streamed model (a splat built before the RAD layout).
     /// </summary>
     private static readonly string[] RenderRoles =
     [
         ArtifactRoles.RasterCog, ArtifactRoles.PointCloudCopc, ArtifactRoles.PointCloudEpt,
         ArtifactRoles.VectorGpkg, ArtifactRoles.ModelBm3d, ArtifactRoles.ModelNexus,
-        ArtifactRoles.GsplatLod
+        ArtifactRoles.GsplatLod, ArtifactRoles.GsplatSpz
     ];
 
     private readonly Lazy<FrozenSet<EntryType>> _renderedTypes;

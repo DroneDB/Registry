@@ -99,6 +99,56 @@ public class BuildArtifactResolverTests
     }
 
     [Test]
+    public void RenderSource_OfAGaussianSplat_IsItsLodModel_WhenItIsTheOnlyModelFile()
+    {
+        _ddb.SetupBuilds(Built("scene.ply", EntryType.GaussianSplat,
+            TestBuilds.File(ArtifactRoles.GsplatLod, "gsplat/model.rad")));
+
+        _resolver.GetRenderSource(_ddb.Object, Entry("scene.ply", EntryType.GaussianSplat))
+            .ShouldBe($".ddb/build/{Hash}/gsplat/model.rad");
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void RenderSource_OfAGaussianSplatBuiltBeforeTheLodModel_IsItsSpzFile(bool flaggedLegacy)
+    {
+        // The splat has only the SPZ file an older build wrote: the viewer opens it, so the thumbnail is drawn from
+        // it too, whether or not libddb flags the file as the legacy stand-in of the LOD model
+        _ddb.SetupBuilds(Built("scene.spz", EntryType.GaussianSplat,
+            TestBuilds.File(ArtifactRoles.GsplatSpz, "gsplat/model.spz", legacy: flaggedLegacy,
+                fallbackFor: flaggedLegacy ? ArtifactRoles.GsplatLod : null)));
+
+        _resolver.GetRenderSource(_ddb.Object, Entry("scene.spz", EntryType.GaussianSplat))
+            .ShouldBe($".ddb/build/{Hash}/gsplat/model.spz");
+    }
+
+    [Test]
+    public void RenderSource_OfAGaussianSplatWithBothModelFiles_IsTheLodModel_WhicheverIsListedFirst()
+    {
+        // A libddb that does not flag the SPZ file as legacy lists it beside the LOD model of a rebuilt splat
+        _ddb.SetupBuilds(Built("scene.ply", EntryType.GaussianSplat,
+            TestBuilds.File(ArtifactRoles.GsplatSpz, "gsplat/model.spz"),
+            TestBuilds.File(ArtifactRoles.GsplatLod, "gsplat/model.rad")));
+
+        _resolver.GetRenderSource(_ddb.Object, Entry("scene.ply", EntryType.GaussianSplat))
+            .ShouldBe($".ddb/build/{Hash}/gsplat/model.rad");
+    }
+
+    [Test]
+    public void ListsLegacyArtifact_OfASplatWithOnlyItsSpzFile_FollowsTheFlagOfTheManifest()
+    {
+        var legacy = Built("scene.spz", EntryType.GaussianSplat,
+            TestBuilds.File(ArtifactRoles.GsplatSpz, "gsplat/model.spz", legacy: true,
+                fallbackFor: ArtifactRoles.GsplatLod));
+        var current = Built("scene.spz", EntryType.GaussianSplat,
+            TestBuilds.File(ArtifactRoles.GsplatLod, "gsplat/model.rad"),
+            TestBuilds.File(ArtifactRoles.GsplatSpz, "gsplat/model.spz"));
+
+        legacy.Build!.ListsLegacyArtifact().ShouldBeTrue();
+        current.Build!.ListsLegacyArtifact().ShouldBeFalse();
+    }
+
+    [Test]
     public void RenderSource_OfAGaussianSplatWithOnlyItsBounds_IsNotAvailable()
     {
         _ddb.SetupBuilds(Built("scene.ply", EntryType.GaussianSplat,

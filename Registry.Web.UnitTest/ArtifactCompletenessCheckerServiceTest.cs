@@ -408,6 +408,23 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
     }
 
     [Test]
+    public async Task CheckAndQueueAsync_SplatWithOnlyItsLegacySpzFile_IsRebuiltInTheBackground()
+    {
+        await using var context = GetTest1Context();
+        // A splat built before the RAD layout: its SPZ file stands in for the missing LOD model. A splat that has
+        // the LOD model is complete, and the sweep leaves it alone
+        Dataset(TestBuilds.Build(Folder, "old.ply", EntryType.GaussianSplat, "h-old.ply", BuildState.None,
+                TestBuilds.File(ArtifactRoles.GsplatSpz, "gsplat/model.spz", legacy: true,
+                    fallbackFor: ArtifactRoles.GsplatLod)),
+            TestBuilds.Build(Folder, "new.ply", EntryType.GaussianSplat, "h-new.ply", BuildState.Complete,
+                TestBuilds.File(ArtifactRoles.GsplatLod, "gsplat/model.rad")));
+
+        await Service(context).CheckAndQueueAsync(null, CancellationToken.None);
+
+        QueuedJobs().ShouldBe([(nameof(DdbJobs.RebuildInBackground), "old.ply")]);
+    }
+
+    [Test]
     public async Task CheckAndQueueAsync_CompleteEntryListingALegacyArtifact_IsLeftAlone()
     {
         await using var context = GetTest1Context();
