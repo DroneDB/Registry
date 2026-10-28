@@ -3,7 +3,7 @@ namespace Registry.Web.Models.Configuration;
 public class LdapSettings
 {
     /// <summary>Enables LDAP/Active Directory authentication.</summary>
-    public bool Enabled { get; set; } = false;
+    public bool Enabled { get; set; }
 
     /// <summary>LDAP server host (e.g. "ldap.example.com" or "dc.domain.com").</summary>
     public string Server { get; set; }

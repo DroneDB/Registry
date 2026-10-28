@@ -108,8 +108,8 @@ public static class HttpHelper
         string outputPath,
         Dictionary<string, string> headers = null,
         int maxRetries = 3,
-        CancellationToken cancellationToken = default,
-        HttpClient httpClient = null)
+        HttpClient httpClient = null,
+        CancellationToken cancellationToken = default)
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out _))
             return new DownloadResult { Success = false, ErrorMessage = "URI is invalid." };

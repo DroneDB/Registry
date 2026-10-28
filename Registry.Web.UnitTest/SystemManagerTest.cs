@@ -47,7 +47,7 @@ public class SystemManagerTest : TestBase
         };
     }
 
-    private RegistryContext CreateInMemoryContext()
+    private static RegistryContext CreateInMemoryContext()
     {
         var context = TestDb.CreateContext<RegistryContext>();
 

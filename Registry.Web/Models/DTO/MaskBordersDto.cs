@@ -9,7 +9,7 @@ public class MaskBordersRequestDto
     [Required]
     public DatasetPath Path { get; set; } = null!;
     public int Near { get; set; } = 15;
-    public bool White { get; set; } = false;
+    public bool White { get; set; }
 }
 
 public class MaskBordersCheckResponseDto

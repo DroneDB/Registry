@@ -132,7 +132,7 @@ public class ObjectsManagerThumbnailTests : TestBase
     }
 
     private static bool IsCopcArtifact(string localPath) =>
-        localPath.Replace('\\', '/').EndsWith(".ddb/build/abc123/copc/cloud.copc.laz");
+        localPath.Replace('\\', '/').EndsWith(".ddb/build/abc123/copc/cloud.copc.laz", StringComparison.Ordinal);
 
     // libddb's build manifest of the entry: its state and the artifacts that exist
     private void SetupBuild(string path, EntryType type, string hash, BuildState state, params BuildArtifact[] artifacts) =>

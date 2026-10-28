@@ -111,6 +111,8 @@
         <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
         <PackageVersion Include="Moq" Version="4.21.0" />
         <PackageVersion Include="NUnit" Version="5.0.0" />
+        <!-- NUnit rules (fixture lifecycle, assertions, TestContext output) for every NUnit project -->
+        <PackageVersion Include="NUnit.Analyzers" Version="4.15.0" />
         <PackageVersion Include="NUnit3TestAdapter" Version="6.3.1" />
         <PackageVersion Include="Shouldly" Version="4.3.0" />
         <PackageVersion Include="Testcontainers" Version="4.16.0" />

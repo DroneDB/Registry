@@ -71,7 +71,7 @@ public class AuthHardeningTests
 
     // 6c
 
-    private async Task<string> BasicAuthCookieAsync(HttpClient client)
+    private static async Task<string> BasicAuthCookieAsync(HttpClient client)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, OgcUrl);
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic",

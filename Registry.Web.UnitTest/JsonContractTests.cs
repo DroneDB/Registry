@@ -85,7 +85,7 @@ public sealed class JsonContractTests
             NativeJson.Deserialize<JsonElement>(output.Pointer);
         var perCall = (GC.GetAllocatedBytesForCurrentThread() - before) / (double)calls;
 
-        TestContext.WriteLine($"{perCall:F0} bytes per call");
+        TestContext.Out.WriteLine($"{perCall:F0} bytes per call");
         perCall.ShouldBeLessThan(1024, "the reader allocated 200 KB per call (a 64 Ki-char StreamReader buffer)");
     }
 

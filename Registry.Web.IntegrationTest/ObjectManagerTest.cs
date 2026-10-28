@@ -53,11 +53,14 @@ public class ObjectManagerTest : TestBase
     private const string BaseTestFolder = "ObjectManagerTest";
 
     private static readonly string Test4ArchiveUrl = TestData.Url("registry/Test4-new.zip");
+
+    /// <summary>SHA-256 of DJI_0019.JPG in the Test4 archive.</summary>
+    private const string Dji0019Sha256 = "037fa63260e54ed21f048359b454f32ef62cb08c864feecca0cb70d2a06e6902";
     private static readonly string Test5ArchiveUrl = TestData.Url("registry/Test5-new.zip");
 
     private readonly Guid _defaultDatasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
 
-    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper();
+    private static readonly NativeDdbWrapper DdbWrapper = new();
 
     [SetUp]
     public void Setup()
@@ -272,7 +275,7 @@ public class ObjectManagerTest : TestBase
     [Test]
     public async Task Get_ExistingFile_FileRes()
     {
-        var expectedHash = new byte[] { 152, 110, 79, 250, 177, 15, 101, 187, 24, 23, 34, 217, 117, 168, 119, 124 };
+        var expectedHash = Convert.FromHexString(Dji0019Sha256);
 
         const string expectedName = "DJI_0019.JPG";
         const EntryType expectedObjectType = EntryType.GeoImage;
@@ -302,13 +305,14 @@ public class ObjectManagerTest : TestBase
         obj.Type.ShouldBe(expectedObjectType);
         obj.ContentType.ShouldBe(expectedContentType);
 
-        (await MD5.Create().ComputeHashAsync(obj.PhysicalPath)).ShouldBe(expectedHash);
+        using var sha256 = SHA256.Create();
+        (await sha256.ComputeHashAsync(obj.PhysicalPath)).ShouldBe(expectedHash);
     }
 
     [Test]
     public async Task Download_ExistingFile_FileRes()
     {
-        var expectedHash = new byte[] { 152, 110, 79, 250, 177, 15, 101, 187, 24, 23, 34, 217, 117, 168, 119, 124 };
+        var expectedHash = Convert.FromHexString(Dji0019Sha256);
 
         const string expectedName = "DJI_0019.JPG";
         using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
@@ -333,7 +337,8 @@ public class ObjectManagerTest : TestBase
         res.Name.ShouldBe(expectedName);
         res.Type.ShouldBe(EntryType.GeoImage);
 
-        (await MD5.Create().ComputeHashAsync(res.PhysicalPath)).ShouldBe(expectedHash);
+        using var sha256 = SHA256.Create();
+        (await sha256.ComputeHashAsync(res.PhysicalPath)).ShouldBe(expectedHash);
 
     }
 
@@ -367,7 +372,7 @@ public class ObjectManagerTest : TestBase
         await res.CopyToAsync(memoryStream);
         memoryStream.SafeReset();
 
-        var md5 = MD5.Create();
+        using var sha256 = SHA256.Create();
 
         // Let's check if the archive is not corrupted and all the files have the right checksums
         using var archive = new ZipArchive(memoryStream, ZipArchiveMode.Read);
@@ -377,10 +382,10 @@ public class ObjectManagerTest : TestBase
             var obj = await objectManager.Queries.GetAsync(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
                 entry.FullName);
 
-            // We could use entry.Crc32 but md5 comes so handy
+            // entry.Crc32 would do too; a sha256 is as easy to compare
             await using var stream = entry.Open();
-            var expectedHash = await md5.ComputeHashAsync(obj.PhysicalPath);
-            var hash = await md5.ComputeHashAsync(stream);
+            var expectedHash = await sha256.ComputeHashAsync(obj.PhysicalPath);
+            var hash = await sha256.ComputeHashAsync(stream);
 
             hash.ShouldBe(expectedHash);
         }
@@ -416,7 +421,7 @@ public class ObjectManagerTest : TestBase
 
         res.Name.ShouldEndWith(".zip");
 
-        var md5 = MD5.Create();
+        using var sha256 = SHA256.Create();
 
         await using var memoryStream = new MemoryStream();
         await res.CopyToAsync(memoryStream);
@@ -430,10 +435,10 @@ public class ObjectManagerTest : TestBase
             var obj = await objectManager.Queries.GetAsync(organizationSlug, datasetSlug,
                 entry.FullName);
 
-            // We could use entry.Crc32 but md5 comes so handy
+            // entry.Crc32 would do too; a sha256 is as easy to compare
             await using var stream = entry.Open();
-            var expectedHash = await md5.ComputeHashAsync(obj.PhysicalPath);
-            var hash = await md5.ComputeHashAsync(stream);
+            var expectedHash = await sha256.ComputeHashAsync(obj.PhysicalPath);
+            var hash = await sha256.ComputeHashAsync(stream);
 
             hash.ShouldBe(expectedHash);
         }

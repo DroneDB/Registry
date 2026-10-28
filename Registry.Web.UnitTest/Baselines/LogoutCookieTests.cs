@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -67,7 +68,7 @@ public class LogoutCookieTests
         attributes.ShouldContain("path=/");
         var expires = attributes.SingleOrDefault(a => a.StartsWith("expires=", StringComparison.Ordinal));
         expires.ShouldNotBeNull("the cookie must be expired, not just emptied");
-        DateTimeOffset.Parse(expires["expires=".Length..]).ShouldBeLessThan(DateTimeOffset.UtcNow);
+        DateTimeOffset.Parse(expires["expires=".Length..], CultureInfo.InvariantCulture).ShouldBeLessThan(DateTimeOffset.UtcNow);
     }
 
     [Test]

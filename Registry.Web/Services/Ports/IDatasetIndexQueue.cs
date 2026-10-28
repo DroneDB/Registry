@@ -12,7 +12,7 @@ public readonly record struct DatasetKey(string OrgSlug, Guid InternalRef);
 
 /// <summary>
 /// Schedules index writes for a dataset. Concurrent requests for the same dataset are
-/// coalesced into a single native batch (<see cref="IDdbIndex.AddRawBatchWithOptions"/>), which
+/// coalesced into a single native batch (<see cref="IDdbIndex.AddRawBatchWithOptions(System.Collections.Generic.IReadOnlyList{AddItem},bool)"/>), which
 /// keeps the underlying SQLite write transaction short and gives callers FIFO fairness.
 /// </summary>
 public interface IDatasetIndexQueue

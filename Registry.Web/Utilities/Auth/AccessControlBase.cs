@@ -7,14 +7,14 @@ namespace Registry.Web.Utilities.Auth;
 
 public abstract class AccessControlBase
 {
-    protected readonly IUserAuthSnapshotProvider Snapshots;
-    protected readonly RegistryContext _context;
-    protected readonly ILogger Logger;
+    protected IUserAuthSnapshotProvider Snapshots { get; }
+    protected RegistryContext Context { get; }
+    protected ILogger Logger { get; }
 
     protected AccessControlBase(IUserAuthSnapshotProvider snapshots, RegistryContext context, ILogger logger)
     {
         Snapshots = snapshots;
-        _context = context;
+        Context = context;
         Logger = logger;
     }
 

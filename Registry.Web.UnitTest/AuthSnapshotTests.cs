@@ -116,7 +116,7 @@ public class AuthSnapshotTests
         var second = await QueriesOf(async () =>
             (await Request(_member).RequestAccess(_privateDataset, AccessType.Read)).ShouldBeTrue());
 
-        TestContext.WriteLine($"member/private/Read: first request {first}, second request {second} identity queries");
+        TestContext.Out.WriteLine($"member/private/Read: first request {first}, second request {second} identity queries");
         first.ShouldBe(3, "one user lookup and two role checks fill the snapshot");
         second.ShouldBe(0);
         (await Request(_member).RequestAccess(_privateDataset, AccessType.Write)).ShouldBeFalse();

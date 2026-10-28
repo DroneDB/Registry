@@ -191,7 +191,7 @@ public class DatasetCleanupServiceTest : TestBase
             .ReturnsAsync(jobs);
 
         // First job cancellation fails, second succeeds
-        _backgroundJobMock.Setup(x => x.Delete("job-1")).Throws(new Exception("Job not found"));
+        _backgroundJobMock.Setup(x => x.Delete("job-1")).Throws(new InvalidOperationException("Job not found"));
         _backgroundJobMock.Setup(x => x.Delete("job-2")).Returns(true);
 
         var service = new DatasetCleanupService(
@@ -210,12 +210,12 @@ public class DatasetCleanupServiceTest : TestBase
         _ddbManagerMock.Verify(x => x.Delete(orgSlug, internalRef), Times.Once);
     }
 
-    private RegistryContext GetEmptyContext()
+    private static RegistryContext GetEmptyContext()
     {
         return TestDb.CreateContext<RegistryContext>();
     }
 
-    private RegistryContext GetContextWithJobIndices(string orgSlug, string dsSlug)
+    private static RegistryContext GetContextWithJobIndices(string orgSlug, string dsSlug)
     {
         return TestDb.CreateContext<RegistryContext>(context =>
         {

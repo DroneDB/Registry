@@ -49,7 +49,7 @@ public class DdbJobsTests
     private CapturingLogger<DdbJobs> _log = null!;
     private Mock<IDdbManager> _ddbManager = null!;
     private Mock<IDDB> _ddb = null!;
-    private JobStorage _storage = null!;
+    private InMemoryStorage _storage = null!;
 
     [SetUp]
     public void SetUp()
@@ -64,6 +64,9 @@ public class DdbJobsTests
         var internalRef = Ref;
         _ddbManager.Setup(x => x.TryParseDatasetFolder(Folder, out org, out internalRef)).Returns(true);
     }
+
+    [TearDown]
+    public void TearDown() => _storage.Dispose();
 
     private IEnumerable<string> Logged => _log.Entries.Select(e => e.Message);
 

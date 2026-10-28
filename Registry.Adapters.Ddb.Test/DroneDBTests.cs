@@ -36,7 +36,7 @@ public class NativeDdbWrapperTests : TestBase
 
     private static readonly string TestPointCloud2Url = TestData.Url("point-clouds/brighton-beach.laz");
 
-    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper();
+    private static readonly NativeDdbWrapper DdbWrapper = new();
 
     // ApplyDelta with libddb hashing every file it adds
     private static readonly Dictionary<string, string> NoVerifiedHashes = new();
@@ -749,7 +749,7 @@ public class NativeDdbWrapperTests : TestBase
 
         // For buildable files, the API should work without exceptions
         // The exact result depends on whether there are pending builds or not
-        TestContext.WriteLine($"IsBuildActive for point cloud file returns: {isActive}");
+        TestContext.Out.WriteLine($"IsBuildActive for point cloud file returns: {isActive}");
 
         // Call it multiple times to ensure consistency
         (BuildOf(ddbPath, Path.GetFileName(destPath))!.State == BuildState.Building).ShouldBe(isActive);
@@ -826,7 +826,7 @@ public class NativeDdbWrapperTests : TestBase
         // For non-buildable files, build should never be active
         isActive.ShouldBeFalse();
 
-        TestContext.WriteLine($"IsBuildActive for non-buildable file returns: {isActive}");
+        TestContext.Out.WriteLine($"IsBuildActive for non-buildable file returns: {isActive}");
     }
 
     [Test]
@@ -957,7 +957,7 @@ public class NativeDdbWrapperTests : TestBase
 
         res.ValueKind.ShouldBe(JsonValueKind.Object);
 
-        TestContext.WriteLine(res);
+        TestContext.Out.WriteLine(res);
     }
 
     [Test]
@@ -972,7 +972,7 @@ public class NativeDdbWrapperTests : TestBase
 
         res.ValueKind.ShouldBe(JsonValueKind.Object);
 
-        TestContext.WriteLine(res);
+        TestContext.Out.WriteLine(res);
 
     }
 
@@ -991,7 +991,7 @@ public class NativeDdbWrapperTests : TestBase
 
         foreach (var entry in res)
         {
-            TestContext.WriteLine($"Path: {entry.Path}, Success: {entry.Success}, Hash: {entry.Hash}, Error: {entry.Error}");
+            TestContext.Out.WriteLine($"Path: {entry.Path}, Success: {entry.Success}, Hash: {entry.Hash}, Error: {entry.Error}");
             entry.Path.ShouldNotBeNullOrWhiteSpace();
         }
     }
@@ -1010,7 +1010,7 @@ public class NativeDdbWrapperTests : TestBase
 
         foreach (var entry in res)
         {
-            TestContext.WriteLine($"Path: {entry.Path}, Success: {entry.Success}, Hash: {entry.Hash}");
+            TestContext.Out.WriteLine($"Path: {entry.Path}, Success: {entry.Success}, Hash: {entry.Hash}");
         }
     }
 

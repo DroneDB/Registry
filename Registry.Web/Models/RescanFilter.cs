@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using Registry.Ports.DroneDB;
@@ -14,7 +15,7 @@ namespace Registry.Web.Models;
 /// </summary>
 public sealed class RescanFilter
 {
-    private static readonly char[] InvalidExtensionChars = ['/', '\\', '*', '?', ' ', '\t'];
+    private static readonly SearchValues<char> InvalidExtensionChars = SearchValues.Create("/\\*? \t");
 
     private RescanFilter(EntryType[] types, string[] extensions)
     {

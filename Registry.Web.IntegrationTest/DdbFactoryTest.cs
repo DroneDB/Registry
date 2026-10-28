@@ -30,7 +30,7 @@ public class DdbFactoryTest : TestBase
 
     private readonly Guid _datasetGuid = Guid.Parse("0a223495-84a0-4c15-b425-c7ef88110e75");
 
-    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper();
+    private static readonly NativeDdbWrapper DdbWrapper = new();
 
     [SetUp]
     public void Setup()
@@ -127,7 +127,7 @@ public class DdbFactoryTest : TestBase
 
         var list = ddb.Find(new EntryQuery(fileName)).ToArray();
 
-        list.Count().ShouldBe(1);
+        list.Length.ShouldBe(1);
 
         var res = list.First();
 
@@ -182,7 +182,7 @@ public class DdbFactoryTest : TestBase
 
         var list = ddb.Find(new EntryQuery(fileName)).ToArray();
 
-        list.Count().ShouldBe(1);
+        list.Length.ShouldBe(1);
 
         var res = list.First();
 

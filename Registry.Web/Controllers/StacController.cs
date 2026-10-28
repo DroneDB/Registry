@@ -319,7 +319,7 @@ public class StacController : ControllerBaseEx
         return true;
     }
 
-    private ContentResult StacContent(object value, string contentType)
+    private static ContentResult StacContent(object value, string contentType)
     {
         return new ContentResult
         {

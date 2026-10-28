@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -128,14 +129,14 @@ public class WfsFeatureCollectionWriterTests : TestBase
             var y = 45 + rnd.NextDouble();
             sb.Append("  <ogr:featureMember>\n    <ogr:A010101 gml:id=\"A010101.").Append(i + 1).Append("\">\n")
                 .Append("      <gml:boundedBy><gml:Envelope srsName=\"urn:ogc:def:crs:EPSG::4326\"><gml:lowerCorner>")
-                .Append(y.ToString("F6")).Append(' ').Append(x.ToString("F6")).Append("</gml:lowerCorner><gml:upperCorner>")
-                .Append((y + 0.001).ToString("F6")).Append(' ').Append((x + 0.001).ToString("F6"))
+                .Append(y.ToString("F6", CultureInfo.InvariantCulture)).Append(' ').Append(x.ToString("F6", CultureInfo.InvariantCulture)).Append("</gml:lowerCorner><gml:upperCorner>")
+                .Append((y + 0.001).ToString("F6", CultureInfo.InvariantCulture)).Append(' ').Append((x + 0.001).ToString("F6", CultureInfo.InvariantCulture))
                 .Append("</gml:upperCorner></gml:Envelope></gml:boundedBy>\n")
                 .Append("      <ogr:geom><gml:Polygon srsName=\"urn:ogc:def:crs:EPSG::4326\" gml:id=\"A010101.geom.")
                 .Append(i + 1).Append("\"><gml:exterior><gml:LinearRing><gml:posList>");
             for (var k = 0; k < 24; k++)
-                sb.Append((y + rnd.NextDouble() * 0.001).ToString("F7")).Append(' ')
-                    .Append((x + rnd.NextDouble() * 0.001).ToString("F7")).Append(' ');
+                sb.Append((y + rnd.NextDouble() * 0.001).ToString("F7", CultureInfo.InvariantCulture)).Append(' ')
+                    .Append((x + rnd.NextDouble() * 0.001).ToString("F7", CultureInfo.InvariantCulture)).Append(' ');
             sb.Append("</gml:posList></gml:LinearRing></gml:exterior></gml:Polygon></ogr:geom>\n");
             for (var a = 0; a < 12; a++)
                 sb.Append("      <ogr:ATTR_").Append(a).Append('>').Append(a == 3 ? "" : $"value {i}-{a}")
@@ -164,7 +165,7 @@ public class WfsFeatureCollectionWriterTests : TestBase
         sw.Stop();
         var allocatedMb = (GC.GetTotalAllocatedBytes(precise: true) - before) / (1024.0 * 1024.0);
 
-        TestContext.WriteLine(
+        TestContext.Out.WriteLine(
             $"input {inputMb:F1} MB GML ({features} features) -> {Encoding.UTF8.GetByteCount(output) / (1024.0 * 1024.0):F1} MB; " +
             $"streaming rewrite: {sw.ElapsedMilliseconds} ms, {allocatedMb:F0} MB allocated ({allocatedMb / inputMb:F1}x input)");
         output.ShouldContain($"numberReturned=\"{features}\"");

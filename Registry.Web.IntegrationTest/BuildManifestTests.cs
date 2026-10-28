@@ -63,6 +63,7 @@ public class BuildManifestTests
     [TearDown]
     public void TearDown()
     {
+        _resolver.Dispose();
         foreach (var folder in Directory.EnumerateDirectories(_root, "*", SearchOption.AllDirectories)
                      .Where(d => File.Exists(Path.Combine(d, ".ddb", "dbase.sqlite"))))
             _wrapper.ReleaseConnections(folder);

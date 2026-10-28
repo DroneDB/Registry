@@ -37,6 +37,7 @@
         <PackageReference Include="Microsoft.NET.Test.Sdk" />
         <PackageReference Include="Moq" />
         <PackageReference Include="NUnit" />
+        <PackageReference Include="NUnit.Analyzers" PrivateAssets="all" />
         <PackageReference Include="NUnit3TestAdapter" />
         <PackageReference Include="Serilog.Extensions.Logging" />
         <PackageReference Include="Shouldly" />

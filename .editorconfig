@@ -82,11 +82,29 @@ dotnet_diagnostic.CA1848.severity = suggestion
 dotnet_diagnostic.CA1873.severity = suggestion
 dotnet_diagnostic.CA2101.severity = suggestion
 
+# Naming rules that do not fit this code base:
+#   CA1716: Registry is C# only, and Get/Set are keywords only in Visual Basic. The managers and
+#     ports name their operations with plain verbs (List, Get, Add, Edit, Delete) on purpose.
+#   CA1711: "Ex" names the extended variant of a libddb call or endpoint (GenerateThumbnailEx,
+#     /ex), "Queue" names the dataset and thumbnail work queues, which are not System.Collections
+#     queues, and "Permission" names an enum of tool permissions.
+dotnet_diagnostic.CA1716.severity = none
+dotnet_code_quality.CA1711.allowed_suffixes = Ex|Queue|Permission
+
 # Test methods are named Method_Scenario_Result (1420 CA1707 hits, all in test projects).
 # Production code has 0 CA1707 violations, so the rule stays a warning there.
 [*Test/**.cs]
 dotnet_diagnostic.CA1707.severity = suggestion
+# NUnit creates a fixture once and disposes its fields in [TearDown] or [OneTimeTearDown], not in
+# Dispose. NUnit.Analyzers checks that (NUnit1032), so CA1001 does not apply to the test projects.
+dotnet_diagnostic.CA1001.severity = none
 
 # EF Core scaffolds migrations with block-scoped namespaces. Do not edit them by hand.
 [**/Migrations/*.cs]
 dotnet_diagnostic.IDE0161.severity = none
+# The generated column arrays of a migration run once, when the migration is applied.
+dotnet_diagnostic.CA1861.severity = none
+
+# FileDescriptorType.Single means "one file" (as opposed to Multiple and Dataset), not System.Single.
+[Registry.Web/Models/DTO/FileStreamDescriptor.cs]
+dotnet_diagnostic.CA1720.severity = none

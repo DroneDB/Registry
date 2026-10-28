@@ -1,4 +1,5 @@
 #nullable enable
+using System.Globalization;
 using Registry.Web.Services.Jobs;
 using System;
 using System.Collections.Generic;
@@ -98,6 +99,7 @@ internal sealed class FaultyStorage(JobStorage inner) : JobStorage
     public override IMonitoringApi GetMonitoringApi() => inner.GetMonitoringApi();
     public override IEnumerable<IStateHandler> GetStateHandlers() => inner.GetStateHandlers();
 #pragma warning disable CS0618
+    [Obsolete("Forwards the obsolete JobStorage.GetComponents of the wrapped storage.")]
     public override IEnumerable<Hangfire.Server.IServerComponent> GetComponents() => inner.GetComponents();
 #pragma warning restore CS0618
 }
@@ -180,7 +182,7 @@ internal sealed class PublicationEnv : IDisposable
     {
         var mon = (s ?? Storage).GetMonitoringApi();
         var n = 0;
-        while (mon.JobDetails((n + 1).ToString()) != null) n++;
+        while (mon.JobDetails((n + 1).ToString(CultureInfo.InvariantCulture)) != null) n++;
         return n;
     }
 
@@ -500,7 +502,7 @@ public class IndexedJobPublicationRecoveryTests
             .Returns<string, IndexPayload, DateTime, string, CancellationToken>(async (i, p, c, m, t) =>
             {
                 created.Add(i);
-                (await Pass()).Published.ShouldBe(1);
+                (await Pass(ct: t)).Published.ShouldBe(1);
                 return await _env.Writer.PrepareForPublicationAsync(i, p, c, m, t);
             });
         using var provider = new ServiceCollection()

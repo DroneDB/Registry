@@ -336,7 +336,7 @@ public class BuildPendingServiceTest : TestBase
 
         // First dataset throws error, second succeeds
         _ddbManagerMock.SetupSequence(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
-            .Throws(new Exception("DDB access failed"))
+            .Throws(new InvalidOperationException("DDB access failed"))
             .Returns(ddbMock2.Object);
 
         _cacheManager.Setup(x => x.IsRegistered(It.IsAny<string>())).Returns(false);
@@ -695,7 +695,7 @@ public class BuildPendingServiceTest : TestBase
         _ddbManagerMock.Verify(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()), Times.Never);
     }
 
-    private RegistryContext GetEmptyContext()
+    private static RegistryContext GetEmptyContext()
     {
         var context = TestDb.CreateContext<RegistryContext>();
         return context;

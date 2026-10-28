@@ -21,19 +21,19 @@ public sealed class SyncWriteBufferingStream(Stream inner) : Stream
 
     public override void Write(ReadOnlySpan<byte> buffer) => _pending.Write(buffer);
 
-    public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
+    public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
     {
-        await SendPendingAsync(ct);
-        await inner.WriteAsync(buffer, ct);
+        await SendPendingAsync(cancellationToken);
+        await inner.WriteAsync(buffer, cancellationToken);
     }
 
-    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
-        WriteAsync(buffer.AsMemory(offset, count), ct).AsTask();
+    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+        WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
 
-    public override async Task FlushAsync(CancellationToken ct)
+    public override async Task FlushAsync(CancellationToken cancellationToken)
     {
-        await SendPendingAsync(ct);
-        await inner.FlushAsync(ct);
+        await SendPendingAsync(cancellationToken);
+        await inner.FlushAsync(cancellationToken);
     }
 
     // Synchronous flushes only keep the pending bytes: they go out with the next asynchronous call

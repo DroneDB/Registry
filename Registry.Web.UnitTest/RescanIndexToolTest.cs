@@ -105,7 +105,7 @@ public class RescanIndexToolTest
             new HeavyToolValidationContext(_ddb.Object, null, NullLogger.Instance), CancellationToken.None));
     }
 
-    private Task Execute(object prms)
+    private Task<HeavyToolArtifact?> Execute(object prms)
     {
         var request = new HeavyToolRequest("rescan-index", "1", "org", "ds", null,
             JsonSerializer.SerializeToElement(prms));

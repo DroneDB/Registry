@@ -59,7 +59,7 @@ public class OrganizationAccessControl : AccessControlBase
 
         // Load organization users if not already loaded
         if (org.Users == null)
-            await _context.Entry(org).Collection(o => o.Users).LoadAsync();
+            await Context.Entry(org).Collection(o => o.Users).LoadAsync();
 
         // Find the user's membership
         var orgUser = org.Users?.FirstOrDefault(u => u.UserId == userId);

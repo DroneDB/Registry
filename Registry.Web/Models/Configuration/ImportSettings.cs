@@ -12,14 +12,14 @@ namespace Registry.Web.Models.Configuration;
 public class ImportSettings
 {
     /// <summary>Maximum total bytes that can be imported in a single task (0 = unlimited).</summary>
-    public long MaxImportSizeBytes { get; set; } = 0;
+    public long MaxImportSizeBytes { get; set; }
 
     /// <summary>
     /// Maximum size (bytes) of a single file imported from a URL via the <c>import-file</c> tool
     /// (0 = fall back to <see cref="MaxImportSizeBytes"/>). Enforced up-front against the reported
     /// <c>Content-Length</c> and again incrementally while streaming.
     /// </summary>
-    public long MaxFileImportSizeBytes { get; set; } = 0;
+    public long MaxFileImportSizeBytes { get; set; }
 
     /// <summary>
     /// Minimum sustained download speed (bytes/second) for a single-file URL import. If the average
@@ -78,7 +78,7 @@ public class ImportSettings
     public string[]? AllowedSourceTypes { get; set; }
 
     /// <summary>Allow outbound connections to private/loopback/link-local addresses (SSRF guard).</summary>
-    public bool SsrfAllowPrivateNetworks { get; set; } = false;
+    public bool SsrfAllowPrivateNetworks { get; set; }
 
     /// <summary>Hostnames explicitly exempt from SSRF blocking.</summary>
     public string[] SsrfAllowedHosts { get; set; } = [];

@@ -109,7 +109,7 @@ public class OgcRenderCachingTests
     private WmsManager CreateWms() => new(Dependencies(TestCaches.Records(_cache), _http),
         NullLogger<WmsManager>.Instance, _cacheManager, Mock.Of<IRasterIndexCatalog>());
 
-    private Task<byte[]> GetMap(WmsManager wms, double[] bbox, string format = "image/png", bool transparent = true) =>
+    private static Task<byte[]> GetMap(WmsManager wms, double[] bbox, string format = "image/png", bool transparent = true) =>
         wms.GetMapAsync(Org, Ds, ["ortho"], [""], bbox, "EPSG:3857", 1024, 768, format, null, transparent);
 
     private int NativeRenders() => _wrapper.Invocations.Count(i => i.Method.Name == nameof(IDdbWrapper.RenderRasterRegion));

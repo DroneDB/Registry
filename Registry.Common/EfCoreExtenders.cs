@@ -33,7 +33,7 @@ public static class EfCoreExtenders
 
         var migrations = databaseFacade.GetMigrations().ToArray();
 
-        if (!migrations.Any())
+        if (migrations.Length == 0)
         {
             if (!hasTables)
                 await databaseCreator.CreateTablesAsync(cancellationToken);
@@ -59,7 +59,7 @@ public static class EfCoreExtenders
     {
         var migrations = databaseFacade.GetMigrations().ToArray();
         
-        Debug.Assert(migrations.Any());
+        Debug.Assert(migrations.Length > 0);
 
         var createScript = historyRepository.GetCreateScript();
         await databaseFacade.ExecuteSqlRawAsync(createScript, cancellationToken);

@@ -36,6 +36,7 @@
         <!-- Json.NET as the oracle of the wire: the converters are tested against what it wrote -->
         <PackageReference Include="Newtonsoft.Json" />
         <PackageReference Include="NUnit" />
+        <PackageReference Include="NUnit.Analyzers" PrivateAssets="all" />
         <PackageReference Include="NUnit3TestAdapter" />
         <PackageReference Include="Serilog.Extensions.Logging" />
         <PackageReference Include="Shouldly" />

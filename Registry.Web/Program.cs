@@ -284,7 +284,7 @@ public class Program
         return true;
 
         static bool IsLocalhostOrAddress(string host) =>
-            host.Equals("localhost", StringComparison.InvariantCultureIgnoreCase) || IPEndPoint.TryParse(host, out _);
+            host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || IPEndPoint.TryParse(host, out _);
     }
 
     private static bool SetupStorageFolder(string folder, bool resetSpa = false, bool resetDdb = false,

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.DirectoryServices.Protocols;
+using System.Globalization;
 using System.Net;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -58,7 +59,7 @@ public class LdapLoginManager : ILoginManager
             {
                 // Path A: direct bind using UserDnFormat (e.g. UPN: "{0}@domain.com")
                 // The username is not DN-escaped here; UPN and similar formats do not use DN syntax.
-                var userPrincipal = string.Format(_settings.UserDnFormat, userName);
+                var userPrincipal = string.Format(CultureInfo.InvariantCulture, _settings.UserDnFormat, userName);
 
                 using var conn = CreateConnection();
                 conn.Bind(new NetworkCredential(userPrincipal, password));
@@ -163,7 +164,7 @@ public class LdapLoginManager : ILoginManager
     private (string dn, string email, string displayName, List<string> groups) SearchUser(
         LdapConnection conn, string safeUserName)
     {
-        var filter = string.Format(_settings.SearchFilter, safeUserName);
+        var filter = string.Format(CultureInfo.InvariantCulture, _settings.SearchFilter, safeUserName);
         var attrs = new[]
         {
             _settings.EmailAttribute,

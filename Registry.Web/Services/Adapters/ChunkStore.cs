@@ -2,6 +2,7 @@
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -30,6 +31,9 @@ public sealed partial class ChunkStore
 
     private const int BufferSize = 1024 * 1024;
 
+    [SuppressMessage("Design", "CA1001", Justification =
+        "Lock is only awaited and released, never asked for its AvailableWaitHandle, so it holds nothing to " +
+        "dispose; disposing it when the upload is dropped could race with a chunk write still waiting on it.")]
     private sealed class Upload
     {
         public readonly SemaphoreSlim Lock = new(1, 1);
@@ -109,7 +113,7 @@ public sealed partial class ChunkStore
         var upload = _uploads.GetOrAdd(Key(folder), _ => new Upload());
 
         // An in-order chunk is hashed as it streams in; any other one is hashed from disk later
-        var inline = upload.Lock.Wait(0);
+        var inline = upload.Lock.Wait(0, CancellationToken.None);
         if (inline && (upload.Hash == null || upload.Hashed != index))
         {
             upload.Lock.Release();

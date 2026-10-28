@@ -110,7 +110,7 @@ public sealed class AdminTasksManager
         return map;
     }
 
-    private AdminTaskSummaryDto ToSummary(JobIndex j, IReadOnlyDictionary<string, string> ownerNames)
+    private AdminTaskSummaryDto ToSummary(JobIndex j, Dictionary<string, string> ownerNames)
     {
         string? owner = null;
         if (!string.IsNullOrEmpty(j.UserId) && ownerNames.TryGetValue(j.UserId, out var name))

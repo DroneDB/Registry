@@ -57,7 +57,7 @@ public class RemoteRegistryImporterNetworkTest : TestBase
         }
         catch (Exception ex)
         {
-            TestContext.WriteLine($"Warning: Failed to cleanup temp directories: {ex.Message}");
+            TestContext.Out.WriteLine($"Warning: Failed to cleanup temp directories: {ex.Message}");
         }
     }
 
@@ -92,13 +92,13 @@ public class RemoteRegistryImporterNetworkTest : TestBase
         var request = Request("imported-org", "imported-dataset", ImportMode.Archive);
 
         // Act
-        TestContext.WriteLine($"Starting Archive mode import of {TestOrganization}/{TestDataset}...");
+        TestContext.Out.WriteLine($"Starting Archive mode import of {TestOrganization}/{TestDataset}...");
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
         var result = await importer.ImportAsync(request, null, CancellationToken.None);
 
         stopwatch.Stop();
-        TestContext.WriteLine($"Import completed in {stopwatch.Elapsed.TotalSeconds:F2} seconds");
+        TestContext.Out.WriteLine($"Import completed in {stopwatch.Elapsed.TotalSeconds:F2} seconds");
 
         // Assert
         result.ShouldNotBeNull();
@@ -109,8 +109,8 @@ public class RemoteRegistryImporterNetworkTest : TestBase
         result.TotalFiles.ShouldBeGreaterThan(0);
         result.TotalSize.ShouldBeGreaterThan(0);
 
-        TestContext.WriteLine($"Imported {result.TotalFiles} files, total size: {result.TotalSize / 1024.0 / 1024.0:F2} MB");
-        TestContext.WriteLine($"Duration: {result.Duration.TotalSeconds:F2} seconds");
+        TestContext.Out.WriteLine($"Imported {result.TotalFiles} files, total size: {result.TotalSize / 1024.0 / 1024.0:F2} MB");
+        TestContext.Out.WriteLine($"Duration: {result.Duration.TotalSeconds:F2} seconds");
     }
 
     [Test]
@@ -134,13 +134,13 @@ public class RemoteRegistryImporterNetworkTest : TestBase
         var request = Request("imported-org-parallel", "imported-dataset-parallel", ImportMode.ParallelFiles);
 
         // Act
-        TestContext.WriteLine($"Starting ParallelFiles mode import of {TestOrganization}/{TestDataset}...");
+        TestContext.Out.WriteLine($"Starting ParallelFiles mode import of {TestOrganization}/{TestDataset}...");
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
         var result = await importer.ImportAsync(request, null, CancellationToken.None);
 
         stopwatch.Stop();
-        TestContext.WriteLine($"Import completed in {stopwatch.Elapsed.TotalSeconds:F2} seconds");
+        TestContext.Out.WriteLine($"Import completed in {stopwatch.Elapsed.TotalSeconds:F2} seconds");
 
         // Assert
         result.ShouldNotBeNull();
@@ -155,16 +155,16 @@ public class RemoteRegistryImporterNetworkTest : TestBase
         // Verify AddRaw was called for each file
         ddbMock.Verify(x => x.AddRaw(It.IsAny<string>()), Times.AtLeastOnce());
 
-        TestContext.WriteLine($"Imported {result.TotalFiles} files, skipped {result.SkippedFiles} files");
-        TestContext.WriteLine($"Total size: {result.TotalSize / 1024.0 / 1024.0:F2} MB");
-        TestContext.WriteLine($"Duration: {result.Duration.TotalSeconds:F2} seconds");
+        TestContext.Out.WriteLine($"Imported {result.TotalFiles} files, skipped {result.SkippedFiles} files");
+        TestContext.Out.WriteLine($"Total size: {result.TotalSize / 1024.0 / 1024.0:F2} MB");
+        TestContext.Out.WriteLine($"Duration: {result.Duration.TotalSeconds:F2} seconds");
 
         if (result.FileErrors?.Length > 0)
         {
-            TestContext.WriteLine($"File errors ({result.FileErrors.Length}):");
+            TestContext.Out.WriteLine($"File errors ({result.FileErrors.Length}):");
             foreach (var error in result.FileErrors)
             {
-                TestContext.WriteLine($"  - {error.FilePath}: {error.Message} (retries: {error.RetryCount})");
+                TestContext.Out.WriteLine($"  - {error.FilePath}: {error.Message} (retries: {error.RetryCount})");
             }
         }
     }

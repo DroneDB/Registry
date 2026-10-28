@@ -233,13 +233,13 @@ public sealed class WcsProtocol20Handler : IWcsProtocolHandler
         await w.WriteEndElementAsync();
     }
 
-    public async Task<WcsCoverageResult> GetCoverageAsync(string orgSlug, string dsSlug, IQueryCollection q,
+    public async Task<WcsCoverageResult> GetCoverageAsync(string orgSlug, string dsSlug, IQueryCollection query,
         CancellationToken ct = default)
     {
-        var coverageId = OgcRequestParser.GetRequired(q, "COVERAGEID");
+        var coverageId = OgcRequestParser.GetRequired(query, "COVERAGEID");
 
         // WCS 2.0 Req29: mediaType, when present, must equal multipart/related.
-        var mediaType = OgcRequestParser.Get(q, "MEDIATYPE");
+        var mediaType = OgcRequestParser.Get(query, "MEDIATYPE");
         if (!string.IsNullOrWhiteSpace(mediaType) &&
             !string.Equals(mediaType, "multipart/related", StringComparison.OrdinalIgnoreCase))
             throw new OgcException("InvalidParameterValue",
@@ -247,7 +247,7 @@ public sealed class WcsProtocol20Handler : IWcsProtocolHandler
                 400, "mediaType");
 
         // WCS 2.0 Req32/33: FORMAT optional → native (image/tiff); when present must be supported.
-        var format = OgcRequestParser.Get(q, "FORMAT");
+        var format = OgcRequestParser.Get(query, "FORMAT");
         if (string.IsNullOrWhiteSpace(format)) format = "image/tiff";
         else if (!WcsConformance.SupportedFormats.Contains(format, StringComparer.OrdinalIgnoreCase))
             throw new OgcException("InvalidParameterValue",
@@ -256,7 +256,7 @@ public sealed class WcsProtocol20Handler : IWcsProtocolHandler
         // Multiple SUBSET KVPs come as a single key with a StringValues collection. Iterate
         // each entry individually (joining via ToString() would corrupt parenthesised values
         // by interleaving them with ',' separators). Also accept ';'-joined values.
-        var subsetParams = q
+        var subsetParams = query
             .Where(kv => string.Equals(kv.Key, "SUBSET", StringComparison.OrdinalIgnoreCase))
             .SelectMany(kv => kv.Value.AsEnumerable())
             .Where(v => !string.IsNullOrWhiteSpace(v))
@@ -271,8 +271,8 @@ public sealed class WcsProtocol20Handler : IWcsProtocolHandler
         // OGC 09-147r3 §8.3 - optional band subset and output CRS overrides.
         var info = await _svc.ProbeRasterAsync(ddb, layer, ct);
         var bands = WcsRangeSubsetParser.ParseRangeSubset20(
-            OgcRequestParser.Get(q, "RANGESUBSET"), info);
-        var outputCrs = WcsConformance.NormalizeCrs(OgcRequestParser.Get(q, "OUTPUTCRS"));
+            OgcRequestParser.Get(query, "RANGESUBSET"), info);
+        var outputCrs = WcsConformance.NormalizeCrs(OgcRequestParser.Get(query, "OUTPUTCRS"));
 
         var bytes = await _svc.RenderRegionAsync(ddb, layer, bbox, 0, 0, format, bands,
             string.IsNullOrEmpty(outputCrs) ? null : outputCrs, ct);

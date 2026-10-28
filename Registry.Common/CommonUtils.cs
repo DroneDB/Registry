@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -194,13 +195,13 @@ public static class CommonUtils
                 readable = i;
                 break;
             default:
-                return i.ToString("0 B"); // Byte
+                return i.ToString("0 B", CultureInfo.InvariantCulture); // Byte
         }
 
         // Divide by 1024 to get fractional value
         readable /= 1024;
         // Return formatted number with suffix
-        return readable.ToString("0.### ") + suffix;
+        return readable.ToString("0.### ", CultureInfo.InvariantCulture) + suffix;
     }
 
     public static int BytesPerPixel(string? dataType) => dataType switch

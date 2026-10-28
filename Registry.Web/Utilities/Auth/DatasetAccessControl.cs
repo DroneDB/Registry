@@ -93,7 +93,7 @@ public class DatasetAccessControl : AccessControlBase
         }
 
         if (org.Users == null)
-            await _context.Entry(org).Collection(o => o.Users).LoadAsync();
+            await Context.Entry(org).Collection(o => o.Users).LoadAsync();
 
         // Organization member access
         var orgUser = org.Users?.FirstOrDefault(u => u.UserId == userId);

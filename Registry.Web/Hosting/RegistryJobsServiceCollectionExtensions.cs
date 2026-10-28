@@ -165,6 +165,33 @@ public static class RegistryJobsServiceCollectionExtensions
         sp.GetRequiredService<HostResourceBudget>().Processing ??
         throw new InvalidOperationException("Job servers are registered on a host that runs no jobs");
 
+    /// <summary>Table prefix of the Hangfire tables in the MySQL database.</summary>
+    public const string MySqlTablesPrefix = "hangfire";
+
+    /// <summary>
+    /// The options of the MySQL job storage. <paramref name="invisibilityTimeout"/> is how long a fetched
+    /// job stays invisible to the other workers (<see cref="JobScheduleOptions.HangfireInvisibilityTimeoutHours"/>
+    /// in production); tests pass a short timeout and their own <paramref name="tablesPrefix"/>.
+    /// </summary>
+    public static MySqlStorageOptions CreateMySqlStorageOptions(TimeSpan invisibilityTimeout,
+        string tablesPrefix = MySqlTablesPrefix) => new()
+    {
+        TransactionIsolationLevel = IsolationLevel.ReadCommitted,
+        QueuePollInterval = TimeSpan.FromSeconds(3),
+        JobExpirationCheckInterval = TimeSpan.FromMinutes(15),
+        CountersAggregateInterval = TimeSpan.FromMinutes(5),
+        // Marked obsolete, but Hangfire.MySqlStorage 2.0.3 still reads it: its fetch query takes a job
+        // again when it was fetched longer ago than this timeout. Without it the timeout is the 30-minute
+        // default, and a build that runs longer would be started a second time by another worker.
+#pragma warning disable CS0618
+        InvisibilityTimeout = invisibilityTimeout,
+#pragma warning restore CS0618
+        PrepareSchemaIfNecessary = true,
+        DashboardJobListLimit = 50000,
+        TransactionTimeout = TimeSpan.FromMinutes(30),
+        TablesPrefix = tablesPrefix
+    };
+
     private static void UseStorage(IGlobalConfiguration hangfire, HangfireProvider provider,
         JobScheduleOptions schedule, string? connectionString)
     {
@@ -179,18 +206,8 @@ public static class RegistryJobsServiceCollectionExtensions
             case HangfireProvider.Mysql:
                 hangfire
                     .UseConsole(new ConsoleOptions { FollowJobRetentionPolicy = false, ExpireIn = retention })
-                    .UseStorage(new MySqlStorage(connectionString, new MySqlStorageOptions
-                    {
-                        TransactionIsolationLevel = IsolationLevel.ReadCommitted,
-                        QueuePollInterval = TimeSpan.FromSeconds(3),
-                        JobExpirationCheckInterval = TimeSpan.FromMinutes(15),
-                        CountersAggregateInterval = TimeSpan.FromMinutes(5),
-                        InvisibilityTimeout = TimeSpan.FromHours(Math.Max(1, schedule.HangfireInvisibilityTimeoutHours)),
-                        PrepareSchemaIfNecessary = true,
-                        DashboardJobListLimit = 50000,
-                        TransactionTimeout = TimeSpan.FromMinutes(30),
-                        TablesPrefix = "hangfire"
-                    }))
+                    .UseStorage(new MySqlStorage(connectionString, CreateMySqlStorageOptions(
+                        TimeSpan.FromHours(Math.Max(1, schedule.HangfireInvisibilityTimeoutHours)))))
                     .WithJobExpirationTimeout(retention);
                 break;
 

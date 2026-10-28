@@ -93,7 +93,7 @@ public class WfsFeatureQueryTests
         $"<fes:PropertyIsEqualTo><fes:ValueReference>{property}</fes:ValueReference>" +
         $"<fes:Literal>{literal}</fes:Literal></fes:PropertyIsEqualTo>";
 
-    private static IRecordCache Cache() => TestCaches.Records();
+    private static RecordCache Cache() => TestCaches.Records();
 
     private WfsManager CreateWfs()
     {

@@ -331,12 +331,12 @@ public class DDB : IDDB
         }, ex => $"Cannot batch-add {items.Count} file(s) (with options) to ddb '{DatasetFolderPath}'");
     }
 
-    public void Add(string path, Stream? stream = null)
+    public void Add(string path, Stream? data = null)
     {
         var localPath = GetLocalPath(path);
         try
         {
-            if (stream == null)
+            if (data == null)
             {
                 Directory.CreateDirectory(localPath);
                 Wrap(() => Wrapper.Add(DatasetFolderPath, localPath),
@@ -344,12 +344,12 @@ public class DDB : IDDB
             }
             else
             {
-                stream.SafeReset();
+                data.SafeReset();
                 FileSystem.EnsureParentFolderExists(localPath);
 
                 using (var writer = File.OpenWrite(localPath))
                 {
-                    stream.CopyTo(writer);
+                    data.CopyTo(writer);
                 }
 
                 Wrap(() => Wrapper.Add(DatasetFolderPath, localPath),

@@ -61,7 +61,7 @@ public class ListingMarshallingTests : TestBase
         return Encoding.UTF8.GetBytes(sb.Append(']').ToString());
     }
 
-    /// <summary>A null-terminated copy of <paramref name="bytes"/> in unmanaged memory.</summary>
+    /// <summary>A null-terminated copy of a byte array in unmanaged memory.</summary>
     private sealed class NativeBuffer : IDisposable
     {
         public NativeBuffer(byte[] bytes)
@@ -105,10 +105,10 @@ public class ListingMarshallingTests : TestBase
             Measure(() => NativeJson.Deserialize<List<EntrySummary>>(summary.Pointer)!);
 
         var payloadMb = full.Length / (1024.0 * 1024);
-        TestContext.WriteLine($"full payload {payloadMb:F1} MB, summary payload {summary.Length / (1024.0 * 1024):F1} MB, {Entries} entries");
-        TestContext.WriteLine($"string + parse:         {stringMs,5:F0} ms {stringMb,6:F0} MB ({stringMb / payloadMb:F1}x full payload)");
-        TestContext.WriteLine($"NativeJson, Entry:      {fullMs,5:F0} ms {fullMb,6:F0} MB ({fullMb / payloadMb:F1}x)");
-        TestContext.WriteLine($"NativeJson, summaries:  {summaryMs,5:F0} ms {summaryMb,6:F0} MB ({summaryMb / payloadMb:F1}x)");
+        TestContext.Out.WriteLine($"full payload {payloadMb:F1} MB, summary payload {summary.Length / (1024.0 * 1024):F1} MB, {Entries} entries");
+        TestContext.Out.WriteLine($"string + parse:         {stringMs,5:F0} ms {stringMb,6:F0} MB ({stringMb / payloadMb:F1}x full payload)");
+        TestContext.Out.WriteLine($"NativeJson, Entry:      {fullMs,5:F0} ms {fullMb,6:F0} MB ({fullMb / payloadMb:F1}x)");
+        TestContext.Out.WriteLine($"NativeJson, summaries:  {summaryMs,5:F0} ms {summaryMb,6:F0} MB ({summaryMb / payloadMb:F1}x)");
 
         stringCount.ShouldBe(Entries);
         fullCount.ShouldBe(Entries);

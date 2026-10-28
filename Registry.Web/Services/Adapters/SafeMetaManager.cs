@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Services.Adapters;
@@ -57,7 +58,7 @@ public class SafeMetaManager
         {
             if (value == null)
                 throw new ArgumentException("Visibility cannot be null");
-            _manager.Set(VisibilityField, ((int)value).ToString());
+            _manager.Set(VisibilityField, ((int)value).ToString(CultureInfo.InvariantCulture));
         }
     }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
@@ -25,7 +26,7 @@ public class SimpleBackgroundJobsProcessor : IBackgroundJobsProcessor
     {
         var newId = GetNewId();
         _jobs.Add(newId, status);
-        return newId.ToString();
+        return newId.ToString(CultureInfo.InvariantCulture);
     }
 
     public string Enqueue<T>(Expression<Func<T, Task>> methodCall)
@@ -45,11 +46,11 @@ public class SimpleBackgroundJobsProcessor : IBackgroundJobsProcessor
 
     public bool Delete(string jobId)
     {
-        if (!_jobs.TryGetValue(int.Parse(jobId), out var status))
+        if (!_jobs.TryGetValue(int.Parse(jobId, CultureInfo.InvariantCulture), out var status))
             return false;
 
         if (status is JobStatus.Processing or JobStatus.Succeeded or JobStatus.Failed)
-            _jobs[int.Parse(jobId)] = JobStatus.Deleted;
+            _jobs[int.Parse(jobId, CultureInfo.InvariantCulture)] = JobStatus.Deleted;
 
         return true;
     }
@@ -57,19 +58,19 @@ public class SimpleBackgroundJobsProcessor : IBackgroundJobsProcessor
     // Mirrors the production contract: flipped to Enqueued only from Failed (Failed-only guard).
     public bool Requeue(string jobId)
     {
-        if (!_jobs.TryGetValue(int.Parse(jobId), out var status))
+        if (!_jobs.TryGetValue(int.Parse(jobId, CultureInfo.InvariantCulture), out var status))
             return false;
 
         if (status != JobStatus.Failed)
             return false;
 
-        _jobs[int.Parse(jobId)] = JobStatus.Enqueued;
+        _jobs[int.Parse(jobId, CultureInfo.InvariantCulture)] = JobStatus.Enqueued;
         return true;
     }
 
     public JobStatus GetJobStatus(string jobId)
     {
-        return !_jobs.TryGetValue(int.Parse(jobId), out var status) ? JobStatus.Unknown : status;
+        return !_jobs.TryGetValue(int.Parse(jobId, CultureInfo.InvariantCulture), out var status) ? JobStatus.Unknown : status;
     }
 
     public string EnqueueIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta) => Record(JobStatus.Succeeded);

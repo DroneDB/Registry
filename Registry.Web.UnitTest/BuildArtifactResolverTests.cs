@@ -32,6 +32,9 @@ public class BuildArtifactResolverTests
         _resolver = TestPorts.Artifacts();
     }
 
+    [TearDown]
+    public void TearDown() => _resolver.Dispose();
+
     private static Entry Entry(string path, EntryType type) => new() { Path = path, Type = type, Hash = Hash };
 
     private static EntryBuildArtifacts Built(string path, EntryType type, params BuildArtifact[] artifacts) =>

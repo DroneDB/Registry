@@ -37,7 +37,7 @@ namespace Registry.Web.Test;
 [TestFixture]
 [Category(TestCategories.Native)]
 [Category(TestCategories.Network)]
-class ShareManagerTest : TestBase
+sealed class ShareManagerTest : TestBase
 {
     private ILogger<ObjectsManager> _objectManagerLogger;
     private ILogger<DdbManager> _ddbFactoryLogger;

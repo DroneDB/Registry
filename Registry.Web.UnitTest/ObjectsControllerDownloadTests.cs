@@ -51,7 +51,7 @@ public class ObjectsControllerDownloadTests
         return queries;
     }
 
-    private static async Task<string[]> CaptureParsedPaths(string[] queryPathValues)
+    private static async Task<string[]> CaptureParsedPaths(params string[] queryPathValues)
     {
         var httpContext = new DefaultHttpContext
         {
@@ -93,37 +93,37 @@ public class ObjectsControllerDownloadTests
     [Test]
     public async Task RepeatedPathParams_AreTakenLiterally_NoCommaSplit()
     {
-        var paths = await CaptureParsedPaths(new[] { "ortho & crop.tif", "we,ird,name.tif" });
-        paths.ShouldBe(new[] { "ortho & crop.tif", "we,ird,name.tif" });
+        var paths = await CaptureParsedPaths("ortho & crop.tif", "we,ird,name.tif");
+        paths.ShouldBe(["ortho & crop.tif", "we,ird,name.tif"]);
     }
 
     [Test]
     public async Task RepeatedPathParams_DropEmptyEntries()
     {
-        var paths = await CaptureParsedPaths(new[] { "", "a.tif" });
-        paths.ShouldBe(new[] { "a.tif" });
+        var paths = await CaptureParsedPaths("", "a.tif");
+        paths.ShouldBe(["a.tif"]);
     }
 
     [Test]
     public async Task SingleOccurrence_KeepsLegacyCommaSplit()
     {
         // Old shared links encode multiple files in one comma-joined value.
-        var paths = await CaptureParsedPaths(new[] { "a.tif,b.tif" });
-        paths.ShouldBe(new[] { "a.tif", "b.tif" });
+        var paths = await CaptureParsedPaths("a.tif,b.tif");
+        paths.ShouldBe(["a.tif", "b.tif"]);
     }
 
     [Test]
     public async Task SingleOccurrence_AmpersandAndSpacesSurvive()
     {
         // The '&' from the original tile bug must survive intact on download too.
-        var paths = await CaptureParsedPaths(new[] { "ortho & crop.tif" });
-        paths.ShouldBe(new[] { "ortho & crop.tif" });
+        var paths = await CaptureParsedPaths("ortho & crop.tif");
+        paths.ShouldBe(["ortho & crop.tif"]);
     }
 
     [Test]
     public async Task NoPathParam_PassesNullPaths()
     {
-        var paths = await CaptureParsedPaths(Array.Empty<string>());
+        var paths = await CaptureParsedPaths();
         paths.ShouldBeNull();
     }
 }

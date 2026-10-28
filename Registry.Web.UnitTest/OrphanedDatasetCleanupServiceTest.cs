@@ -215,12 +215,12 @@ public class OrphanedDatasetCleanupServiceTest : TestBase
         Directory.Exists(Path.Combine(_testDatasetsPath, org2)).ShouldBeFalse();
     }
 
-    private RegistryContext GetEmptyContext()
+    private static RegistryContext GetEmptyContext()
     {
         return TestDb.CreateContext<RegistryContext>();
     }
 
-    private RegistryContext GetContextWithDataset(string orgSlug, Guid internalRef)
+    private static RegistryContext GetContextWithDataset(string orgSlug, Guid internalRef)
     {
         return TestDb.CreateContext<RegistryContext>(context =>
         {

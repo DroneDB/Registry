@@ -111,6 +111,7 @@ public class RetryEndpointTest : IDisposable
     public void Dispose()
     {
         _db?.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private static JobIndex NewRow(string jobId, string state, string toolId = null) => new()

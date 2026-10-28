@@ -349,7 +349,7 @@ public class JobIndexWriterPreparationTests
         using var t = new Sqlite();
         t.Seed(Telemetry("a", "Indexing", Created));
         t.Seed(Telemetry("b", "Indexing", Created));
-        t.Db.JobIndices.AsTracking().ToList(); // a stale tracked copy must be dropped, not resurrected
+        _ = t.Db.JobIndices.AsTracking().ToList(); // a stale tracked copy must be dropped, not resurrected
 
         (await t.Writer.UpdateStateIfCurrentAsync("a", ["Created", "Indexing"], newState, Changed)).ShouldBeTrue();
         await t.Writer.UpdateStateAsync("b", newState, Changed);

@@ -13,6 +13,7 @@
 
     <ItemGroup>
       <PackageReference Include="NUnit" />
+      <PackageReference Include="NUnit.Analyzers" PrivateAssets="all" />
       <PackageReference Include="Serilog" />
       <PackageReference Include="Serilog.Extensions.Logging" />
       <PackageReference Include="Serilog.Sinks.Console" />

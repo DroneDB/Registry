@@ -46,7 +46,7 @@ public class ArchiveExtractToolTests
         }
     }
 
-    private (ArchiveExtractTool tool, Mock<IStorageQuota> utils) CreateTool(
+    private static (ArchiveExtractTool tool, Mock<IStorageQuota> utils) CreateTool(
         long maxArchiveBytes = 5L * 1024 * 1024 * 1024, bool registerQuota = true)
     {
         var extractor = new SharpCompressArchiveExtractor();

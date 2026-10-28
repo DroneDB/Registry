@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -68,13 +69,7 @@ public class IndexedJobPublicationMySqlIntegrationTests
         catch (InvalidOperationException) { _previousStorage = null; }
         _initialized = true;
 
-        _storage = new MySqlStorage(_connection, new MySqlStorageOptions
-        {
-            TransactionIsolationLevel = System.Transactions.IsolationLevel.ReadCommitted,
-            QueuePollInterval = TimeSpan.FromMilliseconds(100),
-            PrepareSchemaIfNecessary = true,
-            TablesPrefix = _prefix
-        });
+        _storage = new MySqlStorage(_connection, MariaDbServer.HangfireStorageOptions(_prefix));
         JobStorage.Current = _storage;
         GlobalConfiguration.Configuration.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
             .UseSimpleAssemblyNameTypeSerializer().UseRecommendedSerializerSettings();
@@ -91,6 +86,7 @@ public class IndexedJobPublicationMySqlIntegrationTests
         GlobalStateHandlers.Handlers.Clear();
         foreach (var h in _previousHandlers) GlobalStateHandlers.Handlers.Add(h);
         if (_previousStorage != null) JobStorage.Current = _previousStorage;
+        _storage.Dispose();
 
         // Drop only the exact random prefix owned by this test.
         await using var connection = new MySqlConnection(_connection);
@@ -242,7 +238,7 @@ public class IndexedJobPublicationMySqlIntegrationTests
         var jobTable = (await TablesOfPrefix(connection)).Single(t => t.EndsWith("Job", StringComparison.Ordinal));
         await using var c = connection.CreateCommand();
         c.CommandText = $"SELECT COUNT(*) FROM `{jobTable}` WHERE `StateName`='Indexing'";
-        Convert.ToInt64(await c.ExecuteScalarAsync()).ShouldBe(0);
+        Convert.ToInt64(await c.ExecuteScalarAsync(), CultureInfo.InvariantCulture).ShouldBe(0);
 
         // The storage is healthy afterwards.
         var id = CreateIndexing(Record());
@@ -503,7 +499,7 @@ public static class PubProbe
     public static readonly ConcurrentDictionary<string, string> Checks = new();
 
     /// <summary>Set by the fixture; returns "" when the publication is complete for the job id.</summary>
-    public static Func<PerformContext, string>? Inspect;
+    public static Func<PerformContext, string>? Inspect { get; set; }
 
     public static void Reset()
     {
@@ -577,14 +573,7 @@ public class IndexedJobPublicationWorkerIntegrationTests
         catch (InvalidOperationException) { _previousStorage = null; }
         _initialized = true;
 
-        _storage = new MySqlStorage(_connection, new MySqlStorageOptions
-        {
-            TransactionIsolationLevel = System.Transactions.IsolationLevel.ReadCommitted,
-            QueuePollInterval = TimeSpan.FromMilliseconds(100),
-            InvisibilityTimeout = TimeSpan.FromMinutes(5),
-            PrepareSchemaIfNecessary = true,
-            TablesPrefix = _prefix
-        });
+        _storage = new MySqlStorage(_connection, MariaDbServer.HangfireStorageOptions(_prefix));
         JobStorage.Current = _storage;
 
         var services = new ServiceCollection();
@@ -637,6 +626,7 @@ public class IndexedJobPublicationWorkerIntegrationTests
         GlobalStateHandlers.Handlers.Clear();
         foreach (var h in _previousHandlers) GlobalStateHandlers.Handlers.Add(h);
         if (_previousStorage != null) JobStorage.Current = _previousStorage;
+        _storage.Dispose();
         PubProbe.Reset();
 
         await using var connection = new MySqlConnection(_connection);
@@ -675,7 +665,7 @@ public class IndexedJobPublicationWorkerIntegrationTests
         var table = (await TablesOfPrefix(connection)).Single(t => t.EndsWith(tableSuffix, StringComparison.Ordinal));
         await using var c = connection.CreateCommand();
         c.CommandText = $"SELECT COUNT(*) FROM `{table}` WHERE {where}";
-        return Convert.ToInt64(await c.ExecuteScalarAsync());
+        return Convert.ToInt64(await c.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
     }
 
     private Task<long> JobCount() => Scalar("Job");

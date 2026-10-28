@@ -39,7 +39,7 @@ public class ChunkStoreTests
         try { Directory.Delete(_root, true); } catch { /* ignore */ }
     }
 
-    private Stream Chunk(int index) =>
+    private MemoryStream Chunk(int index) =>
         new MemoryStream(_file, (int)_manifest.OffsetOf(index), (int)_manifest.LengthOf(index));
 
     private static string Sha(byte[] data) => Convert.ToHexStringLower(SHA256.HashData(data));

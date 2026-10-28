@@ -121,7 +121,7 @@ public class BuildStatusService : IBuildStatusService
         build.State == BuildState.Pending ||
         (build.State == BuildState.Building && build.MissingDependencies.Count > 0);
 
-    private Dictionary<string, EntryBuildArtifacts>? GetBuildsSafe(IDDB ddb, IReadOnlyList<EntryDto> candidates)
+    private Dictionary<string, EntryBuildArtifacts>? GetBuildsSafe(IDDB ddb, List<EntryDto> candidates)
     {
         try
         {

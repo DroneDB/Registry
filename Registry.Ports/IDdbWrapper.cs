@@ -445,6 +445,6 @@ public interface IDdbWrapper
     /// Content of a .prj that gives a CAD drawing the coordinate system <paramref name="crs"/>
     /// (DDBMakeCadPrj): ESRI WKT for an authority code, WKT or PROJ string; LOCAL_CS for "local".
     /// </summary>
-    /// <exception cref="ArgumentException"><paramref name="crs"/> is not a coordinate system.</exception>
+    /// <exception cref="System.ArgumentException"><paramref name="crs"/> is not a coordinate system.</exception>
     public string MakeCadPrj(string crs);
 }

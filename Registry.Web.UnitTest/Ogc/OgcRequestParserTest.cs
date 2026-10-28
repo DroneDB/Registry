@@ -10,7 +10,7 @@ namespace Registry.Web.Test.Ogc;
 [TestFixture]
 public class OgcRequestParserTest
 {
-    private static IQueryCollection Q(params (string key, string value)[] pairs)
+    private static QueryCollection Q(params (string key, string value)[] pairs)
     {
         var dict = new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>(System.StringComparer.OrdinalIgnoreCase);
         foreach (var (k, v) in pairs) dict[k] = v;

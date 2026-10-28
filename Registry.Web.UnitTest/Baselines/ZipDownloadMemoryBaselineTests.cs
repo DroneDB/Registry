@@ -118,7 +118,7 @@ public class ZipDownloadMemoryBaselineTests : TestBase
         await CreateDescriptor().CopyToAsync(output);
 
         var allocatedMb = (GC.GetTotalAllocatedBytes(precise: true) - before) / (1024 * 1024);
-        TestContext.WriteLine($"{Files} x {FileSize / (1024 * 1024)} MB -> zip {output.Written / (1024 * 1024)} MB; " +
+        TestContext.Out.WriteLine($"{Files} x {FileSize / (1024 * 1024)} MB -> zip {output.Written / (1024 * 1024)} MB; " +
                               $"managed allocations {allocatedMb} MB; files opened before the first response byte: {output.OpenedAtFirstWrite}");
         output.Written.ShouldBeGreaterThan((long)Files * FileSize);
         allocatedMb.ShouldBeLessThanOrEqualTo(16, "the archive must be streamed, not buffered");
@@ -143,7 +143,7 @@ public class ZipDownloadMemoryBaselineTests : TestBase
         bytes.Position = 0;
         using var archive = new System.IO.Compression.ZipArchive(bytes, System.IO.Compression.ZipArchiveMode.Read);
         var names = archive.Entries.Select(e => e.FullName.Replace('\\', '/')).ToArray();
-        names.Count(n => n.StartsWith("IMG_")).ShouldBe(Files);
+        names.Count(n => n.StartsWith("IMG_", StringComparison.Ordinal)).ShouldBe(Files);
         names.ShouldContain(IDDB.DatabaseFolderName + "/" + IDDB.DatabaseFileName);
 
         await using var entry = await archive.GetEntry("IMG_3.jpg")!.OpenAsync();

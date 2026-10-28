@@ -119,7 +119,11 @@ public class PendingBuildCoordinationTests
     private static JobConsole NoConsole => JobConsole.For(Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, null);
 
     [TearDown]
-    public void TearDown() => _context.Dispose();
+    public void TearDown()
+    {
+        _context.Dispose();
+        _storage.Dispose();
+    }
 
     private void Seed(int attempt = 0, string? jobId = null, bool pending = true) =>
         _cacheData[CacheCategories.ForDataset(Org, Ds)] = JsonSerializer.SerializeToUtf8Bytes(new

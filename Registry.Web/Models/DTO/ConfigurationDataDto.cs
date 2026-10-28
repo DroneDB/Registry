@@ -12,14 +12,14 @@ public class ConfigurationDataDto
 }
 
 /// <summary>
-/// A logical grouping of related configuration fields (e.g., "Auth & Security", "LDAP").
+/// A logical grouping of related configuration fields (e.g., "Auth &amp; Security", "LDAP").
 /// </summary>
 public class ConfigurationSectionDataDto
 {
     /// <summary>Section key used for JSON nesting (e.g., "Auth", "Storage", "Cache").</summary>
     public string Name { get; set; }
 
-    /// <summary>Display title shown in the UI (e.g., "Authentication & Security").</summary>
+    /// <summary>Display title shown in the UI (e.g., "Authentication &amp; Security").</summary>
     public string Title { get; set; }
 
     /// <summary>Short description of what this section controls.</summary>

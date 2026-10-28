@@ -245,32 +245,32 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
         await w.WriteEndElementAsync();
     }
 
-    public async Task<WcsCoverageResult> GetCoverageAsync(string orgSlug, string dsSlug, IQueryCollection q,
+    public async Task<WcsCoverageResult> GetCoverageAsync(string orgSlug, string dsSlug, IQueryCollection query,
         CancellationToken ct = default)
     {
-        var coverageId = OgcRequestParser.GetRequired(q, "COVERAGE");
-        var rawFormat = OgcRequestParser.GetRequired(q, "FORMAT");
+        var coverageId = OgcRequestParser.GetRequired(query, "COVERAGE");
+        var rawFormat = OgcRequestParser.GetRequired(query, "FORMAT");
         var mime = WcsConformance.NormalizeWcs10Format(rawFormat);
         if (!WcsConformance.SupportedFormats.Contains(mime, StringComparer.OrdinalIgnoreCase))
             throw new OgcException("InvalidParameterValue",
                 $"format '{rawFormat}' is not supported", 400, "format");
 
-        var crs = OgcRequestParser.GetRequired(q, "CRS");
+        var crs = OgcRequestParser.GetRequired(query, "CRS");
         // We always render in EPSG:4326 internally and assume the requested CRS is supported.
         if (!IsSupportedCrs(crs))
             throw new OgcException("InvalidParameterValue",
                 $"CRS '{crs}' is not supported", 400, "CRS");
 
         var (bbox, _) = OgcRequestParser.ParseBbox(
-            OgcRequestParser.GetRequired(q, "BBOX"), crs, "1.0.0");
+            OgcRequestParser.GetRequired(query, "BBOX"), crs, "1.0.0");
         // For non-WGS84 CRS we would need to reproject the BBOX here. EPSG:3857 / 4326 are
         // both accepted; reprojection to WGS84 happens inside RenderRasterRegion only when
         // CRS=EPSG:4326. For 3857 we currently treat the BBOX as already lon/lat to avoid
         // the dependency on a server-side projector - this is acceptable because QGIS' WCS
         // 1.0 client defaults to EPSG:4326 and the GetCapabilities advertises both.
 
-        var width = OgcRequestParser.GetInt(q, "WIDTH", 0, 0, 4096);
-        var height = OgcRequestParser.GetInt(q, "HEIGHT", 0, 0, 4096);
+        var width = OgcRequestParser.GetInt(query, "WIDTH", 0, 0, 4096);
+        var height = OgcRequestParser.GetInt(query, "HEIGHT", 0, 0, 4096);
 
         var (ddb, layer) = await _svc.ResolveCoverageAsync(orgSlug, dsSlug, coverageId, ct);
 
@@ -278,12 +278,12 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
         // accepted because QGIS users frequently expect it). Resolution requires
         // probing the source raster band names.
         var info = await _svc.ProbeRasterAsync(ddb, layer, ct);
-        var bands = WcsRangeSubsetParser.ParseBands10(OgcRequestParser.Get(q, "BANDS"), info);
+        var bands = WcsRangeSubsetParser.ParseBands10(OgcRequestParser.Get(query, "BANDS"), info);
 
         // RESPONSE_CRS (WCS 1.0) overrides the output CRS without changing the
         // BBOX CRS. Falls back to RESPONSE_CRS_URI for QGIS compatibility.
         var outputCrs = WcsConformance.NormalizeCrs(
-            OgcRequestParser.Get(q, "RESPONSE_CRS") ?? OgcRequestParser.Get(q, "RESPONSE_CRS_URI"));
+            OgcRequestParser.Get(query, "RESPONSE_CRS") ?? OgcRequestParser.Get(query, "RESPONSE_CRS_URI"));
 
         var bytes = await _svc.RenderRegionAsync(ddb, layer, bbox, width, height, mime, bands,
             string.IsNullOrEmpty(outputCrs) ? null : outputCrs, ct);

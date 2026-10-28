@@ -180,7 +180,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         string dsSlug, string entryPath, string localPath, CancellationToken ct) =>
         HttpHelper.DownloadFileWithRetryAsync(
             $"{DatasetUrl(registryUrl, orgSlug, dsSlug)}/download?path={Uri.EscapeDataString(entryPath)}&inline=1",
-            localPath, BearerHeaders(authToken), Math.Max(1, _settings.RegistryDownloadMaxRetries), ct, CreateClient());
+            localPath, BearerHeaders(authToken), Math.Max(1, _settings.RegistryDownloadMaxRetries), CreateClient(), ct);
 
     /// <inheritdoc />
     public Task DownloadArchiveAsync(string registryUrl, string? authToken, string orgSlug, string dsSlug,

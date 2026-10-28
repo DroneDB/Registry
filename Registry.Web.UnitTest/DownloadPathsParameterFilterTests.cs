@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Net.Http;
 using Microsoft.AspNetCore.Hosting;
@@ -38,7 +39,7 @@ public class DownloadPathsParameterFilterTests
     }
 
     private static IOpenApiParameter PathParam(OpenApiDocument doc, string route, HttpMethod method) =>
-        doc.Paths.Single(p => p.Key.EndsWith(route)).Value.Operations![method].Parameters!
+        doc.Paths.Single(p => p.Key.EndsWith(route, StringComparison.Ordinal)).Value.Operations![method].Parameters!
             .Single(p => p.Name == "path");
 
     [Test]

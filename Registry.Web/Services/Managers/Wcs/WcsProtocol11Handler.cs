@@ -205,21 +205,21 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
         await w.WriteEndElementAsync(); // CoverageDescription
     }
 
-    public async Task<WcsCoverageResult> GetCoverageAsync(string orgSlug, string dsSlug, IQueryCollection q,
+    public async Task<WcsCoverageResult> GetCoverageAsync(string orgSlug, string dsSlug, IQueryCollection query,
         CancellationToken ct = default)
     {
-        var coverageId = OgcRequestParser.GetRequired(q, "Identifier");
-        var format = OgcRequestParser.GetRequired(q, "FORMAT");
+        var coverageId = OgcRequestParser.GetRequired(query, "Identifier");
+        var format = OgcRequestParser.GetRequired(query, "FORMAT");
         if (!WcsConformance.SupportedFormats.Contains(format, StringComparer.OrdinalIgnoreCase))
             throw new OgcException("InvalidParameterValue",
                 $"format '{format}' is not supported", 400, "format");
 
         // WCS 1.1: BoundingBox=minx,miny,maxx,maxy,<crsUri>
-        var raw = OgcRequestParser.GetRequired(q, "BoundingBox");
+        var raw = OgcRequestParser.GetRequired(query, "BoundingBox");
         var (bbox, _) = OgcRequestParser.ParseBbox(raw, null, "1.1.1");
 
         // Honour GridOffsets when present to derive WIDTH/HEIGHT; otherwise auto-size.
-        var gridOffsets = OgcRequestParser.Get(q, "GridOffsets");
+        var gridOffsets = OgcRequestParser.Get(query, "GridOffsets");
         int width = 0, height = 0;
         if (!string.IsNullOrWhiteSpace(gridOffsets))
         {
@@ -240,7 +240,7 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
         // OGC 07-067r5 §9.3.2.4 - optional band subset via RangeSubset.
         var info = await _svc.ProbeRasterAsync(ddb, layer, ct);
         var bands = WcsRangeSubsetParser.ParseRangeSubset11(
-            OgcRequestParser.Get(q, "RangeSubset"), info);
+            OgcRequestParser.Get(query, "RangeSubset"), info);
 
         var bytes = await _svc.RenderRegionAsync(ddb, layer, bbox, width, height, format, bands, ct: ct);
         return new WcsCoverageResult(bytes, format);

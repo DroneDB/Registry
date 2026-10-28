@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -26,7 +27,7 @@ public static class AuthorizationExtensions
     internal static bool HasMonitorToken(HttpContext httpContext, string monitorToken)
     {
         var authHeader = httpContext.Request.Headers.Authorization.FirstOrDefault();
-        var token = !string.IsNullOrEmpty(authHeader) && authHeader.StartsWith(BearerPrefix)
+        var token = !string.IsNullOrEmpty(authHeader) && authHeader.StartsWith(BearerPrefix, StringComparison.Ordinal)
             ? authHeader[BearerPrefix.Length..].Trim()
             : httpContext.Request.Query["token"].FirstOrDefault();
 

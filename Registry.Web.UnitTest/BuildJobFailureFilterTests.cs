@@ -169,7 +169,7 @@ public class BuildJobFailureFilterTests
     public void OnStateApplied_NonBuildBuildMethod_TouchesNothing()
     {
         var ctx = BuildContext(nameof(HangfireUtils.CleanupWrapper),
-            new FailedState(new Exception("cleanup failed")));
+            new FailedState(new InvalidOperationException("cleanup failed")));
 
         _filter.OnStateApplied(ctx, Mock.Of<IWriteOnlyTransaction>());
 
@@ -197,7 +197,7 @@ public class BuildJobFailureFilterTests
     public void OnStateApplied_WriterThrows_DoesNotPropagate()
     {
         _writerMock.Setup(w => w.UpdateErrorAsync(JobId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new Exception("db down"));
+            .ThrowsAsync(new InvalidOperationException("db down"));
 
         var ctx = BuildContext(nameof(HangfireUtils.BuildWrapper),
             new FailedState(new DdbException("gdal cannot open")));

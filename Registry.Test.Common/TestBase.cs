@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using NUnit.Framework;
 using Serilog;
@@ -20,12 +21,13 @@ public class TestBase
     /// </summary>
     /// <param name="minimumLevel">The minimum log level to capture (defaults to Debug)</param>
     /// <returns>A configured ILoggerFactory instance</returns>
-    protected ILoggerFactory CreateTestLoggerFactory(Serilog.Events.LogEventLevel minimumLevel = Serilog.Events.LogEventLevel.Debug)
+    protected static ILoggerFactory CreateTestLoggerFactory(Serilog.Events.LogEventLevel minimumLevel = Serilog.Events.LogEventLevel.Debug)
     {
         var serilogLogger = new LoggerConfiguration()
             .MinimumLevel.Is(minimumLevel)
             .WriteTo.Console(
                 outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}",
+                formatProvider: CultureInfo.InvariantCulture,
                 standardErrorFromLevel: null)
             .CreateLogger();
 
@@ -39,7 +41,7 @@ public class TestBase
     /// <typeparam name="T">The category type for the logger</typeparam>
     /// <param name="minimumLevel">The minimum log level to capture (defaults to Debug)</param>
     /// <returns>A configured ILogger&lt;T&gt; instance</returns>
-    protected ILogger<T> CreateTestLogger<T>(Serilog.Events.LogEventLevel minimumLevel = Serilog.Events.LogEventLevel.Debug)
+    protected static ILogger<T> CreateTestLogger<T>(Serilog.Events.LogEventLevel minimumLevel = Serilog.Events.LogEventLevel.Debug)
     {
         var factory = CreateTestLoggerFactory(minimumLevel);
         return factory.CreateLogger<T>();

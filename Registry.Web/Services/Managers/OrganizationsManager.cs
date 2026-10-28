@@ -57,8 +57,8 @@ public class OrganizationsManager : IOrganizationsManager
     public Task AddMember(string orgSlug, string userName, OrganizationPermissions permissions = OrganizationPermissions.ReadWrite,
         CancellationToken ct = default) => _members.AddMember(orgSlug, userName, permissions, ct);
 
-    public Task UpdateMemberPermission(string orgSlug, string userName, OrganizationPermissions permission,
-        CancellationToken ct = default) => _members.UpdateMemberPermission(orgSlug, userName, permission, ct);
+    public Task UpdateMemberPermission(string orgSlug, string userName, OrganizationPermissions permissions,
+        CancellationToken ct = default) => _members.UpdateMemberPermission(orgSlug, userName, permissions, ct);
 
     public Task RemoveMember(string orgSlug, string userName, CancellationToken ct = default) =>
         _members.RemoveMember(orgSlug, userName, ct);

@@ -30,12 +30,12 @@ public abstract class OgcManagerBase
     protected const string NsXsd   = OgcNamespaces.Xsd;
     protected const string NsDdb   = OgcNamespaces.Ddb;
 
-    protected readonly IDatasetAccessResolver Access;
-    protected readonly IBuildArtifactResolver Builds;
-    protected readonly IDdbWrapper DdbWrapper;
-    protected readonly IOgcLayerCatalog LayerCatalog;
-    protected readonly IRecordCache Records;
-    protected readonly IHttpContextAccessor HttpContext;
+    protected IDatasetAccessResolver Access { get; }
+    protected IBuildArtifactResolver Builds { get; }
+    protected IDdbWrapper DdbWrapper { get; }
+    protected IOgcLayerCatalog LayerCatalog { get; }
+    protected IRecordCache Records { get; }
+    protected IHttpContextAccessor HttpContext { get; }
 
     /// <summary>Capabilities documents: kept 5 minutes, and dropped at once by a new OGC generation.</summary>
     protected static readonly RecordCacheOptions CapabilitiesCache = RecordCacheOptions.For(TimeSpan.FromMinutes(5));

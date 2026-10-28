@@ -141,7 +141,7 @@ public class ApiExceptionClassifierTests
     [Test]
     public void ExtensionBlocked_Batch_Is400NoRetry()
     {
-        var ex = new ExtensionBlockedException(new[] { "a.exe", "b.bat" }, new ImportSettings());
+        var ex = new ExtensionBlockedException(["a.exe", "b.bat"], new ImportSettings());
         var d = ApiExceptionClassifier.Classify(ex, authenticated: true);
 
         d.StatusCode.ShouldBe(StatusCodes.Status400BadRequest);

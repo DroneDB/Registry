@@ -539,7 +539,7 @@ public class UsersManagerTest : TestBase
             Id = $"{userName}-id",
             UserName = userName,
             Email = $"{userName}@example.com",
-            NormalizedUserName = userName.ToUpper()
+            NormalizedUserName = userName.ToUpperInvariant()
         };
 
         await _appContext.Users.AddAsync(user);

@@ -3,8 +3,10 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using DotNet.Testcontainers.Configurations;
+using Hangfire.MySql;
 using MySqlConnector;
 using NUnit.Framework;
+using Registry.Web.Hosting;
 using Testcontainers.MariaDb;
 
 namespace Registry.Web.Test.Support;
@@ -46,6 +48,17 @@ public sealed class MariaDbServer
     {
         _container = container;
         ConnectionString = connectionString;
+    }
+
+    /// <summary>
+    /// The production Hangfire storage options with the tables under <paramref name="tablesPrefix"/>,
+    /// polled every 100 ms and a 5-minute invisibility timeout, so a test sees its jobs at once.
+    /// </summary>
+    public static MySqlStorageOptions HangfireStorageOptions(string tablesPrefix)
+    {
+        var options = RegistryJobsServiceCollectionExtensions.CreateMySqlStorageOptions(TimeSpan.FromMinutes(5), tablesPrefix);
+        options.QueuePollInterval = TimeSpan.FromMilliseconds(100);
+        return options;
     }
 
     /// <summary>

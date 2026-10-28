@@ -27,7 +27,7 @@ namespace Registry.Web.Test;
 [TestFixture]
 [Category(TestCategories.Native)]
 [Category(TestCategories.Network)]
-internal class MetaManagerTest : TestBase
+internal sealed class MetaManagerTest : TestBase
 {
     private ILogger<DdbManager> _ddbFactoryLogger;
     private ILogger<MetaManager> _metaManagerLogger;

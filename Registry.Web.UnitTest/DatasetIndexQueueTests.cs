@@ -237,7 +237,7 @@ public class DatasetIndexQueueTests
         var ddb = new Mock<IDDB>();
         var ddbManager = new Mock<IDdbManager>();
         ddbManager.Setup(m => m.Get(It.IsAny<string>(), It.IsAny<Guid>()))
-            .Throws(new Exception("scope resolution failed"));
+            .Throws(new InvalidOperationException("scope resolution failed"));
 
         var services = new ServiceCollection();
         services.AddSingleton(ddbManager.Object);
@@ -257,7 +257,7 @@ public class DatasetIndexQueueTests
         // Throws TimeoutException on a hang (the regression this guards); the completion fault is
         // surfaced separately so we can assert on its message.
         var finished = await TestUtils.AwaitWithin(task, TimeSpan.FromSeconds(15));
-        var ex = Should.Throw<Exception>(async () => await finished);
+        var ex = Should.Throw<InvalidOperationException>(async () => await finished);
         ex.Message.ShouldContain("scope resolution failed");
     }
 

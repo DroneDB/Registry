@@ -230,7 +230,7 @@ public class ProcessingPlatformTests
         var gating = Gating(new Dictionary<string, HeavyToolConfig>
         {
             ["build"] = new() { AllowedRoles = { "power-user" } }
-        }, isAdmin: false, roles: new[] { "power-user" });
+        }, isAdmin: false, roles: ["power-user"]);
 
         (await gating.EvaluateAsync("build", "org1")).Allowed.ShouldBeTrue();
     }

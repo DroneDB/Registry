@@ -1,4 +1,5 @@
 #nullable enable
+using System.Globalization;
 using Registry.Adapters;
 using Registry.Web.Services.Jobs;
 using System;
@@ -105,14 +106,7 @@ public class PendingRecoveryIntegrationTests
         _environment.Set("DDB_OBJ2TILES_PATH", Path.Combine(_root, "missing-Obj2Tiles"));
         _initialized = true;
 
-        _storage = new MySqlStorage(_connection, new MySqlStorageOptions
-        {
-            TransactionIsolationLevel = System.Transactions.IsolationLevel.ReadCommitted,
-            QueuePollInterval = TimeSpan.FromMilliseconds(100),
-            InvisibilityTimeout = TimeSpan.FromMinutes(5),
-            PrepareSchemaIfNecessary = true,
-            TablesPrefix = _prefix
-        });
+        _storage = new MySqlStorage(_connection, MariaDbServer.HangfireStorageOptions(_prefix));
         JobStorage.Current = _storage;
         var manager = new Mock<IDdbManager>();
         manager.Setup(x => x.Get(Org, It.IsAny<Guid>()))
@@ -227,6 +221,7 @@ public class PendingRecoveryIntegrationTests
         _server?.Dispose();
         _server = null;
         _provider?.Dispose();
+        _storage.Dispose();
         GlobalJobFilters.Filters.Clear();
         foreach (var filter in _previousFilters)
             GlobalJobFilters.Filters.Add(filter.Instance, filter.Order);
@@ -683,7 +678,7 @@ public class PendingRecoveryIntegrationTests
             {
                 stagedId = id;
                 beforeIndex.Set();
-                if (!releaseIndex.Wait(TimeSpan.FromSeconds(30))) throw new TimeoutException("Publication barrier not released");
+                if (!releaseIndex.Wait(TimeSpan.FromSeconds(30), ct)) throw new TimeoutException("Publication barrier not released");
                 using var scope = _provider.CreateScope();
                 return await scope.ServiceProvider.GetRequiredService<IJobIndexWriter>()
                     .PrepareForPublicationAsync(id, meta, created, method, ct);
@@ -936,7 +931,7 @@ public class PendingRecoveryIntegrationTests
             for (var x = 0; x < n - 1; x++)
             {
                 var a = y * n + x + 1;
-                text.Append($"f {a} {a + 1} {a + n + 1}\nf {a} {a + n + 1} {a + n}\n");
+                text.Append(CultureInfo.InvariantCulture, $"f {a} {a + 1} {a + n + 1}\nf {a} {a + n + 1} {a + n}\n");
             }
         return text.ToString();
     }

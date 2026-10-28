@@ -26,7 +26,7 @@ public class ProgressCallbackExceptionTests : TestBase
 
     private static readonly string TestGeoTiffUrl = TestData.Url("brighton/odm_orthophoto.tif");
 
-    private static readonly IDdbWrapper DdbWrapper = new NativeDdbWrapper();
+    private static readonly NativeDdbWrapper DdbWrapper = new();
 
     private string _outputFolder = null!;
 

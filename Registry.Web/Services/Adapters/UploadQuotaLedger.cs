@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
@@ -19,6 +20,9 @@ namespace Registry.Web.Services.Adapters;
 /// </summary>
 public sealed class UploadQuotaLedger
 {
+    [SuppressMessage("Design", "CA1001", Justification =
+        "Evaluation is only awaited and released, never asked for its AvailableWaitHandle, so it holds nothing " +
+        "to dispose; disposing it when the state is dropped could race with a reservation still waiting on it.")]
     private sealed class UserState
     {
         public readonly SemaphoreSlim Evaluation = new(1, 1);
@@ -30,7 +34,7 @@ public sealed class UploadQuotaLedger
         public long InFlight;
     }
 
-    private sealed class Reservation(UploadQuotaLedger ledger, UserState state, long bytes) : IQuotaReservation
+    private sealed class Reservation(UserState state, long bytes) : IQuotaReservation
     {
         private bool _done;
         public long Bytes { get; private set; } = bytes;
@@ -41,7 +45,7 @@ public sealed class UploadQuotaLedger
             {
                 if (_done) throw new InvalidOperationException("The reservation is already released");
                 var delta = bytes - Bytes;
-                if (delta > 0) ledger.EnsureFits(state, delta);
+                if (delta > 0) EnsureFits(state, delta);
                 state.InFlight += delta;
                 Bytes = bytes;
             }
@@ -128,12 +132,12 @@ public sealed class UploadQuotaLedger
 
                 EnsureFits(state, bytes);
                 state.InFlight += bytes;
-                return new Reservation(this, state, bytes);
+                return new Reservation(state, bytes);
             }
         }
     }
 
-    private void EnsureFits(UserState state, long bytes)
+    private static void EnsureFits(UserState state, long bytes)
     {
         if (state.Unlimited) return;
         var usage = state.Used + state.StoredSinceEvaluation + state.InFlight + bytes;

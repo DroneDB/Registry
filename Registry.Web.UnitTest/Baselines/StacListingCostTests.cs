@@ -73,7 +73,7 @@ public sealed class StacListingCostTests : IDisposable
         _factory.DdbWrapper.Invocations.Clear();
         (await LandingPageChildren("staclistingcost-cost-2")).ShouldBe(Datasets);
 
-        TestContext.WriteLine($"Distributed cache: {_cache.Reads} reads, {_cache.Writes} writes for {Datasets} datasets");
+        TestContext.Out.WriteLine($"Distributed cache: {_cache.Reads} reads, {_cache.Writes} writes for {Datasets} datasets");
         _cache.Reads.ShouldBeLessThan(Datasets / 2, "a constant number of reads, not one per dataset");
         _factory.DdbWrapper.Invocations.Count(i => i.Method.Name == nameof(FakeIndexCalls.MetaGet)).ShouldBe(0,
             "the names and visibilities come from the caches");

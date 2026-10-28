@@ -83,7 +83,7 @@ public class OrganizationManagerTest : TestBase
         var organizations = (await _organizationsManager.List()).ToArray();
 
         // Assert
-        organizations.Count().ShouldBe(1);
+        organizations.Length.ShouldBe(1);
         var publicOrg = organizations.First();
         AssertPublicOrganization(publicOrg);
     }
@@ -207,7 +207,7 @@ public class OrganizationManagerTest : TestBase
         var organizations = (await _organizationsManager.List()).ToArray();
 
         // Assert
-        organizations.Count().ShouldBe(2); // Public org + owned org
+        organizations.Length.ShouldBe(2); // Public org + owned org
         organizations.ShouldContain(org => org.Slug == MagicStrings.PublicOrganizationSlug);
         organizations.ShouldContain(org => org.Slug == ownedOrg.Slug);
     }

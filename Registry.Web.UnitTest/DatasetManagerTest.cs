@@ -99,7 +99,7 @@ public class DatasetManagerTest : TestBase
 
         var list = (await datasetsManager.List(MagicStrings.PublicOrganizationSlug)).ToArray();
 
-        list.Count().ShouldBe(1);
+        list.Length.ShouldBe(1);
 
         var pub = list.First();
 
@@ -288,7 +288,7 @@ public class DatasetManagerTest : TestBase
 
         // Assert
         result.ShouldNotBeNull();
-        result.Count().ShouldBe(1);
+        result.Length.ShouldBe(1);
 
         var entry = result.First();
         entry.Properties.ShouldNotBeNull();
@@ -356,7 +356,7 @@ public class DatasetManagerTest : TestBase
 
         // Assert
         result.ShouldNotBeNull();
-        result.Count().ShouldBe(1);
+        result.Length.ShouldBe(1);
 
         var entry = result.First();
         var permissionsDict = entry.Properties["permissions"].Deserialize<Dictionary<string, bool>>()!;
