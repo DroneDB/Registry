@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Threading;
 using System.Collections.Generic;
@@ -41,7 +40,7 @@ public class DatasetManagerTest : TestBase
     private IFileSystem _fileSystem;
 
     /// <summary>The manager over the test's collaborators; the listing invalidator is the mock.</summary>
-    private DatasetsManager CreateManager(RegistryContext context, WebPorts utils, IFileSystem fileSystem = null) =>
+    private DatasetsManager CreateManager(RegistryContext context, WebPorts utils, IFileSystem? fileSystem = null) =>
         TestDatasets.Manager(context, utils, _ddbFactoryMock.WithFolders(() => _settingsOptions.Value.DatasetsPath).Object,
             _authManagerMock.Object, _listingsMock.Object, fileSystem ?? _fileSystem, _backgroundJobMock.Object,
             TestSettings.Options<ThumbnailOptions>(_settingsOptions));
@@ -84,7 +83,7 @@ public class DatasetManagerTest : TestBase
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry{
-                Properties = TestJson.Props(new Dictionary<string, object>
+                Properties = TestJson.Props(new Dictionary<string, object?>
                 {
                     {"public", true },
                     {"name", expectedName}
@@ -107,7 +106,7 @@ public class DatasetManagerTest : TestBase
         pub.Slug.ShouldBe(expectedSlug);
 
         // TODO: Check test data: this should be true
-        pub.Properties["public"].GetBoolean().ShouldBeTrue();
+        pub.Properties.ShouldNotBeNull()["public"].GetBoolean().ShouldBeTrue();
         pub.Properties["name"].GetString().ShouldBe(expectedName);
 
 
@@ -163,7 +162,7 @@ public class DatasetManagerTest : TestBase
         ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([]);
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
-            Properties = TestJson.Props(new Dictionary<string, object>
+            Properties = TestJson.Props(new Dictionary<string, object?>
             {
                 {"public", true},
                 {"name", "Default"}
@@ -218,7 +217,7 @@ public class DatasetManagerTest : TestBase
         ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([]);
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
-            Properties = TestJson.Props(new Dictionary<string, object>
+            Properties = TestJson.Props(new Dictionary<string, object?>
             {
                 {"public", true},
                 {"name", "Default"}
@@ -269,7 +268,7 @@ public class DatasetManagerTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
-            Properties = TestJson.Props(new Dictionary<string, object>
+            Properties = TestJson.Props(new Dictionary<string, object?>
             {
                 {"public", true},
                 {"name", "Default"}
@@ -337,7 +336,7 @@ public class DatasetManagerTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
-            Properties = TestJson.Props(new Dictionary<string, object>
+            Properties = TestJson.Props(new Dictionary<string, object?>
             {
                 {"public", true},
                 {"name", "Default"}
@@ -360,7 +359,7 @@ public class DatasetManagerTest : TestBase
         result.Length.ShouldBe(1);
 
         var entry = result.First();
-        var permissionsDict = entry.Properties["permissions"].Deserialize<Dictionary<string, bool>>()!;
+        var permissionsDict = entry.Properties.ShouldNotBeNull()["permissions"].Deserialize<Dictionary<string, bool>>()!;
 
         permissionsDict["canRead"].ShouldBeTrue();
         permissionsDict["canWrite"].ShouldBeFalse();
@@ -392,7 +391,7 @@ public class DatasetManagerTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
-            Properties = TestJson.Props(new Dictionary<string, object>
+            Properties = TestJson.Props(new Dictionary<string, object?>
             {
                 {"public", true},
                 {"name", "Default"}
@@ -450,7 +449,7 @@ public class DatasetManagerTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
-            Properties = TestJson.Props(new Dictionary<string, object>
+            Properties = TestJson.Props(new Dictionary<string, object?>
             {
                 {"public", true},
                 {"name", "Default"}
@@ -506,7 +505,7 @@ public class DatasetManagerTest : TestBase
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
         {
-            Properties = TestJson.Props(new Dictionary<string, object>
+            Properties = TestJson.Props(new Dictionary<string, object?>
             {
                 {"public", true},
                 {"name", "Test"}
@@ -595,7 +594,7 @@ public class DatasetManagerTest : TestBase
         var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act & Assert
-        var action = () => datasetsManager.MoveToOrganization(null, ["dataset-1"], "dest-org");
+        var action = () => datasetsManager.MoveToOrganization(null!, ["dataset-1"], "dest-org");
         await Should.ThrowAsync<BadRequestException>(action);
     }
 
@@ -625,7 +624,7 @@ public class DatasetManagerTest : TestBase
         var datasetsManager = CreateManager(context, utils, fileSystemMock.Object);
 
         // Act & Assert
-        var action = () => datasetsManager.MoveToOrganization("source-org", null, "dest-org");
+        var action = () => datasetsManager.MoveToOrganization("source-org", null!, "dest-org");
         await Should.ThrowAsync<BadRequestException>(action);
     }
 
@@ -743,7 +742,7 @@ public class DatasetManagerTest : TestBase
         results.Length.ShouldBe(1);
         results[0].Success.ShouldBeFalse();
         results[0].OriginalSlug.ShouldBe("non-existent-dataset");
-        results[0].Error.ShouldContain("not found");
+        results[0].Error.ShouldNotBeNull().ShouldContain("not found");
     }
 
     [Test]
@@ -789,7 +788,7 @@ public class DatasetManagerTest : TestBase
         // Assert
         results.Length.ShouldBe(1);
         results[0].Success.ShouldBeFalse();
-        results[0].Error.ShouldContain("already exists");
+        results[0].Error.ShouldNotBeNull().ShouldContain("already exists");
     }
 
     [Test]

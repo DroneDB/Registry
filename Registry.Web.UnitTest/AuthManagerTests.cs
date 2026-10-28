@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using Microsoft.Extensions.Caching.Memory;
 using System.Collections.Generic;
@@ -104,7 +103,7 @@ public class AuthManagerTests : TestBase
         _publicDdbMock = new Mock<IDDB>();
         _publicDdbMock.Setup(x => x.GetInfo()).Returns(new Entry
             {
-                Properties = TestJson.Props(new Dictionary<string, object>
+                Properties = TestJson.Props(new Dictionary<string, object?>
                 {
                     { "public", true },
                     { "name", "public" }
@@ -122,7 +121,7 @@ public class AuthManagerTests : TestBase
         _privateDdbMock = new Mock<IDDB>();
         _privateDdbMock.Setup(x => x.GetInfo()).Returns(new Entry
             {
-                Properties = TestJson.Props(new Dictionary<string, object>
+                Properties = TestJson.Props(new Dictionary<string, object?>
                 {
                     { "public", false },
                     { "name", "ds" }
@@ -197,7 +196,7 @@ public class AuthManagerTests : TestBase
         return userManager;
     }
 
-    private void SetupCurrentUser(User user)
+    private void SetupCurrentUser(User? user)
     {
         if (user != null)
         {
@@ -212,7 +211,7 @@ public class AuthManagerTests : TestBase
         }
         else
         {
-            _httpContextAccessorMock.Setup(x => x.HttpContext).Returns((HttpContext)null);
+            _httpContextAccessorMock.Setup(x => x.HttpContext).Returns((HttpContext?)null);
         }
     }
 

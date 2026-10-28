@@ -1,4 +1,3 @@
-#nullable disable
 using Shouldly;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -263,7 +262,7 @@ public class OrganizationManagerTest : TestBase
         };
 
         // Act
-        await _organizationsManager.Edit(ownedOrg.Slug, updateDto);
+        await _organizationsManager.Edit(ownedOrg.Slug.ShouldNotBeNull(), updateDto);
         var updated = await _organizationsManager.Get(ownedOrg.Slug);
 
         // Assert
@@ -282,7 +281,7 @@ public class OrganizationManagerTest : TestBase
             .Returns(Task.CompletedTask);
 
         // Act
-        await _organizationsManager.Delete(ownedOrg.Slug);
+        await _organizationsManager.Delete(ownedOrg.Slug.ShouldNotBeNull());
 
         // Assert
         var organizations = await _organizationsManager.List();
@@ -311,7 +310,7 @@ public class OrganizationManagerTest : TestBase
         SetupAdminUser();
 
         // Act & Assert
-        var action = () => _organizationsManager.Merge(null, "dest-org");
+        var action = () => _organizationsManager.Merge(null!, "dest-org");
         await Should.ThrowAsync<BadRequestException>(action);
     }
 
@@ -333,7 +332,7 @@ public class OrganizationManagerTest : TestBase
         SetupAdminUser();
 
         // Act & Assert
-        var action = () => _organizationsManager.Merge("source-org", null);
+        var action = () => _organizationsManager.Merge("source-org", null!);
         await Should.ThrowAsync<BadRequestException>(action);
     }
 
@@ -388,7 +387,7 @@ public class OrganizationManagerTest : TestBase
         result.DestinationOrgSlug.ShouldBe("dest-org");
         result.DatasetsMovedCount.ShouldBe(3);
         result.DatasetsFailedCount.ShouldBe(0);
-        result.DatasetResults.Length.ShouldBe(3);
+        result.DatasetResults.ShouldNotBeNull().Length.ShouldBe(3);
         result.SourceOrganizationDeleted.ShouldBeTrue();
 
         // Verify MoveToOrganization was called
@@ -451,7 +450,7 @@ public class OrganizationManagerTest : TestBase
         result.DatasetsMovedCount.ShouldBe(2);
         result.DatasetsFailedCount.ShouldBe(0);
         result.SourceOrganizationDeleted.ShouldBeTrue();
-        result.DatasetResults.ShouldContain(r => r.NewSlug == "dataset-0_1");
+        result.DatasetResults.ShouldNotBeNull().ShouldContain(r => r.NewSlug == "dataset-0_1");
     }
 
     [Test]
@@ -1210,7 +1209,7 @@ public class OrganizationManagerTest : TestBase
 
     private void SetupAnonymousUser()
     {
-        _authManagerMock.Setup(x => x.GetCurrentUser()).ReturnsAsync((User)null);
+        _authManagerMock.Setup(x => x.GetCurrentUser()).ReturnsAsync((User?)null);
         _authManagerMock.Setup(x => x.IsUserAdmin()).ReturnsAsync(false);
         _authManagerMock.Setup(x => x.CanListOrganizations(It.IsAny<User>())).ReturnsAsync(false);
         _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Organization>(), It.IsAny<AccessType>()))
@@ -1297,7 +1296,7 @@ public class OrganizationManagerTest : TestBase
             .ReturnsAsync(true);
     }
 
-    private static OrganizationRequestDto CreateTestOrganizationDto(string slug, string owner = null)
+    private static OrganizationRequestDto CreateTestOrganizationDto(string slug, string? owner = null)
     {
         return new OrganizationRequestDto
         {

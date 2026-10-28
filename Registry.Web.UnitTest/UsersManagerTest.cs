@@ -1,4 +1,3 @@
-#nullable disable
 using Shouldly;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -132,7 +131,7 @@ public class UsersManagerTest : TestBase
         SetupAdminUser();
         var testUser = await CreateTestUser("testuser");
         var org = await CreateOrganizationForUser(testUser.Id, "testuser-org");
-        await CreateBatchForUser(testUser.UserName, org.Slug);
+        await CreateBatchForUser(testUser.UserName.ShouldNotBeNull(), org.Slug.ShouldNotBeNull());
 
         _userManagerMock.Setup(x => x.FindByNameAsync("testuser"))
             .ReturnsAsync(testUser);
@@ -213,7 +212,7 @@ public class UsersManagerTest : TestBase
         // So let's test the scenario differently - successor already has an org with same slug
         // We need to remove the first org and add the successor's one with the same slug
         var existingOrg = await _context.Organizations.FirstOrDefaultAsync(o => o.Slug == "testuser-org");
-        _context.Organizations.Remove(existingOrg);
+        _context.Organizations.Remove(existingOrg.ShouldNotBeNull());
         await _context.SaveChangesAsync();
 
         // Now create testuser's org again
@@ -246,7 +245,7 @@ public class UsersManagerTest : TestBase
         // Arrange
         SetupAdminUser();
         _userManagerMock.Setup(x => x.FindByNameAsync("nonexistent"))
-            .ReturnsAsync((User)null);
+            .ReturnsAsync((User?)null);
 
         // Act & Assert
         var action = () => _usersManager.DeleteUser("nonexistent");
@@ -263,7 +262,7 @@ public class UsersManagerTest : TestBase
         _userManagerMock.Setup(x => x.FindByNameAsync("testuser"))
             .ReturnsAsync(testUser);
         _userManagerMock.Setup(x => x.FindByNameAsync("nonexistent"))
-            .ReturnsAsync((User)null);
+            .ReturnsAsync((User?)null);
 
         // Act & Assert
         var action = () => _usersManager.DeleteUser("testuser", "nonexistent");
@@ -367,7 +366,7 @@ public class UsersManagerTest : TestBase
             .Returns(PasswordValidationResult.Success());
 
         _userManagerMock.Setup(x => x.FindByNameAsync("newuser"))
-            .ReturnsAsync((User)null);
+            .ReturnsAsync((User?)null);
         _userManagerMock.Setup(x => x.CreateAsync(It.IsAny<User>(), "Str0ngP@ss"))
             .ReturnsAsync(IdentityResult.Success)
             .Callback<User, string>((u, _) =>
@@ -395,7 +394,7 @@ public class UsersManagerTest : TestBase
             .Returns(PasswordValidationResult.Success());
 
         _userManagerMock.Setup(x => x.FindByNameAsync("newuser"))
-            .ReturnsAsync((User)null);
+            .ReturnsAsync((User?)null);
         _userManagerMock.Setup(x => x.CreateAsync(It.IsAny<User>(), "a"))
             .ReturnsAsync(IdentityResult.Success)
             .Callback<User, string>((u, _) =>
@@ -478,7 +477,7 @@ public class UsersManagerTest : TestBase
         await CreateAdminRoleUser("role-user");
         await CreateTestUser("no-role-user");
 
-        var users = (await _usersManager.GetAll()).ToDictionary(u => u.UserName);
+        var users = (await _usersManager.GetAll()).ToDictionary(u => u.UserName.ShouldNotBeNull());
 
         users["no-role-user"].Roles.ShouldBeEmpty();
         users["role-user"].Roles.ShouldBe(["admin"]);
@@ -493,7 +492,7 @@ public class UsersManagerTest : TestBase
         _userManagerMock.Setup(x => x.FindByNameAsync(It.IsAny<string>()))
             .ReturnsAsync((string name) => _appContext.Users.Single(u => u.UserName == name));
 
-        var users = (await _usersManager.GetAllDetailed()).ToDictionary(u => u.UserName);
+        var users = (await _usersManager.GetAllDetailed()).ToDictionary(u => u.UserName.ShouldNotBeNull());
 
         users["no-role-user"].Roles.ShouldBeEmpty();
         users["role-user"].Roles.ShouldBe(["admin"]);
