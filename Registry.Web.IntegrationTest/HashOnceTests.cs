@@ -108,15 +108,16 @@ public class HashOnceTests
             new StampDto { Checksum = clientStamp.Checksum, Entries = clientStamp.Entries, Meta = clientStamp.Meta });
         var neededFiles = init.NeededFiles.ShouldNotBeNull();
         neededFiles.Length.ShouldBe(Files);
+        var token = init.Token.ShouldNotBeNull();
         foreach (var path in neededFiles)
         {
             await using var body = File.OpenRead(Path.Combine(client.DatasetFolderPath, path));
             var upload = await manager.StreamUploadAsync("org", "ds", body, FileBytes);
-            await manager.UploadAsync(upload, path, init.Token);
+            await manager.UploadAsync(upload, path, token);
         }
 
         var before = BytesRead();
-        await manager.Commit("org", "ds", init.Token);
+        await manager.Commit("org", "ds", token);
         var read = BytesRead() - before;
 
         TestContext.Out.WriteLine($"Pushed {TotalBytes:N0} bytes in {Files} files; read by the commit: {read:N0} bytes");

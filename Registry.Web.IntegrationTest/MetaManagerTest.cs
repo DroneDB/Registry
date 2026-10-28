@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.IO;
 using System.Linq;
@@ -138,7 +137,7 @@ internal sealed class MetaManagerTest : TestBase
         (await metaManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations"))
             .GetArrayLength().ShouldBe(2);
 
-        (await metaManager.Remove(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, a.Id)).ShouldBe(1);
+        (await metaManager.Remove(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, a.Id.ShouldNotBeNull())).ShouldBe(1);
 
         (await metaManager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations"))
             .GetArrayLength().ShouldBe(1);

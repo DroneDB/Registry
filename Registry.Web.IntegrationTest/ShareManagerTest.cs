@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using Registry.Web.Services.Jobs;
 using System.IO;
@@ -118,7 +117,7 @@ sealed class ShareManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(user));
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(user));
         _authManagerMock.Setup(o => o.UserExists(user.Id)).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
 
@@ -171,6 +170,7 @@ sealed class ShareManagerTest : TestBase
         // Commit
         var commitRes = await shareManager.Commit(initRes.Token);
 
+        commitRes.Tag.ShouldNotBeNull();
         commitRes.Tag.OrganizationSlug.ShouldBe(MagicStrings.PublicOrganizationSlug);
 
         // ListBatches
@@ -185,7 +185,7 @@ sealed class ShareManagerTest : TestBase
         batch.UserName.ShouldBe(userName);
         batch.End.ShouldNotBeNull();
         batch.Status.ShouldBe(BatchStatus.Committed);
-        batch.Entries.Count().ShouldBe(0);
+        batch.Entries.ShouldNotBeNull().Count().ShouldBe(0);
     }
 
     [Test]
@@ -211,7 +211,7 @@ sealed class ShareManagerTest : TestBase
             Email = "admin@example.com",
             Id = Guid.NewGuid().ToString()
         };
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(user));
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(user));
         _authManagerMock.Setup(o => o.UserExists(user.Id)).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).Returns(Task.FromResult(userName));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
@@ -265,6 +265,7 @@ sealed class ShareManagerTest : TestBase
         // Commit
         var commitRes = await shareManager.Commit(initRes.Token);
 
+        commitRes.Tag.ShouldNotBeNull();
         commitRes.Url.ShouldBe($"/r/{commitRes.Tag.OrganizationSlug}/{commitRes.Tag.DatasetSlug}");
 
         // ListBatches
@@ -279,7 +280,7 @@ sealed class ShareManagerTest : TestBase
         batch.UserName.ShouldBe(userName);
         batch.End.ShouldNotBeNull();
         batch.Status.ShouldBe(BatchStatus.Committed);
-        batch.Entries.Count().ShouldBe(0);
+        batch.Entries.ShouldNotBeNull().Count().ShouldBe(0);
     }
 
     [Test]
@@ -306,7 +307,7 @@ sealed class ShareManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
         {
             UserName = userName,
             Email = "admin@example.com"
@@ -432,7 +433,7 @@ sealed class ShareManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
         {
             UserName = userName,
             Email = "admin@example.com"
@@ -534,6 +535,7 @@ sealed class ShareManagerTest : TestBase
         var commitRes = await shareManager.Commit(initRes.Token);
 
         commitRes.Url.ShouldBe($"/r/{organizationTestSlug}/{datasetTestSlug}");
+        commitRes.Tag.ShouldNotBeNull();
         commitRes.Tag.OrganizationSlug.ShouldBe(organizationTestSlug);
         commitRes.Tag.DatasetSlug.ShouldBe(datasetTestSlug);
 
@@ -548,7 +550,7 @@ sealed class ShareManagerTest : TestBase
         batch.UserName.ShouldBe(userName);
         batch.End.ShouldNotBeNull();
         batch.Status.ShouldBe(BatchStatus.Committed);
-        batch.Entries.Count().ShouldBe(1);
+        batch.Entries.ShouldNotBeNull().Count().ShouldBe(1);
     }
 
     [Test]
@@ -574,7 +576,7 @@ sealed class ShareManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
         {
             UserName = userName,
             Email = "admin@example.com"
@@ -661,6 +663,7 @@ sealed class ShareManagerTest : TestBase
         var commitRes = await shareManager.Commit(initRes.Token);
 
         commitRes.Url.ShouldBe($"/r/{organizationTestSlug}/{datasetTestSlug}");
+        commitRes.Tag.ShouldNotBeNull();
         commitRes.Tag.OrganizationSlug.ShouldBe(organizationTestSlug);
         commitRes.Tag.DatasetSlug.ShouldBe(datasetTestSlug);
 
@@ -670,7 +673,7 @@ sealed class ShareManagerTest : TestBase
         var batch = batches.First();
         batch.Token.ShouldBe(initRes.Token);
         batch.Status.ShouldBe(BatchStatus.Committed);
-        batch.Entries.Count().ShouldBe(1);
+        batch.Entries.ShouldNotBeNull().Count().ShouldBe(1);
     }
 
     [Test]
@@ -697,7 +700,7 @@ sealed class ShareManagerTest : TestBase
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
             It.IsAny<AccessType>())).Returns(Task.FromResult(true));
 
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
         {
             UserName = userName,
             Email = "admin@example.com"
@@ -825,6 +828,7 @@ sealed class ShareManagerTest : TestBase
         var commitRes = await shareManager.Commit(newInitRes.Token);
 
         commitRes.Url.ShouldBe($"/r/{organizationTestSlug}/{datasetTestSlug}");
+        commitRes.Tag.ShouldNotBeNull();
         commitRes.Tag.OrganizationSlug.ShouldBe(organizationTestSlug);
         commitRes.Tag.DatasetSlug.ShouldBe(datasetTestSlug);
 

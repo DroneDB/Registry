@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Security.Cryptography;
 using System.Text;
@@ -90,6 +89,7 @@ public class LdapLoginManagerIntegrationTest
 
         result.Success.ShouldBeTrue();
         result.UserName.ShouldBe("jdoe");
+        result.Metadata.ShouldNotBeNull();
         result.Metadata["email"].ShouldBe("jdoe@example.com");
         result.Metadata["displayName"].ShouldBe("John");
         result.Metadata["authProvider"].ShouldBe("ldap");
@@ -104,6 +104,7 @@ public class LdapLoginManagerIntegrationTest
         var result = await manager.CheckAccess("alice", AdminPass);
 
         result.Success.ShouldBeTrue();
+        result.Metadata.ShouldNotBeNull();
         ((string[])result.Metadata["roles"]).ShouldContain(ApplicationDbContext.AdminRoleName);
     }
 
@@ -172,6 +173,7 @@ public class LdapLoginManagerIntegrationTest
         var result = await manager.CheckAccess("jdoe", UserPass);
 
         result.Success.ShouldBeTrue();
+        result.Metadata.ShouldNotBeNull();
         result.Metadata["email"].ShouldBe("jdoe@example.com");
     }
 

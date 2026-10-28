@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using Registry.Web.Services.Jobs;
 using System.Collections.Generic;
@@ -101,9 +100,9 @@ public class ObjectManagerTest : TestBase
 
         var objectManager = ObjectsManagerFor(context, webUtils, _ddbFactoryMock.Object).Build();
 
-        await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Queries.ListAsync(null, MagicStrings.DefaultDatasetSlug, "test"));
+        await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Queries.ListAsync(null!, MagicStrings.DefaultDatasetSlug, "test"));
 
-        await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, null, "test"));
+        await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Queries.ListAsync(MagicStrings.PublicOrganizationSlug, null!, "test"));
 
         await Should.ThrowAsync<BadRequestException>(async () => await objectManager.Queries.ListAsync(string.Empty, MagicStrings.DefaultDatasetSlug, "test"));
 
@@ -447,7 +446,7 @@ public class ObjectManagerTest : TestBase
 
 
     private ObjectServices BuildObjectsManagerForBulkDownloadTest(string datasetsPath, RegistryContext context,
-        bool disableAnonymousBulkDownloads, User currentUser)
+        bool disableAnonymousBulkDownloads, User? currentUser)
     {
         var settings = TestSettings.Default;
         settings.DatasetsPath = datasetsPath;
@@ -620,7 +619,7 @@ public class ObjectManagerTest : TestBase
 
         var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
         var ddb = ddbManager.Get(org, context.Datasets.First(d => d.Slug == ds).InternalRef);
-        var hash = ddb.GetEntry("site.dxf")!.Hash;
+        var hash = ddb.GetEntry("site.dxf").ShouldNotBeNull().Hash.ShouldNotBeNull();
         var build = Path.Combine(ddb.DerivedFolderPaths.Single(), hash);
         if (!File.Exists(Path.Combine(build, "mvt", "metadata.json")))
             Assert.Ignore("The loaded native libddb predates CAD coordinate systems");
@@ -1016,7 +1015,7 @@ public class ObjectManagerTest : TestBase
     /// <see cref="DdbManager"/> on <paramref name="ddbWrapper"/> (the native wrapper by default).
     /// </summary>
     private ObjectServicesBuilder ObjectsManagerFor(RegistryContext context, WebPorts utils,
-        IDdbManager ddbManager = null, IDdbWrapper ddbWrapper = null)
+        IDdbManager? ddbManager = null, IDdbWrapper? ddbWrapper = null)
     {
         ddbWrapper ??= DdbWrapper;
         return new ObjectServicesBuilder(context)
@@ -1140,7 +1139,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
         {
             Id = Guid.NewGuid().ToString(),
             UserName = "admin",
@@ -1225,7 +1224,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
         {
             Id = Guid.NewGuid().ToString(),
             UserName = "admin",
@@ -1278,7 +1277,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
         {
             Id = Guid.NewGuid().ToString(),
             UserName = "admin",
@@ -1333,7 +1332,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
         {
             Id = Guid.NewGuid().ToString(),
             UserName = "admin",
@@ -1382,7 +1381,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
         {
             Id = Guid.NewGuid().ToString(),
             UserName = "admin",
@@ -1432,7 +1431,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
         {
             Id = Guid.NewGuid().ToString(),
             UserName = "admin",
@@ -1482,7 +1481,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
         {
             Id = Guid.NewGuid().ToString(),
             UserName = "admin",
@@ -1557,7 +1556,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
         {
             Id = Guid.NewGuid().ToString(),
             UserName = "admin",
@@ -1621,7 +1620,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
         {
             Id = Guid.NewGuid().ToString(),
             UserName = "admin",
@@ -1699,7 +1698,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
         {
             Id = Guid.NewGuid().ToString(),
             UserName = "admin",
@@ -1783,7 +1782,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
         {
             Id = Guid.NewGuid().ToString(),
             UserName = "admin",
@@ -1871,7 +1870,7 @@ public class ObjectManagerTest : TestBase
         _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
-        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult(new User
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
         {
             Id = Guid.NewGuid().ToString(),
             UserName = "admin",

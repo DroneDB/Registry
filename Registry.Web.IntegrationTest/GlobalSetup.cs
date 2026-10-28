@@ -1,4 +1,3 @@
-#nullable disable
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
