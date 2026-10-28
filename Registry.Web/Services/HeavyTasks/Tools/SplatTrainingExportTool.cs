@@ -28,6 +28,15 @@ public sealed class SplatTrainingExportTool : HeavyToolBase<SplatTrainingExportT
     /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
     public sealed record Parameters(long? MaxImageSize, long? MaxPoints, string? FileName);
 
+    /// <summary>
+    /// The most points of the sparse model libddb accepts: the grid that thins the point cloud holds every point it
+    /// keeps, so a larger request is refused there and here before it is queued.
+    /// </summary>
+    public const int MaxPointsLimit = 10_000_000;
+
+    /// <summary>The longest image side in pixels libddb accepts (2^20); a larger request is refused before it is queued.</summary>
+    public const int MaxImageSizeLimit = 1 << 20;
+
     // The native export runs first; archiving the result is the last tenth of the progress
     private const double ExportShare = 0.9;
     private const string ExportFolderName = "training-data";
@@ -36,14 +45,14 @@ public sealed class SplatTrainingExportTool : HeavyToolBase<SplatTrainingExportT
         new(p.WholeNumber("maxImageSize"), p.WholeNumber("maxPoints"), p.Text("fileName"));
 
     private static readonly JsonDocument Schema = JsonDocument.Parse(
-        """
+        $$"""
         {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
           "properties": {
             "path": { "type": ["string", "null"], "description": "Folder of the ODM project (cameras.json, odm_report, images, odm_georeferencing); empty for the dataset root." },
-            "maxImageSize": { "type": ["integer", "null"], "minimum": 0, "description": "Longest side in pixels of the exported images; 0 or absent exports the originals." },
-            "maxPoints": { "type": ["integer", "null"], "minimum": 0, "description": "Most points of the sparse model (default 100000); 0 writes none." },
+            "maxImageSize": { "type": ["integer", "null"], "minimum": 0, "maximum": {{MaxImageSizeLimit}}, "description": "Longest side in pixels of the exported images; 0 or absent exports the originals." },
+            "maxPoints": { "type": ["integer", "null"], "minimum": 0, "maximum": {{MaxPointsLimit}}, "description": "Most points of the sparse model (default 100000); 0 writes none." },
             "fileName": { "type": ["string", "null"], "description": "Optional output file name." }
           },
           "additionalProperties": false
@@ -74,8 +83,8 @@ public sealed class SplatTrainingExportTool : HeavyToolBase<SplatTrainingExportT
     protected override Task ValidateAsync(HeavyToolRequest request, Parameters p, IHeavyToolValidationContext ctx,
         CancellationToken ct)
     {
-        Require(p.MaxImageSize, nameof(p.MaxImageSize));
-        Require(p.MaxPoints, nameof(p.MaxPoints));
+        Require(p.MaxImageSize, nameof(p.MaxImageSize), MaxImageSizeLimit);
+        Require(p.MaxPoints, nameof(p.MaxPoints), MaxPointsLimit);
 
         if (!IsRoot(request.Path))
         {
@@ -147,10 +156,11 @@ public sealed class SplatTrainingExportTool : HeavyToolBase<SplatTrainingExportT
     // The root of the dataset is "", "." or no path
     private static bool IsRoot(string? path) => string.IsNullOrWhiteSpace(path) || path.Trim() == ".";
 
-    private static void Require(long? value, string name)
+    // The same bounds as libddb, so a request it would refuse fails at submit instead of in the queue
+    private static void Require(long? value, string name, int limit)
     {
-        if (value is < 0 or > int.MaxValue)
-            throw new ArgumentException($"{char.ToLowerInvariant(name[0])}{name[1..]} must be a whole number from 0 to {int.MaxValue}.");
+        if (value < 0 || value > limit)
+            throw new ArgumentException($"{char.ToLowerInvariant(name[0])}{name[1..]} must be a whole number from 0 to {limit}.");
     }
 
     private static string FileName(HeavyToolRequest request, Parameters p)

@@ -14,6 +14,7 @@ using Moq;
 using NUnit.Framework;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
+using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Utilities;
 using Registry.Web.Test.Baselines;
 using Registry.Web.Test.Support;
@@ -296,6 +297,8 @@ public sealed class SplatExportHttpTests : DatasetAccessFixture
     [TestCase("""{"maxPoints":-1}""", "maxPoints")]
     [TestCase("""{"maxImageSize":-5}""", "maxImageSize")]
     [TestCase("""{"maxImageSize":4294967296}""", "maxImageSize")]
+    [TestCase("""{"maxImageSize":1048577}""", "maxImageSize")]
+    [TestCase("""{"maxPoints":10000001}""", "maxPoints")]
     public async Task TrainingExport_WithAnOptionOutOfRange_Is400(string parameters, string option)
     {
         ProjectFolder("odm");
@@ -304,6 +307,29 @@ public sealed class SplatExportHttpTests : DatasetAccessFixture
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
         body.ShouldContain(option);
+    }
+
+    // libddb refuses more points (or a longer image side) than these: the largest it accepts is queued
+    [TestCase("""{"maxPoints":10000000}""")]
+    [TestCase("""{"maxImageSize":1048576}""")]
+    public async Task TrainingExport_WithAnOptionAtLibddbsLimit_IsQueued(string parameters)
+    {
+        ProjectFolder("odm");
+
+        var (response, body, _) = await SubmitAsync(Caller.Reader, TrainingTool, "odm", parameters);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted, body);
+    }
+
+    [Test]
+    public async Task TrainingExport_OverTheLimitOfPoints_SaysTheLimit()
+    {
+        ProjectFolder("odm");
+
+        var (response, body, _) = await SubmitAsync(Caller.Reader, TrainingTool, "odm", """{"maxPoints":10000001}""");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        body.ShouldContain($"from 0 to {SplatTrainingExportTool.MaxPointsLimit}");
     }
 }
 

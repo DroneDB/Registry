@@ -398,6 +398,7 @@
               "null"
             ],
             "minimum": 0,
+            "maximum": 1048576,
             "description": "Longest side in pixels of the exported images; 0 or absent exports the originals."
           },
           "maxPoints": {
@@ -406,6 +407,7 @@
               "null"
             ],
             "minimum": 0,
+            "maximum": 10000000,
             "description": "Most points of the sparse model (default 100000); 0 writes none."
           },
           "fileName": {
