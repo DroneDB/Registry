@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Globalization;
 using Registry.Ports.DroneDB;
@@ -28,7 +27,7 @@ public class SafeMetaManager
     /// build in progress, full disk, shutdown: <see cref="DdbErrors.IsTransient"/>) says nothing about the value
     /// and propagates.
     /// </summary>
-    private static T Read<T>(Func<T> read)
+    private static T? Read<T>(Func<T> read)
     {
         try
         {
@@ -40,7 +39,7 @@ public class SafeMetaManager
         }
     }
 
-    public string Name
+    public string? Name
     {
         get => Read(() => _manager.Get<string>(NameField));
         set
@@ -76,7 +75,7 @@ public class SafeMetaManager
     public const string TaglineField = "tagline";
     public const int TaglineMaxLength = 256;
 
-    public string Tagline
+    public string? Tagline
     {
         get => Read(() => _manager.Get<string>(TaglineField));
         set

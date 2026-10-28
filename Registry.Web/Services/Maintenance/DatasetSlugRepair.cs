@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -65,7 +64,7 @@ public sealed class DatasetSlugRepair
             var badDatasets = org.Datasets.Where(d => !d.Slug.IsValidSlug()).ToArray();
             if (!renameOrg && badDatasets.Length == 0) continue;
 
-            string newOrgSlug = null;
+            string? newOrgSlug = null;
             if (renameOrg)
             {
                 newOrgSlug = FreeSlug(org.Slug, takenOrgSlugs);
@@ -157,10 +156,12 @@ public sealed class DatasetSlugRepair
 
     // Renames one organization (newOrgSlug != null) and/or some of its datasets in one transaction.
     // The organization folder is moved first and moved back if the database update fails.
-    private async Task ApplySlugFix(string orgSlug, string newOrgSlug, IReadOnlyDictionary<string, string> dsRenames)
+    private async Task ApplySlugFix(string orgSlug, string? newOrgSlug, IReadOnlyDictionary<string, string> dsRenames)
     {
-        var oldPath = Path.Combine(_storage.DatasetsPath, orgSlug);
-        var newPath = newOrgSlug != null ? Path.Combine(_storage.DatasetsPath, newOrgSlug) : null;
+        // The options validation refuses to start without a datasets path
+        var datasetsPath = _storage.DatasetsPath!;
+        var oldPath = Path.Combine(datasetsPath, orgSlug);
+        var newPath = newOrgSlug != null ? Path.Combine(datasetsPath, newOrgSlug) : null;
         var folderMoved = false;
 
         if (newPath != null && _fileSystem.FolderExists(oldPath))
@@ -181,7 +182,8 @@ public sealed class DatasetSlugRepair
         catch
         {
             _context.ChangeTracker.Clear();
-            if (folderMoved)
+            // The folder moved only to a new path
+            if (folderMoved && newPath != null)
                 MoveFolder(newPath, oldPath);
             throw;
         }
@@ -191,7 +193,7 @@ public sealed class DatasetSlugRepair
     }
 
     // Database part of ApplySlugFix, run inside the transaction of the execution strategy
-    private async Task RenameSlugRows(string orgSlug, string newOrgSlug,
+    private async Task RenameSlugRows(string orgSlug, string? newOrgSlug,
         IReadOnlyDictionary<string, string> dsRenames, CancellationToken ct)
     {
         // A replay after a transient failure starts from the database, not from the failed attempt
@@ -272,7 +274,7 @@ public sealed class DatasetSlugRepair
 
     // Asked by the execution strategy when a commit failed transiently: whether it reached the database anyway.
     // Slugs are compared in memory because case-insensitive collations match "abc" and "ABC" in SQL.
-    private async Task<bool> SlugRowsRenamed(string orgSlug, string newOrgSlug,
+    private async Task<bool> SlugRowsRenamed(string orgSlug, string? newOrgSlug,
         IReadOnlyDictionary<string, string> dsRenames, CancellationToken ct)
     {
         var finalOrgSlug = newOrgSlug ?? orgSlug;

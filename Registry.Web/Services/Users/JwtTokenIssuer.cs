@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -37,7 +36,8 @@ public sealed class JwtTokenIssuer
         ArgumentNullException.ThrowIfNull(user);
 
         var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.ASCII.GetBytes(_tokens.Secret);
+        // The options validation refuses to start without a secret (the first start generates it)
+        var key = Encoding.ASCII.GetBytes(_tokens.Secret!);
         var expiresOn = _time.GetUtcNow().UtcDateTime.AddDays(_tokens.TokenExpirationInDays);
         var isAdmin = await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName);
 

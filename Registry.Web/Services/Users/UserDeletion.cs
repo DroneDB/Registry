@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -41,7 +40,7 @@ public sealed class UserDeletion
 
     public async Task<DeleteUserResultDto> DeleteUser(
         string userName,
-        string successor = null,
+        string? successor = null,
         ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.Rename)
     {
         if (string.IsNullOrWhiteSpace(userName))
@@ -50,7 +49,8 @@ public sealed class UserDeletion
         if (userName == MagicStrings.AnonymousUserName)
             throw new ForbiddenException("Cannot delete the anonymous user");
 
-        if (userName == _identity.DefaultAdmin.UserName)
+        // The options validation refuses to start without a default admin
+        if (userName == _identity.DefaultAdmin!.UserName)
             throw new ForbiddenException("Cannot delete the default admin");
 
         var user = await _userManager.FindByNameAsync(userName);
@@ -81,7 +81,7 @@ public sealed class UserDeletion
         }
 
         // Validate successor if specified
-        User successorUser = null;
+        User? successorUser = null;
         if (!string.IsNullOrWhiteSpace(successor))
         {
             if (successor == userName)

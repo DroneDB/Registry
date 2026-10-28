@@ -1,4 +1,3 @@
-#nullable disable
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
@@ -32,7 +31,7 @@ public sealed class UserPasswords
     /// <summary>Shorthand accessor for the active provider's capability descriptor.</summary>
     private AuthProviderCapabilities Caps => _loginManager.Capabilities;
 
-    public async Task<ChangePasswordResult> ChangePassword(string userName, string currentPassword, string newPassword)
+    public async Task<ChangePasswordResult> ChangePassword(string userName, string? currentPassword, string newPassword)
     {
         var user = await _userManager.FindByNameAsync(userName);
 
@@ -42,7 +41,7 @@ public sealed class UserPasswords
         return await ChangePasswordInternal(user, currentPassword, newPassword);
     }
 
-    public async Task<ChangePasswordResult> ChangePassword(string currentPassword, string newPassword)
+    public async Task<ChangePasswordResult> ChangePassword(string? currentPassword, string newPassword)
     {
         var currentUser = await _authManager.GetCurrentUser();
 
@@ -52,7 +51,7 @@ public sealed class UserPasswords
         return await ChangePasswordInternal(currentUser, currentPassword, newPassword);
     }
 
-    private async Task<ChangePasswordResult> ChangePasswordInternal(User user, string currentPassword,
+    private async Task<ChangePasswordResult> ChangePasswordInternal(User user, string? currentPassword,
         string newPassword)
     {
         if (!Caps.SupportsPasswordChange)

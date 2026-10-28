@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -43,14 +42,14 @@ internal sealed class ThumbnailRequestHandler
     }
 
     /// <exception cref="ArgumentException"><paramref name="token"/> is empty (fail closed) or no root is given.</exception>
-    public ThumbnailRequestHandler(string token, IEnumerable<string> allowedRoots, IDdbWrapper ddbWrapper,
+    public ThumbnailRequestHandler(string? token, IEnumerable<string?>? allowedRoots, IDdbWrapper ddbWrapper,
         ILogger logger)
     {
         if (string.IsNullOrWhiteSpace(token))
             throw new ArgumentException("The thumbnail generator token is not set.", nameof(token));
 
         _token = token;
-        _allowedRoots = allowedRoots?.Where(root => !string.IsNullOrWhiteSpace(root)).ToArray() ?? [];
+        _allowedRoots = allowedRoots?.OfType<string>().Where(root => !string.IsNullOrWhiteSpace(root)).ToArray() ?? [];
 
         if (_allowedRoots.Length == 0)
             throw new ArgumentException("At least one allowed root is required.", nameof(allowedRoots));
@@ -85,8 +84,8 @@ internal sealed class ThumbnailRequestHandler
             return;
         }
 
-        string requestedPath = form["path"];
-        string size = form["size"];
+        string? requestedPath = form["path"];
+        string? size = form["size"];
 
         if (string.IsNullOrWhiteSpace(requestedPath) || !int.TryParse(size, out var sizeInt) || sizeInt < 1)
         {

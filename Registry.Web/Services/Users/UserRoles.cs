@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Linq;
 using System.Threading;
@@ -31,7 +30,8 @@ public sealed class UserRoles
 
     public async Task<string[]> GetRoles(CancellationToken ct = default)
     {
-        var roles = _roleManager.Roles.Select(role => role.Name);
+        // Identity refuses to create a role without a name
+        var roles = _roleManager.Roles.Select(role => role.Name!);
 
         return await roles.ToArrayAsync(ct);
     }

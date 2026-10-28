@@ -1,5 +1,5 @@
-#nullable disable
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -126,7 +126,7 @@ public sealed class OrganizationMembers
         await _memberships.RemoveAsync(org, userName, currentUser, CancellationToken.None);
     }
 
-    private async Task<bool> CanManageMembers(Organization org, User user)
+    private async Task<bool> CanManageMembers(Organization org, [NotNullWhen(true)] User? user)
     {
         if (user == null) return false;
 

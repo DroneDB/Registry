@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -78,7 +77,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
             LayersCache, ct);
     }
 
-    private async Task<List<OgcLayerDto>> ListLayersAsync(string orgSlug, string dsSlug, string folderPath,
+    private async Task<List<OgcLayerDto>> ListLayersAsync(string orgSlug, string dsSlug, string? folderPath,
         CancellationToken ct)
     {
         // Callers are the OGC managers, after the request was authorized (OgcAuthorizationFilter)

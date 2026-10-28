@@ -1,4 +1,3 @@
-#nullable disable
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,7 +22,7 @@ public class DatasetResolver : IDatasetResolver
         _lookups = lookups;
     }
 
-    public async Task<Organization> GetOrganizationAsync(string orgSlug, bool safe = false, bool withTracking = false,
+    public async Task<Organization?> GetOrganizationAsync(string orgSlug, bool safe = false, bool withTracking = false,
         bool withDatasets = false, CancellationToken ct = default)
     {
         EnsureSlug(orgSlug, "organization");
@@ -46,13 +45,13 @@ public class DatasetResolver : IDatasetResolver
         return org;
     }
 
-    public async Task<Dataset> GetDatasetAsync(string orgSlug, string dsSlug, bool safe = false,
+    public async Task<Dataset?> GetDatasetAsync(string orgSlug, string dsSlug, bool safe = false,
         bool withTracking = false, CancellationToken ct = default)
     {
         EnsureSlug(dsSlug, "dataset");
         EnsureSlug(orgSlug, "organization");
 
-        Task<Dataset> Load(CancellationToken token)
+        Task<Dataset?> Load(CancellationToken token)
         {
             IQueryable<Dataset> query = _context.Datasets.Include(item => item.Organization);
 
@@ -65,7 +64,7 @@ public class DatasetResolver : IDatasetResolver
 
         // With the organization's members, which the access check of a member needs: a cached
         // lookup then answers it without a query
-        Task<Dataset> LoadWithMembers(CancellationToken token) => _context.Datasets
+        Task<Dataset?> LoadWithMembers(CancellationToken token) => _context.Datasets
             .Include(item => item.Organization)
             .ThenInclude(org => org.Users)
             .AsNoTracking()

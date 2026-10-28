@@ -1,4 +1,3 @@
-#nullable disable
 namespace Registry.Web.Services.Hub;
 
 /// <summary>
@@ -13,12 +12,12 @@ public static class HubInfo
     /// The Hub semver as read from <c>{StoragePath}/ClientApp/version.txt</c>.
     /// <c>null</c> if the marker is missing (legacy installs).
     /// </summary>
-    public static string CurrentVersion { get; private set; }
+    public static string? CurrentVersion { get; private set; }
 
     /// <summary>
     /// Records the Hub version detected at startup. Idempotent; the latest call wins.
     /// </summary>
-    public static void Initialize(string version)
+    public static void Initialize(string? version)
     {
         CurrentVersion = string.IsNullOrWhiteSpace(version) ? null : version.Trim();
     }

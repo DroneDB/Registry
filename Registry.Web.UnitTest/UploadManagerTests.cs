@@ -457,13 +457,16 @@ public class UploadManagerTests
         var utils = new DatasetResolver(context, lookups);
 
         counter.Reset();
-        (await utils.GetDatasetAsync("acme", "survey")).Slug.ShouldBe("survey");
+        var cached = await utils.GetDatasetAsync("acme", "survey");
+        cached.ShouldNotBeNull();
+        cached.Slug.ShouldBe("survey");
         await utils.GetDatasetAsync("acme", "survey");
         await utils.GetDatasetAsync("acme", "survey");
         counter.Queries.ShouldBe(1);
 
         // A rename through EF drops the cached lookup: the old slug is gone at once
         var tracked = await utils.GetDatasetAsync("acme", "survey", withTracking: true);
+        tracked.ShouldNotBeNull();
         tracked.Slug = "survey-2";
         await context.SaveChangesAsync();
 

@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -145,9 +144,10 @@ public sealed class OrganizationQueries
 
         var usersMapper = await ResolveUserNamesAsync(ownerIds);
 
-        foreach (var org in organizations.Where(org => org.Owner != null))
+        foreach (var org in organizations)
         {
-            org.Owner = usersMapper.SafeGetValue(org.Owner);
+            if (org.Owner is { } owner)
+                org.Owner = usersMapper.SafeGetValue(owner);
         }
     }
 
@@ -159,10 +159,10 @@ public sealed class OrganizationQueries
     ///   - falling back to a single small IN query for tiny inputs.
     /// Returns an empty dictionary when there are no IDs to resolve.
     /// </summary>
-    private async Task<Dictionary<string, string>> ResolveUserNamesAsync(string[] userIds)
+    private async Task<Dictionary<string, string?>> ResolveUserNamesAsync(string[] userIds)
     {
         if (userIds == null || userIds.Length == 0)
-            return new Dictionary<string, string>(StringComparer.Ordinal);
+            return new Dictionary<string, string?>(StringComparer.Ordinal);
 
         // Threshold tuned so that, beyond it, the parameterized IN-clause cost (network +
         // query plan cache pollution + provider per-parameter overhead) exceeds the cost of
@@ -187,7 +187,7 @@ public sealed class OrganizationQueries
             .Select(u => new { u.Id, u.UserName })
             .ToListAsync();
 
-        var result = new Dictionary<string, string>(wanted.Count, StringComparer.Ordinal);
+        var result = new Dictionary<string, string?>(wanted.Count, StringComparer.Ordinal);
         foreach (var u in allUsers)
         {
             if (wanted.Contains(u.Id))
