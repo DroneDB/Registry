@@ -30,6 +30,9 @@ public static partial class EmailStyles
     /// <summary>A build that failed: fixed, not the accent, so it means the same on every instance.</summary>
     public const string Failed = "#b91c1c";
 
+    /// <summary>A build that waits for files: fixed, not the accent, so it means the same on every instance.</summary>
+    public const string Waiting = "#b45309";
+
     /// <summary>A build that completed: fixed, not the accent, so it means the same on every instance.</summary>
     public const string Completed = "#15803d";
 

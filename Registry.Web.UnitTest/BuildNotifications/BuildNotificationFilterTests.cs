@@ -176,7 +176,7 @@ public class BuildNotificationFilterTests
             new BuildRequest(User, JobId)));
     }
 
-    [TestCase(BuildState.Pending, TestName = "Succeeded with a missing dependency (pending) is not final")]
+    [TestCase(BuildState.Pending, TestName = "Succeeded with the entry pending but no marker of its content is not reported")]
     [TestCase(BuildState.Building, TestName = "Succeeded because another process held the lock is not final")]
     [TestCase(BuildState.None, TestName = "Succeeded without a complete build is not final")]
     public void EntryBuild_SucceededButNotBuilt_IsNotReported(BuildState state)
@@ -184,6 +184,86 @@ public class BuildNotificationFilterTests
         Entry(state);
 
         Apply(BuildJob(), new SucceededState(null, 0, 0));
+
+        _reports.ShouldBeEmpty();
+    }
+
+    // --- Succeeded without building: the build found files missing ---
+
+    // libddb's marker of a build that found files missing (dataset-relative names)
+    private static PendingBuildInfo Waiting(string path = Path, string hash = Hash, bool awaitingFiles = true)
+    {
+        var marker = PendingMarkers.Of(path, hash, 0, "cloud.txt", "colors/palette.json");
+        marker.AwaitingFiles = awaitingFiles;
+        return marker;
+    }
+
+    [Test]
+    public void EntryBuild_SucceededLeavingItsContentWaitingForFiles_WaitsForThoseFiles()
+    {
+        Entry(BuildState.Pending);
+        _ddb.Setup(d => d.GetPendingBuildInfo()).Returns([Waiting()]);
+
+        Apply(BuildJob(), new SucceededState(null, 0, 0));
+
+        _reports.ShouldHaveSingleItem().ShouldBe(new BuildReport(Org, Ds, Path, Hash, BuildOutcome.WaitingForFiles,
+            "cloud.txt, colors/palette.json", new BuildRequest(User, JobId)));
+    }
+
+    [Test]
+    public void ACoordinatorBuild_SucceededLeavingItsContentWaitingForFiles_WaitsForThoseFiles()
+    {
+        Entry(BuildState.Pending);
+        _ddb.Setup(d => d.GetPendingBuildInfo()).Returns([Waiting()]);
+
+        Apply(Job.FromExpression<DdbJobs>(j => j.RebuildInBackground(Org, Guid.Empty, Path, null)),
+            new SucceededState(null, 0, 0), userId: MagicStrings.AutoBuildServiceUserId);
+
+        _reports.ShouldHaveSingleItem().Outcome.ShouldBe(BuildOutcome.WaitingForFiles);
+    }
+
+    [Test]
+    public void EntryBuild_SucceededWithAMarkerAFileAlreadyReleased_IsNotReported()
+    {
+        // A missing file arrived after the build looked: the marker is due, the build runs again at once
+        Entry(BuildState.Pending);
+        _ddb.Setup(d => d.GetPendingBuildInfo()).Returns([Waiting(awaitingFiles: false)]);
+
+        Apply(BuildJob(), new SucceededState(null, 0, 0));
+
+        _reports.ShouldBeEmpty();
+    }
+
+    [TestCase("other.laz", Hash)]
+    [TestCase(Path, "other-hash")]
+    public void EntryBuild_SucceededWithTheWaitOfAnotherEntry_IsNotReported(string markerPath, string markerHash)
+    {
+        Entry(BuildState.Pending);
+        _ddb.Setup(d => d.GetPendingBuildInfo()).Returns([Waiting(markerPath, markerHash)]);
+
+        Apply(BuildJob(), new SucceededState(null, 0, 0));
+
+        _reports.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void EntryBuild_SucceededWhileAnotherProcessBuildsIt_IsNotReported_EvenWithAWait()
+    {
+        Entry(BuildState.Building);
+        _ddb.Setup(d => d.GetPendingBuildInfo()).Returns([Waiting()]);
+
+        Apply(BuildJob(), new SucceededState(null, 0, 0));
+
+        _reports.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void EntryBuild_FailedWithAWaitingMarker_IsNotFinal()
+    {
+        Entry(BuildState.Pending);
+        _ddb.Setup(d => d.GetPendingBuildInfo()).Returns([Waiting()]);
+
+        Apply(BuildJob(), Failed());
 
         _reports.ShouldBeEmpty();
     }

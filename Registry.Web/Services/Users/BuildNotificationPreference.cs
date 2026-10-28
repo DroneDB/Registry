@@ -19,7 +19,7 @@ public enum BuildNotificationLevel
     /// <summary>Every completed and every failed build.</summary>
     All,
 
-    /// <summary>Only the builds that failed.</summary>
+    /// <summary>Only the builds that failed, and the builds that wait for missing files.</summary>
     Failed
 }
 
@@ -61,9 +61,13 @@ public static class BuildNotificationPreference
             : BuildNotificationLevel.None;
     }
 
-    /// <summary>Whether a user with <paramref name="level"/> is told about a build that ended with <paramref name="outcome"/>.</summary>
+    /// <summary>
+    /// Whether a user with <paramref name="level"/> is told about a build that ended with <paramref name="outcome"/>: a
+    /// build that waits for missing files needs the user like a failure, so it goes with the failures.
+    /// </summary>
     public static bool Wants(this BuildNotificationLevel level, BuildOutcome outcome) =>
-        level == BuildNotificationLevel.All || (level == BuildNotificationLevel.Failed && outcome == BuildOutcome.Failed);
+        level == BuildNotificationLevel.All ||
+        (level == BuildNotificationLevel.Failed && outcome is BuildOutcome.Failed or BuildOutcome.WaitingForFiles);
 
     /// <summary>
     /// Checks the <see cref="Section"/> section of a preferences patch (not null: null deletes it): an object whose only

@@ -39,6 +39,8 @@ public class BuildNotificationRecorderTests : IDisposable
     [TestCase(BuildNotificationLevel.Failed, BuildOutcome.Failed, true)]
     [TestCase(BuildNotificationLevel.All, BuildOutcome.Completed, true)]
     [TestCase(BuildNotificationLevel.All, BuildOutcome.Failed, true)]
+    [TestCase(BuildNotificationLevel.Failed, BuildOutcome.WaitingForFiles, true)]
+    [TestCase(BuildNotificationLevel.All, BuildOutcome.WaitingForFiles, true)]
     public async Task TheLine_IsRecordedOnlyWhenThePreferenceWantsIt(BuildNotificationLevel level, BuildOutcome outcome,
         bool recorded)
     {
@@ -155,24 +157,26 @@ public class BuildNotificationRecorderTests : IDisposable
     }
 
     [Test]
-    public async Task TheRetriesGivingUp_OnAUserBuildThatWaitsForAMissingFile_TellThatUserItFailed_AndWhatIsMissing_Once()
+    public async Task TheRetriesGivingUp_AfterTheFilesAUserBuildWaitedForArrived_TellThatUserItFailed_Once()
     {
         _h.Levels["jane"] = BuildNotificationLevel.Failed;
         _h.RequestersFromJobIndex = true;
-        // The user's build succeeded but left the entry pending; the retries succeed without building it too
+        // The user's build found the .mtl missing and succeeded without building: she is told it waits
         _h.IndexedBuild("user-build", "jane", "Succeeded", 0, "a.obj", "a-hash");
-        _h.IndexedBuild("retry-1", MagicStrings.AutoBuildServiceUserId, "Succeeded", 2, "a.obj", "a-hash");
+        await _h.Record("jane", "a.obj", BuildOutcome.WaitingForFiles, "user-build", "a-hash");
+        await _h.DigestJob().SendAsync("jane", CancellationToken.None);
+        // The .mtl arrived and released the build; its retries as the build service failed until the budget ran out
+        _h.IndexedBuild("retry-1", MagicStrings.AutoBuildServiceUserId, "Failed", 2, "a.obj", "a-hash");
         _h.Time.Advance(TimeSpan.FromMinutes(10));
-        Registry.Ports.DroneDB.PendingBuildInfo[] pending =
-            [Registry.Adapters.Testing.PendingMarkers.Of("a.obj", "a-hash", 0, "a.mtl")];
+        Registry.Ports.DroneDB.PendingBuildInfo[] pending = [Registry.Adapters.Testing.PendingMarkers.Of("a.obj", "a-hash")];
 
         await _h.Reporter().ReportGivenUpAsync(NotificationHarness.Org, NotificationHarness.Ds, pending, CancellationToken.None);
 
-        var row = _h.Rows().ShouldHaveSingleItem();
+        var row = _h.Rows().ShouldHaveSingleItem("the wait ended with the build");
         (row.UserId, row.Path, row.Outcome, row.Error, row.RequestJobId).ShouldBe(
-            ("jane", "a.obj", "Failed", "Not built after the automatic retries; missing: a.mtl", "user-build"));
+            ("jane", "a.obj", "Failed", "Not built after the automatic retries", "user-build"));
         await _h.DigestJob().SendAsync("jane", CancellationToken.None);
-        _h.Sent.ShouldHaveSingleItem();
+        _h.Sent.Count.ShouldBe(2);
 
         // The safety-net sweep starts the retries again and they give up again: the user was already told
         _h.Time.Advance(TimeSpan.FromHours(6));

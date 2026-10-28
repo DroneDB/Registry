@@ -97,6 +97,57 @@ public class BuildNotificationEmailTests
             h => h.ShouldContain("href=\"https://hub.example.org/r?preferences=notifications\""));
     }
 
+    private static BuildNotificationModel WithAWait() => Model() with
+    {
+        Builds =
+        [
+            .. Model().Builds,
+            new BuildNotificationLine("acme", "site-a", "model.obj", BuildOutcome.WaitingForFiles,
+                "model.mtl, textures/wall.png", Now.AddMinutes(2))
+        ]
+    };
+
+    [Test]
+    public async Task ABuildWaitingForFiles_IsBetweenTheFailuresAndTheCompletions_WithTheFilesItNeeds()
+    {
+        var message = await Compose(WithAWait(), Text(new EmailTemplateText("{{summary}} ({{waitingCount}} waiting)", "{{builds}}")));
+
+        message.Subject.ShouldBe("1 build failed, 1 waiting for files, 1 completed (1 waiting)");
+        message.TextBody.ShouldStartWith(
+            """
+            - Failed: cloud.laz (acme/site-a)
+              Reason: Out of memory
+            - Waiting for files: model.obj (acme/site-a)
+              Missing: model.mtl, textures/wall.png
+            - Completed: ortho.tif (acme/site-a)
+
+            """.ReplaceLineEndings("\n"));
+        message.HtmlBody.ShouldNotBeNull().ShouldSatisfyAllConditions(
+            h => h.ShouldContain("Missing: model.mtl, textures/wall.png"),
+            h => h.ShouldContain(">Waiting for files"),
+            // Its own fixed colour, for the result and for the files
+            h => Regex.Count(h, $"color:{EmailStyles.Waiting};").ShouldBe(2));
+    }
+
+    [Test]
+    public async Task OnlyWaits_TheSummaryCountsThem()
+    {
+        var model = new BuildNotificationModel("jane",
+        [
+            new BuildNotificationLine("acme", "site-a", "a.obj", BuildOutcome.WaitingForFiles, "a.mtl", Now),
+            new BuildNotificationLine("acme", "site-a", "b.shp", BuildOutcome.WaitingForFiles, "b.shx", Now)
+        ]);
+
+        (await Compose(model)).Subject.ShouldBe("My Hub: 2 builds waiting for files");
+    }
+
+    [Test]
+    public void TheSample_ShowsEveryKind()
+    {
+        BuildNotificationEmailTemplate.Sample("jane").Builds.Select(b => b.Outcome).Distinct()
+            .ShouldBe(Enum.GetValues<BuildOutcome>(), ignoreOrder: true);
+    }
+
     [Test]
     public async Task SeveralDatasets_TheLinkIsTheHub()
     {

@@ -15,8 +15,8 @@ namespace Registry.Web.Services.BuildNotifications;
 
 /// <summary>
 /// Turns the ends of builds into build notifications: a finished entry build job (<see cref="FinishedBuildJob"/>), judged
-/// against libddb's view of the entry (<see cref="IBuildOutcomeClassifier"/>), and the pending builds whose automatic
-/// retries ran out, which failed for good. Both go to <see cref="IBuildNotificationRecorder"/>.
+/// against libddb's view of the entry (<see cref="IBuildOutcomeClassifier"/>: built, failed for good, or waiting for
+/// files it names), and the pending builds whose automatic retries ran out, which failed for good. Both go to <see cref="IBuildNotificationRecorder"/>.
 /// </summary>
 public sealed class FinishedBuildReporter
 {
@@ -62,9 +62,14 @@ public sealed class FinishedBuildReporter
             return;
         }
 
-        var error = classified.Outcome == BuildOutcome.Failed
-            ? BuildReport.ShortError(JobLogText.Cause(build.Failure), ddb.DatasetFolderPath)
-            : null;
+        var error = classified.Outcome switch
+        {
+            BuildOutcome.Failed => BuildReport.ShortError(JobLogText.Cause(build.Failure), ddb.DatasetFolderPath),
+            // libddb names the missing files relative to the dataset
+            BuildOutcome.WaitingForFiles => BuildReport.ShortError(string.Join(", ", classified.MissingFiles),
+                ddb.DatasetFolderPath),
+            _ => null
+        };
         await _recorder.RecordAsync(new BuildReport(build.OrgSlug, build.DsSlug, build.Path, classified.Hash,
             classified.Outcome, error, new BuildRequest(build.UserId, build.JobId)), ct).ConfigureAwait(false);
     }
@@ -79,7 +84,7 @@ public sealed class FinishedBuildReporter
     /// <summary>
     /// Reports the pending builds of <paramref name="orgSlug"/>/<paramref name="dsSlug"/> whose automatic retries ran out
     /// as failed. They were retried as the build service: each goes to the user whose build of that content failed, or
-    /// succeeded but left the entry waiting for a missing file (the error names what is missing).
+    /// found files missing before the files arrived and released it (<see cref="IBuildRequesterResolver"/>).
     /// </summary>
     public async Task ReportGivenUpAsync(string orgSlug, string dsSlug, IReadOnlyList<PendingBuildInfo> pending,
         CancellationToken ct)

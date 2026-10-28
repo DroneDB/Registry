@@ -131,8 +131,14 @@ internal sealed class NotificationHarness : IDisposable
     public bool RequestersFromJobIndex { get; set; }
 
     public BuildNotificationRecorder Recorder() =>
-        new(Email.Object, RequestersFromJobIndex ? new BuildRequesterResolver(_db.NewContext()) : Requesters.Object,
-            _levels.Object, Outbox(), Digests(), NullLogger<BuildNotificationRecorder>.Instance);
+        new(Email.Object, RequestersFromJobIndex ? Resolver() : Requesters.Object, _levels.Object, Outbox(), Digests(),
+            NullLogger<BuildNotificationRecorder>.Instance);
+
+    private BuildRequesterResolver Resolver()
+    {
+        var db = _db.NewContext();
+        return new BuildRequesterResolver(db, new BuildNotificationOutbox(db, Time));
+    }
 
     /// <summary>The reporter of the ends of builds; only the path that needs no dataset (the retries gave up) works.</summary>
     public FinishedBuildReporter Reporter()
@@ -166,8 +172,15 @@ internal sealed class NotificationHarness : IDisposable
     public BuildNotificationCleanup Cleanup() => new(Outbox(), Digests(), Time);
 
     public static BuildReport Report(string userId, string path, BuildOutcome outcome, string jobId, string? hash = null) =>
-        new(Org, Ds, path, hash ?? path + "-hash", outcome, outcome == BuildOutcome.Failed ? "it broke" : null,
-            new BuildRequest(userId, jobId));
+        new(Org, Ds, path, hash ?? path + "-hash", outcome, outcome switch
+        {
+            BuildOutcome.Failed => "it broke",
+            BuildOutcome.WaitingForFiles => MissingFiles,
+            _ => null
+        }, new BuildRequest(userId, jobId));
+
+    /// <summary>The files a <see cref="BuildOutcome.WaitingForFiles"/> report of <see cref="Report"/> waits for.</summary>
+    public const string MissingFiles = "model.mtl, textures/wall.png";
 
     public Task Record(string userId, string path, BuildOutcome outcome, string jobId, string? hash = null) =>
         Recorder().RecordAsync(Report(userId, path, outcome, jobId, hash), CancellationToken.None);

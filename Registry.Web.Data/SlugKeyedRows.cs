@@ -41,7 +41,8 @@ public static class SlugKeyedRows
     /// <summary>Whether <paramref name="dsSlug"/> is a <see cref="TombstoneSlug"/>: its dataset was deleted.</summary>
     public static bool IsTombstone(string? dsSlug) => dsSlug?.StartsWith(TombstonePrefix, StringComparison.Ordinal) == true;
 
-    private const string TombstonePrefix = "~deleted-";
+    /// <summary>How every <see cref="TombstoneSlug"/> starts, for a query that keeps or drops the rows of deleted datasets.</summary>
+    public const string TombstonePrefix = "~deleted-";
 
     /// <summary>The datasets (organization slug, dataset slug) that have a job in a <see cref="BlockingJobStates"/> state.</summary>
     public static async Task<HashSet<(string OrgSlug, string DsSlug)>> BusyDatasetsAsync(this RegistryContext context,

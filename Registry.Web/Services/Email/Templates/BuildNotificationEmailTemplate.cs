@@ -27,6 +27,7 @@ public sealed class BuildNotificationValues
     public const string User = "user";
     public const string Summary = "summary";
     public const string FailedCount = "failedCount";
+    public const string WaitingCount = "waitingCount";
     public const string CompletedCount = "completedCount";
     public const string Datasets = "datasets";
     public const string Builds = "builds";
@@ -38,11 +39,12 @@ public sealed class BuildNotificationValues
     [
         new(AppName, "The application name", InSubject: true),
         new(User, "The name of the user", InSubject: true),
-        new(Summary, "The counts in words, e.g. \"2 builds failed, 3 completed\"", InSubject: true),
+        new(Summary, "The counts in words, e.g. \"2 builds failed, 1 waiting for files, 3 completed\"", InSubject: true),
         new(FailedCount, "The number of failed builds", InSubject: true),
+        new(WaitingCount, "The number of builds waiting for files that are not in the dataset", InSubject: true),
         new(CompletedCount, "The number of completed builds", InSubject: true),
         new(Datasets, "The datasets of the builds (org/dataset, comma separated)", InSubject: true),
-        new(Builds, "The list of the builds, with the reason of each failure", InSubject: false, IsBlock: true),
+        new(Builds, "The list of the builds, with the reason of each failure and the files each waiting build needs", InSubject: false, IsBlock: true),
         new(Link, "A link to the dataset (to the Hub when the builds are in several datasets); alone in its paragraph it is a button", InSubject: false),
         new(PreferencesLink, "A link to the user's notification settings, to change or stop these e-mails", InSubject: false)
     ];
@@ -106,6 +108,7 @@ public sealed class BuildNotificationValues
         User => _model.UserName,
         Summary => _model.Summary,
         FailedCount => _model.FailedCount.ToString(CultureInfo.InvariantCulture),
+        WaitingCount => _model.WaitingCount.ToString(CultureInfo.InvariantCulture),
         CompletedCount => _model.CompletedCount.ToString(CultureInfo.InvariantCulture),
         Datasets => string.Join(", ", _model.Datasets),
         Builds => BuildList(),
@@ -114,11 +117,34 @@ public sealed class BuildNotificationValues
     };
 
     /// <summary>What a build's outcome is called.</summary>
-    public static string OutcomeText(BuildOutcome outcome) => outcome == BuildOutcome.Failed ? "Failed" : "Completed";
+    public static string OutcomeText(BuildOutcome outcome) => outcome switch
+    {
+        BuildOutcome.Failed => "Failed",
+        BuildOutcome.WaitingForFiles => "Waiting for files",
+        _ => "Completed"
+    };
 
     /// <summary>The fixed colour of a build's outcome.</summary>
-    public static string OutcomeColor(BuildOutcome outcome) =>
-        outcome == BuildOutcome.Failed ? EmailStyles.Failed : EmailStyles.Completed;
+    public static string OutcomeColor(BuildOutcome outcome) => outcome switch
+    {
+        BuildOutcome.Failed => EmailStyles.Failed,
+        BuildOutcome.WaitingForFiles => EmailStyles.Waiting,
+        _ => EmailStyles.Completed
+    };
+
+    /// <summary>
+    /// What a build's line says under its file, as both parts show it: the reason of a failure, the files a waiting build
+    /// needs; null when it says nothing.
+    /// </summary>
+    public static string? Detail(BuildNotificationLine line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        if (string.IsNullOrWhiteSpace(line.Error))
+            return null;
+
+        var text = line.Error.Trim().ReplaceLineEndings(" ");
+        return line.Outcome == BuildOutcome.WaitingForFiles ? $"Missing: {text}" : text;
+    }
 
     private string BuildList()
     {
@@ -127,8 +153,8 @@ public sealed class BuildNotificationValues
         {
             text.Append("- ").Append(OutcomeText(line.Outcome)).Append(": ").Append(line.Path)
                 .Append(" (").Append(line.Dataset).Append(')').Append('\n');
-            if (!string.IsNullOrWhiteSpace(line.Error))
-                text.Append("  Reason: ").Append(line.Error.Trim().ReplaceLineEndings(" ")).Append('\n');
+            if (Detail(line) is { } detail)
+                text.Append(line.Outcome == BuildOutcome.Failed ? "  Reason: " : "  ").Append(detail).Append('\n');
         }
 
         return text.ToString();
@@ -136,7 +162,7 @@ public sealed class BuildNotificationValues
 }
 
 /// <summary>
-/// The e-mail that tells a user that builds of theirs completed or failed. Administrators can change its text
+/// The e-mail that tells a user that builds of theirs completed, failed or wait for files. Administrators can change its text
 /// (<see cref="IEditableEmailTemplate"/>); the built-in text below is placeholder text too.
 /// </summary>
 public sealed class BuildNotificationEmailTemplate : EmailTemplate<BuildNotificationEmailModel, BuildNotificationEmail>,
@@ -195,7 +221,7 @@ public sealed class BuildNotificationEmailTemplate : EmailTemplate<BuildNotifica
         return composer.ComposeAsync(this, new BuildNotificationEmailModel(Sample(userName), text), recipients);
     }
 
-    /// <summary>The builds the preview and the test e-mail show: one that completed and one that failed.</summary>
+    /// <summary>The builds the preview and the test e-mail show: one that completed, one that failed, one that waits for files.</summary>
     public static BuildNotificationModel Sample(string userName)
     {
         var now = DateTime.UtcNow;
@@ -203,7 +229,9 @@ public sealed class BuildNotificationEmailTemplate : EmailTemplate<BuildNotifica
         [
             new BuildNotificationLine("demo", "survey-2026", "flight-1/orthophoto.tif", BuildOutcome.Completed, null, now.AddMinutes(-3)),
             new BuildNotificationLine("demo", "survey-2026", "flight-2/cloud.laz", BuildOutcome.Failed,
-                "The point cloud has no points", now.AddMinutes(-1))
+                "The point cloud has no points", now.AddMinutes(-1)),
+            new BuildNotificationLine("demo", "survey-2026", "flight-3/model.obj", BuildOutcome.WaitingForFiles,
+                "flight-3/model.mtl, flight-3/texture.png", now.AddMinutes(-2))
         ]);
     }
 }

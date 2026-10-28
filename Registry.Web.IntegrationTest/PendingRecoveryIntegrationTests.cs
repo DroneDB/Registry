@@ -44,6 +44,9 @@ using Shouldly;
 using Registry.Test.Common;
 using Registry.Web.Services.Caching;
 using Registry.Web.Services.Builds;
+using Registry.Web.Services.BuildNotifications;
+using Registry.Web.Hosting;
+using Registry.Web.Services.Users;
 
 namespace Registry.Web.Test;
 
@@ -175,6 +178,14 @@ public class PendingRecoveryIntegrationTests
                 });
         services.AddSingleton(query.Object);
         services.AddSingleton(TestJobs.Budget());
+        // The build notifications of the production hosts, over the real index; every user wants every e-mail, and no
+        // digest runs (it is scheduled minutes later, past the schedule polling of the workers)
+        services.AddBuildNotifications();
+        var email = new Mock<IEmailService>();
+        email.SetupGet(e => e.IsEnabled).Returns(true);
+        services.AddSingleton(email.Object);
+        services.AddSingleton(Mock.Of<IBuildNotificationLevels>(l =>
+            l.OfAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()) == Task.FromResult(BuildNotificationLevel.All)));
         _provider = services.BuildServiceProvider();
         Cache.Register(MagicStrings.BuildPendingTrackerCacheSeed, _ => Task.FromResult(Encoding.UTF8.GetBytes("{}")));
         using (var scope = _provider.CreateScope())
@@ -198,6 +209,9 @@ public class PendingRecoveryIntegrationTests
         IndexingStateHandler.EnsureRegistered();
         GlobalJobFilters.Filters.Add(new JobIndexStateFilter(_provider.GetRequiredService<IServiceScopeFactory>(),
             _provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<JobIndexStateFilter>>()));
+        // After the job index filter, as on the hosts: who asked is read from the row of the job that ended
+        GlobalJobFilters.Filters.Add(new BuildNotificationFilter(_provider.GetRequiredService<IServiceScopeFactory>(),
+            _provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<BuildNotificationFilter>>()));
         InstallFailureFilters(failureFirst: true);
         GlobalJobFilters.Filters.Add(_gate);
         var native = new NativeDdbWrapper();
@@ -296,6 +310,40 @@ public class PendingRecoveryIntegrationTests
         ddb.GetPendingBuildInfo().ShouldBeEmpty();
         ddb.IsBuildPending().ShouldBeFalse();
         (await Rows(ds)).Single(x => x.JobId == initial.JobId).CurrentState.ShouldBe("Succeeded");
+    }
+
+    [Test]
+    public async Task LateCompanion_TheUploaderIsToldTheModelWaitsForTheFile_ThenThatItsBuildCompleted()
+    {
+        const string ds = "companion-mail";
+        var ddb = await Dataset(ds);
+        StartWorkers();
+
+        // The uploader's build of the model finds late.mtl missing: one line tells them what it waits for
+        await Upload(ddb, ds, "model.obj", "mtllib late.mtl\n" + GridObj());
+        var initial = (await Rows(ds)).ShouldHaveSingleItem();
+        await WaitForState(initial.JobId, "Succeeded");
+        var hash = ddb.GetEntry("model.obj")!.Hash;
+        var wait = await Until(async () => (await Notifications(ds)).SingleOrDefault());
+        (wait.UserId, wait.Path, wait.Hash, wait.Outcome, wait.Error, wait.RequestJobId).ShouldBe(
+            ("uploader", "model.obj", hash, nameof(BuildOutcome.WaitingForFiles), "late.mtl", initial.JobId));
+
+        // The upload of late.mtl releases the build, which runs as the build service and answers the uploader's request
+        await Upload(ddb, ds, "late.mtl", "newmtl plain\nKd 0.8 0.6 0.4\n");
+        var done = await Until(async () =>
+            (await Notifications(ds)).SingleOrDefault(n => n.Outcome == nameof(BuildOutcome.Completed)));
+        ddb.IsBuildComplete("model.obj").ShouldBeTrue();
+        (await Rows(ds)).ShouldContain(x => x.JobId != initial.JobId && x.UserId == MagicStrings.AutoBuildServiceUserId &&
+                                           x.Path == "model.obj" && x.CurrentState == "Succeeded");
+        (done.UserId, done.Hash, done.RequestJobId).ShouldBe(("uploader", hash, initial.JobId));
+        (await Notifications(ds)).ShouldHaveSingleItem("the wait ended with the build");
+    }
+
+    private async Task<BuildNotification[]> Notifications(string ds)
+    {
+        using var scope = _provider.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<RegistryContext>().BuildNotifications.AsNoTracking()
+            .Where(n => n.OrgSlug == Org && n.DsSlug == ds).OrderBy(n => n.Id).ToArrayAsync();
     }
 
     [Test]
@@ -859,6 +907,14 @@ public class PendingRecoveryIntegrationTests
     // Worker state is committed by Hangfire's MySQL transactions: no event to await
     private static Task Until(Func<Task<bool>> condition) =>
         Eventually.Until(condition, "expected worker/cache state", TimeSpan.FromSeconds(45));
+
+    // The value once there is one
+    private static async Task<T> Until<T>(Func<Task<T?>> value) where T : class
+    {
+        T? found = null;
+        await Until(async () => (found = await value()) != null);
+        return found!;
+    }
 
     private static void MakeDue(IDDB ddb, string path)
     {

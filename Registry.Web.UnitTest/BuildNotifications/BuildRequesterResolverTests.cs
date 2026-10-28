@@ -13,7 +13,8 @@ namespace Registry.Web.Test.BuildNotifications;
 
 /// <summary>
 /// Who a build notification goes to, read from a real (SQLite) job index: the job's user, the user of the task a build
-/// came from, and for an automatic retry the user whose build of the same content failed and was not built since.
+/// came from, and for an automatic build the user whose build of the same content failed and was not built since, or else
+/// whose build of it waited for files (the wait the outbox keeps).
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~BuildRequesterResolverTests"
 /// </summary>
 [TestFixture]
@@ -52,9 +53,25 @@ public class BuildRequesterResolverTests
 
     private Task<BuildRequester?> Resolve(string? userId, string? jobId) => Resolve(new BuildRequest(userId, jobId));
 
-    private Task<BuildRequester?> Resolve(BuildRequest request) =>
-        new BuildRequesterResolver(_db.NewContext()).ResolveAsync(
+    private Task<BuildRequester?> Resolve(BuildRequest request)
+    {
+        var db = _db.NewContext();
+        return new BuildRequesterResolver(db, new BuildNotificationOutbox(db, TimeProvider.System)).ResolveAsync(
             new BuildReport(Org, Ds, Path, Hash, BuildOutcome.Completed, null, request), CancellationToken.None);
+    }
+
+    // The wait for files the outbox keeps of the build of userId's request jobId (wanted or not, sent or not)
+    private void Waited(string userId, string jobId, string hash = Hash, bool sent = true)
+    {
+        using var db = _db.NewContext();
+        db.BuildNotifications.Add(new BuildNotification
+        {
+            UserId = userId, OrgSlug = Org, DsSlug = Ds, Path = Path, Hash = hash,
+            Outcome = nameof(BuildOutcome.WaitingForFiles), Error = "cloud.txt", RequestJobId = jobId,
+            FinishedAtUtc = T0, SentAtUtc = sent ? T0 : null, PendingKey = sent ? null : jobId
+        });
+        db.SaveChanges();
+    }
 
     // The pending entries whose automatic retries ran out (FinishedBuildReporter.ReportGivenUpAsync)
     private Task<BuildRequester?> ResolveGivenUp() => Resolve(BuildRequest.RetriesGivenUp);
@@ -151,15 +168,25 @@ public class BuildRequesterResolverTests
     }
 
     [Test]
-    public async Task GivenUp_AfterAUserBuildThatSucceededWaitingForAMissingFile_GoesToThatUser()
+    public async Task GivenUp_AfterAUserBuildThatWaitedForFiles_GoesToThatUser()
     {
-        // The user's build succeeded but left the entry pending (a companion file is missing); the retries of a missing
-        // file succeed too, without building it, until the budget runs out
+        // The user's build found files missing (a success that built nothing); the files arrived, released the build,
+        // and its retries failed until the budget ran out
         Job("user-build", "jane", "Succeeded", 0);
-        Job("retry-1", Auto, "Succeeded", 2);
-        Job("retry-2", Auto, "Succeeded", 5);
+        Waited("jane", "user-build");
+        Job("release-build", Auto, "Failed", 30);
 
         (await ResolveGivenUp()).ShouldBe(new BuildRequester("jane", "user-build"));
+    }
+
+    [Test]
+    public async Task GivenUp_AfterAUserBuildThatSucceeded_WithoutAWait_GoesToNobody()
+    {
+        // A success is not a wait: only the wait the outbox keeps says that the build found files missing
+        Job("user-build", "jane", "Succeeded", 0);
+        Job("retry-1", Auto, "Failed", 2);
+
+        (await ResolveGivenUp()).ShouldBeNull();
     }
 
     [Test]
@@ -188,6 +215,56 @@ public class BuildRequesterResolverTests
         Job("retry-1", Auto, "Succeeded", 5);
 
         (await ResolveGivenUp()).ShouldBeNull();
+    }
+
+    // --- A build released by the files it waited for ---
+
+    [Test]
+    public async Task TheBuildThatFollowsTheFiles_GoesToTheUserWhoseBuildWaited_AndAnswersThatRequest()
+    {
+        // The user's build found the files missing and succeeded without building; the upload of a missing file released
+        // the entry, and the pending-build coordinator built it as the build service
+        Job("user-build", "jane", "Succeeded", 0);
+        Waited("jane", "user-build");
+
+        (await Resolve(Auto, "release-build")).ShouldBe(new BuildRequester("jane", "user-build"));
+    }
+
+    [Test]
+    public async Task TheBuildThatFollowsTheFiles_GoesToTheUserWhoseBuildWaited_AfterTheJobIndexForgotIt()
+    {
+        // The wait outlives the job history: the files may come months later
+        Waited("jane", "user-build");
+
+        (await Resolve(Auto, "release-build")).ShouldBe(new BuildRequester("jane", "user-build"));
+    }
+
+    [Test]
+    public async Task TheBuildThatFollowsTheFiles_GoesToTheFirstRequestThatWaited()
+    {
+        Waited("jane", "first-build");
+        Waited("bob", "second-build", sent: false);
+
+        (await Resolve(Auto, "release-build")).ShouldBe(new BuildRequester("jane", "first-build"));
+    }
+
+    [Test]
+    public async Task ABuildOfOtherContent_IsNotTheBuildThatFollowsTheFiles()
+    {
+        Waited("jane", "user-build", hash: "old-hash");
+
+        (await Resolve(Auto, "release-build")).ShouldBeNull();
+    }
+
+    [Test]
+    public async Task AFailedUserRequestAfterTheWait_IsTheOneAnswered()
+    {
+        // The latest request is the user's that failed: the retries that follow are that request's
+        Job("user-build", "jane", "Succeeded", 0);
+        Waited("jane", "user-build");
+        Job("bob-build", "bob", "Failed", 10);
+
+        (await Resolve(Auto, "retry")).ShouldBe(new BuildRequester("bob", "bob-build"));
     }
 
     [Test]

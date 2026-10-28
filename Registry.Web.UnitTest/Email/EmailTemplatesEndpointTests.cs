@@ -122,7 +122,8 @@ public class EmailTemplatesEndpointTests : IDisposable
             .ToDictionary(p => p!["name"]!.GetValue<string>(), p => p!["inSubject"]!.GetValue<bool>());
         placeholders.ShouldBe(new Dictionary<string, bool>
         {
-            ["appName"] = true, ["user"] = true, ["summary"] = true, ["failedCount"] = true, ["completedCount"] = true,
+            ["appName"] = true, ["user"] = true, ["summary"] = true, ["failedCount"] = true, ["waitingCount"] = true,
+            ["completedCount"] = true,
             ["datasets"] = true, ["builds"] = false, ["link"] = false, ["preferencesLink"] = false
         }, ignoreOrder: true);
         body["placeholders"]!.AsArray().ShouldAllBe(p => p!["description"]!.GetValue<string>().Length > 0);
@@ -219,7 +220,7 @@ public class EmailTemplatesEndpointTests : IDisposable
             new { subject = "{{summary}} <b>now</b>", body = "Hello {{user}} <script>x</script>\n\n{{builds}}\n\n{{link}}" });
 
         status.ShouldBe(HttpStatusCode.OK);
-        preview!["subject"]!.GetValue<string>().ShouldBe("1 build failed, 1 completed <b>now</b>");
+        preview!["subject"]!.GetValue<string>().ShouldBe("1 build failed, 1 waiting for files, 1 completed <b>now</b>");
         preview["text"]!.GetValue<string>().ShouldContain($"Hello {RegistryWebFactory.AdminUserName} <script>x</script>");
         var html = preview["html"]!.GetValue<string>();
         html.ShouldStartWith("<!DOCTYPE html>");

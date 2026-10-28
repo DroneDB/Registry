@@ -26,9 +26,9 @@
                         </td>
                         <td style="padding:8px;border-bottom:1px solid #e5e7eb;vertical-align:top;word-break:break-all;font-family:@EmailStyles.FontStack;">
                             @line.Path
-                            @if (!string.IsNullOrWhiteSpace(line.Error))
+                            @if (BuildNotificationValues.Detail(line) is { } detail)
                             {
-                                <div style="margin-top:4px;font-size:13px;color:@EmailStyles.Failed;word-break:break-word;">@line.Error.Trim()</div>
+                                <div style="margin-top:4px;font-size:13px;color:@BuildNotificationValues.OutcomeColor(line.Outcome);word-break:break-word;">@detail</div>
                             }
                         </td>
                         <td style="padding:8px;border-bottom:1px solid #e5e7eb;vertical-align:top;white-space:nowrap;font-weight:600;color:@BuildNotificationValues.OutcomeColor(line.Outcome);font-family:@EmailStyles.FontStack;">

@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 namespace Registry.Web.Services.BuildNotifications;
@@ -12,7 +13,13 @@ public enum BuildOutcome
     Completed,
 
     /// <summary>The build failed for good: no automatic retry is left.</summary>
-    Failed
+    Failed,
+
+    /// <summary>
+    /// The build waits for files the dataset lacks (an .obj without its .mtl): it runs when one of them is added. Told
+    /// once per content of the entry, with the failures (a user who wants only the failed builds gets it too).
+    /// </summary>
+    WaitingForFiles
 }
 
 /// <summary>One finished build in a notification e-mail.</summary>
@@ -20,7 +27,10 @@ public enum BuildOutcome
 /// <param name="DsSlug">The dataset.</param>
 /// <param name="Path">The entry that was built, relative to the dataset root.</param>
 /// <param name="Outcome">How it ended.</param>
-/// <param name="Error">A short reason when it failed (no server paths in it); null otherwise.</param>
+/// <param name="Error">
+/// A short reason when it failed, the missing files (dataset-relative) when it waits for files; no server paths in it;
+/// null otherwise.
+/// </param>
 /// <param name="FinishedAtUtc">When it ended (UTC).</param>
 public sealed record BuildNotificationLine(
     string OrgSlug,
@@ -39,36 +49,45 @@ public sealed record BuildNotificationLine(
 /// <param name="Builds">The builds, at least one.</param>
 public sealed record BuildNotificationModel(string UserName, IReadOnlyList<BuildNotificationLine> Builds)
 {
-    /// <summary>The builds, failures first, then in the order they ended.</summary>
+    // The order of the outcomes in an e-mail and in its summary: what needs the user first
+    private static readonly (BuildOutcome Outcome, string Words)[] OutcomeOrder =
+    [
+        (BuildOutcome.Failed, "failed"),
+        (BuildOutcome.WaitingForFiles, "waiting for files"),
+        (BuildOutcome.Completed, "completed")
+    ];
+
+    /// <summary>The builds, failures first, then the builds waiting for files, each kind in the order they ended.</summary>
     // Computed on read, not stored: a copy made with "with { Builds = ... }" must not keep the old order
     public IReadOnlyList<BuildNotificationLine> Ordered =>
-        [.. Builds.OrderBy(b => b.Outcome == BuildOutcome.Failed ? 0 : 1).ThenBy(b => b.FinishedAtUtc)];
+        [.. Builds.OrderBy(b => Array.FindIndex(OutcomeOrder, o => o.Outcome == b.Outcome)).ThenBy(b => b.FinishedAtUtc)];
 
     /// <summary>How many failed.</summary>
-    public int FailedCount => Builds.Count(b => b.Outcome == BuildOutcome.Failed);
+    public int FailedCount => CountOf(BuildOutcome.Failed);
+
+    /// <summary>How many wait for files.</summary>
+    public int WaitingCount => CountOf(BuildOutcome.WaitingForFiles);
 
     /// <summary>How many completed.</summary>
-    public int CompletedCount => Builds.Count(b => b.Outcome == BuildOutcome.Completed);
+    public int CompletedCount => CountOf(BuildOutcome.Completed);
+
+    private int CountOf(BuildOutcome outcome) => Builds.Count(b => b.Outcome == outcome);
 
     /// <summary>The datasets of the builds (<c>org/ds</c>), each once, in the order of <see cref="Ordered"/>.</summary>
     public IReadOnlyList<string> Datasets => [.. Ordered.Select(b => b.Dataset).Distinct(StringComparer.Ordinal)];
 
-    /// <summary>The counts in words, e.g. "2 builds failed, 3 completed".</summary>
+    /// <summary>The counts in words, e.g. "2 builds failed, 1 waiting for files, 3 completed".</summary>
     public string Summary
     {
         get
         {
-            var failed = FailedCount;
-            var completed = CompletedCount;
+            var counts = OutcomeOrder.Select(o => (Count: CountOf(o.Outcome), o.Words)).Where(c => c.Count > 0).ToList();
+            if (counts.Count == 0)
+                return "0 builds completed";
 
-            static string Builds(int count) => count == 1 ? "1 build" : $"{count} builds";
-
-            return (failed, completed) switch
-            {
-                (> 0, > 0) => $"{Builds(failed)} failed, {completed} completed",
-                (> 0, _) => $"{Builds(failed)} failed",
-                _ => $"{Builds(completed)} completed"
-            };
+            // The noun goes with the first count only: "2 builds failed, 3 completed"
+            var first = counts[0].Count == 1 ? "1 build" : $"{counts[0].Count} builds";
+            return string.Join(", ", counts.Select((c, i) => $"{(i == 0 ? first : c.Count.ToString(CultureInfo.InvariantCulture))} {c.Words}"));
         }
     }
 }

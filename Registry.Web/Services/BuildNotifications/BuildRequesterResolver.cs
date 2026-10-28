@@ -13,15 +13,18 @@ namespace Registry.Web.Services.BuildNotifications;
 
 /// <summary>
 /// <see cref="IBuildRequesterResolver"/> from the job index (<see cref="Data.Models.JobIndex"/>: the user, the parent
-/// task, the path, the hash and the state of every job).
+/// task, the path, the hash and the state of every job) and the waits for files the outbox keeps
+/// (<see cref="BuildNotificationOutbox.WaitRequesterAsync"/>).
 /// </summary>
 public sealed class BuildRequesterResolver : IBuildRequesterResolver
 {
     private readonly RegistryContext _db;
+    private readonly BuildNotificationOutbox _outbox;
 
-    public BuildRequesterResolver(RegistryContext db)
+    public BuildRequesterResolver(RegistryContext db, BuildNotificationOutbox outbox)
     {
         _db = db ?? throw new ArgumentNullException(nameof(db));
+        _outbox = outbox ?? throw new ArgumentNullException(nameof(outbox));
     }
 
     /// <inheritdoc />
@@ -37,8 +40,11 @@ public sealed class BuildRequesterResolver : IBuildRequesterResolver
         if (string.IsNullOrEmpty(request.UserId))
             return request.JobId == null ? null : await UserOfAsync(request.JobId, request.JobId, ct).ConfigureAwait(false);
 
-        // An automatic retry (the pending builds run as the build service): the user whose build of this content failed
-        return await RetriedRequestAsync(report, request.IsRetriesGivenUp, ct).ConfigureAwait(false);
+        // An automatic build (the pending builds run as the build service): the user whose build of this content failed,
+        // or else whose build of it found files missing and waits for them
+        return await RetriedRequestAsync(report, ct).ConfigureAwait(false) ??
+               await _outbox.WaitRequesterAsync(report.OrgSlug, report.DsSlug, report.Path, report.Hash, ct)
+                   .ConfigureAwait(false);
     }
 
     // The user of the job, or of its parent task when it has none; the line answers requestJobId
@@ -60,12 +66,10 @@ public sealed class BuildRequesterResolver : IBuildRequesterResolver
 
     // The latest request of a user (or of a task) to build this content, when it failed and nothing built it since: the
     // retries that follow a failure are that request's. A rescan or a completeness sweep of a built entry finds a
-    // succeeded build after the request (or a request that did not fail) and answers nobody.
-    // When the retries gave up, a request that succeeded counts too: libddb still lists the entry pending with this hash,
-    // so that success left it waiting for a missing file (a companion file, a texture) and the retries never built it.
-    // The job states cannot say more: the retries of a missing file succeed too, without building, so no "built since"
-    // check is possible there.
-    private async Task<BuildRequester?> RetriedRequestAsync(BuildReport report, bool givenUp, CancellationToken ct)
+    // succeeded build after the request (or a request that did not fail) and answers nobody. A request that succeeded
+    // without building (it found files missing) is not told apart here: the job states cannot say it, the wait the
+    // outbox keeps does.
+    private async Task<BuildRequester?> RetriedRequestAsync(BuildReport report, CancellationToken ct)
     {
         var self = report.Request.JobId;
         var builds = _db.JobIndices.AsNoTracking().Where(j =>
@@ -77,13 +81,7 @@ public sealed class BuildRequesterResolver : IBuildRequesterResolver
             .OrderByDescending(j => j.CreatedAtUtc)
             .Select(j => new { j.JobId, j.CurrentState, j.FailedAtUtc })
             .FirstOrDefaultAsync(ct).ConfigureAwait(false);
-        if (request == null)
-            return null;
-
-        if (givenUp && request.CurrentState == SucceededState.StateName)
-            return await UserOfAsync(request.JobId, request.JobId, ct).ConfigureAwait(false);
-
-        if (request.CurrentState != FailedState.StateName)
+        if (request == null || request.CurrentState != FailedState.StateName)
             return null;
 
         var builtSince = await builds

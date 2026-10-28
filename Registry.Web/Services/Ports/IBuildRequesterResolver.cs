@@ -10,8 +10,9 @@ public interface IBuildRequesterResolver
 {
     /// <summary>
     /// The user who asked for the build of <paramref name="report"/>: the job's user; for a task output (no user of its
-    /// own) the user of the task; for an automatic retry the user whose build of the same content failed and was not
-    /// built since. Null when nobody asked (a rescan, the completeness sweep, a system job).
+    /// own) the user of the task; for an automatic build the user whose build of the same content failed and was not
+    /// built since, or else the user whose build of it found files missing (the build that runs once they arrive). Null
+    /// when nobody asked (a rescan, the completeness sweep, a system job).
     /// </summary>
     Task<BuildRequester?> ResolveAsync(BuildReport report, CancellationToken ct);
 }

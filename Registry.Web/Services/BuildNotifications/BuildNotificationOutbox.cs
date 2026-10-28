@@ -15,11 +15,15 @@ namespace Registry.Web.Services.BuildNotifications;
 /// <summary>
 /// The lines of the build notification e-mails in the Registry database (<see cref="BuildNotification"/>), shared by every
 /// host: the recorder adds them, a digest run claims and sends the lines of one user, the daily cleanup removes the old
-/// ones. Every rule that keeps two hosts from sending a line twice is a condition of one statement here, never a check
+/// ones. The line of a build that waits for files is also the record of that wait until the build ends: it tells the
+/// wait of a content once, and names who the build that follows the files answers. Every rule that keeps two hosts from sending a line twice is a condition of one statement here, never a check
 /// followed by a write.
 /// </summary>
 public sealed class BuildNotificationOutbox
 {
+    // The outcome of the lines that record a wait for files, as stored
+    private const string Waiting = nameof(BuildOutcome.WaitingForFiles);
+
     private readonly RegistryContext _db;
     private readonly TimeProvider _time;
 
@@ -33,31 +37,55 @@ public sealed class BuildNotificationOutbox
 
     /// <summary>
     /// Adds the line of <paramref name="report"/> for <paramref name="requester"/>, unless the same news is already
-    /// waiting for that user (<see cref="BuildNotification.PendingKey"/>) or the request already has a line with this
-    /// outcome (<see cref="BuildNotification.RequestJobId"/>). The unique keys decide, so two hosts adding the same
+    /// waiting for that user (<see cref="BuildNotification.PendingKey"/>), the request already has a line with this
+    /// outcome (<see cref="BuildNotification.RequestJobId"/>), or, for a build waiting for files, the same content of the
+    /// entry already waited (see <see cref="WaitRequesterAsync"/>). The unique keys decide, so two hosts adding the same
     /// line at once add it once.
     /// </summary>
     /// <returns>The line added, or null when it was already there.</returns>
-    public async Task<BuildNotification?> AddAsync(BuildReport report, BuildRequester requester, CancellationToken ct)
+    public Task<BuildNotification?> AddAsync(BuildReport report, BuildRequester requester, CancellationToken ct) =>
+        InsertAsync(LineOf(report, requester, wanted: true), ct);
+
+    /// <summary>
+    /// Keeps the wait of <paramref name="report"/> (<see cref="BuildOutcome.WaitingForFiles"/>) for a
+    /// <paramref name="requester"/> whose preference does not want it: a line already sent, which no e-mail tells, but
+    /// which links the build that follows the files to that user (<see cref="WaitRequesterAsync"/>) and tells the wait of
+    /// this content once even when they want it later.
+    /// </summary>
+    /// <returns>The line added, or null when the content already waited.</returns>
+    public Task<BuildNotification?> AddUnwantedWaitAsync(BuildReport report, BuildRequester requester, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (report.Outcome != BuildOutcome.WaitingForFiles)
+            throw new ArgumentException($"Only a {nameof(BuildOutcome.WaitingForFiles)} report is kept unsent", nameof(report));
+
+        return InsertAsync(LineOf(report, requester, wanted: false), ct);
+    }
+
+    private BuildNotification LineOf(BuildReport report, BuildRequester requester, bool wanted)
     {
         ArgumentNullException.ThrowIfNull(report);
         ArgumentNullException.ThrowIfNull(requester);
 
-        var outcome = report.Outcome.ToString();
-        var line = new BuildNotification
+        var now = UtcNow;
+        return new BuildNotification
         {
             UserId = requester.UserId,
             OrgSlug = report.OrgSlug,
             DsSlug = report.DsSlug,
             Path = report.Path,
             Hash = report.Hash,
-            Outcome = outcome,
-            Error = report.Outcome == BuildOutcome.Failed ? report.Error : null,
+            Outcome = report.Outcome.ToString(),
+            Error = report.Outcome is BuildOutcome.Failed or BuildOutcome.WaitingForFiles ? report.Error : null,
             RequestJobId = requester.RequestJobId,
-            FinishedAtUtc = UtcNow,
-            PendingKey = PendingKeyOf(requester.UserId, report)
+            FinishedAtUtc = now,
+            PendingKey = wanted ? PendingKeyOf(requester.UserId, report) : null,
+            SentAtUtc = wanted ? null : now
         };
+    }
 
+    private async Task<BuildNotification?> InsertAsync(BuildNotification line, CancellationToken ct)
+    {
         // The common case of a repeat (a state applied twice, a retry chain giving up again) without a failed insert
         if (await IsKnownAsync(line, ct).ConfigureAwait(false))
             return null;
@@ -78,10 +106,42 @@ public sealed class BuildNotificationOutbox
         }
     }
 
-    private Task<bool> IsKnownAsync(BuildNotification line, CancellationToken ct) =>
-        _db.BuildNotifications.AsNoTracking().AnyAsync(n =>
-            n.PendingKey == line.PendingKey ||
-            (line.RequestJobId != null && n.RequestJobId == line.RequestJobId && n.Outcome == line.Outcome), ct);
+    private Task<bool> IsKnownAsync(BuildNotification line, CancellationToken ct)
+    {
+        var waits = line.Outcome == Waiting;
+        return _db.BuildNotifications.AsNoTracking().AnyAsync(n =>
+            (line.PendingKey != null && n.PendingKey == line.PendingKey) ||
+            (line.RequestJobId != null && n.RequestJobId == line.RequestJobId && n.Outcome == line.Outcome) ||
+            (waits && n.Outcome == Waiting && n.OrgSlug == line.OrgSlug && n.DsSlug == line.DsSlug &&
+             n.Path == line.Path && n.Hash == line.Hash), ct);
+    }
+
+    /// <summary>
+    /// The request whose build of <paramref name="hash"/> of the entry <paramref name="path"/> found files missing first
+    /// and still waits (the first line of that wait, wanted or not, sent or not); null when no request of it waits. The
+    /// build that runs when the files arrive (as the build service) answers that request.
+    /// </summary>
+    public async Task<BuildRequester?> WaitRequesterAsync(string orgSlug, string dsSlug, string path, string hash,
+        CancellationToken ct)
+    {
+        var wait = await WaitsOf(orgSlug, dsSlug, path, hash).AsNoTracking().OrderBy(n => n.Id)
+            .Select(n => new { n.UserId, n.RequestJobId })
+            .FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        return wait == null ? null : new BuildRequester(wait.UserId, wait.RequestJobId);
+    }
+
+    /// <summary>
+    /// Ends the wait of <paramref name="hash"/> of the entry <paramref name="path"/>: its build ended for good (built or
+    /// failed), so the lines of the wait go, sent or not (news that a build waits is stale once it ended), and a later
+    /// wait of the same content is news again.
+    /// </summary>
+    /// <returns>How many lines were removed.</returns>
+    public Task<int> EndWaitAsync(string orgSlug, string dsSlug, string path, string hash, CancellationToken ct) =>
+        WaitsOf(orgSlug, dsSlug, path, hash).ExecuteDeleteAsync(ct);
+
+    private IQueryable<BuildNotification> WaitsOf(string orgSlug, string dsSlug, string path, string hash) =>
+        _db.BuildNotifications.Where(n => n.Outcome == Waiting && n.OrgSlug == orgSlug && n.DsSlug == dsSlug &&
+                                          n.Path == path && n.Hash == hash);
 
     /// <summary>
     /// Makes the lines that answer the job <paramref name="jobId"/> answer no request any more: the job runs again from
@@ -180,10 +240,16 @@ public sealed class BuildNotificationOutbox
             .Where(n => n.UserId == userId && n.SentAtUtc == null && n.ClaimId == null)
             .MinAsync(n => (DateTime?)n.FinishedAtUtc, ct);
 
-    /// <summary>Deletes the lines sent before <paramref name="cutoffUtc"/>.</summary>
+    /// <summary>
+    /// Deletes the lines sent before <paramref name="cutoffUtc"/>, except the lines of a wait for files that has not ended
+    /// (<see cref="EndWaitAsync"/>), however old: they tell the wait once and name who the build that follows answers.
+    /// Those of a deleted dataset go with the others.
+    /// </summary>
     /// <returns>How many were deleted.</returns>
     public Task<int> DeleteSentBeforeAsync(DateTime cutoffUtc, CancellationToken ct) =>
-        _db.BuildNotifications.Where(n => n.SentAtUtc != null && n.SentAtUtc < cutoffUtc).ExecuteDeleteAsync(ct);
+        _db.BuildNotifications.Where(n => n.SentAtUtc != null && n.SentAtUtc < cutoffUtc &&
+                                          (n.Outcome != Waiting || n.DsSlug.StartsWith(SlugKeyedRows.TombstonePrefix)))
+            .ExecuteDeleteAsync(ct);
 
     /// <summary>
     /// The users whose lines still wait although they ended before <paramref name="cutoffUtc"/>: their digest was lost

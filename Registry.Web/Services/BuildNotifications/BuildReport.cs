@@ -12,9 +12,6 @@ public sealed record BuildRequest(string? UserId, string? JobId)
 {
     /// <summary>The request of an entry whose automatic retries ran out: no job ended, the build service gave up.</summary>
     public static BuildRequest RetriesGivenUp { get; } = new(MagicStrings.AutoBuildServiceUserId, null);
-
-    /// <summary>Whether this is <see cref="RetriesGivenUp"/>.</summary>
-    public bool IsRetriesGivenUp => this == RetriesGivenUp;
 }
 
 /// <summary>The final outcome of the build of one entry, and the request it answers.</summary>
@@ -23,7 +20,9 @@ public sealed record BuildRequest(string? UserId, string? JobId)
 /// <param name="Path">The entry, relative to the dataset root.</param>
 /// <param name="Hash">The hash of the entry that was built.</param>
 /// <param name="Outcome">How it ended.</param>
-/// <param name="Error">A short reason when it failed (see <see cref="ShortError"/>); null otherwise.</param>
+/// <param name="Error">
+/// A short reason when it failed, the missing files when it waits for files (see <see cref="ShortError"/>); null otherwise.
+/// </param>
 /// <param name="Request">Who asked.</param>
 public sealed record BuildReport(
     string OrgSlug,

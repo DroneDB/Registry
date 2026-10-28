@@ -8,10 +8,11 @@ namespace Registry.Web.Services.Ports;
 public interface IBuildOutcomeClassifier
 {
     /// <summary>
-    /// The final outcome of the build of <paramref name="path"/> whose job just ended, as libddb sees the entry now: a
-    /// succeeded job completed it only when libddb says it is built (not when a dependency is missing or another process
-    /// held the build lock); a failed job failed for good only when libddb keeps no pending marker for the entry (with
-    /// one, the pending-build retries take over). Null when the end is not final.
+    /// The outcome of the build of <paramref name="path"/> whose job just ended, as libddb sees the entry now: a
+    /// succeeded job completed it only when libddb says it is built (not when another process held the build lock); a
+    /// succeeded job that left the entry's pending marker waiting for files (libddb's <c>awaitingFiles</c>) waits for
+    /// files, which it names; a failed job failed for good only when libddb keeps no pending marker for the entry (with
+    /// one, the pending-build retries take over). Null when the end is no news.
     /// </summary>
     /// <param name="ddb">The dataset.</param>
     /// <param name="path">The entry.</param>
