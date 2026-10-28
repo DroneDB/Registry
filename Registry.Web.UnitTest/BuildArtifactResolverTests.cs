@@ -86,6 +86,28 @@ public class BuildArtifactResolverTests
     }
 
     [Test]
+    public void RenderSource_OfAGaussianSplat_IsItsLodModel_NotItsBoundsOrItsSpzFile()
+    {
+        // The splat thumbnail is drawn from the streamed model; the bounds sidecar and the SPZ file are listed too
+        _ddb.SetupBuilds(Built("scene.ply", EntryType.GaussianSplat,
+            TestBuilds.File(ArtifactRoles.GsplatBounds, "gsplat/bounds.json", "application/json"),
+            TestBuilds.File(ArtifactRoles.GsplatLod, "gsplat/model.rad"),
+            TestBuilds.File(ArtifactRoles.GsplatSpz, "gsplat/model.spz")));
+
+        _resolver.GetRenderSource(_ddb.Object, Entry("scene.ply", EntryType.GaussianSplat))
+            .ShouldBe($".ddb/build/{Hash}/gsplat/model.rad");
+    }
+
+    [Test]
+    public void RenderSource_OfAGaussianSplatWithOnlyItsBounds_IsNotAvailable()
+    {
+        _ddb.SetupBuilds(Built("scene.ply", EntryType.GaussianSplat,
+            TestBuilds.File(ArtifactRoles.GsplatBounds, "gsplat/bounds.json", "application/json")));
+
+        _resolver.GetRenderSource(_ddb.Object, Entry("scene.ply", EntryType.GaussianSplat)).ShouldBeNull();
+    }
+
+    [Test]
     public void RenderSource_WithoutTheRenderedArtifactYet_IsNotAvailable()
     {
         // Only the tiles exist (a partial build): the renderer's GeoPackage is not there
