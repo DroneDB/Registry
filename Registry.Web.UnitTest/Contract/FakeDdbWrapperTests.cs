@@ -251,6 +251,35 @@ public sealed class FakeDdbWrapperTests
             .ShouldBe(["layer.geojson", "ortho.tif"]);
     }
 
+    private const string CogMediaType = "image/tiff; application=geotiff; profile=cloud-optimized";
+
+    private static readonly string RecordedCog = $"{ContractFixture.RootPlaceholder}/.ddb/build/{BuiltHash}/cog/cog.tif";
+
+    // libddb answered DDBResolveBuildFile with the path alone, and answers with {"path", "mediaType"} since the
+    // manifest gives the media type: the fake reads whichever answer its fixture records, as the native adapter does
+    [Test]
+    public void ResolveBuildFile_RecordedAsAPath_IsTheFileOfTheCallersDataset()
+    {
+        var file = new RecordedResolveFake(JsonValue.Create(RecordedCog)).ResolveBuildFile(Root, BuiltHash, "cog/cog.tif");
+
+        file.ShouldBe(new ResolvedBuildFile($"{GenericRoot}/.ddb/build/{BuiltHash}/cog/cog.tif"));
+    }
+
+    [Test]
+    public void ResolveBuildFile_RecordedAsAnObject_IsTheFileOfTheCallersDataset_WithItsMediaType()
+    {
+        var recorded = new JsonObject { ["mediaType"] = CogMediaType, ["path"] = RecordedCog };
+
+        var file = new RecordedResolveFake(recorded).ResolveBuildFile(Root, BuiltHash, "cog/cog.tif");
+
+        file.ShouldBe(new ResolvedBuildFile($"{GenericRoot}/.ddb/build/{BuiltHash}/cog/cog.tif", CogMediaType));
+    }
+
+    private sealed class RecordedResolveFake(JsonNode recorded) : FakeDdbWrapper
+    {
+        protected override JsonNode RecordedResolveBuildFile() => recorded.DeepClone();
+    }
+
     [Test]
     public void UnrecordedCalls_Throw_NeverDefaults()
     {

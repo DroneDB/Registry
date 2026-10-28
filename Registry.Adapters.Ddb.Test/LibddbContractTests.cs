@@ -439,12 +439,17 @@ public unsafe class LibddbContractTests : TestBase
         var hash = GeoRasterHash();
         var expected = Path.GetFullPath(Path.Combine(root, ".ddb", "build", hash, "cog", "cog.tif"));
 
+        // The path alone, or {"path", "mediaType"} from a libddb that gives the manifest's media type: the
+        // adapter's parser reads either, and cog/cog.tif is a declared artifact, so the object form has its type
         foreach (var path in new[] { "cog/cog.tif", "cog\\cog.tif" })
         {
             Ok(NativeDdb.DDBResolveBuildFile(root, hash, path, out var output), $"DDBResolveBuildFile({path})");
-            var resolved = TakeString(output);
-            Path.GetFullPath(resolved).ShouldBe(expected);
-            File.Exists(resolved).ShouldBeTrue();
+            var answer = TakeString(output);
+            var resolved = NativeDdbWrapper.ParseResolvedBuildFile(answer);
+            Path.GetFullPath(resolved.Path).ShouldBe(expected);
+            File.Exists(resolved.Path).ShouldBeTrue();
+            if (answer.StartsWith('{'))
+                resolved.MediaType.ShouldNotBeNullOrEmpty();
         }
 
         Fails(NativeDdb.DDBResolveBuildFile(root, hash, "cog/missing.tif", out _), DdbResult.NotFound,

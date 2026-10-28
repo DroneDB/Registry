@@ -302,9 +302,10 @@ public class NativeDdbWrapper : IDdbWrapper
     /// The answer of <c>DDBResolveBuildFile</c>: the absolute path as a plain string (the libddb builds that give
     /// nothing else), or a JSON object <c>{"path": ..., "mediaType": ...}</c> where <c>mediaType</c> is the
     /// manifest's media type of a declared artifact and may be absent or null. An absolute path never starts with
-    /// '{', so the two shapes cannot be mistaken for each other.
+    /// '{', so the two shapes cannot be mistaken for each other. Public for the test doubles and the contract tests,
+    /// which read libddb's answer (recorded or live) through this one parser.
     /// </summary>
-    internal static ResolvedBuildFile ParseResolvedBuildFile(string output)
+    public static ResolvedBuildFile ParseResolvedBuildFile(string output)
     {
         if (!output.StartsWith('{'))
             return new ResolvedBuildFile(output);

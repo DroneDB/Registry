@@ -180,13 +180,20 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual ResolvedBuildFile? ResolveBuildFile(string ddbPath, string hash, string path)
     {
         if (hash == BuiltHash && Generic(path) == BuiltFile)
-            return new ResolvedBuildFile((string)WithRoot(ContractFixture.Load("resolve-build-file").Output, Generic(ddbPath))!);
+            return NativeDdbWrapper.ParseResolvedBuildFile(OutputText(WithRoot(RecordedResolveBuildFile(), Generic(ddbPath))));
 
         if (!BuildArtifacts.Value.Any(e => (string?)e!["build"]?["hash"] == hash))
             return null;
 
         throw NoFixture($"ResolveBuildFile({ddbPath}, {hash}, {path})");
     }
+
+    /// <summary>
+    /// The recorded output of <c>DDBResolveBuildFile</c> (<c>resolve-build-file</c>): the path as a JSON string
+    /// (libddb before the media type) or the object <c>{"path", "mediaType"}</c>; both read as the native adapter
+    /// reads them.
+    /// </summary>
+    protected virtual JsonNode RecordedResolveBuildFile() => ContractFixture.Load("resolve-build-file").Output;
 
     public virtual IReadOnlyList<EntryTypeInfo> GetEntryTypes() =>
         Serve<List<EntryTypeInfo>>("entry-types", "GetEntryTypes()");
@@ -481,6 +488,10 @@ public class FakeDdbWrapper : IDdbWrapper
         ?? throw new InvalidOperationException($"The fixture output is not a {typeof(T).Name}");
 
     private static string Compact(JsonNode? node) => node?.ToJsonString(NativeJson.Options) ?? "null";
+
+    // The text libddb returned for a recorded output: a string output is the string itself, not its JSON literal
+    private static string OutputText(JsonNode node) =>
+        node is JsonValue value && value.TryGetValue<string>(out var text) ? text : Compact(node);
 
     private static JsonNode MetaOutput(string? fixture, string? path, string key, string call)
     {
