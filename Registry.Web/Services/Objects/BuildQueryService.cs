@@ -111,8 +111,10 @@ public sealed class BuildQueryService
     /// <paramref name="role"/> the existing downloadable artifact of that role (the <c>.spz</c> a splat is exported to).
     /// </summary>
     /// <exception cref="Exceptions.InvalidDatasetPathException">The path is not a dataset path (no path: empty).</exception>
-    /// <exception cref="Exceptions.BadRequestException">The entry has no downloadable artifact.</exception>
-    /// <exception cref="Exceptions.NotFoundException">No such entry, it is not built yet or has no artifact of the role.</exception>
+    /// <exception cref="Exceptions.BadRequestException">The entry has no downloadable artifact, or its artifact of the
+    /// role is not one.</exception>
+    /// <exception cref="Exceptions.NotFoundException">No such entry, it is not built yet, its type has no artifact of the
+    /// role, or the artifact of the role is made on demand and was not made.</exception>
     public async Task<BuildDownload> GetBuildArtifactAsync(string orgSlug, string dsSlug, string? entryPath,
         string? role = null, CancellationToken ct = default)
     {
@@ -128,10 +130,8 @@ public sealed class BuildQueryService
         if (_artifacts.GetDownload(build, role) is { } download)
             return download;
 
-        // The artifact of a role that is made on demand (the .spz export) does not exist until a task made it
-        if (role != null && build.IsOwnBuild() && build.Build!.State == BuildState.Complete)
-            throw new NotFoundException(
-                $"Entry '{entryPath}' has no downloadable '{role}' artifact. It is made on demand: run its export first.");
+        if (role != null)
+            throw NoDownloadOfRole(entryPath, entry.Type, build, role);
 
         // A build that is complete without a downloadable artifact, or no build of its own: nothing to download
         if (!build.IsOwnBuild() || build.Build!.State == BuildState.Complete)
@@ -139,6 +139,32 @@ public sealed class BuildQueryService
 
         throw new NotFoundException(
             $"Build artifact not found for '{entryPath}'. The entry may not have been built yet.");
+    }
+
+    /// <summary>
+    /// Why the entry at <paramref name="entryPath"/> has no download of <paramref name="role"/>, from libddb's entry
+    /// types and the entry's manifest: its type has no such role (or it has no build of its own), the artifact exists
+    /// but is not offered as a download (no download name: the bounds of a splat), the entry is not built yet, or a
+    /// complete build lacks it (a role made on demand, the <c>.spz</c> export, until a task made it).
+    /// </summary>
+    private Exception NoDownloadOfRole(string entryPath, EntryType type, EntryBuildArtifacts build, string role)
+    {
+        var declared = _artifacts.EntryTypes.Any(t => t.Id == type && t.Roles.Contains(role, StringComparer.Ordinal));
+        if (!declared || !build.IsOwnBuild())
+            return new NotFoundException($"Entry '{entryPath}' has no '{role}' artifact.");
+
+        var own = build.Build!;
+        if (own.Find(role) != null)
+            return new BadRequestException($"The '{role}' artifact of entry '{entryPath}' cannot be downloaded.");
+
+        if (own.State != BuildState.Complete)
+            return new NotFoundException(
+                $"Entry '{entryPath}' is not built yet: its '{role}' artifact exists once its build is complete.");
+
+        return ArtifactRoles.MadeOnDemand.Contains(role)
+            ? new NotFoundException(
+                $"Entry '{entryPath}' has no '{role}' artifact yet. It is made on demand: run its export first.")
+            : new NotFoundException($"Entry '{entryPath}' has no '{role}' artifact.");
     }
 
     /// <summary>The builds deferred for a missing dependency (companion file or external tool).</summary>
@@ -156,6 +182,7 @@ public sealed class BuildQueryService
             Hash = p.Hash,
             MissingDependencies = p.MissingDependencies,
             LastAttempt = DateTimeOffset.FromUnixTimeSeconds(p.LastAttempt).UtcDateTime,
+            AwaitingFiles = p.AwaitingFiles,
             Artifacts = _urls.ArtifactLinks(orgSlug, dsSlug, builds[i]) is { Count: > 0 } links ? [.. links] : null
         }).ToArray();
     }

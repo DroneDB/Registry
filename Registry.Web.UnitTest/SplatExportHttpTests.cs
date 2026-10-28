@@ -210,11 +210,85 @@ public sealed class SplatExportHttpTests : DatasetAccessFixture
     {
         BuiltSplat("scene.ply");
 
-        var (response, body, _) = await SendAsync(Request(HttpMethod.Get,
-            $"{Ds}/build-artifact?path=scene.ply&role={ArtifactRoles.GsplatExport}", Caller.Reader));
+        var (response, body, _) = await DownloadAsync("scene.ply", ArtifactRoles.GsplatExport);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound, body);
-        body.ShouldContain("made on demand");
+        body.ShouldContain("made on demand: run its export first");
+    }
+
+    private Task<(HttpResponseMessage Response, string Body, JsonObject? Json)> DownloadAsync(string path, string role) =>
+        SendAsync(Request(HttpMethod.Get, $"{Ds}/build-artifact?path={path}&role={role}", Caller.Reader));
+
+    // Only a role made on demand tells to run its export: the other misses each say what is missing
+
+    [Test]
+    public async Task Download_ByRole_OfAnArtifactThatIsNotADownload_Is400()
+    {
+        // The bounds of a splat exist after its build, but the manifest offers them for no download (no downloadName)
+        BuiltSplat("scene.ply", TestBuilds.File(ArtifactRoles.GsplatBounds, "gsplat/bounds.json", "application/json"));
+
+        var (response, body, _) = await DownloadAsync("scene.ply", ArtifactRoles.GsplatBounds);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        body.ShouldContain($"The '{ArtifactRoles.GsplatBounds}' artifact of entry 'scene.ply' cannot be downloaded");
+        body.ShouldNotContain("made on demand");
+    }
+
+    [Test]
+    public async Task Download_ByRole_ThatTheEntryTypeDoesNotHave_Is404()
+    {
+        BuiltSplat("scene.ply");
+
+        var (response, body, _) = await DownloadAsync("scene.ply", ArtifactRoles.RasterCog);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound, body);
+        body.ShouldContain($"Entry 'scene.ply' has no '{ArtifactRoles.RasterCog}' artifact");
+        body.ShouldNotContain("made on demand");
+    }
+
+    [Test]
+    public async Task Download_ByRole_OfAnEntryThatIsNotBuildable_Is404()
+    {
+        Factory.DdbWrapper.Setup(d => d.GetEntry(_datasetFolder, "photo.jpg"))
+            .Returns(new Entry { Path = "photo.jpg", Hash = Hash, Type = EntryType.Image, Size = 1 });
+        Factory.DdbWrapper.Setup(d => d.GetBuildArtifacts(_datasetFolder, It.Is<string[]>(p => p.Single() == "photo.jpg")))
+            .Returns([TestBuilds.NotBuildable("photo.jpg", EntryType.Image)]);
+
+        var (response, body, _) = await DownloadAsync("photo.jpg", ArtifactRoles.GsplatLod);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound, body);
+        body.ShouldContain($"Entry 'photo.jpg' has no '{ArtifactRoles.GsplatLod}' artifact");
+    }
+
+    [Test]
+    public async Task Download_ByRole_OfAnAbsentArtifactOfACompleteBuild_ThatIsNotMadeOnDemand_Is404()
+    {
+        // A splat built with the level-of-detail model has no legacy .spz file
+        BuiltSplat("scene.ply");
+
+        var (response, body, _) = await DownloadAsync("scene.ply", ArtifactRoles.GsplatSpz);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound, body);
+        body.ShouldContain($"Entry 'scene.ply' has no '{ArtifactRoles.GsplatSpz}' artifact");
+        body.ShouldNotContain("made on demand");
+    }
+
+    [TestCase(BuildState.Building, ArtifactRoles.GsplatLod)]
+    [TestCase(BuildState.Pending, ArtifactRoles.GsplatLod)]
+    [TestCase(BuildState.None, ArtifactRoles.GsplatLod)]
+    [TestCase(BuildState.None, ArtifactRoles.GsplatExport)]
+    public async Task Download_ByRole_OfASplatThatIsNotBuilt_Is404(BuildState state, string role)
+    {
+        Factory.DdbWrapper.Setup(d => d.GetEntry(_datasetFolder, "late.ply"))
+            .Returns(new Entry { Path = "late.ply", Hash = Hash, Type = EntryType.GaussianSplat, Size = 1 });
+        Factory.DdbWrapper.Setup(d => d.GetBuildArtifacts(_datasetFolder, It.Is<string[]>(p => p.Single() == "late.ply")))
+            .Returns([TestBuilds.Build(_datasetFolder, "late.ply", EntryType.GaussianSplat, Hash, state)]);
+
+        var (response, body, _) = await DownloadAsync("late.ply", role);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound, body);
+        body.ShouldContain("Entry 'late.ply' is not built yet");
+        body.ShouldNotContain("made on demand");
     }
 
     [TestCase(Caller.Anonymous, HttpStatusCode.Unauthorized)]

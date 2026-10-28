@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Frozen;
+
 namespace Registry.Ports.DroneDB;
 
 /// <summary>
@@ -27,4 +30,11 @@ public static class ArtifactRoles
     /// only while the file exists, never a render source.
     /// </summary>
     public const string GsplatExport = "gsplat.export";
+
+    /// <summary>
+    /// The roles whose file a task makes on request, after the build (<see cref="GsplatExport"/>): libddb lists them
+    /// only while the file exists, and neither its entry types nor its manifest say which roles are made this way, so a
+    /// complete build without one is told to run the export rather than that the artifact does not exist.
+    /// </summary>
+    public static readonly FrozenSet<string> MadeOnDemand = new[] { GsplatExport }.ToFrozenSet(StringComparer.Ordinal);
 }
