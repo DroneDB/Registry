@@ -38,6 +38,21 @@ public class ResolvedBuildFileParsingTests
         NativeDdbWrapper.ParseResolvedBuildFile(output).ShouldBe(new ResolvedBuildFile("/b/x.json"));
     }
 
+    [Test]
+    public void AnObject_GivesTheVersionOfTheArtifact()
+    {
+        NativeDdbWrapper.ParseResolvedBuildFile("""{"path":"/b/3dtiles/tiles/0.b3dm","version":"77c1"}""")
+            .ShouldBe(new ResolvedBuildFile("/b/3dtiles/tiles/0.b3dm", null, "77c1"));
+    }
+
+    [TestCase("""{"path":"/b/x.json","version":null}""")]
+    [TestCase("""{"path":"/b/x.json","version":""}""")]
+    [TestCase("""{"path":"/b/x.json","version":7}""")]
+    public void AnObjectWithoutAVersion_HasNone(string output)
+    {
+        NativeDdbWrapper.ParseResolvedBuildFile(output).Version.ShouldBeNull();
+    }
+
     [TestCase("""{"mediaType":"image/tiff"}""")]
     [TestCase("""{"path":"","mediaType":"image/tiff"}""")]
     [TestCase("""{"path":3}""")]

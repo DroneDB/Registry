@@ -135,6 +135,31 @@ public class BuildManifestTests
         Should.Throw<DdbInvalidArgumentsException>(() => _resolver.ResolveFile(ddb, build.Hash!, "../../dbase.sqlite"));
     }
 
+    // The URL an entry listing hands to the Hub names, in its path, the version libddb reports for the file behind it,
+    // so Registry serves that URL as immutable; a forced rebuild rewrites the COG under the same hash and the listing
+    // hands out a new URL, which the browser has never kept
+    [Test]
+    public void ArtifactLink_NamesTheVersionOfItsFile_AndAForcedRebuildGivesANewOne()
+    {
+        var ddb = DatasetWithGeoRaster();
+        ddb.Build("ortho.tif");
+        var urls = TestPorts.Urls(Microsoft.Extensions.Options.Options.Create(
+            new HttpHostOptions { ExternalUrlOverride = "https://hub.example" }));
+        var hash = ddb.GetEntry("ortho.tif")!.Hash;
+        string CogLink() => urls.ArtifactLinks(Org, "ds", _resolver.GetBuild(ddb, "ortho.tif"))
+            .Single(l => l.Role == ArtifactRoles.RasterCog).Url;
+        string? CogVersion() => _resolver.ResolveFile(ddb, hash, "cog/cog.tif")!.Version;
+
+        var before = CogVersion().ShouldNotBeNull();
+        CogLink().ShouldBe($"https://hub.example/orgs/{Org}/ds/ds/build/{hash}@{before}/cog/cog.tif");
+
+        ddb.Build("ortho.tif", force: true);
+
+        var after = CogVersion().ShouldNotBeNull();
+        after.ShouldNotBe(before);
+        CogLink().ShouldBe($"https://hub.example/orgs/{Org}/ds/ds/build/{hash}@{after}/cog/cog.tif");
+    }
+
     [Test]
     public async Task Transfer_OfADeferredBuild_KeepsItDeferredInTheDestination()
     {

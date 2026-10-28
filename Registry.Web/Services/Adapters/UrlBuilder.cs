@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,6 +9,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters;
 
@@ -23,8 +25,11 @@ public class UrlBuilder : IUrlBuilder
         _accessor = accessor;
     }
 
-    public string BuildFileUrl(string orgSlug, string dsSlug, string hash, string path) =>
-        $"{GetLocalHost()}/orgs/{orgSlug}/ds/{dsSlug}/build/{hash}/" +
+    // build/{hash}/{path}, or build/{hash}@{version}/{path} when libddb gives the artifact's version
+    // (RoutesHelper.BuildFile, RoutesHelper.VersionedBuildFile)
+    private string BuildFileUrl(string orgSlug, string dsSlug, string hash, string? version, string path) =>
+        $"{GetLocalHost()}/orgs/{orgSlug}/ds/{dsSlug}/build/{hash}" +
+        (string.IsNullOrEmpty(version) ? "" : RoutesHelper.BuildVersionSeparator + Uri.EscapeDataString(version)) + "/" +
         string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
 
     public IReadOnlyList<ArtifactLinkDto> ArtifactLinks(string orgSlug, string dsSlug, EntryBuildArtifacts build)
@@ -39,7 +44,8 @@ public class UrlBuilder : IUrlBuilder
             .. own.Artifacts.Select(a => new ArtifactLinkDto
             {
                 Role = a.Role,
-                Url = BuildFileUrl(orgSlug, dsSlug, own.Hash!, a.Index is { Length: > 0 } index ? $"{a.Path}/{index}" : a.Path),
+                Url = BuildFileUrl(orgSlug, dsSlug, own.Hash!, a.Version,
+                    a.Index is { Length: > 0 } index ? $"{a.Path}/{index}" : a.Path),
                 MediaType = a.MediaType
             })
         ];

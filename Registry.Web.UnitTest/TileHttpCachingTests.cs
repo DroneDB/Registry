@@ -201,6 +201,21 @@ public class TileHttpCachingTests
         ETagOf(HashedContentCachePolicy.For("h1", "h1", "tile", 1, 2, 3)).ShouldBe(a, "v only affects freshness");
     }
 
+    // The freshness rule alone, which the files of a build share with tiles and thumbnails: immutable only when the
+    // URL names the current version, never without a current version to compare with
+    [Test]
+    public void Policy_CacheControl_IsImmutableOnlyForTheCurrentVersion()
+    {
+        var immutable = $"private, max-age={(int)HashedContentCachePolicy.VersionedMaxAge.TotalSeconds}, immutable";
+
+        HashedContentCachePolicy.CacheControlFor("3f2a", "3f2a").ShouldBe(immutable);
+        HashedContentCachePolicy.CacheControlFor("3f2a", "b07d").ShouldBe("private, no-cache");
+        HashedContentCachePolicy.CacheControlFor("3f2a", null).ShouldBe("private, no-cache");
+        HashedContentCachePolicy.CacheControlFor(null, null).ShouldBe("private, no-cache");
+        HashedContentCachePolicy.CacheControlFor("", "").ShouldBe("private, no-cache");
+        HashedContentCachePolicy.For(Hash, Hash, "tile").CacheControl.ShouldBe(immutable);
+    }
+
     // The validator the policy puts on a response
     private static string ETagOf(HashedContentCachePolicy policy)
     {

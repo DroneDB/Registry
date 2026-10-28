@@ -84,6 +84,15 @@ HEAD /orgs/{orgSlug}/ds/{dsSlug}/build/{hash}/{path}
   200 application/json string(binary)
   401 application/json ProblemDetails
   404 application/json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/build/{hash}@{version}/{path}
+  200 application/json string(binary)
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+HEAD /orgs/{orgSlug}/ds/{dsSlug}/build/{hash}@{version}/{path}
+  200 application/json string(binary)
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
 GET /orgs/{orgSlug}/ds/{dsSlug}/builds
   200 application/json array<PendingBuildInfoDto>
   400 application/json ProblemDetails

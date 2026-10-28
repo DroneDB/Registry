@@ -21,6 +21,10 @@ namespace Registry.Web.Utilities;
 /// URL can change at any time (the file at the path can be replaced), so the browser must
 /// revalidate on every use and gets a 304 while the entry is unchanged.
 /// </para>
+/// <para>
+/// <see cref="CacheControlFor"/> is that freshness rule on its own, for a response whose validator the caller
+/// has already (the files of a build, whose URL names the version of their artifact).
+/// </para>
 /// </summary>
 public sealed class HashedContentCachePolicy
 {
@@ -51,12 +55,23 @@ public sealed class HashedContentCachePolicy
         var opaque = string.Join("-", new object[] { hash }.Concat(variant).Append(AppVersion)
             .Select(p => Sanitize(Convert.ToString(p, System.Globalization.CultureInfo.InvariantCulture))));
 
-        var cacheControl = string.Equals(requestedVersion, hash, StringComparison.OrdinalIgnoreCase)
+        return new HashedContentCachePolicy(new EntityTagHeaderValue($"\"{opaque}\""),
+            CacheControlFor(hash, requestedVersion));
+    }
+
+    /// <summary>
+    /// The <c>Cache-Control</c> of a response whose URL may name the version of its content: when
+    /// <paramref name="requestedVersion"/> is <paramref name="currentVersion"/>, the URL identifies the bytes and the
+    /// browser may reuse them without asking for <see cref="VersionedMaxAge"/> (<c>immutable</c>); otherwise (no
+    /// version, a stale one, or no current version to compare with) it must revalidate on every use.
+    /// </summary>
+    /// <param name="currentVersion">What identifies the content now (an entry hash, the version of a build artifact).</param>
+    /// <param name="requestedVersion">The version the request's URL names, if any.</param>
+    public static string CacheControlFor(string? currentVersion, string? requestedVersion) =>
+        !string.IsNullOrEmpty(currentVersion) &&
+        string.Equals(requestedVersion, currentVersion, StringComparison.OrdinalIgnoreCase)
             ? $"private, max-age={(int)VersionedMaxAge.TotalSeconds}, immutable"
             : "private, no-cache";
-
-        return new HashedContentCachePolicy(new EntityTagHeaderValue($"\"{opaque}\""), cacheControl);
-    }
 
     /// <summary>
     /// True when the request's <c>If-None-Match</c> lists this ETag (weak comparison, as

@@ -68,9 +68,12 @@ public unsafe class LibddbContractTests : TestBase
           "kind": "file",
           "mediaType": "image/tiff; application=geotiff; profile=cloud-optimized",
           "path": "cog/cog.tif",
-          "role": "raster.cog"
+          "role": "raster.cog",
+          "version": "<volatile>"
         }
         """;
+
+    private const string VolatilePlaceholder = "<volatile>";
 
     // fixtures/build-artifacts.json: the build object of an entry that is not buildable
     private const string NotBuildableJson = """
@@ -350,7 +353,7 @@ public unsafe class LibddbContractTests : TestBase
 
         var artifacts = GetBuildArtifacts(root, GeoRasterName, TextName, "missing.tif");
 
-        ShouldEqualJson(Normalize(artifacts[0], root), ParseJson($$"""
+        ShouldEqualJson(WithVolatileVersions(Normalize(artifacts[0], root)), ParseJson($$"""
             {
               "build": {
                 "artifacts": [{{CogArtifactJson}}],
@@ -507,6 +510,8 @@ public unsafe class LibddbContractTests : TestBase
             File.Exists(resolved.Path).ShouldBeTrue();
             if (answer.StartsWith('{'))
                 resolved.MediaType.ShouldNotBeNullOrEmpty();
+            // The version the build object lists for the artifact: what the artifact's URL names
+            resolved.Version.ShouldBe(CogVersion(root));
         }
 
         Fails(NativeDdb.DDBResolveBuildFile(root, hash, "cog/missing.tif", out _), DdbResult.NotFound,
@@ -523,6 +528,29 @@ public unsafe class LibddbContractTests : TestBase
             "DDBResolveBuildFile(NULL path)");
     }
 
+    // A forced rebuild rewrites the COG under the same hash: its version changes, in the build object and in what
+    // DDBResolveBuildFile reports, so a URL with the old version is no longer the current one
+    [Test]
+    public void ArtifactVersion_ChangesWithAForcedRebuild_UnderTheSameHash()
+    {
+        using var area = new TestArea(nameof(ArtifactVersion_ChangesWithAForcedRebuild_UnderTheSameHash));
+        var root = CreateDataset(area, "dataset", withGeoRaster: true);
+        DdbWrapper.Build(root, GeoRasterName);
+        var hash = GeoRasterHash();
+        var before = CogVersion(root);
+        before.ShouldNotBeNullOrEmpty();
+        before.ShouldMatch("^[0-9a-f]+$");
+        CogVersion(root).ShouldBe(before, "reading the build changes nothing");
+
+        DdbWrapper.Build(root, GeoRasterName, force: true);
+
+        GeoRasterHash().ShouldBe(hash);
+        var after = CogVersion(root);
+        after.ShouldNotBeNullOrEmpty();
+        after.ShouldNotBe(before);
+        DdbWrapper.ResolveBuildFile(root, hash, "cog/cog.tif")!.Version.ShouldBe(after);
+    }
+
     // fixtures/copy-build-artifacts.json
     [Test]
     public void CopyBuildArtifacts_CopiesTheBuildToAnotherDataset()
@@ -534,7 +562,7 @@ public unsafe class LibddbContractTests : TestBase
         var hash = GeoRasterHash();
 
         Ok(NativeDdb.DDBCopyBuildArtifacts(source, destination, hash, out var output), "DDBCopyBuildArtifacts");
-        ShouldEqualJson(TakeJson(output), ParseJson($$"""
+        ShouldEqualJson(WithVolatileVersions(TakeJson(output)), ParseJson($$"""
             {"artifacts": [{{CogArtifactJson}}], "hash": "{{hash}}", "pending": false}
             """));
         File.Exists(Path.Combine(destination, ".ddb", "build", hash, "cog", "cog.tif")).ShouldBeTrue();
@@ -905,6 +933,29 @@ public unsafe class LibddbContractTests : TestBase
     }
 
     private static string Sha256(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+
+    // The version of the COG of the contract GeoRaster, read through the adapter's port type
+    private static string? CogVersion(string root) =>
+        DdbWrapper.GetBuildArtifacts(root, [GeoRasterName]).ShouldHaveSingleItem().Build!.Artifacts
+            .ShouldHaveSingleItem().Version;
+
+    /// <summary>
+    /// The fixtures' normalisation of the version of each artifact (it follows the files of the build): a lowercase
+    /// hex string, replaced by <c>"&lt;volatile&gt;"</c>.
+    /// </summary>
+    private static JToken WithVolatileVersions(JToken token)
+    {
+        var copy = token.DeepClone();
+        IEnumerable<JToken> tokens = copy is JContainer container ? container.DescendantsAndSelf() : [copy];
+        foreach (var artifact in tokens.OfType<JProperty>().Where(p => p.Name == "artifacts")
+                     .SelectMany(p => p.Value.Children<JObject>()))
+        {
+            ((string?)artifact["version"]).ShouldNotBeNull().ShouldMatch("^[0-9a-f]+$", $"at {artifact.Path}");
+            artifact["version"] = VolatilePlaceholder;
+        }
+
+        return copy;
+    }
 
     /// <summary>The fixtures' &lt;root&gt; placeholder (README "Normalisation"): the dataset folder in its native and generic form, then '\' as '/'.</summary>
     private static JToken Normalize(JToken token, string root)

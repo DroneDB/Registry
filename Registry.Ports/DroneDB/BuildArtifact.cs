@@ -47,4 +47,13 @@ public sealed class BuildArtifact
     [JsonPropertyName("fallbackFor")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? FallbackFor { get; set; }
+
+    /// <summary>
+    /// Identifies the bytes of the file a client opens (the file, or the <see cref="Index"/> of a directory) as they
+    /// are now: libddb changes it whenever a build rewrites or replaces that file under the same hash (a forced
+    /// rebuild, a rebuild to a newer layout). Opaque, compared and never parsed; null from a libddb without it.
+    /// </summary>
+    [JsonPropertyName("version")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Version { get; set; }
 }

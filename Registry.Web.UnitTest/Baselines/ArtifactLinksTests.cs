@@ -51,6 +51,26 @@ public sealed class ArtifactLinksTests
         ]);
     }
 
+    // libddb's version of each artifact goes in the path of its URL (build/{hash}@{version}/...), where the relative
+    // references of a directory (its tiles) keep it: Registry serves a URL at the current version as immutable
+    [Test]
+    public void TheVersionOfEachArtifact_IsInThePathOfItsLink()
+    {
+        var build = TestBuilds.Build(Folder, "splat.ply", EntryType.GaussianSplat, Hash, BuildState.Complete,
+            TestBuilds.File("gsplat.lod", "gsplat/model.rad", version: "3f2a"),
+            TestBuilds.File("gsplat.bounds", "gsplat/bounds.json", "application/json", version: "91c"),
+            TestBuilds.Directory("model.3dtiles", "3dtiles", "tileset.json", version: "77c1"));
+
+        var links = Urls.ArtifactLinks("org", "ds", build);
+
+        links.Select(l => (l.Role, l.Url)).ShouldBe(
+        [
+            ("gsplat.lod", $"https://hub.example/orgs/org/ds/ds/build/{Hash}@3f2a/gsplat/model.rad"),
+            ("gsplat.bounds", $"https://hub.example/orgs/org/ds/ds/build/{Hash}@91c/gsplat/bounds.json"),
+            ("model.3dtiles", $"https://hub.example/orgs/org/ds/ds/build/{Hash}@77c1/3dtiles/tileset.json")
+        ]);
+    }
+
     [Test]
     public void ASidecar_HasNoLinks_ItsBuildIsItsMainFiles()
     {

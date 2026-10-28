@@ -239,7 +239,8 @@
       "downloadName": "DownloadName-text",
       "index": "Index-text",
       "legacy": true,
-      "fallbackFor": "FallbackFor-text"
+      "fallbackFor": "FallbackFor-text",
+      "version": "Version-text"
     },
     "sparse": {
       "role": null,
@@ -260,7 +261,8 @@
           "downloadName": "DownloadName-text",
           "index": "Index-text",
           "legacy": true,
-          "fallbackFor": "FallbackFor-text"
+          "fallbackFor": "FallbackFor-text",
+          "version": "Version-text"
         }
       ],
       "pending": true
@@ -438,7 +440,8 @@
           "downloadName": "DownloadName-text",
           "index": "Index-text",
           "legacy": true,
-          "fallbackFor": "FallbackFor-text"
+          "fallbackFor": "FallbackFor-text",
+          "version": "Version-text"
         }
       ]
     },
@@ -482,7 +485,8 @@
             "downloadName": "DownloadName-text",
             "index": "Index-text",
             "legacy": true,
-            "fallbackFor": "FallbackFor-text"
+            "fallbackFor": "FallbackFor-text",
+            "version": "Version-text"
           }
         ]
       }

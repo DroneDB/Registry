@@ -11,6 +11,7 @@ using System.Text.Json.Nodes;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
+using Registry.Ports.Json;
 
 namespace Registry.Adapters.DroneDB;
 
@@ -300,8 +301,9 @@ public class NativeDdbWrapper : IDdbWrapper
 
     /// <summary>
     /// The answer of <c>DDBResolveBuildFile</c>: the absolute path as a plain string (the libddb builds that give
-    /// nothing else), or a JSON object <c>{"path": ..., "mediaType": ...}</c> where <c>mediaType</c> is the
-    /// manifest's media type of a declared artifact and may be absent or null. An absolute path never starts with
+    /// nothing else), or a JSON object <c>{"path": ..., "mediaType": ..., "version": ...}</c> where <c>mediaType</c>
+    /// is the manifest's media type of a declared artifact and <c>version</c> the version of the artifact the file
+    /// belongs to, each of which may be absent or null. An absolute path never starts with
     /// '{', so the two shapes cannot be mistaken for each other. Public for the test doubles and the contract tests,
     /// which read libddb's answer (recorded or live) through this one parser.
     /// </summary>
@@ -312,17 +314,17 @@ public class NativeDdbWrapper : IDdbWrapper
 
         using var document = JsonDocument.Parse(output);
         var root = document.RootElement;
-        var file = root.TryGetProperty("path", out var path) && path.ValueKind == JsonValueKind.String
-            ? path.GetString()
-            : null;
-        if (string.IsNullOrEmpty(file))
-            throw new DdbException($"{nameof(NativeDdb.DDBResolveBuildFile)} returned no path");
+        var file = OptionalString(root, "path") ??
+                   throw new DdbException($"{nameof(NativeDdb.DDBResolveBuildFile)} returned no path");
 
-        var mediaType = root.TryGetProperty("mediaType", out var type) && type.ValueKind == JsonValueKind.String
-            ? type.GetString()
-            : null;
-        return new ResolvedBuildFile(file, string.IsNullOrEmpty(mediaType) ? null : mediaType);
+        return new ResolvedBuildFile(file, OptionalString(root, "mediaType"), OptionalString(root, "version"));
     }
+
+    // A string member of a libddb answer: null when it is absent, empty or not a string
+    private static string? OptionalString(JsonElement owner, string name) =>
+        owner.Member(name) is { ValueKind: JsonValueKind.String } value && value.GetString() is { Length: > 0 } text
+            ? text
+            : null;
 
     public IReadOnlyList<EntryTypeInfo> GetEntryTypes() => EntryTypes.Value;
 

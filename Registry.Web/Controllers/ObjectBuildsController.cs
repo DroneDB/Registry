@@ -59,15 +59,19 @@ public class ObjectBuildsController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Gets a file from a build by hash and path.
+    /// Gets a file from a build by hash and path. The URLs of the artifacts of an entry name the version of the
+    /// artifact (<c>build/{hash}@{version}/{path}</c>): while it is the current one, the file may be kept without
+    /// revalidation.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>
     /// <param name="hash">The build hash.</param>
     /// <param name="path">The path to the file within the build.</param>
+    /// <param name="version">The version of the artifact the URL names, if any.</param>
     /// <returns>The build file.</returns>
     [BasicAuthentication]
-    [HttpGet("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(GetBuildFile))]
+    [HttpGet(RoutesHelper.BuildFile, Name = nameof(ObjectsController) + "." + nameof(GetBuildFile))]
+    [HttpGet(RoutesHelper.VersionedBuildFile, Name = nameof(ObjectsController) + "." + nameof(GetBuildFile) + "Versioned")]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -76,21 +80,24 @@ public class ObjectBuildsController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string hash,
-        [FromRoute] string? path, CancellationToken ct)
+        [FromRoute] string? path,
+        [FromRoute] string? version, CancellationToken ct)
     {
         var res = await _builds.GetBuildFileAsync(orgSlug, dsSlug, hash, path, ct: ct);
 
-        return BuildFileResult(res);
+        return BuildFileResult(res, version);
     }
 
     // GET and HEAD send the same file result: the executor sends the headers (length, type, validators, ranges) of
-    // both and the body of GET only. The type is the manifest's when libddb gives one, else the extension's. A
-    // client may keep the file but must ask again before it uses it (If-None-Match, answered 304): a forced rebuild
-    // rewrites the file under the same hash, so it is never immutable. The tag is weak for a type the response
-    // compression encodes (a JSON tileset), strong for the binary files a viewer reads by ranges
-    private PhysicalFileResult BuildFileResult(ResolvedBuildFile file)
+    // both and the body of GET only. The type is the manifest's when libddb gives one, else the extension's. A URL
+    // that names the current version of the file's artifact identifies its bytes: the browser keeps them without
+    // asking (immutable, for the bounded VersionedMaxAge), every range of a file read by ranges included. Any other
+    // URL (no version, or one a rebuild replaced) may change under the same hash, so the client must ask again
+    // before it uses the file (If-None-Match, answered 304). The tag is weak for a type the response compression
+    // encodes (a JSON tileset), strong for the binary files a viewer reads by ranges
+    private PhysicalFileResult BuildFileResult(ResolvedBuildFile file, string? requestedVersion)
     {
-        Response.Headers.CacheControl = "private, no-cache";
+        Response.Headers.CacheControl = HashedContentCachePolicy.CacheControlFor(file.Version, requestedVersion);
         return FileTaggedPhysicalFile(file.Path, file.MediaType ?? MimeUtility.GetMimeMapping(file.Path), _compression);
     }
 
@@ -102,9 +109,11 @@ public class ObjectBuildsController : ControllerBaseEx
     /// <param name="dsSlug">The dataset slug.</param>
     /// <param name="hash">The build hash.</param>
     /// <param name="path">The path to the file within the build.</param>
+    /// <param name="version">The version of the artifact the URL names, if any.</param>
     /// <returns>The headers of the file if it exists, NotFound otherwise.</returns>
     [BasicAuthentication]
-    [HttpHead("build/{hash}/{*path}", Name = nameof(ObjectsController) + "." + nameof(CheckBuildFile))]
+    [HttpHead(RoutesHelper.BuildFile, Name = nameof(ObjectsController) + "." + nameof(CheckBuildFile))]
+    [HttpHead(RoutesHelper.VersionedBuildFile, Name = nameof(ObjectsController) + "." + nameof(CheckBuildFile) + "Versioned")]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -112,11 +121,12 @@ public class ObjectBuildsController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string hash,
-        [FromRoute] string? path, CancellationToken ct)
+        [FromRoute] string? path,
+        [FromRoute] string? version, CancellationToken ct)
     {
         var res = await _builds.FindBuildFileAsync(orgSlug, dsSlug, hash, path, ct: ct);
 
-        return res == null ? NotFound() : BuildFileResult(res);
+        return res == null ? NotFound() : BuildFileResult(res, version);
     }
 
     /// <summary>

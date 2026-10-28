@@ -140,3 +140,9 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   fixture of the deferred `roads.shp`, `false` in the others), the value `pending-build-info` reports for the same
   marker. `EntryBuild.AwaitingFiles` reads it (absent from an older libddb: false) and the entry listing passes it to
   clients as `buildAwaitingFiles` next to `buildMissingDependencies`. No other fixture, schema or vector changed.
+* 2026-10-28: DroneDB `a9f5e437ca3ad809442ce0d0bdccedec82a4b2a5`: an artifact of the build object (`build-artifacts`,
+  `list-entries-ex`) and of `copy-build-artifacts` gains `version` (string, required in the schema), and
+  `resolve-build-file` gains `version` (the version of the artifact the file belongs to; the tiles of a directory have the
+  one of its index): it changes whenever a build rewrites or replaces the file a client opens under the same hash. The
+  fixtures normalise it to `"<volatile>"`. `BuildArtifact.Version` and `ResolvedBuildFile.Version` read it (absent from an
+  older libddb: null, and the URLs of the artifact stay unversioned). No other fixture, schema or vector changed.

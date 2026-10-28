@@ -16,6 +16,7 @@ using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Registry.Web.Data;
 using Registry.Web.Test.Support;
+using Registry.Web.Utilities;
 using Shouldly;
 
 namespace Registry.Web.Test.Baselines;
@@ -28,8 +29,10 @@ namespace Registry.Web.Test.Baselines;
 /// went to <c>PhysicalFile</c>, which threw <c>FileNotFoundException</c> while the result executed); libddb
 /// resolves the file now (<c>DDBResolveBuildFile</c>), so it is a 404.</item>
 /// <item><c>GET</c> and <c>HEAD</c> of a build file send the manifest's media type when libddb gives one (the
-/// extension's otherwise), <c>Cache-Control: private, no-cache</c> and file validators (<c>ETag</c>, 304,
-/// <c>Range</c> answered 206).</item>
+/// extension's otherwise), file validators (<c>ETag</c>, 304, <c>Range</c> answered 206) and
+/// <c>Cache-Control: private, no-cache</c>, or <c>private, max-age=&lt;bounded&gt;, immutable</c> when the URL names
+/// the current version of the file's artifact (<c>build/{hash}@{version}/{path}</c>), so a browser reads a file it
+/// streams by ranges (a splat's <c>.rad</c>) from its cache without revalidating every range.</item>
 /// <item><c>GET build-artifact</c> serves the manifest's artifact and download name with the media type
 /// Registry has always sent (the switch to the manifest's media types is a pending decision).</item>
 /// </list>
@@ -98,15 +101,39 @@ public sealed class BuildFilesHttpTests : IDisposable
         return await _client.SendAsync(request);
     }
 
-    private string Resolves(string relative, string content, string? mediaType = null)
+    private string Resolves(string relative, string content, string? mediaType = null, string? version = null)
     {
         var file = BuildFile(relative, content);
         _factory.DdbWrapper.Setup(d => d.ResolveBuildFile(_datasetFolder, Hash, relative))
-            .Returns(new ResolvedBuildFile(file, mediaType));
+            .Returns(new ResolvedBuildFile(file, mediaType, version));
         return file;
     }
 
     private static string BuildFileUrl(string relative) => $"/orgs/{Org}/ds/{Ds}/build/{Hash}/{relative}";
+
+    // The URL of a build file at a version of its artifact, as the artifact links of an entry name it
+    private static string VersionedBuildFileUrl(string version, string relative) =>
+        $"/orgs/{Org}/ds/{Ds}/build/{Hash}@{version}/{relative}";
+
+    private static readonly int VersionedMaxAgeSeconds = (int)HashedContentCachePolicy.VersionedMaxAge.TotalSeconds;
+
+    private static void ShouldBeImmutable(HttpResponseMessage response)
+    {
+        var cacheControl = response.Headers.CacheControl!;
+        cacheControl.Private.ShouldBeTrue("the file sits behind dataset authorization");
+        cacheControl.NoCache.ShouldBeFalse();
+        cacheControl.MaxAge.ShouldBe(TimeSpan.FromSeconds(VersionedMaxAgeSeconds));
+        cacheControl.Extensions.Select(e => e.Name).ShouldContain("immutable");
+    }
+
+    private static void ShouldBeRevalidated(HttpResponseMessage response)
+    {
+        var cacheControl = response.Headers.CacheControl!;
+        cacheControl.Private.ShouldBeTrue();
+        cacheControl.NoCache.ShouldBeTrue();
+        cacheControl.ToString().ShouldNotContain("immutable");
+        cacheControl.MaxAge.ShouldBeNull();
+    }
 
     [Test]
     public async Task BuildFile_NotPartOfTheBuild_Is404NotA500()
@@ -201,26 +228,117 @@ public sealed class BuildFilesHttpTests : IDisposable
         (await response.Content.ReadAsStringAsync()).ShouldBe("2345");
     }
 
-    // The viewer streams a .rad by ranges and keeps what it fetched: it may reuse the file only after the server
-    // says it is current (no-cache), and never without asking (not immutable: a forced rebuild rewrites the file under
-    // the same hash)
+    // A URL without a version names whatever the build holds at that path: a forced rebuild rewrites the file under
+    // the same hash, so the client may keep it but must ask before it reuses it (no-cache), whatever version libddb
+    // reports
     [TestCase("GET")]
     [TestCase("HEAD")]
-    public async Task BuildFile_CanBeKept_ButMustBeRevalidated(string method)
+    public async Task BuildFile_WithoutAVersion_CanBeKept_ButMustBeRevalidated(string method)
     {
-        Resolves("gsplat/model.rad", "0123456789");
+        Resolves("gsplat/model.rad", "0123456789", version: "3f2a");
 
         using var response = await SendAsync(new HttpMethod(method), BuildFileUrl("gsplat/model.rad"));
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var cacheControl = response.Headers.CacheControl!;
-        cacheControl.Private.ShouldBeTrue();
-        cacheControl.NoCache.ShouldBeTrue();
-        cacheControl.ToString().ShouldNotContain("immutable");
-        cacheControl.MaxAge.ShouldBeNull();
+        ShouldBeRevalidated(response);
         response.Headers.ETag.ShouldNotBeNull();
         response.Headers.ETag!.IsWeak.ShouldBeFalse();
         response.Content.Headers.LastModified.ShouldNotBeNull();
+    }
+
+    // The viewer streams a .rad by ranges. A URL that names the current version of the artifact identifies its bytes,
+    // so the browser keeps every range without revalidating it (on revisits Chromium revalidated each range, and
+    // sometimes answered one range with the whole cached file); libddb resolves the file by its path alone
+    [TestCase("GET")]
+    [TestCase("HEAD")]
+    public async Task BuildFile_AtTheCurrentVersionOfItsArtifact_IsImmutable_ForTheBoundedMaxAge(string method)
+    {
+        Resolves("gsplat/model.rad", "0123456789", "application/octet-stream", version: "3f2a");
+
+        using var response = await SendAsync(new HttpMethod(method), VersionedBuildFileUrl("3f2a", "gsplat/model.rad"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        ShouldBeImmutable(response);
+        response.Headers.ETag!.IsWeak.ShouldBeFalse();
+        response.Content.Headers.ContentLength.ShouldBe(10);
+        _factory.DdbWrapper.Verify(d => d.ResolveBuildFile(_datasetFolder, Hash, "gsplat/model.rad"), Times.Once);
+    }
+
+    [Test]
+    public async Task BuildFile_AtTheCurrentVersion_AnswersARangeRequestWith206_ThatIsImmutable()
+    {
+        Resolves("gsplat/model.rad", "0123456789", "application/octet-stream", version: "3f2a");
+
+        using var response = await SendAsync(HttpMethod.Get, VersionedBuildFileUrl("3f2a", "gsplat/model.rad"),
+            r => r.Headers.Range = new RangeHeaderValue(2, 5));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.PartialContent);
+        response.Content.Headers.ContentRange!.ToString().ShouldBe("bytes 2-5/10");
+        (await response.Content.ReadAsStringAsync()).ShouldBe("2345");
+        ShouldBeImmutable(response);
+    }
+
+    // A rebuild gave the artifact a new version: a URL with the old one (a page opened before the rebuild) still gets
+    // the file, but as one that can change, revalidated (304 while it is the same)
+    [Test]
+    public async Task BuildFile_AtAVersionARebuildReplaced_MustBeRevalidated_AndIs304WhileUnchanged()
+    {
+        Resolves("gsplat/model.rad", "0123456789", version: "b07d");
+        using var first = await SendAsync(HttpMethod.Get, VersionedBuildFileUrl("3f2a", "gsplat/model.rad"));
+
+        using var again = await SendAsync(HttpMethod.Get, VersionedBuildFileUrl("3f2a", "gsplat/model.rad"),
+            r => r.Headers.IfNoneMatch.Add(first.Headers.ETag!));
+
+        first.StatusCode.ShouldBe(HttpStatusCode.OK);
+        ShouldBeRevalidated(first);
+        (await first.Content.ReadAsStringAsync()).ShouldBe("0123456789");
+        again.StatusCode.ShouldBe(HttpStatusCode.NotModified);
+        again.Headers.ETag.ShouldBe(first.Headers.ETag);
+        ShouldBeRevalidated(again);
+    }
+
+    // A libddb that reports no version cannot vouch for any: a version in the URL changes nothing
+    [Test]
+    public async Task BuildFile_WhoseArtifactHasNoVersion_IsNeverImmutable()
+    {
+        Resolves("gsplat/model.rad", "0123456789");
+
+        using var response = await SendAsync(HttpMethod.Get, VersionedBuildFileUrl("3f2a", "gsplat/model.rad"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        ShouldBeRevalidated(response);
+    }
+
+    // The version is in the path, so the files a tileset.json names by relative URL carry it: libddb gives every file
+    // of a directory artifact the version of its index, and the tiles are kept like the index. The JSON index keeps
+    // its weak tag (the response compression encodes it)
+    [Test]
+    public async Task BuildFile_OfADirectoryArtifact_AtItsVersion_IsImmutable_IndexAndTilesAlike()
+    {
+        Resolves("3dtiles/tileset.json", Tileset, "application/json", version: "77c1");
+        Resolves("3dtiles/tiles/0.b3dm", "b3dm bytes", version: "77c1");
+
+        using var index = await SendAsync(HttpMethod.Get, VersionedBuildFileUrl("77c1", "3dtiles/tileset.json"),
+            r => r.Headers.AcceptEncoding.ParseAdd("gzip"));
+        using var tile = await SendAsync(HttpMethod.Get, VersionedBuildFileUrl("77c1", "3dtiles/tiles/0.b3dm"));
+
+        index.StatusCode.ShouldBe(HttpStatusCode.OK);
+        index.Content.Headers.ContentEncoding.ShouldBe(["gzip"]);
+        index.Headers.ETag!.IsWeak.ShouldBeTrue();
+        ShouldBeImmutable(index);
+        tile.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await tile.Content.ReadAsStringAsync()).ShouldBe("b3dm bytes");
+        ShouldBeImmutable(tile);
+    }
+
+    [Test]
+    public async Task BuildFile_NotPartOfTheBuild_AtAVersion_Is404()
+    {
+        using var get = await SendAsync(HttpMethod.Get, VersionedBuildFileUrl("3f2a", "cog/missing.tif"));
+        using var head = await SendAsync(HttpMethod.Head, VersionedBuildFileUrl("3f2a", "cog/missing.tif"));
+
+        get.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        head.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [TestCase("GET")]
@@ -236,7 +354,7 @@ public sealed class BuildFilesHttpTests : IDisposable
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotModified);
         response.Headers.ETag.ShouldBe(etag);
-        response.Headers.CacheControl!.NoCache.ShouldBeTrue();
+        ShouldBeRevalidated(response);
         (await response.Content.ReadAsByteArrayAsync()).ShouldBeEmpty();
     }
 

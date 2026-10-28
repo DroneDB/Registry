@@ -25,6 +25,8 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/build -> none [open] @ ObjectBuildsController.B
 GET /orgs/{orgSlug}/ds/{dsSlug}/build-artifact -> none [open] @ ObjectBuildsController.DownloadBuildArtifact
 GET /orgs/{orgSlug}/ds/{dsSlug}/build/{hash}/{*path} -> Filter(BasicAuthFilter) [open] @ ObjectBuildsController.GetBuildFile
 HEAD /orgs/{orgSlug}/ds/{dsSlug}/build/{hash}/{*path} -> Filter(BasicAuthFilter) [open] @ ObjectBuildsController.CheckBuildFile
+GET /orgs/{orgSlug}/ds/{dsSlug}/build/{hash}@{version}/{*path} -> Filter(BasicAuthFilter) [open] @ ObjectBuildsController.GetBuildFile
+HEAD /orgs/{orgSlug}/ds/{dsSlug}/build/{hash}@{version}/{*path} -> Filter(BasicAuthFilter) [open] @ ObjectBuildsController.CheckBuildFile
 GET /orgs/{orgSlug}/ds/{dsSlug}/builds -> none [open] @ ObjectBuildsController.GetPendingBuilds
 POST /orgs/{orgSlug}/ds/{dsSlug}/builds/clear -> none [open] @ ObjectBuildsController.ClearCompletedBuilds
 GET /orgs/{orgSlug}/ds/{dsSlug}/builds/pending -> none [open] @ ObjectBuildsController.GetPendingBuilds
