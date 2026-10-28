@@ -235,7 +235,7 @@ public class DDB : IDDB
             ex => $"Cannot read the build manifest from ddb '{DatasetFolderPath}'");
     }
 
-    public string? ResolveBuildFile(string hash, string path)
+    public ResolvedBuildFile? ResolveBuildFile(string hash, string path)
     {
         return Wrap(() => Wrapper.ResolveBuildFile(DatasetFolderPath, hash, path.ToDdbPath()),
             ex => $"Cannot resolve the build file '{path}' of '{hash}' in ddb '{DatasetFolderPath}'");

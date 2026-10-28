@@ -28,7 +28,23 @@ public class ControllerBaseEx : ControllerBase
     [NonAction]
     public PhysicalFileResult ValidatedPhysicalFile(string path, string contentType, string? entityTag,
         string? downloadName = null) =>
-        PhysicalFile(path, contentType, downloadName, new FileInfo(path).LastWriteTimeUtc,
+        ValidatedPhysicalFile(path, new FileInfo(path), contentType, entityTag, downloadName);
+
+    /// <summary>
+    /// <see cref="ValidatedPhysicalFile(string, string, string?, string?)"/> for a file whose content has no tag of
+    /// its own to offer: the tag is taken from the file system (<see cref="EntityTags.OfFile"/>), so it follows
+    /// the file when it is rewritten.
+    /// </summary>
+    [NonAction]
+    public PhysicalFileResult FileTaggedPhysicalFile(string path, string contentType)
+    {
+        var file = new FileInfo(path);
+        return ValidatedPhysicalFile(path, file, contentType, EntityTags.OfFile(file), null);
+    }
+
+    private PhysicalFileResult ValidatedPhysicalFile(string path, FileInfo file, string contentType,
+        string? entityTag, string? downloadName) =>
+        PhysicalFile(path, contentType, downloadName, file.LastWriteTimeUtc,
             entityTag is null ? null! : EntityTagHeaderValue.Parse(entityTag), enableRangeProcessing: true);
 
     /// <summary>

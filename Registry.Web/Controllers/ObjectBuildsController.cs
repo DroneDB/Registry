@@ -7,6 +7,7 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using MimeMapping;
+using Registry.Ports.DroneDB;
 using Registry.Web.Filters;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
@@ -80,9 +81,14 @@ public class ObjectBuildsController : ControllerBaseEx
     }
 
     // GET and HEAD send the same file result: the executor sends the headers (length, type, validators, ranges) of
-    // both and the body of GET only
-    private PhysicalFileResult BuildFileResult(string file) =>
-        PhysicalFile(file, MimeUtility.GetMimeMapping(file), enableRangeProcessing: true);
+    // both and the body of GET only. The type is the manifest's when libddb gives one, else the extension's. A
+    // client may keep the file but must ask again before it uses it (If-None-Match, answered 304): a forced rebuild
+    // rewrites the file under the same hash, so it is never immutable
+    private PhysicalFileResult BuildFileResult(ResolvedBuildFile file)
+    {
+        Response.Headers.CacheControl = "private, no-cache";
+        return FileTaggedPhysicalFile(file.Path, file.MediaType ?? MimeUtility.GetMimeMapping(file.Path));
+    }
 
     /// <summary>
     /// Checks if a build file exists by hash and path: the headers of <c>GET</c> (length, type, validators, range

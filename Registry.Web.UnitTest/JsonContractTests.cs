@@ -59,7 +59,9 @@ public sealed class JsonContractTests
         "Registry.Ports.DroneDB.FileHashHint", "Registry.Ports.DroneDB.AddItem", "Registry.Ports.DroneDB.DdbCapabilities",
         "Registry.Ports.DroneDB.DdbEffectiveConfig", "Registry.Ports.DroneDB.DdbCancellation",
         "Registry.Ports.DroneDB.DdbOperation", "Registry.Ports.DroneDB.BatchAddItemError",
-        "Registry.Ports.DroneDB.BatchAddUnchangedItem", "Registry.Ports.DroneDB.PendingBuildInfo"
+        "Registry.Ports.DroneDB.BatchAddUnchangedItem", "Registry.Ports.DroneDB.PendingBuildInfo",
+        // The adapter reads libddb's answer by hand (plain path or object), the type never crosses a wire
+        "Registry.Ports.DroneDB.ResolvedBuildFile"
     ];
 
     private static bool InAContract(Type type, JsonSerializerOptions options)

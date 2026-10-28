@@ -177,10 +177,10 @@ public class FakeDdbWrapper : IDdbWrapper
     /// The recorded <c>cog/cog.tif</c> of the built <c>ortho.tif</c> (<c>resolve-build-file</c>); null,
     /// libddb's not-found answer, for a hash no entry of the contract dataset has.
     /// </summary>
-    public virtual string? ResolveBuildFile(string ddbPath, string hash, string path)
+    public virtual ResolvedBuildFile? ResolveBuildFile(string ddbPath, string hash, string path)
     {
         if (hash == BuiltHash && Generic(path) == BuiltFile)
-            return (string)WithRoot(ContractFixture.Load("resolve-build-file").Output, Generic(ddbPath))!;
+            return new ResolvedBuildFile((string)WithRoot(ContractFixture.Load("resolve-build-file").Output, Generic(ddbPath))!);
 
         if (!BuildArtifacts.Value.Any(e => (string?)e!["build"]?["hash"] == hash))
             return null;

@@ -104,15 +104,15 @@ public interface IDdbWrapper
     public EntryBuildArtifacts[] GetBuildArtifacts(string ddbPath, string[] paths);
 
     /// <summary>
-    /// The absolute path of a file of a build, checked by libddb (DDBResolveBuildFile): it
-    /// serves <c>.../build/{hash}/{path}</c>, tiles included.
+    /// A file of a build, checked by libddb (DDBResolveBuildFile): its absolute path and, for a declared artifact,
+    /// the media type of the manifest. It serves <c>.../build/{hash}/{path}</c>, tiles included.
     /// </summary>
     /// <param name="ddbPath">Dataset folder (parent of .ddb)</param>
     /// <param name="hash">The hash of the build (<see cref="EntryBuild.Hash"/>)</param>
     /// <param name="path">The file, relative to the build root (an artifact path or a file below a directory artifact)</param>
-    /// <returns>The absolute path, or null when no build has this hash or the file is not one of its artifacts</returns>
+    /// <returns>The file, or null when no build has this hash or the file is not one of its artifacts</returns>
     /// <exception cref="DdbInvalidArgumentsException">The hash is malformed or the path breaks the dataset path rules.</exception>
-    public string? ResolveBuildFile(string ddbPath, string hash, string path);
+    public ResolvedBuildFile? ResolveBuildFile(string ddbPath, string hash, string path);
 
     /// <summary>The entry types of libddb and what it does with them (DDBGetEntryTypes).</summary>
     public IReadOnlyList<EntryTypeInfo> GetEntryTypes();

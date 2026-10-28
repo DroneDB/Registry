@@ -87,8 +87,8 @@ public class NativeAdapterContractTests : TestBase
         built.Build!.State.ShouldBe(BuildState.Complete);
         var cog = built.Build.Artifacts.Single(a => a.Role == ArtifactRoles.RasterCog);
 
-        var file = Wrapper.ResolveBuildFile(root, built.Build.Hash!, cog.Path);
-        File.Exists(file).ShouldBeTrue(file);
+        var file = Wrapper.ResolveBuildFile(root, built.Build.Hash!, cog.Path).ShouldNotBeNull();
+        File.Exists(file.Path).ShouldBeTrue(file.Path);
 
         // NOTFOUND is the absent answer, INVALIDARGS a typed client error with libddb's message
         Wrapper.ResolveBuildFile(root, new string('0', 64), cog.Path).ShouldBeNull();

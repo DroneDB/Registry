@@ -41,14 +41,14 @@ public interface IDdbBuild
     IReadOnlyList<EntryBuildArtifacts> GetBuildArtifacts(IReadOnlyList<string> paths);
 
     /// <summary>
-    /// The absolute path of a file of a build (<c>DDBResolveBuildFile</c>): an artifact or a
-    /// file below a directory artifact, containment-checked by libddb.
+    /// A file of a build (<c>DDBResolveBuildFile</c>): an artifact or a file below a directory artifact,
+    /// containment-checked by libddb, with its absolute path and the manifest's media type when libddb gives one.
     /// </summary>
     /// <param name="hash">The hash that names the build (<see cref="EntryBuild.Hash"/>).</param>
     /// <param name="path">The file, relative to the build root.</param>
-    /// <returns>The absolute path, or null when no build has this hash or the file is not one of its files.</returns>
+    /// <returns>The file, or null when no build has this hash or the file is not one of its files.</returns>
     /// <exception cref="DdbInvalidArgumentsException">The hash is malformed or the path breaks the path rules.</exception>
-    string? ResolveBuildFile(string hash, string path);
+    ResolvedBuildFile? ResolveBuildFile(string hash, string path);
 
     /// <summary>
     /// Copies the build named by <paramref name="hash"/> (its artifacts and its pending marker) to

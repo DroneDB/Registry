@@ -130,7 +130,7 @@ public class BuildManifestTests
         var build = _resolver.GetBuild(ddb, "ortho.tif").Build!;
         var cog = build.Artifacts.Single(a => a.Role == ArtifactRoles.RasterCog);
 
-        _resolver.ResolveFile(ddb, build.Hash!, cog.Path).ShouldBe(build.LocalPathOf(cog));
+        _resolver.ResolveFile(ddb, build.Hash!, cog.Path)!.Path.ShouldBe(build.LocalPathOf(cog));
         _resolver.ResolveFile(ddb, build.Hash!, "cog/missing.tif").ShouldBeNull();
         Should.Throw<DdbInvalidArgumentsException>(() => _resolver.ResolveFile(ddb, build.Hash!, "../../dbase.sqlite"));
     }

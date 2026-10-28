@@ -72,9 +72,12 @@ public sealed class BuildQueryService
         _logger.LogInformation("Building '{Path}' asynchronously, background job id is {JobId}", path, jobId);
     }
 
-    /// <summary>The local path of the file <paramref name="path"/> of the build <paramref name="hash"/>.</summary>
+    /// <summary>
+    /// The file <paramref name="path"/> of the build <paramref name="hash"/>: its local path and, for a declared
+    /// artifact, the manifest's media type when libddb gives it.
+    /// </summary>
     /// <exception cref="Exceptions.NotFoundException">The file is not part of that build.</exception>
-    public async Task<string> GetBuildFileAsync(string orgSlug, string dsSlug, string hash, string? path,
+    public async Task<ResolvedBuildFile> GetBuildFileAsync(string orgSlug, string dsSlug, string hash, string? path,
         CancellationToken ct = default)
     {
         var (ddb, file) = await ResolveBuildFilePathAsync(orgSlug, dsSlug, path, ct);
@@ -85,10 +88,10 @@ public sealed class BuildQueryService
     }
 
     /// <summary>
-    /// The local path of the file <paramref name="path"/> of the build <paramref name="hash"/>, or null when it is
-    /// not a file of that build (a malformed hash names no build): <see cref="GetBuildFileAsync"/> without the 404.
+    /// The file <paramref name="path"/> of the build <paramref name="hash"/>, or null when it is not a file of that
+    /// build (a malformed hash names no build): <see cref="GetBuildFileAsync"/> without the 404.
     /// </summary>
-    public async Task<string?> FindBuildFileAsync(string orgSlug, string dsSlug, string hash, string? path,
+    public async Task<ResolvedBuildFile?> FindBuildFileAsync(string orgSlug, string dsSlug, string hash, string? path,
         CancellationToken ct = default)
     {
         var (ddb, file) = await ResolveBuildFilePathAsync(orgSlug, dsSlug, path, ct);

@@ -197,7 +197,7 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
         public string Under(string relativePath) => Path.Combine(LocalPath, relativePath.ToLocalSeparators());
     }
 
-    public string? ResolveFile(IDDB ddb, string hash, string path)
+    public ResolvedBuildFile? ResolveFile(IDDB ddb, string hash, string path)
     {
         ArgumentNullException.ThrowIfNull(ddb);
         return ddb.ResolveBuildFile(hash, path);

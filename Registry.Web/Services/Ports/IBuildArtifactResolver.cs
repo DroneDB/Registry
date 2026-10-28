@@ -72,11 +72,12 @@ public interface IBuildArtifactResolver
     string? FindArtifactFile(IDDB ddb, string hash, string role, string? relativePath = null, string? entryPath = null);
 
     /// <summary>
-    /// The absolute path of a file of a build (an artifact or a file below a directory artifact),
-    /// containment-checked by libddb; null when the file is not one of the build's files.
+    /// A file of a build (an artifact or a file below a directory artifact), containment-checked by libddb, with its
+    /// absolute path and the manifest's media type when libddb gives one; null when the file is not one of the
+    /// build's files.
     /// </summary>
     /// <exception cref="DdbInvalidArgumentsException">The hash is malformed or the path breaks the path rules.</exception>
-    string? ResolveFile(IDDB ddb, string hash, string path);
+    ResolvedBuildFile? ResolveFile(IDDB ddb, string hash, string path);
 
     /// <summary>
     /// Copies the builds of <paramref name="entryPaths"/> (artifacts and pending markers) from

@@ -288,13 +288,39 @@ public class NativeDdbWrapper : IDdbWrapper
             (out IntPtr output) => NativeDdb.DDBGetBuildArtifacts(ddbPath, normalized, normalized.Length, out output));
     }
 
-    public string? ResolveBuildFile(string ddbPath, string hash, string path)
+    public ResolvedBuildFile? ResolveBuildFile(string ddbPath, string hash, string path)
     {
         ArgumentNullException.ThrowIfNull(ddbPath);
         ArgumentNullException.ThrowIfNull(hash);
         ArgumentNullException.ThrowIfNull(path);
-        return NativeCall.InvokeStringOrNotFound(nameof(NativeDdb.DDBResolveBuildFile),
-            (out IntPtr output) => NativeDdb.DDBResolveBuildFile(ddbPath, hash, path, out output));
+        var output = NativeCall.InvokeStringOrNotFound(nameof(NativeDdb.DDBResolveBuildFile),
+            (out IntPtr result) => NativeDdb.DDBResolveBuildFile(ddbPath, hash, path, out result));
+        return output is null ? null : ParseResolvedBuildFile(output);
+    }
+
+    /// <summary>
+    /// The answer of <c>DDBResolveBuildFile</c>: the absolute path as a plain string (the libddb builds that give
+    /// nothing else), or a JSON object <c>{"path": ..., "mediaType": ...}</c> where <c>mediaType</c> is the
+    /// manifest's media type of a declared artifact and may be absent or null. An absolute path never starts with
+    /// '{', so the two shapes cannot be mistaken for each other.
+    /// </summary>
+    internal static ResolvedBuildFile ParseResolvedBuildFile(string output)
+    {
+        if (!output.StartsWith('{'))
+            return new ResolvedBuildFile(output);
+
+        using var document = JsonDocument.Parse(output);
+        var root = document.RootElement;
+        var file = root.TryGetProperty("path", out var path) && path.ValueKind == JsonValueKind.String
+            ? path.GetString()
+            : null;
+        if (string.IsNullOrEmpty(file))
+            throw new DdbException($"{nameof(NativeDdb.DDBResolveBuildFile)} returned no path");
+
+        var mediaType = root.TryGetProperty("mediaType", out var type) && type.ValueKind == JsonValueKind.String
+            ? type.GetString()
+            : null;
+        return new ResolvedBuildFile(file, string.IsNullOrEmpty(mediaType) ? null : mediaType);
     }
 
     public IReadOnlyList<EntryTypeInfo> GetEntryTypes() => EntryTypes.Value;
