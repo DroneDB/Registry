@@ -260,7 +260,7 @@ public class ArtifactCompletenessCheckerService
     /// <see cref="DdbRetryableException"/>) never counts. A new upload (new hash)
     /// or any non-failed build (e.g. a manual retry that succeeded) resets the count.
     /// </summary>
-    internal static bool ShouldBackOff(IReadOnlyList<BuildAttempt> jobsLatestFirst, string hash, DateTime now,
+    internal static bool ShouldBackOff(IReadOnlyList<BuildAttempt> jobsLatestFirst, string? hash, DateTime now,
         out int failures, out DateTime retryAt)
     {
         failures = 0;

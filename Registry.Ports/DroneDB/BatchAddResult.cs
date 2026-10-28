@@ -12,21 +12,21 @@ public class BatchAddedEntry : Entry
 {
     /// <summary>"added" or "updated".</summary>
     [JsonPropertyName("status")]
-    public string Status { get; set; }
+    public string Status { get; set; } = "";
 }
 
 /// <summary>A path that failed to be added, isolated from the rest of the batch.</summary>
 public class BatchAddItemError
 {
     [JsonPropertyName("path")]
-    public string Path { get; set; }
+    public string Path { get; set; } = "";
 
     /// <summary>"FS" | "GDAL" | "PDAL" | "JSON" | "INDEX" | "CONFLICT".</summary>
     [JsonPropertyName("code")]
-    public string Code { get; set; }
+    public string Code { get; set; } = "";
 
     [JsonPropertyName("message")]
-    public string Message { get; set; }
+    public string Message { get; set; } = "";
 }
 
 /// <summary>
@@ -50,5 +50,5 @@ public class BatchAddResult
 public class BatchAddUnchangedItem
 {
     [JsonPropertyName("path")]
-    public string Path { get; set; }
+    public string Path { get; set; } = "";
 }

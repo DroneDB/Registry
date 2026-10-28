@@ -19,10 +19,13 @@ namespace Registry.Adapters.DroneDB;
 public class DDB : IDDB
 {
     private static readonly FileSystem FileSystem = new();
-    private readonly IDdbWrapper _wrapper;
+    private readonly IDdbWrapper? _wrapper;
+    private readonly IMetaManager? _meta;
 
-    // Null only in a DDB read from job data stored by earlier releases: that one only names its folder
-    private IDdbWrapper Wrapper => _wrapper ?? throw new InvalidOperationException(
+    // Both null only in a DDB read from job data stored by earlier releases: that one only names its folder
+    private IDdbWrapper Wrapper => _wrapper ?? throw ReadFromJobData();
+
+    private InvalidOperationException ReadFromJobData() => new(
         $"The dataset '{DatasetFolderPath}' was read from job data: it only names its folder");
 
     [JsonIgnore] public string Version => Wrapper.GetVersion();
@@ -37,12 +40,14 @@ public class DDB : IDDB
 
     [JsonIgnore] public IReadOnlyList<string> DerivedFolderPaths => [BuildFolderPath];
 
-    [JsonIgnore] public IMetaManager Meta { get; private set; }
+    [JsonIgnore] public IMetaManager Meta => _meta ?? throw ReadFromJobData();
 
     [JsonConstructor]
     private DDB()
     {
-        //
+        // Json.NET sets DatasetFolderPath right after this constructor, and OnDeserializedMethod BuildFolderPath
+        DatasetFolderPath = null!;
+        BuildFolderPath = null!;
     }
 
     /// <summary>
@@ -68,7 +73,7 @@ public class DDB : IDDB
 
         DatasetFolderPath = ddbPath;
         BuildFolderPath = BuildFolderOf(ddbPath);
-        Meta = new MetaManager(this, ddbWrapper);
+        _meta = new MetaManager(this, ddbWrapper);
     }
 
     // The one place the build folder of a dataset folder is composed (a new DDB and one read from job data)
@@ -190,7 +195,7 @@ public class DDB : IDDB
             ex => $"Cannot move '{source}' to {dest} from ddb '{DatasetFolderPath}'");
     }
 
-    public void Build(string path, string dest = null, bool force = false) =>
+    public void Build(string path, string? dest = null, bool force = false) =>
         RunBuild(path, dest, force, null);
 
     public void BuildWithOptions(string path, BuildOptions options, bool force = false)
@@ -205,7 +210,7 @@ public class DDB : IDDB
             ex => $"Cannot build '{path}' from ddb '{DatasetFolderPath}'");
     }
 
-    public void BuildPending(string dest = null, bool force = false)
+    public void BuildPending(string? dest = null, bool force = false)
     {
         Wrap(() => Wrapper.Build(DatasetFolderPath, null, dest, force, true),
             ex => $"Cannot build pending from ddb '{DatasetFolderPath}'");
@@ -407,9 +412,9 @@ public class DDB : IDDB
         return Wrapper.GetStamp(DatasetFolderPath);
     }
 
-    public JsonElement GetStacData(string path = null) => Wrapper.StacData(DatasetFolderPath, path);
+    public JsonElement GetStacData(string? path = null) => Wrapper.StacData(DatasetFolderPath, path);
 
-    public JsonElement GetStacItemCollectionData(string bbox = null, string datetime = null, int limit = 10,
+    public JsonElement GetStacItemCollectionData(string? bbox = null, string? datetime = null, int limit = 10,
         int offset = 0) =>
         Wrapper.StacItemCollectionData(DatasetFolderPath, bbox, datetime, limit, offset);
 

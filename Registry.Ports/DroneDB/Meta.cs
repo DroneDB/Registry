@@ -8,7 +8,7 @@ namespace Registry.Ports.DroneDB;
 public class Meta
 {
     [JsonPropertyName("id")]
-    public string Id { get; set; }
+    public string Id { get; set; } = "";
 
     [JsonPropertyName("data")]
     public JsonElement? Data { get; set; }

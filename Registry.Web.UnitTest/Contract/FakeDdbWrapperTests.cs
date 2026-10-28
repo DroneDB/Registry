@@ -168,7 +168,7 @@ public sealed class FakeDdbWrapperTests
         image.Depth.ShouldBe(1);
         image.Size.ShouldBe(1151);
         image.ModifiedTime.ShouldBe(DateTimeOffset.FromUnixTimeSeconds(1700000000).UtcDateTime);
-        image.Properties["make"].GetString().ShouldBe("Contract");
+        image.Properties!["make"].GetString().ShouldBe("Contract");
         image.PointGeometry!.Value.ValueKind.ShouldBe(JsonValueKind.Object);
         entries.Single(e => e.Path == "sub").Type.ShouldBe(EntryType.Directory);
     }

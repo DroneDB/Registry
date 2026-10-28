@@ -11,11 +11,11 @@ public class PendingBuildInfo
 {
     /// <summary>Entry hash (matches the ".pending" marker file on disk).</summary>
     [JsonPropertyName("hash")]
-    public string Hash { get; set; }
+    public string Hash { get; set; } = "";
 
     /// <summary>Dataset-relative path of the entry whose build is pending.</summary>
     [JsonPropertyName("path")]
-    public string Path { get; set; }
+    public string Path { get; set; } = "";
 
     /// <summary>Dependency names still missing at the time of the last attempt.</summary>
     [JsonPropertyName("missingDependencies")]

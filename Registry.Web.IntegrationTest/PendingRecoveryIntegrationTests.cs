@@ -551,14 +551,14 @@ public class PendingRecoveryIntegrationTests
         Add(ddb, "ordinary.obj", GridObj() + "# independent hash\n");
         ddb.Build("recover.obj");
         ddb.Build("ordinary.obj");
-        var hash = ddb.GetEntry("recover.obj")!.Hash;
+        var hash = ddb.GetEntry("recover.obj")!.FileHash();
         var root = Path.Combine(ddb.DerivedFolderPaths.Single(), hash);
         var mesh = Path.Combine(root, "bm3d", "model.bm3d");
         var bytes = await File.ReadAllBytesAsync(mesh);
         var modified = File.GetLastWriteTimeUtc(mesh);
         foreach (var path in new[] { "recover.obj", "ordinary.obj" })
         {
-            var tiles = Path.Combine(ddb.DerivedFolderPaths.Single(), ddb.GetEntry(path)!.Hash, "3dtiles");
+            var tiles = Path.Combine(ddb.DerivedFolderPaths.Single(), ddb.GetEntry(path)!.FileHash(), "3dtiles");
             if (Directory.Exists(tiles)) Directory.Delete(tiles, recursive: true);
         }
         var old = Path.Combine(root, "3dtiles-old");

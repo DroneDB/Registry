@@ -7,9 +7,10 @@ namespace Registry.Ports.DroneDB;
 
 public class Entry : EntrySummary
 {
+    /// <summary>Absent when the entry has no properties.</summary>
     [JsonPropertyName("properties")]
     [JsonConverter(typeof(SharedDocumentMapConverter))]
-    public Dictionary<string, JsonElement> Properties { get; set; }
+    public Dictionary<string, JsonElement>? Properties { get; set; }
 
     [JsonPropertyName("point_geom")]
     public JsonElement? PointGeometry { get; set; }
