@@ -30,24 +30,23 @@ public class DDB : IDDB
 
     [JsonIgnore] public string Version => Wrapper.GetVersion();
 
-    [JsonProperty] public string DatasetFolderPath { get; private set; }
+    [JsonProperty] public string DatasetFolderPath { get; private set; } = null!;
 
     /// <summary>libddb's build folder under the database folder (the adapter's knowledge, not Registry's).</summary>
     public const string BuildFolderName = "build";
 
     /// <summary>The build folder (also the member job data stored by earlier releases carries).</summary>
-    [JsonProperty] public string BuildFolderPath { get; private set; }
+    [JsonProperty] public string BuildFolderPath { get; private set; } = null!;
 
     [JsonIgnore] public IReadOnlyList<string> DerivedFolderPaths => [BuildFolderPath];
 
     [JsonIgnore] public IMetaManager Meta => _meta ?? throw ReadFromJobData();
 
+    // Json.NET sets both folder paths right after this constructor (the second in OnDeserializedMethod), so
+    // their null! initializers never outlive the deserialization.
     [JsonConstructor]
     private DDB()
     {
-        // Json.NET sets DatasetFolderPath right after this constructor, and OnDeserializedMethod BuildFolderPath
-        DatasetFolderPath = null!;
-        BuildFolderPath = null!;
     }
 
     /// <summary>

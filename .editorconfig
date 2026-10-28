@@ -70,9 +70,9 @@ dotnet_naming_style.underscore_camel_case.required_prefix = _
 dotnet_naming_style.underscore_camel_case.capitalization = camel_case
 
 # Analyzers (AnalysisLevel = latest-recommended, R2-2). The recommended rules are warnings,
-# and the warnings that exist today are in build/warnings-baseline.txt
-# (scripts/check-warnings.sh fails on a new one). These rules have hundreds of violations
-# each, so they are suggestions until a dedicated change fixes them:
+# and the build has none: build/warnings-baseline.txt is empty, so scripts/check-warnings.sh
+# fails on any warning. These rules have hundreds of violations each, so they are suggestions
+# until a dedicated change fixes them:
 #   CA1848 (811) and CA1873 (384): logging performance. The fix is a LoggerMessage
 #     source-generator migration of the Registry.Web log calls.
 #   CA2101 (185): P/Invoke string marshaling. The fix is a LibraryImport migration of the

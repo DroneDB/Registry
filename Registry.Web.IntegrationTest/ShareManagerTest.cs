@@ -174,7 +174,7 @@ sealed class ShareManagerTest : TestBase
         commitRes.Tag.OrganizationSlug.ShouldBe(MagicStrings.PublicOrganizationSlug);
 
         // ListBatches
-        batches = (await shareManager.ListBatches(commitRes.Tag.OrganizationSlug, commitRes.Tag.DatasetSlug))
+        batches = (await shareManager.ListBatches(commitRes.Tag.OrganizationSlug, commitRes.Tag.DatasetSlug.ShouldNotBeNull()))
             .ToArray();
 
         batches.Length.ShouldBe(1);
@@ -269,7 +269,7 @@ sealed class ShareManagerTest : TestBase
         commitRes.Url.ShouldBe($"/r/{commitRes.Tag.OrganizationSlug}/{commitRes.Tag.DatasetSlug}");
 
         // ListBatches
-        batches = (await shareManager.ListBatches(commitRes.Tag.OrganizationSlug, commitRes.Tag.DatasetSlug))
+        batches = (await shareManager.ListBatches(commitRes.Tag.OrganizationSlug, commitRes.Tag.DatasetSlug.ShouldNotBeNull()))
             .ToArray();
 
         batches.Length.ShouldBe(1);

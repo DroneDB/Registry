@@ -42,9 +42,10 @@ if [[ -z "$log" ]]; then
     fi
 fi
 
-# Prints the unique warnings of a build log as "<path> <code> <count>", sorted.
+# Prints the unique warnings of a build log as "<path> <code> <count>", sorted (nothing when there are none:
+# grep finds no line, which is not an error).
 extract_warnings() {
-    grep -E ': warning [A-Za-z]+[0-9]+:' "$1" |
+    { grep -E ': warning [A-Za-z]+[0-9]+:' "$1" || true; } |
         sed -E 's/ \[[^]]*\]$//' |
         sed -E -n \
             -e 's/^[[:space:]]*(.*)\(([0-9]+(,[0-9]+)*)\): warning ([A-Za-z]+[0-9]+):.*/\1|\2|\4/p' \

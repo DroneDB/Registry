@@ -39,7 +39,8 @@ actual="$(
     } | sort -u
 )"
 
-expected="$(grep -Ev '^[[:space:]]*(#|$)' "$ALLOWLIST" | sed -E 's/[[:space:]]+$//' | sort -u)"
+# An empty list (only comments) is the goal, not an error.
+expected="$({ grep -Ev '^[[:space:]]*(#|$)' "$ALLOWLIST" || true; } | sed -E 's/[[:space:]]+$//' | sort -u)"
 
 unlisted="$(comm -23 <(printf '%s\n' "$actual" | sed '/^$/d') <(printf '%s\n' "$expected" | sed '/^$/d'))"
 stale="$(comm -13 <(printf '%s\n' "$actual" | sed '/^$/d') <(printf '%s\n' "$expected" | sed '/^$/d'))"
