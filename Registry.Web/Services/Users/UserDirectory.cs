@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -37,7 +36,7 @@ public sealed class UserDirectory
         _registryContext = registryContext;
     }
 
-    public async Task<UserStorageInfo> GetUserStorageInfo(string userName = null)
+    public async Task<UserStorageInfo> GetUserStorageInfo(string? userName = null)
     {
         var user = await _authManager.GetCurrentUser();
 
@@ -82,7 +81,7 @@ public sealed class UserDirectory
             var isOwner = org.OwnerId == user.Id;
             var membership = org.Users?.FirstOrDefault(u => u.UserId == user.Id);
 
-            string grantedByUserName = null;
+            string? grantedByUserName = null;
             if (membership?.GrantedBy != null)
             {
                 var grantedByUser = await _applicationDbContext.Users.FindAsync([membership.GrantedBy], ct);

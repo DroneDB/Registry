@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -84,7 +83,7 @@ public sealed class PushCommit
             throw new ExtensionBlockedException(blockedFiles, _importSettings);
 
         // Read meta dump
-        string metaDump = null;
+        string? metaDump = null;
         if (_fileSystem.Exists(metaFile))
         {
             metaDump = await _fileSystem.ReadAllTextAsync(metaFile, ct);

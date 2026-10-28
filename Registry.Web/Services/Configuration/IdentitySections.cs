@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
@@ -65,22 +64,23 @@ public sealed class IdentitySections : IConfigurationSectionBuilder
 
     private ConfigurationSectionDataDto BuildDefaultAdminSection()
     {
-        var identity = _view.Configured<IdentityProviderOptions>();
-        var identityDefault = _view.Shipped<IdentityProviderOptions>();
+        // The options validation refuses to start without a default admin, and the shipped defaults have one
+        var admin = _view.Configured<IdentityProviderOptions>().DefaultAdmin!;
+        var adminDefault = _view.Shipped<IdentityProviderOptions>().DefaultAdmin!;
         return Section("DefaultAdmin", "Default Admin",
             "Credentials for the default administrator account created on first run.",
             [
                 StringField("Email", "Admin Email",
                     "Email address of the default admin user.",
-                    identity.DefaultAdmin.Email, identityDefault.DefaultAdmin.Email),
+                    admin.Email, adminDefault.Email),
 
                 StringField("UserName", "Admin Username",
                     "Username of the default admin user.",
-                    identity.DefaultAdmin.UserName, identityDefault.DefaultAdmin.UserName),
+                    admin.UserName, adminDefault.UserName),
 
                 SensitiveField("Password", "Admin Password",
                     "Password for the default admin account.",
-                    identity.DefaultAdmin.Password, identityDefault.DefaultAdmin.Password)
+                    admin.Password, adminDefault.Password)
             ]);
     }
 

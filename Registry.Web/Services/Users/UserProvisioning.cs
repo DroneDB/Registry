@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -114,7 +113,7 @@ public sealed class UserProvisioning
     }
 
     /// <summary>Creates <paramref name="user"/> (password policy, roles that must exist, the default organization when enabled).</summary>
-    public async Task<User> CreateAsync(User user, string password, string[] roles = null)
+    public async Task<User> CreateAsync(User user, string password, string[]? roles = null)
     {
         await ValidateRoles(roles);
 
@@ -142,7 +141,7 @@ public sealed class UserProvisioning
         return user;
     }
 
-    private async Task AddUserToRoles(User user, string[] roles)
+    private async Task AddUserToRoles(User user, string[]? roles)
     {
         // Add user roles
         if (roles != null && roles.Length != 0)
@@ -152,7 +151,7 @@ public sealed class UserProvisioning
         }
     }
 
-    private async Task ValidateRoles(string[] roles)
+    private async Task ValidateRoles(string[]? roles)
     {
         if (roles == null || roles.Length == 0)
             return;

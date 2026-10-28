@@ -88,7 +88,7 @@ public static class ConfigurationFields
 
     public static ConfigurationFieldDataDto StringField(
         string key, string displayName, string description,
-        string currentValue, string defaultValue,
+        string? currentValue, string? defaultValue,
         string fieldType = "text", string? unit = null)
     {
         return Field(key, displayName, fieldType, description,
@@ -166,7 +166,7 @@ public static class ConfigurationFields
 
     public static ConfigurationFieldDataDto SensitiveField(
         string key, string displayName, string description,
-        string currentValue, string defaultValue)
+        string? currentValue, string? defaultValue)
     {
         var isSet = !string.IsNullOrEmpty(currentValue) && currentValue != defaultValue;
         return Field(key, displayName, "password", description,
@@ -179,7 +179,7 @@ public static class ConfigurationFields
 
     public static ConfigurationFieldDataDto EnumField(
         string key, string displayName, string description,
-        string currentValue, string defaultValue, string[] enumOptions)
+        string? currentValue, string? defaultValue, string[] enumOptions)
     {
         return Field(key, displayName, "enum", description,
             currentValue, defaultValue, enumOptions: enumOptions);

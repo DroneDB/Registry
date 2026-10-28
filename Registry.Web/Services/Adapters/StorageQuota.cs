@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -57,7 +56,7 @@ public class StorageQuota : IStorageQuota
         };
     }
 
-    public async Task<UserStorageInfo> GetCurrentUserStorageLimit()
+    public async Task<UserStorageInfo?> GetCurrentUserStorageLimit()
     {
         if (!_accounts.EnableStorageLimiter) return null;
 

@@ -1,4 +1,3 @@
-#nullable disable
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -17,10 +16,10 @@ namespace Registry.Web.Services.Users;
 public interface IUserSessions
 {
     /// <summary>The session of <paramref name="userName"/>, or null when the provider refuses them or they are deactivated.</summary>
-    Task<AuthenticateResponse> Authenticate(string userName, string password);
+    Task<AuthenticateResponse?> Authenticate(string userName, string password);
 
     /// <summary>The session of the holder of an external provider's <paramref name="token"/> (external auth only), or null.</summary>
-    Task<AuthenticateResponse> Authenticate(string token);
+    Task<AuthenticateResponse?> Authenticate(string token);
 
     /// <summary>A new token for the current user.</summary>
     Task<AuthenticateResponse> Refresh();
@@ -51,7 +50,7 @@ public sealed class UserSessions : IUserSessions
     /// <summary>Shorthand accessor for the active provider's capability descriptor.</summary>
     private AuthProviderCapabilities Caps => _loginManager.Capabilities;
 
-    public async Task<AuthenticateResponse> Authenticate(string userName, string password)
+    public async Task<AuthenticateResponse?> Authenticate(string userName, string password)
     {
         var res = await _loginManager.CheckAccess(userName, password);
 
@@ -85,7 +84,7 @@ public sealed class UserSessions : IUserSessions
         return new AuthenticateResponse(user.UserName, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
     }
 
-    public async Task<AuthenticateResponse> Authenticate(string token)
+    public async Task<AuthenticateResponse?> Authenticate(string token)
     {
         // Internal auth does not support token auth
         if (_identity.ExternalAuthUrl == null)

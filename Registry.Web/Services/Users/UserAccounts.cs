@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -40,7 +39,7 @@ public sealed class UserAccounts
     /// <summary>Shorthand accessor for the active provider's capability descriptor.</summary>
     private AuthProviderCapabilities Caps => _loginManager.Capabilities;
 
-    public async Task<UserDto> CreateUser(string userName, string email, string password, string[] roles)
+    public async Task<UserDto> CreateUser(string userName, string? email, string password, string[]? roles)
     {
         if (!Caps.SupportsLocalUserManagement)
             throw new ForbiddenException(
@@ -104,7 +103,7 @@ public sealed class UserAccounts
         await _applicationDbContext.SaveChangesAsync();
     }
 
-    public async Task<Dictionary<string, object>> GetUserMeta(string userName = null)
+    public async Task<Dictionary<string, object>> GetUserMeta(string? userName = null)
     {
         var user = await _authManager.GetCurrentUser();
 

@@ -1,4 +1,3 @@
-#nullable disable
 using System.IO;
 using System.Reflection;
 
@@ -9,12 +8,12 @@ namespace Registry.Web.Services.Adapters;
 /// </summary>
 public class EmbeddedResourceQuery
 {
-    public Stream Read(Assembly assembly, string resource)
+    public Stream? Read(Assembly assembly, string resource)
     {
         return ReadInternal(assembly, resource);
     }
 
-    private static Stream ReadInternal(Assembly assembly, string resource)
+    private static Stream? ReadInternal(Assembly assembly, string resource)
     {
         return assembly.GetManifestResourceStream($"{assembly.GetName().Name}.{resource}");
     }

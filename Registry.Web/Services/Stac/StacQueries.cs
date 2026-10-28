@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -12,11 +11,11 @@ namespace Registry.Web.Services.Stac;
 public static class StacQueries
 {
     /// <summary>The 2D footprint libddb filters on, or null.</summary>
-    public static string BboxToString(double[] bbox)
+    public static string? BboxToString(double[]? bbox)
     {
         // Accept 2D ([minX,minY,maxX,maxY]) or 3D ([minX,minY,minZ,maxX,maxY,maxZ]) bboxes,
         // projecting to the 2D footprint the C++ core understands.
-        double[] flat = bbox switch
+        double[]? flat = bbox switch
         {
             { Length: 4 } => bbox,
             { Length: 6 } => [bbox[0], bbox[1], bbox[3], bbox[4]],
@@ -29,7 +28,7 @@ public static class StacQueries
     }
 
     /// <summary>The query of a page link (next, prev): every paging parameter.</summary>
-    public static string BuildItemsQuery(double[] bbox, string datetime, int limit, int offset)
+    public static string BuildItemsQuery(double[]? bbox, string? datetime, int limit, int offset)
     {
         var parts = new List<string> { $"limit={limit}", $"offset={offset}" };
 
@@ -44,7 +43,7 @@ public static class StacQueries
     }
 
     /// <summary>The query of a self link: only the parameters the client gave (STAC API conformance).</summary>
-    public static string BuildItemsSelfQuery(double[] bbox, string datetime, int? limit, int? offset)
+    public static string BuildItemsSelfQuery(double[]? bbox, string? datetime, int? limit, int? offset)
     {
         var parts = new List<string>();
 
@@ -91,7 +90,7 @@ public static class StacQueries
     }
 
     /// <summary>The dataset and offset a search token names (0, 0 for none or an invalid one).</summary>
-    public static void DecodeToken(string token, out int datasetIndex, out int offset)
+    public static void DecodeToken(string? token, out int datasetIndex, out int offset)
     {
         datasetIndex = 0;
         offset = 0;

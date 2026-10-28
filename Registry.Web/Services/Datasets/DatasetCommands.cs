@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -131,7 +130,7 @@ public sealed class DatasetCommands
         await _listings.ListingChangedAsync(orgSlug, internalRef, CancellationToken.None);
 
         // Schedule background cleanup job for: cancelling active jobs, removing JobIndex entries, deleting filesystem
-        string jobId = null;
+        string? jobId = null;
         try
         {
             jobId = _backgroundJob.Enqueue<DatasetCleanupService>(
@@ -219,10 +218,10 @@ public sealed class DatasetCommands
     private Task<bool> SlugIsTakenAsync(string orgSlug, string slug, CancellationToken ct) =>
         _context.Datasets.AsNoTracking().AnyAsync(item => item.Slug == slug && item.Organization.Slug == orgSlug, ct);
 
-    private static BadRequestException SlugTakenOnCreate(Exception inner = null) =>
+    private static BadRequestException SlugTakenOnCreate(Exception? inner = null) =>
         new("Dataset with this slug already exists", innerException: inner);
 
-    private static BadRequestException SlugTakenOnRename(string slug, Exception inner = null) =>
+    private static BadRequestException SlugTakenOnRename(string slug, Exception? inner = null) =>
         new($"Dataset '{slug}' already exists", innerException: inner);
 
     /// <summary>

@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -68,7 +67,7 @@ public sealed class PushSessions
         }
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-        Stamp ourStamp = null;
+        Stamp? ourStamp = null;
 
         if (validateChecksum)
         {
