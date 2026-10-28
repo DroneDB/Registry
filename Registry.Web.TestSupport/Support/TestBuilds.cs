@@ -46,12 +46,16 @@ public static class TestBuilds
             }
         };
 
-    /// <summary>A buildable entry whose build waits for <paramref name="missing"/> (a pending marker).</summary>
+    /// <summary>
+    /// A buildable entry whose build waits for <paramref name="missing"/> (a pending marker), awaiting them as
+    /// libddb reports a marker that lists missing files; with none, a released marker that is due at once.
+    /// </summary>
     public static EntryBuildArtifacts Pending(string datasetFolder, string path, EntryType type, string hash,
         params string[] missing)
     {
         var build = Build(datasetFolder, path, type, hash, BuildState.Pending);
         build.Build!.MissingDependencies = missing;
+        build.Build.AwaitingFiles = missing.Length > 0;
         build.Build.LastAttempt = 1700000000;
         build.Build.RetryAfter = build.Build.LastAttempt + Registry.Adapters.Testing.PendingMarkers.LibddbRetryBackoffSeconds;
         return build;

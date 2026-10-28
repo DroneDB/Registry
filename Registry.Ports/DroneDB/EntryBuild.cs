@@ -33,6 +33,15 @@ public sealed class EntryBuild
     [JsonPropertyName("missingDependencies")]
     public IReadOnlyList<string> MissingDependencies { get; set; } = [];
 
+    /// <summary>
+    /// The pending build waits for files the dataset lacks (its marker lists them in
+    /// <see cref="MissingDependencies"/>): no timer retries it, adding one of those files releases it. libddb
+    /// decides it, the same value as <see cref="PendingBuildInfo.AwaitingFiles"/>; false without a marker, and
+    /// absent from an older libddb, which reads as false.
+    /// </summary>
+    [JsonPropertyName("awaitingFiles")]
+    public bool AwaitingFiles { get; set; }
+
     /// <summary>Unix seconds of the last attempt, from the pending marker; null without one.</summary>
     [JsonPropertyName("lastAttempt")]
     public long? LastAttempt { get; set; }

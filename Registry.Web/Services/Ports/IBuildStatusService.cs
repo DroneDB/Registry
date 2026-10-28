@@ -16,7 +16,7 @@ public interface IBuildStatusService
 {
     /// <summary>
     /// Annotates <see cref="EntryDto.BuildStatus"/> (and, for pending builds,
-    /// <see cref="EntryDto.BuildMissingDependencies"/>) on every buildable
+    /// <see cref="EntryDto.BuildMissingDependencies"/> and <see cref="EntryDto.BuildAwaitingFiles"/>) on every buildable
     /// entry in <paramref name="entries"/>, and <see cref="EntryDto.Artifacts"/> on every entry whose own
     /// build has artifacts. Entries that are not buildable, or whose build is already complete, are left with
     /// a null status.

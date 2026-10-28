@@ -1,13 +1,13 @@
 # libddb contract fixtures vendored from DroneDB. Do not edit the vendored files:
 # run Registry.Adapters.Testing/update-contract.sh <DroneDB clone> <commit> instead.
 repository: https://github.com/DroneDB/DroneDB
-commit: 8235fae7b4ddbf265e235de23aea7e0dd5fd047e
+commit: 11c85d9c28051127b248841396de85ffa0c903b0
 path: tests/contract
 # sha256 and path relative to Contract/ (sha256sum format), one line per vendored file
-294b99ca7f9fd47ea5d88ab7ee9de58534042a906171ecb5124d0adabf9d97c0  README.md
+4acd96bef20437755e1f004701ed5c9f10ef925e260980722633ecde3c1efad0  README.md
 ea51b328026bc175031f1cfe2e0b1d2b2426a092b1a6ab3f19e35731a8293e7a  fixtures/add.json
-dff459b55c29be8b45ef095a5e8a6e97e80f4e1fc6524e5a568815ac5c780eb3  fixtures/build-artifacts-pending.json
-ef0d8f7b505ed504c5f347727bba943cd89b7bfec7ccbfcbe49a88c61da02443  fixtures/build-artifacts.json
+03eb369a3deb100e6f0abfa122927c551e807e62c18ce5b58f00b4ce0027b129  fixtures/build-artifacts-pending.json
+4fb2d78f8573fafd64fee734e2cb14dcfc17c1f0090c51b6f127ec1f4f584034  fixtures/build-artifacts.json
 d2c21f116f1007b33f66fa1f12001f51acb46a16913e0f97a329740f409c130e  fixtures/build-status.json
 738f23b9768cedab90d28095589c23be275b9050c7896ec4d6182b5186d1d003  fixtures/capabilities.json
 3ebec81e6ada5a83420b5d0387df43e412b23de5ec43d7072cb51155a750cc5e  fixtures/copy-build-artifacts.json
@@ -22,7 +22,7 @@ de862b8a530d861c9b0007831a0934bde22ff36bcd16cdfdc9d04c1a827ad57b  fixtures/info-
 3f726cf18deda44528056dc079c1c3464599778c35548e33a9abc46354a90faf  fixtures/info-image.json
 412a8078d0c1f6f5be1cfbb32001e0a7779648afb71963a0d4a95af356a5c5d9  fixtures/info-pointcloud.json
 8d27ed42767ef6c171afa7f0760f70ecae43b73df29d6d30539e8df5cb8e44e2  fixtures/info-vector.json
-25cf0c02d5863d8b0bdb483838fa1a61af17d6d124da2b9a525fd65ba54e05fe  fixtures/list-entries-ex.json
+56cf8c6f1e64c6a5a003205a8dabbae8005b377dbd84a3301e8d16f056c3cb6e  fixtures/list-entries-ex.json
 27ca6ba40815c3ca43c6d8c856f371eacaf07bafbbdc6f8f596369364e5c49ac  fixtures/list-entries-filtered.json
 8e5cac739b906b3a3f03be998d10d01cf7c6a69ab7b1d689ef8693d860a589c2  fixtures/list-entries.json
 262ecdf92775001175e152cc2ea4776e3434aa22b77bb4fea07ef2eebd16b2c9  fixtures/list-entry-summaries.json
@@ -54,7 +54,7 @@ b4674094acae5b55bb0052d6e214e08397eec96f9cd46ec1227050a78749624a  fixtures/stac-
 5384a55ecae563bfa679097b034163e599504709b0a741b8b9741fb479f546db  fixtures/stac-item-drone-image.json
 ebbad86077808389a10c5ca82f579d4d0a41c7eefc9cf2397a74ab2a9c4f623e  fixtures/stac-item-georaster.json
 efcf704f9d3a884754f708fc34c95362fda07e7e09e70e2014869f3d66b0f9d7  fixtures/stac-item-image.json
-2772093b63f450ef073d6a83444e6be3db1ac745a19eb260c359c290fef73e66  schemas/build-artifacts.schema.json
+a761d9e0a27970641d41b9c903a2aca04a192119fbb7029814a9db9d06591424  schemas/build-artifacts.schema.json
 cd4eff061daedfcca08baf52b6837a0a91a6a10c32b994662bc9fa9cd66804b2  schemas/build-file.schema.json
 fe705ccf4cc7bc0deb94f6c091e01a990a6bcae1499a3ba1efe19d98812f4e24  schemas/build-status.schema.json
 f19e1b7ee80de8bd6bd9591b9f7698ef5cefa10643126f5c0ec4b25cc24491c0  schemas/capabilities.schema.json

@@ -233,6 +233,36 @@ public class BuildStatusServiceTest : TestBase
 
         entry.BuildStatus.ShouldBe("pending");
         entry.BuildMissingDependencies.ShouldBe(["layer.dbf"]);
+        entry.BuildAwaitingFiles.ShouldBe(true);
+    }
+
+    // Whether a pending build waits for an upload is libddb's answer, passed through as it reports it
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task AnnotateAsync_Pending_ReportsTheAwaitingFilesOfLibddb(bool awaitingFiles)
+    {
+        var entry = Entry("layer.shp", EntryType.Vector);
+        NativePending("layer.shp", "layer.dbf");
+        _native["layer.shp"].Build!.AwaitingFiles = awaitingFiles;
+
+        await CreateService().AnnotateAsync(OrgSlug, DsSlug, _ddbMock.Object, [entry]);
+
+        entry.BuildStatus.ShouldBe("pending");
+        entry.BuildAwaitingFiles.ShouldBe(awaitingFiles);
+    }
+
+    [Test]
+    public async Task AnnotateAsync_ReleasedPendingMarker_IsPendingAndAwaitsNoFile()
+    {
+        // The add of a missing file released the marker: due at once, no file awaited
+        var entry = Entry("layer.shp", EntryType.Vector);
+        NativePending("layer.shp");
+
+        await CreateService().AnnotateAsync(OrgSlug, DsSlug, _ddbMock.Object, [entry]);
+
+        entry.BuildStatus.ShouldBe("pending");
+        entry.BuildMissingDependencies.ShouldBeEmpty();
+        entry.BuildAwaitingFiles.ShouldBe(false);
     }
 
     [Test]
@@ -246,6 +276,7 @@ public class BuildStatusServiceTest : TestBase
 
         entry.BuildStatus.ShouldBeNull();
         entry.BuildMissingDependencies.ShouldBeNull();
+        entry.BuildAwaitingFiles.ShouldBeNull();
     }
 
     [Test]

@@ -426,6 +426,7 @@
       "missingDependencies": [
         "MissingDependencies-text"
       ],
+      "awaitingFiles": true,
       "lastAttempt": 1234567890123,
       "retryAfter": 1234567890123,
       "artifacts": [
@@ -448,6 +449,7 @@
       "root": null,
       "state": "none",
       "missingDependencies": null,
+      "awaitingFiles": false,
       "lastAttempt": null,
       "retryAfter": null,
       "artifacts": null
@@ -468,6 +470,7 @@
         "missingDependencies": [
           "MissingDependencies-text"
         ],
+        "awaitingFiles": true,
         "lastAttempt": 1234567890123,
         "retryAfter": 1234567890123,
         "artifacts": [
@@ -1754,6 +1757,7 @@
       "buildMissingDependencies": [
         "BuildMissingDependencies-text"
       ],
+      "buildAwaitingFiles": true,
       "artifacts": [
         {
           "role": "Role-text",
@@ -3993,6 +3997,7 @@
         "buildMissingDependencies": [
           "BuildMissingDependencies-text"
         ],
+        "buildAwaitingFiles": true,
         "artifacts": [
           {
             "role": "Role-text",
@@ -4354,6 +4359,7 @@
             "buildMissingDependencies": [
               "BuildMissingDependencies-text"
             ],
+            "buildAwaitingFiles": true,
             "artifacts": [
               {
                 "role": null,

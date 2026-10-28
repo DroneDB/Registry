@@ -135,3 +135,8 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   of one of those names makes it due at once (`awaitingFiles` false, `lastAttempt` 0). `PendingBuildInfo.AwaitingFiles`
   reads it (absent from an older libddb: false) and `FakeDdbWrapper.IsBuildPending` counts only the entries that do not
   await files. No other fixture, schema or vector changed.
+* 2026-10-28: DroneDB `11c85d9c28051127b248841396de85ffa0c903b0`: the build object (`build-artifacts`,
+  `build-artifacts-pending`, `list-entries-ex`) gains `awaitingFiles` (boolean, required in the schema; `true` in the
+  fixture of the deferred `roads.shp`, `false` in the others), the value `pending-build-info` reports for the same
+  marker. `EntryBuild.AwaitingFiles` reads it (absent from an older libddb: false) and the entry listing passes it to
+  clients as `buildAwaitingFiles` next to `buildMissingDependencies`. No other fixture, schema or vector changed.

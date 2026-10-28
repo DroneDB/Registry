@@ -76,6 +76,7 @@ public unsafe class LibddbContractTests : TestBase
     private const string NotBuildableJson = """
         {
           "artifacts": [],
+          "awaitingFiles": false,
           "buildable": false,
           "hash": null,
           "lastAttempt": null,
@@ -353,6 +354,7 @@ public unsafe class LibddbContractTests : TestBase
             {
               "build": {
                 "artifacts": [{{CogArtifactJson}}],
+                "awaitingFiles": false,
                 "buildable": true,
                 "hash": "{{hash}}",
                 "lastAttempt": null,
@@ -405,6 +407,8 @@ public unsafe class LibddbContractTests : TestBase
         // DDBGetPendingBuildInfo reports the same marker, through the adapter's port type
         var marker = DdbWrapper.GetPendingBuildInfo(root).ShouldHaveSingleItem();
         (marker.Path, marker.LastAttempt, marker.RetryAfter).ShouldBe((ShapefileName, lastAttempt, retryAfter));
+        DdbWrapper.GetBuildArtifacts(root, [ShapefileName]).ShouldHaveSingleItem().Build!.AwaitingFiles
+            .ShouldBe(marker.AwaitingFiles, "the build object and the pending info read the same marker");
         build["lastAttempt"] = 0;
         build["retryAfter"] = 0;
 
@@ -412,6 +416,7 @@ public unsafe class LibddbContractTests : TestBase
             [{
               "build": {
                 "artifacts": [],
+                "awaitingFiles": true,
                 "buildable": true,
                 "hash": "{{ShapefileHash}}",
                 "lastAttempt": 0,
@@ -475,6 +480,9 @@ public unsafe class LibddbContractTests : TestBase
             }]
             """));
         DdbWrapper.GetPendingBuildInfo(root).ShouldHaveSingleItem().AwaitingFiles.ShouldBeFalse();
+        var released = DdbWrapper.GetBuildArtifacts(root, [ShapefileName]).ShouldHaveSingleItem().Build!;
+        (released.State, released.AwaitingFiles).ShouldBe((BuildState.Pending, false),
+            "a released build stays pending, due at once, and awaits no file");
         DdbWrapper.IsBuildPending(root).ShouldBeTrue();
     }
 

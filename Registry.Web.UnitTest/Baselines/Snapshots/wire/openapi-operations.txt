@@ -1018,7 +1018,7 @@ schema EmailTemplatePlaceholderDto { name:string, description:string, inSubject:
 schema EmailTemplatePreviewDto { subject:string, text:string, html:string }
 schema EmailTemplateSummaryDto { name:string, title:string, isDefault:boolean }
 schema EmailTemplateTextDto { subject:string, body:string }
-schema EntryDto { path:string, hash:string, type:EntryType, properties:map<any>, mtime:string(date-time), size:integer(int64), depth:integer(int32), point_geom:any, polygon_geom:any, buildStatus:string, buildMissingDependencies:array<string>, artifacts:array<ArtifactLinkDto> }
+schema EntryDto { path:string, hash:string, type:EntryType, properties:map<any>, mtime:string(date-time), size:integer(int64), depth:integer(int32), point_geom:any, polygon_geom:any, buildStatus:string, buildMissingDependencies:array<string>, buildAwaitingFiles:boolean, artifacts:array<ArtifactLinkDto> }
 schema EntryType {  }
 schema EntryTypeDto { id:integer(int32), name:string, buildable:boolean, thumbnail:string, sidecarExtensions:array<string>, roles:array<string> }
 schema FaviconOptions { faviconIco:string, favicon16:string, favicon32:string, appleTouchIcon:string, manifest:string, themeColor:string }

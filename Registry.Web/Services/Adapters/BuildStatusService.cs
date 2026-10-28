@@ -16,7 +16,7 @@ namespace Registry.Web.Services.Adapters;
 /// <summary>
 /// Default <see cref="IBuildStatusService"/> implementation. Combines the
 /// Hangfire job index (for "building"/"failed") with libddb's build manifest
-/// (buildability, the pending marker with the missing dependency names,
+/// (buildability, the pending marker with the missing dependency names and whether it awaits them,
 /// and completeness for the default "ready" state) into a single per-entry status,
 /// and lists the artifacts that exist (<see cref="EntryDto.Artifacts"/>).
 /// A listing costs one native call (the manifest of the listed entries) and two
@@ -91,6 +91,7 @@ public class BuildStatusService : IBuildStatusService
             {
                 entry.BuildStatus = "pending";
                 entry.BuildMissingDependencies = [.. build.MissingDependencies];
+                entry.BuildAwaitingFiles = build.AwaitingFiles;
             }
             else if (build.State != BuildState.Complete && !waitingPaths.Contains(entry.Path))
                 unfinished.Add(entry);
