@@ -13,6 +13,7 @@ using Registry.Ports;
 using Registry.Test.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
@@ -144,6 +145,41 @@ internal class MetaManagerTest : TestBase
         (await metaManager.Unset(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "annotations"))
             .ShouldBe(1);
 
+        (await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task AddRemove_ReadOnlyUser_Forbidden()
+    {
+        await using var context = GetTest1Context();
+
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+
+        var settings = TestSettings.Default;
+
+        settings.DatasetsPath = Path.Combine(test.TestFolder, DdbFolder);
+        _settingsOptions.Value = settings;
+        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(false));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), AccessType.Read)).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), AccessType.Write)).Returns(Task.FromResult(false));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+
+        var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
+
+        var webUtils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(ddbManager));
+
+        var metaManager = new MetaManager(_metaManagerLogger,
+            new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, ddbManager, TestPaths.Policy),
+            new DatasetListingInvalidator(_cacheManager, ddbManager, TestCaches.Generations()));
+
+        await Should.ThrowAsync<ForbiddenException>(async () =>
+            await metaManager.Add(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug,
+                "annotations", "{\"test\":123}"));
+
+        await Should.ThrowAsync<ForbiddenException>(async () =>
+            await metaManager.Remove(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug, "any-id"));
+
+        // Reading is still allowed and nothing was written
         (await metaManager.List(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).ShouldBeEmpty();
     }
 
