@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -10,12 +9,12 @@ public class MockMeta : IMetaManager
 {
     private readonly Dictionary<string, string> _data = new();
 
-    public Meta Add(string key, string data, string path = null)
+    public Meta Add(string key, string data, string? path = null)
     {
         throw new NotImplementedException();
     }
 
-    public Meta Set(string key, string data, string path = null)
+    public Meta Set(string key, string data, string? path = null)
     {
         var fullKey = path != null ? $"{path}:{key}" : key;
         _data[fullKey] = data;
@@ -33,28 +32,28 @@ public class MockMeta : IMetaManager
         throw new NotImplementedException();
     }
 
-    public JsonElement Get(string key, string path = null)
+    public JsonElement Get(string key, string? path = null)
     {
         var fullKey = path != null ? $"{path}:{key}" : key;
         return JsonSerializer.SerializeToElement(_data.TryGetValue(fullKey, out var value) ? value : null);
     }
 
-    public int Unset(string key, string path = null)
+    public int Unset(string key, string? path = null)
     {
         throw new NotImplementedException();
     }
 
-    public MetaListItem[] List(string path = null)
+    public MetaListItem[] List(string? path = null)
     {
         throw new NotImplementedException();
     }
 
-    public MetaDump[] Dump(string ids = null)
+    public MetaDump[] Dump(string? ids = null)
     {
         throw new NotImplementedException();
     }
 
-    public T Get<T>(string key, string path = null)
+    public T? Get<T>(string key, string? path = null)
     {
         var fullKey = path != null ? $"{path}:{key}" : key;
 
