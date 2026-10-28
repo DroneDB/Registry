@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using Registry.Web.Services.Jobs;
 using System.Collections.Generic;
@@ -81,8 +80,9 @@ public class BuildPendingServiceTest : TestBase
             .Returns(ddbMock.Object);
 
         _cacheManager.Setup(x => x.IsRegistered(It.IsAny<string>())).Returns(false);
+        // The contract never returns null, but the service also copes with a null read like a missing entry
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((byte[])null);
+            .ReturnsAsync((byte[])null!);
 
         var service = new BuildPendingService(new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
@@ -119,7 +119,7 @@ public class BuildPendingServiceTest : TestBase
 
         _cacheManager.Setup(x => x.IsRegistered(It.IsAny<string>())).Returns(false);
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((byte[])null);
+            .ReturnsAsync((byte[])null!);
 
         var service = new BuildPendingService(new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
@@ -342,7 +342,7 @@ public class BuildPendingServiceTest : TestBase
 
         _cacheManager.Setup(x => x.IsRegistered(It.IsAny<string>())).Returns(false);
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((byte[])null);
+            .ReturnsAsync((byte[])null!);
 
         var service = new BuildPendingService(new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
@@ -379,7 +379,7 @@ public class BuildPendingServiceTest : TestBase
 
         _cacheManager.Setup(x => x.IsRegistered(It.IsAny<string>())).Returns(false);
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((byte[])null);
+            .ReturnsAsync((byte[])null!);
 
         var service = new BuildPendingService(new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
@@ -544,7 +544,7 @@ public class BuildPendingServiceTest : TestBase
         ddbMock.Setup(x => x.IsBuildPending()).Returns(false);
         ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp { Checksum = "c", Entries = [], Meta = [] });
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
-        _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync((byte[])null);
+        _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync((byte[])null!);
 
         var service = new BuildPendingService(new DatasetSweep(context), _ddbManagerMock.Object, _backgroundJobMock.Object, _cacheManager.Object, TestJobs.NewStorage(), _logger);
 
@@ -566,7 +566,7 @@ public class BuildPendingServiceTest : TestBase
         ddbMock.Setup(x => x.IsBuildPending()).Returns(true);
         ddbMock.Setup(x => x.GetStamp()).Returns(new Stamp { Checksum = "c", Entries = [], Meta = [] });
         _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
-        _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync((byte[])null);
+        _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync((byte[])null!);
         _backgroundJobMock.Setup(x => x.ScheduleIndexed(
                 It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(), It.IsAny<IndexPayload>(), It.IsAny<TimeSpan>()))
             .Returns("retry-1");
@@ -598,7 +598,7 @@ public class BuildPendingServiceTest : TestBase
             LastCheckBinary = DateTime.UtcNow.ToBinary(),
             StampChecksum = "c",
             RetryAttempt = 2,
-            ScheduledRetryJobId = (string)null
+            ScheduledRetryJobId = (string?)null
         });
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(System.Text.Encoding.UTF8.GetBytes(cacheState));
@@ -667,7 +667,7 @@ public class BuildPendingServiceTest : TestBase
             LastCheckBinary = DateTime.UtcNow.ToBinary(),
             StampChecksum = "c",
             RetryAttempt = 12,
-            ScheduledRetryJobId = (string)null
+            ScheduledRetryJobId = (string?)null
         });
         _cacheManager.Setup(x => x.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(System.Text.Encoding.UTF8.GetBytes(cacheState));

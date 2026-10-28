@@ -1,4 +1,3 @@
-#nullable disable
 using Shouldly;
 using Microsoft.EntityFrameworkCore;
 using Moq;
@@ -266,7 +265,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         var manager = CreateManager();
 
         await Should.ThrowAsync<BadRequestException>(
-            manager.AddMember(_testOrg.Slug, _ownerUser.UserName, OrganizationPermissions.ReadWrite)
+            manager.AddMember(_testOrg.Slug, _ownerUser.UserName.ShouldNotBeNull(), OrganizationPermissions.ReadWrite)
         );
     }
 
@@ -277,7 +276,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         var manager = CreateManager();
 
         await Should.ThrowAsync<ConflictException>(
-            manager.AddMember(_testOrg.Slug, _memberUser.UserName, OrganizationPermissions.ReadWrite)
+            manager.AddMember(_testOrg.Slug, _memberUser.UserName.ShouldNotBeNull(), OrganizationPermissions.ReadWrite)
         );
     }
 
@@ -291,12 +290,12 @@ public class OrganizationMemberPermissionsTest : TestBase
         SetupAsUser(_ownerUser);
         var manager = CreateManager();
 
-        await manager.UpdateMemberPermission(_testOrg.Slug, _memberUser.UserName, OrganizationPermissions.Admin);
+        await manager.UpdateMemberPermission(_testOrg.Slug, _memberUser.UserName.ShouldNotBeNull(), OrganizationPermissions.Admin);
 
         var orgUser = await _context.Set<OrganizationUser>()
             .FirstOrDefaultAsync(u => u.UserId == _memberUser.Id);
 
-        orgUser.Permissions.ShouldBe(OrganizationPermissions.Admin);
+        orgUser.ShouldNotBeNull().Permissions.ShouldBe(OrganizationPermissions.Admin);
     }
 
     [Test]
@@ -305,12 +304,12 @@ public class OrganizationMemberPermissionsTest : TestBase
         SetupAsAdmin(_adminUser);
         var manager = CreateManager();
 
-        await manager.UpdateMemberPermission(_testOrg.Slug, _memberUser.UserName, OrganizationPermissions.ReadWriteDelete);
+        await manager.UpdateMemberPermission(_testOrg.Slug, _memberUser.UserName.ShouldNotBeNull(), OrganizationPermissions.ReadWriteDelete);
 
         var orgUser = await _context.Set<OrganizationUser>()
             .FirstOrDefaultAsync(u => u.UserId == _memberUser.Id);
 
-        orgUser.Permissions.ShouldBe(OrganizationPermissions.ReadWriteDelete);
+        orgUser.ShouldNotBeNull().Permissions.ShouldBe(OrganizationPermissions.ReadWriteDelete);
     }
 
     [Test]
@@ -334,7 +333,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         SetupAsUser(_ownerUser);
         var manager = CreateManager();
 
-        await manager.RemoveMember(_testOrg.Slug, _memberUser.UserName);
+        await manager.RemoveMember(_testOrg.Slug, _memberUser.UserName.ShouldNotBeNull());
 
         var orgUser = await _context.Set<OrganizationUser>()
             .FirstOrDefaultAsync(u => u.UserId == _memberUser.Id);
@@ -361,7 +360,7 @@ public class OrganizationMemberPermissionsTest : TestBase
         var manager = CreateManager();
 
         await Should.ThrowAsync<ForbiddenException>(
-            manager.RemoveMember(_testOrg.Slug, _memberUser.UserName)
+            manager.RemoveMember(_testOrg.Slug, _memberUser.UserName.ShouldNotBeNull())
         );
     }
 

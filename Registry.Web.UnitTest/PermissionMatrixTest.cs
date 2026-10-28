@@ -1,4 +1,3 @@
-#nullable disable
 using Shouldly;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -400,7 +399,7 @@ public class PermissionMatrixTest : TestBase
         var control = CreateOrgAccessControl();
         var org = GetOrg(orgIsPublic);
 
-        var result = await control.CanAccessOrganization(org, access, (User)null);
+        var result = await control.CanAccessOrganization(org, access, (User?)null);
 
         result.ShouldBe(expected);
     }
@@ -606,7 +605,7 @@ public class PermissionMatrixTest : TestBase
         var control = CreateDatasetAccessControl();
         var dataset = GetDataset(orgIsPublic, dsVisibility);
 
-        var result = await control.CanAccessDataset(dataset, access, (User)null);
+        var result = await control.CanAccessDataset(dataset, access, (User?)null);
 
         result.ShouldBe(expected);
     }
@@ -1042,11 +1041,12 @@ public class PermissionMatrixTest : TestBase
 
     #region OrganizationsManager Member Management Integration
 
-    private Mock<IAuthManager> _authManagerMock;
-    private MutableOptions<AppSettings> _settingsOptions;
-    private Mock<IDatasetsManager> _datasetManagerMock;
-    private Mock<IDatasetResolver> _utilsMock;
-    private AppSettings _appSettings;
+    // Set by CreateOrganizationsManager, which every member-management test calls first
+    private Mock<IAuthManager> _authManagerMock = null!;
+    private MutableOptions<AppSettings> _settingsOptions = null!;
+    private Mock<IDatasetsManager> _datasetManagerMock = null!;
+    private Mock<IDatasetResolver> _utilsMock = null!;
+    private AppSettings _appSettings = null!;
 
     private OrganizationsManager CreateOrganizationsManager()
     {
@@ -1182,7 +1182,7 @@ public class PermissionMatrixTest : TestBase
         SetupManagerAsUser(_readOnlyMember);
 
         await Should.ThrowAsync<ForbiddenException>(
-            manager.UpdateMemberPermission(_privateOrg.Slug, _readWriteMember.UserName, OrganizationPermissions.Admin));
+            manager.UpdateMemberPermission(_privateOrg.Slug, _readWriteMember.UserName.ShouldNotBeNull(), OrganizationPermissions.Admin));
     }
 
     [Test]
@@ -1192,7 +1192,7 @@ public class PermissionMatrixTest : TestBase
         SetupManagerAsUser(_readWriteMember);
 
         await Should.ThrowAsync<ForbiddenException>(
-            manager.UpdateMemberPermission(_privateOrg.Slug, _readOnlyMember.UserName, OrganizationPermissions.Admin));
+            manager.UpdateMemberPermission(_privateOrg.Slug, _readOnlyMember.UserName.ShouldNotBeNull(), OrganizationPermissions.Admin));
     }
 
     [Test]
@@ -1202,7 +1202,7 @@ public class PermissionMatrixTest : TestBase
         SetupManagerAsUser(_readWriteDeleteMember);
 
         await Should.ThrowAsync<ForbiddenException>(
-            manager.UpdateMemberPermission(_privateOrg.Slug, _readOnlyMember.UserName, OrganizationPermissions.Admin));
+            manager.UpdateMemberPermission(_privateOrg.Slug, _readOnlyMember.UserName.ShouldNotBeNull(), OrganizationPermissions.Admin));
     }
 
     [Test]
@@ -1211,7 +1211,7 @@ public class PermissionMatrixTest : TestBase
         var manager = CreateOrganizationsManager();
         SetupManagerAsUser(_adminMember);
 
-        await manager.UpdateMemberPermission(_privateOrg.Slug, _readOnlyMember.UserName,
+        await manager.UpdateMemberPermission(_privateOrg.Slug, _readOnlyMember.UserName.ShouldNotBeNull(),
             OrganizationPermissions.ReadWrite);
 
         var orgUser = await _context.Set<OrganizationUser>()
@@ -1228,7 +1228,7 @@ public class PermissionMatrixTest : TestBase
         SetupManagerAsUser(_readOnlyMember);
 
         await Should.ThrowAsync<ForbiddenException>(
-            manager.RemoveMember(_privateOrg.Slug, _readWriteMember.UserName));
+            manager.RemoveMember(_privateOrg.Slug, _readWriteMember.UserName.ShouldNotBeNull()));
     }
 
     [Test]
@@ -1238,7 +1238,7 @@ public class PermissionMatrixTest : TestBase
         SetupManagerAsUser(_readWriteMember);
 
         await Should.ThrowAsync<ForbiddenException>(
-            manager.RemoveMember(_privateOrg.Slug, _readOnlyMember.UserName));
+            manager.RemoveMember(_privateOrg.Slug, _readOnlyMember.UserName.ShouldNotBeNull()));
     }
 
     [Test]
@@ -1248,7 +1248,7 @@ public class PermissionMatrixTest : TestBase
         SetupManagerAsUser(_readWriteDeleteMember);
 
         await Should.ThrowAsync<ForbiddenException>(
-            manager.RemoveMember(_privateOrg.Slug, _readOnlyMember.UserName));
+            manager.RemoveMember(_privateOrg.Slug, _readOnlyMember.UserName.ShouldNotBeNull()));
     }
 
     [Test]
@@ -1338,7 +1338,7 @@ public class PermissionMatrixTest : TestBase
         // When the org owner is deactivated, anonymous cannot read even public datasets
         var control = CreateDatasetAccessControl();
 
-        var result = await control.CanAccessDataset(_deactivatedOwnerOrgPublicDs, AccessType.Read, (User)null);
+        var result = await control.CanAccessDataset(_deactivatedOwnerOrgPublicDs, AccessType.Read, (User?)null);
 
         result.ShouldBeFalse();
     }
@@ -1349,7 +1349,7 @@ public class PermissionMatrixTest : TestBase
         // When the org owner is deactivated, anonymous cannot read the public org
         var control = CreateOrgAccessControl();
 
-        var result = await control.CanAccessOrganization(_deactivatedOwnerOrg, AccessType.Read, (User)null);
+        var result = await control.CanAccessOrganization(_deactivatedOwnerOrg, AccessType.Read, (User?)null);
 
         result.ShouldBeFalse();
     }
@@ -1399,7 +1399,7 @@ public class PermissionMatrixTest : TestBase
         // Even though the org is public, anonymous cannot read a private dataset
         var control = CreateDatasetAccessControl();
 
-        var result = await control.CanAccessDataset(_publicOrgPrivateDs, AccessType.Read, (User)null);
+        var result = await control.CanAccessDataset(_publicOrgPrivateDs, AccessType.Read, (User?)null);
 
         result.ShouldBeFalse();
     }
@@ -1411,7 +1411,7 @@ public class PermissionMatrixTest : TestBase
         // (DatasetAccessControl checks dataset visibility, not org visibility)
         var control = CreateDatasetAccessControl();
 
-        var result = await control.CanAccessDataset(_privateOrgPublicDs, AccessType.Read, (User)null);
+        var result = await control.CanAccessDataset(_privateOrgPublicDs, AccessType.Read, (User?)null);
 
         result.ShouldBeTrue();
     }
@@ -1508,7 +1508,7 @@ public class PermissionMatrixTest : TestBase
         SetupManagerAsUser(_ownerUser);
 
         await Should.ThrowAsync<ForbiddenException>(
-            manager.RemoveMember(_privateOrg.Slug, _readOnlyMember.UserName));
+            manager.RemoveMember(_privateOrg.Slug, _readOnlyMember.UserName.ShouldNotBeNull()));
     }
 
     [Test]
@@ -1520,7 +1520,7 @@ public class PermissionMatrixTest : TestBase
         SetupManagerAsUser(_ownerUser);
 
         await Should.ThrowAsync<ForbiddenException>(
-            manager.UpdateMemberPermission(_privateOrg.Slug, _readOnlyMember.UserName, OrganizationPermissions.Admin));
+            manager.UpdateMemberPermission(_privateOrg.Slug, _readOnlyMember.UserName.ShouldNotBeNull(), OrganizationPermissions.Admin));
     }
 
     [Test]
@@ -1530,7 +1530,7 @@ public class PermissionMatrixTest : TestBase
         SetupManagerAsUser(_ownerUser);
 
         await Should.ThrowAsync<BadRequestException>(
-            manager.AddMember(_privateOrg.Slug, _ownerUser.UserName, OrganizationPermissions.ReadWrite));
+            manager.AddMember(_privateOrg.Slug, _ownerUser.UserName.ShouldNotBeNull(), OrganizationPermissions.ReadWrite));
     }
 
     [Test]
@@ -1540,7 +1540,7 @@ public class PermissionMatrixTest : TestBase
         SetupManagerAsUser(_ownerUser);
 
         await Should.ThrowAsync<ConflictException>(
-            manager.AddMember(_privateOrg.Slug, _readWriteMember.UserName, OrganizationPermissions.ReadWrite));
+            manager.AddMember(_privateOrg.Slug, _readWriteMember.UserName.ShouldNotBeNull(), OrganizationPermissions.ReadWrite));
     }
 
     [Test]
@@ -1560,7 +1560,7 @@ public class PermissionMatrixTest : TestBase
         SetupManagerAsUser(_ownerUser);
 
         await Should.ThrowAsync<NotFoundException>(
-            manager.UpdateMemberPermission(_privateOrg.Slug, _nonMemberUser.UserName, OrganizationPermissions.Admin));
+            manager.UpdateMemberPermission(_privateOrg.Slug, _nonMemberUser.UserName.ShouldNotBeNull(), OrganizationPermissions.Admin));
     }
 
     [Test]
@@ -1570,7 +1570,7 @@ public class PermissionMatrixTest : TestBase
         SetupManagerAsUser(_ownerUser);
 
         await Should.ThrowAsync<NotFoundException>(
-            manager.RemoveMember(_privateOrg.Slug, _nonMemberUser.UserName));
+            manager.RemoveMember(_privateOrg.Slug, _nonMemberUser.UserName.ShouldNotBeNull()));
     }
 
     [Test]
