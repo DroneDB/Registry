@@ -58,6 +58,8 @@ public static class ProcessingPlatformServiceCollectionExtensions
         services.AddSingleton<IHeavyTool, AlignRasterTool>();
         services.AddSingleton<IHeavyTool, RescanIndexTool>();
         services.AddSingleton<IHeavyTool, ArchiveExtractTool>();
+        services.AddSingleton<IHeavyTool, SplatTrainingExportTool>();
+        services.AddSingleton<IHeavyTool, SplatSpzExportTool>();
 
         // Catalog is immutable for the process lifetime.
         services.AddSingleton<IHeavyToolRegistry, HeavyToolRegistry>();

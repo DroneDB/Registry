@@ -118,6 +118,28 @@
         "disabledMessage": null
       },
       {
+        "id": "splat-training-export",
+        "version": "1",
+        "title": "Export splat training data",
+        "requiredAccess": "Read",
+        "producesArtifact": true,
+        "resultExtension": "zip",
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "splat-spz-export",
+        "version": "1",
+        "title": "Export splat as .spz",
+        "requiredAccess": "Read",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
         "id": "import-dataset",
         "version": "1",
         "title": "Import dataset",

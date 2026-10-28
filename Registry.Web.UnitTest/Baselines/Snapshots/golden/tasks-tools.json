@@ -376,6 +376,77 @@
       "disabledMessage": null
     },
     {
+      "id": "splat-training-export",
+      "version": "1",
+      "title": "Export splat training data",
+      "requiredAccess": "Read",
+      "producesArtifact": true,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Folder of the ODM project (cameras.json, odm_report, images, odm_georeferencing); empty for the dataset root."
+          },
+          "maxImageSize": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Longest side in pixels of the exported images; 0 or absent exports the originals."
+          },
+          "maxPoints": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Most points of the sparse model (default 100000); 0 writes none."
+          },
+          "fileName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional output file name."
+          }
+        },
+        "additionalProperties": false
+      },
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    },
+    {
+      "id": "splat-spz-export",
+      "version": "1",
+      "title": "Export splat as .spz",
+      "requiredAccess": "Read",
+      "producesArtifact": false,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Entry path of the built Gaussian splat (PLY, SPLAT or SPZ)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    },
+    {
       "id": "import-dataset",
       "version": "1",
       "title": "Import dataset",

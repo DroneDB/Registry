@@ -25,13 +25,20 @@ public static class ZipArchiveExtension
         var path = CommonUtils.SafeCombine(entryName, Path.GetFileName(sourceName));
 
         if (File.GetAttributes(sourceName).HasFlag(FileAttributes.Directory))
-        {
-            foreach (var child in Directory.GetFiles(sourceName).Concat(Directory.GetDirectories(sourceName)))
-                await archive.CreateEntryFromAnyAsync(child, path, excludes, ct);
-        }
+            await archive.CreateEntriesFromFolderAsync(sourceName, path, excludes, ct);
         else
-        {
             await archive.CreateEntryFromFileAsync(sourceName, path, CommonUtils.GetCompressionLevel(path), ct);
-        }
+    }
+
+    /// <summary>
+    /// Adds what is in a folder (its files, and its subfolders with everything under them) to the archive under
+    /// <paramref name="entryName"/>, without an entry for the folder itself: the archive of a folder has the folder's
+    /// content at its root when <paramref name="entryName"/> is empty.
+    /// </summary>
+    public static async Task CreateEntriesFromFolderAsync(this ZipArchive archive, string folder,
+        string entryName = "", string[]? excludes = null, CancellationToken ct = default)
+    {
+        foreach (var child in Directory.GetFiles(folder).Concat(Directory.GetDirectories(folder)))
+            await archive.CreateEntryFromAnyAsync(child, entryName, excludes, ct);
     }
 }

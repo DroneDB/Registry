@@ -91,17 +91,27 @@ public sealed class ZipArchiveBuilder : IZipArchiveBuilder
         return (files, folders, includeDdb);
     }
 
-    public async Task WriteZipAsync(IDDB ddb, string[] files, string[] folders, bool includeDdb,
-        Stream output, IProgress<long>? progress = null, CancellationToken ct = default)
+    public Task WriteZipAsync(IDDB ddb, string[] files, string[] folders, bool includeDdb,
+        Stream output, IProgress<long>? progress = null, CancellationToken ct = default) =>
+        WriteArchiveAsync(output, archive => WriteEntriesAsync(archive, ddb, files, folders, includeDdb, progress, ct),
+            ct);
+
+    public Task WriteFolderZipAsync(string folder, Stream output, CancellationToken ct = default)
     {
-        // Written entry by entry, asynchronously and without seeking, so output can be a response
-        // body: the first bytes leave while later files are still being read, and
-        // memory stays at the copy buffer whatever the size of the selection
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        return WriteArchiveAsync(output, archive => archive.CreateEntriesFromFolderAsync(folder, ct: ct), ct);
+    }
+
+    // Written entry by entry, asynchronously and without seeking, so output can be a response
+    // body: the first bytes leave while later files are still being read, and
+    // memory stays at the copy buffer whatever the size of the selection
+    private static async Task WriteArchiveAsync(Stream output, Func<ZipArchive, Task> write, CancellationToken ct)
+    {
         await using var sink = new SyncWriteBufferingStream(output);
         await using (var archive = await ZipArchive.CreateAsync(sink, ZipArchiveMode.Create, leaveOpen: true,
                          entryNameEncoding: null, ct))
         {
-            await WriteEntriesAsync(archive, ddb, files, folders, includeDdb, progress, ct);
+            await write(archive);
         }
         // The archive's last records (data descriptor, central directory) may still be pending
         await sink.FlushAsync(ct);

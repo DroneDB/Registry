@@ -91,7 +91,7 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
             // estimate is best-effort
         }
 
-        var fileName = SafeFileName(p.FileName,
+        var fileName = ToolFileNames.Safe(p.FileName,
                            $"{Path.GetFileNameWithoutExtension(request.Path)}_export.tif");
 
         return new HeavyToolPlan(estimate, QuotaKey: "raster-export", DefaultFileName: fileName, ContentType: "image/tiff");
@@ -107,7 +107,7 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
         if (ctx.WorkDir is null)
             throw new InvalidOperationException("RasterExportTool requires a work directory.");
 
-        var fileName = SafeFileName(p.FileName,
+        var fileName = ToolFileNames.Safe(p.FileName,
                            $"{Path.GetFileNameWithoutExtension(request.Path)}_export.tif");
         var outputPath = Path.Combine(ctx.WorkDir, fileName);
 
@@ -150,14 +150,4 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
             SizeBytes: info.Length,
             Sha256: sha);
     }
-
-    // Strips any directory components (path traversal / absolute path) from a
-    // user-supplied file name, falling back to `fallback` if the result is empty.
-    private static string SafeFileName(string? name, string fallback)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return fallback;
-        var safe = Path.GetFileName(name.Trim());
-        return string.IsNullOrWhiteSpace(safe) ? fallback : safe;
-    }
-
 }

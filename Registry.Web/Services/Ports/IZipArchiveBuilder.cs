@@ -34,4 +34,11 @@ public interface IZipArchiveBuilder
     /// <param name="progress">Reports cumulative bytes written, for progress mapping.</param>
     Task WriteZipAsync(IDDB ddb, string[] files, string[] folders, bool includeDdb,
         Stream output, IProgress<long>? progress = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Writes a ZIP archive of what is in <paramref name="folder"/> (a folder of the filesystem, not of a dataset)
+    /// to <paramref name="output"/>: every file and subfolder, named relative to the folder, with the
+    /// per-extension compression level of <see cref="WriteZipAsync"/>.
+    /// </summary>
+    Task WriteFolderZipAsync(string folder, Stream output, CancellationToken ct = default);
 }
