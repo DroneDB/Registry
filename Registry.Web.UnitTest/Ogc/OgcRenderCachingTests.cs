@@ -149,8 +149,8 @@ public class OgcRenderCachingTests
         var wms = CreateWms();
         await GetMap(wms, Shift(View, 0.1, 0.1));
 
-        var rendered = (double[])_wrapper.Invocations.Single(i => i.Method.Name == nameof(IDdbWrapper.RenderRasterRegion))
-            .Arguments[1];
+        var rendered = _wrapper.Invocations.Single(i => i.Method.Name == nameof(IDdbWrapper.RenderRasterRegion))
+            .Arguments[1].ShouldBeOfType<double[]>();
         for (var i = 0; i < 4; i++)
             Math.Abs(rendered[i] - View[i]).ShouldBeLessThan(1e-6, "snapped to the 0.5 m grid");
     }

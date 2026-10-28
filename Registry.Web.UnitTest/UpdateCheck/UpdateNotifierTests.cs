@@ -241,7 +241,7 @@ public class UpdateNotifierTests
         _email.Sends.ShouldBeEmpty();
         _admins.Calls.ShouldBe(0);
         _cache.Content.LastNotifiedVersion.ShouldBeNull();
-        logger.Invocations.Where(i => i.Method.Name == nameof(ILogger.Log)).Select(i => (LogLevel)i.Arguments[0])
+        logger.Invocations.Where(i => i.Method.Name == nameof(ILogger.Log)).Select(i => i.Arguments[0].ShouldBeOfType<LogLevel>())
             .ShouldBe([LogLevel.Debug]);
     }
 
@@ -274,7 +274,7 @@ public class UpdateNotifierTests
         await Should.NotThrowAsync(() => notifier.NotifyAsync(Update(), CancellationToken.None));
 
         _cache.Content.LastNotifiedVersion.ShouldBeNull();
-        logger.Invocations.Count(i => i.Method.Name == nameof(ILogger.Log) && (LogLevel)i.Arguments[0] == LogLevel.Warning).ShouldBe(1);
+        logger.Invocations.Count(i => i.Method.Name == nameof(ILogger.Log) && i.Arguments[0] is LogLevel.Warning).ShouldBe(1);
 
         _email.Failure = null;
         await notifier.NotifyAsync(Update(), CancellationToken.None);

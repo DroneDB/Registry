@@ -14,13 +14,16 @@
         Packages whose assemblies ship in the shared framework (Microsoft.NETCore.App or
         Microsoft.AspNetCore.App) are not referenced: NuGet reports them as NU1510.
 
-        Transitive pinning (CentralPackageTransitivePinningEnabled) is off, so restore resolves the
-        same transitive versions as before.
+        Transitive pinning (CentralPackageTransitivePinningEnabled) is on: a version set here also
+        applies where the package only comes in transitively. Packages that no project references
+        are listed under "Transitive pins", each with the reason; remove a pin once the package
+        that brings it in depends on a fixed version itself.
     -->
     <PropertyGroup>
         <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-        <DotNetPackagesVersion>10.0.7</DotNetPackagesVersion>
-        <HangfireVersion>1.8.23</HangfireVersion>
+        <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+        <DotNetPackagesVersion>10.0.14</DotNetPackagesVersion>
+        <HangfireVersion>1.8.25</HangfireVersion>
         <AspNetCoreHealthChecksVersion>9.0.0</AspNetCoreHealthChecksVersion>
         <SkiaSharpVersion>3.119.2</SkiaSharpVersion>
     </PropertyGroup>
@@ -45,7 +48,7 @@
 
     <!-- Data access -->
     <ItemGroup>
-        <PackageVersion Include="Microting.EntityFrameworkCore.MySql" Version="10.0.7" />
+        <PackageVersion Include="Microting.EntityFrameworkCore.MySql" Version="10.0.13" />
     </ItemGroup>
 
     <!-- Background jobs and health checks -->
@@ -61,7 +64,7 @@
 
     <!-- Logging -->
     <ItemGroup>
-        <PackageVersion Include="Serilog" Version="4.3.1" />
+        <PackageVersion Include="Serilog" Version="4.4.0" />
         <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
         <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
         <PackageVersion Include="Serilog.Enrichers.Thread" Version="4.0.0" />
@@ -75,10 +78,10 @@
     <ItemGroup>
         <PackageVersion Include="CommandLineParser" Version="2.9.1" />
         <PackageVersion Include="MailKit" Version="4.18.2" />
-        <PackageVersion Include="Scalar.AspNetCore" Version="2.14.11" />
-        <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.1.7" />
+        <PackageVersion Include="Scalar.AspNetCore" Version="2.18.5" />
+        <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.3.1" />
         <PackageVersion Include="System.DirectoryServices.Protocols" Version="9.0.0" />
-        <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.18.0" />
+        <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
     </ItemGroup>
 
     <!-- General purpose libraries -->
@@ -86,23 +89,33 @@
         <PackageVersion Include="MimeMapping" Version="4.0.0" />
         <PackageVersion Include="MimeTypes" Version="2.5.2" />
         <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
-        <PackageVersion Include="Polly" Version="8.6.6" />
-        <PackageVersion Include="SharpCompress" Version="0.49.1" />
+        <PackageVersion Include="Polly" Version="8.9.0" />
+        <PackageVersion Include="SharpCompress" Version="0.50.7" />
         <PackageVersion Include="SkiaSharp" Version="$(SkiaSharpVersion)" />
         <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="$(SkiaSharpVersion)" />
+    </ItemGroup>
+
+    <!-- Transitive pins -->
+    <ItemGroup>
+        <!--
+            Hangfire.MySqlStorage 2.0.3 (the latest) depends on Dapper 1.50.5, which depends on
+            System.Data.SqlClient 4.4.0 (GHSA-98g6-xh36-x2p7, GHSA-8g2p-5pqh-5jmc). Registry never
+            connects to SQL Server, but the package ships with it; 4.9.1 is the last fixed version.
+        -->
+        <PackageVersion Include="System.Data.SqlClient" Version="4.9.1" />
     </ItemGroup>
 
     <!-- Tests -->
     <ItemGroup>
         <!-- Checks the payload of the update check against its JSON Schema (test only) -->
         <PackageVersion Include="JsonSchema.Net" Version="9.5.0" />
-        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
-        <PackageVersion Include="Moq" Version="4.20.72" />
+        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+        <PackageVersion Include="Moq" Version="4.21.0" />
         <PackageVersion Include="NUnit" Version="4.6.0" />
-        <PackageVersion Include="NUnit3TestAdapter" Version="6.2.0" />
+        <PackageVersion Include="NUnit3TestAdapter" Version="6.3.1" />
         <PackageVersion Include="Shouldly" Version="4.3.0" />
-        <PackageVersion Include="Testcontainers" Version="4.12.0" />
-        <PackageVersion Include="Testcontainers.MariaDb" Version="4.12.0" />
+        <PackageVersion Include="Testcontainers" Version="4.16.0" />
+        <PackageVersion Include="Testcontainers.MariaDb" Version="4.16.0" />
     </ItemGroup>
 
 </Project>
