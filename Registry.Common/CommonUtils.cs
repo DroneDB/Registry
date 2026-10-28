@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -33,7 +32,7 @@ public static class CommonUtils
         return res.ToString();
     }
 
-    public static TValue SafeGetValue<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key)
+    public static TValue? SafeGetValue<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key)
     {
         return !dictionary.TryGetValue(key, out var value) ? default : value;
     }
@@ -67,9 +66,9 @@ public static class CommonUtils
     /// </summary>
     /// <param name="paths">An array of parts of the path.</param>
     /// <returns></returns>
-    public static string SafeCombine(params string[] paths)
+    public static string SafeCombine(params string?[] paths)
     {
-        return Path.Combine([.. paths.Where(item => item != null)]).ToDdbPath();
+        return Path.Combine([.. paths.OfType<string>()]).ToDdbPath();
     }
 
     /// <summary>
@@ -218,7 +217,7 @@ public static class CommonUtils
     public const string DroneDBDllNameWindows = "ddb.dll";
     public const string DroneDBDllNameLinux = "libddb.so";
 
-    public static string FindDdbFolder()
+    public static string? FindDdbFolder()
     {
         var path = Environment.GetEnvironmentVariable("PATH");
 

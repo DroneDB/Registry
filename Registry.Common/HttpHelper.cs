@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -30,8 +29,8 @@ public static class HttpHelper
     /// <param name="progressCallback">Optional callback for progress reporting (bytesDownloaded, totalBytes). totalBytes may be -1 if unknown.</param>
     /// <param name="httpClient">Optional client to use (e.g. an SSRF-hardened one); falls back to the shared static client.</param>
     /// <param name="cancellationToken">Stops the transfer (the partial file stays: the caller removes it).</param>
-    public static async Task DownloadFileAsync(string uri, string outputPath, Dictionary<string, string> headers = null,
-        Action<long, long> progressCallback = null, HttpClient httpClient = null,
+    public static async Task DownloadFileAsync(string uri, string outputPath, Dictionary<string, string>? headers = null,
+        Action<long, long>? progressCallback = null, HttpClient? httpClient = null,
         CancellationToken cancellationToken = default)
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out _))
@@ -88,7 +87,7 @@ public static class HttpHelper
     public class DownloadResult
     {
         public bool Success { get; set; }
-        public string ErrorMessage { get; set; }
+        public string? ErrorMessage { get; set; }
         public int RetryCount { get; set; }
         public long BytesDownloaded { get; set; }
     }
@@ -107,9 +106,9 @@ public static class HttpHelper
     public static async Task<DownloadResult> DownloadFileWithRetryAsync(
         string uri,
         string outputPath,
-        Dictionary<string, string> headers = null,
+        Dictionary<string, string>? headers = null,
         int maxRetries = 3,
-        HttpClient httpClient = null,
+        HttpClient? httpClient = null,
         CancellationToken cancellationToken = default)
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out _))

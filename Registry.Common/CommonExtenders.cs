@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using System.IO;
 
@@ -20,6 +19,6 @@ public static class CommonExtenders
     /// True when both dictionaries hold the same values (<see cref="PlainValue"/>): the lists and dictionaries inside are
     /// compared by content, not by reference.
     /// </summary>
-    public static bool IsSameAs(this Dictionary<string, object> a, Dictionary<string, object> b) =>
+    public static bool IsSameAs(this Dictionary<string, object>? a, Dictionary<string, object>? b) =>
         PlainValue.AreEqual(a, b);
 }
