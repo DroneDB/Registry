@@ -1,3 +1,4 @@
+#nullable disable
 using Registry.Adapters.Testing;
 using System;
 using System.Collections.Generic;

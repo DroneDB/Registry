@@ -1,3 +1,4 @@
+#nullable disable
 using System;
 using Registry.Adapters.Testing;
 using Registry.Ports;

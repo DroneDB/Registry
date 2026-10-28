@@ -1,3 +1,4 @@
+#nullable disable
 using Shouldly;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;

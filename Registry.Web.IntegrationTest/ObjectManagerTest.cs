@@ -1,3 +1,4 @@
+#nullable disable
 using System;
 using Registry.Web.Services.Jobs;
 using System.Collections.Generic;

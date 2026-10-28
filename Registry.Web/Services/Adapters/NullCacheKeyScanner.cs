@@ -1,3 +1,4 @@
+#nullable disable
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;

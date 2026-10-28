@@ -1,3 +1,4 @@
+#nullable disable
 using System.Threading.Tasks;
 using Hangfire.Dashboard;
 using Microsoft.Extensions.DependencyInjection;

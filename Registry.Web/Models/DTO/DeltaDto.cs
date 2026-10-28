@@ -1,3 +1,4 @@
+#nullable disable
 using System.Text.Json.Serialization;
 using Registry.Ports.DroneDB;
 

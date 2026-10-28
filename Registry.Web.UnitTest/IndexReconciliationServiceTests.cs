@@ -1,3 +1,4 @@
+#nullable disable
 using Registry.Adapters;
 using Registry.Web.Services.Jobs;
 using System;

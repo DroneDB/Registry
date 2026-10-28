@@ -1,3 +1,4 @@
+#nullable disable
 using System.Xml.Linq;
 using NUnit.Framework;
 using Registry.Web.Utilities.Ogc;

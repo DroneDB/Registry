@@ -71,7 +71,8 @@
 }
 
 @code {
-    private BuildNotificationValues _values;
+    // Set by OnParametersSet, which runs before every render.
+    private BuildNotificationValues _values = null!;
 
     protected override void OnParametersSet() => _values = new BuildNotificationValues(Model.Data, Branding);
 }

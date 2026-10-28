@@ -8,8 +8,6 @@
     <Platforms>AnyCPU;x64</Platforms>
 
     <Configurations>Debug;Release</Configurations>
-    <!-- Nullable allow-list (build/nullable-allowlist.txt): it may only shrink. -->
-    <Nullable>disable</Nullable>
 
   </PropertyGroup>
 

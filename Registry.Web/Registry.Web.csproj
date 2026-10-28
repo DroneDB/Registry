@@ -12,8 +12,6 @@
         <Platforms>AnyCPU;x64</Platforms>
         <PackageVersion>2.7.1</PackageVersion>
         <Configurations>Debug;Release</Configurations>
-        <!-- Nullable allow-list (build/nullable-allowlist.txt): it may only shrink. -->
-        <Nullable>disable</Nullable>
         <!-- Windows: lets the builds of libddb, which runs in this process, use long paths (see the file). -->
         <ApplicationManifest>app.manifest</ApplicationManifest>
     </PropertyGroup>

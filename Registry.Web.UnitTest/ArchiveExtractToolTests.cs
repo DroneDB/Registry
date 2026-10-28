@@ -1,3 +1,4 @@
+#nullable disable
 using Registry.Web.Test.Support;
 using System;
 using System.IO;

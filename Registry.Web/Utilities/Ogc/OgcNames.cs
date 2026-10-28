@@ -1,3 +1,4 @@
+#nullable disable
 using System.Text;
 
 namespace Registry.Web.Utilities.Ogc;

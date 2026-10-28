@@ -1,3 +1,4 @@
+#nullable disable
 using Microsoft.Extensions.Logging;
 using NUnit.Framework;
 using Registry.Test.Common;

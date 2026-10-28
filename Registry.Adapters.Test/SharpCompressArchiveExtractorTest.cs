@@ -1,3 +1,4 @@
+#nullable disable
 using System.Collections.Generic;
 using System.Formats.Tar;
 using System.IO;

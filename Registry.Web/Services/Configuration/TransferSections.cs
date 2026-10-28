@@ -1,3 +1,4 @@
+#nullable disable
 using System.Collections.Generic;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;

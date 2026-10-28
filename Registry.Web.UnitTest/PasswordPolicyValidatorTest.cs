@@ -1,3 +1,4 @@
+#nullable disable
 using NUnit.Framework;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;

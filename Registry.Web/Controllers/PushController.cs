@@ -1,3 +1,4 @@
+#nullable disable
 using Registry.Ports;
 using System.ComponentModel.DataAnnotations;
 using System.Threading;

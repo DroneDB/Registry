@@ -8,8 +8,6 @@
         <Platforms>AnyCPU;x64</Platforms>
 
         <Configurations>Debug;Release</Configurations>
-        <!-- Nullable allow-list (build/nullable-allowlist.txt): it may only shrink. -->
-        <Nullable>disable</Nullable>
         <!-- The libddb contract tests pass a function pointer to DDBSetLogCallback (LibddbContractTests) -->
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <!-- Program.Main (LibddbShutdownProbe.cs) runs DDBShutdown in a child process -->

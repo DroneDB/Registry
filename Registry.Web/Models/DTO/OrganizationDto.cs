@@ -1,3 +1,4 @@
+#nullable disable
 using System;
 using System.ComponentModel.DataAnnotations;
 using Registry.Common;
@@ -52,7 +53,7 @@ public class OrganizationDto
     /// </summary>
 #nullable enable
     public OrganizationPermissionsDto? Permissions { get; set; }
-#nullable restore
+#nullable disable
 }
 
 /// <summary>

@@ -1,3 +1,4 @@
+#nullable disable
 namespace Registry.Web.Models.DTO;
 
 // Named answers of the actions that used to return an anonymous object: same member names, same types,

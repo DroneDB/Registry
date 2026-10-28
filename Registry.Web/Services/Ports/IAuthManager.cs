@@ -1,3 +1,4 @@
+#nullable disable
 using System.Threading.Tasks;
 using Registry.Common;
 using Registry.Web.Data.Models;

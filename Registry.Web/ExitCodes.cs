@@ -1,3 +1,4 @@
+#nullable disable
 namespace Registry.Web;
 
 /// <summary>Process exit codes of Registry.Web (returned by <see cref="Program.Main"/>).</summary>

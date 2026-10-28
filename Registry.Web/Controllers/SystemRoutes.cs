@@ -1,3 +1,4 @@
+#nullable disable
 namespace Registry.Web.Controllers;
 
 /// <summary>

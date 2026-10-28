@@ -1,3 +1,4 @@
+#nullable disable
 using System;
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;

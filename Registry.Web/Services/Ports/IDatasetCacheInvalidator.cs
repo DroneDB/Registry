@@ -1,3 +1,4 @@
+#nullable disable
 using System.Threading.Tasks;
 
 namespace Registry.Web.Services.Ports;

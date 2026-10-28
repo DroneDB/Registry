@@ -1,3 +1,4 @@
+#nullable disable
 namespace Registry.Web.Utilities.Ogc;
 
 /// <summary>OGC / W3C namespace URIs used by the OGC services.</summary>

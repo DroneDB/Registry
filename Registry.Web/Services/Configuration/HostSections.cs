@@ -1,3 +1,4 @@
+#nullable disable
 using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
 using Registry.Web.Models.Configuration;

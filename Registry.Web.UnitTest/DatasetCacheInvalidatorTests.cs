@@ -1,3 +1,4 @@
+#nullable disable
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using System;

@@ -1,3 +1,4 @@
+#nullable disable
 using System.Threading.Tasks;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.DTO;

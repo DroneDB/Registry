@@ -1,3 +1,4 @@
+#nullable disable
 namespace Registry.Web.Models.Configuration;
 
 public class LdapSettings

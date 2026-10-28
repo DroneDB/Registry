@@ -1,3 +1,4 @@
+#nullable disable
 using Registry.Ports;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;

@@ -1,3 +1,4 @@
+#nullable disable
 using Registry.Common;
 using Registry.Web.Services.Managers;
 

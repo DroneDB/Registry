@@ -1,3 +1,4 @@
+#nullable disable
 using Registry.Web.Services.Managers.Wcs;
 
 namespace Registry.Web.Utilities.Ogc;
