@@ -28,7 +28,7 @@ View orthophotos, point clouds, 3D models, Vector files, 3D Tiles, Gaussian spla
 | Point Clouds | LAS, LAZ, E57, PTS, XYZ, PLY* |
 | 3D Models | OBJ, GLTF, GLB, PLY* |
 | 3D Tiles | 3TZ |
-| Gaussian Splats | SPLAT, SPZ |
+| Gaussian Splats | PLY, SPLAT, SPZ, KSPLAT, SOG, RAD |
 | Rasters | GeoTIFF, JPEG 2000 (orthophotos, DEMs) |
 | Vector | GeoJSON, DXF, DWG, SHP, SHZ, FGB, TopoJSON, KML, KMZ, GPKG, GPX |
 | Videos | MP4, MOV, WEBM, M4V, AVI, MKV |
