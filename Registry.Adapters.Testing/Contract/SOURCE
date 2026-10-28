@@ -1,10 +1,10 @@
 # libddb contract fixtures vendored from DroneDB. Do not edit the vendored files:
 # run Registry.Adapters.Testing/update-contract.sh <DroneDB clone> <commit> instead.
 repository: https://github.com/DroneDB/DroneDB
-commit: 78a1518b01efffdcce9ab3162df269f6b1bbdcaf
+commit: 8235fae7b4ddbf265e235de23aea7e0dd5fd047e
 path: tests/contract
 # sha256 and path relative to Contract/ (sha256sum format), one line per vendored file
-897c8dd247396261ecfb6c646e58ac34b4205c8ef6b48717f98eb30ab89f7bf2  README.md
+294b99ca7f9fd47ea5d88ab7ee9de58534042a906171ecb5124d0adabf9d97c0  README.md
 ea51b328026bc175031f1cfe2e0b1d2b2426a092b1a6ab3f19e35731a8293e7a  fixtures/add.json
 dff459b55c29be8b45ef095a5e8a6e97e80f4e1fc6524e5a568815ac5c780eb3  fixtures/build-artifacts-pending.json
 ef0d8f7b505ed504c5f347727bba943cd89b7bfec7ccbfcbe49a88c61da02443  fixtures/build-artifacts.json
@@ -40,7 +40,7 @@ eb49dccf5a95822336edfeef6d762571c3f23472b1d60bb008d0d54c1999a04f  fixtures/meta-
 0988ed80e2ce521037e2e4b2a74694ed68224243aad87735d8e9213c270c27ae  fixtures/normalize-path-rejected.json
 0d84464fdac83b683144441ab45ee7a6bb2572cb94cdfc405768c0d7c1546ee2  fixtures/normalize-path.json
 e193bd2732b7a59155b447f66f06e9a409c97a4fe5f62b941562f153628064b8  fixtures/pending-build-info-none.json
-cff257eb9728ed0c777646c15102563877b4e15489da71daee0c8774c75fb66b  fixtures/pending-build-info.json
+9a158dd71efe8284cc3a3d3fc9cbf95c1599deef3def2349e20a2af8f287a4a5  fixtures/pending-build-info.json
 8272f29c87296f1d20caf54cfa21cc80171a6f3f564044588eff64c767108f97  fixtures/raster-info.json
 72b9aba400917ec7b4501e5fb7e974d21b9d250a46a78af6c1c7a8c8c530c92f  fixtures/raster-metadata-formula.json
 2788265277480b32436371b72a500b813394c9fadf134a8c33d459de85e4ace9  fixtures/raster-metadata.json
@@ -71,7 +71,7 @@ dca22daacc5ce7869a48ac6b1fc0364c269504ef476b813b2e76c0585231d7f8  schemas/meta-d
 5d42af673817ee50d33d9789127535020d23104bee9c27a6ba030ba107184dec  schemas/meta-items.schema.json
 4be3c777300fa38d16e9af5e8c71471eec263f469bb1f86cb7adaaf7aa823a23  schemas/meta-list.schema.json
 d53d03540ac88804083020619c0fb2c8ace941b9cf90a71bb16cd44556f2856a  schemas/normalize-path.schema.json
-fdffde04e42f8ac86337427180cf482cc7506b10b9a2cab2639e02e2c7f8f819  schemas/pending-build-info.schema.json
+db88e5acd858e2c1b225783e34266d534328809b6e3fb9391cceb50446162ff7  schemas/pending-build-info.schema.json
 aebcee7eb92f61313ddd7d9a8e9b792912cea35e3fd3d3987b6d188b1c1fab69  schemas/raster-info.schema.json
 305c502dd86aeb9a548ecce14b95b447edf273a3baf750dc4daa2e55d81f42b5  schemas/raster-metadata.schema.json
 943182a161018547b8c905d585b7ad6f79af908325381b057761a7f6f0295a21  schemas/stac-collection.schema.json

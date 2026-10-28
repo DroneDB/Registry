@@ -129,3 +129,9 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   `DDBExportSplatTrainingData` changed since `c75d5442` (`maxPoints` is at most 10000000, the bound the training data export
   of Registry already refuses above; `outFolder` must be missing or empty and outside of the dataset, else
   `DDBERR_INVALIDARGS`, which the task's own folder is). No fixture, schema or vector changed.
+* 2026-10-28: DroneDB `8235fae7b4ddbf265e235de23aea7e0dd5fd047e`: `pending-build-info` gains `awaitingFiles` (boolean,
+  required in the schema; `true` in the fixture of the deferred `roads.shp`): the build waits for files it lists in
+  `missingDependencies`, so no timer retries it and `DDBIsBuildPending` does not count it; adding or moving in a file
+  of one of those names makes it due at once (`awaitingFiles` false, `lastAttempt` 0). `PendingBuildInfo.AwaitingFiles`
+  reads it (absent from an older libddb: false) and `FakeDdbWrapper.IsBuildPending` counts only the entries that do not
+  await files. No other fixture, schema or vector changed.

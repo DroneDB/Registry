@@ -30,6 +30,9 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Filters;
+using Registry.Web.Identity.Models;
+using Registry.Web.Models.Configuration;
+using Registry.Web.Models.DTO;
 using Registry.Web.Models;
 using Registry.Web.Services;
 using Registry.Web.Services.Adapters;
@@ -262,43 +265,69 @@ public class PendingRecoveryIntegrationTests
     }
 
     [Test]
-    public async Task LateCompanion_DeferredWorkerSchedulesDueEntryAndCompletes()
+    public async Task LateCompanion_BuildAwaitsTheMissingFileWithoutRetriesAndBuildsOnceItIsUploaded()
     {
-        var ddb = await Dataset("companion");
-        Add(ddb, "model.obj", "mtllib late.mtl\n" + GridObj());
-        var initial = StageEntry(ddb, "companion", "model.obj");
+        const string ds = "companion";
+        var ddb = await Dataset(ds);
         StartWorkers();
-        Promote(initial);
-        await WaitForState(initial, "Succeeded");
+
+        // The upload of the model queues its build, which libddb defers: the model waits for late.mtl
+        await Upload(ddb, ds, "model.obj", "mtllib late.mtl\n" + GridObj());
+        var initial = (await Rows(ds)).ShouldHaveSingleItem();
+        initial.Path.ShouldBe("model.obj");
+        await WaitForState(initial.JobId, "Succeeded");
         var marker = ddb.GetPendingBuildInfo().Single();
         marker.Path.ShouldBe("model.obj");
         marker.MissingDependencies.ShouldContain("late.mtl");
+        marker.AwaitingFiles.ShouldBeTrue();
         ddb.IsBuildComplete("model.obj").ShouldBeFalse();
-        var retry = await WaitForRetry("companion", 1);
-        ScheduledDelay(retry).ShouldBe(TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(2));
-
-        Add(ddb, "late.mtl", "newmtl plain\nKd 0.8 0.6 0.4\n");
-        using (var scope = _provider.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<BuildPendingService>()
-                .SetDatasetHasPendingBuilds(Org, "companion", true);
-        var preserved = await CacheState("companion");
-        preserved.GetProperty("RetryAttempt").GetInt32().ShouldBe(1);
-        preserved.GetProperty("ScheduledRetryJobId").GetString().ShouldBe(retry);
-
-        MakeDue(ddb, "model.obj");
-        Promote(retry);
-        await Until(async () => ddb.IsBuildComplete("model.obj") &&
-            (await Rows("companion")).Any(x => x.Path == "model.obj" && x.JobId != initial && x.CurrentState == "Succeeded"));
+        // Nothing a timer could retry: the end of the build (its state filters ran before Succeeded was committed)
+        // scheduled no coordinator
         ddb.IsBuildPending().ShouldBeFalse();
-        await Until(async () => (await CacheState("companion")).GetProperty("RetryAttempt").GetInt32() == 0);
-        (await Rows("companion")).Single(x => x.JobId == initial).CurrentState.ShouldBe("Succeeded");
+        (await Rows(ds)).ShouldHaveSingleItem().JobId.ShouldBe(initial.JobId);
+        Volatile.Read(ref _gate.CoordinatorsStarted).ShouldBe(0);
+
+        // The upload of the missing file releases the build (libddb) and starts the coordinator at once (the upload's
+        // pending retry), which queues the build: no timer, no promotion of a scheduled job
+        await Upload(ddb, ds, "late.mtl", "newmtl plain\nKd 0.8 0.6 0.4\n");
+        await Until(async () => ddb.IsBuildComplete("model.obj") &&
+            (await Rows(ds)).Any(x => x.Path == "model.obj" && x.JobId != initial.JobId && x.CurrentState == "Succeeded"));
+        Volatile.Read(ref _gate.CoordinatorsStarted).ShouldBeGreaterThanOrEqualTo(1);
+        ddb.GetPendingBuildInfo().ShouldBeEmpty();
+        ddb.IsBuildPending().ShouldBeFalse();
+        (await Rows(ds)).Single(x => x.JobId == initial.JobId).CurrentState.ShouldBe("Succeeded");
+    }
+
+    [Test]
+    public async Task Sweep_DatasetWhoseOnlyBuildAwaitsFiles_GetsNoCoordinatorUntilTheFileIsAdded()
+    {
+        const string ds = "awaiting";
+        var ddb = await PendingModel(ds);
+        using (var scope = _provider.CreateScope())
+        {
+            var pending = scope.ServiceProvider.GetRequiredService<BuildPendingService>();
+            // Flagged as the upload of the model flags it, so the sweep checks the dataset
+            await pending.SetDatasetHasPendingBuilds(Org, ds, true);
+            await pending.ProcessPendingBuilds(null, CancellationToken.None);
+            pending.GetStatus().DatasetsChecked.ShouldBe(1);
+            pending.GetStatus().JobsEnqueued.ShouldBe(0);
+        }
+        (await Rows(ds)).ShouldBeEmpty();
+        (await CacheState(ds)).GetProperty("ScheduledRetryJobId").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // Added outside of a path that starts the retry: the sweep is the safety net that starts it
+        Add(ddb, "late.mtl", "newmtl plain\nKd 1 1 1\n");
+        using (var scope = _provider.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<BuildPendingService>().ProcessPendingBuilds(null, CancellationToken.None);
+        var coordinator = (await Rows(ds)).ShouldHaveSingleItem();
+        coordinator.Path.ShouldBeNull();
+        (await CacheState(ds)).GetProperty("ScheduledRetryJobId").GetString().ShouldBe(coordinator.JobId);
     }
 
     [Test]
     public async Task PendingDueBoundary_BeforeRetryAfterSkipsAndAtRetryAfterQueuesRealEntry()
     {
-        var ddb = await PendingModel("boundary");
-        Add(ddb, "late.mtl", "newmtl plain\nKd 1 1 1\n");
+        var ddb = await ReleasedModel("boundary");
         var marker = ddb.GetPendingBuildInfo().Single();
         // Libddb reports when it retries the build; the enqueue path follows it
         marker.RetryAfter.ShouldBe(marker.LastAttempt + PendingMarkers.LibddbRetryBackoffSeconds);
@@ -318,12 +347,8 @@ public class PendingRecoveryIntegrationTests
     [Test]
     public async Task OverlappingWorkers_FreshLockedSnapshotsDeduplicateAndOtherDatasetProceeds()
     {
-        var ddb = await PendingModel("overlap");
-        var independent = await PendingModel("independent");
-        Add(ddb, "late.mtl", "newmtl plain\nKd 1 1 1\n");
-        Add(independent, "late.mtl", "newmtl plain\nKd 1 1 1\n");
-        MakeDue(ddb, "model.obj");
-        MakeDue(independent, "model.obj");
+        var ddb = await ReleasedModel("overlap");
+        var independent = await ReleasedModel("independent");
         _gate.BlockDataset = "overlap";
         _gate.ReleaseEntries.Reset();
         var first = StageCoordinator(ddb, "overlap");
@@ -362,9 +387,7 @@ public class PendingRecoveryIntegrationTests
     public async Task PendingLowDiskFailure_RemainsFailedAndRetriesAfterRecoveryInEitherFilterOrder(bool failureFirst)
     {
         InstallFailureFilters(failureFirst);
-        var ddb = await PendingModel("transient");
-        Add(ddb, "late.mtl", "newmtl plain\nKd 1 1 1\n");
-        MakeDue(ddb, "model.obj");
+        var ddb = await ReleasedModel("transient");
         _environment.Set("DDB_MIN_FREE_DISK_MB", "9000000000000");
         var failed = StageEntry(ddb, "transient", "model.obj");
         StartWorkers();
@@ -396,8 +419,7 @@ public class PendingRecoveryIntegrationTests
     [Test]
     public async Task RepeatedTransientFailure_StopsAtBudgetAndUnchangedChecksumSweepStartsNewEpoch()
     {
-        var ddb = await PendingModel("budget");
-        Add(ddb, "late.mtl", "newmtl plain\nKd 1 1 1\n");
+        var ddb = await ReleasedModel("budget");
         var checksum = ddb.GetStamp().Checksum;
         _environment.Set("DDB_MIN_FREE_DISK_MB", "9000000000000");
         var first = StageEntry(ddb, "budget", "model.obj");
@@ -456,9 +478,13 @@ public class PendingRecoveryIntegrationTests
     public async Task PermanentDependencyEscape_ConsumesOwnMarkerAndOtherPendingEntryDoesNotTriggerRetry()
     {
         var ddb = await PendingModel("permanent");
-        Add(ddb, "other.obj", "mtllib never.mtl\n" + GridObj());
+        Add(ddb, "other.obj", "mtllib other.mtl\n" + GridObj());
         ddb.Build("other.obj");
+        // Its material arrives (and is never built): other.obj is pending work a retry can progress, which the failure
+        // of model.obj must still not retry
+        Add(ddb, "other.mtl", "newmtl plain\nKd 1 1 1\n");
         ddb.GetPendingBuildInfo().Length.ShouldBe(2);
+        ddb.IsBuildPending().ShouldBeTrue();
         Add(ddb, "late.mtl", "newmtl plain\nmap_Kd ../../outside.png\n");
         var job = StageEntry(ddb, "permanent", "model.obj");
         StartWorkers();
@@ -466,6 +492,7 @@ public class PendingRecoveryIntegrationTests
         await WaitForState(job, "Failed");
         var remaining = ddb.GetPendingBuildInfo().Single();
         remaining.Path.ShouldBe("other.obj");
+        remaining.AwaitingFiles.ShouldBeFalse();
         remaining.Hash.ShouldNotBe(ddb.GetEntry("model.obj")!.Hash);
         var rows = await Rows("permanent");
         rows.Length.ShouldBe(1);
@@ -518,7 +545,7 @@ public class PendingRecoveryIntegrationTests
     public async Task SeparateHostCachesAndCategoryInvalidationShareAuthoritativeMySqlBudget()
     {
         const string ds = "shared-controls";
-        await PendingModel(ds);
+        await ReleasedModel(ds);
         await Cache.SetAsync(MagicStrings.BuildPendingTrackerCacheSeed, CacheCategories.ForDataset(Org, ds),
             JsonSerializer.SerializeToUtf8Bytes(new { HasPending = true, RetryAttempt = 3, RetryEpoch = "legacy-epoch" }));
         var services = new ServiceCollection();
@@ -596,9 +623,7 @@ public class PendingRecoveryIntegrationTests
     public async Task PublicationBarrierPreventsEarlyWorkerFailureAndRetainsFailedIndexForRecovery()
     {
         const string ds = "publication";
-        var ddb = await PendingModel(ds);
-        Add(ddb, "late.mtl", "newmtl plain\nKd 1 1 1\n");
-        MakeDue(ddb, "model.obj");
+        var ddb = await ReleasedModel(ds);
         _environment.Set("DDB_MIN_FREE_DISK_MB", "9000000000000");
         using var beforeIndex = new ManualResetEventSlim();
         using var releaseIndex = new ManualResetEventSlim();
@@ -701,8 +726,48 @@ public class PendingRecoveryIntegrationTests
         var ddb = await Dataset(slug);
         Add(ddb, "model.obj", "mtllib late.mtl\n" + GridObj());
         ddb.Build("model.obj");
-        ddb.GetPendingBuildInfo().Single().Path.ShouldBe("model.obj");
+        var marker = ddb.GetPendingBuildInfo().Single();
+        marker.Path.ShouldBe("model.obj");
+        marker.AwaitingFiles.ShouldBeTrue();
         return ddb;
+    }
+
+    // A pending model whose late.mtl was added since: libddb released its build, due at once (work a retry can progress)
+    private async Task<IDDB> ReleasedModel(string slug)
+    {
+        var ddb = await PendingModel(slug);
+        Add(ddb, "late.mtl", "newmtl plain\nKd 1 1 1\n");
+        ddb.GetPendingBuildInfo().Single().AwaitingFiles.ShouldBeFalse();
+        ddb.IsBuildPending().ShouldBeTrue();
+        return ddb;
+    }
+
+    // A file uploaded by a user through Registry's upload pipeline (streamed, moved into the dataset and indexed with
+    // the native library, then the builds and the pending retry an upload calls for)
+    private async Task Upload(IDDB ddb, string ds, string path, string text)
+    {
+        var dataset = new Dataset { Slug = ds, InternalRef = IdOf(ddb), Organization = new Organization { Slug = Org } };
+        var datasets = new Mock<IDatasetResolver>();
+        datasets.Setup(x => x.GetDatasetAsync(Org, ds, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(dataset);
+        var auth = new Mock<IAuthManager>();
+        auth.Setup(x => x.RequestAccess(It.IsAny<Dataset>(), AccessType.Write)).ReturnsAsync(true);
+        auth.Setup(x => x.GetCurrentUser()).ReturnsAsync(new User { Id = "uploader" });
+        var quota = new Mock<IStorageQuota>();
+        quota.Setup(x => x.GetCurrentUserStorageLimit())
+            .ReturnsAsync(new UserStorageInfo { Used = 0, Total = long.MaxValue });
+        var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings { DatasetsPath = _root });
+        using var scope = _provider.CreateScope();
+        var uploads = TestUploads.Create(auth.Object,
+            new DatasetAccessResolver(datasets.Object, auth.Object, _provider.GetRequiredService<IDdbManager>(),
+                TestPaths.Policy),
+            new FileSystem(), TestSettings.Options<ThumbnailOptions>(settings),
+            TestSettings.Options<ImportSettings>(settings), scope.ServiceProvider.GetRequiredService<BuildScheduler>(),
+            new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), quota.Object),
+            Mock.Of<IDatasetChangeCoalescer>());
+        using var ctx = await uploads.BeginAsync(Org, ds);
+        var file = await uploads.StreamAsync(ctx, new MemoryStream(Encoding.UTF8.GetBytes(text)));
+        (await uploads.CommitAsync(ctx, path, file)).Path.ShouldBe(path);
     }
 
     private static void Add(IDDB ddb, string path, string text)

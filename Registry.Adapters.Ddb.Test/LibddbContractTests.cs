@@ -429,6 +429,55 @@ public unsafe class LibddbContractTests : TestBase
             """));
     }
 
+    // fixtures/pending-build-info.json: the same deferred roads.shp. A build that waits for missing files is not
+    // retryable work (no timer retries it, so the coordinator must not be started for it) until one of them is
+    // added, which makes it due at once: Registry starts the retry on that add.
+    [Test]
+    public void GetPendingBuildInfo_DeferredBuild_AwaitsItsMissingFilesUntilOneIsAdded()
+    {
+        using var area = new TestArea(nameof(GetPendingBuildInfo_DeferredBuild_AwaitsItsMissingFilesUntilOneIsAdded));
+        var root = Path.Combine(area.TestFolder, "dataset");
+        Directory.CreateDirectory(root);
+        DdbWrapper.Init(root);
+        DdbWrapper.Add(root, WriteContractFile(root, ShapefileName, ShapefileContent));
+        DdbWrapper.Build(root, ShapefileName); // DDBERR_BUILDDEPMISSING: deferred
+
+        var awaiting = GetPendingBuildInfo(root);
+        var lastAttempt = awaiting[0]["lastAttempt"]!.Value<long>();
+        lastAttempt.ShouldBeGreaterThan(0);
+        awaiting[0]["retryAfter"]!.Value<long>().ShouldBe(lastAttempt + PendingMarkers.LibddbRetryBackoffSeconds);
+        awaiting[0]["lastAttempt"] = 0;
+        awaiting[0]["retryAfter"] = 0;
+        ShouldEqualJson(awaiting, ParseJson($$"""
+            [{
+              "awaitingFiles": true,
+              "hash": "{{ShapefileHash}}",
+              "lastAttempt": 0,
+              "missingDependencies": ["roads.shx"],
+              "path": "roads.shp",
+              "retryAfter": 0
+            }]
+            """));
+        DdbWrapper.GetPendingBuildInfo(root).ShouldHaveSingleItem().AwaitingFiles.ShouldBeTrue();
+        DdbWrapper.IsBuildPending(root).ShouldBeFalse("a build that waits for files is not retried on a timer");
+
+        // The add of a missing file releases the marker: no dependency, no time, due at once
+        DdbWrapper.Add(root, WriteContractFile(root, "roads.shx", "the index of roads.shp"));
+
+        ShouldEqualJson(GetPendingBuildInfo(root), ParseJson($$"""
+            [{
+              "awaitingFiles": false,
+              "hash": "{{ShapefileHash}}",
+              "lastAttempt": 0,
+              "missingDependencies": [],
+              "path": "roads.shp",
+              "retryAfter": {{PendingMarkers.LibddbRetryBackoffSeconds}}
+            }]
+            """));
+        DdbWrapper.GetPendingBuildInfo(root).ShouldHaveSingleItem().AwaitingFiles.ShouldBeFalse();
+        DdbWrapper.IsBuildPending(root).ShouldBeTrue();
+    }
+
     // fixtures/resolve-build-file.json
     [Test]
     public void ResolveBuildFile_ReturnsTheArtifactPath_AndRejectsPathsOutsideTheBuild()
@@ -823,6 +872,12 @@ public unsafe class LibddbContractTests : TestBase
         var artifacts = (JArray)TakeJson(output);
         artifacts.Count.ShouldBe(paths.Length, "one element per input path");
         return artifacts;
+    }
+
+    private static JArray GetPendingBuildInfo(string root)
+    {
+        Ok(NativeDdb.DDBGetPendingBuildInfo(root, out var output), "DDBGetPendingBuildInfo");
+        return (JArray)TakeJson(output);
     }
 
     /// <summary>
