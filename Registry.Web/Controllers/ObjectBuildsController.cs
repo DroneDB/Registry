@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.ResponseCompression;
 using MimeMapping;
 using Registry.Ports.DroneDB;
 using Registry.Web.Filters;
@@ -26,10 +27,12 @@ namespace Registry.Web.Controllers;
 public class ObjectBuildsController : ControllerBaseEx
 {
     private readonly BuildQueryService _builds;
+    private readonly IResponseCompressionProvider _compression;
 
-    public ObjectBuildsController(BuildQueryService builds)
+    public ObjectBuildsController(BuildQueryService builds, IResponseCompressionProvider compression)
     {
         _builds = builds;
+        _compression = compression;
     }
 
     /// <summary>
@@ -83,11 +86,12 @@ public class ObjectBuildsController : ControllerBaseEx
     // GET and HEAD send the same file result: the executor sends the headers (length, type, validators, ranges) of
     // both and the body of GET only. The type is the manifest's when libddb gives one, else the extension's. A
     // client may keep the file but must ask again before it uses it (If-None-Match, answered 304): a forced rebuild
-    // rewrites the file under the same hash, so it is never immutable
+    // rewrites the file under the same hash, so it is never immutable. The tag is weak for a type the response
+    // compression encodes (a JSON tileset), strong for the binary files a viewer reads by ranges
     private PhysicalFileResult BuildFileResult(ResolvedBuildFile file)
     {
         Response.Headers.CacheControl = "private, no-cache";
-        return FileTaggedPhysicalFile(file.Path, file.MediaType ?? MimeUtility.GetMimeMapping(file.Path));
+        return FileTaggedPhysicalFile(file.Path, file.MediaType ?? MimeUtility.GetMimeMapping(file.Path), _compression);
     }
 
     /// <summary>

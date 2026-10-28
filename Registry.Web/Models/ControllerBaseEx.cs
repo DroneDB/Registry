@@ -2,6 +2,7 @@
 using System.IO;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Net.Http.Headers;
 using Registry.Web.Utilities;
 
@@ -33,13 +34,30 @@ public class ControllerBaseEx : ControllerBase
     /// <summary>
     /// <see cref="ValidatedPhysicalFile(string, string, string?, string?)"/> for a file whose content has no tag of
     /// its own to offer: the tag is taken from the file system (<see cref="EntityTags.OfFile"/>), so it follows
-    /// the file when it is rewritten.
+    /// the file when it is rewritten. It is strong, so <c>Range</c> with <c>If-Range</c> resumes the file, unless
+    /// <paramref name="compression"/> may encode the response: then it is weak.
     /// </summary>
+    /// <param name="path">The file.</param>
+    /// <param name="contentType">Its media type.</param>
+    /// <param name="compression">The provider of the response compression middleware the response goes through.</param>
     [NonAction]
-    public PhysicalFileResult FileTaggedPhysicalFile(string path, string contentType)
+    public PhysicalFileResult FileTaggedPhysicalFile(string path, string contentType,
+        IResponseCompressionProvider compression)
     {
         var file = new FileInfo(path);
-        return ValidatedPhysicalFile(path, file, contentType, EntityTags.OfFile(file), null);
+        var tag = EntityTags.OfFile(file, weak: MayBeContentEncoded(contentType, compression));
+        return ValidatedPhysicalFile(path, file, contentType, tag, null);
+    }
+
+    // ASP.NET Core's response compression gzips or brotlis a 200 of a media type it compresses and leaves its ETag
+    // as it was (it adds Vary: Accept-Encoding, drops Content-Length and Content-MD5, and skips a 206, which has a
+    // Content-Range): a strong tag would then name two different byte sequences. The middleware's own provider
+    // decides, on this response with its type, so the tag is weak exactly for the types it would encode (JSON, not
+    // the .rad or .tif a viewer reads by ranges) and the same for 200, 206, 304 and HEAD whatever the client accepts.
+    private bool MayBeContentEncoded(string contentType, IResponseCompressionProvider compression)
+    {
+        Response.ContentType = contentType;
+        return compression.ShouldCompressResponse(HttpContext);
     }
 
     private PhysicalFileResult ValidatedPhysicalFile(string path, FileInfo file, string contentType,

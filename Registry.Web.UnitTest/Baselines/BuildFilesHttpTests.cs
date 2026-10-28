@@ -276,6 +276,85 @@ public sealed class BuildFilesHttpTests : IDisposable
         (await after.Content.ReadAsStringAsync()).ShouldBe("9876543210");
     }
 
+    private const string Tileset = """{"asset":{"version":"1.0"},"geometricError":500}""";
+
+    // The response compression gzips a JSON build file (tileset.json, bounds.json) for a client that accepts it and
+    // keeps the ETag it was given: the gzip and the identity bytes are two representations, so one strong tag must
+    // not name both. The tag is weak for such a type, whichever encoding the client asked for
+    [Test]
+    public async Task BuildFile_OfATypeTheCompressionEncodes_HasAWeakEtag_ForEveryEncoding()
+    {
+        Resolves("3dtiles/tileset.json", Tileset, "application/json");
+
+        using var gzip = await SendAsync(HttpMethod.Get, BuildFileUrl("3dtiles/tileset.json"),
+            r => r.Headers.AcceptEncoding.ParseAdd("gzip"));
+        using var identity = await SendAsync(HttpMethod.Get, BuildFileUrl("3dtiles/tileset.json"));
+
+        gzip.Content.Headers.ContentEncoding.ShouldBe(["gzip"]);
+        gzip.Headers.ETag!.IsWeak.ShouldBeTrue();
+        identity.Content.Headers.ContentEncoding.ShouldBeEmpty();
+        identity.Headers.ETag.ShouldBe(gzip.Headers.ETag);
+        (await identity.Content.ReadAsStringAsync()).ShouldBe(Tileset);
+    }
+
+    // If-Range compares strongly: with the tag of a gzip response it must not return a range of the identity bytes,
+    // which the client would join to the gzip ones it has; it sends the whole file instead
+    [Test]
+    public async Task BuildFile_OfATypeTheCompressionEncodes_IfRangeWithItsTag_SendsTheWholeFile()
+    {
+        Resolves("3dtiles/tileset.json", Tileset, "application/json");
+        using var gzip = await SendAsync(HttpMethod.Get, BuildFileUrl("3dtiles/tileset.json"),
+            r => r.Headers.AcceptEncoding.ParseAdd("gzip"));
+
+        using var response = await SendAsync(HttpMethod.Get, BuildFileUrl("3dtiles/tileset.json"), r =>
+        {
+            r.Headers.Range = new RangeHeaderValue(2, 5);
+            r.Headers.IfRange = new RangeConditionHeaderValue(gzip.Headers.ETag!);
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync()).ShouldBe(Tileset);
+    }
+
+    [Test]
+    public async Task BuildFile_OfATypeTheCompressionEncodes_WhoseEtagTheClientHas_Is304()
+    {
+        Resolves("3dtiles/tileset.json", Tileset, "application/json");
+        using var gzip = await SendAsync(HttpMethod.Get, BuildFileUrl("3dtiles/tileset.json"),
+            r => r.Headers.AcceptEncoding.ParseAdd("gzip"));
+
+        using var response = await SendAsync(HttpMethod.Get, BuildFileUrl("3dtiles/tileset.json"), r =>
+        {
+            r.Headers.AcceptEncoding.ParseAdd("gzip");
+            r.Headers.IfNoneMatch.Add(gzip.Headers.ETag!);
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotModified);
+        response.Headers.ETag.ShouldBe(gzip.Headers.ETag);
+    }
+
+    // A .rad is never encoded: its tag stays strong for a client that accepts gzip, so the viewer resumes it by
+    // ranges with If-Range
+    [Test]
+    public async Task BuildFile_Rad_KeepsAStrongEtag_AndIfRangeWithItAnswers206()
+    {
+        Resolves("gsplat/model.rad", "0123456789", "application/octet-stream");
+        using var first = await SendAsync(HttpMethod.Get, BuildFileUrl("gsplat/model.rad"),
+            r => r.Headers.AcceptEncoding.ParseAdd("gzip"));
+
+        using var response = await SendAsync(HttpMethod.Get, BuildFileUrl("gsplat/model.rad"), r =>
+        {
+            r.Headers.AcceptEncoding.ParseAdd("gzip");
+            r.Headers.Range = new RangeHeaderValue(2, 5);
+            r.Headers.IfRange = new RangeConditionHeaderValue(first.Headers.ETag!);
+        });
+
+        first.Content.Headers.ContentEncoding.ShouldBeEmpty();
+        first.Headers.ETag!.IsWeak.ShouldBeFalse();
+        response.StatusCode.ShouldBe(HttpStatusCode.PartialContent);
+        (await response.Content.ReadAsStringAsync()).ShouldBe("2345");
+    }
+
     private static IEnumerable<TestCaseData> Downloads()
     {
         yield return new TestCaseData("ortho.tif", EntryType.GeoRaster, ArtifactRoles.RasterCog, "cog/cog.tif",
