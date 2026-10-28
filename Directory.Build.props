@@ -60,35 +60,45 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-10-27): DroneDB has ONE version, 2.0.0 (package.json); the libddb ABI follows
+        Pinned now (2026-10-28): DroneDB has ONE version, 2.0.0 (package.json); the libddb ABI follows
         it (ABI 2.0, semver: a removed export is a new major, an added one a new minor) and so does
         the handshake (libddb 2.x). It is not tagged until Registry is proven on it, so Registry pins
-        the CI build of DroneDB fixes-and-optimizations commit a7de68d, run 40471334893 (a pull
+        the CI build of DroneDB fixes-and-optimizations commit 78a1518, run 40651242926 (a pull
         request run of DroneDB#472, built from the merge with master; the .deb is named after that
-        merge commit, 2.0.0~git6d148806), every job green (Linux and Windows builds and tests,
-        ASan + UBSan, the Docker image). It builds 3D models with the bm3d program from vendor/bm3d
-        at release v1.1.1: the output is bm3d/model.bm3d (role model.bm3d), and the Nexus build
+        merge commit, 2.0.0~gitb41ed882), every job green (Linux and Windows builds and tests,
+        ASan + UBSan, the Docker image). It exports the two Gaussian splat exports Registry calls
+        and the startup handshake requires: DDBExportSplatSpz (the .spz of a splat for other tools,
+        made on demand in the build folder as gsplat/export.spz, role gsplat.export) and
+        DDBExportSplatTrainingData (the COLMAP sparse model, the images and the georeference of an
+        ODM project). DDBResolveBuildFile returns {"path", "mediaType"}, the media type of the
+        build manifest with the path. Splat builds no longer write into the dataset folder or the
+        published folder, build SPZ 4 and .sog uploads, take a .rad upload as it is (published as
+        a copy, not a hard link), check the sizes a .rad declares, and survive a bounds.json that
+        cannot be written; bounds.json says which way is up, confident only when the splats leave
+        no second answer, and a splat (or a model) georeferenced by an ODM coords.txt or a
+        georef.json gets up [0, 0, 1] and its WGS84 footprint (wgs84Footprint). Splat thumbnails
+        show the subject upright. 3D models are built with the bm3d program from vendor/bm3d at
+        release v1.1.1: the output is bm3d/model.bm3d (role model.bm3d), and the Nexus build
         nxs/model.nxz is the legacy role model.nexus with fallbackFor model.bm3d, served while the
         bm3d model is missing and removed once bm3d/ is published. STL files are Models. On Windows
         the programs of the build (ddbcmd.exe, bm3d.exe, metadata-util.exe, untwine.exe) declare
         themselves long path aware, and libddb reads the folder of the executable and of libddb
-        whatever the length of its path (it cut the path at 260 characters), so the embedded libddb
-        and its helper programs work in datasets under long paths where Windows allows them
-        (LongPathsEnabled). DDBBuildEx (a build with a cap on its threads, {"threads": N}, which the
-        background rebuild of models of an older layout calls) stays, with GPX and JPEG 2000 files
-        and the formula mask fix of the earlier pins. Next: the v2.0.0 release (DdbSource release)
-        once it is tagged.
+        whatever the length of its path, so the embedded libddb and its helper programs work in
+        datasets under long paths where Windows allows them (LongPathsEnabled). DDBBuildEx (a build
+        with a cap on its threads, {"threads": N}, which the background rebuild of models of an
+        older layout calls) stays, with GPX and JPEG 2000 files and the formula mask fix of the
+        earlier pins. Next: the v2.0.0 release (DdbSource release) once it is tagged.
     -->
     <PropertyGroup>
         <DdbSource>ci</DdbSource>
         <DdbVersion>2.0.0</DdbVersion>
-        <DdbDebFileVersion>2.0.0~git6d148806</DdbDebFileVersion>
-        <DdbCiCommit>a7de68dcdc2a80166cda7110a7476c2fb69c89ed</DdbCiCommit>
-        <DdbCiRunId>40471334893</DdbCiRunId>
-        <DdbDebArtifactId>12719924094</DdbDebArtifactId>
-        <DdbWindowsArtifactId>12721085528</DdbWindowsArtifactId>
-        <DdbDebSha256>5dfa4f2c7da0f9baeeb9d7de2c9e5ad305ccf77e8e5914b5a4c78bc018650508</DdbDebSha256>
-        <DdbWindowsZipSha256>43a9d223ee524074372ee05e18b20c4f3f93b635c0ae1605ea19799b3ae07a90</DdbWindowsZipSha256>
+        <DdbDebFileVersion>2.0.0~gitb41ed882</DdbDebFileVersion>
+        <DdbCiCommit>78a1518b01efffdcce9ab3162df269f6b1bbdcaf</DdbCiCommit>
+        <DdbCiRunId>40651242926</DdbCiRunId>
+        <DdbDebArtifactId>12800897744</DdbDebArtifactId>
+        <DdbWindowsArtifactId>12801905010</DdbWindowsArtifactId>
+        <DdbDebSha256>92a2b78f85374a3c5bde5195ad3c41b9655eae0b3e625f225028f824433d347d</DdbDebSha256>
+        <DdbWindowsZipSha256>bf75002a5ec7fb25934271e6b900e14fba575a17f69bfe61b8723f50a61a2aed</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>

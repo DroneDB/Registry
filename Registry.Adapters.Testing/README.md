@@ -125,3 +125,7 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   `DDBExportSplatSpz` and `DDBExportSplatTrainingData` in `symbols` and in `cancellable`; `entry.schema.json` describes
   the `georeferenced` and `georef` properties of a splat or model. The two exports are `IDdbWrapper` and `IDDB` members
   (`FakeDdbWrapper` records no fixture for them: a test configures them on a `Mock<FakeDdbWrapper>`).
+* 2026-10-28: DroneDB `78a1518b01efffdcce9ab3162df269f6b1bbdcaf` (the pinned build): only the `Contract/README.md` text of
+  `DDBExportSplatTrainingData` changed since `c75d5442` (`maxPoints` is at most 10000000, the bound the training data export
+  of Registry already refuses above; `outFolder` must be missing or empty and outside of the dataset, else
+  `DDBERR_INVALIDARGS`, which the task's own folder is). No fixture, schema or vector changed.
