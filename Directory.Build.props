@@ -63,10 +63,14 @@
         Pinned now (2026-10-28): DroneDB has ONE version, 2.0.0 (package.json); the libddb ABI follows
         it (ABI 2.0, semver: a removed export is a new major, an added one a new minor) and so does
         the handshake (libddb 2.x). It is not tagged until Registry is proven on it, so Registry pins
-        the CI build of DroneDB fixes-and-optimizations commit 6828a56, run 40695295201 (a pull
+        the CI build of DroneDB fixes-and-optimizations commit a9f5e43, run 40706550975 (a pull
         request run of DroneDB#472, built from the merge with master; the .deb is named after that
-        merge commit, 2.0.0~gitc73cafb1), every job green (Linux and Windows builds and tests,
-        ASan + UBSan, the Docker image). A build that only waits for companion files the dataset
+        merge commit, 2.0.0~git77636835), every job green (Linux and Windows builds and tests,
+        ASan + UBSan, the Docker image). Each artifact of a build object and a resolved build file
+        carry a version (a digest of the opened file's write time and size) that changes whenever
+        the file is rewritten under the same hash, which versioned build URLs are cached by;
+        build-lod is Spark v2.4.0 and reads every SPZ version, so a v4 upload is no longer
+        transcoded first. A build that only waits for companion files the dataset
         lacks (its pending marker lists missing files) is not retried on a timer: DDBIsBuildPending
         counts only work a retry can progress, DDBGetPendingBuildInfo and the build object of
         DDBGetBuildArtifacts / DDBListEntriesEx report awaitingFiles, and adding, moving, delta-applying
@@ -97,13 +101,13 @@
     <PropertyGroup>
         <DdbSource>ci</DdbSource>
         <DdbVersion>2.0.0</DdbVersion>
-        <DdbDebFileVersion>2.0.0~gitc73cafb1</DdbDebFileVersion>
-        <DdbCiCommit>6828a561ca26274ea668b8539f5d8df2c48e5409</DdbCiCommit>
-        <DdbCiRunId>40695295201</DdbCiRunId>
-        <DdbDebArtifactId>12824160555</DdbDebArtifactId>
-        <DdbWindowsArtifactId>12821990643</DdbWindowsArtifactId>
-        <DdbDebSha256>2779d98c88edb0e1b3944bbf7bda385abb12f79d316416181b5d8808a0caf7b5</DdbDebSha256>
-        <DdbWindowsZipSha256>27be53570ad11dbb813cf6480ecb1aaf4a828affa5c48f6ea8725e9fb4bb637d</DdbWindowsZipSha256>
+        <DdbDebFileVersion>2.0.0~git77636835</DdbDebFileVersion>
+        <DdbCiCommit>a9f5e437ca3ad809442ce0d0bdccedec82a4b2a5</DdbCiCommit>
+        <DdbCiRunId>40706550975</DdbCiRunId>
+        <DdbDebArtifactId>12826677568</DdbDebArtifactId>
+        <DdbWindowsArtifactId>12827705682</DdbWindowsArtifactId>
+        <DdbDebSha256>22b33e0d5816ecf65d266f5f3a9475dd2925d6b9c5f85ed40252918b0e0f9bb1</DdbDebSha256>
+        <DdbWindowsZipSha256>3b24f7ab61e77acb3fb69977d3e349350020d976378c6e1fd23468574e50fb09</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
