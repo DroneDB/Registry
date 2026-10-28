@@ -356,7 +356,8 @@ public class WmsManager : OgcManagerBase
                 if (bmp == null)
                     continue;
                 using var paint = new SKPaint { BlendMode = SKBlendMode.SrcOver };
-                surface.Canvas.DrawBitmap(bmp, new SKRect(0, 0, width, height), paint);
+                // Every layer is rendered at width x height, so it is drawn 1:1: the sampling never resamples.
+                surface.Canvas.DrawBitmap(bmp, new SKRect(0, 0, width, height), SKSamplingOptions.Default, paint);
             }
 
             surface.Canvas.Flush();

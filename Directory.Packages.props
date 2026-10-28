@@ -24,7 +24,7 @@
         <DotNetPackagesVersion>10.0.14</DotNetPackagesVersion>
         <HangfireVersion>1.8.25</HangfireVersion>
         <AspNetCoreHealthChecksVersion>9.0.0</AspNetCoreHealthChecksVersion>
-        <SkiaSharpVersion>3.119.2</SkiaSharpVersion>
+        <SkiaSharpVersion>4.154.0</SkiaSharpVersion>
     </PropertyGroup>
 
     <!-- .NET 10 servicing train -->
