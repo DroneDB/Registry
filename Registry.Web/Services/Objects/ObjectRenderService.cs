@@ -111,7 +111,7 @@ public sealed class ObjectRenderService : IObjectRenderService
         var v = visualization;
 
         var data = await _cache.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug), ct,
-            source.Entry.Hash, pixels, v.CacheKey,
+            source.Entry.FileHash(), pixels, v.CacheKey,
             new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Heavy, () => source.Ddb.GenerateThumbnailEx(
                 source.SourcePath, pixels, v.Preset, v.Bands, v.Formula, v.BandFilter, v.Colormap, v.Rescale), token)));
 
@@ -132,9 +132,9 @@ public sealed class ObjectRenderService : IObjectRenderService
 
         // libddb renders a visualization tile as a PNG: the other formats are encoded from it
         return await CachedTileAsync(ty, format, () => _cache.GetAsync(MagicStrings.TileCacheSeed,
-            ForDataset(orgSlug, dsSlug), ct, source.Entry.Hash, tx, ty, tz, retina, v.CacheKey, format.MediaType,
+            ForDataset(orgSlug, dsSlug), ct, source.Entry.FileHash(), tx, ty, tz, retina, v.CacheKey, format.MediaType,
             new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles, () => source.Ddb.GenerateTileEx(
-                source.SourcePath, tz, tx, ty, retina, source.Entry.Hash, v.Preset, v.Bands, v.Formula,
+                source.SourcePath, tz, tx, ty, retina, source.Entry.FileHash(), v.Preset, v.Bands, v.Formula,
                 v.BandFilter, v.Colormap, v.Rescale).InFormat(format), token))));
     }
 

@@ -8,8 +8,8 @@ public class MetaListItem
     public int Count { get; set; }
 
     [JsonPropertyName("key")]
-    public string Key { get; set; }
+    public string Key { get; set; } = "";
 
     [JsonPropertyName("path")]
-    public string Path { get; set; }
+    public string Path { get; set; } = "";
 }

@@ -101,7 +101,7 @@ public sealed class RenderSources
             _logger.LogDebug(ex, "Cannot read the write time of '{SourcePath}'", source.SourcePath);
         }
 
-        return new ReadableObject(orgSlug, dsSlug, source.Path, source.Entry.Hash, source.SourcePath, source.Ddb,
+        return new ReadableObject(orgSlug, dsSlug, source.Path, source.Entry.FileHash(), source.SourcePath, source.Ddb,
             version);
     }
 

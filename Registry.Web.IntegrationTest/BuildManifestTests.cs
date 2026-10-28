@@ -146,7 +146,7 @@ public class BuildManifestTests
         ddb.Build("ortho.tif");
         var urls = TestPorts.Urls(Microsoft.Extensions.Options.Options.Create(
             new HttpHostOptions { ExternalUrlOverride = "https://hub.example" }));
-        var hash = ddb.GetEntry("ortho.tif")!.Hash;
+        var hash = ddb.GetEntry("ortho.tif")!.FileHash();
         string CogLink() => urls.ArtifactLinks(Org, "ds", _resolver.GetBuild(ddb, "ortho.tif"))
             .Single(l => l.Role == ArtifactRoles.RasterCog).Url;
         string? CogVersion() => _resolver.ResolveFile(ddb, hash, "cog/cog.tif")!.Version;

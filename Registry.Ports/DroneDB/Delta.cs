@@ -5,16 +5,16 @@ namespace Registry.Ports.DroneDB;
 public class Delta
 {
     [JsonPropertyName("adds")]
-    public AddAction[] Adds { get; set; }
+    public AddAction[] Adds { get; set; } = [];
 
     [JsonPropertyName("removes")]
-    public RemoveAction[] Removes { get; set; }
+    public RemoveAction[] Removes { get; set; } = [];
 
     [JsonPropertyName("metaAdds")]
-    public string[] MetaAdds { get; set; }
+    public string[] MetaAdds { get; set; } = [];
         
     [JsonPropertyName("metaRemoves")]
-    public string[] MetaRemoves { get; set; }
+    public string[] MetaRemoves { get; set; } = [];
 
 
 }

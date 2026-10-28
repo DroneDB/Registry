@@ -14,7 +14,7 @@ public interface IDdbBuild
     /// </summary>
     IReadOnlyList<string> DerivedFolderPaths { get; }
 
-    void Build(string path, string dest = null, bool force = false);
+    void Build(string path, string? dest = null, bool force = false);
 
     /// <summary>
     /// <see cref="Build"/> of <paramref name="path"/> under <paramref name="options"/> (the background rebuild caps
@@ -22,7 +22,7 @@ public interface IDdbBuild
     /// </summary>
     void BuildWithOptions(string path, BuildOptions options, bool force = false);
 
-    void BuildPending(string dest = null, bool force = false);
+    void BuildPending(string? dest = null, bool force = false);
 
     string GetTmpFolder(string path);
 

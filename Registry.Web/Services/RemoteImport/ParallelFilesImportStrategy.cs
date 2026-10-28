@@ -112,7 +112,7 @@ public sealed class ParallelFilesImportStrategy : IRemoteImportStrategy
         ddb.FindSummaries(EntryQuery.All)
             .Where(e => !string.IsNullOrEmpty(e.Hash))
             .GroupBy(e => e.Path, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First().Hash, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(g => g.Key, g => g.First().FileHash(), StringComparer.OrdinalIgnoreCase);
 
     // The state of one dataset transfer, shared by the download workers: the index has one writer at a time
     private sealed class Transfer(RemoteDataset dataset, IDDB ddb, Dictionary<string, string> indexed,

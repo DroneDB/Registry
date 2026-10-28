@@ -1,4 +1,3 @@
-#nullable disable
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
 using static Registry.Adapters.Ddb.Test.LibddbNative;

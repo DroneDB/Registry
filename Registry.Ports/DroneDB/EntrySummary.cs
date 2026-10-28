@@ -11,10 +11,11 @@ namespace Registry.Ports.DroneDB;
 public class EntrySummary
 {
     [JsonPropertyName("path")]
-    public string Path { get; set; }
+    public string Path { get; set; } = "";
 
+    /// <summary>Absent for a directory (libddb writes no hash when it is empty).</summary>
     [JsonPropertyName("hash")]
-    public string Hash { get; set; }
+    public string? Hash { get; set; }
 
     [JsonPropertyName("type")]
     public EntryType Type { get; set; }
@@ -28,4 +29,12 @@ public class EntrySummary
 
     [JsonPropertyName("depth")]
     public int Depth { get; set; }
+
+    /// <summary>
+    /// The <see cref="Hash"/> of an entry the caller knows is a file: libddb hashes every entry but a directory.
+    /// A method, not a property, so that no serializer writes it.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The entry has no hash (a directory).</exception>
+    public string FileHash() =>
+        Hash ?? throw new InvalidOperationException($"The entry '{Path}' has no hash: it is a directory");
 }

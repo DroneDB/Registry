@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -60,7 +59,7 @@ public class NativeDdbWrapperTests : TestBase
     }
 
     /// <summary>The build object of one entry (DDBGetBuildArtifacts), null for a path that is not indexed.</summary>
-    private static EntryBuild BuildOf(string ddbPath, string path) =>
+    private static EntryBuild? BuildOf(string ddbPath, string path) =>
         DdbWrapper.GetBuildArtifacts(ddbPath, [path]).ShouldHaveSingleItem().Build;
 
     [Test]
@@ -85,7 +84,7 @@ public class NativeDdbWrapperTests : TestBase
         Should.Throw<DdbException>(act);
 
         // A null argument is a programming error, rejected before libddb is called
-        act = () => DdbWrapper.Init(null);
+        act = () => DdbWrapper.Init(null!);
         Should.Throw<ArgumentNullException>(act);
 
     }
@@ -109,10 +108,10 @@ public class NativeDdbWrapperTests : TestBase
         act = () => DdbWrapper.Add("nonexistant", "test");
         Should.Throw<DdbException>(act);
 
-        act = () => DdbWrapper.Add(null, "test");
+        act = () => DdbWrapper.Add(null!, "test");
         Should.Throw<ArgumentNullException>(act);
 
-        act = () => DdbWrapper.Add("nonexistant", (string)null);
+        act = () => DdbWrapper.Add("nonexistant", (string)null!);
         Should.Throw<DdbException>(act);
 
     }
@@ -272,8 +271,8 @@ public class NativeDdbWrapperTests : TestBase
     [TestCase("", true, "*", new[] { EntryType.Directory })]
     [TestCase("", true, null, new[] { EntryType.GeoImage, EntryType.Image })]
     [TestCase("Sub", false, "2020*", new[] { EntryType.GeoImage })]
-    public void ListEntries_MatchesFilteredFullListing(string folder, bool recursive, string pattern,
-        EntryType[] types)
+    public void ListEntries_MatchesFilteredFullListing(string folder, bool recursive, string? pattern,
+        EntryType[]? types)
     {
         using var test = new TestFS(Test1ArchiveUrl, BaseTestFolder);
         var ddbPath = Path.Combine(test.TestFolder, "public", "default");
@@ -400,7 +399,7 @@ public class NativeDdbWrapperTests : TestBase
         act = () => DdbWrapper.Remove("invalid", "wefrfwef");
         Should.Throw<DdbException>(act);
 
-        act = () => DdbWrapper.Remove(null, "wefrfwef");
+        act = () => DdbWrapper.Remove(null!, "wefrfwef");
         Should.Throw<ArgumentNullException>(act);
 
     }
@@ -788,7 +787,7 @@ public class NativeDdbWrapperTests : TestBase
         // The build takes "<build>/<hash>/<output>.building" and writes its PID into it once it
         // holds the kernel lock: that write is the moment the build is active. The hash folder is
         // created here (the build creates it too) so that it is watched before the build starts.
-        var hashFolder = Path.Combine(ddbPath, IDDB.DatabaseFolderName, DDB.BuildFolderName, res[0].Hash);
+        var hashFolder = Path.Combine(ddbPath, IDDB.DatabaseFolderName, DDB.BuildFolderName, res[0].FileHash());
         Directory.CreateDirectory(hashFolder);
         using var locked = new ManualResetEventSlim();
         using var watcher = new FileSystemWatcher(hashFolder, "*.building")

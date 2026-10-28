@@ -13,9 +13,10 @@ public class RemoteThumbnailGeneratorSettings
     public const string TokenHeaderName = ThumbnailHostContract.TokenHeaderName;
 
     /// <summary>
-    /// URL of the host's <c>generate-thumbnail</c> endpoint.
+    /// URL of the host's <c>generate-thumbnail</c> endpoint. The remote generator is registered only when the
+    /// setting is present, and the registration sets it, so it is never read unset.
     /// </summary>
-    public string Url { get; set; }
+    public string Url { get; set; } = null!;
 
     /// <summary>
     /// Shared secret sent in <see cref="TokenHeaderName"/> (the <c>ThumbnailGeneratorToken</c> setting).

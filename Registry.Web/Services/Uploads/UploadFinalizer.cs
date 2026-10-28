@@ -49,7 +49,7 @@ public sealed class UploadFinalizer
             if (part.Entry!.Type is not (EntryType.Image or EntryType.GeoImage) || _thumbnails == null)
                 continue;
 
-            _thumbnails.TryEnqueue(new ThumbnailPrecomputeRequest(ctx.OrgSlug, ctx.DsSlug, part.Entry.Hash,
+            _thumbnails.TryEnqueue(new ThumbnailPrecomputeRequest(ctx.OrgSlug, ctx.DsSlug, part.Entry.FileHash(),
                 part.LocalPath, _defaultThumbnailSize));
         }
 

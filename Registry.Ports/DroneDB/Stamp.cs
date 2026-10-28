@@ -7,13 +7,13 @@ namespace Registry.Ports.DroneDB;
 public class Stamp
 {
     [JsonPropertyName("checksum")]
-    public string Checksum { get; set; }
+    public string Checksum { get; set; } = "";
 
     [JsonPropertyName("entries")]
-    public List<Dictionary<string, string>> Entries { get; set; }
+    public List<Dictionary<string, string>> Entries { get; set; } = [];
 
     [JsonPropertyName("meta")]
-    public List<string> Meta { get; set; }
+    public List<string> Meta { get; set; } = [];
 
 
 
