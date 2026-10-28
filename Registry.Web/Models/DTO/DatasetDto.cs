@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -18,14 +17,14 @@ public class DatasetDto
 {
 
     [Required]
-    public string Slug { get; set; }
+    public required string Slug { get; set; }
     [Required]
     public DateTime CreationDate { get; set; }
-    public Dictionary<string, JsonElement> Properties { get; set; }
+    public Dictionary<string, JsonElement>? Properties { get; set; }
 
     public long Size { get; set; }
 
-    public DatasetPermissionsDto Permissions { get; set; }
+    public DatasetPermissionsDto? Permissions { get; set; }
 
     public bool? HasThumbnail { get; set; }
 
@@ -33,21 +32,22 @@ public class DatasetDto
 
 public class DatasetNewDto
 {
+    // [ApiController] answers 400 before the action runs when a [Required] member is missing, so it is never null there
     [Required]
-    public string Slug { get; set; }
+    public string Slug { get; set; } = null!;
 
-    public string Name { get; set; }
+    public string? Name { get; set; }
 
     public Visibility? Visibility { get; set; }
 
     [MaxLength(256)]
-    public string Tagline { get; set; }
+    public string? Tagline { get; set; }
 }
 
 public class DatasetEditDto
 {
 
-    public string Name { get; set; }
+    public string? Name { get; set; }
 
     public Visibility? Visibility { get; set; }
 

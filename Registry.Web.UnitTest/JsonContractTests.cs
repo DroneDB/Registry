@@ -166,7 +166,7 @@ public sealed class JsonContractTests
             """{"checksum":"c0ffee","entries":[{"path":"a.txt","hash":"h1"},{"path":"sub","hash":""}],"meta":["1b4e28ba-2fa1-11d2-883f-0016d3cca427"]}""")!;
 
         stamp.Checksum.ShouldBe("c0ffee");
-        stamp.Entries.Select(e => e["path"]).ShouldBe(["a.txt", "sub"]);
+        stamp.Entries.ShouldNotBeNull().Select(e => e["path"]).ShouldBe(["a.txt", "sub"]);
         stamp.Meta.ShouldBe(["1b4e28ba-2fa1-11d2-883f-0016d3cca427"]);
 
         ApiJson.Serialize(new PushInitResultDto { NeededFiles = ["a.txt"], NeededMeta = [], PullRequired = false, Token = "t" })
@@ -193,9 +193,9 @@ public sealed class JsonContractTests
 
         var listing = ApiJson.Deserialize<StacCollectionsDto>(legacy)!;
 
-        listing.Collections.Count().ShouldBe(1);
+        listing.Collections.ShouldNotBeNull().Count().ShouldBe(1);
         listing.NumberMatched.ShouldBe(1);
-        listing.Links.Single().Relationship.ShouldBe("self");
+        listing.Links.ShouldHaveSingleItem().Relationship.ShouldBe("self");
         JsonConvert.DeserializeObject<StacCollectionsDto>(ApiJson.Serialize(listing))!.NumberReturned.ShouldBe(1);
     }
 

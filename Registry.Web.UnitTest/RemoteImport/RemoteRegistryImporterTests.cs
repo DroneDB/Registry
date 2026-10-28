@@ -105,7 +105,7 @@ public sealed class RemoteRegistryImporterTests : IDisposable
     {
         var result = await ImportAsync(Dataset(mode, destinationDs: "jake--amy-property"));
 
-        result.Errors.ShouldHaveSingleItem().Message.ShouldContain("Invalid destination slug");
+        result.Errors.ShouldHaveSingleItem().Message.ShouldNotBeNull().ShouldContain("Invalid destination slug");
         _remote.Requests.ShouldBeEmpty();
         _context.Datasets.ShouldBeEmpty();
     }
@@ -140,7 +140,7 @@ public sealed class RemoteRegistryImporterTests : IDisposable
         result.Errors.ShouldBeEmpty();
         result.FileErrors.ShouldHaveSingleItem().FilePath.ShouldBe("broken.jpg");
         _indexed.ShouldBe(["a.jpg"]);
-        result.ImportedItems.Single().FileCount.ShouldBe(1);
+        result.ImportedItems.ShouldHaveSingleItem().FileCount.ShouldBe(1);
     }
 
     [Test]
@@ -157,7 +157,7 @@ public sealed class RemoteRegistryImporterTests : IDisposable
 
         _indexed.ShouldBe(["b.jpg"]);
         _remote.Requests.Count(r => r.Contains("/download", StringComparison.Ordinal)).ShouldBe(1);
-        result.ImportedItems.Single().ShouldSatisfyAllConditions(
+        result.ImportedItems.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
             i => i.FileCount.ShouldBe(2),
             i => i.SkippedFileCount.ShouldBe(1));
     }
@@ -174,7 +174,7 @@ public sealed class RemoteRegistryImporterTests : IDisposable
         var result = await ImportAsync(Dataset(ImportMode.Archive));
 
         result.Errors.ShouldBeEmpty();
-        result.ImportedItems.Single().FileCount.ShouldBe(2);
+        result.ImportedItems.ShouldHaveSingleItem().FileCount.ShouldBe(2);
         Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
             .Select(f => Path.GetRelativePath(folder, f).Replace('\\', '/')).Order(StringComparer.Ordinal)
             .ShouldBe([".ddb/dbase.sqlite", "new.jpg"]);
@@ -191,7 +191,7 @@ public sealed class RemoteRegistryImporterTests : IDisposable
 
         result.Errors.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
             e => e.Phase.ShouldBe(ImportPhase.Download),
-            e => e.Message.ShouldContain("valid ZIP"));
+            e => e.Message.ShouldNotBeNull().ShouldContain("valid ZIP"));
         _context.Datasets.ShouldBeEmpty();
     }
 
@@ -205,7 +205,7 @@ public sealed class RemoteRegistryImporterTests : IDisposable
         var result = await ImportAsync(new RemoteImportRequest(Url, null, null, "src", null, "dst", null,
             ImportMode.ParallelFiles));
 
-        result.ImportedItems.Select(i => (i.Organization, i.Dataset)).Order()
+        result.ImportedItems.ShouldNotBeNull().Select(i => (i.Organization, i.Dataset)).Order()
             .ShouldBe([("dst", "one"), ("dst", "two")]);
     }
 

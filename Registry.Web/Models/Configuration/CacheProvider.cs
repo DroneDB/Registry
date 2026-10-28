@@ -1,4 +1,3 @@
-#nullable disable
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
@@ -9,5 +8,5 @@ public class CacheProvider
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public CacheType Type { get; set; }
-    public Dictionary<string, object> Settings { get; set; }
+    public Dictionary<string, object>? Settings { get; set; }
 }

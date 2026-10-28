@@ -1,4 +1,3 @@
-#nullable disable
 namespace Registry.Web.Models.Configuration;
 
 public class LdapSettings
@@ -7,7 +6,7 @@ public class LdapSettings
     public bool Enabled { get; set; }
 
     /// <summary>LDAP server host (e.g. "ldap.example.com" or "dc.domain.com").</summary>
-    public string Server { get; set; }
+    public string? Server { get; set; }
 
     /// <summary>LDAP port. 389 for plain LDAP, 636 for LDAPS.</summary>
     public int Port { get; set; } = 636;
@@ -25,19 +24,19 @@ public class LdapSettings
     /// Base DN for searches (e.g. "dc=example,dc=com").
     /// Required.
     /// </summary>
-    public string BaseDn { get; set; }
+    public string? BaseDn { get; set; }
 
     /// <summary>
     /// Service account DN used for the initial search bind.
     /// If null, an anonymous bind is attempted.
     /// </summary>
-    public string BindDn { get; set; }
+    public string? BindDn { get; set; }
 
     /// <summary>
     /// Password for <see cref="BindDn"/>.
     /// Never commit in plain text - use environment variables or secrets management.
     /// </summary>
-    public string BindPassword { get; set; }
+    public string? BindPassword { get; set; }
 
     /// <summary>
     /// LDAP search filter to locate the user entry.
@@ -52,7 +51,7 @@ public class LdapSettings
     /// <c>{0}</c> is replaced with the username.
     /// Examples: <c>{0}@domain.com</c> (UPN) or <c>CN={0},OU=Users,DC=domain,DC=com</c>.
     /// </summary>
-    public string UserDnFormat { get; set; }
+    public string? UserDnFormat { get; set; }
 
     /// <summary>
     /// Distinguished names of LDAP groups whose members receive the Registry admin role.

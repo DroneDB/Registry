@@ -171,9 +171,10 @@ public class PushPipelineTests : TestBase
     {
         var res = await mgr.Init("org", "ds", "c1", ClientStamp());
         res.PullRequired.ShouldBeFalse();
-        res.NeededFiles.Length.ShouldBe(Adds);
-        StageUploads(res.Token);
-        return res.Token;
+        res.NeededFiles.ShouldNotBeNull().Length.ShouldBe(Adds);
+        var token = res.Token.ShouldNotBeNull();
+        StageUploads(token);
+        return token;
     }
 
     /// <summary>
@@ -411,7 +412,7 @@ public class PushPipelineTests : TestBase
     {
         UseContentHashes();
         var mgr = CreateManager();
-        var token = (await mgr.Init("org", "ds", "c1", ClientStamp())).Token;
+        var token = (await mgr.Init("org", "ds", "c1", ClientStamp())).Token.ShouldNotBeNull();
 
         var upload = await Stream(mgr, "photo photos/IMG_0.JPG");
         upload.Bytes.ShouldBe(22);
@@ -433,7 +434,7 @@ public class PushPipelineTests : TestBase
     {
         UseContentHashes();
         var mgr = CreateManager();
-        var token = (await mgr.Init("org", "ds", "c1", ClientStamp())).Token;
+        var token = (await mgr.Init("org", "ds", "c1", ClientStamp())).Token.ShouldNotBeNull();
         var upload = await Stream(mgr, "a corrupted transfer");
 
         var ex = await Should.ThrowAsync<BadRequestException>(() => mgr.UploadAsync(upload, "photos/IMG_0.JPG", token));
@@ -448,7 +449,7 @@ public class PushPipelineTests : TestBase
     {
         UseContentHashes();
         var mgr = CreateManager();
-        var token = (await mgr.Init("org", "ds", "c1", ClientStamp())).Token;
+        var token = (await mgr.Init("org", "ds", "c1", ClientStamp())).Token.ShouldNotBeNull();
 
         (await Should.ThrowAsync<BadRequestException>(async () =>
                 await mgr.UploadAsync(await Stream(mgr, "x"), "photos/unknown.jpg", token)))
@@ -463,7 +464,7 @@ public class PushPipelineTests : TestBase
     {
         UseContentHashes();
         var mgr = CreateManager();
-        var token = (await mgr.Init("org", "ds", "c1", ClientStamp())).Token;
+        var token = (await mgr.Init("org", "ds", "c1", ClientStamp())).Token.ShouldNotBeNull();
         StageUploads(token); // every file staged as before verification existed (or linked)
         for (var i = 0; i < 3; i++)
             await mgr.UploadAsync(await Stream(mgr, $"photo photos/IMG_{i}.JPG"), $"photos/IMG_{i}.JPG", token);
@@ -526,7 +527,7 @@ public class PushPipelineTests : TestBase
     public async Task SaveMeta_DoesNotCheckQuota()
     {
         var mgr = CreateManager();
-        var token = (await mgr.Init("org", "ds", "c1", ClientStamp())).Token;
+        var token = (await mgr.Init("org", "ds", "c1", ClientStamp())).Token.ShouldNotBeNull();
 
         await mgr.SaveMeta("org", "ds", token, "[]");
 

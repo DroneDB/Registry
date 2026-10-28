@@ -1,4 +1,3 @@
-#nullable disable
 using System.ComponentModel.DataAnnotations;
 
 namespace Registry.Web.Models.DTO;
@@ -13,13 +12,14 @@ public class MergeOrganizationDto
     /// <summary>
     /// The slug of the source organization from which all datasets will be moved.
     /// </summary>
-    public string SourceOrgSlug { get; set; }
+    public string? SourceOrgSlug { get; set; }
     
     /// <summary>
     /// The slug of the destination organization where all datasets will be moved.
     /// </summary>
+    /// <remarks>Never null in an action: [ApiController] answers 400 before it runs when it is missing.</remarks>
     [Required]
-    public string DestinationOrgSlug { get; set; }
+    public string DestinationOrgSlug { get; set; } = null!;
 
     /// <summary>
     /// How to handle conflicts when a dataset with the same slug already exists in the destination.
@@ -41,17 +41,17 @@ public class MergeOrganizationResultDto
     /// <summary>
     /// The slug of the source organization that was merged.
     /// </summary>
-    public string SourceOrgSlug { get; set; }
+    public string? SourceOrgSlug { get; set; }
 
     /// <summary>
     /// The slug of the destination organization.
     /// </summary>
-    public string DestinationOrgSlug { get; set; }
+    public string? DestinationOrgSlug { get; set; }
 
     /// <summary>
     /// Results for each dataset that was moved.
     /// </summary>
-    public MoveDatasetResultDto[] DatasetResults { get; set; }
+    public MoveDatasetResultDto[]? DatasetResults { get; set; }
 
     /// <summary>
     /// Whether the source organization was deleted.

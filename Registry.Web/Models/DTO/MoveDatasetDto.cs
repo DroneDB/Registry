@@ -1,4 +1,3 @@
-#nullable disable
 using System.ComponentModel.DataAnnotations;
 
 namespace Registry.Web.Models.DTO;
@@ -32,19 +31,21 @@ public class MoveDatasetDto
     /// <summary>
     /// The slug of the source organization.
     /// </summary>
-    public string SourceOrgSlug { get; set; }
+    public string? SourceOrgSlug { get; set; }
     
     /// <summary>
     /// The slugs of the datasets to move.
     /// </summary>
+    /// <remarks>Never null in an action: [ApiController] answers 400 before it runs when it is missing.</remarks>
     [Required]
-    public string[] DatasetSlugs { get; set; }
+    public string[] DatasetSlugs { get; set; } = null!;
 
     /// <summary>
     /// The slug of the destination organization.
     /// </summary>
+    /// <remarks>Never null in an action: [ApiController] answers 400 before it runs when it is missing.</remarks>
     [Required]
-    public string DestinationOrgSlug { get; set; }
+    public string DestinationOrgSlug { get; set; } = null!;
 
     /// <summary>
     /// How to handle conflicts when a dataset with the same slug already exists in the destination.
@@ -60,12 +61,12 @@ public class MoveDatasetResultDto
     /// <summary>
     /// The original slug of the dataset.
     /// </summary>
-    public string OriginalSlug { get; set; }
+    public string? OriginalSlug { get; set; }
 
     /// <summary>
     /// The new slug of the dataset (may differ if renamed).
     /// </summary>
-    public string NewSlug { get; set; }
+    public string? NewSlug { get; set; }
 
     /// <summary>
     /// Whether the move was successful.
@@ -75,5 +76,5 @@ public class MoveDatasetResultDto
     /// <summary>
     /// Error message if the move failed.
     /// </summary>
-    public string Error { get; set; }
+    public string? Error { get; set; }
 }

@@ -1,4 +1,3 @@
-#nullable disable
 using System;
 using System.ComponentModel.DataAnnotations;
 using Registry.Common;
@@ -39,21 +38,19 @@ public class OrganizationPermissionsDto
 /// </summary>
 public class OrganizationDto
 {
-    public string Slug { get; set; }
+    public string? Slug { get; set; }
 
-    public string Name { get; set; }
-    public string Description { get; set; }
+    public string? Name { get; set; }
+    public string? Description { get; set; }
     public DateTime CreationDate { get; set; }
-    public string Owner { get; set; }
+    public string? Owner { get; set; }
 
     public bool IsPublic { get; set; }
 
     /// <summary>
     /// The permissions of the current user in this organization.
     /// </summary>
-#nullable enable
     public OrganizationPermissionsDto? Permissions { get; set; }
-#nullable disable
 }
 
 /// <summary>
@@ -65,15 +62,16 @@ public class OrganizationDto
 /// </summary>
 public class OrganizationRequestDto
 {
+    // [ApiController] answers 400 before the action runs when a [Required] member is missing, so it is never null there
     [Required]
-    public string Slug { get; init; }
+    public string Slug { get; init; } = null!;
 
     [Required]
-    public string Name { get; init; }
+    public string Name { get; init; } = null!;
 
-    public string Description { get; init; }
+    public string? Description { get; init; }
 
-    public string Owner { get; init; }
+    public string? Owner { get; init; }
 
     public bool IsPublic { get; init; }
 }

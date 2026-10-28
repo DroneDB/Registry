@@ -139,7 +139,7 @@ public class ReservedPathCallSitesTests
 
         var result = await ImportWithRemoteImporterAsync(context, handler, added);
 
-        result.Errors.ShouldHaveSingleItem().Message.ShouldContain("Invalid path");
+        result.Errors.ShouldHaveSingleItem().Message.ShouldNotBeNull().ShouldContain("Invalid path");
         handler.Downloaded.ShouldBeEmpty();
         added.ShouldBeEmpty();
         EscapedFiles().ShouldBeEmpty();

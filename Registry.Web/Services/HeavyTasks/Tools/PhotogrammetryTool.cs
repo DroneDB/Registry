@@ -250,7 +250,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
 
                 // Resolve the DDB for the new dataset.
                 var ddbManager = scope.ServiceProvider.GetRequiredService<IDdbManager>();
-                var internalRef = newDs.Properties.TryGetValue("internalRef", out var refVal)
+                var internalRef = newDs.Properties is { } props && props.TryGetValue("internalRef", out var refVal)
                     ? Guid.Parse(refVal.ToString()!)
                     : throw new InvalidOperationException("New dataset is missing internalRef.");
                 targetDdb = ddbManager.Get(newDatasetOrgSlug, internalRef);

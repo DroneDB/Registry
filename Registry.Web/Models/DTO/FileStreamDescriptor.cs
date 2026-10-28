@@ -1,4 +1,3 @@
-#nullable disable
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -22,7 +21,7 @@ public enum FileDescriptorType
 public class FileStreamDescriptor
 {
     private readonly string[] _paths;
-    private readonly string[] _folders;
+    private readonly string[]? _folders;
     private readonly FileDescriptorType _descriptorType;
     private readonly ILogger _logger;
     private readonly IDDB _ddb;
@@ -39,7 +38,7 @@ public class FileStreamDescriptor
     /// </summary>
     public FileDescriptorType Type => _descriptorType;
 
-    public FileStreamDescriptor(string name, string contentType, IDDB ddb, string[] paths, string[] folders,
+    public FileStreamDescriptor(string name, string contentType, IDDB ddb, string[] paths, string[]? folders,
         FileDescriptorType descriptorType, ILogger logger, IZipArchiveBuilder zipBuilder)
     {
         _paths = paths;

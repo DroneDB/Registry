@@ -106,8 +106,9 @@ public class HashOnceTests
         var manager = CreatePushManager(db, ds, target);
         var init = await manager.Init("org", "ds", _wrapper.GetStampChecksum(target.DatasetFolderPath),
             new StampDto { Checksum = clientStamp.Checksum, Entries = clientStamp.Entries, Meta = clientStamp.Meta });
-        init.NeededFiles.Length.ShouldBe(Files);
-        foreach (var path in init.NeededFiles)
+        var neededFiles = init.NeededFiles.ShouldNotBeNull();
+        neededFiles.Length.ShouldBe(Files);
+        foreach (var path in neededFiles)
         {
             await using var body = File.OpenRead(Path.Combine(client.DatasetFolderPath, path));
             var upload = await manager.StreamUploadAsync("org", "ds", body, FileBytes);
