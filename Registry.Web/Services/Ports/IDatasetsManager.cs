@@ -39,7 +39,7 @@ public interface IDatasetsManager
     /// <param name="conflictResolution">How to handle conflicts with existing datasets.</param>
     /// <returns>Results of the move operation for each dataset.</returns>
     public Task<IEnumerable<MoveDatasetResultDto>> MoveToOrganization(
-        string sourceOrgSlug,
+        string? sourceOrgSlug,
         string[] datasetSlugs,
         string destOrgSlug,
         ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict, CancellationToken ct = default);

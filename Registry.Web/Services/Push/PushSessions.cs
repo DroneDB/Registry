@@ -56,7 +56,7 @@ public sealed class PushSessions
             }, ct);
 
             _logger.LogInformation("New dataset {OrgSlug}/{DsSlug} created", orgSlug, dsSlug);
-            ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, ct: CancellationToken.None);
+            ds = await _datasets.GetRequiredDatasetAsync(orgSlug, dsSlug, ct: CancellationToken.None);
 
         }
         else
@@ -89,10 +89,15 @@ public sealed class PushSessions
         ourStamp ??= _ddbWrapper.GetStamp(ddb.DatasetFolderPath);
 
         // Perform delta with our ddb
+        // libddb refuses a stamp without meta ("Stamp meta not found") and reads null entries as none; the
+        // checksum is not part of the delta
+        if (stamp.Meta == null)
+            throw new BadRequestException("Stamp meta not found");
+
         var delta = _ddbWrapper.Delta(new Stamp
         {
-            Checksum = stamp.Checksum,
-            Entries = stamp.Entries,
+            Checksum = stamp.Checksum ?? "",
+            Entries = stamp.Entries ?? [],
             Meta = stamp.Meta
         }, ourStamp);
 

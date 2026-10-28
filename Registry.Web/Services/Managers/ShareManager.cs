@@ -51,6 +51,6 @@ public class ShareManager
     public Task<ChunkUploadResultDto> UploadChunk(string token, ChunkUploadDto chunkInfo, Stream chunkStream, CancellationToken ct = default) =>
         _chunked.UploadChunk(token, chunkInfo, chunkStream, ct: ct);
 
-    public Task<UploadResultDto> FinalizeChunkedUpload(string token, string fileId, string path, CancellationToken ct = default) =>
+    public Task<UploadResultDto> FinalizeChunkedUpload(string token, string? fileId, string? path, CancellationToken ct = default) =>
         _chunked.FinalizeChunkedUpload(token, fileId, path, ct: ct);
 }

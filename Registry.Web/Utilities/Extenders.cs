@@ -19,7 +19,7 @@ namespace Registry.Web.Utilities;
 public static class Extenders
 {
     /// <summary>The organization a request creates, owned by <paramref name="ownerId"/> and created at <paramref name="creationDate"/>.</summary>
-    public static Organization ToEntity(this OrganizationRequestDto organization, string ownerId, DateTime creationDate)
+    public static Organization ToEntity(this OrganizationRequestDto organization, string? ownerId, DateTime creationDate)
     {
         return new Organization
         {
@@ -254,7 +254,7 @@ public static class Extenders
         return new TagDto(org, ds);
     }
 
-    public static T? ToObject<T>(this Dictionary<string, object> obj)
+    public static T? ToObject<T>(this Dictionary<string, object>? obj)
     {
         // The dictionary the configuration binder made (strings, numbers): as the type it describes
         return JsonSerializer.SerializeToElement(obj, ApiJson.Options).Deserialize<T>(ApiJson.Options);

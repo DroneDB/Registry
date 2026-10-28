@@ -17,7 +17,7 @@ public class RedisCacheKeyScanner : ICacheKeyScanner
     private readonly string _instanceName;
     private readonly ILogger<RedisCacheKeyScanner> _logger;
 
-    public RedisCacheKeyScanner(IConnectionMultiplexer redis, string instanceName,
+    public RedisCacheKeyScanner(IConnectionMultiplexer redis, string? instanceName,
         ILogger<RedisCacheKeyScanner> logger)
     {
         _redis = redis ?? throw new ArgumentNullException(nameof(redis));

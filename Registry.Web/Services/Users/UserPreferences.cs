@@ -90,8 +90,7 @@ public sealed partial class UserPreferences
         return merged;
     }
 
-    private async Task<User> CurrentUser() =>
-        await _authManager.GetCurrentUser() ?? throw new UnauthorizedException("Unauthorized", noRetry: false);
+    private Task<User> CurrentUser() => _authManager.GetRequiredCurrentUser();
 
     private static void ValidateShape(Dictionary<string, JsonElement> patch)
     {

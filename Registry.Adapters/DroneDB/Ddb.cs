@@ -195,16 +195,16 @@ public class DDB : IDDB
             ex => $"Cannot move '{source}' to {dest} from ddb '{DatasetFolderPath}'");
     }
 
-    public void Build(string path, string? dest = null, bool force = false) =>
+    public void Build(string? path, string? dest = null, bool force = false) =>
         RunBuild(path, dest, force, null);
 
-    public void BuildWithOptions(string path, BuildOptions options, bool force = false)
+    public void BuildWithOptions(string? path, BuildOptions options, bool force = false)
     {
         ArgumentNullException.ThrowIfNull(options);
         RunBuild(path, null, force, options);
     }
 
-    private void RunBuild(string path, string? dest, bool force, BuildOptions? options)
+    private void RunBuild(string? path, string? dest, bool force, BuildOptions? options)
     {
         Wrap(() => Wrapper.Build(DatasetFolderPath, path?.ToDdbPath(), dest, force, options: options),
             ex => $"Cannot build '{path}' from ddb '{DatasetFolderPath}'");

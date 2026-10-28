@@ -89,7 +89,7 @@ public sealed class DatasetCommands
         if (dataset == null)
             throw new BadRequestException("Dataset is null");
 
-        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true, ct: ct);
+        var ds = await _datasets.GetRequiredDatasetAsync(orgSlug, dsSlug, withTracking: true, ct: ct);
         await _access.EnsureAccessAsync(ds, AccessType.Write);
 
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
@@ -112,7 +112,7 @@ public sealed class DatasetCommands
 
     public async Task Delete(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
-        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true, ct: ct);
+        var ds = await _datasets.GetRequiredDatasetAsync(orgSlug, dsSlug, withTracking: true, ct: ct);
         await _access.EnsureAccessAsync(ds, AccessType.Delete);
 
         // Save references before removing from DB
@@ -172,7 +172,7 @@ public sealed class DatasetCommands
         if (dsSlug == newSlug) return; // Nothing to do
 
         // Access first: a caller who may not rename learns nothing about the other slugs
-        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, withTracking: true, ct: ct);
+        var ds = await _datasets.GetRequiredDatasetAsync(orgSlug, dsSlug, withTracking: true, ct: ct);
         await _access.EnsureAccessAsync(ds, AccessType.Write);
 
         // Its queued and running jobs name it by the old slug (the same rule as the slug repair)
@@ -197,7 +197,7 @@ public sealed class DatasetCommands
     /// <summary>Sets the legacy public flag (use the dataset metadata).</summary>
     [Obsolete("Use meta")]
     public async Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug,
-        AttributesDto attributes, CancellationToken ct = default)
+        AttributesDto? attributes, CancellationToken ct = default)
     {
         if (attributes == null)
             throw new BadRequestException("Attributes are null");

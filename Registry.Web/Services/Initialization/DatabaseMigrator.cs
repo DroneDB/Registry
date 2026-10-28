@@ -41,8 +41,9 @@ internal sealed class DatabaseMigrator
     {
         var isSqlite = context.Database.IsSqlite();
 
-        if (isSqlite)
-            CommonUtils.EnsureFolderCreated(_configuration.GetConnectionString(connectionName));
+        // Without a connection string there is no folder to create: EF reports it when the migration connects
+        if (isSqlite && _configuration.GetConnectionString(connectionName) is { } connectionString)
+            CommonUtils.EnsureFolderCreated(connectionString);
 
         if (isSqlite || context.Database.IsMySql())
         {

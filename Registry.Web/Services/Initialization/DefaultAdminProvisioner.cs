@@ -111,7 +111,8 @@ internal sealed class DefaultAdminProvisioner
             UserName = defaultAdmin.UserName
         };
 
-        var result = await userManager.CreateAsync(adminUser, defaultAdmin.Password);
+        // The options validation refuses to start without the admin's user name, e-mail and password
+        var result = await userManager.CreateAsync(adminUser, defaultAdmin.Password!);
 
         if (!result.Succeeded)
             throw new InvalidOperationException($"Cannot create default admin: {result.Errors?.ToErrorString()}");
@@ -160,7 +161,8 @@ internal sealed class DefaultAdminProvisioner
 
     private async Task EnsureAdminOrganizationAsync(RegistryContext context, User adminUser, AdminInfo defaultAdmin, CancellationToken token)
     {
-        var adminOrgSlug = defaultAdmin.UserName.ToSlug();
+        // The options validation refuses to start without the admin's user name
+        var adminOrgSlug = defaultAdmin.UserName!.ToSlug();
         var org = await context.Organizations.FirstOrDefaultAsync(o => o.Slug == adminOrgSlug, token);
 
         if (org != null)

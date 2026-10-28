@@ -63,7 +63,7 @@ public class StorageQuota : IStorageQuota
         // Admins do not have limits
         if (await _authManager.IsUserAdmin()) return null;
 
-        var storageInfo = GetUserStorage(await _authManager.GetCurrentUser());
+        var storageInfo = GetUserStorage(await _authManager.GetRequiredCurrentUser());
         return storageInfo.Total == null ? null : storageInfo;
     }
 

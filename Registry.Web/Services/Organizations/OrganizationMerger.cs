@@ -39,7 +39,7 @@ public sealed class OrganizationMerger
     /// every dataset moved, deletes the source.
     /// </summary>
     public async Task<MergeOrganizationResultDto> Merge(
-        string sourceOrgSlug,
+        string? sourceOrgSlug,
         string destOrgSlug,
         ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict,
         bool deleteSourceOrganization = true, CancellationToken ct = default)
@@ -57,10 +57,14 @@ public sealed class OrganizationMerger
         if (sourceOrgSlug == MagicStrings.PublicOrganizationSlug)
             throw new BadRequestException("Cannot merge the public organization");
 
+        // The grantor of the copied memberships: resolved before anything moves, so a caller without a user
+        // fails before the merge starts
+        var currentUser = await _authManager.GetRequiredCurrentUser();
+
         // Honoured while the merge is prepared; the moves then run to completion
-        var sourceOrg = await _datasets.GetOrganizationAsync(sourceOrgSlug, withTracking: true, withDatasets: true,
+        var sourceOrg = await _datasets.GetRequiredOrganizationAsync(sourceOrgSlug, withTracking: true, withDatasets: true,
             ct: ct);
-        var destOrg = await _datasets.GetOrganizationAsync(destOrgSlug, withTracking: true, ct: ct);
+        var destOrg = await _datasets.GetRequiredOrganizationAsync(destOrgSlug, withTracking: true, ct: ct);
 
         _logger.LogInformation("Starting merge of organization '{SourceOrgSlug}' into '{DestOrgSlug}'",
             sourceOrgSlug, destOrgSlug);
@@ -97,7 +101,7 @@ public sealed class OrganizationMerger
 
         // The members of the source join the destination with their permissions (the source's members
         // were never loaded here, so a merge used to drop every one of them)
-        await _memberships.CopyMembersAsync(sourceOrgSlug, destOrgSlug, await _authManager.GetCurrentUser(), CancellationToken.None);
+        await _memberships.CopyMembersAsync(sourceOrgSlug, destOrgSlug, currentUser, CancellationToken.None);
 
         // Delete source organization if requested and all datasets were moved successfully
         if (deleteSourceOrganization)
@@ -107,7 +111,7 @@ public sealed class OrganizationMerger
                 _logger.LogInformation("Deleting source organization '{SourceOrgSlug}' after successful merge", sourceOrgSlug);
 
                 // Reload the organization to ensure we have the latest state
-                sourceOrg = await _datasets.GetOrganizationAsync(sourceOrgSlug, withTracking: true, ct: CancellationToken.None);
+                sourceOrg = await _datasets.GetRequiredOrganizationAsync(sourceOrgSlug, withTracking: true, ct: CancellationToken.None);
 
                 // Clear remaining users
                 sourceOrg.Users?.Clear();

@@ -154,11 +154,11 @@ public class DdbJobs : DdbRetriedJob
         var skipped = false;
         try
         {
-            // null: the whole dataset (the port predates annotations)
+            // null: the whole dataset
             if (options == null)
-                ddb.Build(path!, force: force);
+                ddb.Build(path, force: force);
             else
-                ddb.BuildWithOptions(path!, options, force);
+                ddb.BuildWithOptions(path, options, force);
         }
         catch (DdbBuildInProgressException ex)
         {

@@ -51,6 +51,9 @@ public sealed class ShareChunkedUploads
         if (chunkStream == null || !chunkStream.CanRead)
             throw new BadRequestException("Invalid chunk data stream");
 
+        if (string.IsNullOrWhiteSpace(chunkInfo.FileId))
+            throw new BadRequestException("Missing file ID");
+
         if (string.IsNullOrWhiteSpace(chunkInfo.Path))
             throw new BadRequestException("Missing path");
 
@@ -89,7 +92,7 @@ public sealed class ShareChunkedUploads
         };
     }
 
-    public async Task<UploadResultDto> FinalizeChunkedUpload(string token, string fileId, string path,
+    public async Task<UploadResultDto> FinalizeChunkedUpload(string token, string? fileId, string? path,
         CancellationToken ct = default)
     {
         // Validate parameters

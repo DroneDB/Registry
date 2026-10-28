@@ -47,7 +47,8 @@ public sealed class OrganizationCommands
     public async Task<OrganizationDto> AddNew(OrganizationRequestDto organization, bool skipAuthCheck = false,
         CancellationToken ct = default)
     {
-        string ownerId;
+        // Without the auth check the request's owner is taken as it is (an organization may have no owner)
+        string? ownerId;
 
         if (!skipAuthCheck)
         {

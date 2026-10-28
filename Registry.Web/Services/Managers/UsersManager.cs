@@ -55,7 +55,7 @@ public class UsersManager
     public Task<Dictionary<string, object>> PatchPreferences(Dictionary<string, JsonElement> patch, CancellationToken ct) =>
         _preferences.Patch(patch, ct);
 
-    public Task<ChangePasswordResult> ChangePassword(string userName, string currentPassword, string newPassword) =>
+    public Task<ChangePasswordResult> ChangePassword(string userName, string? currentPassword, string newPassword) =>
         _passwords.ChangePassword(userName, currentPassword, newPassword);
 
     public Task<ChangePasswordResult> ChangePassword(string currentPassword, string newPassword) =>

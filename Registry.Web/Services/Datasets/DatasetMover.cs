@@ -37,7 +37,7 @@ public sealed class DatasetMover
     }
 
     public async Task<IEnumerable<MoveDatasetResultDto>> MoveToOrganization(
-        string sourceOrgSlug,
+        string? sourceOrgSlug,
         string[] datasetSlugs,
         string destOrgSlug,
         ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict,
@@ -56,8 +56,8 @@ public sealed class DatasetMover
             throw new BadRequestException("Source and destination organizations cannot be the same");
 
         // The token is honoured while the move is prepared; the per-dataset moves then run to completion
-        var sourceOrg = await _datasets.GetOrganizationAsync(sourceOrgSlug, withTracking: true, ct: ct);
-        var destOrg = await _datasets.GetOrganizationAsync(destOrgSlug, withTracking: true, ct: ct);
+        var sourceOrg = await _datasets.GetRequiredOrganizationAsync(sourceOrgSlug, withTracking: true, ct: ct);
+        var destOrg = await _datasets.GetRequiredOrganizationAsync(destOrgSlug, withTracking: true, ct: ct);
 
         var results = new List<MoveDatasetResultDto>();
 

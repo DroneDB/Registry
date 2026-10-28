@@ -74,8 +74,7 @@ public sealed class TaskRetry
     {
         try
         {
-            // Without safe the lookup throws when the dataset is missing: never null
-            var ds = (await _datasets.GetDatasetAsync(orgSlug, dsSlug, ct: ct))!;
+            var ds = await _datasets.GetRequiredDatasetAsync(orgSlug, dsSlug, ct: ct);
             var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
             return ddb.IsBuildPending();
         }

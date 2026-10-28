@@ -81,7 +81,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         CancellationToken ct)
     {
         // Callers are the OGC managers, after the request was authorized (OgcAuthorizationFilter)
-        var ds = await _datasets.GetDatasetAsync(orgSlug, dsSlug, ct: ct);
+        var ds = await _datasets.GetRequiredDatasetAsync(orgSlug, dsSlug, ct: ct);
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
 
         var entries = ddb.Find(EntryQuery.OfTypes(folderPath, EntryType.GeoRaster, EntryType.Vector));

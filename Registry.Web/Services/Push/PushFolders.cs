@@ -15,7 +15,7 @@ public static class PushFolders
     /// The folder of the push <paramref name="token"/>. Tokens are the GUIDs Init generates: anything else could point
     /// outside the temp folder.
     /// </summary>
-    public static string Of(IDDB ddb, string token)
+    public static string Of(IDDB ddb, string? token)
     {
         ArgumentNullException.ThrowIfNull(ddb);
         if (!Guid.TryParse(token, out _))

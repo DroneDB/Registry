@@ -128,12 +128,10 @@ public class AuthManager : IAuthManager
     {
         ArgumentNullException.ThrowIfNull(obj);
 
-        return typeof(T) switch
+        return obj switch
         {
-            var t when t == typeof(Organization) =>
-                await _organizationAccess.CanAccessOrganization(obj as Organization, access, userId),
-            var t when t == typeof(Dataset) =>
-                await _datasetAccess.CanAccessDataset(obj as Dataset, access, userId),
+            Organization organization => await _organizationAccess.CanAccessOrganization(organization, access, userId),
+            Dataset dataset => await _datasetAccess.CanAccessDataset(dataset, access, userId),
             _ => throw new InvalidEnumArgumentException($"Not supported type {typeof(T)}")
         };
     }

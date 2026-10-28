@@ -42,4 +42,12 @@ public class User : IdentityUser
         get => _preferences ??= new();
         set => _preferences = value ?? new();
     }
+
+    /// <summary>
+    /// The name of a user of the identity store. Identity's user validator refuses a user without a name, so a user
+    /// that was read from the store or created in it always has one (a method, so that EF does not map it).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The user was never stored and has no name.</exception>
+    public string RequiredUserName() =>
+        UserName ?? throw new InvalidOperationException($"The user '{Id}' has no user name");
 }

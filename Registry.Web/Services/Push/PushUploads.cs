@@ -73,7 +73,7 @@ public sealed class PushUploads
         }
     }
 
-    public async Task UploadAsync(PushUpload upload, string path, string token, CancellationToken ct = default)
+    public async Task UploadAsync(PushUpload upload, string? path, string? token, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(upload);
         // Honoured until the file is staged

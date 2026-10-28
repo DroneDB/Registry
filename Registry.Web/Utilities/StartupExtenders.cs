@@ -81,12 +81,12 @@ public static class StartupExtenders
 
                 var settings = appSettings.CacheProvider.Settings.ToObject<RedisProviderSettings>();
 
-                if (settings == null)
+                if (settings?.InstanceAddress is not { } instanceAddress)
                     throw new ArgumentException("Invalid redis cache provider settings");
 
                 // Register a shared IConnectionMultiplexer for both caching and pattern-based key scanning
                 services.AddSingleton<IConnectionMultiplexer>(sp =>
-                    ConnectionMultiplexer.Connect(settings.InstanceAddress));
+                    ConnectionMultiplexer.Connect(instanceAddress));
 
                 services.AddStackExchangeRedisCache(options =>
                 {
@@ -129,12 +129,12 @@ public static class StartupExtenders
             {
                 var settings = appSettings.CacheProvider.Settings.ToObject<RedisProviderSettings>();
 
-                if (settings == null)
+                if (settings?.InstanceAddress is not { } instanceAddress)
                     throw new InvalidOperationException("Invalid redis cache provider settings");
 
                 try
                 {
-                    await using var connection = await ConnectionMultiplexer.ConnectAsync(settings.InstanceAddress);
+                    await using var connection = await ConnectionMultiplexer.ConnectAsync(instanceAddress);
                     var database = connection.GetDatabase();
 
                     // Test Redis connection with a simple ping

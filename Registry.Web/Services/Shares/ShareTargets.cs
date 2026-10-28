@@ -62,11 +62,9 @@ public sealed class ShareTargets
             if (tag?.DatasetSlug != null)
                 throw new BadRequestException("Cannot specify a dataset without an organization");
 
-            string orgSlug;
-
             _logger.LogInformation("No organization and dataset specified");
 
-            var nameSlug = currentUser.UserName.ToSlug();
+            var nameSlug = currentUser.RequiredUserName().ToSlug();
 
             // We start from the principle that a default user organization begins with the username in slug form
             // If we notice that this strategy is weak we have to add a new field to the db entry
@@ -76,14 +74,14 @@ public sealed class ShareTargets
             // Some idiot removed its own organization, maybe we should prevent this, btw nevermind: let's take care of it
             if (userOrganization == null)
             {
-                orgSlug = (await _organizationsManager.AddUserDefaultAsync(currentUser.Id, currentUser.UserName)).Slug;
+                var addedSlug = (await _organizationsManager.AddUserDefaultAsync(currentUser.Id, currentUser.RequiredUserName())).Slug;
 
-                _logger.LogInformation("No default user organization found, added a new one: '{OrgSlug}'", orgSlug);
+                _logger.LogInformation("No default user organization found, added a new one: '{OrgSlug}'", addedSlug);
 
-                userOrganization = await _context.Organizations.FirstAsync(item => item.Slug == orgSlug);
+                userOrganization = await _context.Organizations.FirstAsync(item => item.Slug == addedSlug);
             }
 
-            orgSlug = userOrganization.Slug;
+            var orgSlug = userOrganization.Slug;
 
             _logger.LogInformation("Using default user organization '{OrgSlug}'", orgSlug);
 
@@ -132,10 +130,11 @@ public sealed class ShareTargets
             }
             else
             {
-                dataset = await GetTrackedDatasetAsync(tag.OrganizationSlug, tag.DatasetSlug, safe: true);
+                var existing = await _datasets.GetDatasetAsync(tag.OrganizationSlug, tag.DatasetSlug, safe: true,
+                    withTracking: true);
 
                 // Create dataset if not exists
-                if (dataset == null)
+                if (existing == null)
                 {
                     _logger.LogInformation("Dataset '{DatasetSlug}' not found, creating it", tag.DatasetSlug);
 
@@ -153,7 +152,8 @@ public sealed class ShareTargets
                 else
                 {
                     // A new batch replaces the running ones (who may write to the dataset only)
-                    await _rollback.RollbackRunningAsync(dataset);
+                    await _rollback.RollbackRunningAsync(existing);
+                    dataset = existing;
                 }
             }
         }
@@ -162,8 +162,8 @@ public sealed class ShareTargets
     }
 
     // Datasets are identified by organization and slug: the slug alone may match another organization's
-    private Task<Dataset> GetTrackedDatasetAsync(string orgSlug, string dsSlug, bool safe = false) =>
-        _datasets.GetDatasetAsync(orgSlug, dsSlug, safe, withTracking: true);
+    private Task<Dataset> GetTrackedDatasetAsync(string orgSlug, string dsSlug) =>
+        _datasets.GetRequiredDatasetAsync(orgSlug, dsSlug, withTracking: true);
 
     private async Task<string> GetUniqueDatasetSlugAsync()
     {

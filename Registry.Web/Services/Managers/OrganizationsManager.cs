@@ -46,7 +46,7 @@ public class OrganizationsManager : IOrganizationsManager
 
     public Task Delete(string orgSlug, CancellationToken ct = default) => _commands.Delete(orgSlug, ct);
 
-    public Task<MergeOrganizationResultDto> Merge(string sourceOrgSlug, string destOrgSlug,
+    public Task<MergeOrganizationResultDto> Merge(string? sourceOrgSlug, string destOrgSlug,
         ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict,
         bool deleteSourceOrganization = true, CancellationToken ct = default) =>
         _merger.Merge(sourceOrgSlug, destOrgSlug, conflictResolution, deleteSourceOrganization, ct);

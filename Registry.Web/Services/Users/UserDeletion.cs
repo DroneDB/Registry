@@ -142,7 +142,7 @@ public sealed class UserDeletion
                             conflictResolution,
                             deleteSourceOrganization: true);
 
-                        allDatasetResults.AddRange(mergeResult.DatasetResults);
+                        allDatasetResults.AddRange(mergeResult.DatasetResults ?? []);
                         result.DatasetsTransferred += mergeResult.DatasetsMovedCount;
                     }
                     else

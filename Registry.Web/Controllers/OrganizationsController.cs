@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -160,6 +161,10 @@ public class OrganizationsController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromBody, Required] AddOrganizationMemberDto request, CancellationToken ct)
     {
+        // Optional in the body (it was never [Required]), but there is no member to add without it
+        if (string.IsNullOrWhiteSpace(request.UserName))
+            throw new BadRequestException("Missing user name");
+
         await _organizationsManager.AddMember(orgSlug, request.UserName, request.Permissions, ct: ct);
         return NoContent();
     }

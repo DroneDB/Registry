@@ -78,7 +78,7 @@ public sealed class UserAccounts
         return Regex.IsMatch(userName, "^[a-z0-9]{1,127}$", RegexOptions.Singleline);
     }
 
-    public async Task UpdateUser(string userName, string email)
+    public async Task UpdateUser(string userName, string? email)
     {
         if (string.IsNullOrWhiteSpace(userName))
             throw new BadRequestException("User name cannot be empty");

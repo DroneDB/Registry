@@ -79,9 +79,7 @@ public sealed class UserSessions : IUserSessions
         await _provisioning.SyncFromProviderAsync(user, res.Metadata);
 
         // authentication successful so generate jwt token
-        var tokenDescriptor = await _tokens.IssueAsync(user);
-
-        return new AuthenticateResponse(user.UserName, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
+        return await IssueSessionAsync(user);
     }
 
     public async Task<AuthenticateResponse?> Authenticate(string token)
@@ -92,7 +90,8 @@ public sealed class UserSessions : IUserSessions
 
         var res = await _loginManager.CheckAccess(token);
 
-        if (!res.Success)
+        // A provider that accepts the token but names no user cannot sign anyone in
+        if (!res.Success || string.IsNullOrEmpty(res.UserName))
             return null;
 
         // Create user if not exists because login manager has greenlighed us
@@ -110,20 +109,22 @@ public sealed class UserSessions : IUserSessions
         await _provisioning.SyncFromProviderAsync(user, res.Metadata);
 
         // Authentication successful so generate jwt token
-        var tokenDescriptor = await _tokens.IssueAsync(user);
-
-        return new AuthenticateResponse(user.UserName, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
+        return await IssueSessionAsync(user);
     }
 
     public async Task<AuthenticateResponse> Refresh()
     {
         var user = await _authManager.GetCurrentUser();
 
-        if (!await _authManager.CanRefreshToken(user))
+        if (user == null || !await _authManager.CanRefreshToken(user))
             throw new UnauthorizedException("User cannot refresh token");
 
-        var tokenDescriptor = await _tokens.IssueAsync(user);
+        return await IssueSessionAsync(user);
+    }
 
-        return new AuthenticateResponse(user.UserName, tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
+    private async Task<AuthenticateResponse> IssueSessionAsync(User user)
+    {
+        var tokenDescriptor = await _tokens.IssueAsync(user);
+        return new AuthenticateResponse(user.RequiredUserName(), tokenDescriptor.Token, tokenDescriptor.ExpiresOn);
     }
 }

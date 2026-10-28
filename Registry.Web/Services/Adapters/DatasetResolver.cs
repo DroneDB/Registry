@@ -40,7 +40,7 @@ public class DatasetResolver : IDatasetResolver
         var org = await query.FirstOrDefaultAsync(item => item.Slug == orgSlug, ct);
 
         if (org == null)
-            return safe ? null : throw new NotFoundException("Organization not found");
+            return safe ? null : throw new NotFoundException(DatasetResolverExtensions.OrganizationNotFoundMessage);
 
         return org;
     }
@@ -76,7 +76,7 @@ public class DatasetResolver : IDatasetResolver
             ? await Load(ct)
             : await _lookups.GetOrLoadAsync(orgSlug, dsSlug, LoadWithMembers, ct);
 
-        return dataset ?? (safe ? null : throw new NotFoundException($"Cannot find dataset {dsSlug} in organization {orgSlug}"));
+        return dataset ?? (safe ? null : throw new NotFoundException(DatasetResolverExtensions.DatasetNotFoundMessage(orgSlug, dsSlug)));
     }
 
     // "Missing organization id", "Invalid dataset id", ...: the messages clients have always seen

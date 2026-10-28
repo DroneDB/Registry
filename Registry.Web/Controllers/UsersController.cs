@@ -54,9 +54,13 @@ public class UsersController : ControllerBaseEx
         if (model == null)
             throw new BadRequestException("No auth data provided");
 
-        var res = string.IsNullOrWhiteSpace(model.Token)
-            ? await _usersManager.Authenticate(model.Username, model.Password)
-            : await _usersManager.Authenticate(model.Token);
+        AuthenticateResponse? res;
+        if (!string.IsNullOrWhiteSpace(model.Token))
+            res = await _usersManager.Authenticate(model.Token);
+        else if (model.Username == null || model.Password == null)
+            throw new BadRequestException("No auth data provided");
+        else
+            res = await _usersManager.Authenticate(model.Username, model.Password);
 
         if (res == null)
             throw new UnauthorizedException("Unauthorized", noRetry: false);
@@ -407,6 +411,10 @@ public class UsersController : ControllerBaseEx
         [FromRoute, Required] string userName,
         [FromBody, Required] AddUserToOrganizationDto request, CancellationToken ct)
     {
+        // Optional in the body (it was never [Required]), but there is no organization to join without it
+        if (string.IsNullOrWhiteSpace(request.OrgSlug))
+            throw new BadRequestException("Missing organization slug");
+
         await _usersManager.AddUserToOrganization(userName, request.OrgSlug, request.Permissions);
 
         return Ok();

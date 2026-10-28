@@ -56,13 +56,13 @@ public sealed class UserProvisioning
     /// Stores the metadata the login provider returned for <paramref name="user"/>, saving only when it
     /// changed. A provider may return none: <see cref="User.Metadata"/> stores null as empty.
     /// </summary>
-    public async Task SyncFromProviderAsync(User user, Dictionary<string, object> metadata)
+    public async Task SyncFromProviderAsync(User user, Dictionary<string, object>? metadata)
     {
         await SyncMetadata(user, metadata);
         await SyncRolesAsync(user);
     }
 
-    private async Task SyncMetadata(User user, Dictionary<string, object> metadata)
+    private async Task SyncMetadata(User user, Dictionary<string, object>? metadata)
     {
         var previous = user.Metadata;
         user.Metadata = metadata;
@@ -134,7 +134,7 @@ public sealed class UserProvisioning
         }
 
         if (_accounts.EnableDefaultUserOrganization)
-            await _organizations.AddUserDefaultAsync(user.Id, user.UserName);
+            await _organizations.AddUserDefaultAsync(user.Id, user.RequiredUserName());
 
         await AddUserToRoles(user, roles);
 

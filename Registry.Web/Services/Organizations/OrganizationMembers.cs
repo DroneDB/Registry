@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -94,7 +93,7 @@ public sealed class OrganizationMembers
         var org = await _memberships.GetWithMembersAsync(orgSlug, ct);
 
         var currentUser = await _authManager.GetCurrentUser();
-        if (!await CanManageMembers(org, currentUser))
+        if (currentUser == null || !await CanManageMembers(org, currentUser))
             throw new ForbiddenException("You don't have permission to manage members");
 
         if (!IsMemberManagementEnabled)
@@ -126,10 +125,8 @@ public sealed class OrganizationMembers
         await _memberships.RemoveAsync(org, userName, currentUser, CancellationToken.None);
     }
 
-    private async Task<bool> CanManageMembers(Organization org, [NotNullWhen(true)] User? user)
+    private async Task<bool> CanManageMembers(Organization org, User user)
     {
-        if (user == null) return false;
-
         // System admin can always manage
         if (await _authManager.IsUserAdmin()) return true;
 

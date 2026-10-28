@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using Registry.Common;
 using Registry.Web.Data.Models;
+using Registry.Web.Exceptions;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Managers;
@@ -33,8 +34,17 @@ public interface IAuthManager
     public Task<bool> UserExists(string userId);
     public Task<bool> RequestAccess<T>(T obj, AccessType access) where T : IRequestAccess;
 
+    /// <summary>Whether <paramref name="user"/> may list organizations (false when null).</summary>
     public Task<bool> CanListOrganizations(User? user);
     public Task<bool> CanRefreshToken(User? user);
 
     public Task<DatasetPermissionsDto> GetDatasetPermissions(Dataset dataset);
+}
+
+/// <summary>Lookups of the current user for operations that need one.</summary>
+public static class AuthManagerExtensions
+{
+    /// <summary>The current user; an anonymous caller (or the token of a deleted user) is unauthorized.</summary>
+    public static async Task<User> GetRequiredCurrentUser(this IAuthManager authManager) =>
+        await authManager.GetCurrentUser() ?? throw new UnauthorizedException("Unauthorized", noRetry: false);
 }

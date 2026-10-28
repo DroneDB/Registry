@@ -35,7 +35,7 @@ public interface IOrganizationsManager
     /// <param name="deleteSourceOrganization">Whether to delete the source organization after merging.</param>
     /// <returns>Result of the merge operation.</returns>
     public Task<MergeOrganizationResultDto> Merge(
-        string sourceOrgSlug,
+        string? sourceOrgSlug,
         string destOrgSlug,
         ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict,
         bool deleteSourceOrganization = true, CancellationToken ct = default);

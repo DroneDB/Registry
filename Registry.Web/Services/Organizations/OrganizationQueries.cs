@@ -38,7 +38,7 @@ public sealed class OrganizationQueries
     {
         var currentUser = await _authManager.GetCurrentUser();
 
-        if (!await _authManager.CanListOrganizations(currentUser))
+        if (currentUser == null || !await _authManager.CanListOrganizations(currentUser))
             throw new UnauthorizedException("Invalid user");
 
         var isAdmin = await _authManager.IsUserAdmin();
@@ -137,8 +137,8 @@ public sealed class OrganizationQueries
     /// </summary>
     private async Task ResolveOwnerNamesAsync(IReadOnlyCollection<OrganizationDto> organizations)
     {
-        var ownerIds = organizations.Where(o => o.Owner != null)
-                                   .Select(o => o.Owner)
+        var ownerIds = organizations.Select(o => o.Owner)
+                                   .OfType<string>()
                                    .Distinct()
                                    .ToArray();
 

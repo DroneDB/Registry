@@ -102,7 +102,7 @@ public sealed class UserPasswords
 
         return new ChangePasswordResult
         {
-            UserName = user.UserName,
+            UserName = user.RequiredUserName(),
             Password = newPassword
         };
 

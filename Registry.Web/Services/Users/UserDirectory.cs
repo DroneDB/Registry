@@ -108,20 +108,20 @@ public sealed class UserDirectory
     public async Task AddUserToOrganization(string userName, string orgSlug, OrganizationPermissions permissions)
     {
         var org = await _memberships.GetWithMembersAsync(orgSlug);
-        await _memberships.AddAsync(org, userName, permissions, await _authManager.GetCurrentUser());
+        await _memberships.AddAsync(org, userName, permissions, await _authManager.GetRequiredCurrentUser());
     }
 
     public async Task RemoveUserFromOrganization(string userName, string orgSlug)
     {
         var org = await _memberships.GetWithMembersAsync(orgSlug);
-        await _memberships.RemoveAsync(org, userName, await _authManager.GetCurrentUser());
+        await _memberships.RemoveAsync(org, userName, await _authManager.GetRequiredCurrentUser());
     }
 
     public async Task UpdateUserOrganizationPermissions(string userName, string orgSlug,
         OrganizationPermissions permissions)
     {
         var org = await _memberships.GetWithMembersAsync(orgSlug);
-        await _memberships.UpdateAsync(org, userName, permissions, await _authManager.GetCurrentUser());
+        await _memberships.UpdateAsync(org, userName, permissions, await _authManager.GetRequiredCurrentUser());
     }
 
     public async Task<IEnumerable<UserDto>> GetAll(CancellationToken ct = default)

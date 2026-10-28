@@ -47,7 +47,7 @@ public sealed class ShareUploads
     /// <param name="path">The destination path within the dataset.</param>
     /// <param name="file">The temp file produced by <c>IObjectsManager.StreamToTempAsync</c>.</param>
     /// <returns>The upload result.</returns>
-    public async Task<UploadResultDto> UploadStreamed(string token, string path, StreamedFile file,
+    public async Task<UploadResultDto> UploadStreamed(string token, string? path, StreamedFile file,
         CancellationToken ct = default)
     {
         var tempFilePath = file.TempPath;

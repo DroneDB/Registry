@@ -215,7 +215,8 @@ public sealed class ShareBatchStore
         var entry = new Entry
         {
             Type = info.Type,
-            Hash = info.Hash,
+            // An added file is indexed with its hash (only a folder has none)
+            Hash = info.Hash ?? throw new InvalidOperationException($"The entry '{path}' was indexed without a hash"),
             AddedOn = UtcNow(),
             Path = path,
             Size = info.Size,

@@ -50,7 +50,7 @@ public class DatasetsManager : IDatasetsManager
     public Task<Dictionary<string, object>> ChangeAttributes(string orgSlug, string dsSlug, AttributesDto? attributes, CancellationToken ct = default) =>
         _commands.ChangeAttributes(orgSlug, dsSlug, attributes, ct: ct);
 
-    public Task<IEnumerable<MoveDatasetResultDto>> MoveToOrganization(string sourceOrgSlug, string[] datasetSlugs,
+    public Task<IEnumerable<MoveDatasetResultDto>> MoveToOrganization(string? sourceOrgSlug, string[] datasetSlugs,
         string destOrgSlug, ConflictResolutionStrategy conflictResolution = ConflictResolutionStrategy.HaltOnConflict, CancellationToken ct = default) =>
         _mover.MoveToOrganization(sourceOrgSlug, datasetSlugs, destOrgSlug, conflictResolution, ct: ct);
 }
