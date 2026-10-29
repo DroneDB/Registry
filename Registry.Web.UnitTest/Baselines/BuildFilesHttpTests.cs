@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -475,17 +476,19 @@ public sealed class BuildFilesHttpTests : IDisposable
     private static IEnumerable<TestCaseData> Downloads()
     {
         yield return new TestCaseData("ortho.tif", EntryType.GeoRaster, ArtifactRoles.RasterCog, "cog/cog.tif",
-            "image/tiff; application=geotiff; profile=cloud-optimized", "cog.tif").SetName("{m}(cog)");
-        yield return new TestCaseData("cloud.laz", EntryType.PointCloud, ArtifactRoles.PointCloudCopc,
-            "copc/cloud.copc.laz", "application/vnd.laszip+copc", "cloud.copc.laz")
+            "image/tiff; application=geotiff; profile=cloud-optimized", "cog.tif", "ortho.tif").SetName("{m}(cog)");
+        yield return new TestCaseData("scan.laz", EntryType.PointCloud, ArtifactRoles.PointCloudCopc,
+            "copc/cloud.copc.laz", "application/vnd.laszip+copc", "cloud.copc.laz", "scan.copc.laz")
             .SetName("{m}(copc)");
         yield return new TestCaseData("roads.geojson", EntryType.Vector, ArtifactRoles.VectorGpkg, "vec/source.gpkg",
-            "application/geopackage+sqlite3", "source.gpkg").SetName("{m}(gpkg)");
+            "application/geopackage+sqlite3", "source.gpkg", "roads.gpkg").SetName("{m}(gpkg)");
     }
 
+    // The file is named after the entry (every COG of the manifest is cog.tif), with the extension of the manifest's
+    // download name
     [TestCaseSource(nameof(Downloads))]
-    public async Task BuildArtifact_IsTheManifestsDownload_WithTheManifestsMediaType(string path, EntryType type,
-        string role, string artifactPath, string manifestType, string downloadName)
+    public async Task BuildArtifact_IsTheManifestsDownload_NamedAfterTheEntry_WithTheManifestsMediaType(string path,
+        EntryType type, string role, string artifactPath, string manifestType, string downloadName, string offered)
     {
         BuildFile(artifactPath, "artifact bytes");
         SetupEntry(path, type, BuildState.Complete,
@@ -495,8 +498,38 @@ public sealed class BuildFilesHttpTests : IDisposable
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         response.Content.Headers.ContentType!.ToString().ShouldBe(manifestType);
-        response.Content.Headers.ContentDisposition!.FileName.ShouldBe(downloadName);
+        response.Content.Headers.ContentDisposition!.FileName.ShouldBe(offered);
         (await response.Content.ReadAsStringAsync()).ShouldBe("artifact bytes");
+    }
+
+    [Test]
+    public async Task BuildArtifact_OfADirectory_IsAZipOfWhatIsInIt_NamedAfterTheEntry()
+    {
+        BuildFile("3dtiles/tileset.json", "{\"asset\":{}}");
+        BuildFile("3dtiles/LOD-0/root.b3dm", "tile bytes");
+        SetupEntry("site/building.obj", EntryType.Model, BuildState.Complete,
+            TestBuilds.File(ArtifactRoles.ModelBm3d, "bm3d/model.bm3d", "application/vnd.dronedb.bm3d"),
+            TestBuilds.Directory(ArtifactRoles.Model3DTiles, "3dtiles", "tileset.json",
+                downloadName: "model.3dtiles.zip"));
+
+        using var response = await SendAsync(HttpMethod.Get,
+            $"/orgs/{Org}/ds/{Ds}/build-artifact?path=site/building.obj&role={ArtifactRoles.Model3DTiles}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.Content.Headers.ContentType!.MediaType.ShouldBe("application/zip");
+        response.Content.Headers.ContentDisposition!.FileName.ShouldBe("building.3dtiles.zip");
+        response.Headers.CacheControl!.NoStore.ShouldBeTrue();
+
+        await using var body = await response.Content.ReadAsStreamAsync();
+        using var buffered = new MemoryStream();
+        await body.CopyToAsync(buffered);
+        buffered.Position = 0;
+        using var zip = new ZipArchive(buffered, ZipArchiveMode.Read);
+        // The tileset at the root, its tiles at their relative paths
+        zip.Entries.Where(e => e.Length > 0).Select(e => e.FullName.Replace('\\', '/')).Order()
+            .ShouldBe(["LOD-0/root.b3dm", "tileset.json"]);
+        using var reader = new StreamReader(zip.GetEntry("tileset.json")!.Open());
+        (await reader.ReadToEndAsync()).ShouldBe("{\"asset\":{}}");
     }
 
     [Test]

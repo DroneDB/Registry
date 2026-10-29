@@ -118,7 +118,7 @@ public class BuildManifestTests
 
         File.Exists(download.LocalPath).ShouldBeTrue(download.LocalPath);
         Path.IsPathRooted(download.LocalPath).ShouldBeTrue();
-        download.FileName.ShouldBe("cog.tif");
+        download.FileName.ShouldBe("ortho.tif");
         download.MediaType.ShouldBe("image/tiff; application=geotiff; profile=cloud-optimized");
     }
 

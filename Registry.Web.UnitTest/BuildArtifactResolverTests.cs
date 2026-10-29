@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Moq;
@@ -210,8 +211,10 @@ public class BuildArtifactResolverTests
             TestBuilds.File(ArtifactRoles.GsplatBounds, "gsplat/bounds.json", "application/json"), artifact))!;
 
         download.ShouldNotBeNull();
-        download.FileName.ShouldBe(artifact.DownloadName);
+        var downloadName = artifact.DownloadName!;
+        download.FileName.ShouldBe("entry" + downloadName[downloadName.IndexOf('.', StringComparison.Ordinal)..]);
         download.MediaType.ShouldBe(served);
+        download.IsArchive.ShouldBeFalse();
         download.LocalPath.ShouldBe(Path.GetFullPath(Path.Combine(Folder, ".ddb", "build", Hash,
             artifact.Path.Replace('/', Path.DirectorySeparatorChar))));
     }
@@ -236,14 +239,41 @@ public class BuildArtifactResolverTests
     }
 
     [Test]
-    public void Download_WithoutARole_IsStillTheFirstArtifactWithADownloadName_UnderItsOwnName()
+    public void Download_WithoutARole_IsTheFirstArtifactWithADownloadName_NamedAfterTheEntry()
     {
         var build = Built("scene.ply", EntryType.GaussianSplat, SplatModel, SplatExport);
 
         var download = _resolver.GetDownload(build)!;
 
-        download.FileName.ShouldBe("model.rad");
+        download.FileName.ShouldBe("scene.rad", "the manifest's model.rad is the same for every entry");
         download.LocalPath.ShouldEndWith(Path.Combine("gsplat", "model.rad"));
+    }
+
+    [TestCase("ortho.tif", "cog.tif", ExpectedResult = "ortho.tif")]
+    [TestCase("ORTHO.TIF", "cog.tif", ExpectedResult = "ORTHO.TIF")]
+    [TestCase("flights/dsm.jp2", "cog.tif", ExpectedResult = "dsm.tif")]
+    [TestCase("scan.laz", "cloud.copc.laz", ExpectedResult = "scan.copc.laz")]
+    [TestCase("scan.copc.laz", "cloud.copc.laz", ExpectedResult = "scan.copc.laz")]
+    [TestCase("roads.shp", "source.gpkg", ExpectedResult = "roads.gpkg")]
+    [TestCase("site/building.obj", "model.3dtiles.zip", ExpectedResult = "building.3dtiles.zip")]
+    [TestCase("noextension", "cog.tif", ExpectedResult = "noextension.tif")]
+    [TestCase("scene.ply", "export", ExpectedResult = "scene")]
+    public string DownloadFileName_IsTheEntrysName_WithTheExtensionOfTheDownloadNameFromItsFirstDot(string entry,
+        string downloadName) => BuildArtifactResolver.DownloadFileName(entry, downloadName);
+
+    [Test]
+    public void Download_OfADirectoryArtifact_IsAZipArchiveOfTheDirectory()
+    {
+        var build = Built("site/building.obj", EntryType.Model,
+            TestBuilds.File(ArtifactRoles.ModelBm3d, "bm3d/model.bm3d", "application/vnd.dronedb.bm3d"),
+            TestBuilds.Directory(ArtifactRoles.Model3DTiles, "3dtiles", "tileset.json", downloadName: "model.3dtiles.zip"));
+
+        var download = _resolver.GetDownload(build)!;
+
+        download.IsArchive.ShouldBeTrue();
+        download.FileName.ShouldBe("building.3dtiles.zip");
+        download.MediaType.ShouldBe("application/zip", "the manifest's media type is the one of the tileset");
+        download.LocalPath.ShouldBe(Path.GetFullPath(Path.Combine(Folder, ".ddb", "build", Hash, "3dtiles")));
     }
 
     [Test]

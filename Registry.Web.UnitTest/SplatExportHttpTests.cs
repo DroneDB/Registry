@@ -190,7 +190,7 @@ public sealed class SplatExportHttpTests : DatasetAccessFixture
     }
 
     [Test]
-    public async Task Download_WithoutARole_KeepsTheFirstDownloadOfTheManifest()
+    public async Task Download_WithoutARole_IsTheFirstDownloadOfTheManifest_NamedAfterTheEntry()
     {
         BuiltSplat("scene.ply", TestBuilds.File(ArtifactRoles.GsplatExport, "gsplat/export.spz",
             "application/octet-stream", "export.spz"));
@@ -201,7 +201,7 @@ public sealed class SplatExportHttpTests : DatasetAccessFixture
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
         body.ShouldBe("rad bytes");
-        response.Content.Headers.ContentDisposition!.FileName.ShouldBe("model.rad");
+        response.Content.Headers.ContentDisposition!.FileName.ShouldBe("scene.rad");
     }
 
     [Test]

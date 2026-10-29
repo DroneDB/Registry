@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Ports.DroneDB;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Models.DTO;
 
@@ -18,7 +19,7 @@ public enum FileDescriptorType
 /// to the response (nothing is buffered, the first bytes leave while later files are still
 /// being read).
 /// </summary>
-public class FileStreamDescriptor
+public class FileStreamDescriptor : IStreamedDownload
 {
     private readonly string[] _paths;
     private readonly string[]? _folders;

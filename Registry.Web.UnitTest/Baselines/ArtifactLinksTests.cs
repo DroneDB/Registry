@@ -70,6 +70,23 @@ public sealed class ArtifactLinksTests
         ]);
     }
 
+    // The Hub offers a download for each link with a download name, and none for the others
+    [Test]
+    public void TheDownloadNameOfEachArtifact_IsOnItsLink()
+    {
+        var build = TestBuilds.Build(Folder, "building.obj", EntryType.Model, Hash, BuildState.Complete,
+            TestBuilds.File("model.bm3d", "bm3d/model.bm3d", "application/vnd.dronedb.bm3d"),
+            TestBuilds.Directory("model.3dtiles", "3dtiles", "tileset.json", downloadName: "model.3dtiles.zip"));
+
+        var links = Urls.ArtifactLinks("org", "ds", build);
+
+        links.Select(l => (l.Role, l.DownloadName)).ShouldBe(
+        [
+            ("model.bm3d", (string?)null),
+            ("model.3dtiles", "model.3dtiles.zip")
+        ]);
+    }
+
     [Test]
     public void ASidecar_HasNoLinks_ItsBuildIsItsMainFiles()
     {

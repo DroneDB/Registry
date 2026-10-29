@@ -6,12 +6,14 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.Extensions.Logging;
 using MimeMapping;
 using Registry.Ports.DroneDB;
 using Registry.Web.Filters;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Objects;
+using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
@@ -27,11 +29,16 @@ public class ObjectBuildsController : ControllerBaseEx
 {
     private readonly BuildQueryService _builds;
     private readonly IResponseCompressionProvider _compression;
+    private readonly IZipArchiveBuilder _zip;
+    private readonly ILogger<ObjectBuildsController> _logger;
 
-    public ObjectBuildsController(BuildQueryService builds, IResponseCompressionProvider compression)
+    public ObjectBuildsController(BuildQueryService builds, IResponseCompressionProvider compression,
+        IZipArchiveBuilder zip, ILogger<ObjectBuildsController> logger)
     {
         _builds = builds;
         _compression = compression;
+        _zip = zip;
+        _logger = logger;
     }
 
     /// <summary>
@@ -129,10 +136,10 @@ public class ObjectBuildsController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Downloads a pre-built visualization artifact (COG, COPC, or GPKG) for a given entry.
+    /// Downloads a built artifact of an entry (COG, COPC, GPKG, the 3D Tiles of a model...), named after the entry.
     /// The entry type determines which artifact is served, unless <paramref name="role"/> names one (for example the
-    /// <c>gsplat.export</c> <c>.spz</c> of a splat, once its export task has made it), which is then served under the
-    /// entry's name. Zero-copy streaming via PhysicalFileResult.
+    /// <c>gsplat.export</c> <c>.spz</c> of a splat, once its export task has made it). A file is streamed with range
+    /// support; a directory (3D Tiles) is sent as a ZIP archive of what is in it, written while it is read.
     /// </summary>
     [HttpGet("build-artifact", Name = nameof(ObjectsController) + "." + nameof(DownloadBuildArtifact))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
@@ -146,7 +153,10 @@ public class ObjectBuildsController : ControllerBaseEx
     {
         var artifact = await _builds.GetBuildArtifactAsync(orgSlug, dsSlug, path, role, ct);
 
-        return PhysicalFile(artifact.LocalPath, artifact.MediaType, artifact.FileName, enableRangeProcessing: true);
+        return artifact.IsArchive
+            ? new StreamedDownloadResult(new FolderArchiveDownload(artifact.FileName, artifact.LocalPath, _zip),
+                inline: false, _logger)
+            : PhysicalFile(artifact.LocalPath, artifact.MediaType, artifact.FileName, enableRangeProcessing: true);
     }
 
     /// <summary>

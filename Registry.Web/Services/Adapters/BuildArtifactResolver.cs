@@ -24,6 +24,9 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
 
     private static readonly TimeSpan LocationExpiry = TimeSpan.FromMinutes(30);
 
+    /// <summary>The media type of a directory artifact sent as a download (a ZIP archive of what is in it).</summary>
+    private const string ArchiveMediaType = "application/zip";
+
     /// <summary>
     /// The roles the renderers read (thumbnails, tiles, raster analysis): the first existing one of an
     /// entry's own build is its render source. The order does not matter between the roles of a legacy
@@ -125,10 +128,26 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
         if (artifact == null)
             return null;
 
-        var name = role == null
-            ? artifact.DownloadName!
-            : Path.GetFileNameWithoutExtension(build.Path) + Path.GetExtension(artifact.DownloadName);
-        return new BuildDownload(build.Build.LocalPathOf(artifact), name, artifact.MediaType);
+        var name = DownloadFileName(build.Path, artifact.DownloadName!);
+        return artifact.IsDirectory
+            ? new BuildDownload(build.Build.LocalPathOf(artifact), name, ArchiveMediaType, IsArchive: true)
+            : new BuildDownload(build.Build.LocalPathOf(artifact), name, artifact.MediaType);
+    }
+
+    /// <summary>
+    /// The name a download is offered under: the entry's name with the extension of the manifest's download name
+    /// from its first dot (the COPC of <c>scan.laz</c> is <c>scan.copc.laz</c>), or the entry's name as it is when it already
+    /// ends with that extension (a COG of <c>ortho.tif</c> is <c>ortho.tif</c>, not <c>ortho.tif.tif</c>).
+    /// </summary>
+    internal static string DownloadFileName(string entryPath, string downloadName)
+    {
+        var dot = downloadName.IndexOf('.', StringComparison.Ordinal);
+        var extension = dot < 0 ? "" : downloadName[dot..];
+        var name = Path.GetFileName(entryPath);
+
+        return extension.Length > 0 && name.EndsWith(extension, StringComparison.OrdinalIgnoreCase)
+            ? name
+            : Path.GetFileNameWithoutExtension(name) + extension;
     }
 
     public string? FindArtifactFile(IDDB ddb, string hash, string role, string? relativePath = null,

@@ -50,9 +50,11 @@ public interface IBuildArtifactResolver
     /// <summary>
     /// The artifact of <paramref name="build"/> offered as a download, with the local file, the name and the media
     /// type it is served with: the first one with a download name, or with <paramref name="role"/> the existing
-    /// artifact of that role when it has one. An artifact asked for by role is named after the entry, with the
-    /// extension of its download name (a splat <c>scene.ply</c> exported for other tools is <c>scene.spz</c>, not the
-    /// manifest's <c>export.spz</c>): the manifest's name is the same for every entry.
+    /// artifact of that role when it has one. It is named after the entry, with the extension of its download name
+    /// from its first dot (the COG of <c>ortho.tif</c> is <c>ortho.tif</c>, the COPC of <c>scan.laz</c> is
+    /// <c>scan.copc.laz</c>, a splat <c>scene.ply</c> exported for other tools is
+    /// <c>scene.spz</c>): the manifest's name is the same for every entry. A directory artifact is a ZIP archive
+    /// (<see cref="BuildDownload.IsArchive"/>).
     /// </summary>
     /// <returns>The download, or null when the entry's own build has no such downloadable artifact.</returns>
     BuildDownload? GetDownload(EntryBuildArtifacts build, string? role = null);
@@ -91,5 +93,9 @@ public interface IBuildArtifactResolver
     int CopyBuilds(IDDB source, IReadOnlyList<string> entryPaths, IDDB destination);
 }
 
-/// <summary>A build artifact served as a download: its local file, the file name offered and the media type sent.</summary>
-public sealed record BuildDownload(string LocalPath, string FileName, string MediaType);
+/// <summary>
+/// A build artifact served as a download: its local file, the file name offered and the media type sent. An
+/// <paramref name="IsArchive"/> download is a directory (<paramref name="LocalPath"/>), sent as a ZIP archive of what
+/// is in it with <paramref name="MediaType"/> <c>application/zip</c>.
+/// </summary>
+public sealed record BuildDownload(string LocalPath, string FileName, string MediaType, bool IsArchive = false);

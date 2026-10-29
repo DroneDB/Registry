@@ -889,7 +889,8 @@
     "full": {
       "role": "Role-text",
       "url": "Url-text",
-      "mediaType": "MediaType-text"
+      "mediaType": "MediaType-text",
+      "downloadName": "DownloadName-text"
     },
     "sparse": {
       "role": null,
@@ -1766,7 +1767,8 @@
         {
           "role": "Role-text",
           "url": "Url-text",
-          "mediaType": "MediaType-text"
+          "mediaType": "MediaType-text",
+          "downloadName": "DownloadName-text"
         }
       ]
     },
@@ -3032,7 +3034,8 @@
         {
           "role": "Role-text",
           "url": "Url-text",
-          "mediaType": "MediaType-text"
+          "mediaType": "MediaType-text",
+          "downloadName": "DownloadName-text"
         }
       ]
     },
@@ -4006,7 +4009,8 @@
           {
             "role": "Role-text",
             "url": "Url-text",
-            "mediaType": "MediaType-text"
+            "mediaType": "MediaType-text",
+            "downloadName": "DownloadName-text"
           }
         ]
       },

@@ -989,7 +989,7 @@ schema AddUserToOrganizationDto { orgSlug:string, permissions:OrganizationPermis
 schema AdminTaskListDto { items:array<AdminTaskSummaryDto>, total:integer(int64), skip:integer(int32), take:integer(int32) }
 schema AdminTaskSummaryDto { taskId:string, orgSlug:string, dsSlug:string, toolId:string, version:string, state:string, progressPercent:integer(int32), phaseMessage:string, createdAt:string(date-time), startedAt:string(date-time), finishedAt:string(date-time), path:string, userId:string, owner:string, errorType:string, artifactExpiresAt:string(date-time) }
 schema AlignRasterRequestDto { sourcePath:string, referencePath:string, outputPath:string, mode:string }
-schema ArtifactLinkDto { role:string, url:string, mediaType:string }
+schema ArtifactLinkDto { role:string, url:string, mediaType:string, downloadName:string }
 schema AuthenticateResponse { username:string, token:string, expires:string(date-time) }
 schema BatchDto { token:string, userName:string, start:string(date-time), end:string(date-time), status:BatchStatus, entries:array<BatchEntryDto> }
 schema BatchEntryDto { path:string, hash:string, type:EntryType, size:integer(int64), addedOn:string(date-time) }

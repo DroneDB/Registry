@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Utilities;
 
@@ -17,11 +16,11 @@ namespace Registry.Web.Utilities;
 /// </summary>
 public sealed class StreamedDownloadResult : IActionResult
 {
-    private readonly FileStreamDescriptor _download;
+    private readonly IStreamedDownload _download;
     private readonly bool _inline;
     private readonly ILogger _logger;
 
-    public StreamedDownloadResult(FileStreamDescriptor download, bool inline, ILogger logger)
+    public StreamedDownloadResult(IStreamedDownload download, bool inline, ILogger logger)
     {
         _download = download ?? throw new ArgumentNullException(nameof(download));
         _inline = inline;

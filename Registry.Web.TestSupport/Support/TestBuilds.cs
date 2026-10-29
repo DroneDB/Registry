@@ -74,11 +74,11 @@ public static class TestBuilds
 
     /// <summary>A directory artifact read through its descriptor.</summary>
     public static BuildArtifact Directory(string role, string path, string index, bool legacy = false,
-        string? fallbackFor = null, string? version = null) =>
+        string? fallbackFor = null, string? version = null, string? downloadName = null) =>
         new()
         {
-            Role = role, Path = path, Kind = "dir", MediaType = "application/json", Index = index,
-            Legacy = legacy, FallbackFor = fallbackFor, Version = version
+            Role = role, Path = path, Kind = BuildArtifact.DirectoryKind, MediaType = "application/json", Index = index,
+            DownloadName = downloadName, Legacy = legacy, FallbackFor = fallbackFor, Version = version
         };
 
     /// <summary>

@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
@@ -16,15 +17,25 @@ public sealed class BuildArtifact
     [JsonPropertyName("path")]
     public string Path { get; set; } = "";
 
+    /// <summary>The <see cref="Kind"/> of a directory artifact.</summary>
+    public const string DirectoryKind = "dir";
+
     /// <summary>"file", or "dir" for a directory (<see cref="Index"/> names its descriptor).</summary>
     [JsonPropertyName("kind")]
     public string Kind { get; set; } = "";
+
+    /// <summary>The artifact is a directory (a tile pyramid): a download of it is a ZIP archive of what is in it.</summary>
+    [JsonIgnore]
+    public bool IsDirectory => string.Equals(Kind, DirectoryKind, StringComparison.Ordinal);
 
     /// <summary>Media type of the file a client opens: the file, or the index of a directory.</summary>
     [JsonPropertyName("mediaType")]
     public string MediaType { get; set; } = "";
 
-    /// <summary>The file name to offer for a download; null when the artifact is not one.</summary>
+    /// <summary>
+    /// The file name to offer for a download; null when the artifact is not one. A directory is offered as a ZIP
+    /// archive of what is in it, under this name.
+    /// </summary>
     [JsonPropertyName("downloadName")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? DownloadName { get; set; }
