@@ -84,9 +84,11 @@ fi
 grep -Ev '^[[:space:]]*(#|$)' "$BASELINE" | sort >"$tmp/baseline.txt" || true
 
 # Joins baseline and current on "<path> <code>"; prints "<key> <baseline count> <current count>".
-awk '
+# The files are told apart by name, not with FNR == NR, which also holds for the current file when the
+# baseline is empty (and would then read every current warning as a baseline one).
+awk -v base_file="$tmp/baseline.txt" '
     { key = $1; for (i = 2; i < NF; i++) key = key " " $i }
-    FNR == NR { base[key] = $NF; next }
+    FILENAME == base_file { base[key] = $NF; next }
     { cur[key] = $NF }
     END {
         for (k in cur)  print k, (k in base ? base[k] : 0), cur[k]
