@@ -7,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using MimeMapping;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
@@ -99,7 +98,7 @@ public sealed class EntryQueryService : IEntryQueryService
             Name = Path.GetFileName(entry.Path),
             Size = entry.Size,
             Type = entry.Type,
-            ContentType = MimeUtility.GetMimeMapping(entry.Path),
+            ContentType = UserContentPolicy.ForEntry(entry.Path).MediaType,
             PhysicalPath = Path.GetFullPath(ddb.GetLocalPath(entry.Path))
         };
     }
@@ -124,8 +123,7 @@ public sealed class EntryQueryService : IEntryQueryService
 
         // One file asked for by its own path: the file itself; anything else: a ZIP archive
         var descriptor = files.Length == 1 && paths?.Length == 1 && files[0] == paths[0]
-            ? new FileStreamDescriptor(Path.GetFileName(files[0]), MimeUtility.GetMimeMapping(files[0]), ddb, files,
-                null, FileDescriptorType.Single, _logger, _zip)
+            ? SingleFileDownload(ddb, files)
             : new FileStreamDescriptor($"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip", "application/zip", ddb,
                 files, folders, includeDdb ? FileDescriptorType.Dataset : FileDescriptorType.Multiple, _logger, _zip);
 
@@ -142,6 +140,11 @@ public sealed class EntryQueryService : IEntryQueryService
 
         return descriptor;
     }
+
+    // The file itself, with the type the policy for user content gives it
+    private FileStreamDescriptor SingleFileDownload(IDDB ddb, string[] files) =>
+        new(Path.GetFileName(files[0]), UserContentPolicy.ForEntry(files[0]).MediaType, ddb, files, null,
+            FileDescriptorType.Single, _logger, _zip);
 
     public async Task<FileStreamDescriptor> GetDdbAsync(string orgSlug, string dsSlug, CancellationToken ct = default)
     {

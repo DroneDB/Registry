@@ -39,13 +39,27 @@ public class ControllerBaseEx : ControllerBase
     /// <param name="path">The file.</param>
     /// <param name="contentType">Its media type.</param>
     /// <param name="compression">The provider of the response compression middleware the response goes through.</param>
+    /// <param name="downloadName">The download name (<c>Content-Disposition: attachment</c>), or null to leave the file shown in place.</param>
     [NonAction]
     public PhysicalFileResult FileTaggedPhysicalFile(string path, string contentType,
-        IResponseCompressionProvider compression)
+        IResponseCompressionProvider compression, string? downloadName = null)
     {
         var file = new FileInfo(path);
         var tag = EntityTags.OfFile(file, weak: MayBeContentEncoded(contentType, compression));
-        return ValidatedPhysicalFile(path, file, contentType, tag, null);
+        return ValidatedPhysicalFile(path, file, contentType, tag, downloadName);
+    }
+
+    /// <summary>
+    /// A file a user put in a dataset, sent as <see cref="UserContentPolicy"/> allows: with the type and the
+    /// <c>Content-Security-Policy</c> it gives, and shown in place only when the client asked for that
+    /// (<paramref name="inline"/>) and the type may be; otherwise an attachment named <paramref name="fileName"/>.
+    /// </summary>
+    [NonAction]
+    public PhysicalFileResult UserEntryFile(string path, string fileName, bool inline, bool enableRangeProcessing = true)
+    {
+        var served = UserContentPolicy.ForEntry(fileName);
+        Response.Headers.ContentSecurityPolicy = served.ContentSecurityPolicy;
+        return PhysicalFile(path, served.MediaType, inline && served.Inline ? null : fileName, enableRangeProcessing);
     }
 
     // ASP.NET Core's response compression gzips or brotlis a 200 of a media type it compresses and leaves its ETag

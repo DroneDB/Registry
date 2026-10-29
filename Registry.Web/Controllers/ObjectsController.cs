@@ -178,7 +178,7 @@ public class ObjectsController : ControllerBaseEx
         [FromForm] string? path, CancellationToken ct)
     {
         var res = await _queries.GetAsync(orgSlug, dsSlug, path, ct: ct);
-        return PhysicalFile(res.PhysicalPath, res.ContentType, res.Name);
+        return UserEntryFile(res.PhysicalPath, res.Name, inline: false, enableRangeProcessing: false);
     }
 
     /// <summary>

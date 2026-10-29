@@ -72,11 +72,12 @@ public class ObjectDownloadsController : ControllerBaseEx
                 await _queries.GetEntryTypeAsync(orgSlug, dsSlug, paths[0], cancellationToken) != EntryType.Directory)
             {
                 var r = await _queries.GetAsync(orgSlug, dsSlug, paths[0], cancellationToken);
-                return PhysicalFile(r.PhysicalPath, r.ContentType, isInline ? null : r.Name, true);
+                return UserEntryFile(r.PhysicalPath, r.Name, isInline);
             }
 
+            // Anything else is an archive of a selection, a folder or the whole dataset: always an attachment
             var res = await _queries.DownloadAsync(orgSlug, dsSlug, paths, cancellationToken);
-            return new StreamedDownloadResult(res, isInline, _logger);
+            return new StreamedDownloadResult(res, inline: false, _logger);
         }
         catch (OperationCanceledException)
         {

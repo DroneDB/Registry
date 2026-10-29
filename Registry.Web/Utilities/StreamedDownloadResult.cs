@@ -37,6 +37,7 @@ public sealed class StreamedDownloadResult : IActionResult
         response.ContentType = _download.ContentType;
         response.Headers.ContentDisposition = _inline ? "inline" : ContentDispositionHeader.Attachment(_download.Name);
         response.Headers.CacheControl = "no-store";
+        response.Headers.ContentSecurityPolicy = UserContentPolicy.ContentSecurityPolicyFor(_download.ContentType);
         http.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
 
         try

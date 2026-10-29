@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.Logging;
-using MimeMapping;
 using Registry.Ports.DroneDB;
 using Registry.Web.Filters;
 using Registry.Web.Models;
@@ -95,7 +94,9 @@ public class ObjectBuildsController : ControllerBaseEx
     }
 
     // GET and HEAD send the same file result: the executor sends the headers (length, type, validators, ranges) of
-    // both and the body of GET only. The type is the manifest's when libddb gives one, else the extension's. A URL
+    // both and the body of GET only. The type is the manifest's when libddb gives one and the policy for user content
+    // holds it, else the extension's (a type the policy does not know is an attachment of octet-stream, and every
+    // response is sandboxed, because the files of a build are the user's own bytes). A URL
     // that names the current version of the file's artifact identifies its bytes: the browser keeps them without
     // asking (immutable, for the bounded VersionedMaxAge), every range of a file read by ranges included. Any other
     // URL (no version, or one a rebuild replaced) may change under the same hash, so the client must ask again
@@ -103,8 +104,11 @@ public class ObjectBuildsController : ControllerBaseEx
     // encodes (a JSON tileset), strong for the binary files a viewer reads by ranges
     private PhysicalFileResult BuildFileResult(ResolvedBuildFile file, string? requestedVersion)
     {
+        var served = UserContentPolicy.ForBuildFile(file.Path, file.MediaType);
         Response.Headers.CacheControl = HashedContentCachePolicy.CacheControlFor(file.Version, requestedVersion);
-        return FileTaggedPhysicalFile(file.Path, file.MediaType ?? MimeUtility.GetMimeMapping(file.Path), _compression);
+        Response.Headers.ContentSecurityPolicy = served.ContentSecurityPolicy;
+        return FileTaggedPhysicalFile(file.Path, served.MediaType, _compression,
+            served.Inline ? null : System.IO.Path.GetFileName(file.Path));
     }
 
     /// <summary>
