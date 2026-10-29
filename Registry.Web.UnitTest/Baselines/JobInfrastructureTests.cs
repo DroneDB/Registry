@@ -22,6 +22,7 @@ using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Initialization;
 using Registry.Web.Services.Jobs;
+using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Shouldly;
 
@@ -264,6 +265,7 @@ public class JobInfrastructureTests
                 var services = new ServiceCollection();
                 services.AddLogging();
                 services.AddSingleton(Mock.Of<IHeavyToolRegistry>());
+                services.AddSingleton(Mock.Of<IOgcCacheKeys>());
                 foreach (var type in RegistryJobsServiceCollectionExtensions.JobFilterTypes)
                     services.AddSingleton(type);
                 return services.BuildServiceProvider();
