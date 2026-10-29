@@ -71,7 +71,8 @@ public class OgcApiFeaturesManager : OgcManagerBase
         // Local layers (no CRS) resolve here and in items for the Hub's local viewer; they are
         // never listed in /collections.
         var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, includeLocal: true, ct: ct);
-        return layer == null ? null : BuildCollection(layer, baseUrl.TrimEnd('/'));
+        // A raster without a COG is not found, as it is not in /collections
+        return layer == null || IsUnbuiltRaster(layer) ? null : BuildCollection(layer, baseUrl.TrimEnd('/'));
     }
 
     public async Task<string> GetItemsAsync(string orgSlug, string dsSlug, string collectionId,

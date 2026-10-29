@@ -313,6 +313,24 @@ public class OgcUnbuiltRasterTests
     }
 
     [Test]
+    public async Task OgcApiCollection_BuiltRaster_IsDescribed()
+    {
+        var collection = await new OgcApiFeaturesManager(_dependencies, NullLogger<OgcApiFeaturesManager>.Instance)
+            .GetCollectionAsync(Org, Ds, "built.tif", BaseUrl);
+
+        collection.ShouldNotBeNull().Id.ShouldBe("built.tif");
+    }
+
+    [Test]
+    public async Task OgcApiCollection_UnbuiltRaster_IsNotFound()
+    {
+        var collection = await new OgcApiFeaturesManager(_dependencies, NullLogger<OgcApiFeaturesManager>.Instance)
+            .GetCollectionAsync(Org, Ds, "raw.tif", BaseUrl);
+
+        collection.ShouldBeNull();
+    }
+
+    [Test]
     public async Task OgcApiTileSets_UnbuiltRaster_IsInvalidParameterValue()
     {
         var tiles = CreateOgcApiTiles();
