@@ -1,4 +1,3 @@
-#nullable enable
 using System.IO;
 using NUnit.Framework;
 using Registry.Web.Test.Support;

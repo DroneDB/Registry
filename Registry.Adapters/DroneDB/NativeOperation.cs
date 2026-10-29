@@ -1,4 +1,3 @@
-#nullable enable
 using Registry.Ports.DroneDB;
 
 namespace Registry.Adapters.DroneDB;

@@ -1,4 +1,3 @@
-#nullable enable
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Registry.Web.Exceptions;

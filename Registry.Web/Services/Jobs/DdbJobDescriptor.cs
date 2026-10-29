@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using Hangfire.Common;
 using Registry.Web.Utilities;

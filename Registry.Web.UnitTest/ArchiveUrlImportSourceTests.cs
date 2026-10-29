@@ -1,4 +1,3 @@
-#nullable enable
 using NUnit.Framework;
 using Registry.Adapters.Archives;
 using Registry.Web.Services.Import;

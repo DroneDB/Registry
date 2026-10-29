@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>How the web server is reached: public URL, request limits, CORS and the reverse proxy (keys of the <c>AppSettings</c> section).</summary>

@@ -1,4 +1,3 @@
-#nullable enable
 using Hangfire;
 using Hangfire.InMemory;
 using Microsoft.Extensions.Logging.Abstractions;

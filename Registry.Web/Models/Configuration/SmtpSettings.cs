@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>How the connection to the SMTP server is secured.</summary>

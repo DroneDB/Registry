@@ -1,4 +1,3 @@
-#nullable enable
 using Registry.Web.Services.Jobs;
 using System;
 using System.Threading;

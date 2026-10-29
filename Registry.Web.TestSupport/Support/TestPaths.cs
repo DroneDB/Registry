@@ -1,4 +1,3 @@
-#nullable enable
 using Registry.Adapters.Testing;
 using Registry.Web.Utilities;
 

@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>Download and export limits (keys of the <c>AppSettings</c> section).</summary>

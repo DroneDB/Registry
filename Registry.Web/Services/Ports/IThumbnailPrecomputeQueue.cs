@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Services.Ports;
 
 /// <summary>A thumbnail to generate ahead of its first view.</summary>

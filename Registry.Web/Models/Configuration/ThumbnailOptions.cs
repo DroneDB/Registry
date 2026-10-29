@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>Thumbnails: the generator and the defaults (keys of the <c>AppSettings</c> section).</summary>

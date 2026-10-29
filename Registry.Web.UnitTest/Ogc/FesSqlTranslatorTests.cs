@@ -1,4 +1,3 @@
-#nullable enable
 using System.Xml;
 using NUnit.Framework;
 using Registry.Web.Utilities.Ogc;

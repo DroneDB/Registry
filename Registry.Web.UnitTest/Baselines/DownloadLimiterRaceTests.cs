@@ -1,4 +1,3 @@
-#nullable enable
 using Microsoft.Extensions.Logging.Abstractions;
 using MsOptions = Microsoft.Extensions.Options.Options;
 using NUnit.Framework;

@@ -1,4 +1,3 @@
-#nullable enable
 using System.Linq;
 
 namespace Registry.Web.Utilities;

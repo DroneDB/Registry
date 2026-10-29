@@ -1,4 +1,3 @@
-#nullable enable
 using Microsoft.Extensions.DependencyInjection;
 using Registry.Web.Services.UpdateCheck;
 

@@ -1,4 +1,3 @@
-#nullable enable
 using System.IO;
 
 namespace Registry.Web.Services.HeavyTasks;

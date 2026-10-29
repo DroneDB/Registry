@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>The build notification e-mails to users (the <c>AppSettings:BuildNotifications</c> section).</summary>

@@ -1,4 +1,3 @@
-#nullable enable
 // The job log names the exception type: a plain Exception is one of the cases under test
 #pragma warning disable CA2201
 using System;

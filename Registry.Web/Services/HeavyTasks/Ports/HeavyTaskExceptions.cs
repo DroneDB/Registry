@@ -1,4 +1,3 @@
-#nullable enable
 using Microsoft.Extensions.Logging;
 using Registry.Web.Exceptions;
 

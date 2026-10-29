@@ -1,4 +1,3 @@
-#nullable enable
 using System.Globalization;
 using Registry.Web.Services.Jobs;
 using System;

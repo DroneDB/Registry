@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>Tokens the Registry issues and accepts (keys of the <c>AppSettings</c> section).</summary>

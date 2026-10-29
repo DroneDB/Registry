@@ -1,4 +1,3 @@
-#nullable enable
 using System.Text.Json.Serialization;
 using Registry.Web.Data;
 

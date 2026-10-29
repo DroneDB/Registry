@@ -1,4 +1,3 @@
-#nullable enable
 using System.Linq;
 using NUnit.Framework;
 using Registry.Web.Exceptions;

@@ -1,4 +1,3 @@
-#nullable enable
 using System.Text.Json;
 using System.Threading;
 using Registry.Web.Models;

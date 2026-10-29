@@ -1,4 +1,3 @@
-#nullable enable
 using System.Threading.Tasks;
 using Registry.Web.Models.Email;
 using Registry.Web.Services.BuildNotifications;

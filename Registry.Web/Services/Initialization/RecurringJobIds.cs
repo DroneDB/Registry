@@ -1,4 +1,3 @@
-#nullable enable
 using System.Collections.Frozen;
 
 namespace Registry.Web.Services.Initialization;

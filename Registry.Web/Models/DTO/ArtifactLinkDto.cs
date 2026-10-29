@@ -1,4 +1,3 @@
-#nullable enable
 using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.DTO;

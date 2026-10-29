@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 
 namespace Registry.Web.Services.Ports;

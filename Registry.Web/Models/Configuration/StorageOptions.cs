@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>The folders the Registry stores data in (keys of the <c>AppSettings</c> section).</summary>

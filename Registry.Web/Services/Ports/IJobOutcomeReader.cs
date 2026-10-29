@@ -1,5 +1,3 @@
-#nullable enable
-
 namespace Registry.Web.Services.Ports;
 
 /// <summary>

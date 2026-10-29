@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using System.Linq;
 using Registry.Web.Data.Models;

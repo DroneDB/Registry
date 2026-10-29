@@ -1,4 +1,3 @@
-#nullable enable
 using Microsoft.Extensions.Logging.Abstractions;
 using Registry.Adapters;
 using Registry.Ports.Archives;

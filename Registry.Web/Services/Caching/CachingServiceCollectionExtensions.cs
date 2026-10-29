@@ -1,4 +1,3 @@
-#nullable enable
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Registry.Web.Services.Caching;

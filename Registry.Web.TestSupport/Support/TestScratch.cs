@@ -1,4 +1,3 @@
-#nullable enable
 using System.IO;
 using Microsoft.Extensions.Logging.Abstractions;
 using Registry.Adapters;

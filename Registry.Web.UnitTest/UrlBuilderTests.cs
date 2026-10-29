@@ -1,4 +1,3 @@
-#nullable enable
 using Microsoft.AspNetCore.Http;
 using NUnit.Framework;
 using Registry.Web.Data.Models;

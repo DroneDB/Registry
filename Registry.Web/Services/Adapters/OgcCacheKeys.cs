@@ -1,4 +1,3 @@
-#nullable enable
 using System.Threading.Tasks;
 using Registry.Web.Services.Caching;
 using Registry.Web.Services.Ports;

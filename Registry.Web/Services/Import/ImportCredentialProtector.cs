@@ -1,4 +1,3 @@
-#nullable enable
 using Microsoft.AspNetCore.DataProtection;
 using Registry.Ports.Import;
 

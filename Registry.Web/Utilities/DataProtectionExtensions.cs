@@ -1,4 +1,3 @@
-#nullable enable
 using System.IO;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;

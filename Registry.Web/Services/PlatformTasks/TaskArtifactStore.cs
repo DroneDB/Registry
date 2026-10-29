@@ -1,4 +1,3 @@
-#nullable enable
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Web.Services.Adapters;

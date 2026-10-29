@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Models.DTO;
 
 /// <summary>The state of a resumable chunked upload.</summary>

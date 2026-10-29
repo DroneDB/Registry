@@ -1,4 +1,3 @@
-#nullable enable
 using System.Linq;
 using Registry.Web.Services.Jobs;
 using System;

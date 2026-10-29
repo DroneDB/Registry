@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using Hangfire.States;
 using Microsoft.Extensions.Logging;

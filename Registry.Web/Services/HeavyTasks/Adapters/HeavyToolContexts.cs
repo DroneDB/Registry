@@ -1,4 +1,3 @@
-#nullable enable
 using System.Security.Claims;
 using Hangfire.Server;
 using Microsoft.Extensions.Logging;

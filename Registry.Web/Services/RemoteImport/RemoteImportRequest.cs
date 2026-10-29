@@ -1,4 +1,3 @@
-#nullable enable
 using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.RemoteImport;

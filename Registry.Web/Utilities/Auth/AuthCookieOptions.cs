@@ -1,4 +1,3 @@
-#nullable enable
 using Microsoft.AspNetCore.Http;
 
 namespace Registry.Web.Utilities.Auth;

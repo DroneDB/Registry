@@ -14,8 +14,6 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
 
-#nullable enable
-
 /// <summary>
 /// Write operations on the JobIndex table for Hangfire job tracking (upsert, update state, delete).
 /// Also invalidates the per-dataset task-list cache after each mutation.

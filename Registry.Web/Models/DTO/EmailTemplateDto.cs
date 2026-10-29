@@ -1,5 +1,3 @@
-#nullable enable
-
 namespace Registry.Web.Models.DTO;
 
 /// <summary>An editable e-mail in the list of <c>GET /sys/email/templates</c>.</summary>

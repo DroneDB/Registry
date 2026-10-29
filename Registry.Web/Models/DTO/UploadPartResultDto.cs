@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Models.DTO;
 
 /// <summary>The result of one file of an upload request.</summary>

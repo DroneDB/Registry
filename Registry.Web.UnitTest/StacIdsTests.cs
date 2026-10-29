@@ -1,4 +1,3 @@
-#nullable enable
 using NUnit.Framework;
 using Registry.Web.Services.Stac;
 using Shouldly;

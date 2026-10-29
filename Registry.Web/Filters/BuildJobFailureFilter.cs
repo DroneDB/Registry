@@ -1,4 +1,3 @@
-#nullable enable
 using Hangfire.States;
 using Hangfire.Storage;
 using Microsoft.Extensions.DependencyInjection;

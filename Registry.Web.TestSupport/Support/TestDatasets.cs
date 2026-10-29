@@ -1,4 +1,3 @@
-#nullable enable
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;

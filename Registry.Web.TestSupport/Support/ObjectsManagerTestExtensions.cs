@@ -1,4 +1,3 @@
-#nullable enable
 using System.IO;
 using System.Threading.Tasks;
 using Registry.Web.Models.DTO;

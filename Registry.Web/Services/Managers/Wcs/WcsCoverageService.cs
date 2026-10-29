@@ -12,8 +12,6 @@ using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 
-#nullable enable
-
 namespace Registry.Web.Services.Managers.Wcs;
 
 /// <summary>

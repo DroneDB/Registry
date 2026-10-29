@@ -1,4 +1,3 @@
-#nullable enable
 using Registry.Ports.DroneDB;
 using Registry.Web.Services.BuildNotifications;
 

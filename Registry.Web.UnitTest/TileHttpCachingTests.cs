@@ -1,4 +1,3 @@
-#nullable enable
 using Registry.Web.Test.Support;
 using System.Threading;
 using System.Threading.Tasks;

@@ -1,4 +1,3 @@
-#nullable enable
 using Hangfire;
 using Registry.Ports.DroneDB;
 using Registry.Web.Utilities;

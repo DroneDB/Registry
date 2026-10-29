@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Services.Ports;
 
 /// <summary>A chunk of a resumable upload, as sent by the client.</summary>

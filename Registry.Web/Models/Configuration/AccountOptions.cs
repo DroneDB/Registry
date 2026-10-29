@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>Account and organization features (keys of the <c>AppSettings</c> section).</summary>

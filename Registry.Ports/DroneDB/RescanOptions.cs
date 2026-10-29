@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Ports.DroneDB;
 
 /// <summary>

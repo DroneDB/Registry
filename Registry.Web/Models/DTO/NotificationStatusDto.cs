@@ -1,5 +1,3 @@
-#nullable enable
-
 namespace Registry.Web.Models.DTO;
 
 /// <summary>Whether the signed-in user can get notification e-mails (<c>GET /users/notifications/status</c>).</summary>

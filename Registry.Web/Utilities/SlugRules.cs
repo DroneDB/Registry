@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Utilities;
 
 /// <summary>

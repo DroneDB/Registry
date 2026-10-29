@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>Where users and passwords come from (keys of the <c>AppSettings</c> section).</summary>

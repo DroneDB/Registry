@@ -1,4 +1,3 @@
-#nullable enable
 using Registry.Common;
 using System;
 using System.Collections.Generic;

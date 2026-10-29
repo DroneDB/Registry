@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using Registry.Web.Data.Models;
 using Registry.Web.Services.Ports;

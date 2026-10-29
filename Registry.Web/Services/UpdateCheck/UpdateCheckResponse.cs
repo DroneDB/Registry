@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Services.UpdateCheck;
 
 /// <summary>One published release in the answer of the update check.</summary>
