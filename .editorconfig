@@ -71,13 +71,18 @@ dotnet_naming_style.underscore_camel_case.capitalization = camel_case
 
 # Analyzers (AnalysisLevel = latest-recommended, R2-2). The recommended rules are warnings,
 # and the build has none: build/warnings-baseline.txt is empty, so scripts/check-warnings.sh
-# fails on any warning. These rules have hundreds of violations each, so they are suggestions
-# until a dedicated change fixes them:
-#   CA1848 and CA1873: logging performance. The fix is a LoggerMessage
-#     source-generator migration of the Registry.Web log calls.
+# fails on any warning.
+#
+# CA1848 and CA1873 (logging performance: LoggerMessage delegates, no argument evaluation for a
+# disabled level) are off on purpose. They ask for a source-generated method per log call, which
+# saves an argument array and some boxing per call; Registry's requests spend milliseconds in the
+# database, libddb and the disk and make a few log calls each, so the gain is not measurable, while
+# the migration adds a method per call (about 480) for every log line. The template checks that
+# matter (CA2017, CA2253, CA2254) stay warnings. A log call on a measured hot path gets an
+# IsEnabled guard or its own [LoggerMessage] method instead.
 # CA1707 (underscores in names) is a suggestion in the test projects only (see below).
-dotnet_diagnostic.CA1848.severity = suggestion
-dotnet_diagnostic.CA1873.severity = suggestion
+dotnet_diagnostic.CA1848.severity = none
+dotnet_diagnostic.CA1873.severity = none
 
 # Naming rules that do not fit this code base:
 #   CA1716: Registry is C# only, and Get/Set are keywords only in Visual Basic. The managers and
