@@ -73,14 +73,11 @@ dotnet_naming_style.underscore_camel_case.capitalization = camel_case
 # and the build has none: build/warnings-baseline.txt is empty, so scripts/check-warnings.sh
 # fails on any warning. These rules have hundreds of violations each, so they are suggestions
 # until a dedicated change fixes them:
-#   CA1848 (811) and CA1873 (384): logging performance. The fix is a LoggerMessage
+#   CA1848 and CA1873: logging performance. The fix is a LoggerMessage
 #     source-generator migration of the Registry.Web log calls.
-#   CA2101 (185): P/Invoke string marshaling. The fix is a LibraryImport migration of the
-#     libddb bindings, which changes the interop layer.
 # CA1707 (underscores in names) is a suggestion in the test projects only (see below).
 dotnet_diagnostic.CA1848.severity = suggestion
 dotnet_diagnostic.CA1873.severity = suggestion
-dotnet_diagnostic.CA2101.severity = suggestion
 
 # Naming rules that do not fit this code base:
 #   CA1716: Registry is C# only, and Get/Set are keywords only in Visual Basic. The managers and

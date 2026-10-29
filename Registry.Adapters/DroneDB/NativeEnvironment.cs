@@ -13,19 +13,26 @@ namespace Registry.Adapters.DroneDB;
 /// before any native work starts.
 /// </para>
 /// </summary>
-public static class NativeEnvironment
+public static partial class NativeEnvironment
 {
-    [DllImport("libc", EntryPoint = "setenv", SetLastError = true)]
-    private static extern int UnixSetEnv(string name, string value, int overwrite);
+    // The strings are marshalled as the C runtime reads them: UTF-8 on Unix, the ANSI code page on Windows
+    // (the narrow getenv/_putenv_s that libddb and GDAL use; LibraryImport has no ANSI marshalling, so the
+    // Windows entry points stay DllImport with the conversion spelled out).
+    [LibraryImport("libc", EntryPoint = "setenv", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int UnixSetEnv(string name, string value, int overwrite);
 
-    [DllImport("libc", EntryPoint = "getenv")]
-    private static extern IntPtr UnixGetEnv(string name);
+    [LibraryImport("libc", EntryPoint = "unsetenv", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int UnixUnsetEnv(string name);
 
-    [DllImport("ucrtbase.dll", EntryPoint = "_putenv_s", CharSet = CharSet.Ansi)]
-    private static extern int WindowsPutEnv(string name, string value);
+    [LibraryImport("libc", EntryPoint = "getenv", StringMarshalling = StringMarshalling.Utf8)]
+    private static partial IntPtr UnixGetEnv(string name);
 
-    [DllImport("ucrtbase.dll", EntryPoint = "getenv", CharSet = CharSet.Ansi)]
-    private static extern IntPtr WindowsGetEnv(string name);
+    [DllImport("ucrtbase.dll", EntryPoint = "_putenv_s", BestFitMapping = false, ThrowOnUnmappableChar = true)]
+    private static extern int WindowsPutEnv([MarshalAs(UnmanagedType.LPStr)] string name,
+        [MarshalAs(UnmanagedType.LPStr)] string value);
+
+    [DllImport("ucrtbase.dll", EntryPoint = "getenv", BestFitMapping = false, ThrowOnUnmappableChar = true)]
+    private static extern IntPtr WindowsGetEnv([MarshalAs(UnmanagedType.LPStr)] string name);
 
     /// <summary>Value of <paramref name="name"/> in the native environment, or null.</summary>
     public static string? Get(string name)
@@ -47,10 +54,30 @@ public static class NativeEnvironment
             return false;
 
         var rc = OperatingSystem.IsWindows() ? WindowsPutEnv(name, value) : UnixSetEnv(name, value, 0);
-        if (rc != 0)
-            throw new InvalidOperationException($"Cannot set native environment variable {name} (error {rc})");
+        EnsureSet(name, rc);
 
         Environment.SetEnvironmentVariable(name, value);
         return true;
+    }
+
+    /// <summary>
+    /// Sets <paramref name="name"/> to <paramref name="value"/> in the native and managed environment, or removes
+    /// it when <paramref name="value"/> is null, whatever it was before.
+    /// </summary>
+    public static void Set(string name, string? value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        Environment.SetEnvironmentVariable(name, value);
+        // _putenv_s with an empty value removes the variable on Windows.
+        var rc = OperatingSystem.IsWindows() ? WindowsPutEnv(name, value ?? "") :
+            value == null ? UnixUnsetEnv(name) : UnixSetEnv(name, value, 1);
+        EnsureSet(name, rc);
+    }
+
+    private static void EnsureSet(string name, int rc)
+    {
+        if (rc != 0)
+            throw new InvalidOperationException($"Cannot set native environment variable {name} (error {rc})");
     }
 }

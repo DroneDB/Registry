@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
-using Shouldly;
+using Registry.Adapters.DroneDB;
 
 namespace Registry.Web.Test.Support;
 
@@ -27,7 +26,7 @@ public sealed class NativeEnvironmentScope : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         _saved.TryAdd(name, Environment.GetEnvironmentVariable(name));
-        SetVariable(name, value);
+        NativeEnvironment.Set(name, value);
     }
 
     public void Dispose()
@@ -36,24 +35,6 @@ public sealed class NativeEnvironmentScope : IDisposable
             return;
         _disposed = true;
         foreach (var (name, value) in _saved)
-            SetVariable(name, value);
+            NativeEnvironment.Set(name, value);
     }
-
-    /// <summary>Sets (or, for <see langword="null"/>, removes) a variable in the managed and native environment.</summary>
-    public static void SetVariable(string name, string? value)
-    {
-        Environment.SetEnvironmentVariable(name, value);
-        var result = OperatingSystem.IsWindows() ? PutEnv(name, value ?? "") :
-            value == null ? UnsetEnv(name) : SetEnv(name, value, 1);
-        result.ShouldBe(0);
-    }
-
-    [DllImport("libc", EntryPoint = "setenv")]
-    private static extern int SetEnv(string name, string value, int overwrite);
-
-    [DllImport("libc", EntryPoint = "unsetenv")]
-    private static extern int UnsetEnv(string name);
-
-    [DllImport("ucrtbase", EntryPoint = "_putenv_s", CallingConvention = CallingConvention.Cdecl)]
-    private static extern int PutEnv(string name, string value);
 }
