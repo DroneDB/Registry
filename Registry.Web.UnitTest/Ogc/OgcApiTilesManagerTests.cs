@@ -27,6 +27,7 @@ public class OgcApiTilesManagerTests
     private const string Org = "org";
     private const string Ds = "ds";
     private const string BaseUrl = "http://host/orgs/org/ds/ds/ogcapi";
+    private const string Cog = "/data/ortho-cog.tif";
 
     private static readonly OgcLayerDto Layer = new()
     {
@@ -56,10 +57,12 @@ public class OgcApiTilesManagerTests
             .ReturnsAsync(Unbuilt);
 
         _tiles = new Mock<IOgcRasterTileSource>();
-        _tiles.Setup(t => t.GetTileAsync(Org, Ds, It.IsAny<IDDB>(), It.IsAny<OgcLayerDto>(), 3, 1, 2, "png",
+        _tiles.Setup(t => t.GetTileAsync(Org, Ds, It.IsAny<IDDB>(), It.IsAny<OgcLayerDto>(), Cog, 3, 1, 2, "png",
             It.IsAny<CancellationToken>())).ReturnsAsync([1, 2, 3]);
+        var artifacts = Mock.Of<IBuildArtifactResolver>(a =>
+            a.FindArtifactFile(It.IsAny<IDDB>(), Layer.EntryHash, ArtifactRoles.RasterCog, null, It.IsAny<string?>()) == Cog);
 
-        var dependencies = new OgcManagerDependencies(access.Object, Mock.Of<IBuildArtifactResolver>(),
+        var dependencies = new OgcManagerDependencies(access.Object, artifacts,
             Mock.Of<IDdbWrapper>(), catalog.Object, TestCaches.Records(), new HttpContextAccessor());
         _manager = new OgcApiTilesManager(dependencies, _tiles.Object);
     }

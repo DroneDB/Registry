@@ -48,8 +48,14 @@ public class WmsManager : OgcManagerBase
         {
             var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, token);
             var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath, ct: token);
-            var rasterLayers = layers.Where(l => l.EntryType == EntryType.GeoRaster && l.HasBuiltArtifact).ToList();
-            var totalBbox = AggregateBbox(rasterLayers);
+            // A raster whose COG is gone since the layer list was cached is left out, like one never built: it must
+            // not fail the document of the other layers
+            var rasterLayers = layers.Where(l => l.EntryType == EntryType.GeoRaster && l.HasBuiltArtifact)
+                .Select(l => (Layer: l, Source: TryResolveRasterSource(ddb, l)))
+                .Where(r => r.Source != null)
+                .Select(r => (r.Layer, Source: r.Source!))
+                .ToList();
+            var totalBbox = AggregateBbox(rasterLayers.Select(r => r.Layer).ToList());
             var baseUrl = GetServiceUrl(orgSlug, dsSlug, "wms", folderPath);
 
             var sb = new StringBuilder();
@@ -100,7 +106,7 @@ public class WmsManager : OgcManagerBase
                 if (totalBbox != null)
                     WriteBbox(w, version, totalBbox);
 
-                foreach (var layer in rasterLayers)
+                foreach (var (layer, source) in rasterLayers)
                 {
                     w.WriteStartElement("Layer");
                     w.WriteAttributeString("queryable", "1");
@@ -118,7 +124,7 @@ public class WmsManager : OgcManagerBase
                     w.WriteElementString("Title", "Default natural color");
                     await w.WriteEndElementAsync();
 
-                    foreach (var idx in await GetIndexesAsync(ddb, layer, token))
+                    foreach (var idx in await GetIndexesAsync(layer, source, token))
                     {
                         w.WriteStartElement("Style");
                         w.WriteElementString("Name", idx);
@@ -234,9 +240,9 @@ public class WmsManager : OgcManagerBase
         }
     }
 
-    /// <summary>The spectral indices libddb renders from a raster layer (the source it reads), empty when none.</summary>
-    private Task<IReadOnlyList<string>> GetIndexesAsync(IDDB ddb, OgcLayerDto layer, CancellationToken ct) =>
-        _indexes.GetAsync(layer.EntryHash, ResolveRasterSource(ddb, layer), ct);
+    /// <summary>The spectral indices libddb renders from a raster layer (its COG, <paramref name="source"/>), empty when none.</summary>
+    private Task<IReadOnlyList<string>> GetIndexesAsync(OgcLayerDto layer, RasterSource source, CancellationToken ct) =>
+        _indexes.GetAsync(layer.EntryHash, source, ct);
 
     /// <summary>
     /// The raster layers of LAYERS in drawing order with their style: empty for the natural render, else the
@@ -262,7 +268,8 @@ public class WmsManager : OgcManagerBase
             var requested = (styles != null && idx < styles.Length) ? styles[idx] : "";
             var style = WmsValidator.IsDefaultStyle(requested)
                 ? string.Empty
-                : WmsValidator.ResolveIndexStyle(requested, name, await GetIndexesAsync(ddb, layer, ct));
+                : WmsValidator.ResolveIndexStyle(requested, name,
+                    await GetIndexesAsync(layer, ResolveRasterSource(ddb, layer, "LAYERS"), ct));
 
             rasters.Add((layer, style));
         }
@@ -430,6 +437,7 @@ public class WmsManager : OgcManagerBase
                     ?? throw new OgcException("LayerNotDefined", $"Layer '{layerName}' not found", 404, "QUERY_LAYERS");
         if (layer.EntryType != EntryType.GeoRaster)
             throw new OgcException("OperationNotSupported", "GetFeatureInfo only supports raster layers", 400);
+        RequireBuiltRaster(layer, "QUERY_LAYERS");
 
         // Pixel → geo (axis order already normalized by parser).
         var dx = (bbox[2] - bbox[0]) / width;
@@ -437,7 +445,7 @@ public class WmsManager : OgcManagerBase
         var geoX = bbox[0] + (i + 0.5) * dx;
         var geoY = bbox[3] - (j + 0.5) * dy;
 
-        var src = ResolveRasterArtifact(ddb, layer);
+        var src = ResolveRasterArtifact(ddb, layer, "QUERY_LAYERS");
         var json = DdbWrapper.QueryRasterPoint(src, geoX, geoY, crs);
 
         return infoFormat.Contains("xml", StringComparison.OrdinalIgnoreCase) ?

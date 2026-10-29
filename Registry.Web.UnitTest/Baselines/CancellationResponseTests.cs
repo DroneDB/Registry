@@ -158,8 +158,8 @@ public sealed class CancellationResponseTests
     {
         var log = new CapturingLogger<WmtsManager>();
         var tiles = new Mock<IOgcRasterTileSource>();
-        tiles.Setup(t => t.GetTileAsync(Org, Ds, It.IsAny<IDDB>(), It.IsAny<OgcLayerDto>(), 3, 1, 2, "png",
-                It.IsAny<CancellationToken>()))
+        tiles.Setup(t => t.GetTileAsync(Org, Ds, It.IsAny<IDDB>(), It.IsAny<OgcLayerDto>(), It.IsAny<string>(), 3, 1,
+                2, "png", It.IsAny<CancellationToken>()))
             .ThrowsAsync(new DdbCanceledException("Canceled by the cancel token"));
         var wmts = new WmtsManager(OgcDependencies(), log, tiles.Object);
 
@@ -170,8 +170,13 @@ public sealed class CancellationResponseTests
     }
 
     private static OgcManagerDependencies OgcDependencies() =>
-        new(Access(), Mock.Of<IBuildArtifactResolver>(), Mock.Of<IDdbWrapper>(), Catalog(), TestCaches.Records(),
+        new(Access(), BuiltCog(), Mock.Of<IDdbWrapper>(), Catalog(), TestCaches.Records(),
             new HttpContextAccessor());
+
+    // The raster of Catalog() has a COG: a tile reads it
+    private static IBuildArtifactResolver BuiltCog() => Mock.Of<IBuildArtifactResolver>(a =>
+        a.FindArtifactFile(It.IsAny<IDDB>(), "h1", ArtifactRoles.RasterCog, null, It.IsAny<string?>()) ==
+        "/data/ortho-cog.tif");
 
     private static IDatasetAccessResolver Access()
     {

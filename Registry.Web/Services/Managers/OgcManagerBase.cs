@@ -116,22 +116,40 @@ public abstract class OgcManagerBase
     /// The file a raster layer reads: its build's COG (<c>raster.cog</c>). The entry's own file is never read, since
     /// it is what a user uploaded and no build has vetted: a layer without a COG is an invalid parameter value.
     /// </summary>
-    protected string ResolveRasterArtifact(IDDB ddb, OgcLayerDto layer) => ResolveRasterSource(ddb, layer).Path;
+    /// <param name="ddb">The dataset.</param>
+    /// <param name="layer">The raster layer.</param>
+    /// <param name="locator">The parameter that named the layer, reported with the error.</param>
+    protected string ResolveRasterArtifact(IDDB ddb, OgcLayerDto layer, string? locator = null) =>
+        ResolveRasterSource(ddb, layer, locator).Path;
 
     /// <summary>The file a raster layer reads and which one it is (<see cref="ResolveRasterArtifact"/>).</summary>
-    protected RasterSource ResolveRasterSource(IDDB ddb, OgcLayerDto layer) =>
-        Builds.FindArtifactFile(ddb, layer.EntryHash, ArtifactRoles.RasterCog, entryPath: layer.EntryPath) is { } cog
-            ? new RasterSource(cog, ArtifactRoles.RasterCog)
-            : throw UnbuiltRaster(layer);
+    protected RasterSource ResolveRasterSource(IDDB ddb, OgcLayerDto layer, string? locator = null) =>
+        TryResolveRasterSource(ddb, layer) ?? throw UnbuiltRaster(layer, locator);
 
     /// <summary>
-    /// Refuses a raster layer whose COG is not built (<see cref="OgcLayerDto.HasBuiltArtifact"/>) before any work
-    /// starts, as the protocol error a request for it gets: <paramref name="locator"/> is the parameter that named it.
-    /// Any other layer passes.
+    /// The COG a raster layer reads (<see cref="ResolveRasterSource"/>), or null when it has none: a list of layers
+    /// leaves such a layer out instead of failing for it (its COG may be gone since the layer list was cached).
+    /// </summary>
+    protected RasterSource? TryResolveRasterSource(IDDB ddb, OgcLayerDto layer) =>
+        Builds.FindArtifactFile(ddb, layer.EntryHash, ArtifactRoles.RasterCog, entryPath: layer.EntryPath) is { } cog
+            ? new RasterSource(cog, ArtifactRoles.RasterCog)
+            : null;
+
+    /// <summary>
+    /// Whether <paramref name="layer"/> is a raster whose COG is not built (<see cref="OgcLayerDto.HasBuiltArtifact"/>):
+    /// no OGC service lists it or reads it.
+    /// </summary>
+    protected static bool IsUnbuiltRaster(OgcLayerDto layer) =>
+        layer.EntryType == EntryType.GeoRaster && !layer.HasBuiltArtifact;
+
+    /// <summary>
+    /// Refuses a raster layer whose COG is not built (<see cref="IsUnbuiltRaster"/>) before any work starts, as the
+    /// protocol error a request for it gets: <paramref name="locator"/> is the parameter that named it. Any other
+    /// layer passes.
     /// </summary>
     protected static void RequireBuiltRaster(OgcLayerDto layer, string locator)
     {
-        if (layer.EntryType == EntryType.GeoRaster && !layer.HasBuiltArtifact)
+        if (IsUnbuiltRaster(layer))
             throw UnbuiltRaster(layer, locator);
     }
 
@@ -206,9 +224,5 @@ public abstract class OgcManagerBase
     }
 }
 
-/// <summary>The file a raster layer reads and what it is: a build artifact's role, or <see cref="EntryFile"/>.</summary>
-public sealed record RasterSource(string Path, string Source)
-{
-    /// <summary>The entry's own file (no build artifact).</summary>
-    public const string EntryFile = "file";
-}
+/// <summary>The file a raster layer reads and what it is: the role of the build artifact.</summary>
+public sealed record RasterSource(string Path, string Source);

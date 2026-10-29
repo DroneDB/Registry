@@ -206,13 +206,14 @@ public class OgcRenderCachingTests
     public async Task Wmts_GetTile_UsesSharedTileCache()
     {
         var layer = new OgcLayerDto { Name = "ortho", EntryType = EntryType.GeoRaster, EntryPath = "ortho.tif", EntryHash = "h1" };
-        _ddb.Setup(d => d.GenerateTile("ortho.tif", 18, 5, 7, false, "h1", "png")).Returns(RenderedPng);
+        const string cog = "/data/ortho-cog.tif";
+        _ddb.Setup(d => d.GenerateTile(cog, 18, 5, 7, false, "h1", "png")).Returns(RenderedPng);
         var source = new OgcRasterTileSource(_cacheManager);
 
-        (await source.GetTileAsync(Org, Ds, _ddb.Object, layer, 18, 5, 7, "png")).ShouldBe(RenderedPng);
-        (await source.GetTileAsync(Org, Ds, _ddb.Object, layer, 18, 5, 7, "png")).ShouldBe(RenderedPng);
+        (await source.GetTileAsync(Org, Ds, _ddb.Object, layer, cog, 18, 5, 7, "png")).ShouldBe(RenderedPng);
+        (await source.GetTileAsync(Org, Ds, _ddb.Object, layer, cog, 18, 5, 7, "png")).ShouldBe(RenderedPng);
 
-        _ddb.Verify(d => d.GenerateTile("ortho.tif", 18, 5, 7, false, "h1", "png"), Times.Once);
+        _ddb.Verify(d => d.GenerateTile(cog, 18, 5, 7, false, "h1", "png"), Times.Once);
         // Stored under the tile seed and the dataset category, so dataset invalidation clears it
         (await _cache.GetAsync($":{MagicStrings.TileCacheSeed}:{Org}/{Ds}:h1-5-7-18-False-png")).ShouldBe(RenderedPng);
     }

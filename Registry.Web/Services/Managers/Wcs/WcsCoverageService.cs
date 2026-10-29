@@ -103,7 +103,7 @@ public class WcsCoverageService : OgcManagerBase
     {
         try
         {
-            // The build COG and the source it falls back to are probed separately; the read is the one WMS shares
+            // The read of the build COG is the one WMS shares
             var info = await _rasterInfo.GetAsync(layer.EntryHash, ResolveRasterSource(ddb, layer), ct);
             return ParseRasterInfo(info);
         }

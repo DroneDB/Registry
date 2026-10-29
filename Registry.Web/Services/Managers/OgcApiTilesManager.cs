@@ -31,6 +31,8 @@ public class OgcApiTilesManager : OgcManagerBase
         var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, ct: ct)
                     ?? throw new OgcException("InvalidParameterValue",
                         $"Unknown collection '{collectionId}'", 404);
+        // A raster without a COG has no tiles to offer
+        RequireBuiltRaster(layer, "collectionId");
 
         var b = baseUrl.TrimEnd('/');
         return new OgcApiTileSetsDto(
@@ -59,6 +61,7 @@ public class OgcApiTilesManager : OgcManagerBase
             return path != null ? await File.ReadAllBytesAsync(path, ct) : null;
         }
         RequireBuiltRaster(layer, "collectionId");
-        return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer, z, x, y, "png", ct);
+        return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer,
+            ResolveRasterArtifact(ddb, layer, "collectionId"), z, x, y, "png", ct);
     }
 }

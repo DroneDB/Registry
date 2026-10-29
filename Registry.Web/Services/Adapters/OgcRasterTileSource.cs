@@ -25,14 +25,14 @@ public class OgcRasterTileSource : IOgcRasterTileSource
         _gate = gate ?? NativeWorkGate.Default;
     }
 
-    public Task<byte[]> GetTileAsync(string orgSlug, string dsSlug, IDDB ddb, OgcLayerDto layer,
+    public Task<byte[]> GetTileAsync(string orgSlug, string dsSlug, IDDB ddb, OgcLayerDto layer, string cogPath,
         int z, int x, int y, string outputFormat, CancellationToken ct = default)
     {
         // The render runs with the cache flight's token: it stops when every request for the tile has gone
         return _cacheManager.GetAsync(MagicStrings.TileCacheSeed, CacheCategories.ForDataset(orgSlug, dsSlug), ct,
             layer.EntryHash, x, y, z, false, outputFormat,
             new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles, () => ddb.GenerateTile(
-                layer.EntryPath, z, x, y, retina: false, inputPathHash: layer.EntryHash, outputFormat: outputFormat),
+                cogPath, z, x, y, retina: false, inputPathHash: layer.EntryHash, outputFormat: outputFormat),
                 token)));
     }
 }

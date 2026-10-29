@@ -95,18 +95,6 @@ public class RasterIndexCatalogTests
     }
 
     [Test]
-    public async Task Get_TheEntryFileAndItsBuildCog_AreTwoRecords()
-    {
-        _ddb.Setup(d => d.GetRasterInfo("/data/ortho.tif")).Returns(FakeDdbWrapper.RasterInfo("NDVI"));
-
-        var cog = await Create().GetAsync(Hash, Cog);
-        var file = await Create().GetAsync(Hash, new RasterSource("/data/ortho.tif", RasterSource.EntryFile));
-
-        cog.Count.ShouldBe(5);
-        file.ShouldBe(["NDVI"]);
-    }
-
-    [Test]
     public async Task Get_ANewLibddbVersion_ReadsAgain()
     {
         await Create().GetAsync(Hash, Cog);

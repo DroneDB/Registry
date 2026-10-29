@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -54,7 +55,8 @@ public class OgcApiFeaturesManager : OgcManagerBase
         {
             Links = [new() { Href = $"{b}/collections", Rel = "self", Type = "application/json" }]
         };
-        foreach (var l in layers)
+        // A raster without a COG is left out, as from the capabilities of the other OGC services
+        foreach (var l in layers.Where(l => !IsUnbuiltRaster(l)))
         {
             dto.Collections.Add(BuildCollection(l, b));
         }
