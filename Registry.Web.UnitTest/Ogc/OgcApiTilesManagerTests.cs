@@ -33,6 +33,12 @@ public class OgcApiTilesManagerTests
         Name = "ortho", Title = "ortho", EntryType = EntryType.GeoRaster, EntryPath = "ortho.tif", EntryHash = "h1"
     };
 
+    private static readonly OgcLayerDto Unbuilt = new()
+    {
+        Name = "raw", Title = "raw", EntryType = EntryType.GeoRaster, EntryPath = "raw.tif", EntryHash = "h2",
+        HasBuiltArtifact = false
+    };
+
     private Mock<IOgcRasterTileSource> _tiles = null!;
     private OgcApiTilesManager _manager = null!;
 
@@ -46,6 +52,8 @@ public class OgcApiTilesManagerTests
         var catalog = new Mock<IOgcLayerCatalog>();
         catalog.Setup(c => c.ResolveAsync(Org, Ds, Layer.Name, It.IsAny<string?>(), It.IsAny<bool>()))
             .ReturnsAsync(Layer);
+        catalog.Setup(c => c.ResolveAsync(Org, Ds, Unbuilt.Name, It.IsAny<string?>(), It.IsAny<bool>()))
+            .ReturnsAsync(Unbuilt);
 
         _tiles = new Mock<IOgcRasterTileSource>();
         _tiles.Setup(t => t.GetTileAsync(Org, Ds, It.IsAny<IDDB>(), It.IsAny<OgcLayerDto>(), 3, 1, 2, "png",
@@ -82,6 +90,16 @@ public class OgcApiTilesManagerTests
 
         ex.HttpStatusCode.ShouldBe(404);
         ex.Locator.ShouldBe("tileMatrixSetId");
+        _tiles.VerifyNoOtherCalls();
+    }
+
+    [Test]
+    public async Task Tile_OfARasterWithoutACog_IsInvalidParameterValue()
+    {
+        var ex = await Should.ThrowAsync<OgcException>(() =>
+            _manager.GetTileAsync(Org, Ds, Unbuilt.Name, OgcApiTilesConformance.WebMercatorQuad, 3, 1, 2));
+
+        ex.Code.ShouldBe("InvalidParameterValue");
         _tiles.VerifyNoOtherCalls();
     }
 }

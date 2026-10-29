@@ -112,14 +112,33 @@ public abstract class OgcManagerBase
         return any ? [minLon, minLat, maxLon, maxLat] : null;
     }
 
-    /// <summary>The file a raster layer reads: its build's COG (<c>raster.cog</c>), else the entry's own file.</summary>
+    /// <summary>
+    /// The file a raster layer reads: its build's COG (<c>raster.cog</c>). The entry's own file is never read, since
+    /// it is what a user uploaded and no build has vetted: a layer without a COG is an invalid parameter value.
+    /// </summary>
     protected string ResolveRasterArtifact(IDDB ddb, OgcLayerDto layer) => ResolveRasterSource(ddb, layer).Path;
 
     /// <summary>The file a raster layer reads and which one it is (<see cref="ResolveRasterArtifact"/>).</summary>
     protected RasterSource ResolveRasterSource(IDDB ddb, OgcLayerDto layer) =>
         Builds.FindArtifactFile(ddb, layer.EntryHash, ArtifactRoles.RasterCog, entryPath: layer.EntryPath) is { } cog
             ? new RasterSource(cog, ArtifactRoles.RasterCog)
-            : new RasterSource(ddb.GetLocalPath(layer.EntryPath), RasterSource.EntryFile);
+            : throw UnbuiltRaster(layer);
+
+    /// <summary>
+    /// Refuses a raster layer whose COG is not built (<see cref="OgcLayerDto.HasBuiltArtifact"/>) before any work
+    /// starts, as the protocol error a request for it gets: <paramref name="locator"/> is the parameter that named it.
+    /// Any other layer passes.
+    /// </summary>
+    protected static void RequireBuiltRaster(OgcLayerDto layer, string locator)
+    {
+        if (layer.EntryType == EntryType.GeoRaster && !layer.HasBuiltArtifact)
+            throw UnbuiltRaster(layer, locator);
+    }
+
+    // OWS Common 2.0: a layer/coverage the server cannot serve is an invalid parameter value (as for a vector layer)
+    private static OgcException UnbuiltRaster(OgcLayerDto layer, string? locator = null) =>
+        new("InvalidParameterValue", $"Raster layer '{layer.Name}' has no built COG. Run dataset build first.", 400,
+            locator);
 
     /// <summary>The GeoPackage a vector layer is queried from (its build's <c>vector.gpkg</c>).</summary>
     protected string ResolveVectorArtifact(IDDB ddb, OgcLayerDto layer) =>

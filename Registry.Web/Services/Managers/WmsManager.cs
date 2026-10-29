@@ -48,7 +48,7 @@ public class WmsManager : OgcManagerBase
         {
             var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, token);
             var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath, ct: token);
-            var rasterLayers = layers.Where(l => l.EntryType == EntryType.GeoRaster).ToList();
+            var rasterLayers = layers.Where(l => l.EntryType == EntryType.GeoRaster && l.HasBuiltArtifact).ToList();
             var totalBbox = AggregateBbox(rasterLayers);
             var baseUrl = GetServiceUrl(orgSlug, dsSlug, "wms", folderPath);
 
@@ -255,6 +255,7 @@ public class WmsManager : OgcManagerBase
                 throw new OgcException("LayerNotDefined", $"Layer '{name}' not found", 404, "LAYERS");
             if (layer.EntryType != EntryType.GeoRaster)
                 continue;
+            RequireBuiltRaster(layer, "LAYERS");
 
             // STYLES contract: "" / "default" are the natural render; any other style must be a spectral index
             // libddb lists for this raster, the list GetCapabilities advertises for the layer

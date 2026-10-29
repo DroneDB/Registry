@@ -127,7 +127,10 @@ public class OgcLayerCatalog : IOgcLayerCatalog
                     EntryPath = e.Path,
                     EntryHash = e.Hash ?? string.Empty,
                     BboxWgs84 = entryBbox,
-                    BandCount = ExtractBandCount(e)
+                    BandCount = ExtractBandCount(e),
+                    // OGC services read the COG of the build, never the uploaded file
+                    HasBuiltArtifact = !string.IsNullOrEmpty(e.Hash) &&
+                                       _artifacts.FindArtifactFile(ddb, e.Hash, ArtifactRoles.RasterCog, entryPath: e.Path) != null
                 });
             }
         }

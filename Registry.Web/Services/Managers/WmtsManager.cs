@@ -113,6 +113,7 @@ public class WmtsManager : OgcManagerBase
                         // regardless of response. Vector layers remain available via the
                         // dedicated MVT endpoint; skip them in WMTS GetCapabilities.
                         if (layer.EntryType == EntryType.Vector) continue;
+                        if (!layer.HasBuiltArtifact) continue;
                         var isVector = false;
                         w.WriteStartElement("Layer");
                         await w.WriteElementStringAsync("ows", "Title", null, layer.Title);
@@ -240,6 +241,8 @@ public class WmtsManager : OgcManagerBase
             }
             return await File.ReadAllBytesAsync(path, ct);
         }
+
+        RequireBuiltRaster(layer, "layer");
 
         // Raster: delegate to ddb.GenerateTile, passing the requested output format so the
         // returned bytes match the WMTS Content-Type. Out-of-range tiles return a graceful

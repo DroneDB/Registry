@@ -42,7 +42,7 @@ public class WcsCoverageService : OgcManagerBase
     {
         var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
         var layers = (await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath, ct: ct))
-            .Where(l => l.EntryType == EntryType.GeoRaster && l.BboxWgs84 != null)
+            .Where(l => l.EntryType == EntryType.GeoRaster && l.HasBuiltArtifact && l.BboxWgs84 != null)
             .ToList();
         return (ddb, layers);
     }
@@ -60,6 +60,7 @@ public class WcsCoverageService : OgcManagerBase
         if (layer.EntryType != EntryType.GeoRaster)
             throw new OgcException("InvalidParameterValue",
                 "WCS supports only raster coverages", 400);
+        RequireBuiltRaster(layer, "CoverageId");
         return (ddb, layer);
     }
 
@@ -81,7 +82,11 @@ public class WcsCoverageService : OgcManagerBase
         {
             var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, id, ct: ct);
             if (layer == null) missing.Add(id);
-            else resolved.Add((id, layer));
+            else
+            {
+                RequireBuiltRaster(layer, "CoverageId");
+                resolved.Add((id, layer));
+            }
         }
 
         if (missing.Count > 0)

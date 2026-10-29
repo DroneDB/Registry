@@ -58,6 +58,7 @@ public class OgcApiTilesManager : OgcManagerBase
             var path = MvtTile(ddb, layer, z, x, y);
             return path != null ? await File.ReadAllBytesAsync(path, ct) : null;
         }
+        RequireBuiltRaster(layer, "collectionId");
         return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer, z, x, y, "png", ct);
     }
 }

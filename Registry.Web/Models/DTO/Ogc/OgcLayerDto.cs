@@ -31,7 +31,7 @@ public class OgcLayerDto
     /// <summary>
     /// True when the dataset build has produced the artifact required to serve this layer
     /// (COG for rasters, GPKG sidecar for vectors). Layers without a built artifact are
-    /// hidden from WFS/WMTS/OGC API capabilities and surface InvalidParameterValue when
+    /// hidden from the capabilities of every OGC service and surface InvalidParameterValue when
     /// referenced by name.
     /// </summary>
     public bool HasBuiltArtifact { get; set; } = true;
