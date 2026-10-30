@@ -7,8 +7,9 @@ public sealed class AccountOptions
     public bool EnableStorageLimiter { get; set; }
 
     /// <summary>
-    /// Enables organization-level member management. When disabled, only system admins can manage
-    /// organization members.
+    /// Enables organization-level member management: the owner, members with the Admin permission
+    /// and system admins add, change and remove members. When disabled, the member endpoints answer
+    /// 403 to everyone, system admins included.
     /// </summary>
     public bool EnableOrganizationMemberManagement { get; set; }
 
