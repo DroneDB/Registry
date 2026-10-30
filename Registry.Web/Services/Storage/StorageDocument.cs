@@ -36,7 +36,7 @@ internal sealed class StorageDocument<T> where T : class
         string json;
         try
         {
-            json = _fs.ReadAllText(_path);
+            json = _atomic.ReadAllText(_path);
         }
         catch (IOException ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {

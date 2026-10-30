@@ -1,6 +1,8 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Threading;
 using Registry.Ports;
 
 namespace Registry.Web.Utilities;
@@ -14,6 +16,13 @@ public sealed class AtomicFile
 {
     /// <summary>errno of a rename onto a mount point (Linux and macOS): a bind-mounted single file.</summary>
     private const int Ebusy = 16;
+
+    /// <summary>Win32 errors of a file that another process holds open: sharing and lock violation.</summary>
+    private const int ErrorSharingViolation = 32;
+    private const int ErrorLockViolation = 33;
+
+    /// <summary>How long a rename waits for the readers of the file, and a read for the rename (Windows).</summary>
+    private static readonly TimeSpan HeldOpenTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>Added to the name of a file that <see cref="CreateOrRead"/> creates: the folder that holds the content of the node that was first.</summary>
     private const string ClaimSuffix = ".claim";
@@ -147,11 +156,17 @@ public sealed class AtomicFile
         }
     }
 
+    /// <summary>
+    /// The content of <paramref name="path"/>. On Windows a file cannot be opened while a write of this class renames
+    /// over it, or while it is being deleted: the read is tried again until <see cref="HeldOpenTimeout"/>.
+    /// </summary>
+    public string ReadAllText(string path) => WhileHeldOpen(() => _fs.ReadAllText(path));
+
     private string? ReadIfExists(string path)
     {
         try
         {
-            return _fs.ReadAllText(path);
+            return ReadAllText(path);
         }
         catch (FileNotFoundException)
         {
@@ -181,7 +196,48 @@ public sealed class AtomicFile
         }
     }
 
-    private void Replace(string source, string destination) => _fs.Move(source, destination, overwrite: true);
+    /// <summary>
+    /// Renames <paramref name="source"/> over <paramref name="destination"/>. Windows refuses to replace a file that a
+    /// reader holds open without <c>FILE_SHARE_DELETE</c> (as <c>File.ReadAllText</c> does): readers hold it briefly,
+    /// so the rename is tried again until <see cref="HeldOpenTimeout"/>.
+    /// </summary>
+    private void Replace(string source, string destination) => WhileHeldOpen(() =>
+    {
+        _fs.Move(source, destination, overwrite: true);
+        return true;
+    });
+
+    /// <summary><paramref name="operation"/>, tried again while Windows reports the file held open by another process.</summary>
+    private static T WhileHeldOpen<T>(Func<T> operation)
+    {
+        var waited = Stopwatch.StartNew();
+        var spin = new SpinWait();
+        while (true)
+        {
+            try
+            {
+                return operation();
+            }
+            // A rename over a file held open, and an open of a file being deleted, fail with ERROR_ACCESS_DENIED (a real
+            // permission problem looks the same and is reported after the timeout)
+            catch (UnauthorizedAccessException) when (MayRetry(waited))
+            {
+                Wait(ref spin);
+            }
+            // An open during a rename fails with a sharing violation
+            catch (IOException ex) when ((ex.HResult & 0xFFFF) is ErrorSharingViolation or ErrorLockViolation &&
+                                         MayRetry(waited))
+            {
+                Wait(ref spin);
+            }
+        }
+    }
+
+    // Yields, never Sleep(1): that wakes on the system timer tick (15.6 ms), as a reader that sleeps between reads does,
+    // so each try would come at the moment the reader opens the file again
+    private static void Wait(ref SpinWait spin) => spin.SpinOnce(sleep1Threshold: -1);
+
+    private static bool MayRetry(Stopwatch waited) => OperatingSystem.IsWindows() && waited.Elapsed < HeldOpenTimeout;
 
     private void WriteInPlace(string path, byte[] bytes) => _fs.WriteAllBytesDurable(path, bytes, FileMode.Create, FileShare.Read);
 }

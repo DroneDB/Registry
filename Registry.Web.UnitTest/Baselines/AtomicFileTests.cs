@@ -68,6 +68,11 @@ public class AtomicFileTests
                 {
                     throw new InvalidOperationException("the file was missing during a write");
                 }
+                catch (IOException ex) when (OperatingSystem.IsWindows() && (ex.HResult & 0xFFFF) == 32)
+                {
+                    // Windows refuses the open while the rename runs (a sharing violation): the reader tries again
+                    continue;
+                }
 
                 contents.ShouldContain(text, "a reader saw a partial file");
                 reads++;
@@ -76,10 +81,17 @@ public class AtomicFileTests
             return reads;
         });
 
-        for (var i = 0; i < 200; i++)
-            _atomic.WriteAllText(path, contents[(i + 1) % 2]);
+        try
+        {
+            for (var i = 0; i < 200; i++)
+                _atomic.WriteAllText(path, contents[(i + 1) % 2]);
+        }
+        finally
+        {
+            // A failed write must not leave the reader running (and holding the file) for the tests after this one
+            await done.CancelAsync();
+        }
 
-        await done.CancelAsync();
         (await reader).ShouldBeGreaterThan(0);
     }
 
