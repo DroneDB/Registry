@@ -55,6 +55,8 @@ jobs:
           context: .
           file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
+          # A pull request's image is not pushed: it is loaded, so the check below can run it
+          load: ${{ github.event_name == 'pull_request' }}
           # The Dockerfile installs the DroneDB build pinned in Directory.Build.props; a pinned
           # DroneDB CI build needs this token (scripts/ddb-release.sh). Build secrets never reach a layer.
           secrets: |
@@ -65,3 +67,17 @@ jobs:
 
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
+
+      - name: Check that the image confines gdal-util
+        # libddb reads the files of users in the workers of gdal-util, which confine themselves with
+        # Landlock, seccomp and resource limits. Every layer must be active in a container with
+        # Docker's default profile, as the containers of docker/production run (no security_opt).
+        # A missing layer is named here; production would run without it, with a warning in the log.
+        run: |
+          image='${{ fromJSON(steps.docker_meta.outputs.json).tags[0] }}'
+          report="$(docker run --rm --user registry --entrypoint gdal-util "$image" --sandbox-report)"
+          echo "$report"
+          if grep -q ': missing' <<< "$report"; then
+            echo "::error::gdal-util lacks a sandbox layer in the image (see the report above)"
+            exit 1
+          fi
