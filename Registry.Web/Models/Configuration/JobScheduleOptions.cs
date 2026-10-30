@@ -11,7 +11,24 @@ public sealed class JobScheduleOptions
     public const int DefaultHangfireJobRetentionDays = 2;
     public const int DefaultHangfireInvisibilityTimeoutHours = 4;
 
-    /// <summary>Cleanup of expired Hangfire jobs. Default: Hangfire's daily cron.</summary>
+    /// <summary>
+    /// The schedule of each recurring job whose cron is left empty, one constant per cron setting with the
+    /// setting's name: the shipped settings files leave them unset, so these are the schedules a deployment runs.
+    /// </summary>
+    public static class DefaultCrons
+    {
+        public const string CleanupExpiredJobsCron = "0 0 * * *";
+        public const string SyncJobIndexStatesCron = "0 * * * *";
+        public const string RecoverIndexedJobPublicationsCron = "* * * * *";
+        public const string ProcessPendingBuildsCron = "0 */6 * * *";
+        public const string OrphanedDatasetCleanupCron = "0 3 * * *";
+        public const string DatasetCleanupCron = "0 0 * * *";
+        public const string ArtifactCompletenessCheckerCron = "0 2 * * *";
+        public const string JobIndexCleanupCron = "0 4 * * *";
+        public const string IndexReconciliationCron = "0 * * * *";
+    }
+
+    /// <summary>Cleanup of expired Hangfire jobs. Default: "0 0 * * *" (daily at midnight).</summary>
     public string? CleanupExpiredJobsCron { get; set; }
 
     /// <summary>

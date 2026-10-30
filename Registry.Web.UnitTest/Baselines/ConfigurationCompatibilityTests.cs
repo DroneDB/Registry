@@ -112,6 +112,29 @@ public class ConfigurationCompatibilityTests
     }
 
     /// <summary>
+    /// The schedule a deployment runs is the code's: a cron of the shipped settings is either unset or the
+    /// default of its job (<see cref="JobScheduleOptions.DefaultCrons"/>), so a file can never run a job on another
+    /// schedule than the one the code and the admin view describe.
+    /// </summary>
+    [TestCaseSource(nameof(ShippedSettings))]
+    public void TheCronsOfTheShippedSettings_AreUnsetOrTheCodeDefaults(string source, InstanceType[] _)
+    {
+        var jobs = Bind(Configuration(Load(source)), typeof(JobScheduleOptions));
+        var crons = typeof(JobScheduleOptions).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(property => property.Name.EndsWith("Cron", StringComparison.Ordinal)).ToList();
+        crons.ShouldNotBeEmpty();
+
+        foreach (var cron in crons)
+        {
+            var defaultCron = typeof(JobScheduleOptions.DefaultCrons).GetField(cron.Name)
+                .ShouldNotBeNull($"JobScheduleOptions.DefaultCrons has no {cron.Name}");
+            var shipped = (string?)cron.GetValue(jobs);
+            if (shipped != null)
+                shipped.ShouldBe((string?)defaultCron.GetRawConstantValue(), $"AppSettings:{cron.Name} ({source})");
+        }
+    }
+
+    /// <summary>
     /// The keys of the files themselves, not of a class: every key under <c>AppSettings</c> in the shipped settings is a
     /// property of exactly one focused class (a nested section is the class of that section), so a key a deployment
     /// has today is never silently ignored.
