@@ -319,6 +319,54 @@ public class ObjectsManagerCopyTransferTest : TestBase
         _otherDdbMock.Verify(x => x.AddRaw(destPath), Times.Once);
     }
 
+    // The caller reads the source dataset (a public one, say) and writes the destination, nothing more
+    private void ReadOnlySource()
+    {
+        _authManagerMock.Setup(x => x.RequestAccess(_ds, AccessType.Write)).ReturnsAsync(false);
+        _authManagerMock.Setup(x => x.RequestAccess(_ds, AccessType.Delete)).ReturnsAsync(false);
+
+        _ddbMock.Setup(x => x.GetEntry("src.jpg"))
+            .Returns(new Entry { Path = "src.jpg", Type = EntryType.Generic, Size = 10, Hash = "hh" });
+        _otherDdbMock.Setup(x => x.GetEntry("src.jpg")).Returns((Entry?)null);
+        _otherDdbMock.Setup(x => x.EntryExists("src.jpg")).Returns(true);
+        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(true);
+        _fsMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(false);
+    }
+
+    /// <summary>
+    /// A transfer that does not keep its source deletes it from the source dataset, so reading that dataset is not
+    /// enough: the caller is refused before anything is copied to the destination or removed from the source (red
+    /// before: a reader of a public dataset moved its files out into a dataset of their own).
+    /// </summary>
+    [Test]
+    public async Task Transfer_WithoutKeepingTheSource_FromADatasetTheCallerOnlyReads_IsForbidden_AndChangesNothing()
+    {
+        ReadOnlySource();
+
+        await Should.ThrowAsync<ForbiddenException>(() => CreateManager().TransferAsync(OrgSlug, DsSlug, "src.jpg",
+            OrgSlug, OtherDsSlug, destPath: "src.jpg", overwrite: false, keepSource: false));
+
+        _ddbMock.Verify(x => x.Remove(It.IsAny<string>()), Times.Never);
+        _fsMock.Verify(x => x.Delete(It.IsAny<string>()), Times.Never);
+        _fsMock.Verify(x => x.FolderDelete(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+        _fsMock.Verify(x => x.Copy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+        _otherDdbMock.Verify(x => x.AddRaw(It.IsAny<string>()), Times.Never);
+        _ddbManagerMock.Verify(x => x.Get(OrgSlug, _otherDs.InternalRef), Times.Never);
+    }
+
+    /// <summary>A transfer that keeps its source is a copy: reading the source dataset is enough.</summary>
+    [Test]
+    public async Task Transfer_KeepingTheSource_FromADatasetTheCallerOnlyReads_CopiesIt()
+    {
+        ReadOnlySource();
+
+        await CreateManager().TransferAsync(OrgSlug, DsSlug, "src.jpg", OrgSlug, OtherDsSlug,
+            destPath: "src.jpg", overwrite: false, keepSource: true);
+
+        _otherDdbMock.Verify(x => x.AddRaw("src.jpg"), Times.Once);
+        _ddbMock.Verify(x => x.Remove(It.IsAny<string>()), Times.Never);
+    }
+
     [Test]
     public async Task Transfer_CopiesTheBuildThroughLibddb_NeverByHand()
     {

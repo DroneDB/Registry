@@ -50,7 +50,11 @@ public sealed class EntryTransferService : IEntryTransferService
         if (sourceOrgSlug == destOrgSlug && sourceDsSlug == destDsSlug)
             throw new BadRequestException("Source and destination cannot be the same");
 
-        var sourceDdb = (await _access.ResolveAsync(sourceOrgSlug, sourceDsSlug, AccessType.Read, ct: ct)).Ddb;
+        // A transfer that does not keep its source removes it from the source dataset: that takes write access to
+        // the source, as a delete there does; reading it is enough only for a copy. Both checks come before anything
+        // is written to the destination.
+        var sourceAccess = keepSource ? AccessType.Read : AccessType.Write;
+        var sourceDdb = (await _access.ResolveAsync(sourceOrgSlug, sourceDsSlug, sourceAccess, ct: ct)).Ddb;
         var destAccess = await _access.ResolveAsync(destOrgSlug, destDsSlug, AccessType.Write, ct: ct);
         var destDdb = destAccess.Ddb;
 
