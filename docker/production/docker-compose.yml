@@ -59,6 +59,11 @@ services:
             # with the services below; an empty or removed value plans the whole machine, as before.
             - AppSettings__HostBudget__WebServers=1
             - AppSettings__HostBudget__ProcessingNodes=2
+            # One Data Protection key ring for every service: the web server encrypts the credentials of
+            # a remote import and the node that runs it decrypts them, which fails with a key ring of its
+            # own (without Redis or this folder each container keeps its keys in its home folder). The
+            # folder is in ./data, which every service mounts; keep this line in each node service too.
+            - AppSettings__DataProtectionKeysPath=/data/data-protection-keys
             # The image runs in UTC; keep the local time these deployments always used
             - TZ=Europe/Rome
             # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
@@ -101,6 +106,8 @@ services:
             # The Registry processes sharing this machine, see registry_webserver
             - AppSettings__HostBudget__WebServers=1
             - AppSettings__HostBudget__ProcessingNodes=2
+            # The key ring shared with the web server, see registry_webserver
+            - AppSettings__DataProtectionKeysPath=/data/data-protection-keys
             - TZ=Europe/Rome
             # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
             # altitude of images without one in their EXIF falls back to the GPS altitude
@@ -135,6 +142,8 @@ services:
             # The Registry processes sharing this machine, see registry_webserver
             - AppSettings__HostBudget__WebServers=1
             - AppSettings__HostBudget__ProcessingNodes=2
+            # The key ring shared with the web server, see registry_webserver
+            - AppSettings__DataProtectionKeysPath=/data/data-protection-keys
             - TZ=Europe/Rome
             # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
             # altitude of images without one in their EXIF falls back to the GPS altitude

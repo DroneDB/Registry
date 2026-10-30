@@ -10,8 +10,8 @@ namespace Registry.Web.Utilities;
 
 /// <summary>
 /// Wires up ASP.NET Core Data Protection with a SHARED key ring so the web host and the processing
-/// node can encrypt/decrypt the same protected payloads (import credentials). See the Import Dataset
-/// plan section 2.4 for the storage-choice rationale.
+/// node can encrypt/decrypt the same protected payloads (import credentials): the cache's Redis when there
+/// is one (no other store to run), otherwise a folder every process reads.
 /// </summary>
 public static class DataProtectionExtensions
 {
@@ -21,8 +21,10 @@ public static class DataProtectionExtensions
     /// <summary>
     /// Registers a shared Data Protection key ring. Two storage modes: Redis when the cache provider
     /// is Redis, otherwise a shared filesystem path (<see cref="StorageOptions.DataProtectionKeysPath"/>).
-    /// In-memory keys are an implicit local-dev fallback only - a multi-host deployment MUST set Redis
-    /// or a filesystem path, otherwise the processing node cannot decrypt what the web host encrypted.
+    /// Without either, each process keeps its keys where ASP.NET Core puts them by default (the user's
+    /// profile folder, in a container its home folder): enough for a single process, but a deployment with
+    /// separate processing nodes MUST set Redis or a shared folder, otherwise a node cannot decrypt what
+    /// the web host encrypted.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="caching">The cache provider (Redis shares the key ring).</param>
@@ -45,7 +47,7 @@ public static class DataProtectionExtensions
         {
             dp.PersistKeysToFileSystem(new DirectoryInfo(storage.DataProtectionKeysPath));
         }
-        // else: in-memory keys (LOCAL DEV ONLY - single process with in-process worker).
+        // else: the default key folder of this process (a single process with its in-process worker only)
 
         return services;
     }
