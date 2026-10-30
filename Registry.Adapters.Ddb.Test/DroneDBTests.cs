@@ -682,6 +682,23 @@ public class NativeDdbWrapperTests : TestBase
     }
 
     [Test]
+    public void AddWithHints_ALazThatIsNotLaz_IsAnErrorOfItsReader_ThatTheRegistryTakesForInvalidContent()
+    {
+        using var area = new TestArea(nameof(AddWithHints_ALazThatIsNotLaz_IsAnErrorOfItsReader_ThatTheRegistryTakesForInvalidContent));
+        DdbWrapper.Init(area.TestFolder);
+        var cloud = Path.Join(area.TestFolder, "cloud.laz");
+        File.WriteAllText(cloud, "not a point cloud");
+
+        var result = DdbWrapper.AddWithHints(area.TestFolder, [new AddItem(cloud)]);
+
+        result.Entries.ShouldBeEmpty();
+        var error = result.Errors.ShouldHaveSingleItem();
+        error.Path.ShouldBe("cloud.laz");
+        error.Code.ShouldBe(BatchAddItemError.Codes.Pdal);
+        error.ToException().ShouldBeOfType<DdbInvalidContentException>().Message.ShouldStartWith("'cloud.laz' ");
+    }
+
+    [Test]
     public void Checkpoint_MovesTheWritesFromTheWalIntoTheDatabaseFile()
     {
         using var area = new TestArea(nameof(Checkpoint_MovesTheWritesFromTheWalIntoTheDatabaseFile));

@@ -33,7 +33,7 @@ public readonly record struct ApiErrorDescriptor(
 /// anonymous one; <see cref="UnauthorizedException"/> (no valid credentials) is always 401.</item>
 /// <item>Cancellation: 499 without a body when the client went away, 503 + Retry-After otherwise.</item>
 /// <item>The other arms are types the Registry does not own: the DDB port's typed
-/// errors (transient: 503; invalid arguments: 400; not found: 404), Kestrel's request errors (413 body too large) and <see cref="ArgumentException"/> from the
+/// errors (transient: 503; invalid arguments and a file its reader refused: 400; not found: 404), Kestrel's request errors (413 body too large) and <see cref="ArgumentException"/> from the
 /// lower layers' validators (<c>Registry.Common</c>, <c>Registry.Ports</c>), which have no
 /// <see cref="RegistryException"/> to throw.</item>
 /// <item>Anything else is a server fault: 500 with a generic message (details are logged). Masking a
@@ -129,6 +129,8 @@ public static class ApiExceptionClassifier
             DdbRetryableException e => new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, 60, false, e.Message, LogLevel.Warning),
             DdbShutdownException e => new ApiErrorDescriptor(StatusCodes.Status503ServiceUnavailable, ShutdownRetryAfterSeconds, false, e.Message, LogLevel.Warning),
             DdbInvalidArgumentsException e => new ApiErrorDescriptor(StatusCodes.Status400BadRequest, null, true, e.Message, LogLevel.Information),
+            // A file its reader refused (an upload that is not what its type says): the client's data
+            DdbInvalidContentException e => new ApiErrorDescriptor(StatusCodes.Status400BadRequest, null, true, e.Message, LogLevel.Information),
             DdbNotFoundException e => new ApiErrorDescriptor(StatusCodes.Status404NotFound, null, true, e.Message, LogLevel.Information),
 
             // Kestrel: the body grew past MaxRequestBodySize while it was read

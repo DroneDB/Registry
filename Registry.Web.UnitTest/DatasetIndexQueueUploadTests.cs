@@ -158,7 +158,7 @@ public class DatasetIndexQueueUploadTests
         outcomes[0].Entry!.Path.ShouldBe("ok.jpg");
         outcomes[0].Error.ShouldBeNull();
         outcomes[1].Entry.ShouldBeNull();
-        outcomes[1].Error.ShouldBeOfType<DdbException>().Message.ShouldContain("corrupt");
+        outcomes[1].Error.ShouldBeOfType<DdbInvalidContentException>().Message.ShouldContain("corrupt");
     }
 
     [Test]

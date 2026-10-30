@@ -575,7 +575,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             handled.Add(e.Path);
             if (byPath.TryGetValue(e.Path, out var requests))
                 foreach (var req in requests)
-                    req.Tcs.TrySetException(new DdbException($"[{e.Code}] {e.Message}"));
+                    req.Tcs.TrySetException(e.ToException());
         }
 
         // Completeness contract: every path must land in exactly one bucket. A path absent

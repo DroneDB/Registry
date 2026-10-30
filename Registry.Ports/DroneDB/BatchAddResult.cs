@@ -18,15 +18,51 @@ public class BatchAddedEntry : Entry
 /// <summary>A path that failed to be added, isolated from the rest of the batch.</summary>
 public class BatchAddItemError
 {
+    /// <summary>The values of <see cref="Code"/> (libddb's <c>AddItemError</c>).</summary>
+    public static class Codes
+    {
+        /// <summary>The file could not be read from the file system.</summary>
+        public const string FileSystem = "FS";
+
+        /// <summary>GDAL could not read the file (a raster or a vector).</summary>
+        public const string Gdal = "GDAL";
+
+        /// <summary>PDAL could not read the file (a point cloud).</summary>
+        public const string Pdal = "PDAL";
+
+        /// <summary>The file is not valid JSON.</summary>
+        public const string Json = "JSON";
+
+        /// <summary>The path cannot be indexed (a separator in a name, a reserved name).</summary>
+        public const string Index = "INDEX";
+
+        /// <summary>The entry kept changing under the add.</summary>
+        public const string Conflict = "CONFLICT";
+    }
+
     [JsonPropertyName("path")]
     public string Path { get; set; } = "";
 
-    /// <summary>"FS" | "GDAL" | "PDAL" | "JSON" | "INDEX" | "CONFLICT".</summary>
+    /// <summary>One of <see cref="Codes"/>.</summary>
     [JsonPropertyName("code")]
     public string Code { get; set; } = "";
 
     [JsonPropertyName("message")]
     public string Message { get; set; } = "";
+
+    /// <summary>
+    /// The exception of this failure: a file whose content its reader refused is
+    /// <see cref="DdbInvalidContentException"/> and a path that cannot be indexed
+    /// <see cref="DdbInvalidArgumentsException"/> (both the client's data, never retried); anything else
+    /// (the file system, a conflict, a code added later) stays a <see cref="DdbException"/>.
+    /// </summary>
+    public DdbException ToException() => Code switch
+    {
+        Codes.Gdal or Codes.Pdal or Codes.Json =>
+            new DdbInvalidContentException($"'{Path}' cannot be read as its file type: {Message}"),
+        Codes.Index => new DdbInvalidArgumentsException($"'{Path}' cannot be indexed: {Message}"),
+        _ => new DdbException($"[{Code}] {Message}")
+    };
 }
 
 /// <summary>
