@@ -50,6 +50,10 @@ public class DatasetManagerTest : TestBase
     {
         _settingsOptions = TestSettings.Mutable();
         _authManagerMock = new Mock<IAuthManager>();
+
+        // Every dataset is listed unless a test says otherwise: which ones a listing shows is covered over the real
+        // rules by the listing tests
+        _authManagerMock.Setup(o => o.CanListDataset(It.IsAny<Dataset>())).ReturnsAsync(true);
         _ddbFactoryMock = new Mock<IDdbManager>();
         _listingsMock = new Mock<IDatasetListingInvalidator>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
@@ -499,6 +503,8 @@ public class DatasetManagerTest : TestBase
             {
                 CanRead = dataset.Slug == "public-dataset", CanWrite = false, CanDelete = false
             });
+        _authManagerMock.Setup(o => o.CanListDataset(It.IsAny<Dataset>()))
+            .ReturnsAsync((Dataset dataset) => dataset.Slug == "public-dataset");
 
         var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
@@ -550,6 +556,7 @@ public class DatasetManagerTest : TestBase
                 CanWrite = false,
                 CanDelete = false
             }));
+        _authManagerMock.Setup(o => o.CanListDataset(It.IsAny<Dataset>())).ReturnsAsync(false);
 
         var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 

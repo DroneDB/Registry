@@ -134,6 +134,7 @@ public class StacManagerTest : TestBase
         RegistryContext context, string? brokenSlug = null, Func<string, string>? names = null)
     {
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), AccessType.Read)).ReturnsAsync(true);
+        _authManagerMock.Setup(o => o.CanListDataset(It.IsAny<Dataset>())).ReturnsAsync(true);
         _authManagerMock.Setup(o => o.SafeGetCurrentUserName()).ReturnsAsync("user");
         names ??= slug => "Name " + slug;
 

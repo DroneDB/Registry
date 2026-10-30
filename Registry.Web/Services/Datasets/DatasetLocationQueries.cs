@@ -17,17 +17,15 @@ namespace Registry.Web.Services.Datasets;
 public sealed class DatasetLocationQueries
 {
     private readonly DatasetQueries _datasets;
-    private readonly IAuthManager _authManager;
     private readonly ICacheManager _cacheManager;
     private readonly IDdbManager _ddbManager;
     private readonly IDatasetLocationProvider _locations;
     private readonly ILogger<DatasetLocationQueries> _logger;
 
-    public DatasetLocationQueries(DatasetQueries datasets, IAuthManager authManager, ICacheManager cacheManager,
-        IDdbManager ddbManager, IDatasetLocationProvider locations, ILogger<DatasetLocationQueries> logger)
+    public DatasetLocationQueries(DatasetQueries datasets, ICacheManager cacheManager, IDdbManager ddbManager,
+        IDatasetLocationProvider locations, ILogger<DatasetLocationQueries> logger)
     {
         _datasets = datasets;
-        _authManager = authManager;
         _cacheManager = cacheManager;
         _ddbManager = ddbManager;
         _locations = locations;
@@ -35,28 +33,19 @@ public sealed class DatasetLocationQueries
     }
 
     /// <summary>
-    /// The location of each dataset of <paramref name="orgSlug"/> the current user can read, by slug: the datasets
-    /// <see cref="DatasetQueries.ReadableDatasetsAsync"/> lists. A dataset that is unlisted is left out unless the user
-    /// owns, administers or belongs to the organization: a link to it is how the others find it, so a map of the
-    /// organization must not publish it.
+    /// The location of each dataset of <paramref name="orgSlug"/> listed to the current user, by slug: the datasets
+    /// <see cref="DatasetQueries.ListedDatasetsAsync"/> lists, so a map of the organization never shows an unlisted
+    /// dataset to someone who is not part of it.
     /// </summary>
     public async Task<IReadOnlyList<DatasetLocationDto>> List(string orgSlug, CancellationToken ct = default)
     {
-        var (organization, isOwnerOrAdmin, readable) = await _datasets.ReadableDatasetsAsync(orgSlug, ct);
+        var listed = await _datasets.ListedDatasetsAsync(orgSlug, ct);
 
-        var userId = await _authManager.GetCurrentUserId();
-        var knowsTheOrganization = isOwnerOrAdmin ||
-                                   (userId != null && organization.Users?.Any(u => u.UserId == userId) == true);
-
-        var locations = new List<DatasetLocationDto>(readable.Count);
-        foreach (var (ds, _) in readable.OrderBy(r => r.Dataset.Slug, StringComparer.Ordinal))
+        var locations = new List<DatasetLocationDto>(listed.Count);
+        foreach (var (ds, _) in listed.OrderBy(r => r.Dataset.Slug, StringComparer.Ordinal))
         {
             // One native read per dataset on a cold cache: nobody waits for the map any more, stop
             ct.ThrowIfCancellationRequested();
-
-            if (!knowsTheOrganization &&
-                await _cacheManager.GetDatasetVisibilityAsync(orgSlug, ds.InternalRef, _ddbManager) == Visibility.Unlisted)
-                continue;
 
             locations.Add(new DatasetLocationDto
             {

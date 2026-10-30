@@ -147,6 +147,9 @@ public class AuthManager : IAuthManager
             CanDelete = await _datasetAccess.CanAccessDataset(dataset, AccessType.Delete, userId)
         };
     }
+
+    public async Task<bool> CanListDataset(Dataset dataset) =>
+        await _datasetAccess.CanListDataset(dataset, await _currentUserIdLazy.Value);
 }
 
 // Enum for different access levels

@@ -44,10 +44,21 @@ public sealed class StacCatalog
     }
 
     /// <summary>
-    /// The datasets the current caller can read, ordered by id so that collection offsets and search tokens stay
-    /// stable across requests. No native index is opened (the visibility comes from its cache).
+    /// The datasets listed to the current caller (<see cref="IAuthManager.CanListDataset"/>: those they can read,
+    /// without the unlisted ones of an organization they are not part of), ordered by id so that collection offsets
+    /// and search tokens stay stable across requests. No native index is opened (the visibility comes from its cache).
     /// </summary>
-    public async Task<List<Dataset>> ReadableDatasetsAsync(CancellationToken ct = default)
+    public Task<List<Dataset>> ListedDatasetsAsync(CancellationToken ct = default) =>
+        DatasetsWhereAsync(_authManager.CanListDataset, ct);
+
+    /// <summary>
+    /// The datasets the current caller can read, in the order of <see cref="ListedDatasetsAsync"/>: the unlisted ones
+    /// too, for a request that names its collections (a caller with the link of an unlisted dataset knows its id).
+    /// </summary>
+    public Task<List<Dataset>> ReadableDatasetsAsync(CancellationToken ct = default) =>
+        DatasetsWhereAsync(ds => _authManager.RequestAccess(ds, AccessType.Read), ct);
+
+    private async Task<List<Dataset>> DatasetsWhereAsync(Func<Dataset, Task<bool>> shown, CancellationToken ct)
     {
         var datasets = await _context.Datasets
             .AsNoTrackingWithIdentityResolution()
@@ -55,14 +66,14 @@ public sealed class StacCatalog
             .OrderBy(ds => ds.Id)
             .ToListAsync(ct);
 
-        var readable = new List<Dataset>(datasets.Count);
+        var result = new List<Dataset>(datasets.Count);
         foreach (var ds in datasets)
         {
-            if (await _authManager.RequestAccess(ds, AccessType.Read))
-                readable.Add(ds);
+            if (await shown(ds))
+                result.Add(ds);
         }
 
-        return readable;
+        return result;
     }
 
     /// <summary>The display name of a dataset, or null when it has none.</summary>

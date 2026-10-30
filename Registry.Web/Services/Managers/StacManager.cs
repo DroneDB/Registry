@@ -104,7 +104,7 @@ public class StacManager
             new() { Href = _urls.ServiceDocumentation, Relationship = "service-doc", Type = "text/html" }
         };
 
-        foreach (var ds in await _catalog.ReadableDatasetsAsync(ct))
+        foreach (var ds in await _catalog.ListedDatasetsAsync(ct))
         {
             links.Add(new StacLinkDto
             {
@@ -145,7 +145,7 @@ public class StacManager
     private async Task<StacCollectionsDto> BuildCollections(int? limit, int? offset, int lim, int off,
         CancellationToken ct)
     {
-        var datasets = await _catalog.ReadableDatasetsAsync(ct);
+        var datasets = await _catalog.ListedDatasetsAsync(ct);
 
         var collections = new List<JsonNode>();
         foreach (var ds in datasets.Skip(off).Take(lim))
@@ -252,13 +252,16 @@ public class StacManager
         var bboxStr = StacQueries.BboxToString(request.Bbox);
         var datetime = request.Datetime;
 
-        var datasets = await _catalog.ReadableDatasetsAsync(ct);
-
+        // A search over every collection covers the listed ones; one that names its collections reaches an
+        // unlisted collection too, as its URL does
+        List<Dataset> datasets;
         if (request.Collections is { Length: > 0 })
         {
             var wanted = new HashSet<string>(request.Collections);
-            datasets = [.. datasets.Where(d => wanted.Contains(StacDocuments.CollectionId(d)))];
+            datasets = [.. (await _catalog.ReadableDatasetsAsync(ct)).Where(d => wanted.Contains(StacDocuments.CollectionId(d)))];
         }
+        else
+            datasets = await _catalog.ListedDatasetsAsync(ct);
 
         if (request.Ids is { Length: > 0 })
             return SearchByIds(datasets, request.Ids, bboxStr, datetime, ct);

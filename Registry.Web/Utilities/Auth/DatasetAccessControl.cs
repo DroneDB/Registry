@@ -46,21 +46,35 @@ public class DatasetAccessControl : AccessControlBase
             return Visibility.Private;
         }
 
+        Logger.LogDebug("Dataset {OrgSlug}/{DatasetSlug} visibility from cache: {Visibility}",
+            org.Slug, dataset.Slug, visibility.Value);
+
         return visibility.Value;
     }
 
     /// <param name="userId">Id of an existing user, or null for anonymous access</param>
-    public async Task<bool> CanAccessDataset(Dataset dataset, AccessType access, string? userId)
+    public async Task<bool> CanAccessDataset(Dataset dataset, AccessType access, string? userId) =>
+        await CanAccess(dataset, await GetDatasetVisibilityFromCache(dataset), access, userId);
+
+    /// <summary>
+    /// Whether a listing of datasets (the datasets of an organization, their map, the STAC catalog) shows
+    /// <paramref name="dataset"/> to the user. Anyone with its link reads an unlisted dataset, so a listing that
+    /// showed it to everyone who can read it would hand that link out: an unlisted dataset is listed as a private
+    /// one is, to the owner of its organization, its members and the administrators only. The other datasets are
+    /// listed to whoever can read them.
+    /// </summary>
+    /// <param name="userId">Id of an existing user, or null for anonymous access</param>
+    public async Task<bool> CanListDataset(Dataset dataset, string? userId)
     {
-        ArgumentNullException.ThrowIfNull(dataset);
-        var org = dataset.Organization;
-
-        // Check dataset visibility from cache
         var visibility = await GetDatasetVisibilityFromCache(dataset);
-        var isPublicOrUnlisted = visibility is Visibility.Public or Visibility.Unlisted;
+        return await CanAccess(dataset, visibility == Visibility.Unlisted ? Visibility.Private : visibility,
+            AccessType.Read, userId);
+    }
 
-        Logger.LogDebug("Dataset {OrgSlug}/{DatasetSlug} visibility from cache: {Visibility}",
-            org.Slug, dataset.Slug, visibility);
+    private async Task<bool> CanAccess(Dataset dataset, Visibility visibility, AccessType access, string? userId)
+    {
+        var org = dataset.Organization;
+        var isPublicOrUnlisted = visibility is Visibility.Public or Visibility.Unlisted;
 
         // Anonymous access check
         if (userId == null)

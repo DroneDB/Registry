@@ -14,4 +14,7 @@ public static class AccessControlTestExtensions
 
     public static Task<bool> CanAccessDataset(this DatasetAccessControl control, Dataset dataset, AccessType access,
         User? user) => control.CanAccessDataset(dataset, access, user?.Id!);
+
+    public static Task<bool> CanListDataset(this DatasetAccessControl control, Dataset dataset, User? user) =>
+        control.CanListDataset(dataset, user?.Id);
 }

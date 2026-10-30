@@ -36,71 +36,23 @@ namespace Registry.Web.Test;
 [TestFixture]
 public class DatasetLocationQueriesTests
 {
-    private const string PrivateOrg = "private-org";
-    private const string PublicOrg = "public-org";
+    private const string PrivateOrg = DatasetVisibilityWorld.PrivateOrg;
+    private const string PublicOrg = DatasetVisibilityWorld.PublicOrg;
 
-    private RegistryContext _context = null!;
-    private Mock<IDdbManager> _ddbManager = null!;
-    private Mock<ICacheManager> _cache = null!;
+    private DatasetVisibilityWorld _world = null!;
     private Mock<IDatasetLocationProvider> _locations = null!;
-    private Mock<UserManager<User>> _users = null!;
-    private readonly Dictionary<Guid, Visibility> _visibility = new();
-    private readonly Dictionary<Guid, string> _names = new();
-    private readonly Dictionary<Guid, Exception> _nameFailures = new();
-    private readonly Dictionary<string, Guid> _refs = new();
-    private readonly User _owner = new() { Id = "owner-id", UserName = "owner" };
-    private readonly User _member = new() { Id = "member-id", UserName = "member" };
-    private readonly User _outsider = new() { Id = "outsider-id", UserName = "outsider" };
-    private readonly User _administrator = new() { Id = "admin-id", UserName = "administrator" };
+    private User _owner = null!;
+    private User _member = null!;
+    private User _outsider = null!;
+    private User _administrator = null!;
+    private Dictionary<string, Guid> _refs = null!;
 
     [SetUp]
     public void Setup()
     {
-        _context = TestDb.CreateContext<RegistryContext>();
-        _ddbManager = new Mock<IDdbManager>();
-        _visibility.Clear();
-        _names.Clear();
-        _nameFailures.Clear();
-        _refs.Clear();
-
-        foreach (var (slug, isPublic) in new[] { (PrivateOrg, false), (PublicOrg, true) })
-        {
-            var org = new Organization
-            {
-                Slug = slug, Name = slug, OwnerId = _owner.Id, CreationDate = DateTime.UtcNow, IsPublic = isPublic,
-                Users = [new OrganizationUser
-                {
-                    OrganizationSlug = slug, UserId = _member.Id, Permissions = OrganizationPermissions.ReadOnly,
-                    GrantedAt = DateTime.UtcNow, GrantedBy = _owner.Id
-                }],
-                Datasets = []
-            };
-            foreach (var (dsSlug, visibility) in new[]
-                     {
-                         ("c-private", Visibility.Private), ("a-public", Visibility.Public),
-                         ("b-unlisted", Visibility.Unlisted)
-                     })
-            {
-                var ds = new Dataset { Slug = dsSlug, InternalRef = Guid.NewGuid(), CreationDate = DateTime.UtcNow, Organization = org };
-                org.Datasets.Add(ds);
-                _visibility[ds.InternalRef] = visibility;
-                _names[ds.InternalRef] = $"{slug} {dsSlug}";
-                _refs[$"{slug}/{dsSlug}"] = ds.InternalRef;
-            }
-
-            _context.Organizations.Add(org);
-        }
-
-        _context.SaveChanges();
-
-        _cache = new Mock<ICacheManager>();
-        _cache.Setup(c => c.GetAsync(MagicStrings.DatasetVisibilityCacheSeed, It.IsAny<string>(), It.IsAny<object[]>()))
-            .ReturnsAsync((string _, string _, object[] args) => BitConverter.GetBytes((int)_visibility[(Guid)args[1]]));
-        _cache.Setup(c => c.GetAsync(MagicStrings.DatasetNameCacheSeed, It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<object[]>()))
-            .ReturnsAsync((string _, string _, CancellationToken _, object[] args) =>
-                _nameFailures.TryGetValue((Guid)args[1], out var failure)
-                    ? throw failure
-                    : System.Text.Encoding.UTF8.GetBytes(_names[(Guid)args[1]]));
+        _world = new DatasetVisibilityWorld();
+        (_owner, _member, _outsider, _administrator) = (_world.Owner, _world.Member, _world.Outsider, _world.Administrator);
+        _refs = _world.Refs;
 
         // Every dataset is somewhere, but the one called "c-private" has no location at all
         _locations = new Mock<IDatasetLocationProvider>();
@@ -109,35 +61,14 @@ public class DatasetLocationQueriesTests
                 _refs.Single(r => r.Value == dsRef).Key.EndsWith("c-private", StringComparison.Ordinal)
                     ? null
                     : new DatasetLocation([1, 2, 3, 4]));
-
-        _users = new Mock<UserManager<User>>(new Mock<IUserStore<User>>().Object, null!, null!, null!, null!, null!, null!, null!, null!);
-        var everyone = new[] { _owner, _member, _outsider, _administrator };
-        _users.Setup(u => u.FindByIdAsync(It.IsAny<string>()))
-            .ReturnsAsync((string id) => everyone.FirstOrDefault(u => u.Id == id));
-        _users.Setup(u => u.IsInRoleAsync(_administrator, ApplicationDbContext.AdminRoleName)).ReturnsAsync(true);
     }
 
     [TearDown]
-    public void TearDown() => _context.Dispose();
+    public void TearDown() => _world.Dispose();
 
-    private Task<IReadOnlyList<Models.DTO.DatasetLocationDto>> Locations(User? caller, string orgSlug)
-    {
-        var http = new Mock<IHttpContextAccessor>();
-        http.Setup(h => h.HttpContext).Returns(caller == null
-            ? null
-            : new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, caller.Id)])) });
-
-        // Rules only: no snapshot reuse between checks
-        var auth = new AuthManager(_users.Object, http.Object, _ddbManager.Object, _context,
-            NullLogger<AuthManager>.Instance, _cache.Object,
-            new UserAuthSnapshotProvider(_users.Object, new UserAuthSnapshotCache(new MemoryCache(new MemoryCacheOptions()), TimeSpan.Zero)));
-        var access = new DatasetAccessResolver(TestPorts.Datasets(_context), auth, _ddbManager.Object, TestPaths.Policy);
-        var datasets = new DatasetQueries(access, auth, _context, Mock.Of<IDatasetSummaryProvider>(), _ddbManager.Object,
-            Mock.Of<IUrlBuilder>(), Microsoft.Extensions.Options.Options.Create(new ThumbnailOptions()));
-
-        return new DatasetLocationQueries(datasets, auth, _cache.Object, _ddbManager.Object, _locations.Object,
-            NullLogger<DatasetLocationQueries>.Instance).List(orgSlug);
-    }
+    private Task<IReadOnlyList<Models.DTO.DatasetLocationDto>> Locations(User? caller, string orgSlug) =>
+        new DatasetLocationQueries(_world.Datasets(caller), _world.Cache.Object, _world.DdbManager.Object,
+            _locations.Object, NullLogger<DatasetLocationQueries>.Instance).List(orgSlug);
 
     private async Task<string[]> Slugs(User? caller, string orgSlug) =>
         (await Locations(caller, orgSlug)).Select(l => l.Slug).ToArray();
@@ -216,7 +147,7 @@ public class DatasetLocationQueriesTests
     public async Task ADatasetWhoseNameCannotBeRead_IsListedWithoutAName_AndTheOthersAreUnaffected()
     {
         // The owner skips the per-dataset checks: the row is read, then its folder is gone before its name is
-        _nameFailures[_refs["private-org/b-unlisted"]] = new DdbException("Not a valid DroneDB directory");
+        _world.NameFailures[_refs["private-org/b-unlisted"]] = new DdbException("Not a valid DroneDB directory");
 
         var all = await Locations(_owner, PrivateOrg);
 
@@ -231,10 +162,10 @@ public class DatasetLocationQueriesTests
     public async Task ANameThatCannotBeReadForNow_OrACancellation_FailsTheMap()
     {
         // A busy index says nothing about the dataset: the caller answers 503 and the map is asked for again
-        _nameFailures[_refs["private-org/b-unlisted"]] = new DdbBusyException("busy");
+        _world.NameFailures[_refs["private-org/b-unlisted"]] = new DdbBusyException("busy");
         await Should.ThrowAsync<DdbBusyException>(() => Locations(_owner, PrivateOrg));
 
-        _nameFailures[_refs["private-org/b-unlisted"]] = new OperationCanceledException();
+        _world.NameFailures[_refs["private-org/b-unlisted"]] = new OperationCanceledException();
         await Should.ThrowAsync<OperationCanceledException>(() => Locations(_owner, PrivateOrg));
     }
 }

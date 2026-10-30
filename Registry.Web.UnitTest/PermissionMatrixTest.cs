@@ -1328,6 +1328,95 @@ public class PermissionMatrixTest : TestBase
 
     #endregion
 
+    // DATASET LISTING MATRIX
+
+    #region Dataset Listing
+
+    // A listing (the datasets of an organization, their map, the STAC catalog) shows a dataset to whoever reads it,
+    // except an unlisted one: anyone with its link reads that one, so it is listed only to the owner of its
+    // organization, its members and the administrators, as a private one is
+    [Test]
+    [TestCase("anonymous", false, Visibility.Private, false, TestName = "DsListing_Anon_PrivateOrg_PrivateDs_NotListed")]
+    [TestCase("anonymous", false, Visibility.Unlisted, false, TestName = "DsListing_Anon_PrivateOrg_UnlistedDs_NotListed")]
+    [TestCase("anonymous", false, Visibility.Public, true, TestName = "DsListing_Anon_PrivateOrg_PublicDs_Listed")]
+    [TestCase("anonymous", true, Visibility.Private, false, TestName = "DsListing_Anon_PublicOrg_PrivateDs_NotListed")]
+    [TestCase("anonymous", true, Visibility.Unlisted, false, TestName = "DsListing_Anon_PublicOrg_UnlistedDs_NotListed")]
+    [TestCase("anonymous", true, Visibility.Public, true, TestName = "DsListing_Anon_PublicOrg_PublicDs_Listed")]
+    [TestCase("nonmember", false, Visibility.Private, false, TestName = "DsListing_NonMem_PrivateOrg_PrivateDs_NotListed")]
+    [TestCase("nonmember", false, Visibility.Unlisted, false, TestName = "DsListing_NonMem_PrivateOrg_UnlistedDs_NotListed")]
+    [TestCase("nonmember", false, Visibility.Public, true, TestName = "DsListing_NonMem_PrivateOrg_PublicDs_Listed")]
+    [TestCase("nonmember", true, Visibility.Private, false, TestName = "DsListing_NonMem_PublicOrg_PrivateDs_NotListed")]
+    [TestCase("nonmember", true, Visibility.Unlisted, false, TestName = "DsListing_NonMem_PublicOrg_UnlistedDs_NotListed")]
+    [TestCase("nonmember", true, Visibility.Public, true, TestName = "DsListing_NonMem_PublicOrg_PublicDs_Listed")]
+    [TestCase("readonly", false, Visibility.Private, true, TestName = "DsListing_ReadOnly_PrivateOrg_PrivateDs_Listed")]
+    [TestCase("readonly", false, Visibility.Unlisted, true, TestName = "DsListing_ReadOnly_PrivateOrg_UnlistedDs_Listed")]
+    [TestCase("readonly", false, Visibility.Public, true, TestName = "DsListing_ReadOnly_PrivateOrg_PublicDs_Listed")]
+    [TestCase("readonly", true, Visibility.Private, true, TestName = "DsListing_ReadOnly_PublicOrg_PrivateDs_Listed")]
+    [TestCase("readonly", true, Visibility.Unlisted, true, TestName = "DsListing_ReadOnly_PublicOrg_UnlistedDs_Listed")]
+    [TestCase("readonly", true, Visibility.Public, true, TestName = "DsListing_ReadOnly_PublicOrg_PublicDs_Listed")]
+    [TestCase("readwrite", false, Visibility.Private, true, TestName = "DsListing_ReadWrite_PrivateOrg_PrivateDs_Listed")]
+    [TestCase("readwrite", false, Visibility.Unlisted, true, TestName = "DsListing_ReadWrite_PrivateOrg_UnlistedDs_Listed")]
+    [TestCase("readwrite", false, Visibility.Public, true, TestName = "DsListing_ReadWrite_PrivateOrg_PublicDs_Listed")]
+    [TestCase("readwrite", true, Visibility.Private, true, TestName = "DsListing_ReadWrite_PublicOrg_PrivateDs_Listed")]
+    [TestCase("readwrite", true, Visibility.Unlisted, true, TestName = "DsListing_ReadWrite_PublicOrg_UnlistedDs_Listed")]
+    [TestCase("readwrite", true, Visibility.Public, true, TestName = "DsListing_ReadWrite_PublicOrg_PublicDs_Listed")]
+    [TestCase("adminmember", false, Visibility.Private, true, TestName = "DsListing_AdminMem_PrivateOrg_PrivateDs_Listed")]
+    [TestCase("adminmember", false, Visibility.Unlisted, true, TestName = "DsListing_AdminMem_PrivateOrg_UnlistedDs_Listed")]
+    [TestCase("adminmember", false, Visibility.Public, true, TestName = "DsListing_AdminMem_PrivateOrg_PublicDs_Listed")]
+    [TestCase("adminmember", true, Visibility.Private, true, TestName = "DsListing_AdminMem_PublicOrg_PrivateDs_Listed")]
+    [TestCase("adminmember", true, Visibility.Unlisted, true, TestName = "DsListing_AdminMem_PublicOrg_UnlistedDs_Listed")]
+    [TestCase("adminmember", true, Visibility.Public, true, TestName = "DsListing_AdminMem_PublicOrg_PublicDs_Listed")]
+    [TestCase("owner", false, Visibility.Private, true, TestName = "DsListing_Owner_PrivateOrg_PrivateDs_Listed")]
+    [TestCase("owner", false, Visibility.Unlisted, true, TestName = "DsListing_Owner_PrivateOrg_UnlistedDs_Listed")]
+    [TestCase("owner", false, Visibility.Public, true, TestName = "DsListing_Owner_PrivateOrg_PublicDs_Listed")]
+    [TestCase("owner", true, Visibility.Private, true, TestName = "DsListing_Owner_PublicOrg_PrivateDs_Listed")]
+    [TestCase("owner", true, Visibility.Unlisted, true, TestName = "DsListing_Owner_PublicOrg_UnlistedDs_Listed")]
+    [TestCase("owner", true, Visibility.Public, true, TestName = "DsListing_Owner_PublicOrg_PublicDs_Listed")]
+    [TestCase("sysadmin", false, Visibility.Private, true, TestName = "DsListing_SysAdmin_PrivateOrg_PrivateDs_Listed")]
+    [TestCase("sysadmin", false, Visibility.Unlisted, true, TestName = "DsListing_SysAdmin_PrivateOrg_UnlistedDs_Listed")]
+    [TestCase("sysadmin", false, Visibility.Public, true, TestName = "DsListing_SysAdmin_PrivateOrg_PublicDs_Listed")]
+    [TestCase("sysadmin", true, Visibility.Private, true, TestName = "DsListing_SysAdmin_PublicOrg_PrivateDs_Listed")]
+    [TestCase("sysadmin", true, Visibility.Unlisted, true, TestName = "DsListing_SysAdmin_PublicOrg_UnlistedDs_Listed")]
+    [TestCase("sysadmin", true, Visibility.Public, true, TestName = "DsListing_SysAdmin_PublicOrg_PublicDs_Listed")]
+    [TestCase("deactivated", false, Visibility.Private, false, TestName = "DsListing_Deactivated_PrivateOrg_PrivateDs_NotListed")]
+    [TestCase("deactivated", false, Visibility.Unlisted, false, TestName = "DsListing_Deactivated_PrivateOrg_UnlistedDs_NotListed")]
+    [TestCase("deactivated", false, Visibility.Public, false, TestName = "DsListing_Deactivated_PrivateOrg_PublicDs_NotListed")]
+    [TestCase("deactivated", true, Visibility.Private, false, TestName = "DsListing_Deactivated_PublicOrg_PrivateDs_NotListed")]
+    [TestCase("deactivated", true, Visibility.Unlisted, false, TestName = "DsListing_Deactivated_PublicOrg_UnlistedDs_NotListed")]
+    [TestCase("deactivated", true, Visibility.Public, false, TestName = "DsListing_Deactivated_PublicOrg_PublicDs_NotListed")]
+    public async Task DsListing(string who, bool orgIsPublic, Visibility dsVisibility, bool expected)
+    {
+        var user = who switch
+        {
+            "anonymous" => null,
+            "nonmember" => _nonMemberUser,
+            "readonly" => _readOnlyMember,
+            "readwrite" => _readWriteMember,
+            "adminmember" => _adminMember,
+            "owner" => _ownerUser,
+            "sysadmin" => _systemAdminUser,
+            "deactivated" => _deactivatedMember,
+            _ => throw new ArgumentException(who)
+        };
+
+        var listed = await CreateDatasetAccessControl().CanListDataset(GetDataset(orgIsPublic, dsVisibility), user);
+
+        listed.ShouldBe(expected);
+    }
+
+    [Test]
+    public async Task DsListing_AnUnlistedDataset_IsReadByAnOutsiderButNotListedToThem()
+    {
+        var control = CreateDatasetAccessControl();
+
+        (await control.CanAccessDataset(_publicOrgUnlistedDs, AccessType.Read, (User?)null)).ShouldBeTrue();
+        (await control.CanAccessDataset(_publicOrgUnlistedDs, AccessType.Read, _nonMemberUser)).ShouldBeTrue();
+        (await control.CanListDataset(_publicOrgUnlistedDs, (User?)null)).ShouldBeFalse();
+        (await control.CanListDataset(_publicOrgUnlistedDs, _nonMemberUser)).ShouldBeFalse();
+    }
+
+    #endregion
+
     // CORNER CASES
 
     #region Corner Cases

@@ -39,6 +39,13 @@ public interface IAuthManager
     public Task<bool> CanRefreshToken(User? user);
 
     public Task<DatasetPermissionsDto> GetDatasetPermissions(Dataset dataset);
+
+    /// <summary>
+    /// Whether a listing of datasets shows <paramref name="dataset"/> to the current user: they can read it and, when
+    /// it is unlisted, they own its organization, are a member of it or are an administrator. Reading an
+    /// unlisted dataset by its link takes <see cref="RequestAccess{T}"/>, not this.
+    /// </summary>
+    public Task<bool> CanListDataset(Dataset dataset);
 }
 
 /// <summary>Lookups of the current user for operations that need one.</summary>

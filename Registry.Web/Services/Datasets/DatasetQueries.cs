@@ -20,7 +20,7 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Datasets;
 
-/// <summary>The datasets as their readers see them: the readable datasets of an organization, one dataset, its root entry, its stamp.</summary>
+/// <summary>The datasets as their readers see them: the datasets of an organization listed to them, one dataset, its root entry, its stamp.</summary>
 public sealed class DatasetQueries
 {
     private readonly IDatasetAccessResolver _access;
@@ -45,35 +45,28 @@ public sealed class DatasetQueries
     public async Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false, CancellationToken ct = default) =>
         (await ListPage(orgSlug, new DatasetListQuery(), includeThumbnailCheck, ct: ct)).Items;
 
-    /// <summary>A dataset the current user can read, with what they may do with it.</summary>
-    public sealed record ReadableDataset(Dataset Dataset, DatasetPermissionsDto Permissions);
+    /// <summary>A dataset listed to the current user, with what they may do with it.</summary>
+    public sealed record ListedDataset(Dataset Dataset, DatasetPermissionsDto Permissions);
 
     /// <summary>
-    /// The datasets of an organization the current user can read.
+    /// The datasets of <paramref name="orgSlug"/> listed to the current user (<see cref="IAuthManager.CanListDataset"/>:
+    /// those they can read, without the unlisted ones of an organization they are not part of): the one rule of every
+    /// listing of an organization's datasets. No native index is opened (the visibility comes from its cache).
     /// </summary>
-    /// <param name="Organization">The organization; its users are loaded unless the user owns or administers it.</param>
-    /// <param name="IsOwnerOrAdmin">Whether the user owns or administers the organization (and reads every dataset).</param>
-    /// <param name="Datasets">The readable datasets.</param>
-    public sealed record ReadableDatasets(Organization Organization, bool IsOwnerOrAdmin, IReadOnlyList<ReadableDataset> Datasets);
-
-    /// <summary>
-    /// The datasets of <paramref name="orgSlug"/> the current user can read: the one rule of every listing of an
-    /// organization's datasets. No native index is opened (the visibility comes from its cache).
-    /// </summary>
-    public async Task<ReadableDatasets> ReadableDatasetsAsync(string orgSlug, CancellationToken ct = default)
+    public async Task<IReadOnlyList<ListedDataset>> ListedDatasetsAsync(string orgSlug, CancellationToken ct = default)
     {
         var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Read, withDatasets: true, ct: ct);
 
         var datasets = org.Datasets.ToArray();
 
-        // Optimization C: Short-circuit for owner/admin - they can read all datasets
+        // Owner/admin: every dataset is listed, with full permissions
         var isOwnerOrAdmin = await _authManager.IsOwnerOrAdmin(org);
 
-        // Optimization D: Prefetch Organization.Users once to avoid N lazy loads
+        // The members are read once for every dataset, not loaded by each check
         if (!isOwnerOrAdmin && org.Users == null)
             await _context.Entry(org).Collection(o => o.Users).LoadAsync(ct);
 
-        var readable = new List<ReadableDataset>();
+        var listed = new List<ListedDataset>();
 
         foreach (var ds in datasets)
         {
@@ -91,31 +84,31 @@ public sealed class DatasetQueries
             }
             else
             {
-                // Check if user can read this dataset before including it
-                permissions = await _authManager.GetDatasetPermissions(ds);
-                if (!permissions.CanRead)
+                if (!await _authManager.CanListDataset(ds))
                     continue;
+
+                permissions = await _authManager.GetDatasetPermissions(ds);
             }
 
-            readable.Add(new ReadableDataset(ds, permissions));
+            listed.Add(new ListedDataset(ds, permissions));
         }
 
-        return new ReadableDatasets(org, isOwnerOrAdmin, readable);
+        return listed;
     }
 
     public async Task<(IReadOnlyList<DatasetDto> Items, int Total)> ListPage(string orgSlug, DatasetListQuery query,
         bool includeThumbnailCheck = false, CancellationToken ct = default)
     {
-        var (_, _, datasets) = await ReadableDatasetsAsync(orgSlug, ct);
+        var datasets = await ListedDatasetsAsync(orgSlug, ct);
 
-        var readable = new List<(DatasetDto Dto, Dataset Dataset)>();
+        var listed = new List<(DatasetDto Dto, Dataset Dataset)>();
 
         foreach (var (ds, permissions) in datasets)
         {
             // Sizes and properties are cached per dataset until its index changes
             var summary = _summaries.Get(orgSlug, ds.InternalRef);
 
-            readable.Add((new DatasetDto
+            listed.Add((new DatasetDto
             {
                 Slug = ds.Slug,
                 CreationDate = ds.CreationDate,
@@ -126,11 +119,11 @@ public sealed class DatasetQueries
             }, ds));
         }
 
-        var bySlug = readable.ToDictionary(r => r.Dto.Slug, r => r.Dataset);
-        var matching = query.Apply(readable.Select(r => r.Dto)).ToList();
+        var bySlug = listed.ToDictionary(r => r.Dto.Slug, r => r.Dataset);
+        var matching = query.Apply(listed.Select(r => r.Dto)).ToList();
         var total = string.IsNullOrWhiteSpace(query.Query)
-            ? readable.Count
-            : (query with { Skip = 0, Take = null }).Apply(readable.Select(r => r.Dto)).Count();
+            ? listed.Count
+            : (query with { Skip = 0, Take = null }).Apply(listed.Select(r => r.Dto)).Count();
 
         // The only per-dataset native call left: for the page shown, not the whole organization
         if (includeThumbnailCheck)
