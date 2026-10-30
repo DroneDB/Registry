@@ -183,6 +183,24 @@ public class NativeAdapterContractTests : TestBase
         Wrapper.GetEntryTypes().Single(t => t.Id == EntryType.Video).Thumbnail.ShouldBe("none");
     }
 
+    /// <summary>
+    /// A raster query of a place without data is the caller's error (INVALIDARGS: 400 with noRetry), with libddb's
+    /// message: a pixel or an area outside the 20 x 20 raster. libddb used to fail the point as a server error
+    /// (DDBERR_EXCEPTION: 500) and to measure the edge nearest to the area.
+    /// </summary>
+    [Test]
+    public void RasterQueries_OfAPlaceOutsideTheRaster_AreInvalidArguments()
+    {
+        Should.Throw<DdbInvalidArgumentsException>(() => Wrapper.GetRasterPointValue(_geoRaster, 20, 5))
+            .Message.ShouldBe("No valid data at the point: pixel (20, 5) is outside the 20x20 raster");
+        Should.Throw<DdbInvalidArgumentsException>(() => Wrapper.GetRasterAreaStats(_geoRaster, 30, 0, 40, 10))
+            .Message.ShouldBe("No valid data in the area: (30, 0) - (40, 10) is outside the 20x20 raster");
+
+        // Inside, both measure the raster
+        Wrapper.GetRasterPointValue(_geoRaster, 19, 19).ShouldNotBeNullOrWhiteSpace();
+        Wrapper.GetRasterAreaStats(_geoRaster, 15, 15, 40, 40).ShouldContain("\"pixelCount\":25");
+    }
+
     /// <summary>The message of a failure is the failing call's own, never a stale one of an earlier call.</summary>
     [Test]
     public void LastError_IsTheFailingCallsOwn()

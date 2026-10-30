@@ -1528,16 +1528,20 @@ public class NativeDdbWrapperTests : TestBase
     }
 
     [Test]
-    public void GetRasterAreaStats_CoordsClampedToRaster_Ok()
+    public void GetRasterAreaStats_AnAreaAcrossTheEdge_IsCutToTheRaster_AndOneOutsideIsAnInvalidArgument()
     {
-        // Native code clamps out-of-range coordinates to the raster extent rather
-        // than throwing. Verify this well-defined behavior: fully out-of-range
-        // corners get clamped down to a single valid pixel area.
+        // An area across the edge measures its part inside the raster; an area with no pixel in the raster
+        // has no data to measure (it used to be clamped onto the nearest corner, whose pixel it measured)
         using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
 
-        var json = DdbWrapper.GetRasterAreaStats(tempFile.FilePath, -1000, -1000, -1, -1);
+        var json = DdbWrapper.GetRasterAreaStats(tempFile.FilePath, -1000, -1000, 900, 900);
         var obj = ParseAndValidateRasterJson(json, "min", "max", "pixelCount", "bounds");
+        ((int)obj["bounds"]!["x0"]!).ShouldBe(0);
+        ((int)obj["bounds"]!["y0"]!).ShouldBe(0);
         ((int)obj["pixelCount"]!).ShouldBeGreaterThan(0);
+
+        Should.Throw<DdbInvalidArgumentsException>(() => DdbWrapper.GetRasterAreaStats(tempFile.FilePath, -1000, -1000, -1, -1))
+            .Message.ShouldStartWith("No valid data in the area");
     }
 
     [Test]

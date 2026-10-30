@@ -90,11 +90,14 @@ public interface IDdbRaster
     /// <summary>
     /// Get raster value (temperature/elevation/etc.) at a specific pixel location
     /// </summary>
+    /// <exception cref="DdbInvalidArgumentsException">The pixel is outside the raster.</exception>
     string GetRasterPointValue(string path, int x, int y);
 
     /// <summary>
-    /// Get raster value statistics for a rectangular area
+    /// Get raster value statistics for a rectangular area: its part inside the raster
     /// </summary>
+    /// <exception cref="DdbInvalidArgumentsException">No pixel of the area has a value: it is outside the raster, or
+    /// its pixels are all no data.</exception>
     string GetRasterAreaStats(string path, int x0, int y0, int x1, int y1);
 
     /// <summary>
