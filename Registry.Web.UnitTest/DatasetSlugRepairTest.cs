@@ -295,7 +295,8 @@ public class DatasetSlugRepairTest : TestBase
     private DbContextOptions<RegistryContext> Options(params IInterceptor[] interceptors)
     {
         var builder = new DbContextOptionsBuilder<RegistryContext>().AddInterceptors(interceptors);
-        var sqlitePath = "Data Source=" + Path.Combine(_datasetsPath, _dbName + ".sqlite");
+        // No pooling: an idle pooled connection keeps the file open, and Windows then refuses to delete it
+        var sqlitePath = "Data Source=" + Path.Combine(_datasetsPath, _dbName + ".sqlite") + ";Pooling=False";
 
         return (_provider switch
         {

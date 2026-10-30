@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using Registry.Adapters.DroneDB;
+using Registry.Test.Common;
 using static Registry.Adapters.Ddb.Test.LibddbNative;
 
 namespace Registry.Adapters.Ddb.Test;
@@ -19,5 +20,9 @@ public class LibddbProcessSetup
         UseDdbFolder();
         DdbAbi.Verify();
         new NativeDdbRuntime().RegisterProcess(verbose: true);
+
+        // libddb keeps the index of a dataset and its rasters open between calls: a test closes them before it deletes
+        var wrapper = new NativeDdbWrapper();
+        TestCleanup.BeforeDelete = path => wrapper.ReleaseConnections(path);
     }
 }

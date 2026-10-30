@@ -129,6 +129,9 @@ public class LogPathTests
 
     private const string ConfiguredLogPath = "./logs/registry.txt";
 
+    // The folder as the platform's path API gives it back (".\logs" on Windows)
+    private static readonly string LogFolder = Path.GetDirectoryName(ConfiguredLogPath)!;
+
     private static IConfiguration NodeConfiguration() => new ConfigurationBuilder()
         .AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -144,8 +147,8 @@ public class LogPathTests
         var node1 = InstanceLogPaths.Apply(NodeConfiguration(), "registry-node-1")["Serilog:WriteTo:0:Args:path"];
         var node2 = InstanceLogPaths.Apply(NodeConfiguration(), "registry-node-2")["Serilog:WriteTo:0:Args:path"];
 
-        node1.ShouldBe(Path.Combine("./logs", "registry-node-registry-node-1.txt"));
-        node2.ShouldBe(Path.Combine("./logs", "registry-node-registry-node-2.txt"));
+        node1.ShouldBe(Path.Combine(LogFolder, "registry-node-registry-node-1.txt"));
+        node2.ShouldBe(Path.Combine(LogFolder, "registry-node-registry-node-2.txt"));
     }
 
     [TestCase("Node_A.example.org", "registry-node-node-a-example-org.txt")]
@@ -155,7 +158,7 @@ public class LogPathTests
     public void ProcessingNode_MachineName_IsSanitised(string? machineName, string expected)
     {
         InstanceLogPaths.PathFor(ConfiguredLogPath, InstanceType.ProcessingNode, machineName)
-            .ShouldBe(Path.Combine("./logs", expected));
+            .ShouldBe(Path.Combine(LogFolder, expected));
     }
 
     /// <summary>One web server and one thumbnail generator per deployment: their names stay as they are.</summary>
@@ -165,6 +168,6 @@ public class LogPathTests
     public void OtherInstanceTypes_IgnoreTheMachineName(InstanceType instanceType, string expected)
     {
         InstanceLogPaths.PathFor(ConfiguredLogPath, instanceType, "registry-node-1")
-            .ShouldBe(instanceType == InstanceType.Default ? ConfiguredLogPath : Path.Combine("./logs", expected));
+            .ShouldBe(instanceType == InstanceType.Default ? ConfiguredLogPath : Path.Combine(LogFolder, expected));
     }
 }

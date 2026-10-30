@@ -91,6 +91,10 @@ public sealed class LegacyJobStorageIntegrationTests : IDisposable
     [TearDown]
     public async Task TearDown()
     {
+        // SetUp ignored the test before it made anything (no Docker outside CI)
+        if (_provider is null)
+            return;
+
         _provider.Dispose();
         if (Directory.Exists(_root)) Directory.Delete(_root, true);
 

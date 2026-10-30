@@ -17,6 +17,7 @@ using Moq;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Registry.Adapters;
+using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Attributes;
@@ -190,7 +191,8 @@ public sealed class LegacyJobPayloadTests : IDisposable
 
         Perform(Deserialize(Payload("GenerateThumbnailWrapper").Replace("/tmp/t.jpg", dest.Replace('\\', '/')), false));
 
-        _wrapper.Verify(x => x.GenerateThumbnail(Path.Combine(_folder, "a.jpg"), 256), Times.Once);
+        // DDB.GetLocalPath hands libddb '/'-separated paths
+        _wrapper.Verify(x => x.GenerateThumbnail(Path.Combine(_folder, "a.jpg").ToDdbPath(), 256), Times.Once);
         File.ReadAllBytes(dest).ShouldBe(new byte[] { 1, 2, 3 });
     }
 
@@ -199,8 +201,8 @@ public sealed class LegacyJobPayloadTests : IDisposable
     {
         Perform(Deserialize(Payload("MaskBordersWrapper"), false));
 
-        _wrapper.Verify(x => x.MaskBorders(Path.Combine(_folder, "a.tif"), Path.Combine(_folder, "a_masked.tif"),
-            15, true), Times.Once);
+        _wrapper.Verify(x => x.MaskBorders(Path.Combine(_folder, "a.tif").ToDdbPath(),
+            Path.Combine(_folder, "a_masked.tif").ToDdbPath(), 15, true), Times.Once);
         _wrapper.Verify(x => x.Build(_folder, "a_masked.tif", null, false, false), Times.Once);
     }
 

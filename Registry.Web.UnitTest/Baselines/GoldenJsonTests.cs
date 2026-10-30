@@ -459,7 +459,9 @@ public sealed class GoldenJsonTests : IDisposable
                 substrings: new Dictionary<string, string>
                 {
                     [_factory.RootPath.Replace('\\', '/')] = JsonScrubber.RootPlaceholder,
-                    [_factory.RootPath] = JsonScrubber.RootPlaceholder
+                    [_factory.RootPath] = JsonScrubber.RootPlaceholder,
+                    // The factory's folders are Path.Combine'd under the root: '\' on Windows
+                    [_factory.RootPath + Path.DirectorySeparatorChar] = JsonScrubber.RootPlaceholder + "/"
                 },
                 literals: literals);
         }

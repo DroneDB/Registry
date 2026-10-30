@@ -24,12 +24,16 @@ public sealed class TempFile : IDisposable
     {
         var folder = Path.Combine(Path.GetTempPath(), domain);
         if (Directory.Exists(folder))
+        {
+            TestCleanup.BeforeDelete?.Invoke(folder);
             Directory.Delete(folder, true);
+        }
     }
 
     public void Dispose()
     {
         Debug.WriteLine("Deleting: " + FilePath);
+        TestCleanup.BeforeDelete?.Invoke(FilePath);
         TestDownloadCache.Evict(FilePath);
         Debug.WriteLine("Deleted temp file");
     }

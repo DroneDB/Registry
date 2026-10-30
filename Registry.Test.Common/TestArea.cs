@@ -31,7 +31,10 @@ public sealed class TestArea : IDisposable
     public void Dispose()
     {
         if (Directory.Exists(TestFolder))
+        {
+            TestCleanup.BeforeDelete?.Invoke(TestFolder);
             Directory.Delete(TestFolder, true);
+        }
 
         Debug.WriteLine($"Disposed test area '{Name}' in folder '{TestFolder}'");
 

@@ -46,11 +46,14 @@ public class OneCharacterSlugRepairTests : TestBase
             Directory.Delete(_root, true);
     }
 
+    // No pooling: an idle pooled connection keeps the file open, and Windows then refuses to delete it
+    private string Connection(string name) => "Data Source=" + Path.Combine(_root, name + ".sqlite") + ";Pooling=False";
+
     // "o" and "k" are the one-character organizations; "o0" is taken, so "o" cannot become it
     private RegistryContext Seed(string name)
     {
         var context = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
-            .UseSqlite("Data Source=" + Path.Combine(_root, name + ".sqlite")).Options);
+            .UseSqlite(Connection(name)).Options);
         context.Database.EnsureCreated();
 
         Organization Org(string slug, params string[] datasets) => new()
@@ -109,7 +112,7 @@ public class OneCharacterSlugRepairTests : TestBase
         }
 
         await using var check = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
-            .UseSqlite("Data Source=" + Path.Combine(_root, "apply.sqlite")).Options);
+            .UseSqlite(Connection("apply")).Options);
 
         var orgs = check.Organizations.Select(o => o.Slug).ToArray();
         orgs.ShouldBe(["o0_1", "o0", "k0", "fine"], ignoreOrder: true);
@@ -142,7 +145,7 @@ public class OneCharacterSlugRepairTests : TestBase
         Run("first").ShouldBe(Run("second"));
 
         await using var again = new RegistryContext(new DbContextOptionsBuilder<RegistryContext>()
-            .UseSqlite("Data Source=" + Path.Combine(_root, "first.sqlite")).Options);
+            .UseSqlite(Connection("first")).Options);
         (await Manager(again, "first").FixInvalidSlugsAsync(dryRun: true)).Entries.ShouldBeEmpty();
     }
 }

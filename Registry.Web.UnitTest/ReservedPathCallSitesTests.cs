@@ -76,7 +76,9 @@ public class ReservedPathCallSitesTests
         // The one walker of ImportDatasetTool and IndexReconciliationService
         var files = TestPaths.Policy.EnumerateFiles(new FileSystem(), _root).OrderBy(p => p, StringComparer.Ordinal);
 
-        files.ShouldBe(ExpectedImported);
+        // A case-insensitive file system (Windows, macOS) wrote e.jpg into the ".ddb" folder itself: reserved
+        var ddbIsItsOwnFolder = Directory.GetDirectories(_root).Select(Path.GetFileName).Contains(".DDB");
+        files.ShouldBe(ddbIsItsOwnFolder ? ExpectedImported : ExpectedImported.Where(p => p != ".DDB/e.jpg").ToArray());
     }
 
     [Test]
