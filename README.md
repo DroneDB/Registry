@@ -48,9 +48,9 @@ View orthophotos, point clouds, 3D models, Vector files, 3D Tiles, Gaussian spla
 
 | Guide | Description |
 |-------|-------------|
-| [Registry Guide](https://docs.dronedb.app/docs/registry) | Installation, configuration, deployment |
-| [User Management](https://docs.dronedb.app/docs/registry/admin/user-management) | Users, roles, organizations, quotas |
-| [API Reference](https://docs.dronedb.app/docs/integrations/api-reference) | REST API documentation |
+| [Registry Guide](https://docs.dronedb.app/docs/self-hosting) | Installation, configuration, deployment |
+| [User Management](https://docs.dronedb.app/docs/self-hosting/users) | Users, roles, organizations, quotas |
+| [API Reference](https://docs.dronedb.app/docs/developers/api/reference) | REST API documentation |
 
 ## 💬 Community
 
@@ -81,7 +81,7 @@ Open [http://localhost:5000](http://localhost:5000) in your browser to start usi
 >
 > The image is built for `linux/amd64` only. On Apple Silicon the `--platform linux/amd64` line is required, otherwise Docker stops with `no matching manifest for linux/arm64/v8`. Docker Desktop then runs the image through emulation (turn on *Use Rosetta for x86_64/amd64 emulation* in Settings → General).
 >
-> See [macOS: use a named volume](https://docs.dronedb.app/docs/registry/getting-started#macos-use-a-named-volume) for details.
+> See [macOS: use a named volume](https://docs.dronedb.app/docs/self-hosting/install#macos-use-a-named-volume) for details.
 
 **Default credentials**: `admin` / `password123`
 
@@ -102,9 +102,9 @@ The log files are in `registry-data/logs/` and roll daily: `registryYYYYMMDD.txt
 
 ### Processing Platform
 
-On-demand builds (thumbnails, tiles, COG, streaming formats) run automatically or can be triggered manually. Large downloads are offloaded to background tasks. Configuration options including per-user task limits, per-org output budgets, remote processing nodes (ODX/NodeODX), and feature gating are documented in the [Registry Guide](https://docs.dronedb.app/docs/registry).
+On-demand builds (thumbnails, tiles, COG, streaming formats) run automatically or can be triggered manually. Large downloads are offloaded to background tasks. Configuration options including per-user task limits, per-org output budgets, remote processing nodes (ODX/NodeODX), and feature gating are documented in the [Registry Guide](https://docs.dronedb.app/docs/self-hosting).
 
-For production deployment with MySQL/MariaDB, see the [full documentation](https://docs.dronedb.app/docs/registry/admin/production#running-in-production).
+For production deployment with MySQL/MariaDB, see the [full documentation](https://docs.dronedb.app/docs/self-hosting/production).
 
 ### DSM altitude key
 
@@ -118,7 +118,7 @@ Behind a reverse proxy (nginx), the proxy must send `X-Forwarded-For` and `X-For
 
 Registry asks `dronedb.app` once a day which version is the latest, shows an update in the Hub to administrators, and can e-mail them about it (`AppSettings:UpdateCheckEmail`, needs the SMTP settings). At every start it logs what the check sends:
 
-> Update check: enabled (daily). This deployment sends its instance ID (`<instance id>`), Registry/DroneDB versions, platform, public URL, host name, network domain and declared use to dronedb.app, and a contact email only if an admin opted in; dronedb.app also records the source IP address and checks the public URL. Purposes: update notices, release notes and license-compliance verification. Docs: docs.dronedb.app/docs/registry/admin/update-check  ·  Opt out: UpdateCheckCron="disabled"
+> Update check: enabled (daily). This deployment sends its instance ID (`<instance id>`), Registry/DroneDB versions, platform, public URL, host name, network domain and declared use to dronedb.app, and a contact email only if an admin opted in; dronedb.app also records the source IP address and checks the public URL. Purposes: update notices, release notes and license-compliance verification. Docs: docs.dronedb.app/docs/self-hosting/update-check  ·  Opt out: UpdateCheckCron="disabled"
 
 To switch it off set `AppSettings:UpdateCheckCron` to `disabled` (environment variable `AppSettings__UpdateCheckCron`): nothing is sent and the log says `Update check: disabled`. The same text is in the Hub, under Admin, Configuration, "Update check".
 
@@ -155,7 +155,7 @@ not the generic Registry error page.
 ### QGIS setup
 
 Ready-made QGIS setup scripts are in [`scripts/`](scripts/) (`qgis-test-setup.sh` /
-`qgis-test-setup.ps1`). See the [OGC services documentation](https://docs.dronedb.app/docs/integrations/ogc-services)
+`qgis-test-setup.ps1`). See the [OGC services documentation](https://docs.dronedb.app/docs/developers/ogc)
 for detailed QGIS configuration steps.
 
 ## 🛠️ Development

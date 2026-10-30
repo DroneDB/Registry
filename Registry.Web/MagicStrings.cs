@@ -77,5 +77,5 @@ public static class MagicStrings
     public const string BrandingUrlPrefix = "/branding";
 
     public const string DdbReleasesPageUrl = "https://github.com/DroneDB/DroneDB/releases";
-    public const string DdbInstallPageUrl = "https://docs.dronedb.app/download.html";
+    public const string DdbInstallPageUrl = "https://docs.dronedb.app/docs/self-hosting/install#native";
 }

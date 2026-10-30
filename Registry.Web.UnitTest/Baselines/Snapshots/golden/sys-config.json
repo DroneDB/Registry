@@ -1490,7 +1490,7 @@
       {
         "name": "UpdateCheck",
         "title": "Update check",
-        "description": "Update check: enabled (daily). This deployment sends its instance ID (<guid>), Registry/DroneDB versions, platform, public URL, host name, network domain and declared use to dronedb.app, and a contact email only if an admin opted in; dronedb.app also records the source IP address and checks the public URL. Purposes: update notices, release notes and license-compliance verification. Docs: docs.dronedb.app/docs/registry/admin/update-check  ·  Opt out: UpdateCheckCron=\"disabled\"",
+        "description": "Update check: enabled (daily). This deployment sends its instance ID (<guid>), Registry/DroneDB versions, platform, public URL, host name, network domain and declared use to dronedb.app, and a contact email only if an admin opted in; dronedb.app also records the source IP address and checks the public URL. Purposes: update notices, release notes and license-compliance verification. Docs: docs.dronedb.app/docs/self-hosting/update-check  ·  Opt out: UpdateCheckCron=\"disabled\"",
         "isActive": false,
         "fields": [
           {

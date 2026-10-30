@@ -87,7 +87,7 @@ public class InstanceIdInitializerTests
     {
         UpdateCheckDisclosure.Template.ShouldContain(UpdateCheckDisclosure.InstanceIdPlaceholder);
         UpdateCheckDisclosure.For("x").ShouldNotContain(UpdateCheckDisclosure.InstanceIdPlaceholder);
-        UpdateCheckDisclosure.Template.ShouldContain("docs.dronedb.app/docs/registry/admin/update-check");
-        UpdateCheckDisclosure.DocsUrl.ShouldBe("https://docs.dronedb.app/docs/registry/admin/update-check");
+        UpdateCheckDisclosure.Template.ShouldContain("docs.dronedb.app/docs/self-hosting/update-check");
+        UpdateCheckDisclosure.DocsUrl.ShouldBe("https://docs.dronedb.app/docs/self-hosting/update-check");
     }
 }
