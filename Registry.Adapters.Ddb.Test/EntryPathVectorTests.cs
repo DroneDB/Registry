@@ -49,7 +49,7 @@ public class EntryPathVectorTests : TestBase
     [Test]
     public void TheVectorsFileHasEveryRule()
     {
-        PathVectors.All.Count.ShouldBe(54);
+        PathVectors.All.Count.ShouldBe(74);
         PathVectors.All.Select(v => v.Expected.Rejected).Where(r => r != null).Distinct().Order()
             .ShouldBe([EntryPathRejection.Absolute, EntryPathRejection.Empty, EntryPathRejection.Nul,
                 EntryPathRejection.Reserved, EntryPathRejection.Traversal]);

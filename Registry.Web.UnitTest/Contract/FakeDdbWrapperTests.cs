@@ -94,7 +94,13 @@ public sealed class FakeDdbWrapperTests
         "list-entries-ex",
         // The STAC exports that build Registry's URLs, which Registry no longer calls (the data-only
         // documents replace them and Registry builds every id, link and href)
-        "stac-collection", "stac-item-collection", "stac-item-drone-image", "stac-item-georaster", "stac-item-image"
+        "stac-collection", "stac-item-collection", "stac-item-drone-image", "stac-item-georaster", "stac-item-image",
+        // A point cloud of a site grid, which has no footprint (its entry carries a warning instead), recorded on
+        // another file without hashes; its schema checks it like every fixture
+        "info-pointcloud-no-footprint",
+        // Not an output of the C API: the response of the helper program libddb starts to read files of users,
+        // which Registry never reads
+        "gdal-util-probe"
     ];
 
     [Test]
@@ -141,8 +147,8 @@ public sealed class FakeDdbWrapperTests
     [Test]
     public void PathVectors_AreAllLoaded()
     {
-        // The vendored file has 54 vectors (DroneDB 2.0.0), 3 of them for the C++ API only (NUL)
-        PathVectors.All.Count.ShouldBe(54);
+        // The vendored file has 74 vectors (DroneDB 2.0.0), 3 of them for the C++ API only (NUL)
+        PathVectors.All.Count.ShouldBe(74);
         PathVectors.All.Count(v => !v.CString).ShouldBe(3);
     }
 

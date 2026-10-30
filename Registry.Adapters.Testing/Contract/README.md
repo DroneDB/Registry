@@ -98,6 +98,7 @@ with ddb).
 | `capabilities` | `DDBGetCapabilities()` (no dataset): ABI version, error codes, error reasons, cancellable exports, the symbol manifest | `capabilities` | `version` |
 | `effective-config` | `DDBConfigure({"cacheDir": <cache>, "cpuPoolSize": 3, "ioThreads": 2, "minFreeDiskMb": 256})`, then `DDBGetEffectiveConfig()` (no dataset; see `ddb.h`, "Process configuration") | `effective-config` | `hardwareThreads` |
 | `normalize-path`, `normalize-path-rejected` | `DDBNormalizePath("photos\\2024/./a.jpg", "[\".uploads\"]")`, `DDBNormalizePath(".uploads/x", "[\".uploads\"]")` (no dataset) | `normalize-path` | - |
+| `gdal-util-probe` | The response line of `gdal-util --serve` to a `probe` request (kind raster) for `ortho.tif`: the footprint, the size and the other fields the host merges into the entry (`apps/gdal-util/PROTOCOL.md`, `src/include/raster_protocol.h`). The schema also covers the vector probe and the error response. Not an output of the C API: libddb and the helper program share the shape, and the fixture is checked by `tests/unit/gdal_util_tool_test.cpp` against the real program | `gdal-util-probe` | - |
 | `info-drone-image`, `get-drone-image`, `stac-item-drone-image` | `DDBInfo`, `DDBGet`, `DDBStac` of `DJI_0018.JPG` (integration) | `entries`, `entry`, `stac-item` | `depth` (info) |
 
 Each fixture file holds:
@@ -152,8 +153,10 @@ entry, also embedded by `DDBListEntriesEx`) and `$defs/artifact`.
   `gsplat.spz`, `gsplat.export` `application/octet-stream`, the JSON artifacts and directory indexes
   `application/json`.
 * `downloadName` is set for the artifacts a download offers: `cog.tif`, `cloud.copc.laz`,
-  `source.gpkg`, and for a Gaussian splat `model.rad` (`gsplat.lod`), `model.spz` (the legacy
-  `gsplat.spz`) and `export.spz` (`gsplat.export`).
+  `source.gpkg`, for a Gaussian splat `model.rad` (`gsplat.lod`), `model.spz` (the legacy
+  `gsplat.spz`) and `export.spz` (`gsplat.export`), and for a Model `model.3dtiles.zip`
+  (`model.3dtiles`, a directory: a host offers it as a ZIP archive of what is in it, `tileset.json`
+  at its root). The `model.3dtiles` of a `.3tz` has none: the uploaded file is that archive.
 * `state` reads the build lock without reclaiming it (`BuildLock::isHeld`), so a listing never
   changes the dataset.
 * `retryAfter` is the Unix second from which a pending build is retried by `DDBBuild` with
@@ -211,8 +214,13 @@ The rules, checked in this order: `empty` (the input is ""), `nul`, `encoding` (
 `absolute` (a leading `/` or `\`, which covers POSIX roots, UNC and device paths, or a drive
 `X:`), `traversal` (a `..` segment), `empty` (nothing left once empty and `.` segments are
 dropped), `reserved` (a `.ddb` segment at any depth, or a caller name as the first segment). `/`
-and `\` both separate segments, as in Registry. Names are compared byte for byte (`.DDB`,
-`.ddbx` and `photos/.uploads/x` are ordinary) and are not Unicode-normalized. A JSON string
+and `\` both separate segments, as in Registry. The `.ddb` segment is matched as the file
+systems a dataset may live on open it, on every platform alike: ASCII letters in any case,
+trailing dots and spaces dropped and what follows a `:` (an NTFS stream name) ignored, so
+`.DDB`, `.ddb.`, `.ddb ` and `.ddb::$INDEX_ALLOCATION` are reserved. So is the NTFS 8.3 short
+name of `.ddb`, `ddb~` and one or more digits, matched the same way (`DDB~1`, `ddb~2.`), while
+`ddb`, `ddb~` and `ddb~x` are no short name of it. Other names are compared
+byte for byte (`.ddbx` and `photos/.uploads/x` are ordinary) and are not Unicode-normalized. A JSON string
 cannot hold invalid UTF-8, so the `encoding` rejection is tested in `entry_path_test.cpp` only.
 
 ## Normalisation
@@ -463,3 +471,25 @@ Registry has to adopt first.
   from run to run and is normalised to `"<volatile>"` in these fixtures; `build-artifacts-pending`
   lists no artifact and did not change. Registry's exact-JSON adapter tests of these outputs need
   the field before Registry moves to a libddb build that has it.
+
+* 2026-10-29: the `model.3dtiles` artifact of a Model gains a `downloadName`
+  (`model.3dtiles.zip`): the first directory artifact with one, which a host offers as a ZIP
+  archive of what is in it (`tileset.json` at its root). The `model.3dtiles` of a `.3tz` has none.
+  No fixture changed (none lists a Model build); a host that offers the first artifact with a
+  `downloadName` as the download of an entry now offers the 3D Tiles of a Model, so it must
+  serve a directory as a ZIP before it moves to a libddb build that has the field.
+
+* 2026-10-29: `vectors/entry-paths.json`: the reserved `.ddb` segment is matched in any case of
+  its ASCII letters, without trailing dots and spaces and without an NTFS stream name (`.DDB/x`,
+  `.ddb./x`, `.ddb /x`, `.ddb::$INDEX_ALLOCATION/x` are `reserved`; `.DDB/x` was accepted), on
+  every platform: on Windows and macOS those names open the `.ddb` folder of the dataset, so an
+  upload to `.DDB/build/<hash>/...` wrote into its builds. Registry's copy of the vectors takes
+  the same change when it moves to a libddb build that has it.
+
+* 2026-10-29: `vectors/entry-paths.json`: the NTFS 8.3 short name of `.ddb` is reserved too:
+  `ddb~` followed by one or more digits, in any case, with trailing dots and spaces and an NTFS
+  stream name dropped as for `.ddb` (`DDB~1/build/x.tif`, `sub/ddb~2`, `DDB~12./x` are
+  `reserved`; they were accepted), on every platform: on an NTFS volume with short names
+  `DDB~1` opens the `.ddb` folder of the dataset. `ddb`, `ddb~`, `ddb~x`, `ddb~1x` and
+  `ddb~1.txt` stay ordinary. Registry's copy of the vectors takes the same change when it moves
+  to a libddb build that has it.

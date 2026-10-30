@@ -50,7 +50,7 @@ Service-locator calls in Services/Initialization	0
 .Wait() / Task.Delay in startup code	0
 Console helper calls in Program+Startup	0
 HostFacts.Current() call sites	1
-[DllImport] in production code	4
+[DllImport] in production code	2
 EntryPointNotFoundException catches	0
 Copied DDB AutomaticRetry attribute	0
 Recurring-job local WriteLine copies	0

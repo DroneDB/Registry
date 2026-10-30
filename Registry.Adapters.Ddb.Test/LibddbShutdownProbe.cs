@@ -50,7 +50,9 @@ internal static unsafe class LibddbShutdownProbe
             if (gate != Gate.Applies)
                 return 3;
 
-            Ok(NativeDdb.DDBRegisterProcess(false), "DDBRegisterProcess");
+            // Verbose: the process log level is fixed here, and the step of the log callback needs the
+            // debug record of a failed call (UnreadableRaster)
+            Ok(NativeDdb.DDBRegisterProcess(true), "DDBRegisterProcess");
             Step("DDBRegisterProcess returns DDBERR_NONE");
 
             // A dataset with a pooled index connection, for the checkpoint and close
@@ -119,10 +121,9 @@ internal static unsafe class LibddbShutdownProbe
     /// <summary>DDBShutdown called from inside the log callback returns DDBERR_INVALIDARGS and shuts nothing down.</summary>
     private static void ShutdownFromTheLogCallbackIsInvalid(NativeDdbWrapper wrapper, string folder)
     {
-        var notARaster = Path.Combine(folder, "not-a-raster.tif");
-        File.WriteAllText(notARaster, "not a raster");
+        var notARaster = UnreadableRaster.Create(folder);
 
-        Ok(NativeDdb.DDBSetLogCallback(&ShutdownOnLog, (int)DdbLogLevel.Warning, IntPtr.Zero), "DDBSetLogCallback");
+        Ok(NativeDdb.DDBSetLogCallback(&ShutdownOnLog, (int)UnreadableRaster.LogLevel, IntPtr.Zero), "DDBSetLogCallback");
         try
         {
             Should.Throw<DdbException>(() => wrapper.GetRasterInfo(notARaster));

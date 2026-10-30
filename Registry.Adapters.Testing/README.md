@@ -146,3 +146,11 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   one of its index): it changes whenever a build rewrites or replaces the file a client opens under the same hash. The
   fixtures normalise it to `"<volatile>"`. `BuildArtifact.Version` and `ResolvedBuildFile.Version` read it (absent from an
   older libddb: null, and the URLs of the artifact stay unversioned). No other fixture, schema or vector changed.
+
+* 2026-10-30: DroneDB `f878cef9e5b6f2762680c43e0838072f2cb8acb6`: the `entry-paths` vectors gain the spellings a file
+  system opens as the `.ddb` folder, all `reserved` now: another letter case (`.DDB`), trailing dots and spaces
+  (`.ddb.`, `.ddb `), an NTFS stream (`.ddb::$INDEX_ALLOCATION`) and the NTFS short name (`DDB~1`, any number).
+  `EntryPathRule` follows `isReservedSegment`, and `DatasetPathPolicy` takes the rule from libddb as before. New
+  fixtures `gdal-util-probe` (with its schema; the response of the helper program, which Registry does not read) and
+  `info-pointcloud-no-footprint`; `entry.schema.json` describes the `warning` property, which the entry properties
+  carry as they are. No adapter change.

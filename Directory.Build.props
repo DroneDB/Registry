@@ -60,54 +60,36 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-10-28): DroneDB has ONE version, 2.0.0 (package.json); the libddb ABI follows
+        Pinned now (2026-10-30): DroneDB has ONE version, 2.0.0 (package.json); the libddb ABI follows
         it (ABI 2.0, semver: a removed export is a new major, an added one a new minor) and so does
         the handshake (libddb 2.x). It is not tagged until Registry is proven on it, so Registry pins
-        the CI build of DroneDB fixes-and-optimizations commit a9f5e43, run 40706550975 (a pull
+        the CI build of DroneDB fixes-and-optimizations commit f878cef9, run 41045904254 (a pull
         request run of DroneDB#472, built from the merge with master; the .deb is named after that
-        merge commit, 2.0.0~git77636835), every job green (Linux and Windows builds and tests,
-        ASan + UBSan, the Docker image). Each artifact of a build object and a resolved build file
-        carry a version (a digest of the opened file's write time and size) that changes whenever
-        the file is rewritten under the same hash, which versioned build URLs are cached by;
-        build-lod is Spark v2.4.0 and reads every SPZ version, so a v4 upload is no longer
-        transcoded first. A build that only waits for companion files the dataset
-        lacks (its pending marker lists missing files) is not retried on a timer: DDBIsBuildPending
-        counts only work a retry can progress, DDBGetPendingBuildInfo and the build object of
-        DDBGetBuildArtifacts / DDBListEntriesEx report awaitingFiles, and adding, moving, delta-applying
-        or copying in a file of a missing name releases the build; the build-lod silence limit grows
-        with the splats of the source. It exports the two Gaussian splat exports Registry calls
-        and the startup handshake requires: DDBExportSplatSpz (the .spz of a splat for other tools,
-        made on demand in the build folder as gsplat/export.spz, role gsplat.export) and
-        DDBExportSplatTrainingData (the COLMAP sparse model, the images and the georeference of an
-        ODM project). DDBResolveBuildFile returns {"path", "mediaType"}, the media type of the
-        build manifest with the path. Splat builds no longer write into the dataset folder or the
-        published folder, build SPZ 4 and .sog uploads, take a .rad upload as it is (published as
-        a copy, not a hard link), check the sizes a .rad declares, and survive a bounds.json that
-        cannot be written; bounds.json says which way is up, confident only when the splats leave
-        no second answer, and a splat (or a model) georeferenced by an ODM coords.txt or a
-        georef.json gets up [0, 0, 1] and its WGS84 footprint (wgs84Footprint). Splat thumbnails
-        show the subject upright. 3D models are built with the bm3d program from vendor/bm3d at
-        release v1.1.1: the output is bm3d/model.bm3d (role model.bm3d), and the Nexus build
-        nxs/model.nxz is the legacy role model.nexus with fallbackFor model.bm3d, served while the
-        bm3d model is missing and removed once bm3d/ is published. STL files are Models. On Windows
-        the programs of the build (ddbcmd.exe, bm3d.exe, metadata-util.exe, untwine.exe) declare
-        themselves long path aware, and libddb reads the folder of the executable and of libddb
-        whatever the length of its path, so the embedded libddb and its helper programs work in
-        datasets under long paths where Windows allows them (LongPathsEnabled). DDBBuildEx (a build
-        with a cap on its threads, {"threads": N}, which the background rebuild of models of an
-        older layout calls) stays, with GPX and JPEG 2000 files and the formula mask fix of the
-        earlier pins. Next: the v2.0.0 release (DdbSource release) once it is tagged.
+        merge commit, 2.0.0~git529e1439), every job green twice (the run and its re-run: Linux and
+        Windows builds and tests, ASan + UBSan, the Docker image). Since the previous pin
+        (a9f5e43) libddb never opens a file of a user with GDAL: probes, thumbnails, COG and vector
+        builds and the normalized copies the analyses read run in gdal-util, a helper program that
+        confines its workers (Landlock, seccomp, resource limits on Linux; a Job Object and a low
+        integrity level on Windows; the sandbox report of gdal-util says what a host offers), and the
+        tiler and the OGC renders read only what libddb wrote. The reserved .ddb segment is matched
+        as a file system opens it (any letter case, trailing dots and spaces, an NTFS stream or
+        short name), which DatasetPathPolicy takes from DDBNormalizePath. A COG build decodes its
+        source on the threads of the build, the gdal-util server warms GDAL and PROJ up before it
+        forks its workers, and the helper submodules (gdal-util, metadata-util, bm3d) are pinned to
+        release tags. Splat exports, bm3d models, GPX, JPEG 2000, STL, DDBBuildEx, awaitingFiles
+        and versioned build artifacts stay from the earlier pins. Next: the v2.0.0 release
+        (DdbSource release) once it is tagged.
     -->
     <PropertyGroup>
         <DdbSource>ci</DdbSource>
         <DdbVersion>2.0.0</DdbVersion>
-        <DdbDebFileVersion>2.0.0~git77636835</DdbDebFileVersion>
-        <DdbCiCommit>a9f5e437ca3ad809442ce0d0bdccedec82a4b2a5</DdbCiCommit>
-        <DdbCiRunId>40706550975</DdbCiRunId>
-        <DdbDebArtifactId>12826677568</DdbDebArtifactId>
-        <DdbWindowsArtifactId>12827705682</DdbWindowsArtifactId>
-        <DdbDebSha256>22b33e0d5816ecf65d266f5f3a9475dd2925d6b9c5f85ed40252918b0e0f9bb1</DdbDebSha256>
-        <DdbWindowsZipSha256>3b24f7ab61e77acb3fb69977d3e349350020d976378c6e1fd23468574e50fb09</DdbWindowsZipSha256>
+        <DdbDebFileVersion>2.0.0~git529e1439</DdbDebFileVersion>
+        <DdbCiCommit>f878cef9e5b6f2762680c43e0838072f2cb8acb6</DdbCiCommit>
+        <DdbCiRunId>41045904254</DdbCiRunId>
+        <DdbDebArtifactId>12977753472</DdbDebArtifactId>
+        <DdbWindowsArtifactId>12980735004</DdbWindowsArtifactId>
+        <DdbDebSha256>a29f25423cacb4c6f8ad5cc522a15dbe604dbe1f09b4359b86d4a40d94f73df5</DdbDebSha256>
+        <DdbWindowsZipSha256>0a4aece03ad53ff54d79e30048cda8493b57ad2a377079d5603268bff829922e</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>

@@ -731,17 +731,16 @@ public unsafe class LibddbContractTests : TestBase
     }
 
     [Test]
-    public void SetLogCallback_ReceivesGdalErrorsWithTheOperationIdOfTheCall()
+    public void SetLogCallback_ReceivesTheRecordsOfACallWithItsOperationId()
     {
         var log = new LogCollector();
         var handle = GCHandle.Alloc(log);
-        Ok(NativeDdb.DDBSetLogCallback(&OnLog, (int)DdbLogLevel.Warning, GCHandle.ToIntPtr(handle)),
+        using var area = new TestArea(nameof(SetLogCallback_ReceivesTheRecordsOfACallWithItsOperationId));
+        var notARaster = UnreadableRaster.Create(area.TestFolder);
+        Ok(NativeDdb.DDBSetLogCallback(&OnLog, (int)UnreadableRaster.LogLevel, GCHandle.ToIntPtr(handle)),
             "DDBSetLogCallback");
         try
         {
-            using var area = new TestArea(nameof(SetLogCallback_ReceivesGdalErrorsWithTheOperationIdOfTheCall));
-            var notARaster = Path.Combine(area.TestFolder, "not-a-raster.tif");
-            File.WriteAllText(notARaster, "not a raster");
 
             Ok(NativeDdb.DDBSetThreadOperation(42), "DDBSetThreadOperation");
             Should.Throw<DdbException>(() => DdbWrapper.GetRasterInfo(notARaster));
@@ -755,10 +754,10 @@ public unsafe class LibddbContractTests : TestBase
             handle.Free();
         }
 
-        var records = log.Records;
-        records.ShouldNotBeEmpty("GDAL's error on the unreadable raster reaches the callback");
-        records.ShouldAllBe(r => r.Level >= (int)DdbLogLevel.Warning && r.Level <= (int)DdbLogLevel.Fatal);
-        records.ShouldAllBe(r => r.Source == "gdal" || r.Source == "ddb");
+        log.Records.ShouldAllBe(r => r.Level >= (int)UnreadableRaster.LogLevel && r.Level <= (int)DdbLogLevel.Fatal);
+        log.Records.ShouldAllBe(r => r.Source == "gdal" || r.Source == "ddb");
+        var records = log.Records.Where(r => UnreadableRaster.IsAbout(r.Message, notARaster)).ToArray();
+        records.ShouldNotBeEmpty("the failure of the calls on the unreadable raster reaches the callback");
         string.Join(",", records.Select(r => r.OpId).Distinct().Order())
             .ShouldBe("0,42", "the first call logs with operation 42, the second with none");
 

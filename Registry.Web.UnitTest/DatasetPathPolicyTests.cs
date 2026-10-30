@@ -44,7 +44,6 @@ public class DatasetPathPolicyTests
     [TestCase(@"a\b", "a/b")]
     [TestCase("a..b.jpg", "a..b.jpg")]     // was rejected as a Transfer destination (Contains(".."))
     [TestCase("ab:c", "ab:c")]
-    [TestCase(".DDB/x", ".DDB/x")]
     [TestCase(".ddbx/a.txt", ".ddbx/a.txt")]
     [TestCase("photos/.uploads/x", "photos/.uploads/x")]
     [TestCase("fotos/Überflug/été.jpg", "fotos/Überflug/été.jpg")]
@@ -70,6 +69,13 @@ public class DatasetPathPolicyTests
     [TestCase(".ddb/x", EntryPathRejection.Reserved)]
     [TestCase("sub/.ddb/x", EntryPathRejection.Reserved)]
     [TestCase(@"a\.ddb\x", EntryPathRejection.Reserved)]
+    [TestCase(".DDB/x", EntryPathRejection.Reserved)]          // a case-insensitive file system opens it as .ddb
+    [TestCase("sub/.Ddb/x", EntryPathRejection.Reserved)]      // idem
+    [TestCase(".ddb./x", EntryPathRejection.Reserved)]         // Win32 drops trailing dots and spaces
+    [TestCase(".ddb /x", EntryPathRejection.Reserved)]         // idem
+    [TestCase(".ddb::$INDEX_ALLOCATION/x", EntryPathRejection.Reserved)] // an NTFS stream of the folder
+    [TestCase("DDB~1/x", EntryPathRejection.Reserved)]         // the NTFS short name of .ddb
+    [TestCase("a/ddb~12/x", EntryPathRejection.Reserved)]      // idem
     [TestCase(".uploads", EntryPathRejection.Reserved)]
     [TestCase(".uploads/part.tmp", EntryPathRejection.Reserved)]
     [TestCase(@".uploads\part.tmp", EntryPathRejection.Reserved)]
@@ -104,11 +110,16 @@ public class DatasetPathPolicyTests
     [TestCase("sub/.ddb/x")]
     [TestCase(".uploads/x")]
     [TestCase(".uploads")]
+    [TestCase(".DDB/x")]
+    [TestCase("DDB~1/x")]
     public void IsReserved_True(string path) => Policy.IsReserved(path).ShouldBeTrue();
 
     [TestCase(".ddbx/a.txt")]
     [TestCase("sub/.uploads/x")]
     [TestCase("x.ddb")]
+    [TestCase("ddb~/x")]                // no number: not a short name
+    [TestCase("ddb~1a/x")]              // idem
+    [TestCase(".uploads.d/x")]
     [TestCase("a.txt")]
     [TestCase("")]
     [TestCase("/.ddb/x")] // absolute, not reserved: a received path is refused by Normalize either way

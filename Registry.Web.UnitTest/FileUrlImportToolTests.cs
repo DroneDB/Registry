@@ -100,9 +100,11 @@ public class FileUrlImportToolTests
 
     /// <summary>
     /// The destination applies the shared reserved rule (<see cref="Registry.Web.Utilities.DatasetPathPolicy.IsReserved"/>):
-    /// a ".ddb" segment at any depth (libddb never indexes it) and ".uploads" at the root. The old
-    /// check only matched ".ddb" at the root.
+    /// a segment a file system opens as the ".ddb" folder, at any depth (libddb never indexes it),
+    /// whatever its letter case, and ".uploads" at the root. The old check only matched ".ddb" at
+    /// the root.
     /// </summary>
+    [TestCase(".DDB")]
     [TestCase("sub/.ddb")]
     [TestCase("a/b/.ddb/c")]
     [TestCase(".uploads")]
@@ -117,12 +119,9 @@ public class FileUrlImportToolTests
     }
 
     /// <summary>
-    /// Only an exact ".ddb" segment is reserved, compared ordinally as libddb does
-    /// (<c>containsDdbSegment</c>): ".DDB" and ".ddbx" are ordinary folders libddb indexes, and a
-    /// nested ".uploads" is not the dataset's staging folder. The old check rejected ".DDB"
-    /// (case-insensitive), unlike uploads and libddb.
+    /// A longer name is not the ".ddb" folder: ".ddbx" is an ordinary folder libddb indexes, and a
+    /// nested ".uploads" is not the dataset's staging folder.
     /// </summary>
-    [TestCase(".DDB")]
     [TestCase(".ddbx")]
     [TestCase("photos/.uploads")]
     public async Task ValidateAsync_FolderResemblingReserved_DoesNotThrow(string folder)

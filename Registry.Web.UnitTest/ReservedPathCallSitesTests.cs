@@ -28,24 +28,24 @@ namespace Registry.Web.Test;
 
 /// <summary>
 /// The dataset walkers and remote importers classify reserved paths with the one shared rule,
-/// <see cref="DatasetPathPolicy.IsReserved"/> (libddb's: a ".ddb" segment at any depth, ordinal;
-/// ".uploads" only as the first segment). Each used its own rule before: the import walker and
+/// <see cref="DatasetPathPolicy.IsReserved"/> (libddb's: a segment a file system opens as the ".ddb"
+/// folder, at any depth, whatever its letter case, trailing dots and spaces or NTFS short name;
+/// ".uploads" only as the first segment, exactly). Each used its own rule before: the import walker and
 /// both remote importers only skipped a root ".ddb/" prefix, so a nested ".ddb" file was indexed
 /// or downloaded and the ".uploads" staging folder was indexed or written into.
 /// </summary>
 [TestFixture]
 public class ReservedPathCallSitesTests
 {
-    // Remote listing: reserved paths (nested ".ddb", root ".uploads"), plus look-alikes that are
-    // ordinary user files under libddb's ordinal, exact-segment rule.
+    // Remote listing: reserved paths (nested ".ddb" in another letter case, root ".uploads"), plus
+    // look-alikes that are ordinary user files: a longer name, ".uploads" below the root.
     private static readonly string[] RemotePaths =
     [
         ".ddb/dbase.sqlite", "sub/.ddb/b.jpg", ".uploads/c.jpg", ".uploads/quarantine/d.jpg",
         "ok.jpg", ".DDB/e.jpg", ".ddbx/f.jpg", "photos/.uploads/g.jpg"
     ];
 
-    private static readonly string[] ExpectedImported =
-        [".DDB/e.jpg", ".ddbx/f.jpg", "ok.jpg", "photos/.uploads/g.jpg"];
+    private static readonly string[] ExpectedImported = [".ddbx/f.jpg", "ok.jpg", "photos/.uploads/g.jpg"];
 
     private string _root = null!;
 
@@ -76,9 +76,9 @@ public class ReservedPathCallSitesTests
         // The one walker of ImportDatasetTool and IndexReconciliationService
         var files = TestPaths.Policy.EnumerateFiles(new FileSystem(), _root).OrderBy(p => p, StringComparer.Ordinal);
 
-        // A case-insensitive file system (Windows, macOS) wrote e.jpg into the ".ddb" folder itself: reserved
-        var ddbIsItsOwnFolder = Directory.GetDirectories(_root).Select(Path.GetFileName).Contains(".DDB");
-        files.ShouldBe(ddbIsItsOwnFolder ? ExpectedImported : ExpectedImported.Where(p => p != ".DDB/e.jpg").ToArray());
+        // ".DDB" is the ".ddb" folder on a case-insensitive file system (Windows, macOS), and
+        // reserved on every one
+        files.ShouldBe(ExpectedImported);
     }
 
     [Test]

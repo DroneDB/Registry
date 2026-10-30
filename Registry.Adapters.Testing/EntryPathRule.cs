@@ -32,12 +32,37 @@ internal static class EntryPathRule
         if (segments.Count == 0)
             return NormalizedEntryPath.Rejection(EntryPathRejection.Empty);
 
-        if (segments.Contains(DatabaseFolder, StringComparer.Ordinal) ||
-            reserved.Contains(segments[0], StringComparer.Ordinal))
+        if (segments.Any(IsReservedSegment) || reserved.Contains(segments[0], StringComparer.Ordinal))
             return NormalizedEntryPath.Rejection(EntryPathRejection.Reserved);
 
         return NormalizedEntryPath.Accepted(string.Join('/', segments));
     }
+
+    // isReservedSegment: a segment a file system opens as the ".ddb" folder
+    private static bool IsReservedSegment(string segment)
+    {
+        // Windows opens "x::$INDEX_ALLOCATION" (an NTFS stream of the folder x) as the folder x
+        var stream = segment.IndexOf(':');
+        if (stream >= 0)
+            segment = segment[..stream];
+        // Win32 drops trailing dots and spaces from a name: ".ddb." and ".ddb " open ".ddb"
+        segment = segment.TrimEnd('.', ' ');
+        // A case-insensitive file system (Windows, macOS) opens ".DDB" as ".ddb"
+        if (AsciiEqualsIgnoreCase(segment, DatabaseFolder))
+            return true;
+        // NTFS gives ".ddb" an 8.3 short name, "DDB~1" (or ~2, ... when that one is taken), which
+        // opens the folder as well. Any number counts: which one a volume gave is not known here.
+        const string shortName = "ddb~";
+        if (segment.Length <= shortName.Length || !AsciiEqualsIgnoreCase(segment[..shortName.Length], shortName))
+            return false;
+        return segment[shortName.Length..].All(c => c is >= '0' and <= '9');
+    }
+
+    // str::iequals: ASCII letters compared without their case, every other character as it is
+    private static bool AsciiEqualsIgnoreCase(string a, string b) =>
+        a.Length == b.Length && a.Zip(b).All(p => AsciiLower(p.First) == AsciiLower(p.Second));
+
+    private static char AsciiLower(char c) => c is >= 'A' and <= 'Z' ? (char)(c + ('a' - 'A')) : c;
 
     // ReservedRules::fromJson: each name is one whole segment, not ".."
     private static IReadOnlyCollection<string> ValidateReserved(IReadOnlyCollection<string>? names)

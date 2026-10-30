@@ -28,11 +28,10 @@ public class NativeOperationLoggingTests : TestBase
     public async Task NativeRecords_CarryTheCurrentOperation_AcrossAwaitsAndThreads()
     {
         using var area = new TestArea(nameof(NativeRecords_CarryTheCurrentOperation_AcrossAwaitsAndThreads));
-        var notARaster = Path.Combine(area.TestFolder, "not-a-raster.tif");
-        File.WriteAllText(notARaster, "not a raster");
-        var sink = new OperationSink();
+        var notARaster = UnreadableRaster.Create(area.TestFolder);
+        var sink = new OperationSink(notARaster);
 
-        Runtime.SetLogSink(sink, DdbLogLevel.Warning);
+        Runtime.SetLogSink(sink, UnreadableRaster.LogLevel);
         try
         {
             using (DdbOperation.Enter(9001))
@@ -61,11 +60,15 @@ public class NativeOperationLoggingTests : TestBase
         }
     }
 
-    private sealed class OperationSink : IDdbLogSink
+    // The records about the unreadable file
+    private sealed class OperationSink(string file) : IDdbLogSink
     {
         public ConcurrentQueue<(DdbLogLevel Level, ulong OpId)> Records { get; } = new();
 
-        public void Write(DdbLogLevel level, string message, string source, ulong operationId) =>
-            Records.Enqueue((level, operationId));
+        public void Write(DdbLogLevel level, string message, string source, ulong operationId)
+        {
+            if (UnreadableRaster.IsAbout(message, file))
+                Records.Enqueue((level, operationId));
+        }
     }
 }

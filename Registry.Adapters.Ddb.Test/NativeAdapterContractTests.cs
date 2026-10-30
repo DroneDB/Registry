@@ -206,18 +206,22 @@ public class NativeAdapterContractTests : TestBase
     public void LogSink_ReceivesNativeRecords_AndASinkFailureIsDropped()
     {
         using var area = new TestArea(nameof(LogSink_ReceivesNativeRecords_AndASinkFailureIsDropped));
-        var notARaster = Path.Combine(area.TestFolder, "not-a-raster.tif");
-        File.WriteAllText(notARaster, "not a raster");
+        var notARaster = UnreadableRaster.Create(area.TestFolder);
         var sink = new CollectingSink();
 
-        Runtime.SetLogSink(sink, DdbLogLevel.Warning);
+        Runtime.SetLogSink(sink, DdbLogLevel.Info);
         try
         {
+            // Below the level of the sink: nothing of the failure reaches it
             Should.Throw<DdbException>(() => Wrapper.GetRasterInfo(notARaster));
-            sink.Records.ShouldNotBeEmpty();
-            sink.Records.ShouldAllBe(r => r.Level >= DdbLogLevel.Warning);
+            sink.Records.ShouldNotContain(r => UnreadableRaster.IsAbout(r.Message, notARaster));
 
-            Runtime.SetLogSink(new ThrowingSink(), DdbLogLevel.Warning);
+            Runtime.SetLogSink(sink, UnreadableRaster.LogLevel);
+            Should.Throw<DdbException>(() => Wrapper.GetRasterInfo(notARaster));
+            sink.Records.ShouldContain(r => UnreadableRaster.IsAbout(r.Message, notARaster) && r.Source == "ddb");
+            sink.Records.ShouldAllBe(r => r.Level >= UnreadableRaster.LogLevel);
+
+            Runtime.SetLogSink(new ThrowingSink(), UnreadableRaster.LogLevel);
             Should.Throw<DdbException>(() => Wrapper.GetRasterInfo(notARaster));
             Wrapper.GetVersion().ShouldNotBeNullOrWhiteSpace("the process survived the sink's exception");
         }

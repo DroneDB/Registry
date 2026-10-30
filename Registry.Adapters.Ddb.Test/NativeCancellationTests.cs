@@ -164,12 +164,11 @@ public class NativeCancellationTests : TestBase
     public void LiveToken_TheCallKeepsItsOperationId()
     {
         using var area = new TestArea(nameof(LiveToken_TheCallKeepsItsOperationId));
-        var notARaster = Path.Combine(area.TestFolder, "not-a-raster.tif");
-        File.WriteAllText(notARaster, "not a raster");
-        var sink = new OperationSink();
+        var notARaster = UnreadableRaster.Create(area.TestFolder);
+        var sink = new OperationSink(notARaster);
         using var live = new CancellationTokenSource();
 
-        Runtime.SetLogSink(sink, DdbLogLevel.Warning);
+        Runtime.SetLogSink(sink, UnreadableRaster.LogLevel);
         try
         {
             // Creating a native token is an operation call, which resets the thread's operation id: the
@@ -187,11 +186,15 @@ public class NativeCancellationTests : TestBase
         }
     }
 
-    private sealed class OperationSink : IDdbLogSink
+    // The operation ids of the records about the unreadable file
+    private sealed class OperationSink(string file) : IDdbLogSink
     {
         public ConcurrentQueue<ulong> Records { get; } = new();
 
-        public void Write(DdbLogLevel level, string message, string source, ulong operationId) =>
-            Records.Enqueue(operationId);
+        public void Write(DdbLogLevel level, string message, string source, ulong operationId)
+        {
+            if (UnreadableRaster.IsAbout(message, file))
+                Records.Enqueue(operationId);
+        }
     }
 }
