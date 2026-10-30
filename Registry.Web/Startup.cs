@@ -14,6 +14,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Web.Exceptions;
 using Registry.Web.Filters;
 using Registry.Web.Hosting;
 using Registry.Web.Middlewares;
@@ -222,6 +223,15 @@ public class Startup
             var hubStaticFiles = HubCachePolicy.StaticFileOptions();
             builder.UseSpaStaticFiles(hubStaticFiles);
 
+            // The Hub's pages are read, never posted to: a request with another method that no endpoint
+            // matched is a 404 (the SPA default page answers GET and HEAD only and throws for the others)
+            builder.UseWhen(context => !IsPageRead(context.Request.Method),
+                unmatched => unmatched.Run(context =>
+                    throw new NotFoundException($"No endpoint answers {context.Request.Method} {context.Request.Path}")
+                    {
+                        NoRetry = true
+                    }));
+
             builder.UseSpa(spa =>
             {
                 // To learn more about options for serving an Angular SPA from ASP.NET Core,
@@ -248,4 +258,6 @@ public class Startup
                 logger.LogWarning("{EmailWarning:l}", warning);
         });
     }
+
+    private static bool IsPageRead(string method) => HttpMethods.IsGet(method) || HttpMethods.IsHead(method);
 }
