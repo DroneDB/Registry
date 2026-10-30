@@ -64,6 +64,8 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<OrganizationMembers>();
         services.AddScoped<IDatasetsManager, DatasetsManager>();
         services.AddScoped<DatasetQueries>();
+        services.AddScoped<DatasetLocationQueries>();
+        services.AddScoped<IDatasetLocationProvider, DatasetLocationProvider>();
         services.AddScoped<DatasetCommands>();
         services.AddScoped<DatasetMover>();
         services.AddScoped<StacManager>();

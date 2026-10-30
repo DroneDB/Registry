@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Registry.Common;
+using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -23,17 +26,26 @@ public sealed class OrganizationQueries
     private readonly IDatasetAccessResolver _access;
     private readonly RegistryContext _context;
     private readonly ApplicationDbContext _appContext;
+    private readonly IDdbManager _ddbManager;
 
     public OrganizationQueries(IAuthManager authManager, IDatasetAccessResolver access, RegistryContext context,
-        ApplicationDbContext appContext)
+        ApplicationDbContext appContext, IDdbManager ddbManager)
     {
         _authManager = authManager;
         _access = access;
         _context = context;
         _appContext = appContext;
+        _ddbManager = ddbManager;
     }
 
-    /// <summary>The organizations the current user can see (or owns, with <paramref name="ownedOnly"/>), with its permissions in each.</summary>
+    /// <summary>What the datasets of an organization say about it: how many there are and when the newest write to an index happened (null when no index could be read).</summary>
+    private sealed record OrganizationActivity(int DatasetCount, DateTime? LastWriteUtc);
+
+    /// <summary>
+    /// The organizations the current user can see (or owns, with <paramref name="ownedOnly"/>), with its permissions in each,
+    /// by name. The dataset count and the last modified date are shown for the organizations the user owns, administers or
+    /// belongs to; they are null for the others (the datasets of an organization are not public knowledge).
+    /// </summary>
     public async Task<IEnumerable<OrganizationDto>> List(bool ownedOnly = false, CancellationToken ct = default)
     {
         var currentUser = await _authManager.GetCurrentUser();
@@ -45,14 +57,17 @@ public sealed class OrganizationQueries
 
         // Use projection to load only necessary data
         // We compute the raw permission level in the query, then derive boolean permissions in memory
-        var organizationsQuery = _context.Organizations
-            .AsNoTracking()
-            .Where(org => ownedOnly
-                ? org.OwnerId == currentUser.Id
-                : isAdmin ||
-                  org.OwnerId == currentUser.Id ||
-                  org.Slug == MagicStrings.PublicOrganizationSlug ||
-                  org.Users.Any(u => u.UserId == currentUser.Id))
+        Expression<Func<Organization, bool>> isVisible = org => ownedOnly
+            ? org.OwnerId == currentUser.Id
+            : isAdmin ||
+              org.OwnerId == currentUser.Id ||
+              org.Slug == MagicStrings.PublicOrganizationSlug ||
+              org.Users.Any(u => u.UserId == currentUser.Id);
+        var visibleOrganizations = _context.Organizations.AsNoTracking().Where(isVisible);
+
+        var organizationsQuery = visibleOrganizations
+            .OrderBy(org => org.Name)
+            .ThenBy(org => org.Slug)
             .Select(org => new
             {
                 org.CreationDate,
@@ -69,13 +84,22 @@ public sealed class OrganizationQueries
 
         var rawOrganizations = await organizationsQuery.ToListAsync(ct);
 
+        // Only for the organizations the user owns, administers or belongs to
+        var memberSlugs = rawOrganizations
+            .Where(org => org.IsOwnerOrAdmin || org.MemberPermission != null)
+            .Select(org => org.Slug)
+            .ToHashSet(StringComparer.Ordinal);
+        var activity = await LoadActivityAsync(
+            visibleOrganizations.Where(org => isAdmin || org.OwnerId == currentUser.Id ||
+                                              org.Users.Any(u => u.UserId == currentUser.Id)), ct);
+
         var organizations = rawOrganizations.Select(org =>
         {
             var effectivePermission = org.IsOwnerOrAdmin
                 ? OrganizationPermissions.Admin
                 : org.MemberPermission;
 
-            return new OrganizationDto
+            var dto = new OrganizationDto
             {
                 CreationDate = org.CreationDate,
                 Description = org.Description,
@@ -89,6 +113,11 @@ public sealed class OrganizationQueries
                         ? OrganizationPermissionsDto.ReadOnly
                         : null
             };
+
+            if (memberSlugs.Contains(org.Slug))
+                SetActivity(dto, activity);
+
+            return dto;
         }).ToList();
 
         await ResolveOwnerNamesAsync(organizations);
@@ -96,7 +125,7 @@ public sealed class OrganizationQueries
         return organizations;
     }
 
-    /// <summary>The public organizations (open to anonymous callers).</summary>
+    /// <summary>The public organizations (open to anonymous callers), by name, without their dataset count and last modified date.</summary>
     public async Task<IEnumerable<OrganizationDto>> ListPublic(CancellationToken ct = default)
     {
         // List all public organizations for data discovery
@@ -104,6 +133,8 @@ public sealed class OrganizationQueries
         var organizationsQuery = _context.Organizations
             .AsNoTracking()
             .Where(org => org.IsPublic)
+            .OrderBy(org => org.Name)
+            .ThenBy(org => org.Slug)
             .Select(org => new OrganizationDto
             {
                 CreationDate = org.CreationDate,
@@ -122,13 +153,74 @@ public sealed class OrganizationQueries
     }
 
     /// <summary>
-    /// <paramref name="org"/> as every organization answer shows it: the owner is the user name.
+    /// <paramref name="org"/> as every organization answer shows it: the owner is the user name. It has
+    /// no dataset yet (a new organization): the last modified date is its creation date.
     /// </summary>
     public async Task<OrganizationDto> ToDtoWithOwnerNameAsync(Organization org)
     {
         var dto = org.ToDto();
+        SetActivity(dto, EmptyActivity);
         await ResolveOwnerNamesAsync([dto]);
         return dto;
+    }
+
+    private static readonly IReadOnlyDictionary<string, OrganizationActivity> EmptyActivity =
+        new Dictionary<string, OrganizationActivity>();
+
+    /// <summary>
+    /// The activity of each organization of <paramref name="organizations"/> that has datasets: one untracked
+    /// projection of its datasets, then the state of the index files of each (file stats only). A dataset
+    /// whose folder or index cannot be read is skipped: it counts, it does not date.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, OrganizationActivity>> LoadActivityAsync(
+        IQueryable<Organization> organizations, CancellationToken ct)
+    {
+        var datasets = await _context.Datasets
+            .AsNoTracking()
+            .Where(ds => organizations.Any(org => org.Slug == ds.Organization.Slug))
+            .Select(ds => new { OrgSlug = ds.Organization.Slug, ds.InternalRef })
+            .ToListAsync(ct);
+
+        return datasets
+            .GroupBy(ds => ds.OrgSlug, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key,
+                g => new OrganizationActivity(g.Count(), g
+                    .Select(ds => LastWriteOrNull(g.Key, ds.InternalRef))
+                    .Max()),
+                StringComparer.Ordinal);
+    }
+
+    private DateTime? LastWriteOrNull(string orgSlug, Guid internalRef)
+    {
+        try
+        {
+            // Open, never Get: a dataset without a folder must not be created by reading the list
+            return _ddbManager.Open(orgSlug, internalRef).GetIndexFileState()?.LastWriteUtc;
+        }
+        catch (IOException)
+        {
+            // Also a folder that is gone (DirectoryNotFoundException)
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The dataset count and the last modified date of <paramref name="dto"/>: the newest write to the index of its
+    /// datasets, or its creation date when no dataset has a readable index.
+    /// </summary>
+    private static void SetActivity(OrganizationDto dto, IReadOnlyDictionary<string, OrganizationActivity> activity)
+    {
+        activity.TryGetValue(dto.Slug!, out var found);
+        dto.DatasetCount = found?.DatasetCount ?? 0;
+        dto.LastModified = found?.LastWriteUtc ?? dto.CreationDate;
     }
 
     /// <summary>
@@ -204,6 +296,10 @@ public sealed class OrganizationQueries
 
         var dto = await ToDtoWithOwnerNameAsync(org);
 
+        // Shown to its owner, administrators and members only
+        dto.DatasetCount = null;
+        dto.LastModified = null;
+
         // Populate current user's permissions in this organization
         var currentUser = await _authManager.GetCurrentUser();
         if (currentUser != null)
@@ -231,6 +327,7 @@ public sealed class OrganizationQueries
             if (effectivePermission != null)
             {
                 dto.Permissions = OrganizationPermissionsDto.FromPermissions(effectivePermission.Value);
+                SetActivity(dto, await LoadActivityAsync(_context.Organizations.AsNoTracking().Where(o => o.Slug == org.Slug), ct));
             }
             else if (org.IsPublic)
             {

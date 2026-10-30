@@ -59,8 +59,10 @@ Not scrubbed because they are stable: the fixture values (`mtime` 1700000000, ha
 Arrays keep the server order, except where it is not part of the contract (sorted by the test,
 ordinal):
 
-* `users-list`, `users-detailed`: by `userName` (the identity store has no defined order);
-* `orgs-list`, `orgs-list-admin`: by `slug` (`OrganizationsManager.List` has no `ORDER BY`).
+* `users-list`, `users-detailed`: by `userName` (the identity store has no defined order).
+
+`orgs-list`, `orgs-list-admin` and `orgs-public` are not sorted by the test: the server answers them by `name`, then `slug`
+(the database's string order: upper case before lower case in SQLite).
 
 Read-only cases share one host; a case that changes state (`orgs-create`, `orgs-datasets-create`,
 `users-create`) runs on its own host, so no golden depends on the test order.
@@ -198,3 +200,8 @@ scheme also answers with an empty body (plus `WWW-Authenticate: Bearer`, not rec
   sends, with the instance id (`<guid>` here), and its fields are the cron, the e-mail mode, the instance id and the
   documentation link.
 * `sys-features`: `updateCheckEnabled` (the cron is not disabled) and `instanceHash` (scrubbed: random per host).
+* Organizations: `datasetCount` and `lastModified` (the newest write to the index of one of its datasets, its creation date when none can
+  be read). Filled for the owner, administrators and members (`orgs-list`, `orgs-list-admin`, `orgs-get`; `orgs-create` has 0 and its
+  creation date), `null` for the others (the shared public organization in `orgs-list`, `orgs-public`). Datasets: `lastModified` in
+  `orgs-datasets`, `orgs-datasets-paged`, `orgs-datasets-create` and `ds-ex`; `null` here because the fake libddb has no index file
+  (`OrganizationManagerTest`, `DatasetListQueryTests`).

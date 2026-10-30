@@ -11,6 +11,7 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Services.Caching;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 
 namespace Registry.Web.Services.Adapters;
@@ -90,7 +91,7 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         foreach (var e in entries)
         {
 
-            var entryBbox = ExtractBboxFromPolygon(e.PolygonGeometry);
+            var entryBbox = GeoJsonBbox.Of(e.PolygonGeometry);
 
             if (e.Type == EntryType.Vector)
             {
@@ -284,46 +285,6 @@ public class OgcLayerCatalog : IOgcLayerCatalog
         return matches.FirstOrDefault(l => l.BboxWgs84 != null) ?? matches[0];
     }
 
-
-    private static double[]? ExtractBboxFromPolygon(JsonElement? polygonGeom)
-    {
-        if (polygonGeom is not { } token) return null;
-        try
-        {
-            // Support GeoJSON Feature: unwrap to geometry
-            var typeStr = token.Member("type").Text();
-            if (string.Equals(typeStr, "Feature", StringComparison.OrdinalIgnoreCase))
-                token = token.Member("geometry") ?? token;
-
-            if (token.Member("coordinates") is not { ValueKind: JsonValueKind.Array } coords) return null;
-            // GeoJSON Polygon coordinates: [ [ [lon,lat], [lon,lat], ... ] ]
-            if (coords.GetArrayLength() == 0 || coords[0].ValueKind != JsonValueKind.Array || coords[0].GetArrayLength() == 0)
-                return null;
-            double minLon = double.MaxValue,
-                minLat = double.MaxValue,
-                maxLon = double.MinValue,
-                maxLat = double.MinValue;
-            foreach (var pt in coords[0].Items())
-            {
-                if (pt.ValueKind != JsonValueKind.Array || pt.GetArrayLength() < 2) continue;
-                var lon = pt[0].ToDouble();
-                var lat = pt[1].ToDouble();
-                if (lon < minLon) minLon = lon;
-                if (lat < minLat) minLat = lat;
-                if (lon > maxLon) maxLon = lon;
-                if (lat > maxLat) maxLat = lat;
-            }
-
-            if (minLon == double.MaxValue) return null;
-            return [minLon, minLat, maxLon, maxLat];
-        }
-        catch (Exception ex)
-        {
-            // Static method: no logger available. Best-effort fallback.
-            System.Diagnostics.Debug.WriteLine($"ExtractBboxFromPolygon failed: {ex.Message}");
-            return null;
-        }
-    }
 
     private static string? ExtractVectorGeometryType(Entry e)
     {

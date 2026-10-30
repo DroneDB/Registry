@@ -613,6 +613,11 @@ GET /orgs/{orgSlug}/import/sources
 POST /orgs/{orgSlug}/import/verify
   body application/*+json VerifyImportRequestDto; application/json VerifyImportRequestDto; text/json VerifyImportRequestDto
   200 application/json ImportVerifyResultDto
+GET /orgs/{orgSlug}/locations
+  200 application/json array<DatasetLocationDto>
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
 GET /orgs/{orgSlug}/members
   200 application/json array<OrganizationMemberDto>
   401 application/json ProblemDetails
@@ -1016,7 +1021,8 @@ schema CreateImportRequestDto { sourceType:string, params:map<string>, slug:stri
 schema CreateRoleRequestDto { roleName:string }
 schema CreateUserRequest { userName:string, password:string, email:string, roles:array<string> }
 schema DatasetCleanupBuildDto { removedEntries:array<string>, removedBuilds:array<string> }
-schema DatasetDto { slug:string, creationDate:string(date-time), properties:map<any>, size:integer(int64), permissions:DatasetPermissionsDto, hasThumbnail:boolean }
+schema DatasetDto { slug:string, creationDate:string(date-time), properties:map<any>, size:integer(int64), lastModified:string(date-time), permissions:DatasetPermissionsDto, hasThumbnail:boolean }
+schema DatasetLocationDto { slug:string, name:string, bbox:array<number(double)> }
 schema DatasetPermissionsDto { canRead:boolean, canWrite:boolean, canDelete:boolean }
 schema DeleteBatchResponse { deleted:array<string>, failed:map<string> }
 schema DeleteUserResultDto { userName:string, successor:string, organizationsTransferred:integer(int32), organizationsDeleted:integer(int32), datasetsTransferred:integer(int32), datasetsDeleted:integer(int32), batchesDeleted:integer(int32), datasetResults:array<MoveDatasetResultDto> }
@@ -1073,7 +1079,7 @@ schema OgcApiTileSetDto { tileMatrixSetURI:string, links:array<OgcApiTileLinkDto
 schema OgcApiTileSetsDto { tilesets:array<OgcApiTileSetDto> }
 schema OgcConformanceDto { conformsTo:array<string> }
 schema OkDto { ok:boolean }
-schema OrganizationDto { slug:string, name:string, description:string, creationDate:string(date-time), owner:string, isPublic:boolean, permissions:OrganizationPermissionsDto }
+schema OrganizationDto { slug:string, name:string, description:string, creationDate:string(date-time), owner:string, isPublic:boolean, datasetCount:integer(int32), lastModified:string(date-time), permissions:OrganizationPermissionsDto }
 schema OrganizationMemberDto { userName:string, email:string, permissions:OrganizationPermissions, grantedAt:string(date-time), grantedBy:string }
 schema OrganizationPermissions {  }
 schema OrganizationPermissionsDto { canRead:boolean, canWrite:boolean, canDelete:boolean, canManageMembers:boolean }

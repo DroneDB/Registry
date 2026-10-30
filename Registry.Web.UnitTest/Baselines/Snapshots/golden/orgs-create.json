@@ -11,6 +11,8 @@
     "creationDate": "<datetime:Z>",
     "owner": "golden-owner",
     "isPublic": false,
+    "datasetCount": 0,
+    "lastModified": "<datetime:Z>",
     "permissions": null
   }
 }

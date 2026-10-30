@@ -61,7 +61,9 @@ public sealed class JsonContractTests
         "Registry.Ports.DroneDB.DdbOperation", "Registry.Ports.DroneDB.BatchAddItemError",
         "Registry.Ports.DroneDB.BatchAddUnchangedItem", "Registry.Ports.DroneDB.PendingBuildInfo",
         // The adapter reads libddb's answer by hand (plain path or object), the type never crosses a wire
-        "Registry.Ports.DroneDB.ResolvedBuildFile"
+        "Registry.Ports.DroneDB.ResolvedBuildFile",
+        // Read from the index files by the adapter, used in memory by the summaries and the organization list
+        "Registry.Ports.DroneDB.IndexFileState"
     ];
 
     private static bool InAContract(Type type, JsonSerializerOptions options)

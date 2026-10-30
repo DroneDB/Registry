@@ -61,6 +61,7 @@ namespace Registry.Web.Utilities;
 [JsonSerializable(typeof(DatasetCleanupBuildDto))]
 [JsonSerializable(typeof(DatasetDto))]
 [JsonSerializable(typeof(DatasetEditDto))]
+[JsonSerializable(typeof(DatasetLocationDto))]
 [JsonSerializable(typeof(DatasetNewDto))]
 [JsonSerializable(typeof(DatasetPermissionsDto))]
 [JsonSerializable(typeof(DeleteBatchResponse))]

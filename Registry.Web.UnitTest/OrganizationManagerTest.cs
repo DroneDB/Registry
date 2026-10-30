@@ -13,10 +13,12 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
@@ -49,6 +51,9 @@ public class OrganizationManagerTest : TestBase
         _datasetManagerMock = new Mock<IDatasetsManager>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
         _ddbManagerMock = new Mock<IDdbManager>();
+        // Datasets of the seeded data have no folder unless a test says so
+        _ddbManagerMock.Setup(m => m.Open(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Throws(new DirectoryNotFoundException("no folder"));
 
         // Set up contexts
         _context = await CreateTestRegistryContext();
@@ -61,7 +66,7 @@ public class OrganizationManagerTest : TestBase
         _webUtils = TestPorts.All(_authManagerMock.Object, _context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
         _organizationsManager = TestOrganizations.Create(_authManagerMock.Object, new DatasetAccessResolver(_webUtils.Datasets, _authManagerMock.Object, Mock.Of<IDdbManager>(), TestPaths.Policy), _context, _webUtils.Datasets, _datasetManagerMock.Object, _appContext, TestSettings.Options<AccountOptions>(_settingsOptions), new OrganizationMembershipService(_context, _appContext, new UpperInvariantLookupNormalizer(),
-                NullLogger<OrganizationMembershipService>.Instance));
+                NullLogger<OrganizationMembershipService>.Instance), _ddbManagerMock.Object);
     }
 
     [TearDown]
@@ -1173,6 +1178,228 @@ public class OrganizationManagerTest : TestBase
         result.Permissions.CanWrite.ShouldBeFalse();
         result.Permissions.CanDelete.ShouldBeFalse();
         result.Permissions.CanManageMembers.ShouldBeFalse();
+    }
+
+    #endregion
+
+    #region Last modified and dataset count
+
+    private static readonly DateTime Monday = new(2026, 3, 2, 8, 0, 0, DateTimeKind.Utc);
+
+    /// <summary>An organization with one dataset per entry of <paramref name="datasets"/> (its internal references).</summary>
+    private async Task<Organization> AddOrganization(string slug, string name, string ownerId, bool isPublic = false,
+        IEnumerable<Guid>? datasets = null, OrganizationPermissions? memberPermission = null, string? memberId = null)
+    {
+        var org = new Organization
+        {
+            Slug = slug,
+            Name = name,
+            Description = "Test",
+            IsPublic = isPublic,
+            OwnerId = ownerId,
+            CreationDate = Monday.AddDays(-30),
+            Datasets = (datasets ?? []).Select((internalRef, i) => new Dataset
+            {
+                Slug = $"ds-{i}",
+                CreationDate = Monday.AddDays(-20),
+                InternalRef = internalRef
+            }).ToList(),
+            Users = memberPermission == null
+                ? new List<OrganizationUser>()
+                : new List<OrganizationUser> { new() { UserId = memberId!, Permissions = memberPermission.Value, OrganizationSlug = slug } }
+        };
+
+        await _context.Organizations.AddAsync(org);
+        await _context.SaveChangesAsync();
+        return org;
+    }
+
+    /// <summary>A dataset whose index files were last written at <paramref name="lastWrite"/> (null: they cannot be read).</summary>
+    private Guid IndexWrittenAt(DateTime? lastWrite)
+    {
+        var internalRef = Guid.NewGuid();
+        var ddb = new Mock<IDDB>();
+        ddb.Setup(d => d.GetIndexFileState()).Returns(lastWrite is { } at ? new IndexFileState("fingerprint", at) : null);
+        _ddbManagerMock.Setup(m => m.Open(It.IsAny<string>(), internalRef)).Returns(ddb.Object);
+        return internalRef;
+    }
+
+    /// <summary>A dataset row whose folder is gone.</summary>
+    private Guid FolderMissing()
+    {
+        var internalRef = Guid.NewGuid();
+        _ddbManagerMock.Setup(m => m.Open(It.IsAny<string>(), internalRef))
+            .Throws(new DirectoryNotFoundException("no folder"));
+        return internalRef;
+    }
+
+    [Test]
+    public async Task List_LastModified_IsTheNewestWriteOverTheDatasets_AndTheyAreCounted()
+    {
+        SetupAdminUser();
+        await AddOrganization("busy-org", "Busy", "admin-id",
+            datasets: [IndexWrittenAt(Monday.AddHours(1)), IndexWrittenAt(Monday.AddHours(5)), IndexWrittenAt(Monday.AddHours(3))]);
+
+        var busy = (await _organizationsManager.List()).Single(o => o.Slug == "busy-org");
+
+        busy.DatasetCount.ShouldBe(3);
+        busy.LastModified.ShouldBe(Monday.AddHours(5));
+        _ddbManagerMock.Verify(m => m.Get(It.IsAny<string>(), It.IsAny<Guid>()), Times.Never,
+            "reading the list must not create the folder of a dataset");
+    }
+
+    [Test]
+    public async Task List_LastModified_OfAnOrganizationWithoutDatasets_IsItsCreationDate()
+    {
+        SetupAdminUser();
+        var empty = await AddOrganization("empty-org", "Empty", "admin-id");
+
+        var listed = (await _organizationsManager.List()).Single(o => o.Slug == "empty-org");
+
+        listed.DatasetCount.ShouldBe(0);
+        listed.LastModified.ShouldBe(empty.CreationDate);
+    }
+
+    [Test]
+    public async Task List_LastModified_SkipsTheDatasetsThatCannotBeRead()
+    {
+        SetupAdminUser();
+        await AddOrganization("partly-org", "Partly", "admin-id",
+            datasets: [FolderMissing(), IndexWrittenAt(Monday.AddHours(2)), IndexWrittenAt(null)]);
+        var unreadable = await AddOrganization("lost-org", "Lost", "admin-id", datasets: [FolderMissing(), IndexWrittenAt(null)]);
+
+        var organizations = (await _organizationsManager.List()).ToArray();
+
+        var partly = organizations.Single(o => o.Slug == "partly-org");
+        partly.LastModified.ShouldBe(Monday.AddHours(2));
+        partly.DatasetCount.ShouldBe(3, "an unreadable dataset is still a dataset");
+
+        var lost = organizations.Single(o => o.Slug == "lost-org");
+        lost.LastModified.ShouldBe(unreadable.CreationDate);
+        lost.DatasetCount.ShouldBe(2);
+    }
+
+    [Test]
+    public async Task List_AnswersByNameThenSlug()
+    {
+        SetupAdminUser();
+        await AddOrganization("zulu-1", "Bravo", "admin-id");
+        await AddOrganization("yankee", "Alpha", "admin-id");
+        await AddOrganization("xray", "Alpha", "admin-id");
+        await AddOrganization("alpha-2", "Bravo", "admin-id");
+
+        var slugs = (await _organizationsManager.List()).Select(o => o.Slug!)
+            .Where(slug => slug is "zulu-1" or "yankee" or "xray" or "alpha-2")
+            .ToArray();
+
+        slugs.ShouldBe(["xray", "yankee", "alpha-2", "zulu-1"]);
+    }
+
+    [Test]
+    public async Task List_ShowsTheDatesToTheOwnerAndTheMembers_NotToOtherCallers()
+    {
+        var user = SetupStandardUser("some-user");
+        await AddOrganization("owned-org", "Owned", user.Id, datasets: [IndexWrittenAt(Monday)]);
+        await AddOrganization("member-org", "Member", "other-owner", memberPermission: OrganizationPermissions.ReadOnly,
+            memberId: user.Id, datasets: [IndexWrittenAt(Monday.AddHours(1)), IndexWrittenAt(Monday.AddHours(2))]);
+        // The shared public organization is listed for everybody, whose datasets are not theirs to count
+        _context.Organizations.Single(o => o.Slug == MagicStrings.PublicOrganizationSlug).Datasets
+            .Add(new Dataset { Slug = "shared", CreationDate = Monday, InternalRef = IndexWrittenAt(Monday) });
+        await _context.SaveChangesAsync();
+
+        var organizations = (await _organizationsManager.List()).ToArray();
+
+        organizations.Single(o => o.Slug == "owned-org").LastModified.ShouldBe(Monday);
+        organizations.Single(o => o.Slug == "owned-org").DatasetCount.ShouldBe(1);
+        organizations.Single(o => o.Slug == "member-org").LastModified.ShouldBe(Monday.AddHours(2));
+        organizations.Single(o => o.Slug == "member-org").DatasetCount.ShouldBe(2);
+
+        var shared = organizations.Single(o => o.Slug == MagicStrings.PublicOrganizationSlug);
+        shared.LastModified.ShouldBeNull();
+        shared.DatasetCount.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task List_TheSharedPublicOrganization_ShowsItsDatesToItsMembers_NotToTheOtherUsers()
+    {
+        var shared = await _context.Organizations.Include(o => o.Users).Include(o => o.Datasets)
+            .SingleAsync(o => o.Slug == MagicStrings.PublicOrganizationSlug);
+        shared.Datasets.Add(new Dataset { Slug = "shared-written", CreationDate = Monday, InternalRef = IndexWrittenAt(Monday.AddHours(6)) });
+        shared.Users.Add(new OrganizationUser
+        {
+            UserId = "public-member", Permissions = OrganizationPermissions.ReadOnly, OrganizationSlug = shared.Slug
+        });
+        await _context.SaveChangesAsync();
+        var datasets = shared.Datasets.Count;
+
+        SetupStandardUser("public-member");
+        var asMember = (await _organizationsManager.List()).Single(o => o.Slug == MagicStrings.PublicOrganizationSlug);
+
+        asMember.DatasetCount.ShouldBe(datasets);
+        asMember.LastModified.ShouldBe(Monday.AddHours(6), "the other datasets of the seeded data have no folder");
+
+        SetupStandardUser("not-a-member");
+        var asOther = (await _organizationsManager.List()).Single(o => o.Slug == MagicStrings.PublicOrganizationSlug);
+
+        asOther.DatasetCount.ShouldBeNull();
+        asOther.LastModified.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task ListPublic_AnonymousCallersGetNoDatesAndNoCounts_AndTheDatasetsAreNotTouched()
+    {
+        SetupAnonymousUser();
+        await AddOrganization("open-org", "Open", "admin-id", isPublic: true,
+            datasets: [IndexWrittenAt(Monday), IndexWrittenAt(Monday.AddHours(1))]);
+
+        var open = (await _organizationsManager.ListPublic()).Single(o => o.Slug == "open-org");
+
+        open.LastModified.ShouldBeNull();
+        open.DatasetCount.ShouldBeNull();
+        _ddbManagerMock.Verify(m => m.Open(It.IsAny<string>(), It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Test]
+    public async Task ListPublic_AnswersByNameThenSlug()
+    {
+        SetupAnonymousUser();
+        await AddOrganization("pub-b", "Same name", "admin-id", isPublic: true);
+        await AddOrganization("pub-a", "Same name", "admin-id", isPublic: true);
+        await AddOrganization("pub-first", "A first one", "admin-id", isPublic: true);
+
+        var slugs = (await _organizationsManager.ListPublic()).Select(o => o.Slug!)
+            .Where(slug => slug.StartsWith("pub-", StringComparison.Ordinal)).ToArray();
+
+        slugs.ShouldBe(["pub-first", "pub-a", "pub-b"]);
+    }
+
+    [Test]
+    public async Task Get_ShowsTheDatesToTheOwner_AndNotToACallerThatOnlyReadsIt()
+    {
+        var owner = SetupStandardUser("owner-user");
+        await AddOrganization("get-dates", "Dates", owner.Id, isPublic: true,
+            datasets: [IndexWrittenAt(Monday), IndexWrittenAt(Monday.AddHours(4))]);
+
+        var asOwner = await _organizationsManager.Get("get-dates");
+        asOwner.LastModified.ShouldBe(Monday.AddHours(4));
+        asOwner.DatasetCount.ShouldBe(2);
+
+        SetupStandardUser("reader");
+        var asReader = await _organizationsManager.Get("get-dates");
+        asReader.Permissions.ShouldNotBeNull().CanWrite.ShouldBeFalse();
+        asReader.LastModified.ShouldBeNull();
+        asReader.DatasetCount.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task AddNew_AnswersAnEmptyOrganizationModifiedWhenItWasCreated()
+    {
+        SetupAdminUser();
+
+        var created = await _organizationsManager.AddNew(CreateTestOrganizationDto("fresh-org"));
+
+        created.DatasetCount.ShouldBe(0);
+        created.LastModified.ShouldBe(created.CreationDate);
     }
 
     #endregion

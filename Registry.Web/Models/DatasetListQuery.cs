@@ -14,7 +14,7 @@ namespace Registry.Web.Models;
 /// <param name="Skip">Datasets to skip after filtering and sorting.</param>
 /// <param name="Take">Page size; null = every dataset.</param>
 /// <param name="Query">Case-insensitive text matched against name, slug and tagline.</param>
-/// <param name="Sort">name (default), creationDate, size, entries or visibility.</param>
+/// <param name="Sort">name (default), creationDate, lastModified, size, entries or visibility. lastModified puts the datasets without a known date last in either direction, as the Hub's sort of the organizations does.</param>
 /// <param name="Descending">Sort direction.</param>
 /// <param name="Slugs">Only these datasets (the Hub asks for the thumbnails of the rows it shows).</param>
 public sealed record DatasetListQuery(int Skip = 0, int? Take = null, string? Query = null, string? Sort = null,
@@ -37,6 +37,8 @@ public sealed record DatasetListQuery(int Skip = 0, int? Take = null, string? Qu
         IOrderedEnumerable<DatasetDto> ordered = (Sort ?? "name").ToLowerInvariant() switch
         {
             "creationdate" => Order(filtered, d => d.CreationDate),
+            // An unknown date is not older nor newer than the others: it goes last whichever way the list is sorted
+            "lastmodified" => ThenOrder(filtered.OrderBy(d => d.LastModified is null), d => d.LastModified),
             "size" => Order(filtered, d => d.Size),
             "entries" => Order(filtered, Entries),
             "visibility" => Order(filtered, d => (int)VisibilityOf(d)),
@@ -52,6 +54,9 @@ public sealed record DatasetListQuery(int Skip = 0, int? Take = null, string? Qu
 
     private IOrderedEnumerable<DatasetDto> Order<TKey>(IEnumerable<DatasetDto> source, Func<DatasetDto, TKey> key) =>
         Descending ? source.OrderByDescending(key) : source.OrderBy(key);
+
+    private IOrderedEnumerable<DatasetDto> ThenOrder<TKey>(IOrderedEnumerable<DatasetDto> source, Func<DatasetDto, TKey> key) =>
+        Descending ? source.ThenByDescending(key) : source.ThenBy(key);
 
     private static bool Matches(DatasetDto d, string query) =>
         NameOf(d).Contains(query, StringComparison.CurrentCultureIgnoreCase) ||

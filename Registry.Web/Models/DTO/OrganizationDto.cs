@@ -48,6 +48,18 @@ public class OrganizationDto
     public bool IsPublic { get; set; }
 
     /// <summary>
+    /// How many datasets the organization has. Null for callers that are not its owner, an administrator or a
+    /// member (and in the public list).
+    /// </summary>
+    public int? DatasetCount { get; set; }
+
+    /// <summary>
+    /// When the newest change reached the index of one of its datasets (its creation date when it has none that can be
+    /// read). Null for callers that are not its owner, an administrator or a member (and in the public list).
+    /// </summary>
+    public DateTime? LastModified { get; set; }
+
+    /// <summary>
     /// The permissions of the current user in this organization.
     /// </summary>
     public OrganizationPermissionsDto? Permissions { get; set; }

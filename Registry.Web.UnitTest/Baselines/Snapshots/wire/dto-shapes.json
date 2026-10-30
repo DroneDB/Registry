@@ -1444,6 +1444,7 @@
         }
       },
       "size": 1234567890123,
+      "lastModified": "2026-10-21T07:31:17Z",
       "permissions": {
         "canRead": true,
         "canWrite": true,
@@ -1456,6 +1457,7 @@
       "creationDate": "0001-01-01T00:00:00Z",
       "properties": null,
       "size": 0,
+      "lastModified": null,
       "permissions": null,
       "hasThumbnail": null
     }
@@ -1468,6 +1470,20 @@
     "sparse": {
       "name": null,
       "visibility": null
+    }
+  },
+  "Registry.Web.Models.DTO.DatasetLocationDto": {
+    "full": {
+      "slug": "Slug-text",
+      "name": "Name-text",
+      "bbox": [
+        1.0
+      ]
+    },
+    "sparse": {
+      "slug": null,
+      "name": null,
+      "bbox": null
     }
   },
   "Registry.Web.Models.DTO.DatasetNewDto": {
@@ -2942,6 +2958,8 @@
       "creationDate": "2026-10-21T07:31:17.123Z",
       "owner": "Owner-text",
       "isPublic": true,
+      "datasetCount": 42,
+      "lastModified": "2026-10-21T07:31:17Z",
       "permissions": {
         "canRead": true,
         "canWrite": true,
@@ -2956,6 +2974,8 @@
       "creationDate": "0001-01-01T00:00:00Z",
       "owner": null,
       "isPublic": false,
+      "datasetCount": null,
+      "lastModified": null,
       "permissions": null
     }
   },

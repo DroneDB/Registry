@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 using Registry.Web.Services;
 using Shouldly;
@@ -57,6 +58,18 @@ public class CacheCategoriesTest
         CacheCategories.UploadReceipt("o", "d", "u").ShouldBe("upload-receipt-o-d-u");
         CacheCategories.TasksList("o", "d").ShouldBe("tasks-list:o/d");
         CacheCategories.PushSession("/p/session.json").ShouldBe("push-session:/p/session.json");
+        CacheCategories.DatasetLocation(Guid.Parse("11111111-2222-3333-4444-555555555555"), "12-34-56-78")
+            .ShouldBe("ds-location:11111111-2222-3333-4444-555555555555:12-34-56-78");
+    }
+
+    /// <summary>The location of a dataset is keyed on the state of its index: a change never reads the location before it.</summary>
+    [Test]
+    public void DatasetLocation_IsKeyedOnTheDatasetAndTheStateOfItsIndex()
+    {
+        var a = Guid.NewGuid();
+
+        CacheCategories.DatasetLocation(a, "v1").ShouldNotBe(CacheCategories.DatasetLocation(a, "v2"));
+        CacheCategories.DatasetLocation(a, "v1").ShouldNotBe(CacheCategories.DatasetLocation(Guid.NewGuid(), "v1"));
     }
 
     /// <summary>

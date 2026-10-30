@@ -579,6 +579,82 @@ public class NativeDdbWrapperTests : TestBase
         new DDB(noIndex, DdbWrapper).GetIndexFingerprint().ShouldBeNull();
     }
 
+    /// <summary>Puts the write time of an index file well in the past, so a later write is told apart from it at any timestamp granularity.</summary>
+    private static DateTime BackdateIndexFile(string datasetFolder, string suffix = "")
+    {
+        var past = DateTime.UtcNow.AddHours(-2);
+        File.SetLastWriteTimeUtc(Path.Join(datasetFolder, IDDB.DatabaseFolderName, IDDB.DatabaseFileName + suffix), past);
+        return past;
+    }
+
+    [Test]
+    public void IndexFileState_LastWriteAdvancesOnWrites_AndKeepsTheFingerprintFormat()
+    {
+        using var area = new TestArea(nameof(IndexFileState_LastWriteAdvancesOnWrites_AndKeepsTheFingerprintFormat));
+        DdbWrapper.Init(area.TestFolder);
+        var ddb = new DDB(area.TestFolder, DdbWrapper);
+
+        var first = Path.Join(area.TestFolder, "first.txt");
+        File.WriteAllText(first, "first");
+        DdbWrapper.Add(area.TestFolder, first);
+        ddb.Checkpoint().ShouldBeTrue();
+        var flushedAt = BackdateIndexFile(area.TestFolder);
+
+        var flushed = ddb.GetIndexFileState().ShouldNotBeNull();
+        flushed.LastWriteUtc.Kind.ShouldBe(DateTimeKind.Utc);
+        flushed.LastWriteUtc.ShouldBe(flushedAt, TimeSpan.FromSeconds(2));
+        flushed.Fingerprint.ShouldMatch(@"^\d+:\d+\|(\d+:\d+|-)$");
+        ddb.GetIndexFingerprint().ShouldBe(flushed.Fingerprint, "the fingerprint is the one of the state, unchanged");
+
+        // An add reaches the index through its WAL
+        var second = Path.Join(area.TestFolder, "second.txt");
+        File.WriteAllText(second, "second");
+        DdbWrapper.Add(area.TestFolder, second);
+        var afterAdd = ddb.GetIndexFileState().ShouldNotBeNull();
+        afterAdd.LastWriteUtc.ShouldBeGreaterThan(flushed.LastWriteUtc);
+        afterAdd.Fingerprint.ShouldNotBe(flushed.Fingerprint);
+
+        // A meta write as well
+        var walAt = BackdateIndexFile(area.TestFolder, "-wal");
+        ddb.GetIndexFileState().ShouldNotBeNull().LastWriteUtc.ShouldBe(walAt, TimeSpan.FromSeconds(2),
+            "the WAL with bytes in it is the newer file here");
+        DdbWrapper.MetaSet(area.TestFolder, "test", "abc", "first.txt");
+        var afterMeta = ddb.GetIndexFileState().ShouldNotBeNull();
+        afterMeta.LastWriteUtc.ShouldBeGreaterThan(walAt.AddHours(1));
+
+        var noIndex = Directory.CreateDirectory(Path.Join(area.TestFolder, "no-index")).FullName;
+        new DDB(noIndex, DdbWrapper).GetIndexFileState().ShouldBeNull();
+    }
+
+    [Test]
+    public void IndexFileState_LastWriteStaysWhereItIsWhenTheIndexIsOnlyRead()
+    {
+        using var area = new TestArea(nameof(IndexFileState_LastWriteStaysWhereItIsWhenTheIndexIsOnlyRead));
+        using var image = new TempFile(TestFileUrl, BaseTestFolder);
+        DdbWrapper.Init(area.TestFolder);
+        var ddb = new DDB(area.TestFolder, DdbWrapper);
+
+        File.Copy(image.FilePath, Path.Join(area.TestFolder, "photo.jpg"));
+        DdbWrapper.Add(area.TestFolder, Path.Join(area.TestFolder, "photo.jpg"));
+
+        // The state a writer left once its changes are in the database file, dated well in the past
+        ddb.Checkpoint().ShouldBeTrue();
+        var flushedAt = BackdateIndexFile(area.TestFolder);
+        var flushed = ddb.GetIndexFileState().ShouldNotBeNull();
+        flushed.LastWriteUtc.ShouldBe(flushedAt, TimeSpan.FromSeconds(2));
+
+        ddb.IsEmpty().ShouldBeFalse();
+        ddb.GetInfo();
+        ddb.GetEntry("photo.jpg").ShouldNotBeNull();
+        ddb.Find(EntryQuery.All).Count.ShouldBe(1);
+        ddb.FindSummaries(EntryQuery.All).Count.ShouldBe(1);
+        ddb.GetStacData().ValueKind.ShouldBe(JsonValueKind.Object);
+        ddb.GenerateThumbnail("photo.jpg", 64).Length.ShouldBeGreaterThan(0);
+
+        ddb.GetIndexFileState().ShouldNotBeNull().LastWriteUtc.ShouldBe(flushed.LastWriteUtc,
+            "reads of the index must not move the date a dataset is shown as modified");
+    }
+
     [Test]
     public void AddWithHints_UsesAMatchingHint_AndHashesAStaleOne()
     {

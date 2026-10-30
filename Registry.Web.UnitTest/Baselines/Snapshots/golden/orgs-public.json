@@ -12,6 +12,8 @@
       "creationDate": "<datetime:Z>",
       "owner": null,
       "isPublic": true,
+      "datasetCount": null,
+      "lastModified": null,
       "permissions": null
     }
   ]

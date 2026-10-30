@@ -32,6 +32,41 @@ public static class StacDocuments
         return string.IsNullOrEmpty(path) ? null : path;
     }
 
+    /// <summary>
+    /// The 2D footprint <c>[minX, minY, maxX, maxY]</c> of a 2D or 3D (<c>[minX, minY, minZ, maxX, maxY, maxZ]</c>) bbox,
+    /// the form the C++ core understands; null for any other length.
+    /// </summary>
+    public static double[]? FlattenBbox(double[]? bbox) => bbox switch
+    {
+        { Length: 4 } => bbox,
+        { Length: 6 } => [bbox[0], bbox[1], bbox[3], bbox[4]],
+        _ => null
+    };
+
+    /// <summary>
+    /// The footprint (<see cref="FlattenBbox"/>) a Collection document gives in <c>extent.spatial.bbox[0]</c>, as libddb
+    /// writes it (an empty dataset has all zeros); null when the document has none or it is not made of numbers.
+    /// </summary>
+    public static double[]? SpatialBbox(JsonElement collection)
+    {
+        if (collection.ValueKind != JsonValueKind.Object ||
+            !collection.TryGetProperty("extent", out var extent) || extent.ValueKind != JsonValueKind.Object ||
+            !extent.TryGetProperty("spatial", out var spatial) || spatial.ValueKind != JsonValueKind.Object ||
+            !spatial.TryGetProperty("bbox", out var boxes) || boxes.ValueKind != JsonValueKind.Array ||
+            boxes.GetArrayLength() == 0 || boxes[0].ValueKind != JsonValueKind.Array)
+            return null;
+
+        var values = new List<double>();
+        foreach (var value in boxes[0].EnumerateArray())
+        {
+            if (value.ValueKind != JsonValueKind.Number || !value.TryGetDouble(out var number))
+                return null;
+            values.Add(number);
+        }
+
+        return FlattenBbox(values.ToArray());
+    }
+
     /// <summary>The document libddb returned as a mutable object (<see cref="JsonElement"/> is read-only).</summary>
     public static JsonObject Mutable(JsonElement document, string what) =>
         document.ValueKind == JsonValueKind.Object ? JsonObject.Create(document)! : throw new DdbException($"Invalid {what} result");

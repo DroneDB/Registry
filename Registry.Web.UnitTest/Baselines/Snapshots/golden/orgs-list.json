@@ -12,6 +12,8 @@
       "creationDate": "<datetime:Z>",
       "owner": "golden-owner",
       "isPublic": false,
+      "datasetCount": 1,
+      "lastModified": "<datetime:Z>",
       "permissions": {
         "canRead": true,
         "canWrite": true,
@@ -26,6 +28,8 @@
       "creationDate": "<datetime:Z>",
       "owner": null,
       "isPublic": true,
+      "datasetCount": null,
+      "lastModified": null,
       "permissions": {
         "canRead": true,
         "canWrite": false,

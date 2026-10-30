@@ -1,3 +1,5 @@
+using System;
+
 namespace Registry.Web.Services;
 
 /// <summary>
@@ -53,6 +55,12 @@ public static class CacheCategories
 
     /// <summary>The read-only lookup of a dataset by its slugs (with its organization's members).</summary>
     public static string DatasetLookup(string orgSlug, string dsSlug) => $"ds-lookup:{orgSlug}/{dsSlug}";
+
+    /// <summary>
+    /// The location of a dataset (its bounding box on the map) at an index state: the fingerprint of the index files is
+    /// part of the key, so a change to the dataset never reads the location of the one before it.
+    /// </summary>
+    public static string DatasetLocation(Guid internalRef, string fingerprint) => $"ds-location:{internalRef}:{fingerprint}";
 
     /// <summary>The receipt of an upload request (its outcome, for a client retrying after a lost answer).</summary>
     public static string UploadReceipt(string orgSlug, string dsSlug, string uploadId) =>

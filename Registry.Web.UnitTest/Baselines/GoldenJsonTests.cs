@@ -146,16 +146,9 @@ public sealed class GoldenJsonTests : IDisposable
             Isolated = true
         };
 
-        // ---- organizations (organizationsApi.js, organization.js); OrganizationsManager.List has no
-        // ORDER BY, so organizations are listed in slug order
-        yield return new("orgs-list", Caller.Owner, get, "/orgs", 200)
-        {
-            Normalise = body => JsonScrubber.SortArray(body, [], "slug")
-        };
-        yield return new("orgs-list-admin", Caller.Admin, get, "/orgs", 200)
-        {
-            Normalise = body => JsonScrubber.SortArray(body, [], "slug")
-        };
+        // ---- organizations (organizationsApi.js, organization.js); the lists answer by name, then slug
+        yield return new("orgs-list", Caller.Owner, get, "/orgs", 200);
+        yield return new("orgs-list-admin", Caller.Admin, get, "/orgs", 200);
         yield return new("orgs-create", Caller.Owner, post, "/orgs", 201)
         {
             Form = new Dictionary<string, string>

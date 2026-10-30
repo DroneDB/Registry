@@ -127,6 +127,7 @@ POST /orgs/{orgSlug}/import -> none [open] @ ImportController.CreateImport
 POST /orgs/{orgSlug}/import/browse -> none [open] @ ImportController.BrowseImport
 GET /orgs/{orgSlug}/import/sources -> none [open] @ ImportController.GetImportSources
 POST /orgs/{orgSlug}/import/verify -> none [open] @ ImportController.VerifyImport
+GET /orgs/{orgSlug}/locations -> none [open] @ DatasetLocationsController.GetDatasetLocations
 GET /orgs/{orgSlug}/members -> none [open] @ OrganizationsController.GetMembers
 POST /orgs/{orgSlug}/members -> none [open] @ OrganizationsController.AddMember
 DELETE /orgs/{orgSlug}/members/{userName} -> none [open] @ OrganizationsController.RemoveMember

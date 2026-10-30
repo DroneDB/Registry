@@ -36,6 +36,7 @@ public class DatasetSummaryTests : TestBase
     private Mock<IDdbManager> _ddbManager = null!;
     private readonly Dictionary<Guid, string?> _fingerprints = new();
     private int _infoCalls;
+    private static readonly DateTime LastWrite = new(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc);
     private readonly User _user = new() { Id = "u1", UserName = "u1" };
 
     [SetUp]
@@ -62,7 +63,8 @@ public class DatasetSummaryTests : TestBase
         _ddbManager.Setup(m => m.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns((string _, Guid internalRef) =>
         {
             var ddb = new Mock<IDDB>();
-            ddb.Setup(d => d.GetIndexFingerprint()).Returns(() => _fingerprints.GetValueOrDefault(internalRef));
+            ddb.Setup(d => d.GetIndexFileState()).Returns(() =>
+                _fingerprints.GetValueOrDefault(internalRef) is { } fingerprint ? new IndexFileState(fingerprint, LastWrite) : null);
             ddb.Setup(d => d.GetInfo()).Returns(() =>
             {
                 _infoCalls++;
@@ -113,5 +115,18 @@ public class DatasetSummaryTests : TestBase
         summaries.Get("org", internalRef);
 
         _infoCalls.ShouldBe(2);
+    }
+
+    [Test]
+    public void Summary_CarriesTheLastWriteOfTheIndex_AndNothingWhenTheFilesCannotBeRead()
+    {
+        var summaries = TestCaches.Summaries(_ddbManager.Object);
+        var readable = _fingerprints.Keys.First();
+        var unreadable = _fingerprints.Keys.Last();
+        _fingerprints[unreadable] = null;
+
+        summaries.Get("org", readable).LastModified.ShouldBe(LastWrite);
+        summaries.Get("org", readable).LastModified.ShouldBe(LastWrite, "also from the cache");
+        summaries.Get("org", unreadable).LastModified.ShouldBeNull();
     }
 }

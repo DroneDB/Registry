@@ -6,26 +6,14 @@
   "bodyKind": "json",
   "body": [
     {
-      "slug": "admin",
-      "name": "admin organization",
-      "description": null,
-      "creationDate": "<datetime:Z>",
-      "owner": "admin",
-      "isPublic": false,
-      "permissions": {
-        "canRead": true,
-        "canWrite": true,
-        "canDelete": true,
-        "canManageMembers": true
-      }
-    },
-    {
       "slug": "golden-org",
       "name": "Golden organization",
       "description": "Golden JSON contract tests",
       "creationDate": "<datetime:Z>",
       "owner": "golden-owner",
       "isPublic": false,
+      "datasetCount": 1,
+      "lastModified": "<datetime:Z>",
       "permissions": {
         "canRead": true,
         "canWrite": true,
@@ -40,6 +28,8 @@
       "creationDate": "<datetime:Z>",
       "owner": "golden-writer",
       "isPublic": false,
+      "datasetCount": 0,
+      "lastModified": "<datetime:Z>",
       "permissions": {
         "canRead": true,
         "canWrite": true,
@@ -54,6 +44,24 @@
       "creationDate": "<datetime:Z>",
       "owner": null,
       "isPublic": true,
+      "datasetCount": 1,
+      "lastModified": "<datetime:Z>",
+      "permissions": {
+        "canRead": true,
+        "canWrite": true,
+        "canDelete": true,
+        "canManageMembers": true
+      }
+    },
+    {
+      "slug": "admin",
+      "name": "admin organization",
+      "description": null,
+      "creationDate": "<datetime:Z>",
+      "owner": "admin",
+      "isPublic": false,
+      "datasetCount": 0,
+      "lastModified": "<datetime:Z>",
       "permissions": {
         "canRead": true,
         "canWrite": true,

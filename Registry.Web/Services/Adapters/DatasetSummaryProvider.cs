@@ -7,7 +7,7 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// <see cref="IDatasetSummaryProvider"/> over the process memory cache: one native DDBInfo per
-/// dataset and index change, checked with two file stats (<c>IDDB.GetIndexFingerprint</c>).
+/// dataset and index change, checked with two file stats (<c>IDDB.GetIndexFileState</c>).
 /// </summary>
 public class DatasetSummaryProvider : IDatasetSummaryProvider
 {
@@ -35,13 +35,14 @@ public class DatasetSummaryProvider : IDatasetSummaryProvider
         var ddb = _ddbManager.Get(orgSlug, internalRef);
 
         // Taken before reading the index: a write in between makes the next call read it again
-        var fingerprint = ddb.GetIndexFingerprint();
+        var state = ddb.GetIndexFileState();
+        var fingerprint = state?.Fingerprint;
         if (fingerprint != null && _cache.TryGetValue(Key(internalRef), out CachedSummary? cached) &&
             cached!.Fingerprint == fingerprint)
             return cached.Summary;
 
         var info = ddb.GetInfo();
-        var summary = new DatasetSummary(info.Size, info.Properties);
+        var summary = new DatasetSummary(info.Size, info.Properties, state?.LastWriteUtc);
 
         if (fingerprint != null)
             _cache.Set(Key(internalRef), new CachedSummary(fingerprint, summary),

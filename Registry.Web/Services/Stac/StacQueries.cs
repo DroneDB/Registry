@@ -13,14 +13,7 @@ public static class StacQueries
     /// <summary>The 2D footprint libddb filters on, or null.</summary>
     public static string? BboxToString(double[]? bbox)
     {
-        // Accept 2D ([minX,minY,maxX,maxY]) or 3D ([minX,minY,minZ,maxX,maxY,maxZ]) bboxes,
-        // projecting to the 2D footprint the C++ core understands.
-        double[]? flat = bbox switch
-        {
-            { Length: 4 } => bbox,
-            { Length: 6 } => [bbox[0], bbox[1], bbox[3], bbox[4]],
-            _ => null
-        };
+        var flat = StacDocuments.FlattenBbox(bbox);
 
         return flat is null
             ? null

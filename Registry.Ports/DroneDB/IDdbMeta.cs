@@ -16,10 +16,11 @@ public interface IDdbMeta
     bool IsEmpty();
 
     /// <summary>
-    /// Changes whenever the index is written: size and write time of the index database and its
-    /// WAL file. Null when the index files cannot be read.
+    /// The state of the index files (database and WAL), read with file stats only: a fingerprint that
+    /// changes whenever the index is written and the time of the last write. Null when the index files
+    /// cannot be read. <c>GetIndexFingerprint()</c> is its fingerprint.
     /// </summary>
-    string? GetIndexFingerprint();
+    IndexFileState? GetIndexFileState();
 
     /// <summary>
     /// Moves the committed changes of the index from its WAL into the database file and empties

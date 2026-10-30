@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Moq;
+using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Identity;
 using Registry.Web.Models.Configuration;
@@ -18,9 +20,10 @@ public static class TestOrganizations
 {
     public static OrganizationsManager Create(IAuthManager authManager, IDatasetAccessResolver access,
         RegistryContext context, IDatasetResolver datasets, IDatasetsManager datasetsManager,
-        ApplicationDbContext appContext, IOptions<AccountOptions> accounts, OrganizationMembershipService memberships)
+        ApplicationDbContext appContext, IOptions<AccountOptions> accounts, OrganizationMembershipService memberships,
+        IDdbManager? ddbManager = null)
     {
-        var queries = new OrganizationQueries(authManager, access, context, appContext);
+        var queries = new OrganizationQueries(authManager, access, context, appContext, ddbManager ?? Mock.Of<IDdbManager>());
         return new OrganizationsManager(
             queries,
             new OrganizationCommands(authManager, access, context, datasets, datasetsManager, queries),

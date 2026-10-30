@@ -110,7 +110,7 @@ public class DDB : IDDB
 
     public bool Checkpoint() => Wrapper.Checkpoint(DatasetFolderPath);
 
-    public string? GetIndexFingerprint()
+    public IndexFileState? GetIndexFileState()
     {
         try
         {
@@ -120,8 +120,15 @@ public class DDB : IDDB
 
             // A commit appends to the WAL (size and write time change); a checkpoint rewrites the database
             var wal = new FileInfo(database.FullName + "-wal");
-            return $"{database.LastWriteTimeUtc.Ticks}:{database.Length}|" +
-                   (wal.Exists ? $"{wal.LastWriteTimeUtc.Ticks}:{wal.Length}" : "-");
+            var fingerprint = $"{database.LastWriteTimeUtc.Ticks}:{database.Length}|" +
+                              (wal.Exists ? $"{wal.LastWriteTimeUtc.Ticks}:{wal.Length}" : "-");
+
+            // Readers create an empty WAL: it only counts once something was written to it
+            var lastWrite = database.LastWriteTimeUtc;
+            if (wal.Exists && wal.Length > 0 && wal.LastWriteTimeUtc > lastWrite)
+                lastWrite = wal.LastWriteTimeUtc;
+
+            return new IndexFileState(fingerprint, lastWrite);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

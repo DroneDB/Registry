@@ -45,8 +45,22 @@ public sealed class DatasetQueries
     public async Task<IEnumerable<DatasetDto>> List(string orgSlug, bool includeThumbnailCheck = false, CancellationToken ct = default) =>
         (await ListPage(orgSlug, new DatasetListQuery(), includeThumbnailCheck, ct: ct)).Items;
 
-    public async Task<(IReadOnlyList<DatasetDto> Items, int Total)> ListPage(string orgSlug, DatasetListQuery query,
-        bool includeThumbnailCheck = false, CancellationToken ct = default)
+    /// <summary>A dataset the current user can read, with what they may do with it.</summary>
+    public sealed record ReadableDataset(Dataset Dataset, DatasetPermissionsDto Permissions);
+
+    /// <summary>
+    /// The datasets of an organization the current user can read.
+    /// </summary>
+    /// <param name="Organization">The organization; its users are loaded unless the user owns or administers it.</param>
+    /// <param name="IsOwnerOrAdmin">Whether the user owns or administers the organization (and reads every dataset).</param>
+    /// <param name="Datasets">The readable datasets.</param>
+    public sealed record ReadableDatasets(Organization Organization, bool IsOwnerOrAdmin, IReadOnlyList<ReadableDataset> Datasets);
+
+    /// <summary>
+    /// The datasets of <paramref name="orgSlug"/> the current user can read: the one rule of every listing of an
+    /// organization's datasets. No native index is opened (the visibility comes from its cache).
+    /// </summary>
+    public async Task<ReadableDatasets> ReadableDatasetsAsync(string orgSlug, CancellationToken ct = default)
     {
         var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Read, withDatasets: true, ct: ct);
 
@@ -59,7 +73,7 @@ public sealed class DatasetQueries
         if (!isOwnerOrAdmin && org.Users == null)
             await _context.Entry(org).Collection(o => o.Users).LoadAsync(ct);
 
-        var readable = new List<(DatasetDto Dto, Dataset Dataset)>();
+        var readable = new List<ReadableDataset>();
 
         foreach (var ds in datasets)
         {
@@ -83,6 +97,21 @@ public sealed class DatasetQueries
                     continue;
             }
 
+            readable.Add(new ReadableDataset(ds, permissions));
+        }
+
+        return new ReadableDatasets(org, isOwnerOrAdmin, readable);
+    }
+
+    public async Task<(IReadOnlyList<DatasetDto> Items, int Total)> ListPage(string orgSlug, DatasetListQuery query,
+        bool includeThumbnailCheck = false, CancellationToken ct = default)
+    {
+        var (_, _, datasets) = await ReadableDatasetsAsync(orgSlug, ct);
+
+        var readable = new List<(DatasetDto Dto, Dataset Dataset)>();
+
+        foreach (var (ds, permissions) in datasets)
+        {
             // Sizes and properties are cached per dataset until its index changes
             var summary = _summaries.Get(orgSlug, ds.InternalRef);
 
@@ -92,6 +121,7 @@ public sealed class DatasetQueries
                 CreationDate = ds.CreationDate,
                 Properties = summary.Properties,
                 Size = summary.Size,
+                LastModified = summary.LastModified,
                 Permissions = permissions
             }, ds));
         }
@@ -118,6 +148,7 @@ public sealed class DatasetQueries
         var ddb = access.Ddb;
 
         var dto = dataset.ToDto(ddb.GetInfo());
+        dto.LastModified = ddb.GetIndexFileState()?.LastWriteUtc;
         dto.Permissions = await _authManager.GetDatasetPermissions(dataset);
         dto.HasThumbnail = CheckHasThumbnail(ddb);
 

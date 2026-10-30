@@ -5,9 +5,10 @@ using System.Text.Json;
 namespace Registry.Web.Services.Ports;
 
 /// <summary>
-/// Size and properties of a dataset's index root (what <c>IDDB.GetInfo()</c> returns).
+/// Size and properties of a dataset's index root (what <c>IDDB.GetInfo()</c> returns) and the time
+/// of the last write to its index (null when the index files cannot be read).
 /// </summary>
-public sealed record DatasetSummary(long Size, Dictionary<string, JsonElement>? Properties);
+public sealed record DatasetSummary(long Size, Dictionary<string, JsonElement>? Properties, DateTime? LastModified);
 
 /// <summary>
 /// Dataset summaries for code that needs them for many datasets at once (storage quota,
