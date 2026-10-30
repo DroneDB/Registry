@@ -142,7 +142,7 @@ public sealed class ProcessingSections : IConfigurationSectionBuilder
                     pp?.OrgDailyOutputBytes, dp?.OrgDailyOutputBytes),
 
                 JsonField("NodeOdx", "NodeODX Processing Nodes",
-                    "Array of NodeODX processing node configurations. Each entry: { Id, Url, Token, Title }.",
+                    $"Array of NodeODX processing node configurations. Each entry: {{ {EntryMembers<NodeOdxNodeConfig>()} }}.",
                     pp?.NodeOdx, dp?.NodeOdx)
             ]);
 
@@ -163,8 +163,7 @@ public sealed class ProcessingSections : IConfigurationSectionBuilder
             [
                 JsonField("Tools", "Tool Gating Config",
                     "JSON object keyed by tool id (e.g. \"photogrammetry\"). Each entry accepts: " +
-                    "availability (Enabled|Disabled|Hidden), disabledMessage, allowedRoles (array), " +
-                    "allowedOrgs (array), hideWhenNotAllowed (bool), maxConcurrentPerUser, maxQueuedPerUser. " +
+                    $"{EntryMembers<HeavyToolConfig>()}. " +
                     "Omit a tool to use the default (Enabled, no restrictions).",
                     isActive ? pp!.Tools : null,
                     null)

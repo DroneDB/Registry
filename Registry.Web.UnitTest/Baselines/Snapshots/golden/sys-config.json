@@ -1869,7 +1869,7 @@
             "currentValue": null,
             "defaultValue": null,
             "isSet": false,
-            "description": "JSON object keyed by tool id (e.g. \"photogrammetry\"). Each entry accepts: availability (Enabled|Disabled|Hidden), disabledMessage, allowedRoles (array), allowedOrgs (array), hideWhenNotAllowed (bool), maxConcurrentPerUser, maxQueuedPerUser. Omit a tool to use the default (Enabled, no restrictions).",
+            "description": "JSON object keyed by tool id (e.g. \"photogrammetry\"). Each entry accepts: Availability (Enabled|Disabled|Hidden), DisabledMessage, AllowedRoles (array), AllowedOrgs (array), HideWhenNotAllowed (bool). Omit a tool to use the default (Enabled, no restrictions).",
             "fieldType": "json",
             "enumOptions": null,
             "sensitive": false,

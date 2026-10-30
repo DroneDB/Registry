@@ -1,7 +1,9 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -182,6 +184,37 @@ public static class ConfigurationFields
     {
         return Field(key, displayName, "enum", description,
             currentValue, defaultValue, enumOptions: enumOptions);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Helper: describe the members of one entry of a JSON field
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// The members an entry of a JSON field accepts, read from the type Registry binds the entry to, so the
+    /// description of the field cannot name a member the binder does not know: the public settable properties
+    /// in declaration order, by the name the view writes them with (no naming policy), each with a hint of its
+    /// kind when that is not text: an enum's names (<c>A|B|C</c>), <c>array</c>, <c>bool</c> or <c>number</c>.
+    /// </summary>
+    public static string EntryMembers<T>()
+    {
+        var members = typeof(T)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanWrite)
+            .OrderBy(p => p.MetadataToken)
+            .Select(p => KindHint(p.PropertyType) is { } hint ? $"{p.Name} ({hint})" : p.Name);
+        return string.Join(", ", members);
+    }
+
+    private static string? KindHint(Type type)
+    {
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        if (type.IsEnum) return string.Join("|", Enum.GetNames(type));
+        if (type == typeof(string)) return null;
+        if (type == typeof(bool)) return "bool";
+        if (type.IsPrimitive || type == typeof(decimal)) return "number";
+        if (typeof(IEnumerable).IsAssignableFrom(type)) return "array";
+        return "object";
     }
 
     // The admin view shows a section as the JSON of appsettings.json: member names as written in the file (no policy),
