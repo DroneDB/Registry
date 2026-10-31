@@ -54,6 +54,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
     private Mock<IDdbWrapper> _ddbWrapperMock = null!;
     private Mock<IThumbnailGenerator> _thumbsMock = null!;
     private Mock<IJobIndexQuery> _jobIndexQueryMock = null!;
+    private Mock<IBuildNotificationRecorder> _notificationsMock = null!;
     private AppSettings _settings = null!;
     private ILogger<ObjectsManager> _logger = null!;
 
@@ -81,6 +82,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
         _ddbWrapperMock = new Mock<IDdbWrapper>();
         _thumbsMock = new Mock<IThumbnailGenerator>();
         _jobIndexQueryMock = new Mock<IJobIndexQuery>();
+        _notificationsMock = new Mock<IBuildNotificationRecorder>();
         _settings = new AppSettings { DatasetsPath = "/tmp/datasets" };
         _logger = CreateTestLogger<ObjectsManager>();
 
@@ -140,6 +142,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
             .WithDdbWrapper(_ddbWrapperMock.Object)
             .WithThumbnailGenerator(_thumbsMock.Object)
             .WithJobIndexQuery(_jobIndexQueryMock.Object)
+            .WithBuildNotifications(_notificationsMock.Object)
             .Build();
 
     // ---------------------------------------------------------------------
@@ -500,5 +503,108 @@ public class ObjectsManagerCopyTransferTest : TestBase
         var pending = (await CreateServices().Builds.GetPendingBuildsAsync(OrgSlug, DsSlug)).ToArray();
 
         pending.Select(p => (p.Path, p.AwaitingFiles)).ShouldBe([("model.obj", true), ("cloud.laz", false)]);
+    }
+    // ---------------------------------------------------------------------
+    // The waits for files of the entries that leave a dataset
+    // ---------------------------------------------------------------------
+
+    /// <summary>The entries the waits for files of a dataset ended for, call by call.</summary>
+    private List<(string Org, string Ds, string[] Paths)> RecordEndedWaits()
+    {
+        _ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([]);
+        var ended = new List<(string, string, string[])>();
+        _notificationsMock.Setup(n => n.EntriesLeftAsync(It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, IReadOnlyCollection<string>, CancellationToken>((org, ds, paths, _) =>
+                ended.Add((org, ds, [.. paths])))
+            .Returns(Task.CompletedTask);
+        return ended;
+    }
+
+    private static void ShouldEnd(List<(string Org, string Ds, string[] Paths)> ended, string dsSlug,
+        params string[] paths)
+    {
+        var (org, ds, ends) = ended.ShouldHaveSingleItem();
+        (org, ds).ShouldBe((OrgSlug, dsSlug));
+        ends.ShouldBe(paths);
+    }
+
+    /// <summary>
+    /// A deleted entry ends the waits for files of its build and of the builds under it (a folder): the same file
+    /// uploaded again is told again when it waits (red before: the wait outlived the entry, and the same content put back
+    /// was never told).
+    /// </summary>
+    [Test]
+    public async Task Delete_EndsTheWaitsForFilesOfTheDeletedEntries()
+    {
+        _ddbMock.Setup(x => x.EntryExists(It.IsAny<string>())).Returns(true);
+        var ended = RecordEndedWaits();
+
+        await CreateServices().Commands.DeleteAsync(OrgSlug, DsSlug, ["model.obj", "site"]);
+
+        ShouldEnd(ended, DsSlug, "model.obj", "site");
+    }
+
+    [Test]
+    public async Task DeleteBatch_EndsTheWaitsForFilesOfTheEntriesItDeleted_NotOfThoseItCouldNotFind()
+    {
+        _ddbMock.Setup(x => x.EntryExists("model.obj")).Returns(true);
+        _ddbMock.Setup(x => x.EntryExists("missing.obj")).Returns(false);
+        var ended = RecordEndedWaits();
+
+        await CreateServices().Commands.DeleteBatchAsync(OrgSlug, DsSlug, ["model.obj", "missing.obj"]);
+
+        ShouldEnd(ended, DsSlug, "model.obj");
+    }
+
+    /// <summary>An entry moved to another path leaves its old one: the waits of the old path end.</summary>
+    [Test]
+    public async Task Move_EndsTheWaitsForFilesOfTheOldPath()
+    {
+        _ddbMock.Setup(x => x.GetEntry("a.obj"))
+            .Returns(new Entry { Path = "a.obj", Type = EntryType.Generic, Size = 10, Hash = "hh" });
+        _ddbMock.SetupSequence(x => x.GetEntry("b.obj"))
+            .Returns((Entry?)null)
+            .Returns(new Entry { Path = "b.obj", Type = EntryType.Generic, Size = 10, Hash = "hh" });
+        var ended = RecordEndedWaits();
+
+        await CreateServices().Commands.MoveAsync(OrgSlug, DsSlug, "a.obj", "b.obj");
+
+        ShouldEnd(ended, DsSlug, "a.obj");
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task Transfer_EndsTheWaitsForFilesOfTheSource_OnlyWhenItLeavesItsDataset(bool keepSource)
+    {
+        _ddbMock.Setup(x => x.GetEntry("src.obj"))
+            .Returns(new Entry { Path = "src.obj", Type = EntryType.Generic, Size = 10, Hash = "hh" });
+        _otherDdbMock.Setup(x => x.GetEntry("src.obj")).Returns((Entry?)null);
+        _otherDdbMock.Setup(x => x.EntryExists("src.obj")).Returns(true);
+        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(true);
+        _fsMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(false);
+        var ended = RecordEndedWaits();
+
+        await CreateManager().TransferAsync(OrgSlug, DsSlug, "src.obj", OrgSlug, OtherDsSlug, keepSource: keepSource);
+
+        if (keepSource)
+            ended.ShouldBeEmpty();
+        else
+            ShouldEnd(ended, DsSlug, "src.obj");
+    }
+
+    /// <summary>The entries are gone already: a database that cannot end the waits does not fail the delete.</summary>
+    [Test]
+    public async Task Delete_WhoseWaitsCannotBeEnded_StillSucceeds()
+    {
+        _ddbMock.Setup(x => x.EntryExists(It.IsAny<string>())).Returns(true);
+        _ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([]);
+        _notificationsMock.Setup(n => n.EntriesLeftAsync(It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Microsoft.Data.Sqlite.SqliteException("database down", 10));
+
+        await Should.NotThrowAsync(() => CreateServices().Commands.DeleteAsync(OrgSlug, DsSlug, ["model.obj"]));
+
+        _ddbMock.Verify(x => x.Remove("model.obj"), Times.Once);
     }
 }

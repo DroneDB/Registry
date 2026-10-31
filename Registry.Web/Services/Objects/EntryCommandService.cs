@@ -88,8 +88,10 @@ public sealed class EntryCommandService : IEntryCommandService
             await _jobs.RebuildIfBuildableAsync(access, orgSlug, dsSlug, updatedEntry))
             _logger.LogInformation("Extension changed and file is buildable, triggered a build of '{Path}'", dest);
 
-        // A companion renamed to the name its main file expects unblocks the build that waited for it
-        await _changes.EntriesArrivedAsync(access, orgSlug, dsSlug, [source, dest]);
+        // The entry left its old path; a companion renamed to the name its main file expects unblocks the build that
+        // waited for it
+        await _changes.EntriesLeftAsync(orgSlug, dsSlug, [source]);
+        await _changes.EntriesArrivedAsync(access, orgSlug, dsSlug, [dest]);
 
         return updatedEntry.ToDto();
     }
@@ -112,7 +114,7 @@ public sealed class EntryCommandService : IEntryCommandService
         foreach (var path in paths)
             RemoveEntry(ddb, path);
 
-        await _changes.EntriesChangedAsync(orgSlug, dsSlug, paths);
+        await _changes.EntriesLeftAsync(orgSlug, dsSlug, paths);
         await _jobs.RebuildAfterSidecarRemovalAsync(access, orgSlug, dsSlug, paths);
     }
 
@@ -159,7 +161,7 @@ public sealed class EntryCommandService : IEntryCommandService
         }
 
         if (deleted.Count > 0)
-            await _changes.EntriesChangedAsync(orgSlug, dsSlug, deleted);
+            await _changes.EntriesLeftAsync(orgSlug, dsSlug, deleted);
 
         await _jobs.RebuildAfterSidecarRemovalAsync(access, orgSlug, dsSlug, deleted);
 

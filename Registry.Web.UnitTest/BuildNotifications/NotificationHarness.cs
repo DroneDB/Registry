@@ -120,7 +120,7 @@ internal sealed class NotificationHarness : IDisposable
     private readonly ConcurrentDictionary<EmailMessage, BuildNotificationModel> _models =
         new(ReferenceEqualityComparer.Instance);
 
-    private BuildNotificationOutbox Outbox() => new(_db.NewContext(), Time);
+    public BuildNotificationOutbox Outbox() => new(_db.NewContext(), Time);
 
     private BuildNotificationDigests Digests() =>
         new(_jobs.Object, Microsoft.Extensions.Options.Options.Create(Options), Time,
@@ -183,6 +183,17 @@ internal sealed class NotificationHarness : IDisposable
 
     public Task Record(string userId, string path, BuildOutcome outcome, string jobId, string? hash = null) =>
         Recorder().RecordAsync(Report(userId, path, outcome, jobId, hash), CancellationToken.None);
+
+    /// <summary>The entries at <paramref name="paths"/> of <see cref="Ds"/> left it (deleted or moved away).</summary>
+    public Task EntriesLeft(params string[] paths) =>
+        Recorder().EntriesLeftAsync(Org, Ds, paths, CancellationToken.None);
+
+    public async Task ChangeAsync(Func<RegistryContext, Task> change)
+    {
+        await using var db = _db.NewContext();
+        await change(db);
+        await db.SaveChangesAsync();
+    }
 
     public List<BuildNotification> Rows()
     {

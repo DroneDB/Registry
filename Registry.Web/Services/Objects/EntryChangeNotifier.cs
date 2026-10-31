@@ -1,5 +1,7 @@
+using System.Data.Common;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -15,22 +17,26 @@ namespace Registry.Web.Services.Objects;
 /// <summary>
 /// What an entry command changes beyond its entries, at once (uploads coalesce their caches,
 /// <see cref="IDatasetChangeCoalescer"/>): the dataset thumbnail when a thumbnail candidate changed, the dataset's OGC
-/// documents, and, for entries that arrive, the pending builds that waited for them.
+/// documents, for entries that arrive, the pending builds that waited for them, and, for entries that leave, the waits
+/// for files of their builds (<see cref="IBuildNotificationRecorder.EntriesLeftAsync"/>).
 /// </summary>
 public sealed class EntryChangeNotifier
 {
     private readonly ICacheManager _cache;
     private readonly IOgcLayerCatalog _ogcCatalog;
     private readonly BuildScheduler _builds;
+    private readonly IBuildNotificationRecorder _notifications;
     private readonly string[] _thumbnailCandidates;
     private readonly ILogger<EntryChangeNotifier> _logger;
 
     public EntryChangeNotifier(ICacheManager cache, IOgcLayerCatalog ogcCatalog, BuildScheduler builds,
-        IOptions<ThumbnailOptions> thumbnails, ILogger<EntryChangeNotifier> logger)
+        IBuildNotificationRecorder notifications, IOptions<ThumbnailOptions> thumbnails,
+        ILogger<EntryChangeNotifier> logger)
     {
         _cache = cache;
         _ogcCatalog = ogcCatalog;
         _builds = builds;
+        _notifications = notifications;
         _thumbnailCandidates = thumbnails.Value.Candidates;
         _logger = logger;
     }
@@ -44,6 +50,26 @@ public sealed class EntryChangeNotifier
     {
         await EntriesChangedAsync(orgSlug, dsSlug, paths);
         await _builds.RetryPendingAsync(BuildTarget.Of(access, orgSlug, dsSlug));
+    }
+
+    /// <summary>
+    /// Entries at <paramref name="paths"/> left the dataset (deleted, or moved to another path or dataset): the caches of
+    /// <see cref="EntriesChangedAsync"/>, then the end of the waits for files of their builds and of the builds of the
+    /// entries under them, so the same file put back is told again when it waits. The entries are gone already: a
+    /// database that cannot end the waits is logged, never the failure of the command that removed them.
+    /// </summary>
+    public async Task EntriesLeftAsync(string orgSlug, string dsSlug, IReadOnlyCollection<string> paths)
+    {
+        await EntriesChangedAsync(orgSlug, dsSlug, paths);
+        try
+        {
+            await _notifications.EntriesLeftAsync(orgSlug, dsSlug, paths, CancellationToken.None);
+        }
+        catch (DbException ex)
+        {
+            _logger.LogWarning(ex, "Cannot end the waits for files of {Count} entries that left {OrgSlug}/{DsSlug}",
+                paths.Count, orgSlug, dsSlug);
+        }
     }
 
     /// <summary>Entries at <paramref name="paths"/> were added, changed or removed.</summary>

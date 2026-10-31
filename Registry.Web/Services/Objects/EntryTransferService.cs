@@ -121,7 +121,7 @@ public sealed class EntryTransferService : IEntryTransferService
                 _logger.LogInformation("Removing source '{SourcePath}'", sourcePath);
                 sourceDdb.Remove(sourcePath);
                 _fs.RemoveEntry(sourceDdb.GetLocalPath(sourcePath), isFolder);
-                await _changes.EntriesChangedAsync(sourceOrgSlug, sourceDsSlug, [sourcePath]);
+                await _changes.EntriesLeftAsync(sourceOrgSlug, sourceDsSlug, [sourcePath]);
             }
 
             // The transferred files may be what pending builds of the destination waited for

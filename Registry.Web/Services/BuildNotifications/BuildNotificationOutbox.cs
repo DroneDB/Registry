@@ -138,6 +138,37 @@ public sealed class BuildNotificationOutbox
     public Task<int> EndWaitAsync(string orgSlug, string dsSlug, string path, string hash, CancellationToken ct) =>
         WaitsOf(orgSlug, dsSlug, path, hash).ExecuteDeleteAsync(ct);
 
+    /// <summary>
+    /// Ends the waits of the entries at <paramref name="paths"/> of a dataset and of everything under them (a folder):
+    /// those entries left the dataset (deleted, or moved to another path or dataset), so what waited there is gone, and the
+    /// same content put back (an upload of the same file) is a new wait, news again, whose build answers whoever asks for
+    /// it then. The paths are compared ordinally in memory (the MariaDB collation matches "Model.obj" to "model.obj"); a
+    /// dataset has few waits.
+    /// </summary>
+    /// <returns>How many lines were removed.</returns>
+    public async Task<int> EndWaitsUnderAsync(string orgSlug, string dsSlug, IReadOnlyCollection<string> paths,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        if (paths.Count == 0)
+            return 0;
+
+        var waits = await _db.BuildNotifications.AsNoTracking()
+            .Where(n => n.Outcome == Waiting && n.OrgSlug == orgSlug && n.DsSlug == dsSlug)
+            .Select(n => new { n.Id, n.OrgSlug, n.DsSlug, n.Path })
+            .ToArrayAsync(ct).ConfigureAwait(false);
+
+        var ended = waits
+            .Where(n => n.OrgSlug == orgSlug && n.DsSlug == dsSlug &&
+                        paths.Any(p => n.Path == p || n.Path.StartsWith(p + "/", StringComparison.Ordinal)))
+            .Select(n => n.Id)
+            .ToArray();
+        if (ended.Length == 0)
+            return 0;
+
+        return await _db.BuildNotifications.Where(n => ended.Contains(n.Id)).ExecuteDeleteAsync(ct).ConfigureAwait(false);
+    }
+
     private IQueryable<BuildNotification> WaitsOf(string orgSlug, string dsSlug, string path, string hash) =>
         _db.BuildNotifications.Where(n => n.Outcome == Waiting && n.OrgSlug == orgSlug && n.DsSlug == dsSlug &&
                                           n.Path == path && n.Hash == hash);

@@ -56,6 +56,7 @@ public sealed class ObjectServicesBuilder
     private IBuildArtifactResolver? _buildArtifactResolver;
     private IDatasetIndexQueue? _indexQueue;
     private INativeWorkGate? _nativeGate;
+    private IBuildNotificationRecorder? _buildNotifications;
 
     /// <param name="context">The registry context of the SUT (the caller owns and disposes it).</param>
     public ObjectServicesBuilder(RegistryContext context)
@@ -82,6 +83,8 @@ public sealed class ObjectServicesBuilder
     public ObjectServicesBuilder WithBuildArtifactResolver(IBuildArtifactResolver resolver) => Set(() => _buildArtifactResolver = resolver);
     public ObjectServicesBuilder WithIndexQueue(IDatasetIndexQueue indexQueue) => Set(() => _indexQueue = indexQueue);
     public ObjectServicesBuilder WithNativeGate(INativeWorkGate nativeGate) => Set(() => _nativeGate = nativeGate);
+    public ObjectServicesBuilder WithBuildNotifications(IBuildNotificationRecorder recorder) =>
+        Set(() => _buildNotifications = recorder);
 
     /// <summary>The facade and the services, sharing the collaborators.</summary>
     public ObjectServices Build()
@@ -125,6 +128,7 @@ public sealed class ObjectServicesBuilder
         services.AddSingleton(Mock.Of<IOgcLayerCatalog>());
         services.AddSingleton(Mock.Of<IBuildStatusService>());
         services.AddSingleton(_nativeGate ?? NativeWorkGate.Default);
+        services.AddSingleton(_buildNotifications ?? Mock.Of<IBuildNotificationRecorder>());
         var artifacts = _buildArtifactResolver ?? TestPorts.Artifacts();
         var scheduler = new BuildScheduler(artifacts, backgroundJobs, buildPendingService, buildPendingService,
             new CurrentUserBuildRequester(authManager), NullLogger<BuildScheduler>.Instance);

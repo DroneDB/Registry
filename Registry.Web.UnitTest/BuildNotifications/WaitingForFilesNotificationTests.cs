@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using Registry.Web.Data;
+using Registry.Web.Data.Models;
 using Registry.Web.Services.BuildNotifications;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Users;
@@ -221,6 +222,85 @@ public class WaitingForFilesNotificationTests : IDisposable
 
         _h.Sent.Count.ShouldBe(3);
         _h.Sent.Last().Model.Builds.ShouldHaveSingleItem().Outcome.ShouldBe(BuildOutcome.WaitingForFiles);
+    }
+
+    // ---- the entry or its dataset goes, and the same file comes back
+
+    // jane uploads the same .obj again (same path, same content) and its build finds the files missing again
+    private async Task JaneUploadsItAgain()
+    {
+        _h.IndexedBuild("jane-reupload", "jane", "Succeeded", 60, Path, Hash);
+        await Ended("jane", "jane-reupload", BuildOutcome.WaitingForFiles);
+        await Digest();
+    }
+
+    [Test]
+    public async Task TheSameFile_DeletedAndUploadedAgain_IsToldAgain()
+    {
+        await JaneWaits(BuildNotificationLevel.Failed);
+        await Digest();
+
+        await _h.EntriesLeft(Path);
+        _h.Rows().ShouldBeEmpty();
+        await JaneUploadsItAgain();
+
+        _h.Sent.Count.ShouldBe(2);
+        _h.Sent.Last().Model.Builds.ShouldHaveSingleItem().Outcome.ShouldBe(BuildOutcome.WaitingForFiles);
+    }
+
+    [Test]
+    public async Task TheSameFile_PutBackAfterItsFolderWasDeleted_IsToldAgain_TheWaitsOfOtherEntriesStay()
+    {
+        const string inFolder = "site/model.obj";
+        _h.Levels["jane"] = BuildNotificationLevel.Failed;
+        _h.IndexedBuild("jane-folder", "jane", "Succeeded", 0, inFolder, Hash);
+        await _h.Record("jane", inFolder, BuildOutcome.WaitingForFiles, "jane-folder", Hash);
+        // An entry whose name starts like the folder, and one of the same name in another dataset
+        _h.IndexedBuild("jane-sibling", "jane", "Succeeded", 0, "site2/model.obj", Hash);
+        await _h.Record("jane", "site2/model.obj", BuildOutcome.WaitingForFiles, "jane-sibling", Hash);
+        _h.Change(db => db.JobIndices.Add(new JobIndex
+        {
+            JobId = "jane-other-ds", OrgSlug = NotificationHarness.Org, DsSlug = "other", Path = inFolder, Hash = Hash,
+            UserId = "jane", CurrentState = "Succeeded", CreatedAtUtc = _h.Time.Now, SucceededAtUtc = _h.Time.Now
+        }));
+        await _h.Recorder().RecordAsync(NotificationHarness.Report("jane", inFolder, BuildOutcome.WaitingForFiles,
+            "jane-other-ds", Hash) with { DsSlug = "other" }, CancellationToken.None);
+        await Digest();
+
+        await _h.EntriesLeft("site");
+
+        _h.Rows().Select(r => (r.DsSlug, r.Path)).Order()
+            .ShouldBe([(NotificationHarness.Ds, "site2/model.obj"), ("other", inFolder)]);
+        _h.IndexedBuild("jane-folder-again", "jane", "Succeeded", 60, inFolder, Hash);
+        await _h.Record("jane", inFolder, BuildOutcome.WaitingForFiles, "jane-folder-again", Hash);
+        await Digest();
+        _h.Sent.Last().Model.Builds.ShouldHaveSingleItem().Path.ShouldBe(inFolder);
+    }
+
+    [Test]
+    public async Task AnEntryMovedAway_EndsTheWaitOfItsOldPath()
+    {
+        await JaneWaits(BuildNotificationLevel.Failed);
+        await Digest();
+
+        await _h.EntriesLeft(Path);
+        // The build that follows the files at the old path answers nobody's request any more
+        (await _h.Outbox().WaitRequesterAsync(NotificationHarness.Org, NotificationHarness.Ds, Path, Hash,
+            CancellationToken.None)).ShouldBeNull();
+    }
+
+    [Test]
+    public async Task TheSameFile_UploadedToADatasetCreatedAgainWithTheSlugOfADeletedOne_IsToldAgain()
+    {
+        await JaneWaits(BuildNotificationLevel.Failed);
+        await Digest();
+
+        // The deletion of the dataset (DatasetCommands.Delete): its rows go to its tombstone
+        await _h.ChangeAsync(db => db.FollowDatasetAsync(NotificationHarness.Org, NotificationHarness.Ds,
+            NotificationHarness.Org, SlugKeyedRows.TombstoneSlug(Guid.NewGuid())));
+        await JaneUploadsItAgain();
+
+        _h.Sent.Count.ShouldBe(2);
     }
 
     [Test]

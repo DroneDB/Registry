@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -16,7 +17,7 @@ namespace Registry.Web.Services.BuildNotifications;
 /// while a digest is sending waits for the next digest, which the sending run schedules when it is done. A build that
 /// waits for files is recorded whatever the preference (unsent only when it wants it): the record tells the wait of
 /// that content once and names who the build that follows the files answers; it ends when the build of that content
-/// ends for good.
+/// ends for good, or when the entry leaves the dataset (<see cref="EntriesLeftAsync"/>).
 /// </summary>
 public sealed class BuildNotificationRecorder : IBuildNotificationRecorder
 {
@@ -81,5 +82,15 @@ public sealed class BuildNotificationRecorder : IBuildNotificationRecorder
         // Any other waiting line already has its digest: scheduled, or the run sending it schedules the next one
         if (!await _outbox.HasOtherUnsentAsync(requester.UserId, line.Id, ct).ConfigureAwait(false))
             _digests.Schedule(requester.UserId, line.FinishedAtUtc);
+    }
+
+    /// <inheritdoc />
+    public async Task EntriesLeftAsync(string orgSlug, string dsSlug, IReadOnlyCollection<string> paths,
+        CancellationToken ct)
+    {
+        var ended = await _outbox.EndWaitsUnderAsync(orgSlug, dsSlug, paths, ct).ConfigureAwait(false);
+        if (ended > 0)
+            _logger.LogInformation("Ended {Count} wait(s) for files of {Org}/{Ds}: their entries left the dataset",
+                ended, orgSlug, dsSlug);
     }
 }
