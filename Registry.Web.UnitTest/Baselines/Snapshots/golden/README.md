@@ -101,6 +101,7 @@ The fixtures are stateless: `meta-set`/`meta-unset` do not change a later read, 
 | users-list | GET /users | admin | 200 |
 | users-detailed | GET /users/detailed | admin | 200 |
 | users-roles | GET /users/roles | admin | 200 |
+| users-me | GET /users/me | owner | 200 |
 | users-storage | GET /users/storage | owner | 200 |
 | users-user-storage | GET /users/{user}/storage | admin | 200 |
 | users-user-orgs | GET /users/{user}/orgs | admin | 200 |

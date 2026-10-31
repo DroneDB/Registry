@@ -194,6 +194,7 @@ POST /users/authenticate/refresh -> Authorize [authenticated] @ UsersController.
 POST /users/changepwd -> Authorize [authenticated] @ UsersController.ChangePasswordPost
 GET /users/detailed -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.GetAllDetailed
 POST /users/logout -> AllowAnonymous + Authorize [anonymous] @ UsersController.Logout
+GET /users/me -> Authorize [authenticated] @ UsersController.GetCurrentUser
 GET /users/meta -> Authorize [authenticated] @ UsersController.GetCurrentUserMeta
 GET /users/notifications/status -> Authorize [authenticated] @ UsersController.GetNotificationStatus
 GET /users/preferences -> Authorize [authenticated] @ UsersController.GetPreferences

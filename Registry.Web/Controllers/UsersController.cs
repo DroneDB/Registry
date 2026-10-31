@@ -294,6 +294,16 @@ public class UsersController : ControllerBaseEx
         await _notificationStatus.GetAsync(ct);
 
     /// <summary>
+    /// Gets the current user: their name, e-mail, roles and the slugs of the organizations they own or belong to.
+    /// </summary>
+    /// <returns>The current user.</returns>
+    [HttpGet("me", Name = nameof(GetCurrentUser))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<UserDto>> GetCurrentUser(CancellationToken ct) =>
+        await _usersManager.GetCurrentUserProfile(ct);
+
+    /// <summary>
     /// Gets the storage quota information for the current user.
     /// </summary>
     /// <returns>The user's storage information including total and used space.</returns>

@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Registry.Common;
 using Registry.Web.Data;
+using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
@@ -67,11 +69,10 @@ public sealed class UserDirectory
         if (user == null)
             throw new BadRequestException("Cannot find user " + userName);
 
-        // Get all organizations where user is owner OR member
         var orgs = await _registryContext.Organizations
             .Include(o => o.Users)
             .AsNoTracking()
-            .Where(org => org.OwnerId == user.Id || org.Users.Any(item => item.UserId == user.Id))
+            .Where(OwnedOrJoinedBy(user.Id))
             .ToListAsync(ct);
 
         var results = new List<UserOrganizationMembershipDto>();
@@ -103,6 +104,32 @@ public sealed class UserDirectory
 
         return [.. results];
     }
+
+    /// <summary>
+    /// The signed-in user as they see themselves: their name, e-mail, roles and the slugs of the organizations they own
+    /// or belong to (by slug), the same organizations an administrator sees for them.
+    /// </summary>
+    public async Task<UserDto> GetCurrentUserProfile(CancellationToken ct = default)
+    {
+        var user = await _authManager.GetRequiredCurrentUser();
+
+        return new UserDto
+        {
+            UserName = user.UserName,
+            Email = user.Email,
+            Roles = [.. (await _userManager.GetRolesAsync(user)).Order(StringComparer.Ordinal)],
+            Organizations = await _registryContext.Organizations
+                .AsNoTracking()
+                .Where(OwnedOrJoinedBy(user.Id))
+                .Select(org => org.Slug)
+                .OrderBy(slug => slug)
+                .ToArrayAsync(ct)
+        };
+    }
+
+    /// <summary>The organizations a user owns or is a member of.</summary>
+    private static Expression<Func<Organization, bool>> OwnedOrJoinedBy(string userId) =>
+        org => org.OwnerId == userId || org.Users.Any(item => item.UserId == userId);
 
     // The administrator routes (the Admin policy gates them); the rows are the membership service's
     public async Task AddUserToOrganization(string userName, string orgSlug, OrganizationPermissions permissions)

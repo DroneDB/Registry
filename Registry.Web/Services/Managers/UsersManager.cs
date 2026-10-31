@@ -73,6 +73,8 @@ public class UsersManager
 
     public Task<IEnumerable<UserDetailDto>> GetAllDetailed(CancellationToken ct = default) => _directory.GetAllDetailed(ct: ct);
 
+    public Task<UserDto> GetCurrentUserProfile(CancellationToken ct = default) => _directory.GetCurrentUserProfile(ct);
+
     public Task<UserStorageInfo> GetUserStorageInfo(string? userName = null) => _directory.GetUserStorageInfo(userName);
 
     public Task<UserOrganizationMembershipDto[]> GetUserOrganizations(string userName, CancellationToken ct = default) =>

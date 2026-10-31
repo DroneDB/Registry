@@ -909,6 +909,9 @@ GET /users/detailed
   401 application/json ProblemDetails
 POST /users/logout
   200
+GET /users/me
+  200 application/json UserDto
+  401 application/json ProblemDetails
 GET /users/meta
   200 application/json map<any>
   400 application/json ProblemDetails

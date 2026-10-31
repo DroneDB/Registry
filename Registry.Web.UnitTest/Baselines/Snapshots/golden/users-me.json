@@ -1,0 +1,15 @@
+{
+  "request": "GET /users/me",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "userName": "golden-owner",
+    "email": "golden-owner@example.com",
+    "roles": [],
+    "organizations": [
+      "golden-org"
+    ]
+  }
+}

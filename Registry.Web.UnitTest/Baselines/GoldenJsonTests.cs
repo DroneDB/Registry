@@ -137,6 +137,7 @@ public sealed class GoldenJsonTests : IDisposable
             Normalise = body => JsonScrubber.SortArray(body, [], "userName")
         };
         yield return new("users-roles", Caller.Admin, get, "/users/roles", 200);
+        yield return new("users-me", Caller.Owner, get, "/users/me", 200);
         yield return new("users-storage", Caller.Owner, get, "/users/storage", 200);
         yield return new("users-user-storage", Caller.Admin, get, $"/users/{OwnerUser}/storage", 200);
         yield return new("users-user-orgs", Caller.Admin, get, $"/users/{OwnerUser}/orgs", 200);
