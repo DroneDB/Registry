@@ -63,29 +63,30 @@
         Pinned now (2026-10-31): DroneDB has ONE version, 2.0.0 (package.json); the libddb ABI follows
         it (ABI 2.0, semver: a removed export is a new major, an added one a new minor) and so does
         the handshake (libddb 2.x). It is not tagged until Registry is proven on it, so Registry pins
-        the CI build of DroneDB fixes-and-optimizations commit 7e8cc7f6, run 41140225347 (a pull
+        the CI build of DroneDB fixes-and-optimizations commit f21346f9, run 41158881950 (a pull
         request run of DroneDB#472, built from the merge with master; the .deb is named after that
-        merge commit, 2.0.0~gita8e497a8), every job green (Linux and Windows builds and tests,
-        ASan + UBSan, the Docker image). Since the previous pin (f878cef9): bm3d 1.1.2 and Obj2Tiles
+        merge commit, 2.0.0~gitd00db05d), every job green (Linux and Windows builds and tests,
+        ASan + UBSan, the Docker image). Since the pin of f878cef9: bm3d 1.1.2 and Obj2Tiles
         1.8.1 read the 16 bit and float single-band TIFF textures of multispectral models (they
         failed to build); a raster query or a stockpile detection of a place without data fails with
         DDBERR_INVALIDARGS, which Registry answers with a 400; the histogram of a formula has bins
         over the range the Hub draws and counts the values below and above it; ddb align masks no
         data, reports the shift at the centre of the shared area and fails on a solution it cannot
         trust; the WMS and WCS image renders of a multispectral float raster show it as the map tiles
-        do. Everything else stays from the earlier pins. Next: the v2.0.0 release (DdbSource release)
+        do; a stockpile click measures the pile against a plane fitted to the ground around it, so it
+        works on a slope, and detect-all no longer counts a slope as a pile. Everything else stays from the earlier pins. Next: the v2.0.0 release (DdbSource release)
         once it is tagged.
     -->
     <PropertyGroup>
         <DdbSource>ci</DdbSource>
         <DdbVersion>2.0.0</DdbVersion>
-        <DdbDebFileVersion>2.0.0~gita8e497a8</DdbDebFileVersion>
-        <DdbCiCommit>7e8cc7f6c3b5dd5e27ce5e48da82b2ff0dedad30</DdbCiCommit>
-        <DdbCiRunId>41140225347</DdbCiRunId>
-        <DdbDebArtifactId>13020665776</DdbDebArtifactId>
-        <DdbWindowsArtifactId>13021656340</DdbWindowsArtifactId>
-        <DdbDebSha256>cd173a23ff968ed68addca66ea9f122491c3b4d27ecf66ce16bbb8abbfa330e6</DdbDebSha256>
-        <DdbWindowsZipSha256>582867a36be6979b3db72ed43bd0fb15d721d159be28db6ef61a77c174d2d112</DdbWindowsZipSha256>
+        <DdbDebFileVersion>2.0.0~gitd00db05d</DdbDebFileVersion>
+        <DdbCiCommit>f21346f9379198f3c8fda1f2c63e00422c5d8aaf</DdbCiCommit>
+        <DdbCiRunId>41158881950</DdbCiRunId>
+        <DdbDebArtifactId>13028233063</DdbDebArtifactId>
+        <DdbWindowsArtifactId>13027683579</DdbWindowsArtifactId>
+        <DdbDebSha256>e569381a107d4d0eeeae60da40fdeb3c02d3dacd8e27dbe5fa20565af3507ffa</DdbDebSha256>
+        <DdbWindowsZipSha256>81a03e0cc3f24f15cc6b6b75806ba5257c02cc3fcc8446b664a9335a53063660</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
