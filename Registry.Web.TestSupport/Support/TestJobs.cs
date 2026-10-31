@@ -43,6 +43,16 @@ public static class TestJobs
             budget ?? Budget());
     }
 
+    /// <summary>
+    /// Which succeeded build tasks wait for files (<see cref="Services.PlatformTasks.BuildTaskWaits"/>), with the real
+    /// classifier over <paramref name="artifacts"/> (libddb's manifest through the fake's entry types unless given).
+    /// </summary>
+    public static Services.PlatformTasks.BuildTaskWaits BuildTaskWaits(RegistryContext context,
+        IBuildArtifactResolver? artifacts = null, IDdbManager? ddbManager = null) =>
+        new(new Services.BuildNotifications.BuildOutcomeClassifier(artifacts ?? TestPorts.Artifacts()),
+            ddbManager ?? Mock.Of<IDdbManager>(), context,
+            NullLogger<Services.PlatformTasks.BuildTaskWaits>.Instance);
+
     /// <summary>The budget of a job host with 8 cores and 16 GB, with these processing settings (defaults when null).</summary>
     public static HostResourceBudget Budget(ProcessingBudgetSettings? processing = null) =>
         HostResourceBudget.Create(InstanceType.Default, new HostFacts(8, 16L << 30),

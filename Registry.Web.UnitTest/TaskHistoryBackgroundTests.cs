@@ -49,7 +49,7 @@ public class TaskHistoryBackgroundTests
         Add("build", () => Job.FromExpression<DdbJobs>(j => j.Build("org", Guid.Empty, "m.obj", false, null)).ToString());
         Add("legacy", () => null);
         var history = new TaskHistory(Mock.Of<IDatasetAccessResolver>(), new JobIndexQuery(_db),
-            Mock.Of<IRecordCache>(), null!, null!, TestSettings.Options<ProcessingPlatformSettings>(new AppSettings()));
+            Mock.Of<IRecordCache>(), null!, null!, TestJobs.BuildTaskWaits(_db), TestSettings.Options<ProcessingPlatformSettings>(new AppSettings()));
 
         // A filter bypasses the cache of the canonical page
         var page = await history.ListPageAsync("org", "ds", "build", null, 0, 50);

@@ -96,6 +96,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<ITasksManager, TasksManager>();
         services.AddScoped<TaskSubmission>();
         services.AddScoped<TaskHistory>();
+        services.AddScoped<BuildTaskWaits>();
         services.AddScoped<TaskLifecycle>();
         services.AddScoped<TaskRetry>();
         services.AddScoped<TaskAuthorizer>();

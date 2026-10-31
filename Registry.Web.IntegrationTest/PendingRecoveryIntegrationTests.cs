@@ -1,6 +1,7 @@
 using System.Globalization;
 using Registry.Adapters;
 using Registry.Web.Services.Jobs;
+using Registry.Web.Services.PlatformTasks;
 using System;
 using System.Collections.Concurrent;
 using System.IO;
@@ -174,6 +175,7 @@ public class PendingRecoveryIntegrationTests
         // The build notifications of the production hosts, over the real index; every user wants every e-mail, and no
         // digest runs (it is scheduled minutes later, past the schedule polling of the workers)
         services.AddBuildNotifications();
+        services.AddScoped<BuildTaskWaits>();
         var email = new Mock<IEmailService>();
         email.SetupGet(e => e.IsEnabled).Returns(true);
         services.AddSingleton(email.Object);
@@ -294,6 +296,8 @@ public class PendingRecoveryIntegrationTests
         ddb.IsBuildPending().ShouldBeFalse();
         (await Rows(ds)).ShouldHaveSingleItem().JobId.ShouldBe(initial.JobId);
         Volatile.Read(ref _gate.CoordinatorsStarted).ShouldBe(0);
+        // The task lists say that its succeeded build waits for late.mtl
+        (await MissingFilesOf(ds, ddb, initial.JobId)).ShouldBe(["late.mtl"]);
 
         // The upload of the missing file releases the build (libddb) and starts the coordinator at once (the upload's
         // pending retry), which queues the build: no timer, no promotion of a scheduled job
@@ -304,6 +308,17 @@ public class PendingRecoveryIntegrationTests
         ddb.GetPendingBuildInfo().ShouldBeEmpty();
         ddb.IsBuildPending().ShouldBeFalse();
         (await Rows(ds)).Single(x => x.JobId == initial.JobId).CurrentState.ShouldBe("Succeeded");
+        // Built now: no task of the model waits
+        (await MissingFilesOf(ds, ddb, initial.JobId)).ShouldBeNull();
+    }
+
+    // What the task lists say the task waits for (BuildTaskWaits over the dataset's rows, real libddb)
+    private async Task<System.Collections.Generic.IReadOnlyList<string>?> MissingFilesOf(string ds, IDDB ddb,
+        string jobId)
+    {
+        var rows = await Rows(ds);
+        using var scope = _provider.CreateScope();
+        return scope.ServiceProvider.GetRequiredService<BuildTaskWaits>().Find(rows, () => ddb).MissingFilesOf(jobId);
     }
 
     [Test]

@@ -992,7 +992,7 @@ GET /users/{userName}/storage
 schema AddOrganizationMemberDto { userName:string, permissions:OrganizationPermissions }
 schema AddUserToOrganizationDto { orgSlug:string, permissions:OrganizationPermissions }
 schema AdminTaskListDto { items:array<AdminTaskSummaryDto>, total:integer(int64), skip:integer(int32), take:integer(int32) }
-schema AdminTaskSummaryDto { taskId:string, orgSlug:string, dsSlug:string, toolId:string, version:string, state:string, progressPercent:integer(int32), phaseMessage:string, createdAt:string(date-time), startedAt:string(date-time), finishedAt:string(date-time), path:string, userId:string, owner:string, errorType:string, artifactExpiresAt:string(date-time) }
+schema AdminTaskSummaryDto { taskId:string, orgSlug:string, dsSlug:string, toolId:string, version:string, state:string, progressPercent:integer(int32), phaseMessage:string, createdAt:string(date-time), startedAt:string(date-time), finishedAt:string(date-time), path:string, userId:string, owner:string, errorType:string, artifactExpiresAt:string(date-time), waitingForFiles:boolean, missingFiles:array<string> }
 schema AlignRasterRequestDto { sourcePath:string, referencePath:string, outputPath:string, mode:string }
 schema ArtifactLinkDto { role:string, url:string, mediaType:string, downloadName:string }
 schema AuthenticateResponse { username:string, token:string, expires:string(date-time) }
@@ -1117,7 +1117,7 @@ schema TaskLogDto { cursor:integer(int64), lines:array<string>, truncatedFromTai
 schema TaskProgressDto { percent:integer(int32), phase:string, message:string }
 schema TaskRequeuedDto { requeued:boolean }
 schema TaskStateInfoDto { value:string, terminal:boolean }
-schema TaskStatusDto { taskId:string, toolId:string, version:string, state:string, progress:TaskProgressDto, createdAt:string(date-time), startedAt:string(date-time), finishedAt:string(date-time), parentJobId:string, workflowExecutionId:string, logCursor:integer(int64), logTail:array<string>, artifact:TaskArtifactDto, error:string }
+schema TaskStatusDto { taskId:string, toolId:string, version:string, state:string, progress:TaskProgressDto, createdAt:string(date-time), startedAt:string(date-time), finishedAt:string(date-time), parentJobId:string, workflowExecutionId:string, logCursor:integer(int64), logTail:array<string>, artifact:TaskArtifactDto, error:string, waitingForFiles:boolean, missingFiles:array<string> }
 schema TaskToolDto { id:string, version:string, title:string, requiredAccess:string, producesArtifact:boolean, inputSchema:any, hidden:boolean, disabled:boolean, disabledMessage:string }
 schema TaskToolInfoDto { id:string, version:string, title:string, requiredAccess:string, producesArtifact:boolean, resultExtension:string, hidden:boolean, disabled:boolean, disabledMessage:string }
 schema TasksClearedDto { cleared:integer(int32) }

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Registry.Ports.DroneDB;
 using Registry.Web.Services.BuildNotifications;
 
@@ -18,4 +19,19 @@ public interface IBuildOutcomeClassifier
     /// <param name="jobHash">The hash the job built; null to take the entry's.</param>
     /// <param name="succeeded">Whether the job succeeded.</param>
     ClassifiedBuild? Classify(IDDB ddb, string path, string? jobHash, bool succeeded);
+
+    /// <summary>
+    /// <see cref="Classify"/> for several build jobs of one dataset that ended, one result per job in input order: one
+    /// native call for their entries and at most one for the pending markers, whatever the number of jobs (the task
+    /// lists).
+    /// </summary>
+    /// <param name="ddb">The dataset.</param>
+    /// <param name="jobs">The jobs.</param>
+    IReadOnlyList<ClassifiedBuild?> ClassifyAll(IDDB ddb, IReadOnlyList<EndedBuildJob> jobs);
 }
+
+/// <summary>A build job of an entry that ended.</summary>
+/// <param name="Path">The entry.</param>
+/// <param name="Hash">The hash the job built; null to take the entry's.</param>
+/// <param name="Succeeded">Whether the job succeeded.</param>
+public sealed record EndedBuildJob(string Path, string? Hash, bool Succeeded);

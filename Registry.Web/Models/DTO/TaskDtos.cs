@@ -47,6 +47,10 @@ public sealed record TaskArtifactDto(long SizeBytes, string? Sha256, string Resu
 /// <summary>
 /// Single-row summary for TaskHistory (GET /tasks). <c>Background</c> is set for the rebuild of an entry made with an
 /// older layout, which runs when its queue has a free worker, not when somebody asked for it.
+/// <c>WaitingForFiles</c> is set for a succeeded build whose entry waits now for the files it names
+/// (<c>MissingFiles</c>, dataset-relative; null otherwise): libddb defers such a build without failing it, and it
+/// runs by itself when one of those files is added. It is read from the entry when the list is made, not kept with
+/// the task.
 /// </summary>
 public sealed record TaskSummaryDto(
     string TaskId,
@@ -63,9 +67,11 @@ public sealed record TaskSummaryDto(
     string? WorkflowExecutionId,
     string? ErrorType,
     DateTime? ArtifactExpiresAt,
-    bool Background = false);
+    bool Background = false,
+    bool WaitingForFiles = false,
+    IReadOnlyList<string>? MissingFiles = null);
 
-/// <summary>Full status (GET /tasks/{id}).</summary>
+/// <summary>Full status (GET /tasks/{id}); <c>WaitingForFiles</c> and <c>MissingFiles</c> as in <see cref="TaskSummaryDto"/>.</summary>
 public sealed record TaskStatusDto(
     string TaskId,
     string ToolId,
@@ -80,7 +86,9 @@ public sealed record TaskStatusDto(
     long LogCursor,
     IReadOnlyList<string> LogTail,
     TaskArtifactDto? Artifact,
-    string? Error);
+    string? Error,
+    bool WaitingForFiles = false,
+    IReadOnlyList<string>? MissingFiles = null);
 
 /// <summary>Incremental log response (GET /tasks/{id}/log).</summary>
 public sealed record TaskLogDto(long Cursor, IReadOnlyList<string> Lines, long TruncatedFromTail);

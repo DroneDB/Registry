@@ -3,17 +3,27 @@ using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.BuildNotifications;
 using Registry.Web.Services.Jobs;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.HeavyTasks.Tools;
 
 /// <summary>
 /// Native tool wrapping DroneDB derivative build. Produces no
 /// downloadable artifact; it mutates the dataset build cache in place. It runs the build
-/// inline in its task's job, as the build jobs do (<see cref="DdbJobs"/>).
+/// inline in its task's job, as the build jobs do (<see cref="DdbJobs"/>). A build that finds files missing
+/// returns as libddb defers it, without building: its log says which files it waits for, not that it is complete.
 /// </summary>
 public sealed class BuildTool : HeavyToolBase<BuildTool.Parameters>
 {
+    private readonly IBuildOutcomeClassifier _outcomes;
+
+    public BuildTool(IBuildOutcomeClassifier outcomes)
+    {
+        _outcomes = outcomes ?? throw new System.ArgumentNullException(nameof(outcomes));
+    }
+
     /// <summary>Rebuild an entry that is already built.</summary>
     public sealed record Parameters(bool? Force);
 
@@ -68,7 +78,14 @@ public sealed class BuildTool : HeavyToolBase<BuildTool.Parameters>
 
         ctx.Builds.BuildNow(ctx.Ddb, path, force, ctx.Hangfire);
 
-        progress.Report(new HeavyToolProgress(1, "done", LogChunk: "Build complete"));
+        // The job succeeds either way: libddb's deferral is a normal return
+        var waiting = _outcomes.Classify(ctx.Ddb, path, null, succeeded: true) is
+            { Outcome: BuildOutcome.WaitingForFiles } deferred
+            ? deferred.MissingFiles
+            : null;
+        progress.Report(new HeavyToolProgress(1, "done", LogChunk: waiting == null
+            ? "Build complete"
+            : waiting.Count > 0 ? $"Waiting for {string.Join(", ", waiting)}" : "Waiting for files"));
         return Task.FromResult<HeavyToolArtifact?>(null);
     }
 }

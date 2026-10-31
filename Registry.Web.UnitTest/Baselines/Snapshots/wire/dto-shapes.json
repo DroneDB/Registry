@@ -807,7 +807,11 @@
           "userId": "UserId-text",
           "owner": "Owner-text",
           "errorType": "ErrorType-text",
-          "artifactExpiresAt": "2026-10-21T07:31:17.123Z"
+          "artifactExpiresAt": "2026-10-21T07:31:17.123Z",
+          "waitingForFiles": true,
+          "missingFiles": [
+            "MissingFiles-text"
+          ]
         }
       ],
       "total": 1234567890123,
@@ -838,7 +842,11 @@
       "userId": "UserId-text",
       "owner": "Owner-text",
       "errorType": "ErrorType-text",
-      "artifactExpiresAt": "2026-10-21T07:31:17.123Z"
+      "artifactExpiresAt": "2026-10-21T07:31:17.123Z",
+      "waitingForFiles": true,
+      "missingFiles": [
+        "MissingFiles-text"
+      ]
     },
     "sparse": {
       "taskId": null,
@@ -856,7 +864,9 @@
       "userId": null,
       "owner": null,
       "errorType": null,
-      "artifactExpiresAt": null
+      "artifactExpiresAt": null,
+      "waitingForFiles": false,
+      "missingFiles": null
     }
   },
   "Registry.Web.Models.DTO.AlignRasterRequestDto": {
@@ -3749,7 +3759,11 @@
         "resultUrl": "ResultUrl-text",
         "expiresAt": "2026-10-21T07:31:17.123Z"
       },
-      "error": "Error-text"
+      "error": "Error-text",
+      "waitingForFiles": true,
+      "missingFiles": [
+        "MissingFiles-text"
+      ]
     },
     "sparse": {
       "taskId": null,
@@ -3765,7 +3779,9 @@
       "logCursor": 0,
       "logTail": null,
       "artifact": null,
-      "error": null
+      "error": null,
+      "waitingForFiles": false,
+      "missingFiles": null
     }
   },
   "Registry.Web.Models.DTO.TaskSummaryDto": {
@@ -3784,7 +3800,11 @@
       "workflowExecutionId": "WorkflowExecutionId-text",
       "errorType": "ErrorType-text",
       "artifactExpiresAt": "2026-10-21T07:31:17.123Z",
-      "background": true
+      "background": true,
+      "waitingForFiles": true,
+      "missingFiles": [
+        "MissingFiles-text"
+      ]
     },
     "sparse": {
       "taskId": null,
@@ -3801,7 +3821,9 @@
       "workflowExecutionId": null,
       "errorType": null,
       "artifactExpiresAt": null,
-      "background": false
+      "background": false,
+      "waitingForFiles": false,
+      "missingFiles": null
     }
   },
   "Registry.Web.Models.DTO.TaskToolDto": {

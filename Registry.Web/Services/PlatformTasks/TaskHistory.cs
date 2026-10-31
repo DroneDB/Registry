@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -30,16 +31,19 @@ public sealed class TaskHistory
     private readonly IRecordCache _cache;
     private readonly TaskAuthorizer _authorizer;
     private readonly TaskArtifactStore _artifacts;
+    private readonly BuildTaskWaits _waits;
     private readonly ProcessingPlatformSettings _settings;
 
     public TaskHistory(IDatasetAccessResolver access, IJobIndexQuery query, IRecordCache cache,
-        TaskAuthorizer authorizer, TaskArtifactStore artifacts, IOptions<ProcessingPlatformSettings> platformSettings)
+        TaskAuthorizer authorizer, TaskArtifactStore artifacts, BuildTaskWaits waits,
+        IOptions<ProcessingPlatformSettings> platformSettings)
     {
         _access = access;
         _query = query;
         _cache = cache;
         _authorizer = authorizer;
         _artifacts = artifacts;
+        _waits = waits;
         _settings = platformSettings.Value;
     }
 
@@ -47,7 +51,7 @@ public sealed class TaskHistory
     public async Task<TaskListPage> ListPageAsync(string orgSlug, string dsSlug, string? toolId, string? state,
         int skip, int take, CancellationToken ct = default)
     {
-        await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
+        var dataset = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
 
         var clampedTake = Math.Clamp(take, 1, MaxTake);
 
@@ -60,19 +64,19 @@ public sealed class TaskHistory
         {
             var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state,
                 Skip: Math.Max(0, skip), Take: clampedTake);
-            var rows = await _query.QueryAsync(filter, ct);
-            TaskSummaryDto[] page = [.. rows.Select(ToSummary)];
+            var page = Summaries(await _query.QueryAsync(filter, ct), dataset);
             return new TaskListPage(page, ETagOf(JsonSerializer.SerializeToUtf8Bytes(page), clampedTake));
         }
 
         // The cached payload is always the canonical page (first MaxTake rows) so that a
-        // request with a small take cannot poison later requests asking for more rows.
+        // request with a small take cannot poison later requests asking for more rows. The builds that wait for files
+        // are in it: an entry stops waiting when a file it waits for is added, which queues its build, a change of the
+        // dataset's tasks that removes the page.
         var cachedBytes = await _cache.GetOrCreateBytesAsync(CacheCategories.TasksList(orgSlug, dsSlug),
             async token =>
             {
                 var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state, Skip: 0, Take: MaxTake);
-                TaskSummaryDto[] rows = [.. (await _query.QueryAsync(filter, token)).Select(ToSummary)];
-                return JsonSerializer.SerializeToUtf8Bytes(rows);
+                return JsonSerializer.SerializeToUtf8Bytes(Summaries(await _query.QueryAsync(filter, token), dataset));
             }, TasksListCacheOptions, ct);
         var canonical = JsonSerializer.Deserialize<TaskSummaryDto[]>(cachedBytes) ?? [];
 
@@ -90,6 +94,7 @@ public sealed class TaskHistory
         CancellationToken ct = default)
     {
         var job = await _authorizer.LoadAsync(orgSlug, dsSlug, id, AccessType.Read, ct);
+        var missing = await MissingFilesOfAsync(job, orgSlug, dsSlug, ct);
 
         var snapshot = LogTailSnapshot.Parse(job.LogTailJson);
         return new TaskStatusDto(
@@ -98,7 +103,19 @@ public sealed class TaskHistory
             job.CreatedAtUtc, job.ProcessingAtUtc, TaskJobHelpers.FinishedAt(job),
             job.ParentJobId, job.WorkflowExecutionId,
             snapshot.Cursor, snapshot.AsStrings(), BuildArtifactDto(job, orgSlug, dsSlug),
-            job.ErrorType);
+            job.ErrorType, missing != null, missing);
+    }
+
+    // The files the task waits for, when it is a succeeded build whose entry waits for them; the authorizer granted the
+    // access, which the resolver remembers for the request
+    private async Task<IReadOnlyList<string>?> MissingFilesOfAsync(JobIndex job, string orgSlug, string dsSlug,
+        CancellationToken ct)
+    {
+        if (!BuildTaskWaits.CanWait(job))
+            return null;
+
+        var dataset = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
+        return _waits.Find([job], () => dataset.Ddb).MissingFilesOf(job.JobId);
     }
 
     /// <summary>The log lines of a task beyond the caller's cursor.</summary>
@@ -138,11 +155,17 @@ public sealed class TaskHistory
             MimeMapping.MimeUtility.GetMimeMapping(file), etag);
     }
 
-    private TaskSummaryDto ToSummary(JobIndex j) => new(
+    private TaskSummaryDto[] Summaries(JobIndex[] rows, DatasetAccess dataset)
+    {
+        var waits = _waits.Find(rows, () => dataset.Ddb);
+        return [.. rows.Select(j => ToSummary(j, waits.MissingFilesOf(j.JobId)))];
+    }
+
+    private TaskSummaryDto ToSummary(JobIndex j, IReadOnlyList<string>? missingFiles) => new(
         j.JobId, j.ToolId, j.ToolVersion, j.CurrentState, j.ProgressPercent, j.PhaseMessage,
         j.CreatedAtUtc, j.ProcessingAtUtc, TaskJobHelpers.FinishedAt(j), j.Path, j.ParentJobId,
         j.WorkflowExecutionId, j.ErrorType, TaskJobHelpers.ArtifactExpiresAt(j, _settings.ArtifactTtlHours),
-        DdbJobDescriptor.IsBackgroundRebuildDisplay(j.MethodDisplay));
+        DdbJobDescriptor.IsBackgroundRebuildDisplay(j.MethodDisplay), missingFiles != null, missingFiles);
 
     private TaskArtifactDto? BuildArtifactDto(JobIndex j, string orgSlug, string dsSlug) =>
         j.CurrentState == "Succeeded" && j.ArtifactSizeBytes is { } size

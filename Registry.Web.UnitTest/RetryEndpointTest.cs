@@ -100,7 +100,7 @@ public class RetryEndpointTest : IDisposable
                 new CurrentUserTaskSubmitter(new Mock<IHeavyTaskRunner>().Object, authManager.Object,
                     new Mock<IHttpContextAccessor>().Object)),
             new TaskHistory(access, new JobIndexQuery(_db), new Mock<IRecordCache>().Object, authorizer, artifacts,
-                TestSettings.Options<ProcessingPlatformSettings>(appSettings)),
+                TestJobs.BuildTaskWaits(_db, ddbManager: ddbManager.Object), TestSettings.Options<ProcessingPlatformSettings>(appSettings)),
             new TaskLifecycle(access, authorizer, processor, writer, artifacts, NullLogger<TaskLifecycle>.Instance),
             new TaskRetry(authorizer, processor, writer, _utils.Object, ddbManager.Object,
                 NullLogger<TaskRetry>.Instance),

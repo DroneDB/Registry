@@ -12,6 +12,7 @@ using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.PlatformTasks;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Managers;
@@ -29,6 +30,7 @@ public sealed class AdminTasksManager
     private readonly int _artifactTtlHours;
     private readonly string _tempPath;
     private readonly IFileSystem _fs;
+    private readonly BuildTaskWaits _waits;
 
     public AdminTasksManager(
         IJobIndexQuery query,
@@ -36,7 +38,8 @@ public sealed class AdminTasksManager
         UserManager<User> userManager,
         IOptions<ProcessingPlatformSettings> platformSettings,
         ScratchFileProvider scratch,
-        IFileSystem fs)
+        IFileSystem fs,
+        BuildTaskWaits waits)
     {
         _query = query;
         _writer = writer;
@@ -44,6 +47,7 @@ public sealed class AdminTasksManager
         _artifactTtlHours = platformSettings.Value.ArtifactTtlHours;
         _tempPath = scratch.Root;
         _fs = fs;
+        _waits = waits;
     }
 
     /// <summary>
@@ -76,8 +80,9 @@ public sealed class AdminTasksManager
         var total = await _query.CountGlobalAsync(toolId, state, userId, ct);
 
         var ownerNames = await ResolveOwnerNamesAsync(rows, ct);
+        var waits = await _waits.FindAsync(rows, ct);
 
-        var items = rows.Select(j => ToSummary(j, ownerNames)).ToArray();
+        var items = rows.Select(j => ToSummary(j, ownerNames, waits.MissingFilesOf(j.JobId))).ToArray();
         return new AdminTaskListDto(items, total, skip, take);
     }
 
@@ -109,7 +114,8 @@ public sealed class AdminTasksManager
         return map;
     }
 
-    private AdminTaskSummaryDto ToSummary(JobIndex j, Dictionary<string, string> ownerNames)
+    private AdminTaskSummaryDto ToSummary(JobIndex j, Dictionary<string, string> ownerNames,
+        IReadOnlyList<string>? missingFiles)
     {
         string? owner = null;
         if (!string.IsNullOrEmpty(j.UserId) && ownerNames.TryGetValue(j.UserId, out var name))
@@ -118,6 +124,7 @@ public sealed class AdminTasksManager
         return new AdminTaskSummaryDto(
             j.JobId, j.OrgSlug, j.DsSlug, j.ToolId, j.ToolVersion, j.CurrentState,
             j.ProgressPercent, j.PhaseMessage, j.CreatedAtUtc, j.ProcessingAtUtc, TaskJobHelpers.FinishedAt(j),
-            j.Path, j.UserId, owner, j.ErrorType, TaskJobHelpers.ArtifactExpiresAt(j, _artifactTtlHours));
+            j.Path, j.UserId, owner, j.ErrorType, TaskJobHelpers.ArtifactExpiresAt(j, _artifactTtlHours),
+            missingFiles != null, missingFiles);
     }
 }
