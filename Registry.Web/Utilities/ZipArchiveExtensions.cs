@@ -1,8 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Registry.Common;
 
@@ -10,33 +9,35 @@ namespace Registry.Web.Utilities;
 
 public static class ZipArchiveExtension
 {
-
-    public static void CreateEntryFromAny(this ZipArchive archive, string sourceName, string entryName = "", string[] excludes = null)
+    /// <summary>
+    /// Adds a file, or a folder with everything under it, to the archive under
+    /// <paramref name="entryName"/>. Paths listed in <paramref name="excludes"/> (full paths) are
+    /// skipped with their content. Asynchronous throughout, so the archive can be written straight
+    /// to a response body that refuses synchronous writes.
+    /// </summary>
+    public static async Task CreateEntryFromAnyAsync(this ZipArchive archive, string sourceName,
+        string entryName = "", string[]? excludes = null, CancellationToken ct = default)
     {
-        var fileName = Path.GetFileName(sourceName);
+        if (excludes != null && excludes.Contains(sourceName)) return;
 
-        if (excludes != null && excludes.Contains(fileName)) return;
+        ct.ThrowIfCancellationRequested();
+        var path = CommonUtils.SafeCombine(entryName, Path.GetFileName(sourceName));
 
-        var path = CommonUtils.SafeCombine(entryName, fileName);
-            
         if (File.GetAttributes(sourceName).HasFlag(FileAttributes.Directory))
-        {
-            archive.CreateEntryFromDirectory(sourceName, path, excludes);
-        }
+            await archive.CreateEntriesFromFolderAsync(sourceName, path, excludes, ct);
         else
-        {
-            archive.CreateEntryFromFile(sourceName, path, CommonUtils.GetCompressionLevel(path));
-        }
+            await archive.CreateEntryFromFileAsync(sourceName, path, CommonUtils.GetCompressionLevel(path), ct);
     }
 
-    public static void CreateEntryFromDirectory(this ZipArchive archive, string sourceDirName, string entryName = "", string[] excludes = null)
+    /// <summary>
+    /// Adds what is in a folder (its files, and its subfolders with everything under them) to the archive under
+    /// <paramref name="entryName"/>, without an entry for the folder itself: the archive of a folder has the folder's
+    /// content at its root when <paramref name="entryName"/> is empty.
+    /// </summary>
+    public static async Task CreateEntriesFromFolderAsync(this ZipArchive archive, string folder,
+        string entryName = "", string[]? excludes = null, CancellationToken ct = default)
     {
-        var files = Directory.GetFiles(sourceDirName).Concat(Directory.GetDirectories(sourceDirName)).ToArray();
-            
-        foreach (var file in files)
-        {
-            if (excludes != null && excludes.Contains(file)) return;
-            archive.CreateEntryFromAny(file, entryName, excludes);
-        }
+        foreach (var child in Directory.GetFiles(folder).Concat(Directory.GetDirectories(folder)))
+            await archive.CreateEntryFromAnyAsync(child, entryName, excludes, ct);
     }
 }

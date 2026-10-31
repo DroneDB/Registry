@@ -1,10 +1,12 @@
+using System.Globalization;
 using System.Linq;
 using System.Security.Claims;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Registry.Web.Exceptions;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Middlewares;
@@ -23,10 +25,12 @@ public partial class DownloadLimitMiddleware : IMiddleware
 {
     private readonly IDownloadLimiter _downloadLimiter;
     private readonly IAuthManager _authManager;
+    private readonly ClientIpResolver _clientIpResolver;
     private readonly ILogger<DownloadLimitMiddleware> _logger;
 
     private const string PreflightHeader = "X-Download-Check";
     private const string TooManyDownloadsMessage = "Too many concurrent downloads. Please wait for a download to finish.";
+    private const int RetryAfterSeconds = 10;
 
     // Matches the download endpoints subject to the concurrency limit:
     //  - /orgs/{org}/ds/{ds}/download  (bulk/single direct download)
@@ -39,10 +43,12 @@ public partial class DownloadLimitMiddleware : IMiddleware
     public DownloadLimitMiddleware(
         IDownloadLimiter downloadLimiter,
         IAuthManager authManager,
+        ClientIpResolver clientIpResolver,
         ILogger<DownloadLimitMiddleware> logger)
     {
         _downloadLimiter = downloadLimiter;
         _authManager = authManager;
+        _clientIpResolver = clientIpResolver;
         _logger = logger;
     }
 
@@ -107,82 +113,64 @@ public partial class DownloadLimitMiddleware : IMiddleware
     }
 
     /// <summary>
-    /// Writes a 429 Too Many Requests response.
-    /// Returns a user-friendly HTML page for direct browser navigation (Accept: text/html),
-    /// or JSON for API/fetch requests.
+    /// Answers 429 Too Many Requests with <c>Retry-After</c>: a user-friendly HTML page for direct browser
+    /// navigation (Accept: text/html), otherwise the API's ProblemDetails body, written by the exception
+    /// handler from <see cref="TooManyRequestsException"/> (one error model).
     /// </summary>
     private static async Task WriteTooManyRequestsResponse(HttpContext context)
     {
-        context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-        context.Response.Headers["Retry-After"] = "10";
-
         var accept = context.Request.Headers.Accept.ToString();
 
         // Browser direct navigation sends Accept: text/html
         // fetch() sends Accept: */* by default (no text/html preference)
-        if (accept.Contains("text/html") && !context.Request.Headers.ContainsKey(PreflightHeader))
-        {
-            context.Response.ContentType = "text/html; charset=utf-8";
-            await context.Response.WriteAsync($$"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="utf-8">
-                    <title>Download Limit Reached</title>
-                    <style>
-                        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                               display: flex; justify-content: center; align-items: center; min-height: 100vh;
-                               margin: 0; background: #f5f5f5; color: #333; }
-                        .card { background: white; border-radius: 8px; padding: 40px; max-width: 500px;
-                                 box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
-                        h1 { color: #e74c3c; font-size: 1.5em; margin-bottom: 16px; }
-                        p { color: #666; line-height: 1.6; }
-                        button { margin-top: 20px; padding: 10px 24px; background: #3498db; color: white;
-                                  border: none; border-radius: 4px; font-size: 1em; cursor: pointer; }
-                        button:hover { background: #2980b9; }
-                    </style>
-                </head>
-                <body>
-                    <div class="card">
-                        <h1>&#9888; Download Limit Reached</h1>
-                        <p>{{TooManyDownloadsMessage}}</p>
-                        <button onclick="history.back()">Go Back</button>
-                    </div>
-                </body>
-                </html>
-                """);
-        }
-        else
-        {
-            context.Response.ContentType = "application/json";
-            var body = new { error = TooManyDownloadsMessage };
-            await context.Response.WriteAsync(JsonSerializer.Serialize(body));
-        }
+        if (!accept.Contains("text/html") || context.Request.Headers.ContainsKey(PreflightHeader))
+            throw new TooManyRequestsException(TooManyDownloadsMessage, RetryAfterSeconds);
+
+        context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.Response.Headers.RetryAfter = RetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+        context.Response.ContentType = "text/html; charset=utf-8";
+        await context.Response.WriteAsync($$"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>Download Limit Reached</title>
+                <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                           display: flex; justify-content: center; align-items: center; min-height: 100vh;
+                           margin: 0; background: #f5f5f5; color: #333; }
+                    .card { background: white; border-radius: 8px; padding: 40px; max-width: 500px;
+                             box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
+                    h1 { color: #e74c3c; font-size: 1.5em; margin-bottom: 16px; }
+                    p { color: #666; line-height: 1.6; }
+                    button { margin-top: 20px; padding: 10px 24px; background: #3498db; color: white;
+                              border: none; border-radius: 4px; font-size: 1em; cursor: pointer; }
+                    button:hover { background: #2980b9; }
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <h1>&#9888; Download Limit Reached</h1>
+                    <p>{{TooManyDownloadsMessage}}</p>
+                    <button onclick="history.back()">Go Back</button>
+                </div>
+            </body>
+            </html>
+            """);
     }
 
     /// <summary>
     /// Gets the limiter key for the current request.
-    /// Uses the authenticated user ID if available, otherwise falls back to the remote IP address.
-    /// Considers X-Forwarded-For header for reverse proxy scenarios.
+    /// Uses the authenticated user ID if available, otherwise falls back to the client address
+    /// (the forwarded one behind a known proxy, see <see cref="ClientIpResolver"/>).
     /// </summary>
-    private static string GetLimiterKey(HttpContext context)
+    private string GetLimiterKey(HttpContext context)
     {
         // Try authenticated user ID first
         var userId = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
         if (!string.IsNullOrEmpty(userId))
             return $"user:{userId}";
 
-        // Fall back to IP address (consider X-Forwarded-For for reverse proxy)
-        var forwardedFor = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(forwardedFor))
-        {
-            // Take the first IP in the chain (original client)
-            var clientIp = forwardedFor.Split(',')[0].Trim();
-            if (!string.IsNullOrEmpty(clientIp))
-                return $"ip:{clientIp}";
-        }
-
-        var remoteIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return $"ip:{remoteIp}";
+        return _clientIpResolver.AnonymousKey(context);
     }
 }

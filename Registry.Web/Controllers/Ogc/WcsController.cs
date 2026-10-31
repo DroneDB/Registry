@@ -1,10 +1,12 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Exceptions;
 using Registry.Web.Filters;
 using Registry.Web.Models;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Managers;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 
@@ -14,29 +16,37 @@ namespace Registry.Web.Controllers.Ogc;
 /// negotiation; the per-version wire format is handled by
 /// <see cref="Services.Managers.Wcs.IWcsProtocolHandler"/> implementations.</summary>
 [ApiController]
-[ServiceFilter(typeof(BasicAuthFilter))]
+[BasicAuthentication]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]
 [TypeFilter(typeof(OgcExceptionFilter))]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" +
-       RoutesHelper.DatasetRadix + "/" + RoutesHelper.DatasetSlug)]
+[ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status401Unauthorized, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status404NotFound, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status503ServiceUnavailable, "text/xml", "application/xml")]
+[Route(RoutesHelper.DatasetPrefix)]
 public class WcsController : ControllerBaseEx
 {
-    private readonly IWcsManager _mgr;
+    private readonly WcsManager _mgr;
 
-    public WcsController(IWcsManager mgr)
+    public WcsController(WcsManager mgr)
     {
         _mgr = mgr;
     }
 
+    /// <summary>WCS KVP request (1.0.0, 1.1.1, 2.0.1): capabilities and coverage descriptions (XML), coverages (a raster file).</summary>
     [HttpGet("wcs")]
-    public Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug)
-        => Dispatch(orgSlug, dsSlug, null);
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "text/xml", "application/xml", "image/tiff", "image/png", "image/jpeg")]
+    public Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)
+        => Dispatch(orgSlug, dsSlug, null, ct);
 
+    /// <summary>WCS KVP request for the coverages of a folder of the dataset.</summary>
     [HttpGet("wcs/p/{*folder}")]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "text/xml", "application/xml", "image/tiff", "image/png", "image/jpeg")]
     public Task<IActionResult> KvpFolder([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] string folder) => Dispatch(orgSlug, dsSlug, folder);
+        [FromRoute] string? folder, CancellationToken ct) => Dispatch(orgSlug, dsSlug, folder, ct);
 
-    private async Task<IActionResult> Dispatch(string orgSlug, string dsSlug, string? folderPath)
+    private async Task<IActionResult> Dispatch(string orgSlug, string dsSlug, string? folderPath, CancellationToken ct)
     {
         var q = Request.Query;
 
@@ -71,7 +81,7 @@ public class WcsController : ControllerBaseEx
         switch (op)
         {
             case "GETCAPABILITIES":
-                return Content(await _mgr.GetCapabilitiesAsync(orgSlug, dsSlug, version, folderPath),
+                return Content(await _mgr.GetCapabilitiesAsync(orgSlug, dsSlug, version, folderPath, ct: ct),
                     "text/xml; charset=utf-8");
 
             case "DESCRIBECOVERAGE":
@@ -100,13 +110,13 @@ public class WcsController : ControllerBaseEx
                 if (string.IsNullOrWhiteSpace(cid))
                     throw new OgcException("MissingParameterValue",
                         $"{locator} is required", 400, locator);
-                return Content(await _mgr.DescribeCoverageAsync(orgSlug, dsSlug, version, cid),
+                return Content(await _mgr.DescribeCoverageAsync(orgSlug, dsSlug, version, cid, ct: ct),
                     "text/xml; charset=utf-8");
             }
 
             case "GETCOVERAGE":
             {
-                var result = await _mgr.GetCoverageAsync(orgSlug, dsSlug, version, q);
+                var result = await _mgr.GetCoverageAsync(orgSlug, dsSlug, version, q, ct: ct);
                 return File(result.Bytes, result.ContentType);
             }
 

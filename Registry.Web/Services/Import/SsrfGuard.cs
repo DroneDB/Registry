@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using System.Linq;
 using System.Net;
@@ -101,7 +100,11 @@ public sealed class SsrfGuard
         }
     }
 
-    private static bool IsBlocked(IPAddress addr)
+    /// <summary>
+    /// Whether <paramref name="addr"/> is loopback, link-local, private or the cloud metadata address (an IPv4-mapped
+    /// IPv6 address counts as its IPv4 form).
+    /// </summary>
+    internal static bool IsBlocked(IPAddress addr)
     {
         // Normalize IPv4-mapped IPv6 (::ffff:a.b.c.d) to IPv4 so the IPv4 rules below also catch it;
         // otherwise an attacker could reach internal services via the mapped form.

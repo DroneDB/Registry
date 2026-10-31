@@ -1,5 +1,5 @@
-#nullable enable
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -8,11 +8,10 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Web.Services.Adapters;
 using Registry.Common;
 using Registry.Ports.Archives;
-using Registry.Ports.DroneDB;
 using Registry.Ports.Import;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks;
@@ -26,40 +25,38 @@ namespace Registry.Web.Services.Import;
 /// </summary>
 public sealed class ArchiveUrlImportSource : IImportSource
 {
-    private static readonly string[] ArchiveExtensions =
-        [".zip", ".tar.gz", ".tgz", ".tar", ".7z", ".rar"];
-
     private readonly IArchiveExtractor _extractor;
-    private readonly SsrfGuard _ssrfGuard;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly GuardedHttpDownloader _downloader;
     private readonly ImportSettings _settings;
     private readonly long _maxImportSizeBytes;
     private readonly long _diskSafetyMarginBytes;
-    private readonly ILogger<ArchiveUrlImportSource> _logger;
+    private readonly DatasetArchiveExtractor _archives;
+    private readonly ScratchFileProvider _scratch;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ArchiveUrlImportSource"/> class.
     /// </summary>
     /// <param name="extractor">The archive extractor.</param>
-    /// <param name="ssrfGuard">The SSRF guard.</param>
     /// <param name="httpClientFactory">The HTTP client factory.</param>
-    /// <param name="downloader">The SSRF-hardened, disk- and speed-guarded single-file downloader.</param>
-    /// <param name="appSettings">The application settings (import cap + disk safety margin).</param>
-    /// <param name="logger">The logger.</param>
-    public ArchiveUrlImportSource(IArchiveExtractor extractor, SsrfGuard ssrfGuard,
+    /// <param name="downloader">The SSRF-hardened, disk- and speed-guarded single-file downloader (it also pre-validates the host).</param>
+    /// <param name="importSettings">The import settings.</param>
+    /// <param name="platformSettings">The processing platform settings (size cap, disk safety margin).</param>
+    /// <param name="archives">The shared extraction into a dataset (path rule, budget, rollback).</param>
+    /// <param name="scratch">Where the downloaded archive is written (the configured temp folder).</param>
+    public ArchiveUrlImportSource(IArchiveExtractor extractor,
         IHttpClientFactory httpClientFactory, GuardedHttpDownloader downloader,
-        IOptions<AppSettings> appSettings, ILogger<ArchiveUrlImportSource> logger)
+        IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings, DatasetArchiveExtractor archives, ScratchFileProvider scratch)
     {
+        _archives = archives;
+        _scratch = scratch;
         _extractor = extractor;
-        _ssrfGuard = ssrfGuard;
         _httpClientFactory = httpClientFactory;
         _downloader = downloader;
-        _settings = appSettings.Value.Import ?? new ImportSettings();
+        _settings = importSettings.Value;
         _maxImportSizeBytes = _settings.MaxImportSizeBytes;
         _diskSafetyMarginBytes =
-            (appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings()).DiskSafetyMarginBytes;
-        _logger = logger;
+            platformSettings.Value.DiskSafetyMarginBytes;
     }
 
     // Outbound calls go through the SSRF-hardened client (connect-time IP validation + redirect
@@ -73,7 +70,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
     public async Task<ImportSourceProbe> ProbeAsync(JsonElement parameters, CancellationToken ct)
     {
         var p = ReadParams(parameters);
-        await _ssrfGuard.AssertAllowedAsync(p.Host, ct);
+        await _downloader.AssertHostAllowedAsync(p.Host, ct);
 
         var client = CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Head, p.Url);
@@ -106,31 +103,25 @@ public sealed class ArchiveUrlImportSource : IImportSource
         CancellationToken ct)
     {
         var p = ReadParams(parameters);
-        await _ssrfGuard.AssertAllowedAsync(p.Host, ct);
+        await _downloader.AssertHostAllowedAsync(p.Host, ct);
 
         Directory.CreateDirectory(destFolder);
 
-        // Scratch file lives OUTSIDE the dataset folder so it is never indexed. Keep the original
-        // archive extension so the extractor can pick the right format.
-        var scratch = Path.Combine(Path.GetTempPath(), $"ddb-import-{Guid.NewGuid():N}{ArchiveExt(p.Url)}");
+        // The archive goes to the configured temp folder, OUTSIDE the dataset folder, so it is never
+        // indexed, and is deleted when the import ends. Keep the original archive extension so the
+        // extractor can pick the right format.
+        using var scratch = _scratch.Create("ddb-import-", ArchiveExt(p.Url, _extractor.SupportedExtensions));
 
-        try
-        {
-            await DownloadToFileAsync(p, scratch, progress, ct);
+        await DownloadToFileAsync(p, scratch.Path, progress, ct);
 
-            // Content-based guard: reject a non-archive served with an archive name (e.g. an HTML error
-            // page) BEFORE attempting extraction, instead of relying on Open() failing mid-stream.
-            if (!_extractor.IsValidArchive(scratch))
-                throw new InvalidOperationException(
-                    "The downloaded file is not a valid or supported archive.");
+        // Content-based guard: reject a non-archive served with an archive name (e.g. an HTML error
+        // page) BEFORE attempting extraction, instead of relying on Open() failing mid-stream.
+        if (!_extractor.IsValidArchive(scratch.Path))
+            throw new InvalidOperationException(
+                "The downloaded file is not a valid or supported archive.");
 
-            // _extractor.Open throws on a truly unsupported/corrupt archive (surfaced as a task failure).
-            await ExtractIntoAsync(scratch, destFolder, progress, ct);
-        }
-        finally
-        {
-            TryDelete(scratch);
-        }
+        // _extractor.Open throws on a truly unsupported/corrupt archive (surfaced as a task failure).
+        await ExtractIntoAsync(scratch.Path, destFolder, progress, ct);
     }
 
     private async Task DownloadToFileAsync(ArchiveParams p, string scratch, IProgress<ImportProgress> progress,
@@ -161,53 +152,28 @@ public sealed class ArchiveUrlImportSource : IImportSource
             ct: ct);
     }
 
+    // The shared extractor, into the dataset root: the path rule decides every entry (an unsafe name
+    // fails the import, a reserved one is skipped), the budget every chunk (MaxImportSizeBytes, then
+    // the disk head-room with libddb's floor; the outer ImportDatasetTool sink still enforces the
+    // per-user quota). Files are overwritten (an interrupted import is run again from the start), and
+    // a failed import leaves the dataset as it was.
     private async Task ExtractIntoAsync(string scratch, string destFolder, IProgress<ImportProgress> progress,
         CancellationToken ct)
     {
-        using var session = _extractor.Open(scratch);
-        var total = session.FastFileEntryCount ?? 0;
-
-        // Cap (primary, MaxImportSizeBytes) + disk head-room (secondary, re-sampled) consolidated in
-        // ExtractionBudget: enforced per chunk, so a single entry whose header under-reports its size
-        // cannot fill the volume. The outer ImportDatasetTool sink still enforces the per-user quota.
-        var budget = new ExtractionBudget(_maxImportSizeBytes, destFolder, _diskSafetyMarginBytes);
-        var done = 0;
-
-        foreach (var entry in session.Entries())
-        {
-            ct.ThrowIfCancellationRequested();
-            if (entry.IsDirectory) continue;
-
-            var relative = SafeRelative(entry.Key);
-            if (relative is null) continue; // skipped (.ddb or unsafe)
-
-            // Extension policy (allow-list / block-list): skip disallowed types (e.g. executables
-            // or scripts) with a warning; the rest of the archive still extracts.
-            if (!_settings.IsExtensionAllowed(relative))
+        await _archives.ExtractAsync(
+            new ArchiveExtractionRequest(scratch, destFolder, string.Empty, _settings.IsExtensionAllowed, _ => false,
+                _maxImportSizeBytes, _diskSafetyMarginBytes),
+            new CallbackProgress<ArchiveExtractionProgress>(p =>
             {
-                _logger.LogWarning("Skipping disallowed file type during archive import: '{Path}'", relative);
-                done++;
-                continue;
-            }
-
-            var localTarget = Path.Combine(destFolder, relative.Replace('/', Path.DirectorySeparatorChar));
-            var parent = Path.GetDirectoryName(localTarget);
-            if (!string.IsNullOrEmpty(parent))
-                Directory.CreateDirectory(parent);
-
-            await using (var source = entry.OpenStream())
-            await using (var fileStream = File.Create(localTarget))
-                await budget.CopyGuardedAsync(source, fileStream, ct);
-
-            done++;
-            progress.Report(new ImportProgress(
-                total > 0 ? 0.5 + 0.5 * done / total : -1,
-                Phase: "extracting",
-                Message: entry.Key,
-                BytesSoFar: budget.BytesWritten,
-                FilesDone: done,
-                FilesTotal: total > 0 ? total : null));
-        }
+                if (p.Done == 0) return;
+                progress.Report(new ImportProgress(
+                    p.Total > 0 ? 0.5 + 0.5 * p.Done / p.Total : -1,
+                    Phase: "extracting",
+                    Message: p.Key,
+                    BytesSoFar: p.BytesWritten,
+                    FilesDone: p.Done,
+                    FilesTotal: p.Total > 0 ? p.Total : null));
+            }), ct);
     }
 
     private static void ApplyAuth(HttpRequestMessage request, ArchiveParams p)
@@ -215,31 +181,6 @@ public sealed class ArchiveUrlImportSource : IImportSource
         if (string.IsNullOrWhiteSpace(p.Username)) return;
         var raw = Encoding.UTF8.GetBytes($"{p.Username}:{p.Password}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(raw));
-    }
-
-    // Anti zip-slip: rejects rooted paths and ".." traversal; skips the reserved .ddb folder.
-    private static string? SafeRelative(string entryKey)
-    {
-        var key = (entryKey ?? string.Empty).Replace('\\', '/').Trim();
-        while (key.StartsWith('/')) key = key[1..];
-
-        if (string.IsNullOrWhiteSpace(key)) return null;
-
-        // Reject embedded null bytes: on some native paths a NUL truncates the string, which could
-        // sidestep the rooted-path / ".." checks below (defense in depth).
-        if (key.Contains('\0'))
-            throw new InvalidOperationException($"Unsafe archive entry path (null byte): '{entryKey}'.");
-
-        if (Path.IsPathRooted(key) || key.Split('/').Any(seg => seg == ".."))
-            throw new InvalidOperationException($"Unsafe archive entry path (zip-slip): '{entryKey}'.");
-
-        if (key.StartsWith(IDDB.DatabaseFolderName + "/", StringComparison.Ordinal))
-            return null;
-
-        // Normalize every path segment (invalid chars, Windows reserved device names, trailing
-        // dots/spaces, length); leading dots are preserved (hidden files).
-        key = FileImportPolicy.SanitizePathSegments(key);
-        return string.IsNullOrWhiteSpace(key) ? null : key;
     }
 
     private ArchiveParams ReadParams(JsonElement parameters)
@@ -253,38 +194,37 @@ public sealed class ArchiveUrlImportSource : IImportSource
             (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             throw new ArgumentException($"The archive URL is not a valid http/https URL: {url}");
 
-        return new ArchiveParams(url, uri.Host, SuggestName(uri), username, password);
+        return new ArchiveParams(url, uri.Host, SuggestName(uri, _extractor.SupportedExtensions), username, password);
     }
 
     private static string GuessArchiveName(string url)
         => Uri.TryCreate(url, UriKind.Absolute, out var uri) ? Path.GetFileName(uri.AbsolutePath) : url;
 
-    // Returns the recognized multi-part archive extension (e.g. ".tar.gz") or the plain extension.
-    private static string ArchiveExt(string url)
+    // The longest of the extractor's own suffixes that the name ends with (".tar.gz", not ".gz"), or null
+    private static string? KnownSuffix(string name, IReadOnlyList<string> supportedExtensions) => supportedExtensions
+        .Where(ext => name.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(ext => ext.Length)
+        .FirstOrDefault();
+
+    // The extension of the archive named by the URL: its known suffix, else the plain extension (".zip" when it has none)
+    internal static string ArchiveExt(string url, IReadOnlyList<string> supportedExtensions)
     {
         var name = GuessArchiveName(url);
-        foreach (var ext in ArchiveExtensions)
-        {
-            if (name.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
-                return ext;
-        }
+        if (KnownSuffix(name, supportedExtensions) is { } known)
+            return known;
 
         var plain = Path.GetExtension(name);
         return string.IsNullOrEmpty(plain) ? ".zip" : plain;
     }
 
-    private static string SuggestName(Uri uri)
+    internal static string SuggestName(Uri uri, IReadOnlyList<string> supportedExtensions)
     {
         var fileName = Path.GetFileName(uri.AbsolutePath);
         if (string.IsNullOrWhiteSpace(fileName)) return "imported-dataset";
 
-        foreach (var ext in ArchiveExtensions)
-        {
-            if (fileName.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
-                return fileName[..^ext.Length];
-        }
-
-        return Path.GetFileNameWithoutExtension(fileName);
+        return KnownSuffix(fileName, supportedExtensions) is { } known
+            ? fileName[..^known.Length]
+            : Path.GetFileNameWithoutExtension(fileName);
     }
 
     private static string? GetString(JsonElement obj, string name)
@@ -294,18 +234,6 @@ public sealed class ArchiveUrlImportSource : IImportSource
         if (el.ValueKind != JsonValueKind.String) return null;
         var s = el.GetString();
         return string.IsNullOrWhiteSpace(s) ? null : s;
-    }
-
-    private void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path)) File.Delete(path);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not delete import scratch file '{Path}'", path);
-        }
     }
 
     private readonly record struct ArchiveParams(

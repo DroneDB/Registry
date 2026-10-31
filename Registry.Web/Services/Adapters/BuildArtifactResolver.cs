@@ -1,4 +1,9 @@
+using System;
+using System.Collections.Frozen;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using Microsoft.Extensions.Caching.Memory;
 using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
@@ -7,69 +12,271 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Resolves on-disk paths to deterministic build artifacts living under
-/// {dataset}/.ddb/build/{hash}/...
-/// Single source of truth used by OGC service managers; no duplicate path logic.
+/// Default <see cref="IBuildArtifactResolver"/>, over libddb's build manifest: the one place where
+/// Registry chooses which artifact role a renderer reads and which media type a download is served
+/// with. The entry types come from libddb once per process; the locations of existing artifacts are kept in a
+/// bounded process-memory cache (<see cref="FindArtifact"/>).
 /// </summary>
-public class BuildArtifactResolver : IBuildArtifactResolver
+public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
 {
+    /// <summary>Locations of artifacts kept: enough for every built layer a host serves at once.</summary>
+    private const int LocationCacheSize = 20_000;
+
+    private static readonly TimeSpan LocationExpiry = TimeSpan.FromMinutes(30);
+
+    /// <summary>The media type of a directory artifact sent as a download (a ZIP archive of what is in it).</summary>
+    private const string ArchiveMediaType = "application/zip";
+
+    /// <summary>
+    /// The roles the renderers read (thumbnails, tiles, raster analysis): the first existing one of an
+    /// entry's own build is its render source. The order does not matter between the roles of a legacy
+    /// pair (EPT and COPC, Nexus and bm3d), because libddb lists the legacy one only when the current
+    /// one is missing and never lists both. The exception is the SPZ file of a Gaussian splat: a libddb that does not
+    /// yet flag it as legacy can list it beside the streamed model, so it comes after <see cref="ArtifactRoles.GsplatLod"/>
+    /// and is read only when there is no streamed model (a splat built before the RAD layout).
+    /// </summary>
+    private static readonly string[] RenderRoles =
+    [
+        ArtifactRoles.RasterCog, ArtifactRoles.PointCloudCopc, ArtifactRoles.PointCloudEpt,
+        ArtifactRoles.VectorGpkg, ArtifactRoles.ModelBm3d, ArtifactRoles.ModelNexus,
+        ArtifactRoles.GsplatLod, ArtifactRoles.GsplatSpz
+    ];
+
+    private readonly Lazy<FrozenSet<EntryType>> _renderedTypes;
+    private readonly Lazy<FrozenSet<EntryType>> _buildableTypes;
+    private readonly Lazy<FrozenSet<EntryType>> _thumbnailTypes;
+    private readonly Lazy<IReadOnlyList<EntryTypeInfo>> _types;
     private readonly IFileSystem _fs;
+    private readonly MemoryCache _locations = new(new MemoryCacheOptions { SizeLimit = LocationCacheSize });
 
-    public BuildArtifactResolver(IFileSystem fs)
+    public BuildArtifactResolver(IDdbWrapper ddbWrapper, IFileSystem fs)
     {
-        _fs = fs;
+        ArgumentNullException.ThrowIfNull(ddbWrapper);
+        _fs = fs ?? throw new ArgumentNullException(nameof(fs));
+        _types = new Lazy<IReadOnlyList<EntryTypeInfo>>(ddbWrapper.GetEntryTypes);
+
+        // libddb's type rules: the types it builds, and those whose builds can produce a role a renderer reads
+        _buildableTypes = new Lazy<FrozenSet<EntryType>>(() => _types.Value
+            .Where(t => t.Buildable)
+            .Select(t => t.Id)
+            .ToFrozenSet());
+        _thumbnailTypes = new Lazy<FrozenSet<EntryType>>(() => _types.Value
+            .Where(t => t.HasThumbnail)
+            .Select(t => t.Id)
+            .ToFrozenSet());
+        _renderedTypes = new Lazy<FrozenSet<EntryType>>(() => _types.Value
+            .Where(t => t.Roles.Any(r => RenderRoles.Contains(r, StringComparer.Ordinal)))
+            .Select(t => t.Id)
+            .ToFrozenSet());
     }
 
-    private static string BuildBasePath =>
-        CommonUtils.SafeCombine(IDDB.DatabaseFolderName, IDDB.BuildFolderName);
+    public IReadOnlyList<EntryTypeInfo> EntryTypes => _types.Value;
 
-    private static string Relative(string entryHash, params string[] sub)
+    public bool IsBuildableType(EntryType type) => _buildableTypes.Value.Contains(type);
+
+    public bool HasThumbnail(EntryType type) => _thumbnailTypes.Value.Contains(type);
+
+    public EntryBuildArtifacts GetBuild(IDDB ddb, string entryPath) => GetBuilds(ddb, [entryPath])[0];
+
+    public IReadOnlyList<EntryBuildArtifacts> GetBuilds(IDDB ddb, IReadOnlyList<string> entryPaths)
     {
-        var combined = new string[sub.Length + 2];
-        combined[0] = BuildBasePath;
-        combined[1] = entryHash;
-        for (var i = 0; i < sub.Length; i++) combined[i + 2] = sub[i];
-        return CommonUtils.SafeCombine(combined);
+        ArgumentNullException.ThrowIfNull(ddb);
+        ArgumentNullException.ThrowIfNull(entryPaths);
+
+        var builds = ddb.GetBuildArtifacts(entryPaths);
+        if (builds.Count != entryPaths.Count)
+            throw new DdbException(
+                $"The build manifest has {builds.Count} element(s) for {entryPaths.Count} path(s)");
+        return builds;
     }
 
-    // ddb.GetLocalPath() may return a path relative to the current working directory
-    // (e.g. "./datasets/..."). Callers such as MVC PhysicalFileResult require an
-    // absolute (rooted) path, so we normalize here as the single source of truth.
-    private static string Absolute(string path) => Path.GetFullPath(path);
+    public string? GetRenderSource(IDDB ddb, Entry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
 
-    public string GetMvtDir(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "mvt")));
+        // A type that never renders from a build costs no native call (images: the hot thumbnail path)
+        if (!_renderedTypes.Value.Contains(entry.Type))
+            return entry.Path;
 
-    public string GetMvtMetadataPath(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "mvt", "metadata.json")));
+        var build = GetBuild(ddb, entry.Path);
+        if (!build.IsOwnBuild())
+            return entry.Path;
 
-    public string GetMvtTilePath(IDDB ddb, string entryHash, int z, int x, int y) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "mvt", z.ToString(), x.ToString(), $"{y}.pbf")));
+        var artifact = RenderRoles
+            .Select(role => build.Build!.Find(role))
+            .FirstOrDefault(a => a != null);
+        if (artifact == null)
+            return null;
 
-    public string GetCogPath(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "cog", "cog.tif")));
+        // A directory artifact (legacy EPT) is read through its descriptor
+        var local = build.Build!.LocalPathOf(artifact);
+        if (artifact.Index is { Length: > 0 } index)
+            local = Path.Combine(local, index.ToLocalSeparators());
 
-    public string GetVectorQueryPath(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "vec", "source.gpkg")));
+        return Path.GetRelativePath(Path.GetFullPath(ddb.DatasetFolderPath), local).ToDdbPath();
+    }
 
-    public string GetCopcPath(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "copc", "cloud.copc.laz")));
+    public BuildDownload? GetDownload(EntryBuildArtifacts build, string? role = null)
+    {
+        ArgumentNullException.ThrowIfNull(build);
 
-    public string GetGsplatPath(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "gsplat", "model.spz")));
+        if (!build.IsOwnBuild())
+            return null;
 
-    public string GetGsplatLodPath(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "gsplat", "model.rad")));
+        var artifact = build.Build!.Artifacts.FirstOrDefault(a => !string.IsNullOrEmpty(a.DownloadName) &&
+            (role == null || string.Equals(a.Role, role, StringComparison.Ordinal)));
+        if (artifact == null)
+            return null;
 
-    public string GetGsplatGeorefPath(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "gsplat", "georef.json")));
+        var name = DownloadFileName(build.Path, artifact.DownloadName!);
+        return artifact.IsDirectory
+            ? new BuildDownload(build.Build.LocalPathOf(artifact), name, ArchiveMediaType, IsArchive: true)
+            : new BuildDownload(build.Build.LocalPathOf(artifact), name, artifact.MediaType);
+    }
 
-    public string Get3DTilesDir(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "3dtiles")));
+    /// <summary>
+    /// The name a download is offered under: the entry's name with the extension of the manifest's download name
+    /// from its first dot (the COPC of <c>scan.laz</c> is <c>scan.copc.laz</c>), or the entry's name as it is when it already
+    /// ends with that extension (a COG of <c>ortho.tif</c> is <c>ortho.tif</c>, not <c>ortho.tif.tif</c>).
+    /// </summary>
+    internal static string DownloadFileName(string entryPath, string downloadName)
+    {
+        var dot = downloadName.IndexOf('.', StringComparison.Ordinal);
+        var extension = dot < 0 ? "" : downloadName[dot..];
+        var name = Path.GetFileName(entryPath);
 
-    public string Get3DTilesTilesetPath(IDDB ddb, string entryHash) =>
-        Absolute(ddb.GetLocalPath(Relative(entryHash, "3dtiles", "tileset.json")));
+        return extension.Length > 0 && name.EndsWith(extension, StringComparison.OrdinalIgnoreCase)
+            ? name
+            : Path.GetFileNameWithoutExtension(name) + extension;
+    }
 
-    public bool ArtifactExists(string fullPath) =>
-        !string.IsNullOrEmpty(fullPath) && _fs.Exists(fullPath);
+    public string? FindArtifactFile(IDDB ddb, string hash, string role, string? relativePath = null,
+        string? entryPath = null)
+    {
+        if (FindArtifact(ddb, hash, role, entryPath) is not { } located)
+            return null;
+
+        var file = relativePath != null ? located.Under(relativePath)
+            : located.Artifact.Index is { Length: > 0 } index ? located.Under(index)
+            : located.LocalPath;
+        return _fs.Exists(file) ? file : null;
+    }
+
+    private LocatedArtifact? FindArtifact(IDDB ddb, string hash, string role, string? entryPath)
+    {
+        ArgumentNullException.ThrowIfNull(ddb);
+        ArgumentException.ThrowIfNullOrWhiteSpace(hash);
+        ArgumentException.ThrowIfNullOrWhiteSpace(role);
+
+        var key = (Path.GetFullPath(ddb.DatasetFolderPath), hash, role);
+        if (_locations.TryGetValue(key, out LocatedArtifact? known) && known != null)
+        {
+            if (Exists(known))
+                return known;
+            _locations.Remove(key);
+        }
+
+        var located = Locate(ddb, hash, role, entryPath);
+        if (located != null)
+            _locations.Set(key, located, new MemoryCacheEntryOptions { Size = 1, SlidingExpiration = LocationExpiry });
+        return located;
+    }
+
+    // The entry of the build (given, or found by hash among the types whose builds produce the role), then the
+    // manifest of its build
+    private LocatedArtifact? Locate(IDDB ddb, string hash, string role, string? entryPath)
+    {
+        string[] paths;
+        if (entryPath != null)
+            paths = [entryPath];
+        else
+        {
+            var types = _types.Value.Where(t => t.Roles.Contains(role, StringComparer.Ordinal)).Select(t => t.Id).ToArray();
+            if (types.Length == 0)
+                return null;
+            paths = [.. ddb.FindSummaries(EntryQuery.OfTypes(null, types))
+                .Where(e => string.Equals(e.Hash, hash, StringComparison.Ordinal))
+                .Select(e => e.Path)];
+        }
+
+        if (paths.Length == 0)
+            return null;
+
+        return GetBuilds(ddb, paths)
+            .Where(b => b.IsOwnBuild() && string.Equals(b.Build!.Hash, hash, StringComparison.Ordinal))
+            .Select(b => (Build: b.Build!, Artifact: b.Build!.Find(role)))
+            .Where(f => f.Artifact != null)
+            .Select(f => new LocatedArtifact(f.Build.LocalPathOf(f.Artifact!), f.Artifact!))
+            .FirstOrDefault();
+    }
+
+    private bool Exists(LocatedArtifact located) =>
+        located.Artifact.Kind == "dir" ? _fs.FolderExists(located.LocalPath) : _fs.Exists(located.LocalPath);
+
+    public void Dispose() => _locations.Dispose();
+
+    // An existing artifact of a build and its local path (a file, or a directory artifact's directory)
+    private sealed record LocatedArtifact(string LocalPath, BuildArtifact Artifact)
+    {
+        public string Under(string relativePath) => Path.Combine(LocalPath, relativePath.ToLocalSeparators());
+    }
+
+    public ResolvedBuildFile? ResolveFile(IDDB ddb, string hash, string path)
+    {
+        ArgumentNullException.ThrowIfNull(ddb);
+        return ddb.ResolveBuildFile(hash, path);
+    }
+
+    public int CopyBuilds(IDDB source, IReadOnlyList<string> entryPaths, IDDB destination)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        if (entryPaths.Count == 0)
+            return 0;
+
+        var hashes = GetBuilds(source, entryPaths)
+            .Where(b => b.IsOwnBuild() && (b.Build!.Artifacts.Count > 0 || b.Build.State == BuildState.Pending))
+            .Select(b => b.Build!.Hash!)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        foreach (var hash in hashes)
+            source.CopyBuildArtifactsTo(destination.DatasetFolderPath, hash);
+
+        return hashes.Length;
+    }
+}
+
+/// <summary>Reading libddb's build manifest.</summary>
+public static class BuildManifestExtensions
+{
+    /// <summary>The entry is buildable (by itself, or as a sidecar of its main file).</summary>
+    public static bool CanBeBuilt(this EntryBuildArtifacts build) => build.Build?.Buildable == true;
+
+    /// <summary>
+    /// The build is the entry's own: it is buildable and not a sidecar (whose build, and artifacts, are its
+    /// main file's).
+    /// </summary>
+    public static bool IsOwnBuild(this EntryBuildArtifacts build) =>
+        build.Build is { Buildable: true, Hash: not null, Root: not null } own &&
+        string.Equals(own.Source, build.Path, StringComparison.Ordinal);
+
+    /// <summary>A live build holds the entry's build lock.</summary>
+    public static bool HasLiveBuild(this EntryBuildArtifacts build) => build.Build?.State == BuildState.Building;
+
+    /// <summary>
+    /// The build lists an artifact of an older layout (<see cref="BuildArtifact.Legacy"/>): libddb lists it only
+    /// while the current artifact of its role is missing, so the entry is incomplete and a rebuild replaces it.
+    /// </summary>
+    public static bool ListsLegacyArtifact(this EntryBuild build) => build.Artifacts.Any(a => a.Legacy);
+
+    /// <summary>The existing artifact with <paramref name="role"/>, or null.</summary>
+    public static BuildArtifact? Find(this EntryBuild build, string role) =>
+        build.Artifacts.FirstOrDefault(a => string.Equals(a.Role, role, StringComparison.Ordinal));
+
+    /// <summary>The absolute local path of <paramref name="artifact"/> (relative to the build root).</summary>
+    public static string LocalPathOf(this EntryBuild build, BuildArtifact artifact)
+    {
+        ArgumentNullException.ThrowIfNull(build.Root);
+        return Path.GetFullPath(Path.Combine(build.Root, artifact.Path.ToLocalSeparators()));
+    }
 }

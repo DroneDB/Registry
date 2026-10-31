@@ -40,26 +40,46 @@ services:
             db:
                 condition: service_healthy
         image: dronedb/registry:latest
+        # Graceful stop (Registry.Web/Utilities/ShutdownTimeouts.cs): Hangfire drains (15 s), libddb
+        # checkpoints its indexes (DDBShutdown, 10 s), the host allows 30 s; Docker must wait longer
+        stop_grace_period: 40s
+        # Anonymous liveness (GET /health/live; /quickhealth needs the monitor token). The image
+        # HEALTHCHECK runs the same script; it is repeated here for the longer start period: the
+        # first start after the switch to the non-root user hands ./data to it (see entrypoint.sh).
         healthcheck:
-            test: [ "CMD", "curl", "-f", "http://localhost:5000/quickhealth" ]
+            test: [ "CMD", "/healthcheck.sh" ]
             interval: 30s
             timeout: 10s
             retries: 5
+            start_period: 10m
         environment:
             - INSTANCE_TYPE=2
+            # The Registry processes sharing this machine: each takes its share of the cores and
+            # memory (web 1/5, each node 2/5) instead of planning the whole machine. Keep these in step
+            # with the services below; an empty or removed value plans the whole machine, as before.
+            - AppSettings__HostBudget__WebServers=1
+            - AppSettings__HostBudget__ProcessingNodes=2
+            # One Data Protection key ring for every service: the web server encrypts the credentials of
+            # a remote import and the node that runs it decrypts them, which fails with a key ring of its
+            # own (without Redis or this folder each container keeps its keys in its home folder). The
+            # folder is in ./data, which every service mounts; keep this line in each node service too.
+            - AppSettings__DataProtectionKeysPath=/data/data-protection-keys
+            # The image runs in UTC; keep the local time these deployments always used
+            - TZ=Europe/Rome
+            # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
+            # altitude of images without one in their EXIF falls back to the GPS altitude
+            - DDB_OPENTOPOGRAPHY_KEY=${DDB_OPENTOPOGRAPHY_KEY:-}
+            # Outgoing e-mail: configure AppSettings:Smtp in ./appsettings.json (every service reads it:
+            # the nodes send the queued e-mails). To keep the SMTP password out of the file, uncomment
+            # this line here and in every node service. Left set but empty, it would replace the
+            # password of the file with nothing.
+            # - AppSettings__Smtp__Password=${SMTP_PASSWORD}
             # Keep GDAL/Nexus build scratch on the data volume, off the container
             # root filesystem and off the /tmp tmpfs. /data is bind-mounted below;
             # /data/temp must exist on the host (created by the app on startup).
             - CPL_TMPDIR=/data/temp
             - TMPDIR=/data/temp
             - TEMP=/data/temp
-            # NOTE: Temporary workaround for a Nexus/libnexus bug — qWarning
-            # "QFSFileEngine::map: Mapping a file beyond its size is not
-            # portable" floods stderr (hundreds of MB/h per service) during
-            # builds. Unlike "qt" module categories, qWarning writes to the
-            # "default" category, hence the *.warning wildcard. Remove once
-            # the vendored upstream fix for the mapping is released.
-            - QT_LOGGING_RULES=*.warning=false
         tmpfs:
             - /tmp
         volumes:
@@ -74,19 +94,30 @@ services:
             registry_webserver:
                 condition: service_healthy
         image: dronedb/registry:latest
+        # Graceful stop (Registry.Web/Utilities/ShutdownTimeouts.cs): Hangfire drains (15 s), libddb
+        # checkpoints its indexes (DDBShutdown, 10 s), the host allows 30 s; Docker must wait longer
+        stop_grace_period: 40s
+        # Fixed host name: the node's log file is logs/registry-node-<host name>.txt (the nodes share
+        # ./data), so it must not change when the container is recreated
+        hostname: node-a
+        # Healthcheck: the image HEALTHCHECK (docker/healthcheck.sh: the Registry process is alive)
         environment:
             - INSTANCE_TYPE=1
+            # The Registry processes sharing this machine, see registry_webserver
+            - AppSettings__HostBudget__WebServers=1
+            - AppSettings__HostBudget__ProcessingNodes=2
+            # The key ring shared with the web server, see registry_webserver
+            - AppSettings__DataProtectionKeysPath=/data/data-protection-keys
+            - TZ=Europe/Rome
+            # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
+            # altitude of images without one in their EXIF falls back to the GPS altitude
+            - DDB_OPENTOPOGRAPHY_KEY=${DDB_OPENTOPOGRAPHY_KEY:-}
+            # The SMTP password, when it is not in ./appsettings.json (see registry_webserver)
+            # - AppSettings__Smtp__Password=${SMTP_PASSWORD}
             # Keep GDAL/Nexus build scratch on the data volume (see webserver).
             - CPL_TMPDIR=/data/temp
             - TMPDIR=/data/temp
             - TEMP=/data/temp
-            # NOTE: Temporary workaround for a Nexus/libnexus bug — qWarning
-            # "QFSFileEngine::map: Mapping a file beyond its size is not
-            # portable" floods stderr (hundreds of MB/h per service) during
-            # builds. Unlike "qt" module categories, qWarning writes to the
-            # "default" category, hence the *.warning wildcard. Remove once
-            # the vendored upstream fix for the mapping is released.
-            - QT_LOGGING_RULES=*.warning=false
         tmpfs:
             - /tmp
         volumes:
@@ -99,19 +130,30 @@ services:
             registry_webserver:
                 condition: service_healthy
         image: dronedb/registry:latest
+        # Graceful stop (Registry.Web/Utilities/ShutdownTimeouts.cs): Hangfire drains (15 s), libddb
+        # checkpoints its indexes (DDBShutdown, 10 s), the host allows 30 s; Docker must wait longer
+        stop_grace_period: 40s
+        # Fixed host name: the node's log file is logs/registry-node-<host name>.txt (the nodes share
+        # ./data), so it must not change when the container is recreated
+        hostname: node-b
+        # Healthcheck: the image HEALTHCHECK (docker/healthcheck.sh: the Registry process is alive)
         environment:
             - INSTANCE_TYPE=1
+            # The Registry processes sharing this machine, see registry_webserver
+            - AppSettings__HostBudget__WebServers=1
+            - AppSettings__HostBudget__ProcessingNodes=2
+            # The key ring shared with the web server, see registry_webserver
+            - AppSettings__DataProtectionKeysPath=/data/data-protection-keys
+            - TZ=Europe/Rome
+            # OpenTopography API key for DSM altitude lookups (libddb); without it the relative
+            # altitude of images without one in their EXIF falls back to the GPS altitude
+            - DDB_OPENTOPOGRAPHY_KEY=${DDB_OPENTOPOGRAPHY_KEY:-}
+            # The SMTP password, when it is not in ./appsettings.json (see registry_webserver)
+            # - AppSettings__Smtp__Password=${SMTP_PASSWORD}
             # Keep GDAL/Nexus build scratch on the data volume (see webserver).
             - CPL_TMPDIR=/data/temp
             - TMPDIR=/data/temp
             - TEMP=/data/temp
-            # NOTE: Temporary workaround for a Nexus/libnexus bug — qWarning
-            # "QFSFileEngine::map: Mapping a file beyond its size is not
-            # portable" floods stderr (hundreds of MB/h per service) during
-            # builds. Unlike "qt" module categories, qWarning writes to the
-            # "default" category, hence the *.warning wildcard. Remove once
-            # the vendored upstream fix for the mapping is released.
-            - QT_LOGGING_RULES=*.warning=false
         tmpfs:
             - /tmp
         volumes:

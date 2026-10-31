@@ -1,40 +1,46 @@
-﻿using System.Threading.Tasks;
-using Microsoft.AspNetCore.Identity;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Data;
-using Registry.Web.Identity;
-using Registry.Web.Identity.Models;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Utilities.Auth;
 
 public abstract class AccessControlBase
 {
-    protected readonly UserManager<User> UsersManager;
-    protected readonly RegistryContext _context;
-    protected readonly ILogger Logger;
+    protected IUserAuthSnapshotProvider Snapshots { get; }
+    protected RegistryContext Context { get; }
+    protected ILogger Logger { get; }
 
-    protected AccessControlBase(UserManager<User> usersManager, RegistryContext context, ILogger logger)
+    protected AccessControlBase(IUserAuthSnapshotProvider snapshots, RegistryContext context, ILogger logger)
     {
-        UsersManager = usersManager;
-        _context = context;
+        Snapshots = snapshots;
+        Context = context;
         Logger = logger;
     }
 
     /// <summary>
     /// Checks if a user is deactivated
     /// </summary>
-    public async Task<bool> IsUserDeactivated(User user)
+    public async Task<bool> IsUserDeactivated(string? userId)
     {
-        if (user == null) return false;
-        return await UsersManager.IsInRoleAsync(user, ApplicationDbContext.DeactivatedRoleName);
+        if (userId == null) return false;
+        return (await Snapshots.GetAsync(userId)).IsDeactivated;
     }
 
     /// <summary>
     /// Checks if a user has admin privileges
     /// </summary>
-    public async Task<bool> IsUserAdmin(User user)
+    public async Task<bool> IsUserAdmin(string? userId)
     {
-        if (user == null) return false;
-        return await UsersManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName);
+        if (userId == null) return false;
+        return (await Snapshots.GetAsync(userId)).IsAdmin;
+    }
+
+    /// <summary>
+    /// Checks that a resource owner exists and is not deactivated
+    /// </summary>
+    protected async Task<bool> IsOwnerActive(string? ownerId)
+    {
+        return ownerId != null && (await Snapshots.GetAsync(ownerId)).IsActive;
     }
 }

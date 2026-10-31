@@ -1,64 +1,44 @@
-﻿using System.Linq;
+using System;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
-using Microsoft.VisualStudio.Web.CodeGenerators.Mvc.Templates.General;
-using Registry.Web.Data;
-using Registry.Web.Identity;
-using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Utilities.Auth;
 
 public static class AuthorizationExtensions
 {
+    private const string BearerPrefix = "Bearer ";
+
+    /// <summary>
+    /// Allows the request when it carries the configured MonitorToken (bearer header, else the
+    /// "token" query parameter) or when the user is an admin: <see cref="AdminOrMonitorTokenRequirement"/>,
+    /// checked by <see cref="AdminAuthorizationHandler"/>.
+    /// </summary>
     public static IEndpointConventionBuilder RequireAdminOrMonitorToken(
         this IEndpointConventionBuilder builder)
     {
-        return builder.RequireAuthorization(policy =>
-        {
-            policy.RequireAssertion(context =>
-            {
-                if (context.Resource is not HttpContext httpContext)
-                {
-                    if (!context.User.Identity?.IsAuthenticated ?? false)
-                        return false;
-
-                    return context.User.HasClaim(ApplicationDbContext.AdminRoleName, "true");
-                }
-
-                // Resolve the IOptions<AppSettings> from the service provider
-                var appSettings = httpContext.RequestServices.GetRequiredService<IOptions<AppSettings>>();
-
-                // Check if the request contains the Authorization header
-                var authHeader = httpContext.Request.Headers.Authorization.FirstOrDefault();
-                string token = null;
-
-                if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer "))
-                {
-                    token = authHeader["Bearer ".Length..].Trim();
-                }
-                else
-                {
-                    // Fallback to check the "token" query string parameter
-                    token = httpContext.Request.Query["token"].FirstOrDefault();
-                }
-
-                // Check if the token matches the MonitorToken from AppSettings
-                if (!string.IsNullOrEmpty(token) && token == appSettings.Value.MonitorToken)
-                {
-                    // Token is valid, bypass standard authorization
-                    return true;
-                }
-
-                // Check if the user is authenticated
-                if (!context.User.Identity?.IsAuthenticated ?? false)
-                    return false;
-
-                // Check if the user is admin
-                return context.User.HasClaim(ApplicationDbContext.AdminRoleName, "true");
-
-            });
-        });
+        return builder.RequireAuthorization(policy => policy.AddRequirements(new AdminOrMonitorTokenRequirement()));
     }
+
+    /// <summary>Whether the request carries <paramref name="monitorToken"/> (bearer header, else the "token"
+    /// query parameter).</summary>
+    internal static bool HasMonitorToken(HttpContext httpContext, string? monitorToken)
+    {
+        var authHeader = httpContext.Request.Headers.Authorization.FirstOrDefault();
+        var token = !string.IsNullOrEmpty(authHeader) && authHeader.StartsWith(BearerPrefix, StringComparison.Ordinal)
+            ? authHeader[BearerPrefix.Length..].Trim()
+            : httpContext.Request.Query["token"].FirstOrDefault();
+
+        return TokensMatch(token, monitorToken);
+    }
+
+    /// <summary>
+    /// Constant-time comparison of a presented token with the expected one; a missing or empty token
+    /// (presented or configured) never matches.
+    /// </summary>
+    internal static bool TokensMatch(string? presented, string? expected) =>
+        !string.IsNullOrEmpty(presented) && !string.IsNullOrEmpty(expected) &&
+        CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(presented), Encoding.UTF8.GetBytes(expected));
 }

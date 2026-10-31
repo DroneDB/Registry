@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using System.Text.Json;
 using System.Threading;
@@ -28,6 +27,13 @@ public interface IHeavyTool
 
     /// <summary>Whether the tool produces a downloadable artifact.</summary>
     bool ProducesArtifact { get; }
+
+    /// <summary>
+    /// Whether the tool runs a native build or raster processing inline (GDAL warps, COG/COPC
+    /// builds). Such jobs run on the "builds" queue, whose worker count bounds concurrent
+    /// builds. Tools that only enqueue build jobs keep the default.
+    /// </summary>
+    bool RunsNativeBuild => false;
 
     /// <summary>
     /// Default file extension (without the leading dot) of the produced artifact, or

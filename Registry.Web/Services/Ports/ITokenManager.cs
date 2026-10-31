@@ -1,4 +1,4 @@
-﻿namespace Registry.Web.Services.Ports;
+namespace Registry.Web.Services.Ports;
 
 /// <summary>
 /// Manages the JWT tokens
@@ -6,6 +6,4 @@
 public interface ITokenManager
 {
     bool IsCurrentActiveToken();
-    bool IsActive(string token);
-
 }

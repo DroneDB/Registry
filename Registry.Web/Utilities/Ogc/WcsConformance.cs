@@ -16,6 +16,9 @@ public static class WcsConformance
     /// <summary>WCS 2.0 profiles (used by <see cref="WcsProtocol20Handler"/>).</summary>
     public static readonly string[] Profiles = [Core, GetKvp];
 
+    /// <summary>The operations every WCS version advertises.</summary>
+    public static readonly string[] Operations = ["GetCapabilities", "DescribeCoverage", "GetCoverage"];
+
     /// <summary>Supported wire versions (ordered: highest first).</summary>
     public static readonly string[] SupportedVersions = ["2.0.1", "1.1.1", "1.0.0"];
 
@@ -36,7 +39,7 @@ public static class WcsConformance
     ];
 
     /// <summary>Translate a WCS 1.0 short format name (or pass-through MIME) into a MIME type.</summary>
-    public static string NormalizeWcs10Format(string format)
+    public static string NormalizeWcs10Format(string? format)
     {
         if (string.IsNullOrWhiteSpace(format)) return "image/tiff";
         return format.Trim().ToLowerInvariant() switch

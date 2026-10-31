@@ -5,40 +5,106 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+  # release.yml runs this same build + test before it publishes
+  workflow_call:
+
+# A new push to a PR supersedes the run in progress; master and tag runs always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
+    # The Hub is the commit this Registry pins, never Hub master
     - uses: actions/checkout@v4
       with:
         path: registry
-    - name: Submodules
+        submodules: recursive
+    # Counts of patterns the backend refactor removes may only go down (build/quality-baseline.txt)
+    - name: Quality metrics ratchet (no metric may grow)
       run: |
         cd registry
-        git submodule update --force --recursive --init --remote
+        bash scripts/quality-metrics.sh --check
+    # One DroneDB build (Directory.Build.props): well-formed, written nowhere else, installed by the
+    # Dockerfile through scripts/ddb-release.sh, and no build may download releases/latest
+    - name: DroneDB pin (Directory.Build.props)
+      run: |
+        cd registry
+        bash scripts/ddb-release.sh check
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: |
-          10.0.x
+        global-json-file: registry/global.json
     - name: Setup Node
       uses: actions/setup-node@v4
       with:
         node-version: 24
-    - name: Download and install latest DroneDB release
+    - name: Hub checks (tests + coverage, types, bundle budget, listener audit, ESLint)
       run: |
-        LATEST_RELEASE_URL=$(curl -s https://api.github.com/repos/DroneDB/DroneDB/releases/latest | grep "browser_download_url.*deb" | head -n 1 | cut -d '"' -f 4)
-        echo "Downloading DroneDB from $LATEST_RELEASE_URL"
-        curl -L -o dronedb.deb $LATEST_RELEASE_URL
-        sudo apt-get update && sudo apt-get install -y ./dronedb.deb
+        cd registry/Registry.Web/ClientApp
+        npm ci
+        npm run test:coverage
+        npm run typecheck
+        npm run build:stats
+        npm run check:bundle
+        npm run check:listeners
+        npm run lint
     - name: Build the project
       run: |
         cd registry
         dotnet build -c Release --verbosity minimal
-    - name: Run tests
+    - name: Nullable allow-list (may only shrink)
+      run: |
+        cd registry
+        bash scripts/check-nullable-allowlist.sh
+    # Rebuilds with --no-incremental: an up-to-date build reports no warnings
+    - name: Warning ratchet (no new compiler or analyzer warnings)
+      run: |
+        cd registry
+        bash scripts/check-warnings.sh
+    # Coverage comes from the Microsoft.CodeCoverage collector that Microsoft.NET.Test.Sdk ships:
+    # one Cobertura file per test project and run, reported, not gated. --blame-hang-timeout names
+    # a test stuck on a signal wait and dumps it instead of letting the job time out.
+    # Test categories (Registry.Test.Common/TestCategories.cs): Unit, Integration, Native, Network, Baseline.
+    # The unit tests run before DroneDB is installed: Registry.Web.UnitTest never loads libddb,
+    # and its UnitTestSetup fails the run if a test tries to.
+    - name: Unit tests, without libddb (with code coverage)
+      run: |
+        cd registry
+        if ldconfig -p | grep -q 'libddb\.so'; then echo "libddb is installed: the unit tests must run without it" >&2; exit 1; fi
+        dotnet test Registry.Web.UnitTest/Registry.Web.UnitTest.csproj -c Release --verbosity minimal --blame-hang-timeout 10m --collect "Code Coverage;Format=cobertura" --results-directory TestResults
+    # The build pinned in Directory.Build.props, verified with sha256sum -c (DdbDebSha256). A pinned
+    # DroneDB CI build (DdbSource ci, before DroneDB 2.0.0 is tagged) is an Actions artifact of
+    # DroneDB/DroneDB: it needs the repository secret DRONEDB_ARTIFACT_TOKEN.
+    - name: Download and install the pinned DroneDB build
+      env:
+        DRONEDB_ARTIFACT_TOKEN: ${{ secrets.DRONEDB_ARTIFACT_TOKEN }}
+      run: |
+        cd registry
+        if [[ "$(bash scripts/ddb-release.sh get DdbSource)" == "ci" && -z "$DRONEDB_ARTIFACT_TOKEN" ]]; then
+          msg="Secret DRONEDB_ARTIFACT_TOKEN is not set: Registry pins an unreleased DroneDB CI build ($(bash scripts/ddb-release.sh describe)) and cannot download it. Add the repository secret DRONEDB_ARTIFACT_TOKEN (a token with Actions read access to DroneDB/DroneDB, see scripts/ddb-release.sh)."
+          echo "::error title=DRONEDB_ARTIFACT_TOKEN missing::$msg"
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+        fi
+        deb="$(bash scripts/ddb-release.sh fetch-deb "$RUNNER_TEMP/ddb")"
+        sudo apt-get update && sudo apt-get install -y "$deb"
+    # Everything but the unit tests: Registry.Web.IntegrationTest (native libddb, test data
+    # downloads; the MySQL tests start the production MariaDB image through Testcontainers: Docker
+    # is on the runner, CI=true makes a missing Docker fail them instead of skipping) and the
+    # adapter test projects.
+    - name: Integration and adapter tests (with code coverage)
       run: |
         cd registry
         whereis ddb
         ddb --version --debug
-        dotnet test -c Release --verbosity minimal
+        dotnet test -c Release --verbosity minimal --filter "TestCategory!=Unit" --blame-hang-timeout 10m --collect "Code Coverage;Format=cobertura" --results-directory TestResults
+    - name: Upload code coverage
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: registry-coverage-cobertura
+        path: registry/TestResults/**/*.cobertura.xml
+        if-no-files-found: warn

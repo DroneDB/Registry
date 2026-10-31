@@ -1,28 +1,16 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Net;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
-using ICSharpCode.SharpZipLib.GZip;
-using ICSharpCode.SharpZipLib.Tar;
-using ICSharpCode.SharpZipLib.Zip;
-using Registry.Common.Model;
-using ZipFile = System.IO.Compression.ZipFile;
 
 namespace Registry.Common;
 
 /// <summary>
-/// General utilities: random strings, hash, tar/zip extraction, path helpers, and platform detection.
+/// General utilities: random strings, path helpers, downloads, and platform detection.
 /// </summary>
 public static class CommonUtils
 {
@@ -44,65 +32,9 @@ public static class CommonUtils
         return res.ToString();
     }
 
-    private const int BytesToRead = sizeof(long);
-
-    public static bool FilesAreEqual(string first, string second)
-    {
-        return FilesAreEqual(new FileInfo(first), new FileInfo(second));
-    }
-
-    public static bool FilesAreEqual(FileInfo first, FileInfo second)
-    {
-        if (first.Length != second.Length)
-            return false;
-
-        if (string.Equals(first.FullName, second.FullName, StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        var iterations = (int)Math.Ceiling((double)first.Length / BytesToRead);
-
-        using var fs1 = first.OpenRead();
-        using var fs2 = second.OpenRead();
-
-        var one = new byte[BytesToRead];
-        var two = new byte[BytesToRead];
-
-        for (var i = 0; i < iterations; i++)
-        {
-            var c1 = fs1.Read(one, 0, BytesToRead);
-            var c2 = fs2.Read(two, 0, BytesToRead);
-
-            if (c1 != c2)
-                return false;
-
-            if (BitConverter.ToInt64(one, 0) != BitConverter.ToInt64(two, 0))
-                return false;
-        }
-
-        return true;
-    }
-
-    public static TValue SafeGetValue<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key)
+    public static TValue? SafeGetValue<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key)
     {
         return !dictionary.TryGetValue(key, out var value) ? default : value;
-    }
-
-    public static TValue GetOrAdd<TKey, TValue>(
-        this Dictionary<TKey, TValue> dict, TKey key, TValue value) where TKey : notnull
-    {
-        ref var val = ref CollectionsMarshal.GetValueRefOrAddDefault(dict, key, out var exists);
-
-        if (exists)
-            return val;
-
-        val = value;
-        return value;
-    }
-
-    public static TValueOut? SafeGetValue<TKey, TValue, TValueOut>(this IDictionary<TKey, TValue> dictionary,
-        TKey key, Func<TValue, TValueOut> selector) where TValueOut : struct
-    {
-        return !dictionary.TryGetValue(key, out var value) ? null : selector(value);
     }
 
     /// <summary>
@@ -129,200 +61,47 @@ public static class CommonUtils
         }
     }
 
-    public static void SmartExtractFolder(string archive, string dest, bool overwrite = true)
-    {
-        var ext = Path.GetExtension(archive).ToLowerInvariant();
-
-        if (ext == ".tar.gz" || ext == ".tgz")
-            ExtractTGZ(archive, dest);
-        else
-            ZipFile.ExtractToDirectory(archive, dest, overwrite);
-    }
-
-    public static void ExtractTGZ(string archive, string destFolder)
-    {
-        using Stream inStream = File.OpenRead(archive);
-        using Stream gzipStream = new GZipInputStream(inStream);
-
-        var tarArchive = TarArchive.CreateInputTarArchive(gzipStream, Encoding.Default);
-        tarArchive.ExtractContents(destFolder);
-        tarArchive.Close();
-
-        gzipStream.Close();
-        inStream.Close();
-    }
-
-    public static string ComputeSha256Hash(string str)
-    {
-        return ComputeSha256Hash(Encoding.UTF8.GetBytes(str));
-    }
-
-    public static string ComputeFileHash(string filePath)
-    {
-        using var fileStream = File.OpenRead(filePath);
-        using var sha256Hash = SHA256.Create();
-        var bytes = sha256Hash.ComputeHash(fileStream);
-
-        return ConvertBytesToString(bytes);
-    }
-
-    private static string ConvertBytesToString(byte[] bytes)
-    {
-        // Convert byte array to a string
-        var builder = new StringBuilder();
-        foreach (var t in bytes)
-            builder.Append(t.ToString("x2"));
-
-        return builder.ToString();
-    }
-
-    public static string ComputeSha256Hash(byte[] rawData)
-    {
-        using var sha256Hash = SHA256.Create();
-        var bytes = sha256Hash.ComputeHash(rawData);
-
-        return ConvertBytesToString(bytes);
-    }
-
-    private const string SmartFileCacheFolder = "SmartFileCache";
-
-    /// <summary>
-    /// Downloads a file using a rudimentary cache in temp folder
-    /// </summary>
-    /// <param name="url"></param>
-    /// <param name="path"></param>
-    public static void SmartDownloadFile(string url, string path)
-    {
-        var uri = new Uri(url);
-        var fileName = uri.Segments.Last();
-
-        var smartFileCacheFolder = Path.Combine(Path.GetTempPath(), SmartFileCacheFolder);
-
-        if (!Directory.Exists(smartFileCacheFolder))
-            Directory.CreateDirectory(smartFileCacheFolder);
-
-        var cachedFilePath = Path.Combine(smartFileCacheFolder, fileName);
-
-        if (!File.Exists(cachedFilePath))
-            HttpHelper.DownloadFileAsync(url, cachedFilePath).Wait();
-
-        File.Copy(cachedFilePath, path, true);
-    }
-
-    /// <summary>
-    /// Downloads a file using a rudimentary cache in temp folder
-    /// </summary>
-    /// <param name="url"></param>
-    public static byte[] SmartDownloadData(string url)
-    {
-        var tmp = Path.GetTempFileName();
-
-        SmartDownloadFile(url, tmp);
-
-        var data = File.ReadAllBytes(tmp);
-
-        File.Delete(tmp);
-
-        return data;
-    }
-
-    public static StorageInfo GetStorageInfo(string path)
-    {
-        var f = new FileInfo(path);
-        var drive = Path.GetPathRoot(f.FullName);
-
-        // This could be improved but It's enough for now
-        var info = DriveInfo.GetDrives()
-            .FirstOrDefault(drv =>
-                string.Equals(drv.Name, drive, StringComparison.OrdinalIgnoreCase));
-
-        return info == null ? null : new StorageInfo(info.TotalSize, info.AvailableFreeSpace);
-    }
-
     /// <summary>
     /// Combines an array of strings into a path using the forward slash as folder separator
     /// </summary>
     /// <param name="paths">An array of parts of the path.</param>
     /// <returns></returns>
-    public static string SafeCombine(params string[] paths)
+    public static string SafeCombine(params string?[] paths)
     {
-        return Path.Combine([.. paths.Where(item => item != null)]).Replace('\\', '/');
+        return Path.Combine([.. paths.OfType<string>()]).ToDdbPath();
     }
 
     /// <summary>
-    /// Validates that an array of relative paths doesn't contain path traversal attacks.
-    /// Throws ArgumentException if any path is invalid or escapes the base directory.
+    /// True when <paramref name="fullPath"/> lies strictly inside <paramref name="root"/>. Both are
+    /// normalised with <see cref="Path.GetFullPath(string)"/> (so <c>..</c> segments are resolved and
+    /// relative paths are taken from the current directory) and compared per OS (case-insensitive on
+    /// Windows). The root ends with a separator before the comparison, so a sibling sharing the prefix
+    /// (<c>/data/datasets2</c> for root <c>/data/datasets</c>) is not inside. Symbolic links are not
+    /// resolved. Empty or invalid paths are never inside.
     /// </summary>
-    /// <param name="paths">The array of relative paths to validate.</param>
-    /// <param name="baseDirectory">The base directory that all paths must stay within.</param>
-    /// <exception cref="ArgumentNullException">Thrown when paths is null.</exception>
-    /// <exception cref="ArgumentException">Thrown when any path is empty, absolute, or contains traversal attempts.</exception>
-    public static void ValidateRelativePaths(string[] paths, string baseDirectory)
+    public static bool IsUnder(string root, string fullPath)
     {
-        ArgumentNullException.ThrowIfNull(paths);
+        if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(fullPath))
+            return false;
 
-        foreach (var path in paths)
-            ValidateRelativePath(path, baseDirectory);
-    }
-
-    /// <summary>
-    /// Validates that a relative path doesn't contain path traversal attacks.
-    /// Throws ArgumentException if the path is invalid or escapes the base directory.
-    /// </summary>
-    /// <param name="path">The relative path to validate.</param>
-    /// <param name="baseDirectory">The base directory that the path must stay within.</param>
-    /// <exception cref="ArgumentException">Thrown when the path is empty, absolute, or contains traversal attempts.</exception>
-    public static void ValidateRelativePath(string path, string baseDirectory)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("Path cannot be empty.", nameof(path));
-
-        if (string.IsNullOrWhiteSpace(baseDirectory))
-            throw new ArgumentException("Base directory cannot be empty.", nameof(baseDirectory));
-
-        // Reject absolute/rooted paths (including UNC on Windows)
-        if (Path.IsPathRooted(path))
-            throw new ArgumentException("Invalid path: absolute paths are not allowed.", nameof(path));
-
-        // Forbid '.' and '..' segments (semantic check, avoids false positives on 'file..txt')
-        var segments = path.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
-        foreach (var s in segments)
-        {
-            if (s is "." or "..")
-                throw new ArgumentException("Invalid path: path traversal is not allowed.", nameof(path));
-        }
-
-        string baseFull;
-        string combinedFull;
+        string rootFull;
+        string candidate;
 
         try
         {
-            baseFull = Path.GetFullPath(baseDirectory);
-
-            // Ensure trailing separator (prevents prefix tricks: C:\base vs C:\baseX)
-            if (!baseFull.EndsWith(Path.DirectorySeparatorChar))
-                baseFull += Path.DirectorySeparatorChar;
-
-            combinedFull = Path.GetFullPath(Path.Combine(baseFull, path));
+            rootFull = Path.GetFullPath(root);
+            candidate = Path.GetFullPath(fullPath);
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
-            throw new ArgumentException("Invalid path.", nameof(path), ex);
+            return false;
         }
 
-        var comparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
+        // Ensure trailing separator (prevents prefix tricks: C:\base vs C:\baseX)
+        if (!Path.EndsInDirectorySeparator(rootFull))
+            rootFull += Path.DirectorySeparatorChar;
 
-        if (!combinedFull.StartsWith(baseFull, comparison))
-            throw new ArgumentException("Invalid path: path traversal is not allowed.", nameof(path));
-    }
-
-    public static (string, Stream) GetTempStream(int bufferSize = 104857600)
-    {
-        var file = Path.Combine(Path.GetTempPath(), "temp-files", RandomString(16));
-
-        return (file, new BufferedStream(File.Open(file, FileMode.CreateNew, FileAccess.ReadWrite), bufferSize));
+        return candidate.StartsWith(rootFull, PathComparison.Comparison);
     }
 
     private static readonly HashSet<string> AddCompressibleMimeTypes =
@@ -416,13 +195,13 @@ public static class CommonUtils
                 readable = i;
                 break;
             default:
-                return i.ToString("0 B"); // Byte
+                return i.ToString("0 B", CultureInfo.InvariantCulture); // Byte
         }
 
         // Divide by 1024 to get fractional value
         readable /= 1024;
         // Return formatted number with suffix
-        return readable.ToString("0.### ") + suffix;
+        return readable.ToString("0.### ", CultureInfo.InvariantCulture) + suffix;
     }
 
     public static int BytesPerPixel(string? dataType) => dataType switch
@@ -434,108 +213,11 @@ public static class CommonUtils
         _ => 4 // Conservative default for unknown types
     };
 
-    public static bool Validate<T>(T obj, out ICollection<ValidationResult> results)
-    {
-        results = new List<ValidationResult>();
-
-        return Validator.TryValidateObject(obj, new ValidationContext(obj), results, true);
-    }
-
-    public static string ToErrorString(this IEnumerable<ValidationResult> results)
-    {
-        var builder = new StringBuilder();
-
-        foreach (var res in results)
-        {
-            builder.Append(res.ErrorMessage);
-
-            if (res.MemberNames.Any())
-            {
-                builder.Append(" (");
-                builder.Append(string.Join(", ", res.MemberNames));
-                builder.Append(')');
-            }
-
-            builder.Append("; ");
-        }
-
-        return builder.ToString();
-    }
-    /*
-    public static async Task<FileStream> WaitForFile(string fullPath, FileMode mode, FileAccess access, FileShare share,
-        int hops = 15, int baseDelay = 10, int incrementDelay = 2)
-    {
-        int delay = baseDelay;
-
-        for (var hop = 0; hop < hops; hops++)
-        {
-            FileStream fs = null;
-            try
-            {
-                fs = new FileStream(fullPath, mode, access, share);
-                return fs;
-            }
-            catch (IOException)
-            {
-                if (fs != null)
-                {
-                    await fs.DisposeAsync();
-                }
-
-                delay *= 2;
-                await Task.Delay(delay);
-            }
-        }
-
-        return null;
-    }*/
-
-    public static void WriteLineColor(string text, ConsoleColor color)
-    {
-        Console.ForegroundColor = color;
-        Console.WriteLine(text);
-        Console.ResetColor();
-    }
-
-    public static void WriteColor(string text, ConsoleColor color)
-    {
-        Console.ForegroundColor = color;
-        Console.Write(text);
-        Console.ResetColor();
-    }
-
-    public static int? SafeParse(string str, IFormatProvider provider = null)
-    {
-        return int.TryParse(str, NumberStyles.Integer, provider, out var result) ? result : null;
-    }
-
-    public static void SetDefaultDllPath(string path)
-    {
-        const uint LOAD_LIBRARY_SEARCH_DEFAULT_DIRS = 0x00001000;
-
-        if (Environment.OSVersion.Platform != PlatformID.Win32NT)
-            return;
-
-        if (!SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS))
-            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-
-        var dirHandle = AddDllDirectory(path);
-        if (dirHandle == IntPtr.Zero)
-            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-        return;
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        static extern IntPtr AddDllDirectory([MarshalAs(UnmanagedType.LPWStr)] string lpPathName);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        static extern bool SetDefaultDllDirectories(uint flags);
-    }
-
 
     public const string DroneDBDllNameWindows = "ddb.dll";
     public const string DroneDBDllNameLinux = "libddb.so";
 
-    public static string FindDdbFolder()
+    public static string? FindDdbFolder()
     {
         var path = Environment.GetEnvironmentVariable("PATH");
 
@@ -544,7 +226,7 @@ public static class CommonUtils
 
         var newPath = path.Split(Path.PathSeparator);
 
-        var libraryName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+        var libraryName = OperatingSystem.IsWindows()
             ? DroneDBDllNameWindows
             : DroneDBDllNameLinux;
 
@@ -584,6 +266,4 @@ public static class CommonUtils
             }
         }
     }
-
-
 }

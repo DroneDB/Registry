@@ -1,10 +1,8 @@
-﻿#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Models;
-using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.Services.Ports;
 
@@ -31,8 +29,6 @@ public enum JobIndexPreparationResult
 /// </summary>
 public interface IJobIndexWriter
 {
-    Task UpsertOnEnqueueAsync(string jobId, IndexPayload meta, DateTime createdAtUtc, string? methodDisplay, CancellationToken ct = default);
-
     /// <summary>
     /// Forward-only, idempotent JobIndex preparation for an indexed job publication. Inserts a missing
     /// row in <c>Indexing</c> with the original creation time. An existing row with the same creation

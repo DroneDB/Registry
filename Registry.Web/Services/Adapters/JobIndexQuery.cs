@@ -1,4 +1,3 @@
-﻿#nullable enable
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -24,11 +23,54 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
             .Skip(skip).Take(take)
             .ToArrayAsync(ct);
 
-    public async Task<JobIndex[]> GetByOrgDsHashAsync(string orgSlug, string dsSlug, string hash, int skip = 0, int take = 200, CancellationToken ct = default)
+    // Bounds the IN list of path filters (SQLite and MySQL parameter limits)
+    private const int PathChunkSize = 500;
+
+    public async Task<HashSet<string>> GetActivePathsAsync(string orgSlug, string dsSlug, string toolId,
+        IReadOnlyCollection<string> paths, CancellationToken ct = default) =>
+        (await GetActiveJobsAsync(orgSlug, dsSlug, toolId, paths, ct)).Select(j => j.Path).ToHashSet();
+
+    public async Task<IReadOnlyList<ActiveJob>> GetActiveJobsAsync(string orgSlug, string dsSlug, string toolId,
+        IReadOnlyCollection<string> paths, CancellationToken ct = default)
     {
-        var q =
-            db.JobIndices.AsNoTracking().Where(x => x.OrgSlug == orgSlug && x.DsSlug == dsSlug && x.Hash == hash);
-        return await q.OrderByDescending(x => x.CreatedAtUtc).Skip(skip).Take(take).ToArrayAsync(cancellationToken: ct);
+        var result = new List<ActiveJob>();
+
+        foreach (var chunk in paths.Distinct().Chunk(PathChunkSize))
+        {
+            var active = await db.JobIndices
+                .AsNoTracking()
+                .Where(x => x.OrgSlug == orgSlug && x.DsSlug == dsSlug && x.ToolId == toolId &&
+                            chunk.Contains(x.Path!) && ActiveStates.Contains(x.CurrentState))
+                .Select(x => new { Path = x.Path!, x.CurrentState, x.MethodDisplay })
+                .ToArrayAsync(ct);
+
+            result.AddRange(active.Select(x => new ActiveJob(x.Path, x.CurrentState, x.MethodDisplay)));
+        }
+
+        return result;
+    }
+
+    public async Task<Dictionary<string, string>> GetLatestStatesByPathAsync(string orgSlug, string dsSlug,
+        string toolId, IReadOnlyCollection<string> paths, CancellationToken ct = default)
+    {
+        var result = new Dictionary<string, string>();
+
+        foreach (var chunk in paths.Distinct().Chunk(PathChunkSize))
+        {
+            // Three narrow columns of the listed paths' jobs; the latest per path is picked here
+            var jobs = await db.JobIndices
+                .AsNoTracking()
+                .Where(x => x.OrgSlug == orgSlug && x.DsSlug == dsSlug && x.ToolId == toolId &&
+                            chunk.Contains(x.Path!))
+                .Select(x => new { Path = x.Path!, x.CurrentState, x.CreatedAtUtc })
+                .ToArrayAsync(ct);
+
+            foreach (var latest in jobs.GroupBy(x => x.Path)
+                         .Select(g => g.MaxBy(x => x.CreatedAtUtc)!))
+                result[latest.Path] = latest.CurrentState;
+        }
+
+        return result;
     }
 
     public async Task<JobIndex?> GetByJobIdAsync(string orgSlug, string dsSlug, string jobId, CancellationToken ct = default)
@@ -113,11 +155,10 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
             .FirstOrDefaultAsync(ct);
     }
 
-    public async Task<long> CountActiveAsync(string? orgSlug = null, string? userId = null,
+    public async Task<long> CountActiveUserTasksAsync(string? orgSlug = null, string? userId = null,
         string? toolId = null, CancellationToken ct = default)
     {
-        var q = db.JobIndices.AsNoTracking()
-            .Where(x => ActiveStates.Contains(x.CurrentState));
+        var q = db.JobIndices.AsNoTracking().Where(UserTasks.CountTowardLimits);
 
         if (!string.IsNullOrEmpty(orgSlug))
             q = q.Where(x => x.OrgSlug == orgSlug);

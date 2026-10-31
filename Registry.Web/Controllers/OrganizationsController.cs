@@ -1,20 +1,13 @@
-﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Registry.Web.Data;
-using Registry.Web.Data.Models;
+using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -29,12 +22,10 @@ namespace Registry.Web.Controllers;
 public class OrganizationsController : ControllerBaseEx
 {
     private readonly IOrganizationsManager _organizationsManager;
-    private readonly ILogger<OrganizationsController> _logger;
 
-    public OrganizationsController(IOrganizationsManager organizationsManager, ILogger<OrganizationsController> logger)
+    public OrganizationsController(IOrganizationsManager organizationsManager)
     {
         _organizationsManager = organizationsManager;
-        _logger = logger;
     }
 
     /// <summary>
@@ -42,23 +33,12 @@ public class OrganizationsController : ControllerBaseEx
     /// </summary>
     /// <returns>A list of organizations.</returns>
     [HttpGet(Name = nameof(GetAll))]
-    [ProducesResponseType(typeof(IEnumerable<OrganizationDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetAll([FromQuery] bool ownedOnly = false)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<IEnumerable<OrganizationDto>>> GetAll([FromQuery] bool ownedOnly = false, CancellationToken ct = default)
     {
-        try
-        {
-            _logger.LogDebug("Organizations controller GetAll(ownedOnly: {OwnedOnly})", ownedOnly);
-
-            return Ok(await _organizationsManager.List(ownedOnly));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Organizations controller GetAll()");
-
-            throw;
-        }
+        return Answer(await _organizationsManager.List(ownedOnly, ct: ct));
     }
 
     /// <summary>
@@ -67,22 +47,11 @@ public class OrganizationsController : ControllerBaseEx
     /// <returns>A list of public organizations.</returns>
     [HttpGet("public", Name = nameof(GetAllPublic))]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(IEnumerable<OrganizationDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> GetAllPublic()
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<IEnumerable<OrganizationDto>>> GetAllPublic(CancellationToken ct)
     {
-        try
-        {
-            _logger.LogDebug("Organizations controller GetAllPublic()");
-
-            return Ok(await _organizationsManager.ListPublic());
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Organizations controller GetAllPublic()");
-
-            throw;
-        }
+        return Answer(await _organizationsManager.ListPublic(ct: ct));
     }
 
     /// <summary>
@@ -91,24 +60,13 @@ public class OrganizationsController : ControllerBaseEx
     /// <param name="orgSlug">The organization slug.</param>
     /// <returns>The organization information.</returns>
     [HttpGet(RoutesHelper.OrganizationSlug, Name = nameof(Get))]
-    [ProducesResponseType(typeof(OrganizationDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Get([FromRoute, Required] string orgSlug)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<OrganizationDto>> Get([FromRoute, Required] string orgSlug, CancellationToken ct)
     {
-        try
-        {
-            _logger.LogDebug("Organizations controller Get('{OrgSlug}')", orgSlug);
-
-            return Ok(await _organizationsManager.Get(orgSlug));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Organizations controller Get('{OrgSlug}')", orgSlug);
-
-            throw;
-        }
+        return await _organizationsManager.Get(orgSlug, ct: ct);
 
     }
 
@@ -119,26 +77,15 @@ public class OrganizationsController : ControllerBaseEx
     /// <returns>The newly created organization.</returns>
     [HttpPost(Name = nameof(Create))]
     [ProducesResponseType(typeof(OrganizationDto), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Create([FromForm, Required] OrganizationDto organization)
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<OrganizationDto>> Create([FromForm, Required] OrganizationRequestDto organization, CancellationToken ct)
     {
 
-        try
-        {
-            _logger.LogDebug("Organizations controller Create('{organization?.Slug}')", organization?.Slug);
-
-            var newOrg = await _organizationsManager.AddNew(organization);
-            return CreatedAtRoute(nameof(Get), new { orgSlug = newOrg.Slug },
-                newOrg);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Organizations controller Create('{organization?.Slug}')", organization?.Slug);
-
-            throw;
-        }
+        var newOrg = await _organizationsManager.AddNew(organization, ct: ct);
+        return CreatedAtRoute(nameof(Get), new { orgSlug = newOrg.Slug },
+            newOrg);
 
     }
 
@@ -150,27 +97,16 @@ public class OrganizationsController : ControllerBaseEx
     /// <returns>No content on success.</returns>
     [HttpPut(RoutesHelper.OrganizationSlug, Name = nameof(Update))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(
         [FromRoute, Required] string orgSlug,
-        [FromForm, Required] OrganizationDto organization)
+        [FromForm, Required] OrganizationRequestDto organization, CancellationToken ct)
     {
 
-        try
-        {
-            _logger.LogDebug("Organizations controller Update('{OrgSlug}', {organization?.Slug}')",orgSlug, organization?.Slug);
-
-            await _organizationsManager.Edit(orgSlug, organization);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Organizations controller Update('{OrgSlug}', {organization?.Slug}')", orgSlug, organization?.Slug);
-
-            throw;
-        }
+        await _organizationsManager.Edit(orgSlug, organization, ct: ct);
+        return NoContent();
 
     }
 
@@ -181,25 +117,14 @@ public class OrganizationsController : ControllerBaseEx
     /// <returns>No content on success.</returns>
     [HttpDelete(RoutesHelper.OrganizationSlug, Name = nameof(Delete))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Delete([FromRoute, Required] string orgSlug)
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Delete([FromRoute, Required] string orgSlug, CancellationToken ct)
     {
 
-        try
-        {
-            _logger.LogDebug("Organizations controller Delete('{OrgSlug}')", orgSlug);
-
-            await _organizationsManager.Delete(orgSlug);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Organizations controller Delete('{OrgSlug}')", orgSlug);
-
-            throw;
-        }
+        await _organizationsManager.Delete(orgSlug, ct: ct);
+        return NoContent();
 
     }
 
@@ -211,21 +136,12 @@ public class OrganizationsController : ControllerBaseEx
     /// <param name="orgSlug">The organization slug.</param>
     /// <returns>List of organization members with their permissions.</returns>
     [HttpGet("{orgSlug}/members", Name = nameof(GetMembers))]
-    [ProducesResponseType(typeof(IEnumerable<OrganizationMemberDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetMembers([FromRoute, Required] string orgSlug)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IEnumerable<OrganizationMemberDto>>> GetMembers([FromRoute, Required] string orgSlug, CancellationToken ct)
     {
-        try
-        {
-            _logger.LogDebug("Organizations controller GetMembers('{OrgSlug}')", orgSlug);
-            return Ok(await _organizationsManager.GetMembers(orgSlug));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Organizations controller GetMembers('{OrgSlug}')", orgSlug);
-            throw;
-        }
+        return Answer(await _organizationsManager.GetMembers(orgSlug, ct: ct));
     }
 
     /// <summary>
@@ -237,25 +153,20 @@ public class OrganizationsController : ControllerBaseEx
     /// <returns>No content on success.</returns>
     [HttpPost("{orgSlug}/members", Name = nameof(AddMember))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AddMember(
         [FromRoute, Required] string orgSlug,
-        [FromBody, Required] AddOrganizationMemberDto request)
+        [FromBody, Required] AddOrganizationMemberDto request, CancellationToken ct)
     {
-        try
-        {
-            _logger.LogDebug("Organizations controller AddMember('{OrgSlug}', '{UserName}')", orgSlug, request.UserName);
-            await _organizationsManager.AddMember(orgSlug, request.UserName, request.Permissions);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Organizations controller AddMember('{OrgSlug}', '{UserName}')", orgSlug, request.UserName);
-            throw;
-        }
+        // Optional in the body (it was never [Required]), but there is no member to add without it
+        if (string.IsNullOrWhiteSpace(request.UserName))
+            throw new BadRequestException("Missing user name");
+
+        await _organizationsManager.AddMember(orgSlug, request.UserName, request.Permissions, ct: ct);
+        return NoContent();
     }
 
     /// <summary>
@@ -268,27 +179,16 @@ public class OrganizationsController : ControllerBaseEx
     /// <returns>No content on success.</returns>
     [HttpPut("{orgSlug}/members/{userName}", Name = nameof(UpdateMemberPermission))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateMemberPermission(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string userName,
-        [FromBody, Required] UpdateMemberPermissionsDto request)
+        [FromBody, Required] UpdateMemberPermissionsDto request, CancellationToken ct)
     {
-        try
-        {
-            _logger.LogDebug("Organizations controller UpdateMemberPermission('{OrgSlug}', '{UserName}', {Permissions})",
-                orgSlug, userName, request.Permissions);
-            await _organizationsManager.UpdateMemberPermission(orgSlug, userName, request.Permissions);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Organizations controller UpdateMemberPermission('{OrgSlug}', '{UserName}')",
-                orgSlug, userName);
-            throw;
-        }
+        await _organizationsManager.UpdateMemberPermission(orgSlug, userName, request.Permissions, ct: ct);
+        return NoContent();
     }
 
     /// <summary>
@@ -300,23 +200,14 @@ public class OrganizationsController : ControllerBaseEx
     /// <returns>No content on success.</returns>
     [HttpDelete("{orgSlug}/members/{userName}", Name = nameof(RemoveMember))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveMember(
         [FromRoute, Required] string orgSlug,
-        [FromRoute, Required] string userName)
+        [FromRoute, Required] string userName, CancellationToken ct)
     {
-        try
-        {
-            _logger.LogDebug("Organizations controller RemoveMember('{OrgSlug}', '{UserName}')", orgSlug, userName);
-            await _organizationsManager.RemoveMember(orgSlug, userName);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Exception in Organizations controller RemoveMember('{OrgSlug}', '{UserName}')", orgSlug, userName);
-            throw;
-        }
+        await _organizationsManager.RemoveMember(orgSlug, userName, ct: ct);
+        return NoContent();
     }
 
     #endregion

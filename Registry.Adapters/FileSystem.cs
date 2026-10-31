@@ -1,8 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports;
@@ -16,49 +15,21 @@ public class FileSystem : IFileSystem
 {
     #region Synchronous File Operations
 
-    public string ReadAllText(string path)
-    {
-        return File.ReadAllText(path);
-    }
-
-    public byte[] ReadAllBytes(string path)
-    {
-        return File.ReadAllBytes(path);
-    }
-
-    public void WriteAllText(string path, string contents)
-    {
-        File.WriteAllText(path, contents);
-    }
-
-    public void WriteAllText(string path, string contents, Encoding encoding)
-    {
-        File.WriteAllText(path, contents, encoding);
-    }
-
     public void WriteAllBytes(string path, byte[] bytes)
     {
         File.WriteAllBytes(path, bytes);
     }
 
-    public void AppendAllText(string path, string contents)
+    public void WriteAllBytesDurable(string path, byte[] bytes, FileMode mode = FileMode.Create, FileShare share = FileShare.None)
     {
-        File.AppendAllText(path, contents);
+        using var stream = new FileStream(path, mode, FileAccess.Write, share);
+        stream.Write(bytes);
+        stream.Flush(flushToDisk: true);
     }
 
-    public void AppendAllText(string path, string contents, Encoding encoding)
+    public string ReadAllText(string path)
     {
-        File.AppendAllText(path, contents, encoding);
-    }
-
-    public void AppendAllLines(string path, IEnumerable<string> contents)
-    {
-        File.AppendAllLines(path, contents);
-    }
-
-    public void AppendAllLines(string path, IEnumerable<string> contents, Encoding encoding)
-    {
-        File.AppendAllLines(path, contents, encoding);
+        return File.ReadAllText(path);
     }
 
     public void Copy(string sourceFileName, string destFileName, bool overwrite = true)
@@ -66,28 +37,20 @@ public class FileSystem : IFileSystem
         File.Copy(sourceFileName, destFileName, overwrite);
     }
 
-    public void Move(string sourceFileName, string destFileName)
+    public void Move(string sourceFileName, string destFileName) => Move(sourceFileName, destFileName, false);
+
+    public void Move(string sourceFileName, string destFileName, bool overwrite)
     {
         try
         {
-            File.Move(sourceFileName, destFileName);
+            File.Move(sourceFileName, destFileName, overwrite);
         }
         catch (IOException ex) when (ex.Message.Contains("cross-device") || ex.Message.Contains("Invalid cross-device link"))
         {
             // Cross-device move not supported on Linux, fall back to copy + delete
-            File.Copy(sourceFileName, destFileName, true);
+            File.Copy(sourceFileName, destFileName, overwrite);
             File.Delete(sourceFileName);
         }
-    }
-
-    public void Replace(string sourceFileName, string destinationFileName, string destinationBackupFileName)
-    {
-        File.Replace(sourceFileName, destinationFileName, destinationBackupFileName);
-    }
-
-    public void Replace(string sourceFileName, string destinationFileName, string destinationBackupFileName, bool ignoreMetadataErrors)
-    {
-        File.Replace(sourceFileName, destinationFileName, destinationBackupFileName, ignoreMetadataErrors);
     }
 
     public void Delete(string path)
@@ -167,11 +130,6 @@ public class FileSystem : IFileSystem
             FileOptions.Asynchronous | FileOptions.SequentialScan);
     }
 
-    public Stream Open(string path, FileMode mode, FileAccess access, FileShare share)
-    {
-        return new FileStream(path, mode, access, share);
-    }
-
     #endregion
 
     #region File/Folder Information
@@ -181,19 +139,9 @@ public class FileSystem : IFileSystem
         return new FileInfo(path).Length;
     }
 
-    public DateTime GetCreationTime(string path)
-    {
-        return File.GetCreationTime(path);
-    }
-
     public DateTime GetLastWriteTime(string path)
     {
         return File.GetLastWriteTime(path);
-    }
-
-    public DateTime GetLastAccessTime(string path)
-    {
-        return File.GetLastAccessTime(path);
     }
 
     public string[] GetFiles(string path, string searchPattern = "*", SearchOption searchOption = SearchOption.TopDirectoryOnly)
@@ -257,24 +205,9 @@ public class FileSystem : IFileSystem
         return File.WriteAllTextAsync(path, contents, cancellationToken);
     }
 
-    public Task WriteAllTextAsync(string path, string contents, Encoding encoding, CancellationToken cancellationToken = default)
-    {
-        return File.WriteAllTextAsync(path, contents, encoding, cancellationToken);
-    }
-
     public Task WriteAllBytesAsync(string path, byte[] bytes, CancellationToken cancellationToken = default)
     {
         return File.WriteAllBytesAsync(path, bytes, cancellationToken);
-    }
-
-    public Task AppendAllTextAsync(string path, string contents, CancellationToken cancellationToken = default)
-    {
-        return File.AppendAllTextAsync(path, contents, cancellationToken);
-    }
-
-    public Task AppendAllLinesAsync(string path, IEnumerable<string> contents, CancellationToken cancellationToken = default)
-    {
-        return File.AppendAllLinesAsync(path, contents, cancellationToken);
     }
 
     #endregion

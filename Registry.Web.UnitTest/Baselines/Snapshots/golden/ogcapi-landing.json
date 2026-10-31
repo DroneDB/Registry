@@ -1,0 +1,31 @@
+{
+  "request": "GET /orgs/golden-org/ds/golden-ds/ogcapi?f=json",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "title": "OGC API for golden-org/golden-ds",
+    "description": "OGC API – Features + Tiles exposed by DroneDB Registry",
+    "links": [
+      {
+        "href": "http://localhost/orgs/golden-org/ds/golden-ds/ogcapi/",
+        "rel": "self",
+        "type": "application/json",
+        "title": null
+      },
+      {
+        "href": "http://localhost/orgs/golden-org/ds/golden-ds/ogcapi/conformance",
+        "rel": "conformance",
+        "type": "application/json",
+        "title": null
+      },
+      {
+        "href": "http://localhost/orgs/golden-org/ds/golden-ds/ogcapi/collections",
+        "rel": "data",
+        "type": "application/json",
+        "title": null
+      }
+    ]
+  }
+}

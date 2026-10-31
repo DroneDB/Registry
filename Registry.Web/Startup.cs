@@ -1,66 +1,29 @@
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Transactions;
 using Hangfire;
-using Hangfire.Console;
-using Hangfire.MySql;
 using HealthChecks.UI.Client;
-using Registry.Web.Models;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Features;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Server.Kestrel.Core;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi;
-using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Serialization;
-using Registry.Adapters;
-using Registry.Common;
-using Registry.Web.Data;
-using Registry.Web.Data.Models;
+using Registry.Web.Exceptions;
 using Registry.Web.Filters;
-using Registry.Web.HealthChecks;
+using Registry.Web.Hosting;
 using Registry.Web.Middlewares;
 using Registry.Web.Models.Configuration;
-using Registry.Web.Services.Adapters;
-using Registry.Web.Services.Managers;
-using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
-using Registry.Adapters.DroneDB;
-using Registry.Adapters.Thumbnail;
-using Registry.Ports;
-using Registry.Ports.DroneDB;
-using Registry.Web.Identity;
-using Registry.Web.Identity.Models;
-using Registry.Web.Services.Initialization;
-using Registry.Web.Services.Managers.Wcs;
 using Registry.Web.Utilities.Auth;
-using Registry.Web.Utilities.Ogc;
 using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
-using IMetaManager = Registry.Web.Services.Ports.IMetaManager;
 
 namespace Registry.Web;
 
@@ -74,353 +37,53 @@ public class Startup
         Configuration = configuration;
     }
 
+    /// <summary>
+    /// The web host's services: the shared job services (<c>AddProcessingNodeServices</c>, the base of
+    /// every job host), the job storage, and the web modules. The libddb runtime, the options and the
+    /// startup task runner are registered by <see cref="RegistryHost.CreateBuilder"/> before this runs.
+    /// </summary>
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddCors();
-        services.AddControllers(o => o.Filters.Add<ApiExceptionFilter>());
+        services.AddProcessingNodeServices(Configuration);
+        services.AddRegistryJobs(Configuration);
 
-        services.AddSwaggerGen(c =>
-        {
-            c.SwaggerDoc("v1", new OpenApiInfo
-            {
-                Version = "v1",
-                Title = "Registry API",
-                Description = "API to manage DroneDB Registry",
-                Contact = new OpenApiContact
-                {
-                    Name = "DroneDB Support",
-                    Email = "support@dronedb.app",
-                    Url = new Uri("https://dronedb.app/"),
-                },
-                License = new OpenApiLicense
-                {
-                    Name = "Use under AGPLv3 License",
-                    Url = new Uri("https://github.com/DroneDB/Registry/blob/master/LICENSE.md"),
-                }
-            });
-            c.DocumentFilter<BasePathDocumentFilter>();
-            c.OperationFilter<DownloadPathsParameterFilter>();
+        // The all-in-one instance runs the jobs too
+        if (Configuration.GetInstanceType() == InstanceType.Default)
+            services.AddJobServers();
 
-            // Newtonsoft's JToken serializes to a self-referential schema (an array of JToken) that
-            // makes the Scalar/OpenAPI viewer recurse infinitely ("Maximum call stack size exceeded").
-            // STAC and metadata endpoints return arbitrary JSON, so represent JToken as an open schema.
-            c.MapType<JToken>(() => new OpenApiSchema { Description = "Arbitrary JSON value." });
-
-            // Surface the generated XML documentation (controller actions + DTOs) in the API reference
-            var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-            var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-            if (File.Exists(xmlPath))
-                c.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
-        });
-
-        services.AddMvcCore()
-            .AddApiExplorer()
-            .AddNewtonsoftJson(options =>
-            {
-                options.SerializerSettings.DateTimeZoneHandling = Newtonsoft.Json.DateTimeZoneHandling.Utc;
-                options.SerializerSettings.DateFormatHandling = Newtonsoft.Json.DateFormatHandling.IsoDateFormat;
-            });
-
-        services.AddResponseCaching(options =>
-        {
-            options.MaximumBodySize = 8 * 1024 * 1024; // 8MB
-            options.SizeLimit = 10 * 1024 * 1024; // 10MB
-            options.UseCaseSensitivePaths = true;
-        });
-
-        services.AddSpaStaticFiles(config => { config.RootPath = "ClientApp"; });
-
-        // Let's use a strongly typed class for settings
-        var appSettingsSection = Configuration.GetSection("AppSettings");
-        services.Configure<AppSettings>(appSettingsSection);
-        var appSettings = appSettingsSection.Get<AppSettings>();
-
-        services.AddDbContextWithProvider<ApplicationDbContext>(Configuration, appSettings.AuthProvider,
-            MagicStrings.IdentityConnectionName, "Identity");
-
-        if (appSettings.LdapSettings?.Enabled == true)
-        {
-            services.AddIdentityCore<User>()
-                .AddRoles<IdentityRole>()
-                .AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddDefaultTokenProviders();
-
-            services.AddScoped<ILoginManager, LdapLoginManager>();
-        }
-        else if (!string.IsNullOrWhiteSpace(appSettings.ExternalAuthUrl))
-        {
-            services.AddIdentityCore<User>()
-                .AddRoles<IdentityRole>()
-                .AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddDefaultTokenProviders();
-
-            services.AddScoped<ILoginManager, RemoteLoginManager>();
-        }
-        else
-        {
-            services.AddIdentityCore<User>()
-                .AddRoles<IdentityRole>()
-                .AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddSignInManager()
-                .AddDefaultTokenProviders();
-
-            services.AddScoped<ILoginManager, LocalLoginManager>();
-        }
-
-        services.AddDbContextWithProvider<RegistryContext>(Configuration, appSettings.RegistryProvider,
-            MagicStrings.RegistryConnectionName, "Data");
-
-        var key = Encoding.ASCII.GetBytes(appSettings.Secret);
-        services.AddAuthentication(auth =>
-            {
-                auth.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                auth.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-            })
-            .AddJwtBearer(jwt =>
-            {
-                jwt.RequireHttpsMetadata = false;
-                jwt.SaveToken = true;
-                jwt.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(key),
-                    ValidateIssuer = false,
-                    ValidateAudience = false
-                };
-            });
-
-        services.Configure<IdentityOptions>(options =>
-        {
-            // Password settings - driven by PasswordPolicy configuration
-            var passwordPolicy = appSettings.PasswordPolicy;
-            if (passwordPolicy != null)
-            {
-                options.Password.RequireDigit = passwordPolicy.RequireDigit;
-                options.Password.RequireLowercase = passwordPolicy.RequireLowercase;
-                options.Password.RequireNonAlphanumeric = passwordPolicy.RequireNonAlphanumeric;
-                options.Password.RequireUppercase = passwordPolicy.RequireUppercase;
-                options.Password.RequiredLength = passwordPolicy.MinLength;
-            }
-            else
-            {
-                options.Password.RequireDigit = false;
-                options.Password.RequireLowercase = false;
-                options.Password.RequireNonAlphanumeric = false;
-                options.Password.RequireUppercase = false;
-                options.Password.RequiredLength = 1;
-            }
-            options.Password.RequiredUniqueChars = 0;
-
-            // Lockout settings.
-            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
-            options.Lockout.MaxFailedAccessAttempts = 5;
-            options.Lockout.AllowedForNewUsers = true;
-
-            // User settings.
-            options.User.AllowedUserNameCharacters =
-                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+";
-            options.User.RequireUniqueEmail = false;
-        });
-
-        // Error messages that make sense
-        services.Configure<ApiBehaviorOptions>(o =>
-        {
-            o.InvalidModelStateResponseFactory = actionContext =>
-                new BadRequestObjectResult(new ErrorResponse(actionContext.ModelState));
-        });
-
-        services.AddMemoryCache();
-        services.AddCacheProvider(appSettings);
-        services.AddHangfireProvider(appSettings, Configuration);
-        services.AddJobIndexing();
-
-        var instanceType = Configuration.GetValue<InstanceType>("InstanceType");
-
-        // If we are running both the webserver and the processing node
-        if (instanceType == InstanceType.Default)
-        {
-            var workers = appSettings.WorkerThreads > 0 ? appSettings.WorkerThreads : Environment.ProcessorCount;
-            services.AddHangfireServer(options =>
-            {
-                options.WorkerCount = workers;
-                // The heavy task substrate (raster-export and other native tools)
-                // enqueues onto the "tasks" queue; without listing it here the
-                // server would only process "default" and those jobs would never run.
-                options.Queues = ["tasks", "default"];
-            });
-        }
-
-        var hcBuilder = services.AddHealthChecks()
-            .AddCheck<CacheHealthCheck>("Cache health check", null, ["service"])
-            .AddCheck<DdbHealthCheck>("DroneDB health check", null, ["service"])
-            .AddCheck<UserManagerHealthCheck>("User manager health check", null, ["database"])
-            .AddDbContextCheck<RegistryContext>("Registry database health check", null, ["database"])
-            .AddDbContextCheck<ApplicationDbContext>("Registry identity database health check", null,
-                ["database"])
-            .AddDiskSpaceHealthCheck(appSettings.DatasetsPath, "Ddb datasets path space health check", null,
-                ["storage"])
-            .AddDiskSpaceHealthCheck(appSettings.CachePath, "Ddb cache path space health check", null,
-                ["storage"])
-            .AddDiskSpaceHealthCheck(appSettings.TempPath, "Ddb temp path space health check", null,
-                ["storage"])
-            .AddDiskSpaceHealthCheck(appSettings.StoragePath, "Ddb storage path space health check", null,
-                ["storage"])
-            .AddHangfire(options => { options.MinimumAvailableServers = 1; }, "Hangfire health check", null,
-                ["processing"])
-            .AddCheck<HangFireHealthCheck>("Hangfire processing health check", null, ["processing"])
-            .AddCheck<ThumbnailGeneratorHealthCheck>("Thumbnail generator health check", null, ["service"]);
-
-        if (appSettings.LdapSettings?.Enabled == true)
-            hcBuilder.AddCheck<LdapHealthCheck>("LDAP health check", null, ["service"]);
-
-
-        /*
-         * NOTE about services lifetime:
-         *
-         * - A type should be registered as a "Singleton" only when it is fully thread-safe and is not dependent on other services or types.
-         * - Scoped services are bound under a scope (request), and a new instance is created and reused inside a created "scope".
-         * - If a service is defined as Transient, it is instantiated whenever invoked within a request.
-         *   It is almost similar to creating an instance of the same type using "new" keyword and using it.
-         *   It is also the safest option among all other service types, since we don't need to bother about the thread-safety and memory leaks.
-         *
-         * = In terms of lifetime, the singleton object gets the highest life per instantiation,
-         *   followed by a Scoped service object and the least by a Transient object.
-         */
-
-        services.AddTransient<TokenManagerMiddleware>();
-        services.AddTransient<JwtInCookieMiddleware>();
-        services.AddTransient<UserEnrichmentMiddleware>();
-        services.AddTransient<DownloadLimitMiddleware>();
-        services.AddTransient<SecurityHeadersMiddleware>();
-        services.AddSingleton<IDownloadLimiter, DownloadLimiter>();
-        services.AddTransient<ITokenManager, TokenManager>();
-        services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
-
-        services.AddScoped<IUtils, WebUtils>();
-        services.AddScoped<IAuthManager, AuthManager>();
-
-        services.AddScoped<IUsersManager, UsersManager>();
-        services.AddScoped<IOrganizationsManager, OrganizationsManager>();
-        services.AddScoped<IDatasetsManager, DatasetsManager>();
-        services.AddScoped<IStacManager, StacManager>();
-        services.AddScoped<IObjectsManager, ObjectsManager>();
-        services.AddScoped<IShareManager, ShareManager>();
-        services.AddScoped<IPushManager, PushManager>();
-        services.AddScoped<IDdbManager, DdbManager>();
-        services.AddScoped<ISystemManager, SystemManager>();
-        services.AddScoped<IBackgroundJobsProcessor, BackgroundJobsProcessor>();
-        services.AddScoped<IMetaManager, Services.Managers.MetaManager>();
-        services.AddScoped<BuildPendingService>();
-        services.AddScoped<IBuildStatusService, BuildStatusService>();
-        services.AddScoped<DatasetCleanupService>();
-        services.AddScoped<OrphanedDatasetCleanupService>();
-        services.AddScoped<RecurringDatasetCleanupService>();
-        services.AddScoped<ArtifactCompletenessCheckerService>();
-        services.AddScoped<IndexReconciliationService>();
-
-        // Admin global tasks dashboard manager (Part B).
-        services.AddScoped<IAdminTasksManager, AdminTasksManager>();
-
-        // Per-dataset Processing Platform task manager backing TasksController.
-        services.AddScoped<ITasksManager, TasksManager>();
-
-        // Processing Platform task substrate (native tools incl. build/raster-export)
-        services.AddProcessingPlatform();
-
-        // Import Dataset feature: source infrastructure + the import-dataset heavy tool (shared with
-        // the worker host) and the web-only orchestration manager.
-        services.AddImportSources(appSettings);
-        services.AddScoped<IImportManager, ImportManager>();
-
-        // Single-file URL import into an existing dataset (web-only orchestration; the import-file
-        // heavy tool is registered by AddImportSources for both web and worker hosts).
-        services.AddScoped<IFileUrlImportManager, FileUrlImportManager>();
-
-        services.AddScoped<IConfigurationHelper<AppSettings>, ConfigurationHelper>(_ =>
-            new ConfigurationHelper(MagicStrings.AppSettingsFileName));
-
-        // Admin configuration editor: builds ConfigurationDataDto from AppSettings + defaults
-        services.AddScoped<IConfigurationDataBuilder, ConfigurationDataBuilder>();
-
-        services.AddScoped<BasicAuthFilter>();
-
-        // OGC services (WMS/WMTS/WFS/WCS/OGC API + MVT endpoint)
-        services.AddScoped<IBuildArtifactResolver, BuildArtifactResolver>();
-        services.AddScoped<IOgcLayerCatalog, OgcLayerCatalog>();
-        services.AddScoped<IWmtsManager, WmtsManager>();
-        services.AddScoped<IWmsManager, WmsManager>();
-        services.AddScoped<IWfsManager, WfsManager>();
-        services.AddScoped<IWcsCoverageService, WcsCoverageService>();
-        services.AddScoped<IWcsProtocolHandler, WcsProtocol10Handler>();
-        services.AddScoped<IWcsProtocolHandler, WcsProtocol11Handler>();
-        services.AddScoped<IWcsProtocolHandler, WcsProtocol20Handler>();
-        services.AddScoped<IWcsManager, WcsManager>();
-        services.AddScoped<IOgcApiFeaturesManager, OgcApiFeaturesManager>();
-        services.AddScoped<IOgcApiTilesManager, OgcApiTilesManager>();
-        services.AddScoped<OgcAuthorizationFilter>();
-        services.AddScoped<OgcExceptionFilter>();
-
-        if (!string.IsNullOrWhiteSpace(appSettings.RemoteThumbnailGeneratorUrl))
-        {
-            services.Configure<RemoteThumbnailGeneratorSettings>(options =>
-                options.Url = appSettings.RemoteThumbnailGeneratorUrl);
-            services.AddSingleton<IThumbnailGenerator, RemoteThumbnailGenerator>();
-        }
-        else
-        {
-            services.AddSingleton<IThumbnailGenerator, LocalThumbnailGenerator>();
-        }
-
-        services.AddSingleton<IFileSystem, FileSystem>();
-
-        // To change
-        services.AddSingleton<IDdbWrapper, NativeDdbWrapper>();
-
-        services.AddSingleton<IPasswordHasher, PasswordHasher>();
-        services.AddSingleton<IBatchTokenGenerator, BatchTokenGenerator>();
-        services.AddSingleton<INameGenerator, NameGenerator>();
-        services.AddSingleton<ICacheManager, CacheManager>();
-        services.AddSingleton<IPasswordPolicyValidator, PasswordPolicyValidator>();
-        services.AddSingleton<IDatasetIndexQueue, DatasetIndexQueue>();
-
-        services.AddResponseCompression();
-
-        if (appSettings.MaxRequestBodySize.HasValue)
-        {
-            services.Configure<FormOptions>(options =>
-            {
-                // See https://docs.microsoft.com/it-it/aspnet/core/fundamentals/servers/kestrel?view=aspnetcore-3.1#maximum-client-connections
-                // We could put this in config "Kestrel->Limits" section
-                options.MultipartBodyLengthLimit = appSettings.MaxRequestBodySize.Value;
-            });
-        }
-
-        services.AddHttpContextAccessor();
-        services.AddHttpClient();
-
-        // TODO: Enable when needed. Should check return object structure
-        // services.AddOData();
-
-        if (appSettings.WorkerThreads > 0)
-        {
-            ThreadPool.GetMinThreads(out _, out var ioCompletionThreads);
-            ThreadPool.SetMinThreads(appSettings.WorkerThreads, ioCompletionThreads);
-        }
-
-        // Register application initializer
-        services.AddHostedService<AppInitializer>();
+        services.AddRegistryApi();
+        services.AddRegistryHttpHosting();
+        services.AddRegistryAuth(Configuration);
+        services.AddRegistryDomain();
+        services.AddRegistryOgc();
+        services.AddRegistryThumbnails(Configuration);
+        services.AddUploadPipeline();
+        services.AddRegistryHealthChecks(Configuration);
+        services.AddRegistryWebStartup();
     }
 
-    public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+    public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IHostApplicationLifetime lifetime,
+        ILoggerFactory loggerFactory, IOptions<HttpHostOptions> http, IOptions<StorageOptions> storage,
+        IOptions<IdentityProviderOptions> identity, IOptions<SmtpSettings> smtp)
     {
-        if (env.IsDevelopment())
-        {
-            app.UseDeveloperExceptionPage();
-        }
-        else
-        {
+        var logger = loggerFactory.CreateLogger(RegistryHost.StartupLogCategory);
+
+        // First: everything after it (HSTS, logging, auth cookies, limits) sees the real client
+        // address and scheme, taken from the headers of a known proxy only
+        app.UseForwardedHeaders();
+
+        // Right after it, for the same reason: the public URL requests arrive on, as the update check reports it
+        app.UseMiddleware<ObservedBaseUrlMiddleware>();
+
+        // Every native call made while a request is served logs with that request's id
+        app.UseDdbRequestOperation();
+
+        // Every error below answers ProblemDetails (ApiExceptionHandler), in every environment: the
+        // developer exception page would give the Hub an HTML body in Development only
+        app.UseExceptionHandler();
+
+        if (!env.IsDevelopment())
             app.UseHsts();
-        }
 
         app.UseSerilogRequestLogging(options =>
         {
@@ -456,17 +119,15 @@ public class Startup
 
         app.UseRouting();
 
-        var corsSettings = app.ApplicationServices.GetRequiredService<IOptions<AppSettings>>().Value;
-        if (corsSettings.AllowedOrigins is { Length: > 0 })
+        if (http.Value.AllowedOrigins is { Length: > 0 } allowedOrigins)
         {
             app.UseCors(cors => cors
-                .WithOrigins(corsSettings.AllowedOrigins)
+                .WithOrigins(allowedOrigins)
                 .AllowAnyMethod()
                 .AllowAnyHeader());
         }
         else
         {
-            var logger = app.ApplicationServices.GetRequiredService<ILoggerFactory>().CreateLogger<Startup>();
             logger.LogWarning("CORS is configured to allow any origin. Consider setting AllowedOrigins in appsettings for production environments");
 
             app.UseCors(cors => cors
@@ -480,6 +141,7 @@ public class Startup
 
         app.UseAuthentication();
         app.UseAuthorization();
+        app.UseRateLimiter();
 
         // STAC API responses must be served uncompressed: STAC validators (pystac/urllib)
         // send "Accept-Encoding: *" but cannot decode gzip/brotli, which breaks catalog
@@ -491,17 +153,14 @@ public class Startup
             await next();
         });
 
-        app.UseResponseCompression();
+        // Not for responses that carry tokens (BREACH, CompressionPolicy)
+        app.UseWhen(context => !CompressionPolicy.CarriesSecrets(context.Request.Path),
+            compressed => compressed.UseResponseCompression());
         app.UseResponseCaching();
 
         app.UseMiddleware<TokenManagerMiddleware>();
         app.UseMiddleware<UserEnrichmentMiddleware>();
         app.UseMiddleware<DownloadLimitMiddleware>();
-
-        app.UseHangfireDashboard(MagicStrings.HangFireUrl, new DashboardOptions
-        {
-            AsyncAuthorization = [new HangfireAuthorizationFilter()]
-        });
 
         app.UseEndpoints(endpoints =>
         {
@@ -521,6 +180,8 @@ public class Startup
                 ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
             }).RequireAdminOrMonitorToken();
 
+            endpoints.MapLiveness();
+
             endpoints.MapGet(MagicStrings.VersionUrl,
                 async context =>
                 {
@@ -528,10 +189,13 @@ public class Startup
                         Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "undefined");
                 });
 
-            endpoints.MapHangfireDashboard().RequireAuthorization();
-
-            // TODO: Enable when needed
-            // endpoints.MapODataRoute("odata", "odata", GetEdmModel());
+            // Registered once, as an endpoint: signed-in callers only, then the admin check of the
+            // dashboard itself; an unknown dashboard page is Hangfire's 404 (registering the middleware form too
+            // made it a 500)
+            endpoints.MapHangfireDashboard(MagicStrings.HangFireUrl, new DashboardOptions
+            {
+                AsyncAuthorization = [new HangfireAuthorizationFilter()]
+            }).RequireAuthorization();
         });
 
         app.UseWhen(context => !context.Request.Path.StartsWithSegments("/static"), builder =>
@@ -540,7 +204,7 @@ public class Startup
             // from {StoragePath}/branding/ at /branding/*. This folder is
             // preserved across Hub upgrades.
             var brandingRoot = Path.GetFullPath(
-                Path.Combine(corsSettings.StoragePath ?? ".", MagicStrings.BrandingFolder));
+                Path.Combine(storage.Value.StoragePath ?? ".", MagicStrings.BrandingFolder));
             Directory.CreateDirectory(brandingRoot);
             builder.UseStaticFiles(new StaticFileOptions
             {
@@ -549,31 +213,32 @@ public class Startup
                 ServeUnknownFileTypes = true
             });
 
-            builder.UseSpaStaticFiles(new StaticFileOptions
-            {
-                ServeUnknownFileTypes = true,
-                OnPrepareResponse = ctx =>
-                {
-                    // Force browsers/proxies to revalidate index.html so a Hub
-                    // upgrade on the server is picked up by clients with a
-                    // stale cached document. Hashed JS/CSS chunks remain
-                    // cacheable.
-                    var path = ctx.File?.Name;
-                    if (string.Equals(path, "index.html", StringComparison.OrdinalIgnoreCase))
+            // Build-time .br/.gz twins of the Hub's JS/CSS
+            var spaFiles = builder.ApplicationServices
+                .GetService<Microsoft.AspNetCore.SpaServices.StaticFiles.ISpaStaticFileProvider>();
+            builder.UseMiddleware<PrecompressedStaticFilesMiddleware>(
+                new Func<Microsoft.Extensions.FileProviders.IFileProvider?>(() => spaFiles?.FileProvider));
+
+            // Hashed files immutable, index.html revalidated
+            var hubStaticFiles = HubCachePolicy.StaticFileOptions();
+            builder.UseSpaStaticFiles(hubStaticFiles);
+
+            // The Hub's pages are read, never posted to: a request with another method that no endpoint
+            // matched is a 404 (the SPA default page answers GET and HEAD only and throws for the others)
+            builder.UseWhen(context => !IsPageRead(context.Request.Method),
+                unmatched => unmatched.Run(context =>
+                    throw new NotFoundException($"No endpoint answers {context.Request.Method} {context.Request.Path}")
                     {
-                        var headers = ctx.Context.Response.Headers;
-                        headers.CacheControl = "no-cache, no-store, must-revalidate";
-                        headers.Pragma = "no-cache";
-                        headers.Expires = "0";
-                    }
-                }
-            });
+                        NoRetry = true
+                    }));
 
             builder.UseSpa(spa =>
             {
                 // To learn more about options for serving an Angular SPA from ASP.NET Core,
                 // see https://go.microsoft.com/fwlink/?linkid=864501
                 spa.Options.SourcePath = "ClientApp";
+                // Client routes (/login, /r/...) answer with index.html: same headers as /index.html
+                spa.Options.DefaultPageStaticFileOptions = hubStaticFiles;
 
                 if (env.IsDevelopment())
                 {
@@ -581,85 +246,18 @@ public class Startup
             });
         });
 
-        // Application initialization is now handled by AppInitializer IHostedService
-        // Database setup, cache validation, cache registration, and Hangfire jobs are configured on startup
+        // The banner once the server listens (its addresses are known then)
+        lifetime.ApplicationStarted.Register(() =>
+        {
+            foreach (var line in StartupBanner.Lines(env.EnvironmentName,
+                         app.ServerFeatures.Get<IServerAddressesFeature>()?.Addresses, http.Value, identity.Value,
+                         smtp.Value))
+                logger.LogInformation("{StartupBanner:l}", line);
 
-        PrintStartupInfo(app);
+            if (StartupBanner.EmailLinksWarning(smtp.Value, http.Value) is { } warning)
+                logger.LogWarning("{EmailWarning:l}", warning);
+        });
     }
 
-    private static void PrintStartupInfo(IApplicationBuilder app)
-    {
-        if (Log.IsEnabled(LogEventLevel.Information)) return;
-
-        var env = app.ApplicationServices.GetService<IHostEnvironment>();
-        Console.WriteLine(" -> Application started in {0} mode", env?.EnvironmentName ?? "unknown");
-        Console.WriteLine(" ?> Version: {0}", Assembly.GetExecutingAssembly().GetName().Version);
-        Console.WriteLine(" ?> Application started at {0}", DateTime.Now);
-
-        var serverAddresses = app.ServerFeatures.Get<IServerAddressesFeature>()?.Addresses;
-        if (serverAddresses != null)
-        {
-            foreach (var address in serverAddresses)
-            {
-                var addr = address.Replace("0.0.0.0", "localhost");
-                Console.WriteLine($" ?> Registry url: {addr}");
-            }
-        }
-
-        var settingsOptions = app.ApplicationServices.GetService<IOptions<AppSettings>>();
-
-        if (settingsOptions == null)
-            throw new InvalidOperationException("AppSettings not found");
-
-        var settings = settingsOptions.Value;
-
-        if (settings.DefaultAdmin == null)
-            throw new InvalidOperationException("DefaultAdmin not found");
-
-        Console.WriteLine(" ?> Admin credentials: ");
-        Console.WriteLine(" ?> Username: {0}", settings.DefaultAdmin.UserName);
-        Console.WriteLine(" ?> Password: {0}", settings.DefaultAdmin.Password);
-
-        var url = serverAddresses?.FirstOrDefault();
-
-        if (!string.IsNullOrWhiteSpace(settings.ExternalUrlOverride))
-        {
-            Console.WriteLine($" ?> External URL: {settings.ExternalUrlOverride}");
-            url = settings.ExternalUrlOverride;
-        }
-
-        if (url != null)
-        {
-            var builder = new UriBuilder(url);
-
-            if (builder.Host == "0.0.0.0") builder.Host = "localhost";
-            var baseUri = builder.Uri;
-            var monitorQuery = string.IsNullOrWhiteSpace(settings.MonitorToken)
-                ? string.Empty
-                : $"?token={settings.MonitorToken}";
-            var reqAuth = string.IsNullOrWhiteSpace(settings.MonitorToken) ? "(req auth)" : string.Empty;
-
-            Console.WriteLine();
-            Console.WriteLine(" ?> Useful links:");
-
-            var scalarUri = new Uri(baseUri, MagicStrings.ScalarUrl);
-            Console.WriteLine($" ?> API Docs (Scalar): {scalarUri}");
-
-            var versionUri = new Uri(baseUri, MagicStrings.VersionUrl);
-            Console.WriteLine($" ?> Version: {versionUri}");
-
-            var quickHealthUri = new Uri(baseUri, MagicStrings.QuickHealthUrl);
-            Console.WriteLine($" ?> {reqAuth} Quick Health: {quickHealthUri}{monitorQuery}");
-
-            var healthUri = new Uri(baseUri, MagicStrings.HealthUrl);
-            Console.WriteLine($" ?> {reqAuth} Health: {healthUri}{monitorQuery}");
-
-            var hangfireUri = new Uri(baseUri, MagicStrings.HangFireUrl);
-            Console.WriteLine($" ?> (req auth) Hangfire: {hangfireUri}");
-
-            Console.WriteLine();
-        }
-
-        Console.WriteLine(" ?> Press Ctrl+C to quit");
-    }
+    private static bool IsPageRead(string method) => HttpMethods.IsGet(method) || HttpMethods.IsHead(method);
 }

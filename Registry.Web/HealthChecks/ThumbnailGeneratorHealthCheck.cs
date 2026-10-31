@@ -1,51 +1,48 @@
-﻿using System.IO;
+using System.IO;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Options;
-using Registry.Adapters;
 using Registry.Ports;
-using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.HealthChecks;
 
 public class ThumbnailGeneratorHealthCheck : IHealthCheck
 {
     private readonly IThumbnailGenerator _generator;
-    private readonly AppSettings _settings;
+    private readonly ScratchFileProvider _scratch;
     private readonly IFileSystem _fileSystem;
 
     // Updated Base64 string representing a valid 500x500 PNG image
     private const string SamplePngBase64 =
         "iVBORw0KGgoAAAANSUhEUgAAAfQAAAH0CAIAAABEtEjdAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAavSURBVHhe7dQBDQAADMOg+ze9+2hABDcAcuQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5AwTJHSBI7gBBcgcIkjtAkNwBguQOECR3gCC5A+RsD5ZH6Uv1wfoZAAAAAElFTkSuQmCC";
 
-    public ThumbnailGeneratorHealthCheck(IThumbnailGenerator generator, IOptions<AppSettings> options, IFileSystem fileSystem)
+    public ThumbnailGeneratorHealthCheck(IThumbnailGenerator generator, ScratchFileProvider scratch, IFileSystem fileSystem)
     {
         _generator = generator;
-        _settings = options.Value;
+        _scratch = scratch;
         _fileSystem = fileSystem;
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
-        var tempFile = Path.Combine(_settings.TempPath, $"test-{Guid.NewGuid()}.png");
+        // A new file in the configured temp folder, deleted when the check ends
+        using var temp = _scratch.Create("test-", ".png");
+        var tempFile = temp.Path;
 
         try
         {
-            if (File.Exists(tempFile))
-                File.Delete(tempFile);
-
             // Write Base64-encoded PNG to file
-            await File.WriteAllBytesAsync(tempFile, Convert.FromBase64String(SamplePngBase64), cancellationToken);
+            await _fileSystem.WriteAllBytesAsync(tempFile, Convert.FromBase64String(SamplePngBase64), cancellationToken);
 
             // Check if the file is readable and has data
-            if (!File.Exists(tempFile) || new FileInfo(tempFile).Length == 0)
+            if (!_fileSystem.Exists(tempFile) || _fileSystem.GetFileSize(tempFile) == 0)
                 return HealthCheckResult.Unhealthy("Failed to create test file for thumbnail generator health check.");
 
             // Generate thumbnail
             using var stream = new MemoryStream();
-            await _generator.GenerateThumbnailAsync(tempFile, 100, stream);
+            await _generator.GenerateThumbnailAsync(tempFile, 100, stream, cancellationToken);
 
             // Check if the thumbnail was generated by verifying if the stream has data
             return stream.Length > 0 ?
@@ -55,10 +52,6 @@ public class ThumbnailGeneratorHealthCheck : IHealthCheck
         catch (Exception ex)
         {
             return HealthCheckResult.Unhealthy($"Exception during thumbnail generator health check: {ex.Message}");
-        }
-        finally
-        {
-            _fileSystem.SafeDelete(tempFile);
         }
     }
 }

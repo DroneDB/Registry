@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
@@ -10,24 +10,24 @@ public class RescanResult
     /// <summary>
     /// The path of the scanned entry
     /// </summary>
-    [JsonProperty("path")]
+    [JsonPropertyName("path")]
     public string Path { get; set; } = string.Empty;
 
     /// <summary>
     /// The hash of the entry after rescan
     /// </summary>
-    [JsonProperty("hash")]
+    [JsonPropertyName("hash")]
     public string? Hash { get; set; }
 
     /// <summary>
     /// Whether the rescan was successful for this entry
     /// </summary>
-    [JsonProperty("success")]
+    [JsonPropertyName("success")]
     public bool Success { get; set; }
 
     /// <summary>
     /// Error message if the rescan failed for this entry
     /// </summary>
-    [JsonProperty("error")]
+    [JsonPropertyName("error")]
     public string? Error { get; set; }
 }

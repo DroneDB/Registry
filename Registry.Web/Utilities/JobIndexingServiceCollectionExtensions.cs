@@ -1,4 +1,3 @@
-﻿#nullable enable
 using Microsoft.Extensions.DependencyInjection;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;

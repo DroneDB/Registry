@@ -1,0 +1,37 @@
+{
+  "request": "POST /orgs/golden-org/ds/golden-ds/meta/dump",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": [
+    {
+      "path": "",
+      "key": "name",
+      "id": "<guid>",
+      "data": "\"Contract dataset\"",
+      "mtime": 0
+    },
+    {
+      "path": "",
+      "key": "tags",
+      "id": "<guid>",
+      "data": "\"2024\"",
+      "mtime": 0
+    },
+    {
+      "path": "",
+      "key": "tags",
+      "id": "<guid>",
+      "data": "\"survey\"",
+      "mtime": 0
+    },
+    {
+      "path": "sub/img.jpg",
+      "key": "annotation",
+      "id": "<guid>",
+      "data": "{\"level\":2,\"note\":\"tree\"}",
+      "mtime": 0
+    }
+  ]
+}

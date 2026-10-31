@@ -1,148 +1,69 @@
-﻿using System;
-using System.Configuration;
+using System;
 using System.Threading.Tasks;
-using System.Transactions;
-using Hangfire;
-using Hangfire.Console;
-using Hangfire.Console.Progress;
-using Hangfire.MySql;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Web.Data;
-using Registry.Web.Filters;
-using Registry.Web.Identity;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using StackExchange.Redis;
+using Registry.Web.Services.Caching;
 
 namespace Registry.Web.Utilities;
 
 public static class StartupExtenders
 {
     /// <summary>
+    /// How many idle contexts the pool of each context type keeps (EF's default is 1024). A request, a job or a hosted
+    /// service holds one context per scope, so this is far above the concurrency of an instance; past it EF
+    /// creates a context that is not returned to the pool, nothing fails.
+    /// </summary>
+    public const int DbContextPoolSize = 128;
+
+    /// <summary>
     /// Configures a DbContext with the specified provider (Sqlite or MySql)
     /// </summary>
+    /// <param name="mySqlVersions">MySQL server version source; defaults to one built from
+    /// <paramref name="configuration"/>, which probes once per connection string per registration
+    /// (not once per scope) unless the version is pinned.</param>
     public static void AddDbContextWithProvider<T>(this IServiceCollection services,
         IConfiguration configuration,
         DbProvider provider,
         string connectionStringName,
-        string migrationsNamespace) where T : DbContext
+        string migrationsNamespace,
+        MySqlServerVersionCache? mySqlVersions = null) where T : DbContext
     {
         var connectionString = configuration.GetConnectionString(connectionStringName);
+        mySqlVersions ??= MySqlServerVersionCache.FromConfiguration(configuration);
 
-        services.AddDbContext<T>(options =>
-            _ = provider switch
-            {
-                DbProvider.Sqlite => options.UseSqlite(connectionString,
-                    x => x.MigrationsAssembly($"Registry.Web.{migrationsNamespace}.SqliteMigrations")),
-                DbProvider.Mysql => options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
-                    x =>
-                    {
-                        x.EnableRetryOnFailure();
-                        x.MigrationsAssembly($"Registry.Web.{migrationsNamespace}.MySqlMigrations");
-                    }),
-                _ => throw new ArgumentOutOfRangeException(nameof(provider), $"Unrecognised provider: '{provider}'")
-            });
-    }
+        var migrationsAssembly = DbProviderConfigurator.MigrationsAssemblyName(migrationsNamespace, provider);
 
-    public static void AddHangfireProvider(this IServiceCollection services, AppSettings appSettings,
-        IConfiguration appConfig)
-    {
-
-        switch (appSettings.HangfireProvider)
+        // Pooled: the options are built once, from the root provider, so what they
+        // hold must be singletons (the interceptors are) and the contexts must not change their options in OnConfiguring
+        services.AddDbContextPool<T>((sp, options) =>
         {
-            case HangfireProvider.InMemory:
-
-                services.AddHangfire((sp, configuration) =>
-                {
-                    configuration
-                        .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
-                        .UseSimpleAssemblyNameTypeSerializer()
-                        .UseRecommendedSerializerSettings()
-                        .UseSerilogLogProvider()
-                        .UseConsole()
-                        .UseInMemoryStorage();
-
-                    var logger = sp.GetRequiredService<ILogger<JobIndexStateFilter>>();
-                    configuration.UseFilter(new JobIndexStateFilter(sp, logger));
-
-                    var buildFailureLogger = sp.GetRequiredService<ILogger<BuildJobFailureFilter>>();
-                    configuration.UseFilter(new BuildJobFailureFilter(sp, buildFailureLogger));
-
-                    var buildLogLogger = sp.GetRequiredService<ILogger<BuildLogCaptureFilter>>();
-                    configuration.UseFilter(new BuildLogCaptureFilter(sp, buildLogLogger));
-
-                    var buildRetryLogger = sp.GetRequiredService<ILogger<BuildRetrySchedulerFilter>>();
-                    configuration.UseFilter(new BuildRetrySchedulerFilter(sp, buildRetryLogger));
-                });
-
-                break;
-
-            case HangfireProvider.Mysql:
-
-                services.AddHangfire((sp, configuration) =>
-                {
-                    var logger = sp.GetRequiredService<ILogger<JobIndexStateFilter>>();
-                    var buildFailureLogger = sp.GetRequiredService<ILogger<BuildJobFailureFilter>>();
-
-                    configuration
-                        .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
-                        .UseSimpleAssemblyNameTypeSerializer()
-                        .UseRecommendedSerializerSettings()
-                        .UseSerilogLogProvider()
-                        .UseConsole(new ConsoleOptions
-                        {
-                            FollowJobRetentionPolicy = false,
-                            ExpireIn = TimeSpan.FromDays(Math.Max(1, appSettings.HangfireJobRetentionDays))
-                        })
-                        .UseStorage(new MySqlStorage(
-                            appConfig.GetConnectionString(MagicStrings.HangfireConnectionName),
-                            new MySqlStorageOptions
-                            {
-                                TransactionIsolationLevel = IsolationLevel.ReadCommitted,
-                                QueuePollInterval = TimeSpan.FromSeconds(3),
-                                JobExpirationCheckInterval = TimeSpan.FromMinutes(15),
-                                CountersAggregateInterval = TimeSpan.FromMinutes(5),
-                                InvisibilityTimeout = TimeSpan.FromHours(Math.Max(1, appSettings.HangfireInvisibilityTimeoutHours)),
-                                PrepareSchemaIfNecessary = true,
-                                DashboardJobListLimit = 50000,
-                                TransactionTimeout = TimeSpan.FromMinutes(30),
-                                TablesPrefix = "hangfire"
-                            }))
-                        .WithJobExpirationTimeout(TimeSpan.FromDays(Math.Max(1, appSettings.HangfireJobRetentionDays)))
-                        .UseFilter(new JobIndexStateFilter(sp, logger))
-                        .UseFilter(new BuildJobFailureFilter(sp, buildFailureLogger))
-                        .UseFilter(new BuildLogCaptureFilter(sp, sp.GetRequiredService<ILogger<BuildLogCaptureFilter>>()))
-                        .UseFilter(new BuildRetrySchedulerFilter(sp, sp.GetRequiredService<ILogger<BuildRetrySchedulerFilter>>()));
-
-                });
-
-                break;
-
-            default:
-                throw new InvalidOperationException(
-                    $"Unsupported hangfire provider: '{appSettings.HangfireProvider}'");
-        }
-
-        // Specify the global number of retries
-        GlobalJobFilters.Filters.Add(new AutomaticRetryAttribute { Attempts = 1 });
-
-        // Registered eagerly (not in the lazy configuration callback above) for both providers, so
-        // every host that creates or transitions indexed jobs keeps Indexing jobs discoverable by
-        // recovery. Idempotent: hosts and tests may call this more than once.
-        IndexingStateHandler.EnsureRegistered();
+            // Hooks on saved changes (e.g. DatasetChangeInterceptor) registered by the host
+            options.AddInterceptors(sp.GetServices<Microsoft.EntityFrameworkCore.Diagnostics.ISaveChangesInterceptor>());
+            // A missing connection string is not refused here: as before, EF reports it when a context first connects
+            DbProviderConfigurator.Configure(options, provider, connectionString!, migrationsAssembly, mySqlVersions.Resolve);
+        }, DbContextPoolSize);
     }
 
-    public static void AddCacheProvider(this IServiceCollection services, AppSettings appSettings)
+    public static void AddCacheProvider(this IServiceCollection services, CachingOptions appSettings)
     {
+        // Records computed on a miss (single-flight, fail-open) and the cache generations their keys carry
+        // (OGC documents: one per dataset, kept in the distributed cache)
+        services.AddRecordCache();
+        services.AddSingleton<Services.Ports.IOgcCacheKeys, OgcCacheKeys>();
+
         if (appSettings.CacheProvider == null)
         {
             // Use memory caching
             services.AddDistributedMemoryCache();
             services.AddSingleton<ICacheKeyScanner, NullCacheKeyScanner>();
+            services.AddSingleton<Services.Ports.ITaskChangeNotifier, InMemoryTaskChangeNotifier>();
             return;
         }
 
@@ -152,6 +73,7 @@ public static class StartupExtenders
 
                 services.AddDistributedMemoryCache();
                 services.AddSingleton<ICacheKeyScanner, NullCacheKeyScanner>();
+                services.AddSingleton<Services.Ports.ITaskChangeNotifier, InMemoryTaskChangeNotifier>();
 
                 break;
 
@@ -159,12 +81,12 @@ public static class StartupExtenders
 
                 var settings = appSettings.CacheProvider.Settings.ToObject<RedisProviderSettings>();
 
-                if (settings == null)
+                if (settings?.InstanceAddress is not { } instanceAddress)
                     throw new ArgumentException("Invalid redis cache provider settings");
 
                 // Register a shared IConnectionMultiplexer for both caching and pattern-based key scanning
                 services.AddSingleton<IConnectionMultiplexer>(sp =>
-                    ConnectionMultiplexer.Connect(settings.InstanceAddress));
+                    ConnectionMultiplexer.Connect(instanceAddress));
 
                 services.AddStackExchangeRedisCache(options =>
                 {
@@ -184,6 +106,13 @@ public static class StartupExtenders
                         settings.InstanceName,
                         sp.GetRequiredService<ILogger<RedisCacheKeyScanner>>()));
 
+                // Task changes made by processing nodes reach the web node's event streams
+                services.AddSingleton<Services.Ports.ITaskChangeNotifier>(sp =>
+                    new RedisTaskChangeNotifier(
+                        sp.GetRequiredService<IConnectionMultiplexer>(),
+                        settings.InstanceName ?? string.Empty,
+                        sp.GetRequiredService<ILogger<RedisTaskChangeNotifier>>()));
+
                 break;
 
             default:
@@ -192,7 +121,7 @@ public static class StartupExtenders
         }
     }
 
-    public static async Task ValidateCacheConnection(AppSettings appSettings)
+    public static async Task ValidateCacheConnection(CachingOptions appSettings)
     {
         switch (appSettings.CacheProvider?.Type)
         {
@@ -200,12 +129,12 @@ public static class StartupExtenders
             {
                 var settings = appSettings.CacheProvider.Settings.ToObject<RedisProviderSettings>();
 
-                if (settings == null)
+                if (settings?.InstanceAddress is not { } instanceAddress)
                     throw new InvalidOperationException("Invalid redis cache provider settings");
 
                 try
                 {
-                    await using var connection = await ConnectionMultiplexer.ConnectAsync(settings.InstanceAddress);
+                    await using var connection = await ConnectionMultiplexer.ConnectAsync(instanceAddress);
                     var database = connection.GetDatabase();
 
                     // Test Redis connection with a simple ping

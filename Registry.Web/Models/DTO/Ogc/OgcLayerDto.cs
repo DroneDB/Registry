@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Newtonsoft.Json;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Models.DTO.Ogc;
@@ -26,24 +25,24 @@ public class OgcLayerDto
     /// <summary>Vector-only: OGR geometry type name (Point/LineString/Polygon/...).</summary>
     public string? GeometryType { get; set; }
 
-    /// <summary>
-    /// Raster-only: true when the underlying raster has &gt;3 effective bands or carries
-    /// non-RGBA colour interpretations (typical of agricultural multispectral cameras).
-    /// Server-defined spectral styles (NDVI/NDRE/NDWI/EVI/SAVI) and spectral indexes
-    /// in Capabilities are only advertised / accepted when this flag is true.
-    /// </summary>
-    public bool IsMultispectral { get; set; }
-
-    /// <summary>Raster-only: number of bands reported by the underlying dataset (0 when unknown).</summary>
+    /// <summary>Raster-only: number of bands reported by the indexed entry (0 when unknown).</summary>
     public int BandCount { get; set; }
 
     /// <summary>
     /// True when the dataset build has produced the artifact required to serve this layer
     /// (COG for rasters, GPKG sidecar for vectors). Layers without a built artifact are
-    /// hidden from WFS/WMTS/OGC API capabilities and surface InvalidParameterValue when
+    /// hidden from the capabilities of every OGC service and surface InvalidParameterValue when
     /// referenced by name.
     /// </summary>
     public bool HasBuiltArtifact { get; set; } = true;
+
+    /// <summary>
+    /// True for a CAD drawing without a coordinate system: its GPKG keeps the
+    /// drawing coordinates and has no SRS. Such layers are never advertised by OGC
+    /// services (they cannot be served in any CRS); only OGC API Features resolves them,
+    /// for the Hub's local (no globe) viewer. <see cref="BboxWgs84"/> is null for them.
+    /// </summary>
+    public bool IsLocal { get; set; }
 }
 
 public class OgcBoundingBoxDto

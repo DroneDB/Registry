@@ -1,6 +1,3 @@
-#nullable enable
-using System;
-
 namespace Registry.Web.Models.DTO;
 
 /// <summary>

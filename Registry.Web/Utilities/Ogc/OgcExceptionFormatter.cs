@@ -1,7 +1,5 @@
-using System.IO;
 using System.Text;
 using System.Xml;
-using Registry.Web.Exceptions;
 
 namespace Registry.Web.Utilities.Ogc;
 
@@ -13,13 +11,7 @@ public static class OgcExceptionFormatter
 {
     public const string ContentType = "text/xml; charset=utf-8";
 
-    /// <summary>StringWriter that reports UTF-8 encoding so XmlWriter declares encoding="utf-8".</summary>
-    private sealed class Utf8StringWriter : StringWriter
-    {
-        public override Encoding Encoding => Encoding.UTF8;
-    }
-
-    public static string FormatWms111(string code, string message)
+    public static string FormatWms111(string? code, string? message)
     {
         using var sw = new Utf8StringWriter();
         using var w = XmlWriter.Create(sw, new XmlWriterSettings
@@ -40,7 +32,7 @@ public static class OgcExceptionFormatter
     }
 
     /// <summary>WMS 1.3.0 ServiceExceptionReport (namespace http://www.opengis.net/ogc).</summary>
-    public static string FormatWms130(string code, string message)
+    public static string FormatWms130(string? code, string? message)
     {
         using var sw = new Utf8StringWriter();
         using var w = XmlWriter.Create(sw, new XmlWriterSettings
@@ -69,7 +61,7 @@ public static class OgcExceptionFormatter
     /// OWS 1.1. CITE schema validation rejects responses whose ExceptionReport element resolves
     /// to the wrong namespace ("Cannot find the declaration of element 'ows:ExceptionReport'").
     /// </summary>
-    public static string FormatOws(string code, string message, string version = "2.0.0",
+    public static string FormatOws(string? code, string? message, string version = "2.0.0",
         string? locator = null, string owsNamespace = "http://www.opengis.net/ows/1.1")
     {
         using var sw = new Utf8StringWriter();
@@ -96,7 +88,7 @@ public static class OgcExceptionFormatter
     /// <summary>WCS 1.0.0 ServiceExceptionReport (OGC 03-065r6 §A.4.1 - namespace
     /// <c>http://www.opengis.net/ogc</c>, version <c>1.2.0</c>). Note: WCS 1.0 inherited
     /// the WMS-like envelope and predates OWS Common entirely.</summary>
-    public static string FormatWcs10(string code, string message)
+    public static string FormatWcs10(string? code, string? message)
     {
         using var sw = new Utf8StringWriter();
         using var w = XmlWriter.Create(sw, new XmlWriterSettings
@@ -114,18 +106,5 @@ public static class OgcExceptionFormatter
         w.WriteEndDocument();
         w.Flush();
         return sw.ToString();
-    }
-
-    /// <summary>
-    /// Pick the right envelope flavor given the OGC service version of the failing request.
-    /// </summary>
-    public static string Format(OgcException ex, string serviceVersion)
-    {
-        return serviceVersion switch
-        {
-            "1.1.1" => FormatWms111(ex.Code, ex.Message),
-            "1.3.0" => FormatWms130(ex.Code, ex.Message),
-            _ => FormatOws(ex.Code, ex.Message, serviceVersion, ex.Locator)
-        };
     }
 }

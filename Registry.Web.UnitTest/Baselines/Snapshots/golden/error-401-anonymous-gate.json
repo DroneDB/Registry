@@ -1,0 +1,8 @@
+{
+  "request": "GET /users/storage",
+  "caller": "anonymous",
+  "status": 401,
+  "contentType": null,
+  "bodyKind": "empty",
+  "body": null
+}

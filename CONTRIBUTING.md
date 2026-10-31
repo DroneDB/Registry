@@ -20,8 +20,26 @@ This project adheres to the [Contributor Covenant](CONDUCT.md). By participating
 
 - **.NET 10 SDK** (or later)
 - **Node.js >= 18** (for the Vue.js frontend)
-- **DroneDB C++ library** (`ddb.dll`/`libddb.so`) available in system PATH
+- **DroneDB C++ library** (`ddb.dll`/`libddb.so`) available in system PATH: the build pinned in
+  `Directory.Build.props` (libddb 2.x, ABI 2.0 or later; Registry refuses to start on another ABI, see below)
 - **Git** for version control
+
+### The DroneDB build (libddb)
+
+`Directory.Build.props` pins one DroneDB build (`DdbSource`, `DdbVersion`, checksums) and
+`scripts/ddb-release.sh` downloads exactly that build for CI, Docker and the Windows embed. At startup
+Registry checks the loaded library (libddb 2.x: ABI major 2, every export it calls) and fails with one
+message otherwise.
+
+```bash
+bash scripts/ddb-release.sh describe                 # which DroneDB build is pinned
+bash scripts/ddb-release.sh fetch-deb /tmp/ddb       # download and verify the pinned .deb
+# A pinned CI build (DdbSource ci) is a GitHub Actions artifact: set DRONEDB_ARTIFACT_TOKEN (a token
+# with Actions read access to DroneDB/DroneDB) or log in with the GitHub CLI (gh auth login)
+
+# Run Registry and its tests on a DroneDB build of your own (a folder with libddb.so)
+eval "$(DDB_LOCAL_BUILD=../DroneDB/build bash scripts/ddb-release.sh dev-env)"
+```
 
 ### Backend (.NET Core)
 
@@ -249,8 +267,13 @@ public void SomeOperation_ShouldWork()
 # Run all tests
 dotnet test Registry.sln
 
-# Run tests for a specific project
-dotnet test Registry.Web.Test/Registry.Web.Test.csproj
+# Run tests for a specific project: the Registry.Web unit tests never load native libddb,
+# the integration tests need it (and Docker or the network for some fixtures)
+dotnet test Registry.Web.UnitTest/Registry.Web.UnitTest.csproj
+dotnet test Registry.Web.IntegrationTest/Registry.Web.IntegrationTest.csproj
+
+# Select by category (Registry.Test.Common/TestCategories.cs): Unit, Integration, Native, Network, Baseline
+dotnet test Registry.sln --filter "TestCategory=Integration&TestCategory!=Network"
 
 # Run with coverage
 dotnet test Registry.sln /p:CollectCoverage=true
@@ -260,6 +283,36 @@ dotnet test Registry.sln /p:CollectCoverage=true
 
 - **No unit test framework** is configured (no Jest/Vitest)
 - Use **Playwright** for E2E testing of the web platform
+
+---
+
+## Release Notes
+
+The notes of a GitHub release are read by the Registry of every deployment that runs the update check: the administrator's Hub shows them as one list, and an update that has a `## Security` section is e-mailed as a security update. So the headings are fixed and level 2 (`##`), spelled as below (case does not matter). Leave out the sections that have no item.
+
+Put every security fix under `## Security`, and nothing else there: say what the flaw allowed and who was affected, not how to exploit it. The other headings are `Highlights`, `Added / Changed`, `Fixed` and `Breaking changes`. One top-level bullet is one change; a bullet under it (for example `Migration:`) belongs to its parent. A heading you add is kept, after these.
+
+Copy this into the release description and fill it in:
+
+```markdown
+## Security
+- A user could read the files of a dataset they had no access to; the check now runs on every download route
+
+## Highlights
+- One sentence about the change a user will notice first
+
+## Added / Changed
+- What is new or behaves differently, and where to find it
+
+## Fixed
+- What was wrong, in the words of the person who saw it
+
+## Breaking changes
+- What stops working
+  - Migration: what to do before or after the upgrade
+
+**Full Changelog**: https://github.com/DroneDB/Registry/compare/v2.7.1...v3.0.0
+```
 
 ---
 

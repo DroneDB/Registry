@@ -1,19 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Registry.Web.Models.DTO;
+using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Services.Ports;
 
 /// <summary>
 /// Push workflow interface (init, upload, save meta, commit).
 /// </summary>
-public interface IPushManager
-{
-    Task<PushInitResultDto> Init(string orgSlug, string dsSlug, string checksum, StampDto stamp);
-    Task Upload(string orgSlug, string dsSlug, string filePath, string token, Stream stream);
-    Task SaveMeta(string orgSlug, string dsSlug, string token, string meta);
-    Task Commit(string orgSlug, string dsSlug, string token);
-}
+/// <summary>
+/// A file streamed to the uploads folder of a dataset the current user can write to, with the
+/// SHA-256 computed while it streamed.
+/// </summary>
+public sealed record PushUpload(IDDB Ddb, string TempPath, long Bytes, FileHashHint Hash);

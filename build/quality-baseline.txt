@@ -1,0 +1,136 @@
+# Quality metrics baseline for scripts/quality-metrics.sh. Do not edit by hand:
+# run scripts/quality-metrics.sh --update after a metric went down.
+# Format: <metric><TAB><value>
+Raw X-Forwarded-For reads	0
+Admin password persisted to config	0
+Console dump of admin password	0
+Path.GetPathRoot disk checks	1
+ServerVersion.AutoDetect calls	3
+Files with UTF-8 BOM	0
+Projects/props pinning LangVersion	0
+PackageReference with inline Version (CPM)	0
+UseInMemoryDatabase (tests)	0
+new ObjectsManager( in tests	0
+Thread.Sleep / Task.Delay in tests	1
+Mock<IOptions<AppSettings>> in tests	0
+Test helpers in Registry.Common/Test	0
+Category string literals (use TestCategories)	0
+Controller log+rethrow catch blocks	0
+catch (Exception ...) total	164
+new ErrorResponse( in controllers	0
+ErrorResponse references	0
+Controller entry debug traces	0
+Controller Content-Length pre-checks	0
+InvalidOperationException thrown by managers	4
+ArgumentException thrown by managers	3
+UnauthorizedException thrown by managers	3
+Web files importing Registry.Adapters	3
+RequestAccess + throw blocks	0
+IsUserAdmin() guard + throw blocks	2
+Sync _utils.GetDataset/GetOrganization calls	0
+RequestAccess + throw blocks (any form)	2
+RequestAccess calls in controllers	0
+IsUserAdmin() + throw (any form)	3
+Sync IUtils lookups (any receiver)	0
+Raster prologue copies (EnsurePathValidity)	0
+new OrganizationUser in managers	0
+GetService/GetRequiredService calls	44
+Console.Write* in Program+Startup	0
+.Wait() calls	0
+Node registrations re-declared by the web host	0
+AddIdentityCore builder copies	1
+Hangfire storage configuration copies	1
+UseSerilog call sites	1
+HttpContextAccessor registrations	1
+Hangfire dashboard registrations	1
+IOptions<AppSettings> uses	0
+Files consuming IOptions<AppSettings>	0
+Inline ?? new XSettings() defaults	0
+Service-locator calls in Services/Initialization	0
+.Wait() / Task.Delay in startup code	0
+Console helper calls in Program+Startup	0
+HostFacts.Current() call sites	1
+[DllImport] in production code	2
+EntryPointNotFoundException catches	0
+Copied DDB AutomaticRetry attribute	0
+Recurring-job local WriteLine copies	0
+ReadString(JsonElement) copies	0
+Recurring jobs without CancellationToken	0
+HangfireUtils static call sites	0
+JobStorage.Current uses	0
+context != null ? ... : Log copies	0
+Lenient JsonElement reader copies	0
+Job expressions passing an IDDB	0
+Hangfire filters taking IServiceProvider	0
+UseFilter(new ...) in the Hangfire configuration	0
+Hangfire static facade calls	0
+Read-after-write artifact hash copies	0
+ApplyDelta calls without verified hashes	0
+Pending-build backoff copies	0
+Zip-slip normalizer copies	0
+Direct Path.GetTempPath()	0
+Ad-hoc backslash->slash normalizations	1
+Static File./Directory. calls	114
+DateTime.Now (local)	0
+Archive key normalization call sites (zip-slip)	1
+Archive extraction loops	1
+Inline reserved-path checks	0
+Hand-written traversal checks	0
+ValidateRelativePath(s) call sites	0
+Delete-and-ignore helpers	2
+Separator rewrites (Replace with a separator)	3
+OS-specific path comparers	1
+OS-detection idioms other than OperatingSystem.Is*	0
+Static File./Directory. calls in files with an injected IFileSystem	0
+Disk-space call sites	1
+Unpinned test_data URLs	0
+Objects-slice files over 800 lines	0
+Objects-slice constructors over 7 parameters	0
+Objects-slice optional constructor parameters	0
+Objects-slice ?? new fallbacks	0
+Hand-written path checks in object controllers	0
+SendDownload call sites	0
+Task.Run native calls in the objects slice	0
+Native raster calls outside INativeWorkGate (objects slice)	0
+Build-layout literals in the objects slice	0
+Build-layout literals in production C#	11
+Per-entry build probe calls	0
+Split classes: files over 800 lines	0
+Split classes: constructors over 7 parameters	0
+Registry.Web constructors over 7 parameters	2
+Registry.Web files over 800 lines	0
+Whole-section AppSettings in the container	0
+Files injecting IUtils	0
+Build enqueue call sites outside the build scheduler	2
+Pending-flag writes outside the build scheduler	0
+Build payloads with user.Id	0
+PotentiallyBuildableTypes copies	0
+Raw distributed-cache get-then-set sites	0
+STAC per-item rewrites	0
+STAC native calls with Registry URLs	0
+Cache key formats outside CacheCategories	0
+SafeMetaManager unfiltered DdbException catches	0
+IObjectsManager facade injections	4
+IOgcBuildArtifactPaths uses	0
+Build-layout literals in Registry.Web	0
+Task.Run in managers	1
+Hand-built Content-Disposition	1
+Async actions without a CancellationToken	0
+Cancellable libddb export calls outside the call envelope	0
+Hand-built ETag code in controllers	0
+Cancellation answered 408	0
+Anonymous response objects	0
+Actions without [ProducesResponseType]	0
+Newtonsoft attributes in Models and Ports	0
+JToken/JObject/JArray/JValue in port signatures	0
+Production files using Newtonsoft outside the allow-list	0
+AddNewtonsoftJson / MvcNewtonsoftJsonOptions	0
+Dataset route prefix copies in controllers	2
+Entity configuration inline in OnModelCreating	0
+Value comparers hashing the reference (x => x.GetHashCode())	0
+TODO comments in the persistence projects	0
+DEBUG_EF / DebugEf references (cs, csproj, sln)	0
+Provider configuration sites (MigrationsAssembly calls)	2
+appsettings-eftools.json tracked	0
+Synchronous EF queries in request paths	0
+AddDbContext registrations (the host pools its contexts)	0

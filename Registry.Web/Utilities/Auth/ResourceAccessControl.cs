@@ -1,8 +1,7 @@
-﻿using System.Threading.Tasks;
-using Microsoft.AspNetCore.Identity;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Data;
-using Registry.Web.Identity.Models;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Utilities.Auth;
 
@@ -11,33 +10,15 @@ namespace Registry.Web.Utilities.Auth;
 /// </summary>
 public class ResourceAccessControl : AccessControlBase
 {
-    public ResourceAccessControl(UserManager<User> usersManager, RegistryContext context,  ILogger logger)
-        : base(usersManager, context, logger) { }
-
-    /// <summary>
-    /// Validates if an owner exists and is not deactivated
-    /// </summary>
-    public async Task<bool> ValidateOwner(string ownerId, string resourceIdentifier)
-    {
-        if (ownerId == null) return true;
-
-        var owner = await UsersManager.FindByIdAsync(ownerId);
-        if (owner == null)
-        {
-            Logger.LogInformation("Owner {UserId} not found for resource {ResourceId}",
-                ownerId, resourceIdentifier);
-            return true;
-        }
-
-        return !await IsUserDeactivated(owner);
-    }
+    public ResourceAccessControl(IUserAuthSnapshotProvider snapshots, RegistryContext context, ILogger logger)
+        : base(snapshots, context, logger) { }
 
     /// <summary>
     /// Checks if a user has elevated privileges (admin or owner)
     /// </summary>
-    public async Task<bool> HasElevatedPrivileges(User user, string ownerId)
+    public async Task<bool> HasElevatedPrivileges(string? userId, string? ownerId)
     {
-        if (user == null) return false;
-        return ownerId == user.Id || await IsUserAdmin(user);
+        if (userId == null) return false;
+        return ownerId == userId || await IsUserAdmin(userId);
     }
 }

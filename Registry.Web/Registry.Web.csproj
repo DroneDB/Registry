@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
@@ -11,22 +11,24 @@
         <Version>2.7.1</Version>
         <Platforms>AnyCPU;x64</Platforms>
         <PackageVersion>2.7.1</PackageVersion>
-        <Configurations>Debug;Release;DebugEf</Configurations>
-        <DdbVersion>1.12.2</DdbVersion>
-        <LangVersion>13</LangVersion>
+        <Configurations>Debug;Release</Configurations>
+        <!-- Windows: lets the builds of libddb, which runs in this process, use long paths (see the file). -->
+        <ApplicationManifest>app.manifest</ApplicationManifest>
     </PropertyGroup>
 
     <ItemGroup>
-        <AssemblyMetadata Include="DdbVersion" Value="$(DdbVersion)" />
+        <InternalsVisibleTo Include="Registry.Web.UnitTest" />
+        <InternalsVisibleTo Include="Registry.Web.IntegrationTest" />
+        <InternalsVisibleTo Include="Registry.Web.TestSupport" />
     </ItemGroup>
 
     <ItemGroup>
-        <InternalsVisibleTo Include="Registry.Web.Test" />
+        <!-- The libddb version this build is pinned to, read at run time (LibddbVersion.Pinned) by the update check -->
+        <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+            <_Parameter1>DdbVersion</_Parameter1>
+            <_Parameter2>$(DdbVersion)</_Parameter2>
+        </AssemblyAttribute>
     </ItemGroup>
-
-    <PropertyGroup Condition=" '$(Configuration)' == 'DebugEf' ">
-      <DefineConstants>TRACE;DEBUG_EF</DefineConstants>
-    </PropertyGroup>
 
     <ItemGroup>
         <None Remove="ddb-log*.csv" />
@@ -44,53 +46,33 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="AspNetCore.HealthChecks.Hangfire" Version="9.0.0" />
-        <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.0" />
-        <PackageReference Include="AspNetCore.HealthChecks.UI.Core" Version="9.0.0" />
-        <PackageReference Include="CommandLineParser" Version="2.9.1" />
-        <PackageReference Include="Hangfire.AspNetCore" Version="1.8.23" />
-        <PackageReference Include="Hangfire.Console" Version="1.4.3" />
-        <PackageReference Include="Hangfire.Core" Version="1.8.23" />
-        <PackageReference Include="Hangfire.InMemory" Version="1.0.0" />
-        <PackageReference Include="Hangfire.MySqlStorage" Version="2.0.3" />
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.Core" Version="2.3.9" />
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.7" />
-        <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="10.0.7" />
-        <PackageReference Include="Microsoft.AspNetCore.ResponseCompression" Version="2.3.9" />
-        <PackageReference Include="Microsoft.AspNetCore.SpaServices" Version="3.1.32" />
-        <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="10.0.7" />
-        <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" Version="10.0.7" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.7" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.7" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.7">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
-        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.7" />
-        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.7" />
-        <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
-        <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="10.0.2" />
-        <PackageReference Include="MimeMapping" Version="4.0.0" />
-        <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-        <PackageReference Include="Scrutor" Version="7.0.0" />
-        <PackageReference Include="Scrutor.AspNetCore" Version="3.3.0" />
-        <PackageReference Include="System.DirectoryServices.Protocols" Version="9.0.0" />
-        <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
-        <PackageReference Include="Serilog.Aspnetcore.Middleware" Version="1.0.0" />
-        <PackageReference Include="Serilog.Enrichers.AspNetCore" Version="1.0.0" />
-        <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
-        <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
-        <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
-        <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
-        <PackageReference Include="Serilog.Sinks.Seq" Version="9.0.0" />
-        <PackageReference Include="SkiaSharp" Version="3.119.2" />
-        <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.2" />
-        <PackageReference Include="Scalar.AspNetCore" Version="2.14.11" />
-        <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
-        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.18.0" />
-        <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.7" />
-        <PackageReference Include="System.Threading.Tasks.Dataflow" Version="10.0.7" />
+        <PackageReference Include="AspNetCore.HealthChecks.Hangfire" />
+        <PackageReference Include="AspNetCore.HealthChecks.UI.Client" />
+        <PackageReference Include="CommandLineParser" />
+        <PackageReference Include="Hangfire.AspNetCore" />
+        <PackageReference Include="Hangfire.Console" />
+        <PackageReference Include="Hangfire.Core" />
+        <PackageReference Include="Hangfire.InMemory" />
+        <PackageReference Include="Hangfire.MySqlStorage" />
+        <PackageReference Include="MailKit" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+        <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" />
+        <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore" />
+        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
+        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
+        <PackageReference Include="MimeMapping" />
+        <PackageReference Include="System.DirectoryServices.Protocols" />
+        <PackageReference Include="Serilog.AspNetCore" />
+        <PackageReference Include="Serilog.Enrichers.Environment" />
+        <PackageReference Include="Serilog.Enrichers.Thread" />
+        <PackageReference Include="Serilog.Extensions.Hosting" />
+        <PackageReference Include="Serilog.Sinks.File" />
+        <PackageReference Include="SkiaSharp" />
+        <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
+        <PackageReference Include="Scalar.AspNetCore" />
+        <PackageReference Include="Swashbuckle.AspNetCore" />
+        <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
     </ItemGroup>
 
     <ItemGroup>
@@ -104,11 +86,6 @@
         <ProjectReference Include="../Registry.Web.Identity.SqliteMigrations/Registry.Web.Identity.SqliteMigrations.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-        <Content Remove="appsettings-eftools.json" />
-        <Content Include="appsettings-eftools.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
-    </ItemGroup>
-
     <ProjectExtensions>
         <VisualStudio>
             <UserProperties appsettings_1json__JsonSchema="" />
@@ -116,7 +93,9 @@
     </ProjectExtensions>
 
     <PropertyGroup>
-        <DdbReleaseUrl>https://github.com/DroneDB/DroneDB/releases/download/v$(DdbVersion)/ddb-$(DdbVersion)-windows.zip</DdbReleaseUrl>
+        <!-- The DroneDB pin (DdbSource, DdbVersion, DdbWindowsZipSha256, ...): Directory.Build.props -->
+        <DdbReleaseUrl>https://github.com/DroneDB/DroneDB/releases/download/v$(DdbVersion)/ddb-$(DdbVersion)-Windows.zip</DdbReleaseUrl>
+        <DdbReleaseScript>$(MSBuildThisFileDirectory)../scripts/ddb-release.sh</DdbReleaseScript>
     </PropertyGroup>
 
     <Target Name="HandleNPMErrors">
@@ -131,15 +110,53 @@
     </Target>
 
 
+    <!--
+      Embeds the pinned ddb Windows build (Directory.Build.props). The zip is verified against
+      DdbWindowsZipSha256 on every build: a cached zip that does not match (another pin, a broken
+      download) is downloaded again, and a download that does not match fails the build and is deleted.
+        - DdbSource release: MSBuild downloads the release asset (no bash needed on Windows).
+        - DdbSource ci: scripts/ddb-release.sh fetch-windows-zip downloads the CI artifact, which
+          needs bash, curl, unzip and DRONEDB_ARTIFACT_TOKEN (or a gh login).
+        - DDB_LOCAL_BUILD=<path to a ddb Windows zip>: that zip is embedded instead, unverified
+          (developer override).
+    -->
     <Target Name="EmbedDdbRelease">
         <PropertyGroup>
             <DdbReleasePath>$(OutputPath)ddb.zip</DdbReleasePath>
+            <DdbDownloadDir>$(OutputPath)ddb-download</DdbDownloadDir>
+            <DdbLocalZip Condition="'$(DDB_LOCAL_BUILD)' != '' And $(DDB_LOCAL_BUILD.EndsWith('.zip'))">$(DDB_LOCAL_BUILD)</DdbLocalZip>
         </PropertyGroup>
 
-        <Message Condition="Exists('$(DdbReleasePath)')" Text="Ddb release already exists at $(DdbReleasePath), skipping download" Importance="high" />
-        <Message Condition="!Exists('$(DdbReleasePath)')" Text="Embedding ddb version $(DdbVersion), downloading from $(DdbReleaseUrl)" Importance="high" />
+        <Error Condition="'$(DdbWindowsZipSha256)' == ''" Text="DdbWindowsZipSha256 is not set (Directory.Build.props): the embedded ddb build cannot be verified." />
 
-        <DownloadFile Condition="!Exists('$(DdbReleasePath)')" SourceUrl="$(DdbReleaseUrl)" DestinationFolder="$(OutputPath)" DestinationFileName="ddb.zip" />
+        <!-- Developer override -->
+        <Warning Condition="'$(DdbLocalZip)' != ''" Text="DDB_LOCAL_BUILD: embedding $(DdbLocalZip) instead of the pinned DroneDB build; it is not checksum-verified." />
+        <Copy Condition="'$(DdbLocalZip)' != ''" SourceFiles="$(DdbLocalZip)" DestinationFiles="$(DdbReleasePath)" />
+
+        <!-- The pinned build: reuse a cached zip only when it is the pinned one -->
+        <GetFileHash Condition="'$(DdbLocalZip)' == '' And Exists('$(DdbReleasePath)')" Files="$(DdbReleasePath)" Algorithm="SHA256">
+            <Output TaskParameter="Hash" PropertyName="DdbCachedReleaseHash" />
+        </GetFileHash>
+        <Message Condition="'$(DdbLocalZip)' == '' And Exists('$(DdbReleasePath)') And '$(DdbCachedReleaseHash)' != '$(DdbWindowsZipSha256)'" Text="Ddb build at $(DdbReleasePath) is not the pinned one (SHA256 $(DdbCachedReleaseHash)), downloading it again" Importance="high" />
+        <Delete Condition="'$(DdbLocalZip)' == '' And Exists('$(DdbReleasePath)') And '$(DdbCachedReleaseHash)' != '$(DdbWindowsZipSha256)'" Files="$(DdbReleasePath)" />
+        <Message Condition="'$(DdbLocalZip)' == '' And Exists('$(DdbReleasePath)')" Text="Pinned ddb $(DdbVersion) ($(DdbSource)) already at $(DdbReleasePath), skipping download" Importance="high" />
+
+        <Message Condition="'$(DdbLocalZip)' == '' And !Exists('$(DdbReleasePath)') And '$(DdbSource)' == 'release'" Text="Embedding ddb $(DdbVersion), downloading $(DdbReleaseUrl)" Importance="high" />
+        <DownloadFile Condition="'$(DdbLocalZip)' == '' And !Exists('$(DdbReleasePath)') And '$(DdbSource)' == 'release'" SourceUrl="$(DdbReleaseUrl)" DestinationFolder="$(OutputPath)" DestinationFileName="ddb.zip" />
+
+        <Message Condition="'$(DdbLocalZip)' == '' And !Exists('$(DdbReleasePath)') And '$(DdbSource)' == 'ci'" Text="Embedding the pinned ddb CI build $(DdbCiCommit) (run $(DdbCiRunId)), downloading it with scripts/ddb-release.sh" Importance="high" />
+        <Exec Condition="'$(DdbLocalZip)' == '' And !Exists('$(DdbReleasePath)') And '$(DdbSource)' == 'ci'" Command="bash &quot;$(DdbReleaseScript)&quot; fetch-windows-zip &quot;$(DdbDownloadDir)&quot;" ContinueOnError="true">
+            <Output TaskParameter="ExitCode" PropertyName="DdbFetchExitCode" />
+        </Exec>
+        <Error Condition="'$(DdbFetchExitCode)' != '' And '$(DdbFetchExitCode)' != '0'" Text="Cannot download the pinned ddb CI build (exit $(DdbFetchExitCode)). It needs bash, curl, unzip and DRONEDB_ARTIFACT_TOKEN (see scripts/ddb-release.sh); or set DDB_LOCAL_BUILD to a ddb Windows zip." />
+        <Copy Condition="'$(DdbFetchExitCode)' == '0'" SourceFiles="$(DdbDownloadDir)/ddb-$(DdbVersion)-Windows.zip" DestinationFiles="$(DdbReleasePath)" />
+        <RemoveDir Condition="'$(DdbFetchExitCode)' == '0'" Directories="$(DdbDownloadDir)" />
+
+        <GetFileHash Condition="'$(DdbLocalZip)' == ''" Files="$(DdbReleasePath)" Algorithm="SHA256">
+            <Output TaskParameter="Hash" PropertyName="DdbReleaseHash" />
+        </GetFileHash>
+        <Delete Condition="'$(DdbLocalZip)' == '' And '$(DdbReleaseHash)' != '$(DdbWindowsZipSha256)'" Files="$(DdbReleasePath)" />
+        <Error Condition="'$(DdbLocalZip)' == '' And '$(DdbReleaseHash)' != '$(DdbWindowsZipSha256)'" Text="Checksum mismatch for the pinned ddb Windows build: SHA256 $(DdbReleaseHash), expected $(DdbWindowsZipSha256) (DdbWindowsZipSha256, Directory.Build.props). The download was deleted." />
 
         <ItemGroup>
             <EmbeddedResource Include="$(DdbReleasePath)">
@@ -157,8 +174,16 @@
         <!-- Build Hub if not built -->
         <CallTarget Condition="!Exists('$(ProjectDir)/ClientApp/build')" Targets="BuildSPA" />
 
-        <!-- Embed ddb release on windows -->
-        <CallTarget Condition="$([MSBuild]::IsOSPlatform('Windows'))" Targets="EmbedDdbRelease" />
+        <!--
+          Embed the ddb release when the build targets Windows. The target OS is the RuntimeIdentifier,
+          not the build OS: the release builds the win-* zips on Ubuntu. Without a RID (local dev build)
+          the build OS decides, as before.
+        -->
+        <PropertyGroup>
+            <EmbedDdbForTarget Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier.StartsWith('win'))</EmbedDdbForTarget>
+            <EmbedDdbForTarget Condition="'$(RuntimeIdentifier)' == ''">$([MSBuild]::IsOSPlatform('Windows'))</EmbedDdbForTarget>
+        </PropertyGroup>
+        <CallTarget Condition="'$(EmbedDdbForTarget)' == 'true'" Targets="EmbedDdbRelease" />
 
         <Delete Files="$(ProjectDir)/ClientApp.zip" />
 

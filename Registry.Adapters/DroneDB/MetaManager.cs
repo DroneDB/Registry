@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using Registry.Adapters.DroneDB;
+using System.Text.Json;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 
@@ -26,26 +21,12 @@ public class MetaManager : IMetaManager
     public Meta Add(string key, string data, string? path = null)
     {
 
-        var m = _ddbWrapper.MetaAdd(_ddb.DatasetFolderPath, key, data, path);
-
-        return new Meta
-        {
-            Data = JToken.FromObject(m.Data),
-            Id = m.Id,
-            ModifiedTime = m.ModifiedTime
-        };
+        return _ddbWrapper.MetaAdd(_ddb.DatasetFolderPath, key, data, path);
     }
 
     public Meta Set(string key, string data, string? path = null)
     {
-        var m = _ddbWrapper.MetaSet(_ddb.DatasetFolderPath, key, data, path);
-
-        return new Meta
-        {
-            Data = JToken.FromObject(m.Data),
-            Id = m.Id,
-            ModifiedTime = m.ModifiedTime
-        };
+        return _ddbWrapper.MetaSet(_ddb.DatasetFolderPath, key, data, path);
     }
 
     public int Remove(string id)
@@ -53,18 +34,18 @@ public class MetaManager : IMetaManager
         return _ddbWrapper.MetaRemove(_ddb.DatasetFolderPath, id);
     }
 
-    public JToken Get(string key, string? path = null)
+    public JsonElement Get(string key, string? path = null)
     {
         var m = _ddbWrapper.MetaGet(_ddb.DatasetFolderPath, key, path);
-        return JsonConvert.DeserializeObject<JToken>(m);
+        return JsonSerializer.Deserialize<JsonElement>(m!, NativeJson.Options);
     }
 
     public T? Get<T>(string key, string? path = null)
     {
         var m = _ddbWrapper.MetaGet(_ddb.DatasetFolderPath, key, path);
-        var obj = JsonConvert.DeserializeObject<Meta>(m);
+        var obj = JsonSerializer.Deserialize<Meta>(m!, NativeJson.Options);
 
-        return obj != null ? obj.Data.ToObject<T>() : default;
+        return obj?.Data is { } data ? data.Deserialize<T>(NativeJson.Options) : default;
     }
 
     public int Unset(string key, string? path = null)

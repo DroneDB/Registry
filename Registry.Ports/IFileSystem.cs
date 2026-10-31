@@ -1,7 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -11,19 +10,22 @@ public interface IFileSystem
 {
     #region Synchronous File Operations
 
-    string ReadAllText(string path);
-    byte[] ReadAllBytes(string path);
-    void WriteAllText(string path, string contents);
-    void WriteAllText(string path, string contents, Encoding encoding);
     void WriteAllBytes(string path, byte[] bytes);
-    void AppendAllText(string path, string contents);
-    void AppendAllText(string path, string contents, Encoding encoding);
-    void AppendAllLines(string path, IEnumerable<string> contents);
-    void AppendAllLines(string path, IEnumerable<string> contents, Encoding encoding);
+
+    /// <summary>
+    /// Writes <paramref name="bytes"/> to <paramref name="path"/> and flushes them to the disk before it returns, so a
+    /// file renamed over another one right after is whole after a crash. <paramref name="mode"/> decides what an existing
+    /// file means (<see cref="FileMode.CreateNew"/> refuses it), <paramref name="share"/> what a reader may do meanwhile.
+    /// </summary>
+    void WriteAllBytesDurable(string path, byte[] bytes, FileMode mode = FileMode.Create, FileShare share = FileShare.None);
+
+    /// <summary>The whole file as text (UTF-8, a BOM is honoured).</summary>
+    string ReadAllText(string path);
     void Copy(string sourceFileName, string destFileName, bool overwrite = true);
     void Move(string sourceFileName, string destFileName);
-    void Replace(string sourceFileName, string destinationFileName, string destinationBackupFileName);
-    void Replace(string sourceFileName, string destinationFileName, string destinationBackupFileName, bool ignoreMetadataErrors);
+
+    /// <summary>Moves a file, replacing <paramref name="destFileName"/> when <paramref name="overwrite"/> (a rename on one volume).</summary>
+    void Move(string sourceFileName, string destFileName, bool overwrite);
     void Delete(string path);
     bool Exists(string path);
 
@@ -43,16 +45,13 @@ public interface IFileSystem
 
     Stream OpenRead(string path);
     Stream OpenWrite(string path, FileMode mode = FileMode.Create);
-    Stream Open(string path, FileMode mode, FileAccess access, FileShare share);
 
     #endregion
 
     #region File/Folder Information
 
     long GetFileSize(string path);
-    DateTime GetCreationTime(string path);
     DateTime GetLastWriteTime(string path);
-    DateTime GetLastAccessTime(string path);
     string[] GetFiles(string path, string searchPattern = "*", SearchOption searchOption = SearchOption.TopDirectoryOnly);
     string[] GetDirectories(string path, string searchPattern = "*", SearchOption searchOption = SearchOption.TopDirectoryOnly);
     IEnumerable<string> EnumerateFiles(string path, string searchPattern = "*", SearchOption searchOption = SearchOption.TopDirectoryOnly);
@@ -76,10 +75,7 @@ public interface IFileSystem
     Task<string> ReadAllTextAsync(string path, CancellationToken cancellationToken = default);
     Task<byte[]> ReadAllBytesAsync(string path, CancellationToken cancellationToken = default);
     Task WriteAllTextAsync(string path, string contents, CancellationToken cancellationToken = default);
-    Task WriteAllTextAsync(string path, string contents, Encoding encoding, CancellationToken cancellationToken = default);
     Task WriteAllBytesAsync(string path, byte[] bytes, CancellationToken cancellationToken = default);
-    Task AppendAllTextAsync(string path, string contents, CancellationToken cancellationToken = default);
-    Task AppendAllLinesAsync(string path, IEnumerable<string> contents, CancellationToken cancellationToken = default);
 
     #endregion
 }

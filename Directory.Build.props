@@ -16,4 +16,77 @@
         <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
     </PropertyGroup>
 
+    <!--
+        Analyzer and nullable ratchet.
+
+        Nullable is on for every project. A project that is not annotated yet sets
+        <Nullable>disable</Nullable> in its csproj and is listed in build/nullable-allowlist.txt.
+        scripts/check-nullable-allowlist.sh fails when the two disagree, so the list can only shrink.
+    -->
+    <PropertyGroup>
+        <Nullable>enable</Nullable>
+        <AnalysisLevel>latest-recommended</AnalysisLevel>
+        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    </PropertyGroup>
+
+    <!--
+        The DroneDB (libddb) build Registry is built and tested against.
+
+        This is the only place it is written. scripts/ddb-release.sh reads it for everything that
+        installs libddb, downloads exactly this build and checks it with sha256sum -c:
+          - CI installs the .deb (scripts/ddb-release.sh fetch-deb);
+          - the Dockerfile installs the same .deb (fetch-deb, token as a build secret for a CI build);
+          - Registry.Web.csproj embeds the Windows zip in Windows builds (release: downloaded by
+            MSBuild; ci: fetch-windows-zip) and fails the build when its SHA256 differs.
+        scripts/ddb-release.sh check (CI) fails when the pin is malformed or written elsewhere, or
+        when anything downloads releases/latest. Startup checks the ABI of the loaded library
+        (DdbAbi: libddb 2.x, ABI major 2, minor >= 0), not this version number.
+
+        DdbSource:
+          release  a published release: DdbVersion, and the SHA256 of ddb_<DdbVersion>_amd64.deb and
+                   ddb-<DdbVersion>-Windows.zip (the "digest" of each asset, or SHA256SUMS, in
+                   gh api repos/DroneDB/DroneDB/releases/tags/v<version>). Remove the Ci and
+                   ArtifactId properties.
+          ci       an unreleased DroneDB CI build (c-cpp.yml): the DroneDB commit, its run, the ids
+                   of its "Linux-Binaries" and "Windows Binaries" artifacts
+                   (gh api repos/DroneDB/DroneDB/actions/runs/<run>/artifacts), DdbVersion as that
+                   build names its files, and the SHA256 of the .deb and of the zip inside them.
+                   Downloading an artifact needs DRONEDB_ARTIFACT_TOKEN (see scripts/ddb-release.sh);
+                   artifacts expire 90 days after their run.
+
+                   DdbDebFileVersion (optional, ci only): the version in the .deb file name when it is
+                   not DdbVersion. DroneDB names the .deb of an untagged build <package.json
+                   version>~git<commit> (scripts/build-debian-package.sh; the commit is the pull
+                   request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
+                   ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
+
+        Pinned now (2026-10-31): DroneDB has ONE version, 2.0.0 (package.json); the libddb ABI follows
+        it (ABI 2.0, semver: a removed export is a new major, an added one a new minor) and so does
+        the handshake (libddb 2.x). It is not tagged until Registry is proven on it, so Registry pins
+        the CI build of DroneDB fixes-and-optimizations commit f21346f9, run 41158881950 (a pull
+        request run of DroneDB#472, built from the merge with master; the .deb is named after that
+        merge commit, 2.0.0~gitd00db05d), every job green (Linux and Windows builds and tests,
+        ASan + UBSan, the Docker image). Since the pin of f878cef9: bm3d 1.1.2 and Obj2Tiles
+        1.8.1 read the 16 bit and float single-band TIFF textures of multispectral models (they
+        failed to build); a raster query or a stockpile detection of a place without data fails with
+        DDBERR_INVALIDARGS, which Registry answers with a 400; the histogram of a formula has bins
+        over the range the Hub draws and counts the values below and above it; ddb align masks no
+        data, reports the shift at the centre of the shared area and fails on a solution it cannot
+        trust; the WMS and WCS image renders of a multispectral float raster show it as the map tiles
+        do; a stockpile click measures the pile against a plane fitted to the ground around it, so it
+        works on a slope, and detect-all no longer counts a slope as a pile. Everything else stays from the earlier pins. Next: the v2.0.0 release (DdbSource release)
+        once it is tagged.
+    -->
+    <PropertyGroup>
+        <DdbSource>ci</DdbSource>
+        <DdbVersion>2.0.0</DdbVersion>
+        <DdbDebFileVersion>2.0.0~gitd00db05d</DdbDebFileVersion>
+        <DdbCiCommit>f21346f9379198f3c8fda1f2c63e00422c5d8aaf</DdbCiCommit>
+        <DdbCiRunId>41158881950</DdbCiRunId>
+        <DdbDebArtifactId>13028233063</DdbDebArtifactId>
+        <DdbWindowsArtifactId>13027683579</DdbWindowsArtifactId>
+        <DdbDebSha256>e569381a107d4d0eeeae60da40fdeb3c02d3dacd8e27dbe5fa20565af3507ffa</DdbDebSha256>
+        <DdbWindowsZipSha256>81a03e0cc3f24f15cc6b6b75806ba5257c02cc3fcc8446b664a9335a53063660</DdbWindowsZipSha256>
+    </PropertyGroup>
+
 </Project>

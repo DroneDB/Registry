@@ -1,4 +1,3 @@
-﻿#nullable enable
 using System;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
@@ -28,39 +27,24 @@ public static class JobParamKeys
 /// <summary>
 /// Publishes metadata and JobIndex before making an indexed Hangfire job runnable.
 /// </summary>
-public class IndexedJobEnqueuer(IBackgroundJobClient client, IServiceProvider sp, ILogger<IndexedJobEnqueuer> log,
-    JobStorage? storage = null)
+public class IndexedJobEnqueuer(IBackgroundJobClient client, IServiceScopeFactory scopes,
+    ILogger<IndexedJobEnqueuer> log, JobStorage storage)
     : IIndexedJobEnqueuer
 {
-    public string Enqueue(Expression<Action> methodCall, IndexPayload meta) =>
-        EnqueueCore(Job.FromExpression(methodCall), meta);
-
     public string Enqueue<T>(Expression<Action<T>> methodCall, IndexPayload meta) =>
-        EnqueueCore(Job.FromExpression(methodCall), meta);
-
-    public string Enqueue(Expression<Func<Task>> methodCall, IndexPayload meta) =>
         EnqueueCore(Job.FromExpression(methodCall), meta);
 
     public string Enqueue<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta) =>
         EnqueueCore(Job.FromExpression(methodCall), meta);
 
-    public string Schedule(Expression<Action> methodCall, IndexPayload meta, TimeSpan delay) =>
-        ScheduleCore(Job.FromExpression(methodCall), meta, delay);
-
     public string Schedule<T>(Expression<Action<T>> methodCall, IndexPayload meta, TimeSpan delay) =>
         ScheduleCore(Job.FromExpression(methodCall), meta, delay);
 
-    public string Schedule(Expression<Func<Task>> methodCall, IndexPayload meta, TimeSpan delay) =>
-        ScheduleCore(Job.FromExpression(methodCall), meta, delay);
-
-    public string Schedule<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta, TimeSpan delay) =>
-        ScheduleCore(Job.FromExpression(methodCall), meta, delay);
-
-    private string EnqueueCore(Job job, IndexPayload meta) =>
+    internal string EnqueueCore(Job job, IndexPayload meta) =>
         CreateCore(job, meta, createdAt => IndexedJobPublicationRecord.ForImmediate(meta, createdAt,
             meta.Queue ?? EnqueuedState.DefaultQueue));
 
-    private string ScheduleCore(Job job, IndexPayload meta, TimeSpan delay) =>
+    internal string ScheduleCore(Job job, IndexPayload meta, TimeSpan delay) =>
         CreateCore(job, meta, createdAt => IndexedJobPublicationRecord.ForScheduled(meta, createdAt, delay));
 
     internal const string PreparationStateName = IndexingState.StateName;
@@ -90,9 +74,9 @@ public class IndexedJobEnqueuer(IBackgroundJobClient client, IServiceProvider sp
 
         try
         {
-            using var scope = sp.CreateScope();
+            using var scope = scopes.CreateScope();
             var writer = scope.ServiceProvider.GetRequiredService<IJobIndexWriter>();
-            var result = IndexedJobPublication.PublishAsync(jobId, record, storage ?? JobStorage.Current, client,
+            var result = IndexedJobPublication.PublishAsync(jobId, record, storage, client,
                 writer, job.ToString(), log).GetAwaiter().GetResult();
 
             if (result.Outcome != IndexedJobPublicationOutcome.Published)

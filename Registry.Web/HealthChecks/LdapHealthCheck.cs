@@ -16,11 +16,11 @@ namespace Registry.Web.HealthChecks;
 /// </summary>
 public class LdapHealthCheck : IHealthCheck
 {
-    private readonly LdapSettings _settings;
+    private readonly LdapSettings? _settings;
 
-    public LdapHealthCheck(IOptions<AppSettings> appSettings)
+    public LdapHealthCheck(IOptions<IdentityProviderOptions> identity)
     {
-        _settings = appSettings.Value.LdapSettings;
+        _settings = identity.Value.LdapSettings;
     }
 
     public Task<HealthCheckResult> CheckHealthAsync(

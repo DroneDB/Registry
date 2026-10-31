@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.DirectoryServices.Protocols;
+using System.Globalization;
 using System.Net;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -22,10 +23,10 @@ public class LdapLoginManager : ILoginManager
     private readonly ILogger<LdapLoginManager> _logger;
     private readonly LdapSettings _settings;
 
-    public LdapLoginManager(ILogger<LdapLoginManager> logger, IOptions<AppSettings> appSettings)
+    public LdapLoginManager(ILogger<LdapLoginManager> logger, IOptions<IdentityProviderOptions> identity)
     {
         _logger = logger;
-        _settings = appSettings.Value.LdapSettings
+        _settings = identity.Value.LdapSettings
             ?? throw new InvalidOperationException(
                 "LdapSettings must be configured in appsettings.json when LDAP authentication is enabled.");
     }
@@ -50,15 +51,15 @@ public class LdapLoginManager : ILoginManager
 
         try
         {
-            string userEmail;
-            string displayName;
+            string? userEmail;
+            string? displayName;
             List<string> memberOf;
 
             if (!string.IsNullOrWhiteSpace(_settings.UserDnFormat))
             {
                 // Path A: direct bind using UserDnFormat (e.g. UPN: "{0}@domain.com")
                 // The username is not DN-escaped here; UPN and similar formats do not use DN syntax.
-                var userPrincipal = string.Format(_settings.UserDnFormat, userName);
+                var userPrincipal = string.Format(CultureInfo.InvariantCulture, _settings.UserDnFormat, userName);
 
                 using var conn = CreateConnection();
                 conn.Bind(new NetworkCredential(userPrincipal, password));
@@ -69,7 +70,7 @@ public class LdapLoginManager : ILoginManager
             else
             {
                 // Path B: service account search to locate the user DN, then user bind to verify password
-                string userDn;
+                string? userDn;
 
                 using (var svcConn = CreateConnection())
                 {
@@ -160,10 +161,10 @@ public class LdapLoginManager : ILoginManager
     // Private helpers
     // -------------------------------------------------------------------------
 
-    private (string dn, string email, string displayName, List<string> groups) SearchUser(
+    private (string? dn, string? email, string? displayName, List<string> groups) SearchUser(
         LdapConnection conn, string safeUserName)
     {
-        var filter = string.Format(_settings.SearchFilter, safeUserName);
+        var filter = string.Format(CultureInfo.InvariantCulture, _settings.SearchFilter, safeUserName);
         var attrs = new[]
         {
             _settings.EmailAttribute,
@@ -191,7 +192,7 @@ public class LdapLoginManager : ILoginManager
         );
     }
 
-    private (string email, string displayName, List<string> groups) FetchUserAttributes(
+    private (string? email, string? displayName, List<string> groups) FetchUserAttributes(
         LdapConnection conn, string safeUserName)
     {
         var (_, email, displayName, groups) = SearchUser(conn, safeUserName);
@@ -211,7 +212,7 @@ public class LdapLoginManager : ILoginManager
         return false;
     }
 
-    private static string GetAttribute(SearchResultEntry entry, string attributeName)
+    private static string? GetAttribute(SearchResultEntry entry, string? attributeName)
     {
         if (string.IsNullOrEmpty(attributeName) || !entry.Attributes.Contains(attributeName))
             return null;
@@ -220,7 +221,7 @@ public class LdapLoginManager : ILoginManager
         return values.Length > 0 ? values[0] as string : null;
     }
 
-    private static List<string> GetMultiValueAttribute(SearchResultEntry entry, string attributeName)
+    private static List<string> GetMultiValueAttribute(SearchResultEntry entry, string? attributeName)
     {
         if (string.IsNullOrEmpty(attributeName) || !entry.Attributes.Contains(attributeName))
             return [];

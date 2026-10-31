@@ -1,4 +1,3 @@
-﻿#nullable enable
 using System;
 using System.ComponentModel.DataAnnotations;
 
@@ -7,7 +6,7 @@ namespace Registry.Web.Data.Models;
 /// <summary>
 /// EF entity for Hangfire job index tracking (state, timestamps, tool info).
 /// </summary>
-public class JobIndex
+public class JobIndex : IDatasetSlugKeyed
 {
     /// <summary>Hangfire job identifier (primary key).</summary>
     [Key]

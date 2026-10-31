@@ -1,4 +1,3 @@
-#nullable enable
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using Registry.Ports.DroneDB;
@@ -27,8 +26,7 @@ public class ImportVerifyResultDto
     public bool Reachable { get; set; }
 
     /// <summary>
-    /// Optional human-readable note (e.g. a size caveat). NOTE: must NOT be named "message" or "error":
-    /// the web client treats any response body containing those fields as an error, even on HTTP 200.
+    /// Optional human-readable note (e.g. a size caveat).
     /// </summary>
     public string? Note { get; set; }
 

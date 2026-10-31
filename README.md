@@ -1,4 +1,4 @@
-﻿# DroneDB Registry
+# DroneDB Registry
 
 ![GitHub Release](https://img.shields.io/github/v/release/DroneDB/Registry) ![commits](https://img.shields.io/github/commit-activity/m/DroneDB/registry) ![languages](https://img.shields.io/github/languages/top/DroneDB/registry) ![.NET Core](https://github.com/DroneDB/Registry/actions/workflows/dotnet-core.yml/badge.svg) [![Discord](https://img.shields.io/discord/1491016144310767670?label=Discord&logo=discord&color=5865F2)](https://discord.gg/e9M3vBvzge)
 
@@ -24,13 +24,13 @@ View orthophotos, point clouds, 3D models, Vector files, 3D Tiles, Gaussian spla
 
 | Category | Formats |
 |----------|---------|
-| Images | JPG, JPEG, DNG, TIF, TIFF, PNG, GIF, WEBP |
+| Images | JPG, JPEG, DNG, TIF, TIFF, JP2, J2K, PNG, GIF, WEBP |
 | Point Clouds | LAS, LAZ, E57, PTS, XYZ, PLY* |
 | 3D Models | OBJ, GLTF, GLB, PLY* |
 | 3D Tiles | 3TZ |
-| Gaussian Splats | SPLAT, SPZ |
-| Rasters | GeoTIFF (orthophotos, DEMs) |
-| Vector | GeoJSON, DXF, DWG, SHP, SHZ, FGB, TopoJSON, KML, KMZ, GPKG |
+| Gaussian Splats | PLY, SPLAT, SPZ, KSPLAT, SOG, RAD |
+| Rasters | GeoTIFF, JPEG 2000 (orthophotos, DEMs) |
+| Vector | GeoJSON, DXF, DWG, SHP, SHZ, FGB, TopoJSON, KML, KMZ, GPKG, GPX |
 | Videos | MP4, MOV, WEBM, M4V, AVI, MKV |
 | Other | Panoramas (360°), Markdown, PDF |
 
@@ -48,9 +48,9 @@ View orthophotos, point clouds, 3D models, Vector files, 3D Tiles, Gaussian spla
 
 | Guide | Description |
 |-------|-------------|
-| [Registry Guide](https://docs.dronedb.app/docs/registry) | Installation, configuration, deployment |
-| [User Management](https://docs.dronedb.app/docs/registry/admin/user-management) | Users, roles, organizations, quotas |
-| [API Reference](https://docs.dronedb.app/docs/integrations/api-reference) | REST API documentation |
+| [Registry Guide](https://docs.dronedb.app/docs/self-hosting) | Installation, configuration, deployment |
+| [User Management](https://docs.dronedb.app/docs/self-hosting/users) | Users, roles, organizations, quotas |
+| [API Reference](https://docs.dronedb.app/docs/developers/api/reference) | REST API documentation |
 
 ## 💬 Community
 
@@ -81,7 +81,7 @@ Open [http://localhost:5000](http://localhost:5000) in your browser to start usi
 >
 > The image is built for `linux/amd64` only. On Apple Silicon the `--platform linux/amd64` line is required, otherwise Docker stops with `no matching manifest for linux/arm64/v8`. Docker Desktop then runs the image through emulation (turn on *Use Rosetta for x86_64/amd64 emulation* in Settings → General).
 >
-> See [macOS: use a named volume](https://docs.dronedb.app/docs/registry/getting-started#macos-use-a-named-volume) for details.
+> See [macOS: use a named volume](https://docs.dronedb.app/docs/self-hosting/install#macos-use-a-named-volume) for details.
 
 **Default credentials**: `admin` / `password123`
 
@@ -98,13 +98,29 @@ Open [http://localhost:5000](http://localhost:5000) in your browser to start usi
 | [/hangfire](http://localhost:5000/hangfire)       | Background jobs dashboard (requires auth) |
 | [/stac](http://localhost:5000/stac)               | STAC Catalog root                         |
 
-The log file is located in `registry-data/logs/registry.txt`.
+The log files are in `registry-data/logs/` and roll daily: `registryYYYYMMDD.txt` for the default instance, `registry-webYYYYMMDD.txt`, `registry-node-<host>YYYYMMDD.txt` (one per node host name; the production compose names them `node-a` and `node-b`) and `registry-thumbsYYYYMMDD.txt` for the web server, processing node and thumbnail generator instance types.
 
 ### Processing Platform
 
-On-demand builds (thumbnails, tiles, COG, streaming formats) run automatically or can be triggered manually. Large downloads are offloaded to background tasks. Configuration options including per-user task limits, per-org output budgets, remote processing nodes (ODX/NodeODX), and feature gating are documented in the [Registry Guide](https://docs.dronedb.app/docs/registry).
+On-demand builds (thumbnails, tiles, COG, streaming formats) run automatically or can be triggered manually. Large downloads are offloaded to background tasks. Configuration options including per-user task limits, per-org output budgets, remote processing nodes (ODX/NodeODX), and feature gating are documented in the [Registry Guide](https://docs.dronedb.app/docs/self-hosting).
 
-For production deployment with MySQL/MariaDB, see the [full documentation](https://docs.dronedb.app/docs/registry/admin/production#running-in-production).
+For production deployment with MySQL/MariaDB, see the [full documentation](https://docs.dronedb.app/docs/self-hosting/production).
+
+### DSM altitude key
+
+libddb looks up ground elevation (OpenTopography global DEM) to compute the relative altitude of images that carry none in their EXIF. The API key comes from the `DDB_OPENTOPOGRAPHY_KEY` environment variable of every Registry process (the production compose passes it through); without it the lookup is skipped, a warning is logged once, and the relative altitude falls back to the GPS altitude.
+
+### Reverse proxy
+
+Behind a reverse proxy (nginx), the proxy must send `X-Forwarded-For` and `X-Forwarded-Proto` (and pass the original `Host`): the Registry takes the client address (rate and download limits, logs) and the scheme (`Secure` cookies, HSTS) from them. They are trusted only when the peer the Registry sees is listed in `AppSettings:KnownProxies` (IP addresses, default loopback) or inside `AppSettings:KnownNetworks` (CIDR); from any other peer they are ignored. With a host nginx proxying to a port published by Docker (`docker/production`), the peer is the Docker bridge gateway (`172.x.0.1`), not loopback, so the production template sets `"KnownNetworks": [ "172.16.0.0/12" ]` (Docker's default bridge address pool); adjust it if your Docker networks use another range.
+
+### Update check
+
+Registry asks `dronedb.app` once a day which version is the latest, shows an update in the Hub to administrators, and can e-mail them about it (`AppSettings:UpdateCheckEmail`, needs the SMTP settings). At every start it logs what the check sends:
+
+> Update check: enabled (daily). This deployment sends its instance ID (`<instance id>`), Registry/DroneDB versions, platform, public URL, host name, network domain and declared use to dronedb.app, and a contact email only if an admin opted in; dronedb.app also records the source IP address and checks the public URL. Purposes: update notices, release notes and license-compliance verification. Docs: docs.dronedb.app/docs/self-hosting/update-check  ·  Opt out: UpdateCheckCron="disabled"
+
+To switch it off set `AppSettings:UpdateCheckCron` to `disabled` (environment variable `AppSettings__UpdateCheckCron`): nothing is sent and the log says `Update check: disabled`. The same text is in the Hub, under Admin, Configuration, "Update check".
 
 ## 🌍 OGC Services
 
@@ -139,7 +155,7 @@ not the generic Registry error page.
 ### QGIS setup
 
 Ready-made QGIS setup scripts are in [`scripts/`](scripts/) (`qgis-test-setup.sh` /
-`qgis-test-setup.ps1`). See the [OGC services documentation](https://docs.dronedb.app/docs/integrations/ogc-services)
+`qgis-test-setup.ps1`). See the [OGC services documentation](https://docs.dronedb.app/docs/developers/ogc)
 for detailed QGIS configuration steps.
 
 ## 🛠️ Development

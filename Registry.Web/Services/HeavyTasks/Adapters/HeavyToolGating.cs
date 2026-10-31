@@ -1,10 +1,8 @@
-#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Ports;
@@ -25,9 +23,9 @@ public sealed class HeavyToolGating : IHeavyToolGating
 
     private static readonly HeavyToolConfig DefaultConfig = new();
 
-    public HeavyToolGating(IOptions<AppSettings> appSettings, IAuthManager authManager)
+    public HeavyToolGating(IOptions<ProcessingPlatformSettings> settings, IAuthManager authManager)
     {
-        _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
+        _settings = settings.Value;
         _authManager = authManager;
     }
 

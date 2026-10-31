@@ -1,0 +1,30 @@
+{
+  "request": "POST /orgs/golden-write/ds",
+  "caller": "organization owner (write org)",
+  "status": 201,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "slug": "golden-created",
+    "creationDate": "<datetime:Z>",
+    "properties": {
+      "entries": 0,
+      "meta": {
+        "name": {
+          "data": "Golden created",
+          "id": "<guid>",
+          "mtime": 1700000000
+        },
+        "visibility": {
+          "data": 1,
+          "id": "<guid>",
+          "mtime": 1700000000
+        }
+      }
+    },
+    "size": 0,
+    "lastModified": null,
+    "permissions": null,
+    "hasThumbnail": null
+  }
+}

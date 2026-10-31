@@ -1,0 +1,13 @@
+# Nullable allow-list. It is empty and must stay empty.
+#
+# Directory.Build.props enables nullable reference types for every project, and every
+# project and file is annotated. An entry would opt one project or one file out:
+#   - a project directory name: its csproj sets <Nullable>disable</Nullable>
+#   - a .cs path from the repository root: the file has `#nullable disable`
+# EF Core migrations (*/Migrations/*.cs) are generated with `#nullable disable`
+# and are not listed.
+#
+# scripts/check-nullable-allowlist.sh fails if a project or file opts out without
+# an entry here, or if an entry no longer opts out. Annotate new code instead of
+# adding an entry. In controllers and the models MVC binds, a non-nullable reference
+# type is an implicit [Required]: mark every optional input nullable.

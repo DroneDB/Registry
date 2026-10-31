@@ -12,15 +12,20 @@ on:
       - master
   workflow_dispatch:
 
+# A new push to a PR supersedes the run in progress; master and tag runs always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
+      # The Hub is the commit this Registry pins, never Hub master: the image ships the
+      # Hub its API matches
       - uses: actions/checkout@v4
-
-      - name: Submodules
-        run: |
-          git submodule update --force --recursive --init --remote
+        with:
+          submodules: recursive
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -50,9 +55,29 @@ jobs:
           context: .
           file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
+          # A pull request's image is not pushed: it is loaded, so the check below can run it
+          load: ${{ github.event_name == 'pull_request' }}
+          # The Dockerfile installs the DroneDB build pinned in Directory.Build.props; a pinned
+          # DroneDB CI build needs this token (scripts/ddb-release.sh). Build secrets never reach a layer.
+          secrets: |
+            dronedb_artifact_token=${{ secrets.DRONEDB_ARTIFACT_TOKEN }}
           tags: |
             ${{ steps.docker_meta.outputs.tags }}
             ${{ github.ref == 'refs/heads/master' && 'dronedb/registry:latest' || '' }}
 
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
+
+      - name: Check that the image confines gdal-util
+        # libddb reads the files of users in the workers of gdal-util, which confine themselves with
+        # Landlock, seccomp and resource limits. Every layer must be active in a container with
+        # Docker's default profile, as the containers of docker/production run (no security_opt).
+        # A missing layer is named here; production would run without it, with a warning in the log.
+        run: |
+          image='${{ fromJSON(steps.docker_meta.outputs.json).tags[0] }}'
+          report="$(docker run --rm --user registry --entrypoint gdal-util "$image" --sandbox-report)"
+          echo "$report"
+          if grep -q ': missing' <<< "$report"; then
+            echo "::error::gdal-util lacks a sandbox layer in the image (see the report above)"
+            exit 1
+          fi

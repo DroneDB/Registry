@@ -1,0 +1,41 @@
+{
+  "request": "GET /users",
+  "caller": "admin",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": [
+    {
+      "userName": "admin",
+      "email": "admin@example.com",
+      "roles": [
+        "admin"
+      ],
+      "organizations": [
+        "admin"
+      ]
+    },
+    {
+      "userName": "golden-owner",
+      "email": "golden-owner@example.com",
+      "roles": [],
+      "organizations": [
+        "golden-org"
+      ]
+    },
+    {
+      "userName": "golden-user",
+      "email": "golden-user@example.com",
+      "roles": [],
+      "organizations": null
+    },
+    {
+      "userName": "golden-writer",
+      "email": "golden-writer@example.com",
+      "roles": [],
+      "organizations": [
+        "golden-write"
+      ]
+    }
+  ]
+}

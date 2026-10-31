@@ -1,7 +1,7 @@
-﻿namespace Registry.Web.Models.DTO;
+namespace Registry.Web.Models.DTO;
 
 public class SyncFileErrorDto
 {
-    public string Path { get; set; }
-    public string ErrorMessage { get; set; }
+    public string? Path { get; set; }
+    public string? ErrorMessage { get; set; }
 }

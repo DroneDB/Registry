@@ -1,0 +1,23 @@
+{
+  "request": "GET /orgs/golden-org/ds/golden-ds/stamp",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "checksum": "4c9f05cb1d7e8a2f6b3d0e91a7c5f2d84b6e0a39",
+    "entries": [
+      {
+        "path": "ortho.tif",
+        "hash": "8f4e2a1c"
+      },
+      {
+        "path": "sub/img.jpg",
+        "hash": "1b7d3e90"
+      }
+    ],
+    "meta": [
+      "<guid>"
+    ]
+  }
+}

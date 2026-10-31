@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Services.HeavyTasks;
 
 /// <summary>
@@ -9,4 +8,7 @@ public static class HeavyToolIds
 {
     /// <summary>Dataset build tool (matches the JobIndex.ToolId default).</summary>
     public const string Build = "build";
+
+    /// <summary>Index rescan tool.</summary>
+    public const string RescanIndex = "rescan-index";
 }

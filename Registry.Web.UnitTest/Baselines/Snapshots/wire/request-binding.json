@@ -1,0 +1,1167 @@
+{
+  "hub-create-user": {
+    "type": "CreateUserRequest",
+    "input": "{\"userName\":\"alice\",\"email\":\"alice@example.com\",\"password\":\"Secret123!\",\"roles\":[\"admin\"]}",
+    "outcome": "bound",
+    "model": {
+      "userName": "alice",
+      "password": "Secret123!",
+      "email": "alice@example.com",
+      "roles": [
+        "admin"
+      ]
+    }
+  },
+  "hub-create-user-no-roles": {
+    "type": "CreateUserRequest",
+    "input": "{\"userName\":\"bob\",\"email\":\"\",\"password\":\"Secret123!\",\"roles\":[]}",
+    "outcome": "bound",
+    "model": {
+      "userName": "bob",
+      "password": "Secret123!",
+      "email": "",
+      "roles": []
+    }
+  },
+  "hub-update-user": {
+    "type": "EditUserRequestDto",
+    "input": "{\"email\":\"a@b.c\",\"roles\":[\"admin\",\"dev\"]}",
+    "outcome": "bound",
+    "model": {
+      "email": "a@b.c",
+      "roles": [
+        "admin",
+        "dev"
+      ]
+    }
+  },
+  "hub-update-user-roles": {
+    "type": "EditUserRequestDto",
+    "input": "{\"email\":null,\"roles\":[\"dev\"]}",
+    "outcome": "bound",
+    "model": {
+      "email": null,
+      "roles": [
+        "dev"
+      ]
+    }
+  },
+  "hub-create-role": {
+    "type": "CreateRoleRequestDto",
+    "input": "{\"roleName\":\"surveyor\"}",
+    "outcome": "bound",
+    "model": {
+      "roleName": "surveyor"
+    }
+  },
+  "hub-change-password": {
+    "type": "ChangeUserPasswordRequestDto",
+    "input": "{\"currentPassword\":\"old\",\"newPassword\":\"new\"}",
+    "outcome": "bound",
+    "model": {
+      "currentPassword": "old",
+      "newPassword": "new"
+    }
+  },
+  "hub-change-password-admin": {
+    "type": "ChangeUserPasswordRequestDto",
+    "input": "{\"newPassword\":\"new\"}",
+    "outcome": "bound",
+    "model": {
+      "currentPassword": null,
+      "newPassword": "new"
+    }
+  },
+  "hub-add-user-to-org": {
+    "type": "AddUserToOrganizationDto",
+    "input": "{\"orgSlug\":\"acme\",\"permissions\":2}",
+    "outcome": "bound",
+    "model": {
+      "orgSlug": "acme",
+      "permissions": 2
+    }
+  },
+  "hub-update-user-org": {
+    "type": "UpdateMemberPermissionsDto",
+    "input": "{\"permissions\":3}",
+    "outcome": "bound",
+    "model": {
+      "permissions": 3
+    }
+  },
+  "hub-add-member": {
+    "type": "AddOrganizationMemberDto",
+    "input": "{\"userName\":\"carol\",\"permissions\":1}",
+    "outcome": "bound",
+    "model": {
+      "userName": "carol",
+      "permissions": 1
+    }
+  },
+  "hub-update-member": {
+    "type": "UpdateMemberPermissionsDto",
+    "input": "{\"permissions\":0}",
+    "outcome": "bound",
+    "model": {
+      "permissions": 0
+    }
+  },
+  "hub-import-verify": {
+    "type": "VerifyImportRequestDto",
+    "input": "{\"sourceType\":\"registry\",\"params\":{\"url\":\"https://hub.example\",\"username\":\"u\",\"password\":\"p\"}}",
+    "outcome": "bound",
+    "model": {
+      "sourceType": "registry",
+      "params": {
+        "url": "https://hub.example",
+        "username": "u",
+        "password": "p"
+      }
+    }
+  },
+  "hub-import-browse": {
+    "type": "BrowseImportRequestDto",
+    "input": "{\"sourceType\":\"registry\",\"params\":{\"url\":\"https://hub.example\"},\"browseType\":\"organizations\"}",
+    "outcome": "bound",
+    "model": {
+      "sourceType": "registry",
+      "params": {
+        "url": "https://hub.example"
+      },
+      "browseType": "organizations"
+    }
+  },
+  "hub-import-create": {
+    "type": "CreateImportRequestDto",
+    "input": "{\"sourceType\":\"registry\",\"params\":{\"org\":\"o\",\"ds\":\"d\"},\"slug\":\"imported\",\"name\":\"Imported\",\"visibility\":1}",
+    "outcome": "bound",
+    "model": {
+      "sourceType": "registry",
+      "params": {
+        "org": "o",
+        "ds": "d"
+      },
+      "slug": "imported",
+      "name": "Imported",
+      "visibility": 1
+    }
+  },
+  "hub-import-create-minimal": {
+    "type": "CreateImportRequestDto",
+    "input": "{\"sourceType\":\"zip\",\"params\":{}}",
+    "outcome": "bound",
+    "model": {
+      "sourceType": "zip",
+      "params": {},
+      "slug": null,
+      "name": null,
+      "visibility": null
+    }
+  },
+  "hub-submit-task": {
+    "type": "SubmitTaskRequestDto",
+    "input": "{\"toolId\":\"raster-export\",\"path\":\"ortho.tif\",\"params\":{\"format\":\"geotiff\",\"scale\":1.5,\"bands\":[1,2,3]},\"force\":false}",
+    "outcome": "bound",
+    "model": {
+      "toolId": "raster-export",
+      "version": null,
+      "path": "ortho.tif",
+      "params": {
+        "format": "geotiff",
+        "scale": 1.5,
+        "bands": [
+          1,
+          2,
+          3
+        ]
+      },
+      "force": false
+    }
+  },
+  "hub-submit-task-no-params": {
+    "type": "SubmitTaskRequestDto",
+    "input": "{\"toolId\":\"rescan-index\",\"params\":{},\"force\":true}",
+    "outcome": "bound",
+    "model": {
+      "toolId": "rescan-index",
+      "version": null,
+      "path": null,
+      "params": {},
+      "force": true
+    }
+  },
+  "hub-verify-url": {
+    "type": "UrlImportVerifyRequestDto",
+    "input": "{\"url\":\"https://example.test/a.tif\",\"username\":null,\"password\":null}",
+    "outcome": "bound",
+    "model": {
+      "url": "https://example.test/a.tif",
+      "username": null,
+      "password": null
+    }
+  },
+  "hub-import-url": {
+    "type": "UrlImportRequestDto",
+    "input": "{\"url\":\"https://example.test/a.tif\",\"fileName\":\"a.tif\",\"folder\":\"sub\",\"overwrite\":false,\"sizeBytes\":123456789}",
+    "outcome": "bound",
+    "model": {
+      "url": "https://example.test/a.tif",
+      "fileName": "a.tif",
+      "folder": "sub",
+      "overwrite": false,
+      "username": null,
+      "password": null,
+      "sizeBytes": 123456789
+    }
+  },
+  "hub-merge-multispectral": {
+    "type": "MergeMultispectralRequestDto",
+    "input": "{\"paths\":[\"b1.tif\",\"b2.tif\"],\"outputPath\":\"merged.tif\"}",
+    "outcome": "bound",
+    "model": {
+      "paths": [
+        "b1.tif",
+        "b2.tif"
+      ],
+      "previewBands": null,
+      "thumbSize": null,
+      "outputPath": "merged.tif"
+    }
+  },
+  "hub-align-validate": {
+    "type": "AlignRasterRequestDto",
+    "input": "{\"sourcePath\":\"a.tif\",\"referencePath\":\"b.tif\"}",
+    "outcome": "bound",
+    "model": {
+      "sourcePath": "a.tif",
+      "referencePath": "b.tif",
+      "outputPath": "",
+      "mode": "similarity"
+    }
+  },
+  "hub-raster-profile": {
+    "type": "RasterProfileRequestDto",
+    "input": "{\"path\":\"dem.tif\",\"lineString\":\"{\\\"type\\\":\\\"LineString\\\",\\\"coordinates\\\":[[0,0],[1,1]]}\",\"samples\":256}",
+    "outcome": "bound",
+    "model": {
+      "path": "dem.tif",
+      "lineString": "{\"type\":\"LineString\",\"coordinates\":[[0,0],[1,1]]}",
+      "samples": 256
+    }
+  },
+  "hub-stockpile-calculate": {
+    "type": "VolumeCalculationRequestDto",
+    "input": "{\"path\":\"dem.tif\",\"polygon\":\"{\\\"type\\\":\\\"Polygon\\\",\\\"coordinates\\\":[]}\",\"baseMethod\":\"lowest_perimeter\",\"flatElevation\":0}",
+    "outcome": "bound",
+    "model": {
+      "path": "dem.tif",
+      "polygon": "{\"type\":\"Polygon\",\"coordinates\":[]}",
+      "baseMethod": "lowest_perimeter",
+      "flatElevation": 0.0
+    }
+  },
+  "hub-stockpile-detect": {
+    "type": "StockpileDetectionRequestDto",
+    "input": "{\"path\":\"dem.tif\",\"lat\":45.1,\"lon\":11.2,\"radius\":50,\"sensitivity\":0.5}",
+    "outcome": "bound",
+    "model": {
+      "path": "dem.tif",
+      "lat": 45.1,
+      "lon": 11.2,
+      "radius": 50.0,
+      "sensitivity": 0.5
+    }
+  },
+  "hub-contours": {
+    "type": "ContourRequestDto",
+    "input": "{\"path\":\"dem.tif\",\"interval\":5,\"count\":null,\"baseOffset\":0,\"minElev\":null,\"maxElev\":null,\"simplifyTolerance\":0,\"bandIndex\":1}",
+    "outcome": "bound",
+    "model": {
+      "path": "dem.tif",
+      "interval": 5.0,
+      "count": null,
+      "baseOffset": 0.0,
+      "minElev": null,
+      "maxElev": null,
+      "simplifyTolerance": 0.0,
+      "bandIndex": 1
+    }
+  },
+  "hub-mask-borders": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"ortho.tif\",\"near\":15,\"white\":false}",
+    "outcome": "bound",
+    "model": {
+      "path": "ortho.tif",
+      "near": 15,
+      "white": false
+    }
+  },
+  "hub-mask-borders-check": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"ortho.tif\"}",
+    "outcome": "bound",
+    "model": {
+      "path": "ortho.tif",
+      "near": 15,
+      "white": false
+    }
+  },
+  "hub-stockpile-detect-all": {
+    "type": "StockpileBatchDetectionRequestDto",
+    "input": "{\"path\":\"dem.tif\",\"sensitivity\":0.5,\"minAreaM2\":5,\"maxResults\":50}",
+    "outcome": "bound",
+    "model": {
+      "path": "dem.tif",
+      "sensitivity": 0.5,
+      "minAreaM2": 5.0,
+      "maxResults": 50
+    }
+  },
+  "user-meta": {
+    "type": "Dictionary`2",
+    "input": "{\"maxStorage\":1073741824,\"roles\":[\"a\",\"b\"],\"ratio\":0.25,\"whole\":2.0,\"since\":\"2026-01-01T00:00:00Z\",\"day\":\"2026-01-01\",\"nested\":{\"k\":[1,{\"x\":null}]},\"flag\":true,\"none\":null,\"text\":\"x\"}",
+    "outcome": "bound",
+    "model": {
+      "maxStorage": 1073741824,
+      "roles": [
+        "a",
+        "b"
+      ],
+      "ratio": 0.25,
+      "whole": 2.0,
+      "since": "2026-01-01T00:00:00Z",
+      "day": "2026-01-01",
+      "nested": {
+        "k": [
+          1,
+          {
+            "x": null
+          }
+        ]
+      },
+      "flag": true,
+      "none": null,
+      "text": "x"
+    }
+  },
+  "hub-patch-preferences": {
+    "type": "Dictionary`2",
+    "input": "{\"units\":{\"measurement\":\"metric\"},\"map\":{\"zoom\":12.5,\"layers\":[\"osm\",\"sat\"],\"center\":[11.25,45]},\"orgs\":null}",
+    "outcome": "bound",
+    "model": {
+      "units": {
+        "measurement": "metric"
+      },
+      "map": {
+        "zoom": 12.5,
+        "layers": [
+          "osm",
+          "sat"
+        ],
+        "center": [
+          11.25,
+          45
+        ]
+      },
+      "orgs": null
+    }
+  },
+  "hub-patch-preferences-notifications": {
+    "type": "Dictionary`2",
+    "input": "{\"notifications\":{\"builds\":\"failed\"}}",
+    "outcome": "bound",
+    "model": {
+      "notifications": {
+        "builds": "failed"
+      }
+    }
+  },
+  "stac-search": {
+    "type": "StacSearchRequestDto",
+    "input": "{\"bbox\":[11.0,45.0,12.5,46.0],\"datetime\":\"2024-01-01T00:00:00Z/..\",\"limit\":10,\"collections\":[\"org/ds\"],\"ids\":[\"a\",\"b\"],\"token\":\"next:1\",\"intersects\":{\"type\":\"Point\",\"coordinates\":[11.5,45.5]}}",
+    "outcome": "bound",
+    "model": {
+      "bbox": [
+        11.0,
+        45.0,
+        12.5,
+        46.0
+      ],
+      "intersects": {
+        "type": "Point",
+        "coordinates": [
+          11.5,
+          45.5
+        ]
+      },
+      "datetime": "2024-01-01T00:00:00Z/..",
+      "limit": 10,
+      "collections": [
+        "org/ds"
+      ],
+      "ids": [
+        "a",
+        "b"
+      ],
+      "token": "next:1"
+    }
+  },
+  "sys-move-datasets": {
+    "type": "MoveDatasetDto",
+    "input": "{\"sourceOrgSlug\":\"a\",\"datasetSlugs\":[\"x\",\"y\"],\"destinationOrgSlug\":\"b\",\"conflictResolution\":2}",
+    "outcome": "bound",
+    "model": {
+      "sourceOrgSlug": "a",
+      "datasetSlugs": [
+        "x",
+        "y"
+      ],
+      "destinationOrgSlug": "b",
+      "conflictResolution": 2
+    }
+  },
+  "sys-merge-organizations": {
+    "type": "MergeOrganizationDto",
+    "input": "{\"sourceOrgSlug\":\"a\",\"destinationOrgSlug\":\"b\",\"conflictResolution\":1,\"deleteSourceOrganization\":false}",
+    "outcome": "bound",
+    "model": {
+      "sourceOrgSlug": "a",
+      "destinationOrgSlug": "b",
+      "conflictResolution": 1,
+      "deleteSourceOrganization": false
+    }
+  },
+  "sys-import-dataset": {
+    "type": "ImportDatasetRequestDto",
+    "input": "{\"sourceRegistryUrl\":\"https://r.example\",\"username\":\"u\",\"password\":\"p\",\"sourceOrganization\":\"so\",\"sourceDataset\":\"sd\",\"destinationOrganization\":\"do\",\"destinationDataset\":\"dd\",\"mode\":1}",
+    "outcome": "bound",
+    "model": {
+      "sourceRegistryUrl": "https://r.example",
+      "username": "u",
+      "password": "p",
+      "sourceOrganization": "so",
+      "sourceDataset": "sd",
+      "destinationOrganization": "do",
+      "destinationDataset": "dd",
+      "mode": 1
+    }
+  },
+  "sys-import-organization": {
+    "type": "ImportOrganizationRequestDto",
+    "input": "{\"sourceRegistryUrl\":\"https://r.example\",\"username\":\"u\",\"password\":\"p\",\"sourceOrganization\":\"so\",\"destinationOrganization\":\"do\"}",
+    "outcome": "bound",
+    "model": {
+      "sourceRegistryUrl": "https://r.example",
+      "username": "u",
+      "password": "p",
+      "sourceOrganization": "so",
+      "destinationOrganization": "do",
+      "mode": 0
+    }
+  },
+  "sys-cleanup-builds": {
+    "type": "CleanupBuildRequestDto",
+    "input": "{\"organizationSlug\":\"o\",\"datasetSlug\":\"d\"}",
+    "outcome": "bound",
+    "model": {
+      "organizationSlug": "o",
+      "datasetSlug": "d"
+    }
+  },
+  "sys-rescan": {
+    "type": "RescanRequestDto",
+    "input": "{\"organizationSlug\":\"o\",\"datasetSlug\":null,\"types\":[\"image\"],\"extensions\":[\".jpg\"],\"stopOnError\":true}",
+    "outcome": "bound",
+    "model": {
+      "organizationSlug": "o",
+      "datasetSlug": null,
+      "types": [
+        "image"
+      ],
+      "extensions": [
+        ".jpg"
+      ],
+      "stopOnError": true
+    }
+  },
+  "sys-email-test": {
+    "type": "TestEmailRequestDto",
+    "input": "{\"to\":\"admin@example.com\"}",
+    "outcome": "bound",
+    "model": {
+      "to": "admin@example.com"
+    }
+  },
+  "sys-email-template": {
+    "type": "EmailTemplateTextDto",
+    "input": "{\"subject\":\"{{appName}}: {{summary}}\",\"body\":\"Hello {{user}},\\n\\n{{builds}}\\n\\n{{link}}\"}",
+    "outcome": "bound",
+    "model": {
+      "subject": "{{appName}}: {{summary}}",
+      "body": "Hello {{user}},\n\n{{builds}}\n\n{{link}}"
+    }
+  },
+  "sys-update-check-settings": {
+    "type": "UpdateCheckSettingsDto",
+    "input": "{\"useDeclaration\":\"commercial_needs_license\",\"contactEmail\":\"it@acme-survey.com\",\"contactConsent\":true}",
+    "outcome": "bound",
+    "model": {
+      "useDeclaration": "commercial_needs_license",
+      "contactEmail": "it@acme-survey.com",
+      "contactConsent": true
+    }
+  },
+  "sys-update-check-settings-cleared": {
+    "type": "UpdateCheckSettingsDto",
+    "input": "{\"useDeclaration\":null,\"contactEmail\":null,\"contactConsent\":false}",
+    "outcome": "bound",
+    "model": {
+      "useDeclaration": null,
+      "contactEmail": null,
+      "contactConsent": false
+    }
+  },
+  "names-pascal-case": {
+    "type": "CreateUserRequest",
+    "input": "{\"UserName\":\"a\",\"Password\":\"p\",\"Email\":\"e\",\"Roles\":[\"r\"]}",
+    "outcome": "bound",
+    "model": {
+      "userName": "a",
+      "password": "p",
+      "email": "e",
+      "roles": [
+        "r"
+      ]
+    }
+  },
+  "names-upper-case": {
+    "type": "CreateUserRequest",
+    "input": "{\"USERNAME\":\"a\",\"PASSWORD\":\"p\"}",
+    "outcome": "bound",
+    "model": {
+      "userName": "a",
+      "password": "p",
+      "email": null,
+      "roles": null
+    }
+  },
+  "names-explicit-attribute-case": {
+    "type": "StacSearchRequestDto",
+    "input": "{\"LIMIT\":5,\"Datetime\":\"x\",\"COLLECTIONS\":[\"a\"]}",
+    "outcome": "bound",
+    "model": {
+      "bbox": null,
+      "intersects": null,
+      "datetime": "x",
+      "limit": 5,
+      "collections": [
+        "a"
+      ],
+      "ids": null,
+      "token": null
+    }
+  },
+  "names-snake-case-is-not-camel": {
+    "type": "CreateUserRequest",
+    "input": "{\"user_name\":\"a\",\"password\":\"p\"}",
+    "outcome": "bound",
+    "model": {
+      "userName": null,
+      "password": "p",
+      "email": null,
+      "roles": null
+    }
+  },
+  "number-in-string-int": {
+    "type": "StacSearchRequestDto",
+    "input": "{\"limit\":\"5\"}",
+    "outcome": "bound",
+    "model": {
+      "bbox": null,
+      "intersects": null,
+      "datetime": null,
+      "limit": 5,
+      "collections": null,
+      "ids": null,
+      "token": null
+    }
+  },
+  "number-in-string-double": {
+    "type": "StockpileDetectionRequestDto",
+    "input": "{\"path\":\"d.tif\",\"lat\":\"45.5\",\"lon\":\"11.5\",\"radius\":\"50\"}",
+    "outcome": "bound",
+    "model": {
+      "path": "d.tif",
+      "lat": 45.5,
+      "lon": 11.5,
+      "radius": 50.0,
+      "sensitivity": null
+    }
+  },
+  "number-float-for-int": {
+    "type": "StacSearchRequestDto",
+    "input": "{\"limit\":5.0}",
+    "outcome": "refused"
+  },
+  "number-fraction-for-int": {
+    "type": "StacSearchRequestDto",
+    "input": "{\"limit\":5.5}",
+    "outcome": "refused"
+  },
+  "number-exponent-for-int": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"a.tif\",\"near\":1e1}",
+    "outcome": "refused"
+  },
+  "number-too-large-for-int": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"a.tif\",\"near\":99999999999}",
+    "outcome": "refused"
+  },
+  "number-text-not-a-number": {
+    "type": "StacSearchRequestDto",
+    "input": "{\"limit\":\"five\"}",
+    "outcome": "refused"
+  },
+  "number-empty-string-for-nullable-int": {
+    "type": "StacSearchRequestDto",
+    "input": "{\"limit\":\"\"}",
+    "outcome": "refused"
+  },
+  "number-null-for-int": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"a.tif\",\"near\":null}",
+    "outcome": "refused"
+  },
+  "number-negative-ok": {
+    "type": "StacSearchRequestDto",
+    "input": "{\"limit\":-1}",
+    "outcome": "bound",
+    "model": {
+      "bbox": null,
+      "intersects": null,
+      "datetime": null,
+      "limit": -1,
+      "collections": null,
+      "ids": null,
+      "token": null
+    }
+  },
+  "bool-true-string": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"a.tif\",\"white\":\"true\"}",
+    "outcome": "bound",
+    "model": {
+      "path": "a.tif",
+      "near": 15,
+      "white": true
+    }
+  },
+  "bool-capitalised-string": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"a.tif\",\"white\":\"True\"}",
+    "outcome": "bound",
+    "model": {
+      "path": "a.tif",
+      "near": 15,
+      "white": true
+    }
+  },
+  "bool-number": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"a.tif\",\"white\":1}",
+    "outcome": "bound",
+    "model": {
+      "path": "a.tif",
+      "near": 15,
+      "white": true
+    }
+  },
+  "bool-text-not-a-bool": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"a.tif\",\"white\":\"yes\"}",
+    "outcome": "refused"
+  },
+  "bool-null": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"a.tif\",\"white\":null}",
+    "outcome": "refused"
+  },
+  "string-from-number": {
+    "type": "CreateUserRequest",
+    "input": "{\"userName\":\"a\",\"password\":12345}",
+    "outcome": "bound",
+    "model": {
+      "userName": "a",
+      "password": "12345",
+      "email": null,
+      "roles": null
+    }
+  },
+  "string-from-bool": {
+    "type": "CreateUserRequest",
+    "input": "{\"userName\":\"a\",\"password\":true}",
+    "outcome": "bound",
+    "model": {
+      "userName": "a",
+      "password": "true",
+      "email": null,
+      "roles": null
+    }
+  },
+  "string-from-object": {
+    "type": "CreateUserRequest",
+    "input": "{\"userName\":{\"x\":1},\"password\":\"p\"}",
+    "outcome": "refused"
+  },
+  "string-array-of-numbers": {
+    "type": "StacSearchRequestDto",
+    "input": "{\"ids\":[1,2]}",
+    "outcome": "bound",
+    "model": {
+      "bbox": null,
+      "intersects": null,
+      "datetime": null,
+      "limit": null,
+      "collections": null,
+      "ids": [
+        "1",
+        "2"
+      ],
+      "token": null
+    }
+  },
+  "string-unicode-escape": {
+    "type": "CreateUserRequest",
+    "input": "{\"userName\":\"è\uD83D\uDE00\",\"password\":\"p\"}",
+    "outcome": "bound",
+    "model": {
+      "userName": "è\uD83D\uDE00",
+      "password": "p",
+      "email": null,
+      "roles": null
+    }
+  },
+  "string-single-quotes": {
+    "type": "CreateUserRequest",
+    "input": "{'userName':'a','password':'p'}",
+    "outcome": "refused"
+  },
+  "enum-name": {
+    "type": "MoveDatasetDto",
+    "input": "{\"datasetSlugs\":[\"x\"],\"destinationOrgSlug\":\"b\",\"conflictResolution\":\"Rename\"}",
+    "outcome": "bound",
+    "model": {
+      "sourceOrgSlug": null,
+      "datasetSlugs": [
+        "x"
+      ],
+      "destinationOrgSlug": "b",
+      "conflictResolution": 2
+    }
+  },
+  "enum-name-lower-case": {
+    "type": "MoveDatasetDto",
+    "input": "{\"datasetSlugs\":[\"x\"],\"destinationOrgSlug\":\"b\",\"conflictResolution\":\"rename\"}",
+    "outcome": "bound",
+    "model": {
+      "sourceOrgSlug": null,
+      "datasetSlugs": [
+        "x"
+      ],
+      "destinationOrgSlug": "b",
+      "conflictResolution": 2
+    }
+  },
+  "enum-name-upper-case": {
+    "type": "MoveDatasetDto",
+    "input": "{\"datasetSlugs\":[\"x\"],\"destinationOrgSlug\":\"b\",\"conflictResolution\":\"OVERWRITE\"}",
+    "outcome": "bound",
+    "model": {
+      "sourceOrgSlug": null,
+      "datasetSlugs": [
+        "x"
+      ],
+      "destinationOrgSlug": "b",
+      "conflictResolution": 1
+    }
+  },
+  "enum-number": {
+    "type": "MoveDatasetDto",
+    "input": "{\"datasetSlugs\":[\"x\"],\"destinationOrgSlug\":\"b\",\"conflictResolution\":2}",
+    "outcome": "bound",
+    "model": {
+      "sourceOrgSlug": null,
+      "datasetSlugs": [
+        "x"
+      ],
+      "destinationOrgSlug": "b",
+      "conflictResolution": 2
+    }
+  },
+  "enum-number-in-string": {
+    "type": "MoveDatasetDto",
+    "input": "{\"datasetSlugs\":[\"x\"],\"destinationOrgSlug\":\"b\",\"conflictResolution\":\"2\"}",
+    "outcome": "bound",
+    "model": {
+      "sourceOrgSlug": null,
+      "datasetSlugs": [
+        "x"
+      ],
+      "destinationOrgSlug": "b",
+      "conflictResolution": 2
+    }
+  },
+  "enum-unknown-number": {
+    "type": "MoveDatasetDto",
+    "input": "{\"datasetSlugs\":[\"x\"],\"destinationOrgSlug\":\"b\",\"conflictResolution\":9}",
+    "outcome": "bound",
+    "model": {
+      "sourceOrgSlug": null,
+      "datasetSlugs": [
+        "x"
+      ],
+      "destinationOrgSlug": "b",
+      "conflictResolution": 9
+    }
+  },
+  "enum-unknown-name": {
+    "type": "MoveDatasetDto",
+    "input": "{\"datasetSlugs\":[\"x\"],\"destinationOrgSlug\":\"b\",\"conflictResolution\":\"Merge\"}",
+    "outcome": "refused"
+  },
+  "enum-null": {
+    "type": "MoveDatasetDto",
+    "input": "{\"datasetSlugs\":[\"x\"],\"destinationOrgSlug\":\"b\",\"conflictResolution\":null}",
+    "outcome": "refused"
+  },
+  "enum-permissions-name": {
+    "type": "AddOrganizationMemberDto",
+    "input": "{\"userName\":\"c\",\"permissions\":\"Admin\"}",
+    "outcome": "bound",
+    "model": {
+      "userName": "c",
+      "permissions": 3
+    }
+  },
+  "enum-permissions-number": {
+    "type": "AddOrganizationMemberDto",
+    "input": "{\"userName\":\"c\",\"permissions\":3}",
+    "outcome": "bound",
+    "model": {
+      "userName": "c",
+      "permissions": 3
+    }
+  },
+  "members-unknown-ignored": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"a.tif\",\"public\":true,\"extra\":{\"a\":[1]}}",
+    "outcome": "bound",
+    "model": {
+      "path": "a.tif",
+      "near": 15,
+      "white": false
+    }
+  },
+  "members-duplicate-last-wins": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"a.tif\",\"near\":1,\"near\":2}",
+    "outcome": "bound",
+    "model": {
+      "path": "a.tif",
+      "near": 2,
+      "white": false
+    }
+  },
+  "members-missing-take-defaults": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"a.tif\"}",
+    "outcome": "bound",
+    "model": {
+      "path": "a.tif",
+      "near": 15,
+      "white": false
+    }
+  },
+  "members-empty-object": {
+    "type": "MaskBordersRequestDto",
+    "input": "{}",
+    "outcome": "bound",
+    "model": {
+      "path": null,
+      "near": 15,
+      "white": false
+    }
+  },
+  "syntax-comments": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"a.tif\", /* c */ \"near\":3 // d\n}",
+    "outcome": "bound",
+    "model": {
+      "path": "a.tif",
+      "near": 3,
+      "white": false
+    }
+  },
+  "syntax-trailing-comma": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"a.tif\",\"near\":3,}",
+    "outcome": "bound",
+    "model": {
+      "path": "a.tif",
+      "near": 3,
+      "white": false
+    }
+  },
+  "syntax-trailing-comma-array": {
+    "type": "CreateUserRequest",
+    "input": "{\"userName\":\"a\",\"password\":\"p\",\"roles\":[\"r\",]}",
+    "outcome": "bound",
+    "model": {
+      "userName": "a",
+      "password": "p",
+      "email": null,
+      "roles": [
+        "r"
+      ]
+    }
+  },
+  "syntax-unquoted-names": {
+    "type": "MaskBordersRequestDto",
+    "input": "{path:\"a.tif\",near:3}",
+    "outcome": "refused"
+  },
+  "syntax-not-json": {
+    "type": "MaskBordersRequestDto",
+    "input": "path=a.tif&near=3",
+    "outcome": "refused"
+  },
+  "syntax-truncated": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"a.tif\",",
+    "outcome": "refused"
+  },
+  "syntax-array-for-object": {
+    "type": "MaskBordersRequestDto",
+    "input": "[{\"path\":\"a.tif\"}]",
+    "outcome": "refused"
+  },
+  "syntax-null-body": {
+    "type": "MaskBordersRequestDto",
+    "input": "null",
+    "outcome": "no model"
+  },
+  "syntax-empty-body": {
+    "type": "MaskBordersRequestDto",
+    "input": "",
+    "outcome": "refused"
+  },
+  "syntax-bom": {
+    "type": "MaskBordersRequestDto",
+    "input": "\uFEFF{\"path\":\"a.tif\"}",
+    "outcome": "bound",
+    "model": {
+      "path": "a.tif",
+      "near": 15,
+      "white": false
+    }
+  },
+  "array-single-value-for-array": {
+    "type": "CreateUserRequest",
+    "input": "{\"userName\":\"a\",\"password\":\"p\",\"roles\":\"admin\"}",
+    "outcome": "refused"
+  },
+  "array-null": {
+    "type": "CreateUserRequest",
+    "input": "{\"userName\":\"a\",\"password\":\"p\",\"roles\":null}",
+    "outcome": "bound",
+    "model": {
+      "userName": "a",
+      "password": "p",
+      "email": null,
+      "roles": null
+    }
+  },
+  "array-nested-null-element": {
+    "type": "StacSearchRequestDto",
+    "input": "{\"collections\":[\"a\",null]}",
+    "outcome": "bound",
+    "model": {
+      "bbox": null,
+      "intersects": null,
+      "datetime": null,
+      "limit": null,
+      "collections": [
+        "a",
+        null
+      ],
+      "ids": null,
+      "token": null
+    }
+  },
+  "dictionary-number-value-for-string-map": {
+    "type": "VerifyImportRequestDto",
+    "input": "{\"sourceType\":\"registry\",\"params\":{\"port\":8080,\"tls\":true}}",
+    "outcome": "bound",
+    "model": {
+      "sourceType": "registry",
+      "params": {
+        "port": "8080",
+        "tls": "true"
+      }
+    }
+  },
+  "dictionary-key-casing-kept": {
+    "type": "VerifyImportRequestDto",
+    "input": "{\"sourceType\":\"registry\",\"params\":{\"Url\":\"u\",\"url\":\"v\"}}",
+    "outcome": "bound",
+    "model": {
+      "sourceType": "registry",
+      "params": {
+        "Url": "u",
+        "url": "v"
+      }
+    }
+  },
+  "document-intersects-geometry": {
+    "type": "StacSearchRequestDto",
+    "input": "{\"intersects\":{\"type\":\"Polygon\",\"coordinates\":[[[0,0],[1,0],[1,1],[0,0]]]}}",
+    "outcome": "bound",
+    "model": {
+      "bbox": null,
+      "intersects": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              0,
+              0
+            ],
+            [
+              1,
+              0
+            ],
+            [
+              1,
+              1
+            ],
+            [
+              0,
+              0
+            ]
+          ]
+        ]
+      },
+      "datetime": null,
+      "limit": null,
+      "collections": null,
+      "ids": null,
+      "token": null
+    }
+  },
+  "document-intersects-number-forms": {
+    "type": "StacSearchRequestDto",
+    "input": "{\"intersects\":[1,2.0,3.5,1e2,\"2026-01-01T00:00:00Z\"]}",
+    "outcome": "bound",
+    "model": {
+      "bbox": null,
+      "intersects": [
+        1,
+        2.0,
+        3.5,
+        1e2,
+        "2026-01-01T00:00:00Z"
+      ],
+      "datetime": null,
+      "limit": null,
+      "collections": null,
+      "ids": null,
+      "token": null
+    }
+  },
+  "document-task-params-scalar": {
+    "type": "SubmitTaskRequestDto",
+    "input": "{\"toolId\":\"t\",\"params\":5}",
+    "outcome": "bound",
+    "model": {
+      "toolId": "t",
+      "version": null,
+      "path": null,
+      "params": 5,
+      "force": false
+    }
+  },
+  "document-task-params-null": {
+    "type": "SubmitTaskRequestDto",
+    "input": "{\"toolId\":\"t\",\"params\":null}",
+    "outcome": "bound",
+    "model": {
+      "toolId": "t",
+      "version": null,
+      "path": null,
+      "params": null,
+      "force": false
+    }
+  },
+  "path-valid": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"sub/dir/a.tif\"}",
+    "outcome": "bound",
+    "model": {
+      "path": "sub/dir/a.tif",
+      "near": 15,
+      "white": false
+    }
+  },
+  "path-traversal-refused": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"../a.tif\"}",
+    "outcome": "throws InvalidDatasetPathException"
+  },
+  "path-absolute-refused": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\"/etc/passwd\"}",
+    "outcome": "throws InvalidDatasetPathException"
+  },
+  "path-reserved-refused": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":\".ddb/dbase.sqlite\"}",
+    "outcome": "throws InvalidDatasetPathException"
+  },
+  "path-null-required": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":null}",
+    "outcome": "bound",
+    "model": {
+      "path": null,
+      "near": 15,
+      "white": false
+    }
+  },
+  "path-array-of-nullable": {
+    "type": "MergeMultispectralRequestDto",
+    "input": "{\"paths\":[\"a.tif\",null,\"b.tif\"]}",
+    "outcome": "bound",
+    "model": {
+      "paths": [
+        "a.tif",
+        null,
+        "b.tif"
+      ],
+      "previewBands": null,
+      "thumbSize": null,
+      "outputPath": null
+    }
+  },
+  "path-number": {
+    "type": "MaskBordersRequestDto",
+    "input": "{\"path\":5}",
+    "outcome": "bound",
+    "model": {
+      "path": "5",
+      "near": 15,
+      "white": false
+    }
+  }
+}

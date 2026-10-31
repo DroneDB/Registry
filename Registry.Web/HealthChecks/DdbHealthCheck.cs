@@ -1,12 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Registry.Ports;
-using Registry.Web.Services.Ports;
+using Registry.Ports.DroneDB;
 
 namespace Registry.Web.HealthChecks;
 
@@ -26,11 +24,12 @@ public class DdbHealthCheck : IHealthCheck
         var tempOrg = "test-" + Guid.NewGuid();
         var tempDs = Guid.NewGuid();
 
+        // The runtime type of an object always has a full name (only generic parameters have none)
         var data = new Dictionary<string, object>
         {
             {"TempOrg", tempOrg},
             {"TempDs", tempDs.ToString()},
-            {"Provider", _ddbManager.GetType().FullName}
+            {"Provider", _ddbManager.GetType().FullName!}
         };
 
         var ddb = _ddbManager.Get(tempOrg, tempDs);
@@ -43,9 +42,9 @@ public class DdbHealthCheck : IHealthCheck
 
             data.Add("DdbVersion", version);
 
-            var entries = ddb.Search(null, true);
+            var entries = ddb.FindSummaries(EntryQuery.All);
 
-            if (entries == null || entries.Any())
+            if (entries.Count != 0)
                 return Task.FromResult(HealthCheckResult.Unhealthy("Something wrong with ddb behaviour", null, data));
 
             return Task.FromResult(HealthCheckResult.Healthy("Ddb is working properly", data));

@@ -1,0 +1,55 @@
+{
+  "request": "GET /orgs/golden-org/ds/golden-ds/ogcapi/collections?f=json",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "links": [
+      {
+        "href": "http://localhost/orgs/golden-org/ds/golden-ds/ogcapi/collections",
+        "rel": "self",
+        "type": "application/json",
+        "title": null
+      }
+    ],
+    "collections": [
+      {
+        "id": "layer.geojson",
+        "title": "layer.geojson",
+        "description": null,
+        "itemType": "feature",
+        "crs": [
+          "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
+        ],
+        "extent": {
+          "spatial": {
+            "bbox": [
+              [
+                8.25,
+                46.84,
+                8.251,
+                46.841
+              ]
+            ],
+            "crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
+          }
+        },
+        "links": [
+          {
+            "href": "http://localhost/orgs/golden-org/ds/golden-ds/ogcapi/collections/layer.geojson",
+            "rel": "self",
+            "type": "application/json",
+            "title": null
+          },
+          {
+            "href": "http://localhost/orgs/golden-org/ds/golden-ds/ogcapi/collections/layer.geojson/items",
+            "rel": "items",
+            "type": "application/geo+json",
+            "title": null
+          }
+        ]
+      }
+    ]
+  }
+}

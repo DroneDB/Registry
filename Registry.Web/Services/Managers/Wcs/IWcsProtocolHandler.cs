@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 
@@ -7,7 +8,7 @@ namespace Registry.Web.Services.Managers.Wcs;
 /// Per-version WCS protocol handler. One instance implements the wire format
 /// (KVP parsing + XML serialization) for a single version (1.0.0 / 1.1.1 / 2.0.1).
 /// Common logic (catalog resolution, raster rendering) is delegated to
-/// <see cref="IWcsCoverageService"/> - handlers focus exclusively on the
+/// <see cref="WcsCoverageService"/> - handlers focus exclusively on the
 /// version-specific protocol surface.
 /// </summary>
 public interface IWcsProtocolHandler
@@ -16,14 +17,15 @@ public interface IWcsProtocolHandler
     string Version { get; }
 
     /// <summary>Render a GetCapabilities document for the dataset.</summary>
-    Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath);
+    Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath, CancellationToken ct = default);
 
     /// <summary>Render a DescribeCoverage document. <paramref name="coverageIds"/> may contain
     /// a CSV value (1.0/2.0) or a single identifier (1.1). The handler parses as required.</summary>
-    Task<string> DescribeCoverageAsync(string orgSlug, string dsSlug, string coverageIds);
+    Task<string> DescribeCoverageAsync(string orgSlug, string dsSlug, string coverageIds, CancellationToken ct = default);
 
     /// <summary>Parse KVP, render the coverage region, return bytes + content type.</summary>
-    Task<WcsCoverageResult> GetCoverageAsync(string orgSlug, string dsSlug, IQueryCollection query);
+    Task<WcsCoverageResult> GetCoverageAsync(string orgSlug, string dsSlug, IQueryCollection query,
+        CancellationToken ct = default);
 }
 
 /// <summary>Result of a GetCoverage operation: raw bytes + HTTP Content-Type.</summary>

@@ -1,19 +1,24 @@
-#nullable enable
 using System;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Registry.Web.Hosting;
 using Registry.Ports.Import;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.Import;
+using Registry.Web.Services.RemoteImport;
 
 namespace Registry.Web.Utilities;
 
 /// <summary>
 /// DI registration for the Import Dataset feature (spec ImportDataset). Registers the import sources,
 /// the source factory, the credential protector and the <c>import-dataset</c> heavy tool. Must be
-/// called on BOTH the web host and any processing-node host, because the heavy tool runs on the worker.
-/// The web-only <c>IImportManager</c> is registered separately in <c>Startup</c>.
+/// called on BOTH the web host and any processing-node host, because the heavy tool and the remote import job run
+/// on the worker.
+/// The web-only <c>ImportManager</c> is registered separately in <c>Startup</c>.
 /// </summary>
 public static class ImportServiceCollectionExtensions
 {
@@ -21,19 +26,21 @@ public static class ImportServiceCollectionExtensions
     /// Registers the import source infrastructure and the import heavy tool.
     /// </summary>
     /// <param name="services">The service collection.</param>
-    /// <param name="appSettings">The application settings.</param>
+    /// <param name="configuration">The host configuration (the options are registered by <c>AddRegistryOptions</c>).</param>
     /// <returns>The same <paramref name="services"/> for chaining.</returns>
-    public static IServiceCollection AddImportSources(this IServiceCollection services, AppSettings appSettings)
+    public static IServiceCollection AddImportSources(this IServiceCollection services, IConfiguration configuration)
     {
-        var importSettings = appSettings.Import ?? new ImportSettings();
+        var importSettings = configuration.GetRegistryOptions<ImportSettings>();
 
         // Shared Data Protection key ring so the worker can decrypt credentials the web host encrypted.
-        services.AddSharedDataProtection(appSettings);
+        services.AddSharedDataProtection(configuration.GetRegistryOptions<CachingOptions>(),
+            configuration.GetRegistryOptions<StorageOptions>());
 
         // HTTP client factory (idempotent if already registered by the host).
         services.AddHttpClient();
 
-        services.AddSingleton(importSettings);
+        // The bound options, for the services that take the settings object itself
+        services.AddSingleton(sp => sp.GetRequiredService<IOptions<ImportSettings>>().Value);
         services.AddSingleton<SsrfGuard>();
 
         // SSRF-hardened named client used by every import source and the legacy admin import path.
@@ -47,15 +54,27 @@ public static class ImportServiceCollectionExtensions
                     importSettings.MaxRedirects,
                     TimeSpan.FromSeconds(importSettings.ConnectTimeoutSeconds)));
         services.AddSingleton<IImportCredentialProtector, ImportCredentialProtector>();
+        services.AddSingleton<ImportCredentials>();
         services.AddSingleton<IRemoteRegistryClient, RemoteRegistryClient>();
 
         // One source per type (open-closed: add a new source = one line here).
         services.AddSingleton<IImportSource, RegistryImportSource>();
         services.AddSingleton<IImportSource, ArchiveUrlImportSource>();
         services.AddSingleton<IImportSourceFactory, ImportSourceFactory>();
+        services.AddSingleton<ImportSourceCatalog>();
 
         // SSRF-hardened single-file downloader shared by the verify path and the import-file tool.
         services.AddSingleton<GuardedHttpDownloader>();
+
+        // The remote Registry import job: queued by the web host, run by any job host
+        services.AddScoped<ImportDestinations>();
+        services.AddScoped<IRemoteImportStrategy, ArchiveImportStrategy>();
+        services.AddScoped<IRemoteImportStrategy, ParallelFilesImportStrategy>();
+        services.AddScoped<RemoteRegistryImporter>();
+        services.AddScoped<RemoteImportJob>();
+
+        // The files of a dataset folder as the dataset import sees them (before, added, rollback)
+        services.AddSingleton<DatasetFolderFiles>();
 
         // The import heavy tools must run on every host that executes heavy tasks.
         services.AddSingleton<IHeavyTool, ImportDatasetTool>();

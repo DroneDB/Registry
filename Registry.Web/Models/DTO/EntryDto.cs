@@ -1,41 +1,45 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using Newtonsoft.Json;
-using Registry.Common;
-using Registry.Common.Model;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Registry.Ports.Json;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Models.DTO;
 
 public class EntryDto
 {
-    [JsonProperty("path")]
-    public string Path { get; set; }
+    // Every entry has a path: DroneDB writes it in each entry it lists (a Registry answers it as such), and the code
+    // that builds an entry sets it
+    [JsonPropertyName("path")]
+    public string Path { get; set; } = null!;
 
-    [JsonProperty("hash")]
-    public string Hash { get; set; }
+    [JsonPropertyName("hash")]
+    public string? Hash { get; set; }
 
-    [JsonProperty("type")]
+    [JsonPropertyName("type")]
     public EntryType Type { get; set; }
 
-    [JsonProperty("properties")]
-    public Dictionary<string, object> Properties { get; set; }
+    [JsonPropertyName("properties")]
+    [JsonConverter(typeof(SharedDocumentMapConverter))]
+    public Dictionary<string, JsonElement>? Properties { get; set; }
 
-    [JsonProperty("mtime")]
+    [JsonPropertyName("mtime")]
     [JsonConverter(typeof(SecondEpochConverter))]
     public DateTime ModifiedTime { get; set; }
 
-    [JsonProperty("size")]
+    [JsonPropertyName("size")]
     public long Size { get; set; }
 
-    [JsonProperty("depth")]
+    [JsonPropertyName("depth")]
     public int Depth { get; set; }
 
-    [JsonProperty("point_geom")]
-    public object PointGeometry { get; set; }
+    [JsonPropertyName("point_geom")]
+    public JsonElement? PointGeometry { get; set; }
 
-    [JsonProperty("polygon_geom")]
-    public object PolygonGeometry { get; set; }
+    [JsonPropertyName("polygon_geom")]
+    public JsonElement? PolygonGeometry { get; set; }
 
     /// <summary>
     /// Build status of this entry: "queued" (not built yet, auto-build not
@@ -45,14 +49,33 @@ public class EntryDto
     /// its build is already complete ("ready" is the default state and is
     /// not transmitted).
     /// </summary>
-    [JsonProperty("buildStatus", NullValueHandling = NullValueHandling.Ignore)]
-    public string BuildStatus { get; set; }
+    [JsonPropertyName("buildStatus")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? BuildStatus { get; set; }
 
     /// <summary>
     /// Names of the dependencies (companion/sidecar files or external tools)
     /// still missing, blocking the build. Only set when
     /// <see cref="BuildStatus"/> is "pending".
     /// </summary>
-    [JsonProperty("buildMissingDependencies", NullValueHandling = NullValueHandling.Ignore)]
-    public string[] BuildMissingDependencies { get; set; }
+    [JsonPropertyName("buildMissingDependencies")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? BuildMissingDependencies { get; set; }
+
+    /// <summary>
+    /// The pending build waits for files the dataset lacks (<see cref="BuildMissingDependencies"/>): it runs
+    /// when one of them is added, not on a timer. As libddb reports it; only set when <see cref="BuildStatus"/>
+    /// is "pending".
+    /// </summary>
+    [JsonPropertyName("buildAwaitingFiles")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? BuildAwaitingFiles { get; set; }
+
+    /// <summary>
+    /// The artifacts of the entry's own build that exist (libddb's build manifest), absent when there are
+    /// none: a client reads them instead of composing build paths or probing files.
+    /// </summary>
+    [JsonPropertyName("artifacts")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ArtifactLinkDto[]? Artifacts { get; set; }
 }

@@ -1,4 +1,3 @@
-#nullable enable
 using System.Collections.Generic;
 
 namespace Registry.Web.Models.Configuration;
@@ -63,16 +62,4 @@ public class HeavyToolConfig
     /// (greyed out with <see cref="DisabledMessage"/>).
     /// </summary>
     public bool HideWhenNotAllowed { get; set; } = true;
-
-    /// <summary>
-    /// Per-tool cap on concurrent tasks per user. 0 = inherit the global
-    /// <c>MaxConcurrentTasksPerUser</c>.
-    /// </summary>
-    public int MaxConcurrentPerUser { get; set; } = 0;
-
-    /// <summary>
-    /// Per-tool cap on queued tasks per user. 0 = inherit the global
-    /// <c>MaxQueuedTasksPerUser</c>.
-    /// </summary>
-    public int MaxQueuedPerUser { get; set; } = 0;
 }
