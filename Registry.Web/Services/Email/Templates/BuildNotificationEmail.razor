@@ -32,7 +32,15 @@
                             }
                         </td>
                         <td style="padding:8px;border-bottom:1px solid #e5e7eb;vertical-align:top;white-space:nowrap;font-weight:600;color:@BuildNotificationValues.OutcomeColor(line.Outcome);font-family:@EmailStyles.FontStack;">
-                            @BuildNotificationValues.OutcomeText(line.Outcome)
+                            @if (BuildNotificationValues.OutcomeBackground(line.Outcome) is { } background)
+                            {
+                                @* A clipped background where a client drops the padding and the radius (Outlook) *@
+                                <span style="display:inline-block;padding:2px 8px;border-radius:4px;background-color:@background;color:@BuildNotificationValues.OutcomeColor(line.Outcome);">@BuildNotificationValues.OutcomeText(line.Outcome)</span>
+                            }
+                            else
+                            {
+                                @BuildNotificationValues.OutcomeText(line.Outcome)
+                            }
                         </td>
                     </tr>
                 }

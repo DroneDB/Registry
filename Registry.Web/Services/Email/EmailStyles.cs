@@ -29,8 +29,15 @@ public static partial class EmailStyles
     /// <summary>A build that failed: fixed, not the accent, so it means the same on every instance.</summary>
     public const string Failed = "#b91c1c";
 
-    /// <summary>A build that waits for files: fixed, not the accent, so it means the same on every instance.</summary>
-    public const string Waiting = "#b45309";
+    /// <summary>
+    /// A build that waits for files, the text: the Hub's warning, which is yellow with dark text and never orange (its
+    /// <c>warn</c> tag, Lara's <c>yellow.950</c> on <c>yellow.400</c>, 9.5:1); fixed, not the accent, so it means the
+    /// same on every instance.
+    /// </summary>
+    public const string Waiting = "#422006";
+
+    /// <summary>The yellow under the result of a build that waits for files (<see cref="Waiting"/>): Lara's <c>yellow.400</c>.</summary>
+    public const string WaitingBackground = "#facc15";
 
     /// <summary>A build that completed: fixed, not the accent, so it means the same on every instance.</summary>
     public const string Completed = "#15803d";

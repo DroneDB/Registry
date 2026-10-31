@@ -132,6 +132,13 @@ public sealed class BuildNotificationValues
     };
 
     /// <summary>
+    /// The fixed colour under a build's outcome, null when its text colour reads on the white of the e-mail by itself: the
+    /// yellow of a build that waits for files, whose text is dark, as the Hub's warnings are.
+    /// </summary>
+    public static string? OutcomeBackground(BuildOutcome outcome) =>
+        outcome == BuildOutcome.WaitingForFiles ? EmailStyles.WaitingBackground : null;
+
+    /// <summary>
     /// What a build's line says under its file, as both parts show it: the reason of a failure, the files a waiting build
     /// needs; null when it says nothing.
     /// </summary>

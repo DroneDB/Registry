@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ using Registry.Web.Models.Email;
 using Registry.Web.Services.BuildNotifications;
 using Registry.Web.Services.Email;
 using Registry.Web.Services.Email.Templates;
+using Registry.Web.Test.Support;
 using Registry.Web.Test.UpdateCheck;
 using Shouldly;
 
@@ -123,9 +125,26 @@ public class BuildNotificationEmailTests
             """.ReplaceLineEndings("\n"));
         message.HtmlBody.ShouldNotBeNull().ShouldSatisfyAllConditions(
             h => h.ShouldContain("Missing: model.mtl, textures/wall.png"),
-            h => h.ShouldContain(">Waiting for files"),
-            // Its own fixed colour, for the result and for the files
-            h => Regex.Count(h, $"color:{EmailStyles.Waiting};").ShouldBe(2));
+            // The Hub's warning, yellow with dark text: the result on the yellow, the files in the dark text, never orange
+            h => h.ShouldContain($"background-color:{EmailStyles.WaitingBackground};color:{EmailStyles.Waiting};\">Waiting for files</span>"),
+            h => h.ShouldContain($"color:{EmailStyles.Waiting};word-break:break-word;\">Missing: model.mtl"),
+            h => h.ShouldNotContain("#b45309"),
+            // The other results keep their text colour on the white, without the yellow
+            h => Regex.Count(h, $"background-color:{EmailStyles.WaitingBackground}").ShouldBe(1));
+    }
+
+    [Test]
+    public void AWaitingBuild_IsTheHubsWarning_DarkTextOnYellow()
+    {
+        // The warn tag of the Hub's theme: Lara's yellow.950 on yellow.400
+        var theme = RepositoryFiles.PathOf("Registry.Web/ClientApp/webapp/js/theme.js");
+        if (!File.Exists(theme))
+            Assert.Ignore("The Hub submodule is not checked out");
+        File.ReadAllText(theme).ShouldContain("const warnTag = { background: '{yellow.400}', color: '{yellow.950}' };");
+        (EmailStyles.WaitingBackground, EmailStyles.Waiting).ShouldBe(("#facc15", "#422006"));
+
+        EmailStyles.TextOn(EmailStyles.WaitingBackground).ShouldBe(EmailStyles.DarkText);
+        EmailStyles.ReadableOnWhite(EmailStyles.Waiting).ShouldBe(EmailStyles.Waiting);
     }
 
     [Test]
