@@ -60,36 +60,32 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-10-30): DroneDB has ONE version, 2.0.0 (package.json); the libddb ABI follows
+        Pinned now (2026-10-31): DroneDB has ONE version, 2.0.0 (package.json); the libddb ABI follows
         it (ABI 2.0, semver: a removed export is a new major, an added one a new minor) and so does
         the handshake (libddb 2.x). It is not tagged until Registry is proven on it, so Registry pins
-        the CI build of DroneDB fixes-and-optimizations commit f878cef9, run 41045904254 (a pull
+        the CI build of DroneDB fixes-and-optimizations commit 7e8cc7f6, run 41140225347 (a pull
         request run of DroneDB#472, built from the merge with master; the .deb is named after that
-        merge commit, 2.0.0~git529e1439), every job green twice (the run and its re-run: Linux and
-        Windows builds and tests, ASan + UBSan, the Docker image). Since the previous pin
-        (a9f5e43) libddb never opens a file of a user with GDAL: probes, thumbnails, COG and vector
-        builds and the normalized copies the analyses read run in gdal-util, a helper program that
-        confines its workers (Landlock, seccomp, resource limits on Linux; a Job Object and a low
-        integrity level on Windows; the sandbox report of gdal-util says what a host offers), and the
-        tiler and the OGC renders read only what libddb wrote. The reserved .ddb segment is matched
-        as a file system opens it (any letter case, trailing dots and spaces, an NTFS stream or
-        short name), which DatasetPathPolicy takes from DDBNormalizePath. A COG build decodes its
-        source on the threads of the build, the gdal-util server warms GDAL and PROJ up before it
-        forks its workers, and the helper submodules (gdal-util, metadata-util, bm3d) are pinned to
-        release tags. Splat exports, bm3d models, GPX, JPEG 2000, STL, DDBBuildEx, awaitingFiles
-        and versioned build artifacts stay from the earlier pins. Next: the v2.0.0 release
-        (DdbSource release) once it is tagged.
+        merge commit, 2.0.0~gita8e497a8), every job green (Linux and Windows builds and tests,
+        ASan + UBSan, the Docker image). Since the previous pin (f878cef9): bm3d 1.1.2 and Obj2Tiles
+        1.8.1 read the 16 bit and float single-band TIFF textures of multispectral models (they
+        failed to build); a raster query or a stockpile detection of a place without data fails with
+        DDBERR_INVALIDARGS, which Registry answers with a 400; the histogram of a formula has bins
+        over the range the Hub draws and counts the values below and above it; ddb align masks no
+        data, reports the shift at the centre of the shared area and fails on a solution it cannot
+        trust; the WMS and WCS image renders of a multispectral float raster show it as the map tiles
+        do. Everything else stays from the earlier pins. Next: the v2.0.0 release (DdbSource release)
+        once it is tagged.
     -->
     <PropertyGroup>
         <DdbSource>ci</DdbSource>
         <DdbVersion>2.0.0</DdbVersion>
-        <DdbDebFileVersion>2.0.0~git529e1439</DdbDebFileVersion>
-        <DdbCiCommit>f878cef9e5b6f2762680c43e0838072f2cb8acb6</DdbCiCommit>
-        <DdbCiRunId>41045904254</DdbCiRunId>
-        <DdbDebArtifactId>12977753472</DdbDebArtifactId>
-        <DdbWindowsArtifactId>12980735004</DdbWindowsArtifactId>
-        <DdbDebSha256>a29f25423cacb4c6f8ad5cc522a15dbe604dbe1f09b4359b86d4a40d94f73df5</DdbDebSha256>
-        <DdbWindowsZipSha256>0a4aece03ad53ff54d79e30048cda8493b57ad2a377079d5603268bff829922e</DdbWindowsZipSha256>
+        <DdbDebFileVersion>2.0.0~gita8e497a8</DdbDebFileVersion>
+        <DdbCiCommit>7e8cc7f6c3b5dd5e27ce5e48da82b2ff0dedad30</DdbCiCommit>
+        <DdbCiRunId>41140225347</DdbCiRunId>
+        <DdbDebArtifactId>13020665776</DdbDebArtifactId>
+        <DdbWindowsArtifactId>13021656340</DdbWindowsArtifactId>
+        <DdbDebSha256>cd173a23ff968ed68addca66ea9f122491c3b4d27ecf66ce16bbb8abbfa330e6</DdbDebSha256>
+        <DdbWindowsZipSha256>582867a36be6979b3db72ed43bd0fb15d721d159be28db6ef61a77c174d2d112</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
