@@ -25,4 +25,19 @@ public interface IBuildStatusService
     /// <param name="ddb">Opened DDB instance for the dataset.</param>
     /// <param name="entries">Entries to annotate in place.</param>
     Task AnnotateAsync(string orgSlug, string dsSlug, IDDB ddb, IReadOnlyList<EntryDto> entries);
+
+    /// <summary>
+    /// The build status <see cref="AnnotateAsync"/> gives the entry <paramref name="path"/> of type
+    /// <paramref name="type"/> (one of <see cref="EntryBuildStatuses"/>), or null when it has none.
+    /// </summary>
+    Task<string?> GetStatusAsync(string orgSlug, string dsSlug, IDDB ddb, string path, EntryType type);
+}
+
+/// <summary>The values of <see cref="EntryDto.BuildStatus"/>.</summary>
+public static class EntryBuildStatuses
+{
+    public const string Queued = "queued";
+    public const string Building = "building";
+    public const string Pending = "pending";
+    public const string Failed = "failed";
 }

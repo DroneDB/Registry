@@ -133,7 +133,44 @@ public sealed class ThumbnailRuleHttpTests : IDisposable
         using var response = await GetThumbnailAsync("cloud.laz");
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        (await response.Content.ReadAsStringAsync()).ShouldContain("is not available yet");
+        var body = await response.Content.ReadAsStringAsync();
+        body.ShouldContain("is not available yet");
+        // A build is going to make it: the client may ask again
+        NoRetryOf(body).ShouldBeFalse();
         _factory.DdbWrapper.Verify(d => d.GenerateThumbnail(It.IsAny<string>(), It.IsAny<int>()), Times.Never);
+    }
+
+    [Test]
+    public async Task EntryWhoseBuildFailed_Is404_ThatTellsTheClientNotToRetry()
+    {
+        // The latest build of a broken point cloud failed, and libddb keeps no marker to retry it: no build is going to
+        // make its thumbnail
+        SetupEntry("broken.laz", EntryType.PointCloud);
+        _factory.DdbWrapper.Setup(d => d.GetBuildArtifacts(_datasetFolder, It.Is<string[]>(p => p.Length == 1 && p[0] == "broken.laz")))
+            .Returns([TestBuilds.Build(_datasetFolder, "broken.laz", EntryType.PointCloud, Hash, BuildState.None)]);
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<RegistryContext>();
+            context.JobIndices.Add(new Registry.Web.Data.Models.JobIndex
+            {
+                JobId = "broken-build", OrgSlug = Org, DsSlug = Ds, Path = "broken.laz", Hash = Hash, ToolId = "build",
+                CurrentState = "Failed", CreatedAtUtc = DateTime.UtcNow, FailedAtUtc = DateTime.UtcNow
+            });
+            await context.SaveChangesAsync();
+        }
+
+        using var response = await GetThumbnailAsync("broken.laz");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var body = await response.Content.ReadAsStringAsync();
+        body.ShouldContain("its build failed");
+        NoRetryOf(body).ShouldBeTrue();
+        _factory.DdbWrapper.Verify(d => d.GenerateThumbnail(It.IsAny<string>(), It.IsAny<int>()), Times.Never);
+    }
+
+    private static bool NoRetryOf(string problem)
+    {
+        using var json = System.Text.Json.JsonDocument.Parse(problem);
+        return json.RootElement.GetProperty("noRetry").GetBoolean();
     }
 }

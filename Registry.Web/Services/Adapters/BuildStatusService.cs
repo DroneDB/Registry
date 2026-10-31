@@ -75,7 +75,7 @@ public class BuildStatusService : IBuildStatusService
 
         var notBuilding = buildable.Where(e => !buildingPaths.Contains(e.Path)).ToList();
         foreach (var entry in buildable.Except(notBuilding))
-            entry.BuildStatus = "building";
+            entry.BuildStatus = EntryBuildStatuses.Building;
 
         if (notBuilding.Count == 0)
             return;
@@ -88,7 +88,7 @@ public class BuildStatusService : IBuildStatusService
             var build = buildByPath[entry.Path].Build!;
             if (HasPendingMarker(build))
             {
-                entry.BuildStatus = "pending";
+                entry.BuildStatus = EntryBuildStatuses.Pending;
                 entry.BuildMissingDependencies = [.. build.MissingDependencies];
                 entry.BuildAwaitingFiles = build.AwaitingFiles;
             }
@@ -105,8 +105,15 @@ public class BuildStatusService : IBuildStatusService
 
         foreach (var entry in unfinished)
             entry.BuildStatus = latestStateByPath.TryGetValue(entry.Path, out var state) && state == "Failed"
-                ? "failed"
-                : "queued";
+                ? EntryBuildStatuses.Failed
+                : EntryBuildStatuses.Queued;
+    }
+
+    public async Task<string?> GetStatusAsync(string orgSlug, string dsSlug, IDDB ddb, string path, EntryType type)
+    {
+        var entry = new EntryDto { Path = path, Type = type };
+        await AnnotateAsync(orgSlug, dsSlug, ddb, [entry]);
+        return entry.BuildStatus;
     }
 
     // The background rebuild of an entry made with an older layout (the rebuilds queue serves one at a time, so it

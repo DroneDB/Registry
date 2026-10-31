@@ -18,20 +18,24 @@ namespace Registry.Web.Services.Objects;
 /// not a folder: 400 otherwise), for a thumbnail the type's rule (libddb: some types have none, 404), then the
 /// file a renderer reads (its build artifact from libddb's manifest, or the entry itself). A missing artifact is
 /// a 404 "not available yet", decided before any response cache, so deleting an artifact invalidates what was
-/// served from it.
+/// served from it; when the build of the entry failed (<see cref="IBuildStatusService"/>), the 404 has
+/// <c>noRetry</c>, as no build is going to make the artifact, while one that is queued, running or waiting stays
+/// retryable.
 /// </summary>
 public sealed class RenderSources
 {
     private readonly IDatasetAccessResolver _access;
     private readonly IBuildArtifactResolver _artifacts;
+    private readonly IBuildStatusService _buildStatus;
     private readonly IFileSystem _fs;
     private readonly ILogger<RenderSources> _logger;
 
-    public RenderSources(IDatasetAccessResolver access, IBuildArtifactResolver artifacts, IFileSystem fs,
-        ILogger<RenderSources> logger)
+    public RenderSources(IDatasetAccessResolver access, IBuildArtifactResolver artifacts,
+        IBuildStatusService buildStatus, IFileSystem fs, ILogger<RenderSources> logger)
     {
         _access = access;
         _artifacts = artifacts;
+        _buildStatus = buildStatus;
         _fs = fs;
         _logger = logger;
     }
@@ -43,7 +47,8 @@ public sealed class RenderSources
     /// <summary>The entry at <paramref name="path"/> and the file a renderer reads for it.</summary>
     /// <exception cref="InvalidDatasetPathException">The path is not a dataset path (a missing one is empty).</exception>
     /// <exception cref="BadRequestException">A wildcard, no such entry, or a folder.</exception>
-    /// <exception cref="NotFoundException">The build artifact a renderer reads does not exist yet.</exception>
+    /// <exception cref="NotFoundException">The build artifact a renderer reads does not exist yet (with
+    /// <see cref="RegistryException.NoRetry"/> when the build failed).</exception>
     public Task<RenderSource> ResolveAsync(string orgSlug, string dsSlug, string? path,
         CancellationToken ct = default) =>
         ResolveAsync(orgSlug, dsSlug, path, thumbnail: false, ct);
@@ -68,7 +73,8 @@ public sealed class RenderSources
         if (thumbnail && !_artifacts.HasThumbnail(entry.Type))
             throw new NotFoundException($"'{normalized}' has no thumbnail ({entry.Type} entries have none)");
 
-        return new RenderSource(entry, access.Ddb, normalized, SourceOf(entry, access.Ddb, normalized));
+        return new RenderSource(entry, access.Ddb, normalized,
+            await SourceOfAsync(orgSlug, dsSlug, entry, access.Ddb, normalized));
     }
 
     /// <summary>
@@ -104,16 +110,23 @@ public sealed class RenderSources
             version);
     }
 
-    private string SourceOf(Entry entry, IDDB ddb, string requestPath)
+    private async Task<string> SourceOfAsync(string orgSlug, string dsSlug, Entry entry, IDDB ddb,
+        string requestPath)
     {
         var sourcePath = _artifacts.GetRenderSource(ddb, entry);
         if (sourcePath != null)
             return sourcePath;
 
-        _logger.LogInformation("Build artifact for '{OriginalPath}' (hash {Hash}) not available yet",
-            requestPath, entry.Hash);
-        throw new NotFoundException(
-            $"Processed data for '{requestPath}' is not available yet (build pending or failed)");
+        var failed = await _buildStatus.GetStatusAsync(orgSlug, dsSlug, ddb, entry.Path, entry.Type) ==
+                     EntryBuildStatuses.Failed;
+        _logger.LogInformation("Build artifact for '{OriginalPath}' (hash {Hash}) not available {Why}",
+            requestPath, entry.Hash, failed ? "(build failed)" : "yet");
+        throw new NotFoundException(failed
+            ? $"Processed data for '{requestPath}' is not available: its build failed"
+            : $"Processed data for '{requestPath}' is not available yet (its build has not finished)")
+        {
+            NoRetry = failed
+        };
     }
 }
 
