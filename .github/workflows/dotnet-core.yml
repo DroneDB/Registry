@@ -55,11 +55,11 @@ jobs:
       run: |
         cd registry
         dotnet build -c Release --verbosity minimal
-    # THIRD_PARTY_LICENSES.md names every NuGet package the linux-x64 publish ships (NOTICE.md links it)
+    # THIRD_PARTY_LICENSES.md names every NuGet package that Registry ships (NOTICE.md links it); the
+    # build above restored Registry.Web
     - name: Third-party licences up to date
       run: |
         cd registry
-        dotnet restore Registry.Web -r linux-x64 --verbosity quiet
         python3 scripts/third-party-licenses.py --check
     - name: Nullable allow-list (may only shrink)
       run: |

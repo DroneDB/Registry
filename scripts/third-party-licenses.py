@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """THIRD_PARTY_LICENSES.md: the NuGet packages that Registry.Web ships, with their licence texts.
 
-The list comes from the restore of Registry.Web (Registry.Web/obj/project.assets.json, the
-linux-x64 target that the release and the Docker image publish), the licence of each package from its
+The list comes from the restore of Registry.Web (Registry.Web/obj/project.assets.json): every
+package that puts files into a build, for any platform the release publishes (runtime and native assets,
+native assets per runtime, satellite resources); packages that only compile or only carry build tasks
+and analyzers, such as the SDK's trimming tasks, ship nothing. The licence of each package comes from its
 .nuspec: an SPDX expression, a licence file inside the package, or (old packages) a licence URL that
 LEGACY_LICENSE_URLS maps to an SPDX identifier. Standard licence texts come from the SPDX licence list.
 
@@ -10,7 +12,7 @@ LEGACY_LICENSE_URLS maps to an SPDX identifier. Standard licence texts come from
     python3 scripts/third-party-licenses.py --check  # fail when the packages or versions in the file
                                                      # differ from the restore (offline, for CI)
 
-Run `dotnet restore Registry.Web -r linux-x64` first.
+Run `dotnet restore Registry.Web` (or a build) first.
 """
 import json
 import pathlib
@@ -22,7 +24,8 @@ import xml.etree.ElementTree as ET
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "Registry.Web" / "obj" / "project.assets.json"
 OUTPUT = ROOT / "THIRD_PARTY_LICENSES.md"
-TARGET = "net10.0/linux-x64"
+TARGET = "net10.0"
+SHIPPED_ASSETS = ("runtime", "native", "runtimeTargets", "resource")
 SPDX_TEXT = "https://raw.githubusercontent.com/spdx/license-list-data/main/text/{}.txt"
 
 # Packages published before NuGet had license expressions name a URL only.
@@ -42,11 +45,16 @@ LEGACY_LICENSE_URLS = {
 ROW = re.compile(r"^\| ([^|]+) \| ([^|]+) \| [^|]* \|", re.M)
 
 
+def ships(target):
+    """Whether a package puts files into a build ("_._" marks a folder that is empty on purpose)."""
+    return any(not path.endswith("_._") for kind in SHIPPED_ASSETS for path in target.get(kind, {}))
+
+
 def packages():
     assets = json.loads(ASSETS.read_text(encoding="utf-8"))
     folder = pathlib.Path(next(iter(assets["packageFolders"])))
     for key, value in sorted(assets["targets"][TARGET].items(), key=lambda kv: kv[0].lower()):
-        if value.get("type") != "package":
+        if value.get("type") != "package" or not ships(value):
             continue
         name, version = key.split("/", 1)
         yield name, version, folder / assets["libraries"][key]["path"]

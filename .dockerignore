@@ -1,4 +1,4 @@
-# Allow-list: the image build needs the solution props, the production projects, the Hub
+# Allow-list: the image build needs the solution props, the licence files, the production projects, the Hub
 # sources, three docker/ files and the libddb pin script (scripts/ddb-release.sh). Everything else (local data such as
 # Registry.Web/registry-data, test projects and their downloaded data, build outputs,
 # node_modules) stays out of the build context.
@@ -41,3 +41,9 @@ Registry.Web/ClientApp/build
 Registry.Web/ClientApp/coverage
 Registry.Web/ClientApp/stats.json
 Registry.Web/ClientApp/.git
+
+# The licence and notices that the publish puts next to the executable (Registry.Web.csproj)
+!LICENSE.md
+!NOTICE.md
+!COMMERCIAL.md
+!THIRD_PARTY_LICENSES.md
