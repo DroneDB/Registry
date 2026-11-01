@@ -69,7 +69,7 @@ public static class RegistryApiServiceCollectionExtensions
                 },
                 License = new OpenApiLicense
                 {
-                    Name = "Use under AGPLv3 License",
+                    Name = "DroneDB Source-Available License 1.0",
                     Url = new Uri("https://github.com/DroneDB/Registry/blob/master/LICENSE.md"),
                 }
             });

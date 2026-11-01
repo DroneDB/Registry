@@ -4,9 +4,13 @@
 
 ## How can I contribute?
 
-DDB contributors are expected to follow the [Collective Code of Construction Contract (C4)](https://rfc.zeromq.org/spec:42/C4/). You should read the document before making a pull request.
+Open a pull request against `master` with one change per pull request, a description of what it fixes or adds, and tests for it. Contributions are accepted under the Contributor License Agreement below.
 
 Take a look at the list of [open issues](https://github.com/DroneDB/registry/issues) to find out how you can help.
+
+## Contributor License Agreement
+
+Before we can merge a pull request, you must sign our Contributor License Agreement (CLA). The CLA lets Digipa S.R.L. distribute your contribution under the licence of this project and under commercial licences. The CLA bot asks you to sign when you open your first pull request.
 
 ## Code of Conduct
 

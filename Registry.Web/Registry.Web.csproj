@@ -39,6 +39,14 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- The licence and notices travel with every published build (release zips, Docker image),
+             as loose files next to the executable, not inside the single file -->
+        <None Include="../LICENSE.md;../NOTICE.md;../COMMERCIAL.md;../THIRD_PARTY_LICENSES.md"
+              Link="%(Filename)%(Extension)" CopyToOutputDirectory="Never"
+              CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    </ItemGroup>
+
+    <ItemGroup>
         <!-- Don't publish the SPA source files, but do show them in the project files list -->
         <Content Remove="$(SpaRoot)**" />
         <None Remove="$(SpaRoot)**" />

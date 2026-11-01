@@ -200,7 +200,13 @@ docker build . -t dronedb/registry
 
 ## 📄 License
 
-This project is dual-licensed. See [LICENSE.md](LICENSE.md) for details.
+Registry and Hub are **source-available** under the [DroneDB Source-Available License 1.0](LICENSE.md).
+
+- Free for personal use, for teaching at non-profit educational institutions, for research that a non-profit institution does on its own account and publishes, and for a 60-day evaluation by anyone.
+- Companies (including sole traders and freelancers), public bodies and anyone using Registry for paid work need a [commercial licence](COMMERCIAL.md) for production use.
+- You may not change the source code or distribute copies. Settings, configuration, deployment files and branding through the settings are not changes.
+
+Third-party components keep their own licences: see [NOTICE.md](NOTICE.md). Releases before 3.0.0 stay under the terms they were published with.
 
 ## 🤝 Contributing
 
