@@ -60,35 +60,17 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-11-01): DroneDB has ONE version, 2.0.0 (package.json); the libddb ABI follows
-        it (ABI 2.0, semver: a removed export is a new major, an added one a new minor) and so does
-        the handshake (libddb 2.x). It is not tagged until Registry is proven on it, so Registry pins
-        the CI build of DroneDB fixes-and-optimizations commit d74b2a65, run 41274053580 (a pull
-        request run of DroneDB#472, built from the merge with master; the .deb is named after that
-        merge commit, 2.0.0~gitea83dd49), every job green (Linux and Windows builds and tests,
-        ASan + UBSan, the Docker image). Since the pin of f878cef9: bm3d 1.1.2 and Obj2Tiles
-        1.8.1 read the 16 bit and float single-band TIFF textures of multispectral models (they
-        failed to build); a raster query or a stockpile detection of a place without data fails with
-        DDBERR_INVALIDARGS, which Registry answers with a 400; the histogram of a formula has bins
-        over the range the Hub draws and counts the values below and above it; ddb align masks no
-        data, reports the shift at the centre of the shared area and fails on a solution it cannot
-        trust; the WMS and WCS image renders of a multispectral float raster show it as the map tiles
-        do; a stockpile click measures the pile against a plane fitted to the ground around it, so it
-        works on a slope, and detect-all no longer counts a slope as a pile; Obj2Tiles 1.9.0 builds
-        the 3D Tiles of a model 4-22% faster with the same tiles and keeps to the cores DroneDB gives
-        it. Everything else stays from the earlier pins. Next: the v2.0.0 release (DdbSource release)
-        once it is tagged.
+        Pinned now (2026-11-02): the DroneDB v2.0.0 release, the first of libddb 2.x (ABI 2.0; the
+        handshake requires libddb 2.x). It is the code Registry was proven on with the CI build of
+        commit d74b2a65, plus the licence of the Debian package (MPL-2.0) and two fixes of the
+        release workflow (the tag build names the .deb ddb_2.0.0_amd64.deb). The SHA256 values
+        are those of the release's SHA256SUMS.
     -->
     <PropertyGroup>
-        <DdbSource>ci</DdbSource>
+        <DdbSource>release</DdbSource>
         <DdbVersion>2.0.0</DdbVersion>
-        <DdbDebFileVersion>2.0.0~gitea83dd49</DdbDebFileVersion>
-        <DdbCiCommit>d74b2a65e7bd9081c6157fae245242fe155d4f86</DdbCiCommit>
-        <DdbCiRunId>41274053580</DdbCiRunId>
-        <DdbDebArtifactId>13071761771</DdbDebArtifactId>
-        <DdbWindowsArtifactId>13071931935</DdbWindowsArtifactId>
-        <DdbDebSha256>7049d748b60001542c0f028595e377b35ee70c05aee193ce8b770a9cfc5ce80c</DdbDebSha256>
-        <DdbWindowsZipSha256>918071044d7e1cf41c6ac1c0d461c9efc4ea5e1170702da9fe52c224afd6db34</DdbWindowsZipSha256>
+        <DdbDebSha256>ec2cf606465e5f639557758d283fa5e2f2b2cfb71df7301a5b9860764b0efba2</DdbDebSha256>
+        <DdbWindowsZipSha256>8e3c81ec50a3115a0c651ed1002cbed872e32c3df62a3d4e3b0986861fa882ac</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
