@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Moq;
@@ -102,6 +103,35 @@ public class DatasetSummaryTests : TestBase
         _fingerprints[_fingerprints.Keys.First()] = "v2";
         await utils.CheckCurrentUserStorage(8 * 1024 * 1024);
         _infoCalls.ShouldBe(OwnedDatasets + 1);
+    }
+
+    [Test]
+    public void Summary_LeavesTheSavedViewsOutOfTheMetaAndKeepsTheRest()
+    {
+        var internalRef = _fingerprints.Keys.First();
+        _ddbManager.Setup(m => m.Get(It.IsAny<string>(), internalRef)).Returns(() =>
+        {
+            var ddb = new Mock<IDDB>();
+            ddb.Setup(d => d.GetIndexFileState()).Returns(new IndexFileState("v1", LastWrite));
+            ddb.Setup(d => d.GetInfo()).Returns(new Entry
+            {
+                Size = 1_000_000,
+                Properties = TestJson.Props(("entries", 10),
+                    ("meta", TestJson.Parse("""{"name":{"data":"N"},"visibility":{"data":1},"views":[{"id":"a"}]}""")))
+            });
+            return ddb.Object;
+        });
+        var summaries = TestCaches.Summaries(_ddbManager.Object);
+
+        // Read from the native index, then again from the cache: neither carries the views
+        foreach (var summary in new[] { summaries.Get("org", internalRef), summaries.Get("org", internalRef) })
+        {
+            var meta = summary.Properties.ShouldNotBeNull()["meta"];
+            meta.TryGetProperty("views", out _).ShouldBeFalse();
+            meta.GetProperty("name").GetProperty("data").GetString().ShouldBe("N");
+            meta.GetProperty("visibility").GetProperty("data").GetInt32().ShouldBe(1);
+            summary.Properties["entries"].GetInt32().ShouldBe(10);
+        }
     }
 
     [Test]

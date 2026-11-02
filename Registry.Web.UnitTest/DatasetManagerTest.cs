@@ -1093,4 +1093,98 @@ public class DatasetManagerTest : TestBase
     }
 
     #endregion
+
+    #region Saved map views
+
+    // The root meta of a dataset that has saved map views, as libddb writes it: single keys as { data }, lists as arrays
+    private static Entry InfoWithViews() => new()
+    {
+        Properties = TestJson.Props(
+            ("entries", 3),
+            ("meta", TestJson.Parse("""
+                {
+                  "name": { "data": "Default" },
+                  "tagline": { "data": "A tagline" },
+                  "views": [ { "id": "a", "data": { "name": "View A" } }, { "id": "b", "data": { "name": "View B" } } ]
+                }
+                """))),
+        Size = 1000,
+        ModifiedTime = DateTime.Now,
+        Path = "."
+    };
+
+    private DatasetsManager ManagerOverInfoWithViews(RegistryContext context, bool canWrite = true)
+    {
+        _settingsOptions.Value = _settings;
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.GetDatasetPermissions(It.IsAny<Dataset>()))
+            .Returns(Task.FromResult(new DatasetPermissionsDto { CanRead = true, CanWrite = canWrite, CanDelete = false }));
+
+        var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.Meta).Returns(new Mock<Registry.Ports.DroneDB.IMetaManager>().Object);
+        ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([]);
+        ddbMock.Setup(x => x.GetInfo()).Returns(InfoWithViews);
+        _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
+
+        return CreateManager(context, utils);
+    }
+
+    private static void ShouldKeepTheMetaWithoutViews(Dictionary<string, JsonElement>? properties)
+    {
+        var meta = properties.ShouldNotBeNull()["meta"];
+        meta.TryGetProperty("views", out _).ShouldBeFalse();
+        meta.GetProperty("name").GetProperty("data").GetString().ShouldBe("Default");
+        meta.GetProperty("tagline").GetProperty("data").GetString().ShouldBe("A tagline");
+        properties["entries"].GetInt32().ShouldBe(3);
+    }
+
+    [Test]
+    public async Task GetEntry_LeavesTheSavedViewsOutOfTheMeta()
+    {
+        await using var context = GetTest1Context();
+        var manager = ManagerOverInfoWithViews(context);
+
+        var entry = (await manager.GetEntry(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug)).Single();
+
+        ShouldKeepTheMetaWithoutViews(entry.Properties);
+        entry.Properties!.ShouldContainKey("permissions");
+    }
+
+    [Test]
+    public async Task Get_LeavesTheSavedViewsOutOfTheMeta()
+    {
+        await using var context = GetTest1Context();
+        var manager = ManagerOverInfoWithViews(context);
+
+        var dataset = await manager.Get(MagicStrings.PublicOrganizationSlug, MagicStrings.DefaultDatasetSlug);
+
+        ShouldKeepTheMetaWithoutViews(dataset.Properties);
+    }
+
+    [Test]
+    public async Task List_LeavesTheSavedViewsOutOfTheMeta()
+    {
+        await using var context = GetTest1Context();
+        var manager = ManagerOverInfoWithViews(context);
+
+        var listed = (await manager.List(MagicStrings.PublicOrganizationSlug)).Single();
+
+        ShouldKeepTheMetaWithoutViews(listed.Properties);
+    }
+
+    [Test]
+    public async Task AddNew_LeavesTheSavedViewsOutOfTheMeta()
+    {
+        await using var context = GetTest1Context();
+        var manager = ManagerOverInfoWithViews(context);
+
+        var created = await manager.AddNew(MagicStrings.PublicOrganizationSlug, new DatasetNewDto { Slug = "with-views" });
+
+        ShouldKeepTheMetaWithoutViews(created.Properties);
+    }
+
+    #endregion
 }
