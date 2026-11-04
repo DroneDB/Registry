@@ -1,23 +1,31 @@
 using System;
+using System.Buffers.Binary;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
-using Microsoft.Extensions.DependencyInjection;
+using Registry.Web.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
-using Registry.Web.Utilities;
+using Registry.Web.Services.Jobs;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Initialization;
 
 /// <summary>
-/// Handles Hangfire recurring job initialization.
+/// Startup task of every host with the job storage (<see cref="StartupTaskOrder.RecurringJobs"/>): defines
+/// the recurring jobs before the Hangfire servers start.
 /// </summary>
-internal class HangfireJobsInitializer
+internal sealed class HangfireJobsInitializer : IStartupTask
 {
-    private readonly IServiceProvider _services;
-    private readonly ILogger _logger;
+    private readonly IRecurringJobManager _recurringJobManager;
+    private readonly JobScheduleOptions _schedule;
+    private readonly UpdateCheckOptions _updateCheck;
+    private readonly IInstanceIdentity _identity;
+    private readonly ILogger<HangfireJobsInitializer> _logger;
 
     /// <summary>
     /// Recurring job ids retired in newer versions. Removed on startup so older
@@ -25,27 +33,30 @@ internal class HangfireJobsInitializer
     /// </summary>
     private static readonly string[] DeprecatedRecurringJobIds = [];
 
-    public HangfireJobsInitializer(IServiceProvider services, ILogger logger)
+    public HangfireJobsInitializer(IRecurringJobManager recurringJobManager, IOptions<JobScheduleOptions> schedule,
+        IOptions<UpdateCheckOptions> updateCheck, IInstanceIdentity identity, ILogger<HangfireJobsInitializer> logger)
     {
-        _services = services ?? throw new ArgumentNullException(nameof(services));
+        _recurringJobManager = recurringJobManager ?? throw new ArgumentNullException(nameof(recurringJobManager));
+        _schedule = (schedule ?? throw new ArgumentNullException(nameof(schedule))).Value;
+        _updateCheck = (updateCheck ?? throw new ArgumentNullException(nameof(updateCheck))).Value;
+        _identity = identity ?? throw new ArgumentNullException(nameof(identity));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public Task InitializeAsync(CancellationToken token)
+    public int Order => StartupTaskOrder.RecurringJobs;
+
+    public Task ExecuteAsync(CancellationToken token)
     {
         _logger.LogInformation("Hangfire jobs initialization starting");
 
-        var appSettings = _services.GetRequiredService<IOptions<AppSettings>>().Value;
-        var recurringJobManager = _services.GetRequiredService<IRecurringJobManager>();
-
-        SetupRecurringJobs(appSettings, recurringJobManager);
+        SetupRecurringJobs(_schedule, _recurringJobManager);
 
         _logger.LogInformation("Hangfire jobs initialization completed");
 
         return Task.CompletedTask;
     }
 
-    private void SetupRecurringJobs(AppSettings appSettings, IRecurringJobManager recurringJobManager)
+    private void SetupRecurringJobs(JobScheduleOptions appSettings, IRecurringJobManager recurringJobManager)
     {
         // Migration: remove recurring jobs retired in newer versions. Surviving jobs
         // are re-scheduled by the AddOrUpdate calls below, which overwrite any cron
@@ -57,68 +68,86 @@ internal class HangfireJobsInitializer
             _logger.LogInformation("Removed deprecated recurring job '{JobId}'", jobId);
         }
 
-        ScheduleJob(recurringJobManager, "cleanup-expired-jobs",
-            ResolveCron(appSettings.CleanupExpiredJobsCron, Cron.Daily()),
-            cron => recurringJobManager.AddOrUpdate(
-                "cleanup-expired-jobs",
-                () => HangfireUtils.CleanupExpiredJobs(null),
+        ScheduleJob(recurringJobManager, RecurringJobIds.CleanupExpiredJobs,
+            CronSetting.Resolve(appSettings.CleanupExpiredJobsCron, JobScheduleOptions.DefaultCrons.CleanupExpiredJobsCron),
+            cron => recurringJobManager.AddOrUpdate<ExpiredRecurringJobsSweep>(
+                RecurringJobIds.CleanupExpiredJobs,
+                sweep => sweep.Run(null, CancellationToken.None),
                 cron));
 
-        ScheduleJob(recurringJobManager, "sync-jobindex-states",
-            ResolveCron(appSettings.SyncJobIndexStatesCron, "0 * * * *"),
+        ScheduleJob(recurringJobManager, RecurringJobIds.SyncJobIndexStates,
+            CronSetting.Resolve(appSettings.SyncJobIndexStatesCron, JobScheduleOptions.DefaultCrons.SyncJobIndexStatesCron),
             cron => recurringJobManager.AddOrUpdate<JobIndexSyncService>(
-                "sync-jobindex-states",
-                service => service.SyncJobIndexStates(null),
+                RecurringJobIds.SyncJobIndexStates,
+                service => service.SyncJobIndexStates(null, CancellationToken.None),
                 cron));
 
-        ScheduleJob(recurringJobManager, "recover-indexed-job-publications",
-            ResolveCron(appSettings.RecoverIndexedJobPublicationsCron, "* * * * *"),
+        ScheduleJob(recurringJobManager, RecurringJobIds.RecoverIndexedJobPublications,
+            CronSetting.Resolve(appSettings.RecoverIndexedJobPublicationsCron, JobScheduleOptions.DefaultCrons.RecoverIndexedJobPublicationsCron),
             cron => recurringJobManager.AddOrUpdate<IndexedJobPublicationRecoveryService>(
-                "recover-indexed-job-publications",
-                service => service.RecoverPublications(null),
+                RecurringJobIds.RecoverIndexedJobPublications,
+                service => service.RecoverPublications(null, CancellationToken.None),
                 cron));
 
-        ScheduleJob(recurringJobManager, "process-pending-builds",
-            ResolveCron(appSettings.ProcessPendingBuildsCron, "0 */6 * * *"),
+        ScheduleJob(recurringJobManager, RecurringJobIds.ProcessPendingBuilds,
+            CronSetting.Resolve(appSettings.ProcessPendingBuildsCron, JobScheduleOptions.DefaultCrons.ProcessPendingBuildsCron),
             cron => recurringJobManager.AddOrUpdate<BuildPendingService>(
-                "process-pending-builds",
-                service => service.ProcessPendingBuilds(null),
+                RecurringJobIds.ProcessPendingBuilds,
+                service => service.ProcessPendingBuilds(null, CancellationToken.None),
                 cron));
 
-        ScheduleJob(recurringJobManager, "cleanup-orphaned-datasets",
-            ResolveCron(appSettings.OrphanedDatasetCleanupCron, "0 3 * * *"),
+        ScheduleJob(recurringJobManager, RecurringJobIds.CleanupOrphanedDatasets,
+            CronSetting.Resolve(appSettings.OrphanedDatasetCleanupCron, JobScheduleOptions.DefaultCrons.OrphanedDatasetCleanupCron),
             cron => recurringJobManager.AddOrUpdate<OrphanedDatasetCleanupService>(
-                "cleanup-orphaned-datasets",
-                service => service.CleanupOrphanedFoldersAsync(null),
+                RecurringJobIds.CleanupOrphanedDatasets,
+                service => service.CleanupOrphanedFoldersAsync(null, CancellationToken.None),
                 cron));
 
-        ScheduleJob(recurringJobManager, "cleanup-old-jobindices",
-            ResolveCron(appSettings.JobIndexCleanupCron, "0 4 * * *"),
+        ScheduleJob(recurringJobManager, RecurringJobIds.CleanupOldJobIndices,
+            CronSetting.Resolve(appSettings.JobIndexCleanupCron, JobScheduleOptions.DefaultCrons.JobIndexCleanupCron),
             cron => recurringJobManager.AddOrUpdate<JobIndexCleanupService>(
-                "cleanup-old-jobindices",
-                service => service.CleanupOldJobIndicesAsync(null),
+                RecurringJobIds.CleanupOldJobIndices,
+                service => service.CleanupOldJobIndicesAsync(null, CancellationToken.None),
                 cron));
 
-        ScheduleJob(recurringJobManager, "recurring-dataset-cleanup",
-            ResolveCron(appSettings.DatasetCleanupCron, "0 0 * * *"),
+        ScheduleJob(recurringJobManager, RecurringJobIds.RecurringDatasetCleanup,
+            CronSetting.Resolve(appSettings.DatasetCleanupCron, JobScheduleOptions.DefaultCrons.DatasetCleanupCron),
             cron => recurringJobManager.AddOrUpdate<RecurringDatasetCleanupService>(
-                "recurring-dataset-cleanup",
-                service => service.CleanupAllDatasetsAsync(null),
+                RecurringJobIds.RecurringDatasetCleanup,
+                service => service.CleanupAllDatasetsAsync(null, CancellationToken.None),
                 cron));
 
-        ScheduleJob(recurringJobManager, "check-artifact-completeness",
-            ResolveCron(appSettings.ArtifactCompletenessCheckerCron, "0 2 * * *"),
+        ScheduleJob(recurringJobManager, RecurringJobIds.CheckArtifactCompleteness,
+            CronSetting.Resolve(appSettings.ArtifactCompletenessCheckerCron, JobScheduleOptions.DefaultCrons.ArtifactCompletenessCheckerCron),
             cron => recurringJobManager.AddOrUpdate<ArtifactCompletenessCheckerService>(
-                "check-artifact-completeness",
-                service => service.CheckAndQueueAsync(null),
+                RecurringJobIds.CheckArtifactCompleteness,
+                service => service.CheckAndQueueAsync(null, CancellationToken.None),
                 cron));
 
-        ScheduleJob(recurringJobManager, "index-reconciliation",
-            ResolveCron(appSettings.IndexReconciliationCron, "0 * * * *"),
+        ScheduleJob(recurringJobManager, RecurringJobIds.IndexReconciliation,
+            CronSetting.Resolve(appSettings.IndexReconciliationCron, JobScheduleOptions.DefaultCrons.IndexReconciliationCron),
             cron => recurringJobManager.AddOrUpdate<IndexReconciliationService>(
-                "index-reconciliation",
-                service => service.ReconcileAllDatasetsAsync(null),
+                RecurringJobIds.IndexReconciliation,
+                service => service.ReconcileAllDatasetsAsync(null, CancellationToken.None),
                 cron));
+
+        // The identity exists before the jobs are defined (StartupTaskOrder.InstanceIdentity)
+        ScheduleJob(recurringJobManager, RecurringJobIds.CheckUpdates,
+            CronSetting.Resolve(_updateCheck.UpdateCheckCron, InstanceDailyCron(_identity.Current.Id)),
+            cron => recurringJobManager.AddOrUpdate<IUpdateCheckService>(
+                RecurringJobIds.CheckUpdates,
+                service => service.CheckForUpdatesAsync(CancellationToken.None),
+                cron));
+    }
+
+    /// <summary>
+    /// Once a day at a time derived from the instance id, so the deployments do not all ask in the same minute: the
+    /// same id always gives the same time, and the ids are spread evenly over the 24 hours.
+    /// </summary>
+    internal static string InstanceDailyCron(string instanceId)
+    {
+        var minuteOfDay = BinaryPrimitives.ReadUInt32BigEndian(SHA256.HashData(Encoding.UTF8.GetBytes(instanceId.ToLowerInvariant()))) % (24 * 60);
+        return $"{minuteOfDay % 60} {minuteOfDay / 60} * * *";
     }
 
     /// <summary>
@@ -138,24 +167,5 @@ internal class HangfireJobsInitializer
             register(resolvedCron);
             _logger.LogInformation("Scheduled '{JobId}' with cron: {Cron}", jobId, resolvedCron);
         }
-    }
-
-    /// <summary>
-    /// Resolves a raw cron string from configuration:
-    /// <list type="bullet">
-    ///   <item><description>null or empty/whitespace → <paramref name="defaultCron"/> (use built-in default)</description></item>
-    ///   <item><description>"disabled", "off", or "none" (case-insensitive) → <see langword="null"/> (job will be removed)</description></item>
-    ///   <item><description>any other value → returned as-is (treated as a valid cron expression)</description></item>
-    /// </list>
-    /// </summary>
-    private static string? ResolveCron(string? raw, string defaultCron)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-            return defaultCron;
-
-        var trimmed = raw.Trim();
-        return trimmed.ToLowerInvariant() is "disabled" or "off" or "none"
-            ? null
-            : trimmed;
     }
 }

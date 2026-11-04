@@ -8,7 +8,7 @@ using Registry.Web.Models.Configuration;
 namespace Registry.Web.Attributes;
 
 /// <summary>
-/// Applies the configured upload size limit (<see cref="AppSettings.MaxRequestBodySize"/>) to the
+/// Applies the configured upload size limit (<see cref="HttpHostOptions.MaxRequestBodySize"/>) to the
 /// current request. A <c>null</c> configured value means "unlimited".
 /// </summary>
 /// <remarks>
@@ -30,7 +30,7 @@ public sealed class ConfigurableUploadSizeLimitAttribute : Attribute, IResourceF
             return;
 
         var settings = context.HttpContext.RequestServices
-            .GetService<IOptions<AppSettings>>()?.Value;
+            .GetService<IOptions<HttpHostOptions>>()?.Value;
 
         // null => unlimited (previous [DisableRequestSizeLimit] behaviour when unset)
         feature.MaxRequestBodySize = settings?.MaxRequestBodySize;

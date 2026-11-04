@@ -1,15 +1,14 @@
-#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
-using Hangfire.Console;
 using Hangfire.Server;
 using Hangfire.States;
 using Hangfire.Storage;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Attributes;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
@@ -59,8 +58,12 @@ internal sealed class RecoveryPassSummary
 /// backoff while it cannot be published, or cancelled when its record is unusable. All steps are
 /// idempotent and guarded by expected-state transitions, so overlapping passes and a still-running
 /// publisher converge without locks. Storage failures never cancel a job: the member stays in the
-/// set and the pass ends.
+/// set and the pass ends. That is also why it has no <see cref="DisableConcurrentExecutionAttribute"/>:
+/// a pass that overlaps the next minute's is safe and bounded (<see cref="PassBudget"/>).
 /// </summary>
+/// <remarks>Not retried: the next scheduled pass is the retry.</remarks>
+[JobExpiration(ExpirationTimeoutInMinutes = 60)]
+[AutomaticRetry(Attempts = 0)]
 public class IndexedJobPublicationRecoveryService
 {
     /// <summary>Maximum number of candidates examined in one pass.</summary>
@@ -100,37 +103,34 @@ public class IndexedJobPublicationRecoveryService
 
     private readonly IJobIndexWriter _writer;
     private readonly ILogger<IndexedJobPublicationRecoveryService> _logger;
-    private readonly JobStorage? _storage;
+    private readonly JobStorage _storage;
     private readonly TimeProvider _time;
 
     public IndexedJobPublicationRecoveryService(IJobIndexWriter writer,
-        ILogger<IndexedJobPublicationRecoveryService> logger, JobStorage? storage = null, TimeProvider? time = null)
+        ILogger<IndexedJobPublicationRecoveryService> logger, JobStorage storage, TimeProvider? time = null)
     {
         _writer = writer ?? throw new ArgumentNullException(nameof(writer));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _storage = storage;
+        _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _time = time ?? TimeProvider.System;
     }
 
-    /// <summary>
-    /// Recurring entry point. Not retried: the next scheduled pass is the retry.
-    /// </summary>
-    [JobExpiration(ExpirationTimeoutInMinutes = 60)]
-    [AutomaticRetry(Attempts = 0)]
-    public async Task RecoverPublications(PerformContext? context = null)
+    /// <summary>The job as stored by earlier releases: runs with the context's shutdown token.</summary>
+    public Task RecoverPublications(PerformContext? context) => RecoverPublications(context, JobCancellation.Of(context));
+
+    /// <summary>Recurring entry point: one bounded pass.</summary>
+    public async Task RecoverPublications(PerformContext? context, CancellationToken cancellationToken)
     {
-        var storage = context?.Storage ?? _storage ?? JobStorage.Current;
+        var storage = context?.Storage ?? _storage;
         var client = new BackgroundJobClient(storage);
-        var ct = context?.CancellationToken?.ShutdownToken ?? CancellationToken.None;
 
-        var summary = await RunPassAsync(storage, client, ct);
+        var summary = await RunPassAsync(storage, client, cancellationToken);
 
+        var console = JobConsole.For(_logger, context);
         if (summary.Examined > 0 || summary.StopReason != RecoveryStopReason.Drained)
-            _logger.LogInformation("Indexed job publication recovery pass: {Summary}", summary);
+            console.Info("Indexed job publication recovery: {Summary}", summary);
         else
-            _logger.LogDebug("Indexed job publication recovery pass: {Summary}", summary);
-
-        context?.WriteLine($"Indexed job publication recovery: {summary}");
+            console.Debug("Indexed job publication recovery: {Summary}", summary);
     }
 
     /// <summary>

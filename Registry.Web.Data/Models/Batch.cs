@@ -1,8 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Data;
-using System.Text;
 
 namespace Registry.Web.Data.Models;
 
@@ -13,15 +11,15 @@ public class Batch
 {
     /// <summary>Random token identifier for the batch (primary key).</summary>
     [Key]
-    public string Token { get; set; }
+    public string Token { get; set; } = null!;
 
     /// <summary>Dataset this batch is uploading to.</summary>
     [Required]
-    public Dataset Dataset { get; set; }
+    public Dataset Dataset { get; set; } = null!;
 
     /// <summary>Username of the user who initiated the batch.</summary>
     [Required]
-    public string UserName { get; set; }
+    public string UserName { get; set; } = null!;
 
     /// <summary>Batch start timestamp.</summary>
     [Required]
@@ -34,7 +32,7 @@ public class Batch
     public BatchStatus Status { get; set; }
 
     /// <summary>Collection of file entries in this batch.</summary>
-    public virtual ICollection<Entry> Entries { get; set; }
+    public virtual ICollection<Entry> Entries { get; set; } = null!;
 }
 
 /// <summary>

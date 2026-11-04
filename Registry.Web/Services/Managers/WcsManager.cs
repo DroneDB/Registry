@@ -1,20 +1,20 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.Managers.Wcs;
-using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// Thin dispatcher implementing <see cref="IWcsManager"/>. Routes each request to the
+/// Thin dispatcher implementing <see cref="WcsManager"/>. Routes each request to the
 /// registered <see cref="IWcsProtocolHandler"/> matching the negotiated WCS version
 /// (1.0.0 / 1.1.1 / 2.0.1). All version-specific wire-format logic lives in the
 /// handlers; this class deliberately holds no XML / KVP knowledge of its own.
 /// </summary>
-public class WcsManager : IWcsManager
+public class WcsManager
 {
     private readonly Dictionary<string, IWcsProtocolHandler> _handlers;
 
@@ -23,16 +23,17 @@ public class WcsManager : IWcsManager
         _handlers = handlers.ToDictionary(h => h.Version, System.StringComparer.OrdinalIgnoreCase);
     }
 
-    public IReadOnlyList<string> SupportedVersions => [.. _handlers.Keys];
+    public Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string version, string? folderPath = null,
+        CancellationToken ct = default)
+        => Resolve(version).GetCapabilitiesAsync(orgSlug, dsSlug, folderPath, ct);
 
-    public Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string version, string? folderPath = null)
-        => Resolve(version).GetCapabilitiesAsync(orgSlug, dsSlug, folderPath);
+    public Task<string> DescribeCoverageAsync(string orgSlug, string dsSlug, string version, string coverageId,
+        CancellationToken ct = default)
+        => Resolve(version).DescribeCoverageAsync(orgSlug, dsSlug, coverageId, ct);
 
-    public Task<string> DescribeCoverageAsync(string orgSlug, string dsSlug, string version, string coverageId)
-        => Resolve(version).DescribeCoverageAsync(orgSlug, dsSlug, coverageId);
-
-    public Task<WcsCoverageResult> GetCoverageAsync(string orgSlug, string dsSlug, string version, IQueryCollection query)
-        => Resolve(version).GetCoverageAsync(orgSlug, dsSlug, query);
+    public Task<WcsCoverageResult> GetCoverageAsync(string orgSlug, string dsSlug, string version, IQueryCollection query,
+        CancellationToken ct = default)
+        => Resolve(version).GetCoverageAsync(orgSlug, dsSlug, query, ct);
 
     private IWcsProtocolHandler Resolve(string version)
     {

@@ -1,5 +1,5 @@
-#nullable enable
 using System.ComponentModel.DataAnnotations;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Models.DTO;
 
@@ -11,7 +11,7 @@ public class RasterProfileRequestDto
 {
     /// <summary>Dataset-relative path of the raster.</summary>
     [Required]
-    public string Path { get; set; } = null!;
+    public DatasetPath Path { get; set; } = null!;
 
     /// <summary>GeoJSON LineString geometry expressed in WGS84 (EPSG:4326).</summary>
     [Required]

@@ -1,0 +1,4437 @@
+{
+  "Registry.Ports.DroneDB.AddAction": {
+    "full": {
+      "path": "path-text",
+      "hash": "hash-text"
+    },
+    "sparse": {
+      "path": null,
+      "hash": null
+    }
+  },
+  "Registry.Ports.DroneDB.AddItem": {
+    "full": {
+      "path": "Path-text",
+      "hint": {
+        "sha256": "Sha256-text",
+        "size": 1234567890123,
+        "modifiedUtc": "2026-10-21T07:31:17.123Z"
+      }
+    },
+    "sparse": {
+      "path": null,
+      "hint": null
+    }
+  },
+  "Registry.Ports.DroneDB.BatchAddItemError": {
+    "full": {
+      "path": "Path-text",
+      "code": "Code-text",
+      "message": "Message-text"
+    },
+    "sparse": {
+      "path": null,
+      "code": null,
+      "message": null
+    }
+  },
+  "Registry.Ports.DroneDB.BatchAddResult": {
+    "full": {
+      "entries": [
+        {
+          "status": "Status-text",
+          "properties": {
+            "Alpha": {
+              "snake_case": 1.5,
+              "whole": 2.0,
+              "count": 3,
+              "List": [
+                1,
+                2.5,
+                "text",
+                true,
+                null
+              ],
+              "nested": {
+                "Pascal": null,
+                "flag": false
+              }
+            },
+            "snake_Key": {
+              "snake_case": 1.5,
+              "whole": 2.0,
+              "count": 3,
+              "List": [
+                1,
+                2.5,
+                "text",
+                true,
+                null
+              ],
+              "nested": {
+                "Pascal": null,
+                "flag": false
+              }
+            }
+          },
+          "point_geom": {
+            "snake_case": 1.5,
+            "whole": 2.0,
+            "count": 3,
+            "List": [
+              1,
+              2.5,
+              "text",
+              true,
+              null
+            ],
+            "nested": {
+              "Pascal": null,
+              "flag": false
+            }
+          },
+          "polygon_geom": {
+            "snake_case": 1.5,
+            "whole": 2.0,
+            "count": 3,
+            "List": [
+              1,
+              2.5,
+              "text",
+              true,
+              null
+            ],
+            "nested": {
+              "Pascal": null,
+              "flag": false
+            }
+          },
+          "path": "Path-text",
+          "hash": "Hash-text",
+          "type": 1,
+          "mtime": 1792567877.123,
+          "size": 1234567890123,
+          "depth": 42
+        }
+      ],
+      "unchanged": [
+        {
+          "path": "Path-text"
+        }
+      ],
+      "errors": [
+        {
+          "path": "Path-text",
+          "code": "Code-text",
+          "message": "Message-text"
+        }
+      ]
+    },
+    "sparse": {
+      "entries": null,
+      "unchanged": null,
+      "errors": null
+    }
+  },
+  "Registry.Ports.DroneDB.BatchAddUnchangedItem": {
+    "full": {
+      "path": "Path-text"
+    },
+    "sparse": {
+      "path": null
+    }
+  },
+  "Registry.Ports.DroneDB.BatchAddedEntry": {
+    "full": {
+      "status": "Status-text",
+      "properties": {
+        "Alpha": {
+          "snake_case": 1.5,
+          "whole": 2.0,
+          "count": 3,
+          "List": [
+            1,
+            2.5,
+            "text",
+            true,
+            null
+          ],
+          "nested": {
+            "Pascal": null,
+            "flag": false
+          }
+        },
+        "snake_Key": {
+          "snake_case": 1.5,
+          "whole": 2.0,
+          "count": 3,
+          "List": [
+            1,
+            2.5,
+            "text",
+            true,
+            null
+          ],
+          "nested": {
+            "Pascal": null,
+            "flag": false
+          }
+        }
+      },
+      "point_geom": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      },
+      "polygon_geom": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      },
+      "path": "Path-text",
+      "hash": "Hash-text",
+      "type": 1,
+      "mtime": 1792567877.123,
+      "size": 1234567890123,
+      "depth": 42
+    },
+    "sparse": {
+      "status": null,
+      "properties": null,
+      "point_geom": null,
+      "polygon_geom": null,
+      "path": null,
+      "hash": null,
+      "type": 0,
+      "mtime": -62135596800,
+      "size": 0,
+      "depth": 0
+    }
+  },
+  "Registry.Ports.DroneDB.BuildArtifact": {
+    "full": {
+      "role": "Role-text",
+      "path": "Path-text",
+      "kind": "Kind-text",
+      "mediaType": "MediaType-text",
+      "downloadName": "DownloadName-text",
+      "index": "Index-text",
+      "legacy": true,
+      "fallbackFor": "FallbackFor-text",
+      "version": "Version-text"
+    },
+    "sparse": {
+      "role": null,
+      "path": null,
+      "kind": null,
+      "mediaType": null
+    }
+  },
+  "Registry.Ports.DroneDB.CopiedBuildArtifacts": {
+    "full": {
+      "hash": "Hash-text",
+      "artifacts": [
+        {
+          "role": "Role-text",
+          "path": "Path-text",
+          "kind": "Kind-text",
+          "mediaType": "MediaType-text",
+          "downloadName": "DownloadName-text",
+          "index": "Index-text",
+          "legacy": true,
+          "fallbackFor": "FallbackFor-text",
+          "version": "Version-text"
+        }
+      ],
+      "pending": true
+    },
+    "sparse": {
+      "hash": null,
+      "artifacts": null,
+      "pending": false
+    }
+  },
+  "Registry.Ports.DroneDB.DdbCleanupResult": {
+    "full": {
+      "entries": [
+        "Entries-text"
+      ],
+      "builds": [
+        "Builds-text"
+      ]
+    },
+    "sparse": {
+      "entries": null,
+      "builds": null
+    }
+  },
+  "Registry.Ports.DroneDB.DdbEffectiveConfig": {
+    "full": {
+      "minFreeDiskMb": 1234567890123,
+      "cpuPoolSize": 42,
+      "ioThreads": 42,
+      "cacheDir": "CacheDir-text",
+      "gdalCacheMb": 42
+    },
+    "sparse": {
+      "minFreeDiskMb": 0,
+      "cpuPoolSize": 0,
+      "ioThreads": 0,
+      "cacheDir": null,
+      "gdalCacheMb": 0
+    }
+  },
+  "Registry.Ports.DroneDB.Delta": {
+    "full": {
+      "adds": [
+        {
+          "path": "path-text",
+          "hash": "hash-text"
+        }
+      ],
+      "removes": [
+        {
+          "path": "path-text",
+          "hash": "hash-text"
+        }
+      ],
+      "metaAdds": [
+        "MetaAdds-text"
+      ],
+      "metaRemoves": [
+        "MetaRemoves-text"
+      ]
+    },
+    "sparse": {
+      "adds": null,
+      "removes": null,
+      "metaAdds": null,
+      "metaRemoves": null
+    }
+  },
+  "Registry.Ports.DroneDB.Entry": {
+    "full": {
+      "properties": {
+        "Alpha": {
+          "snake_case": 1.5,
+          "whole": 2.0,
+          "count": 3,
+          "List": [
+            1,
+            2.5,
+            "text",
+            true,
+            null
+          ],
+          "nested": {
+            "Pascal": null,
+            "flag": false
+          }
+        },
+        "snake_Key": {
+          "snake_case": 1.5,
+          "whole": 2.0,
+          "count": 3,
+          "List": [
+            1,
+            2.5,
+            "text",
+            true,
+            null
+          ],
+          "nested": {
+            "Pascal": null,
+            "flag": false
+          }
+        }
+      },
+      "point_geom": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      },
+      "polygon_geom": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      },
+      "path": "Path-text",
+      "hash": "Hash-text",
+      "type": 1,
+      "mtime": 1792567877.123,
+      "size": 1234567890123,
+      "depth": 42
+    },
+    "sparse": {
+      "properties": null,
+      "point_geom": null,
+      "polygon_geom": null,
+      "path": null,
+      "hash": null,
+      "type": 0,
+      "mtime": -62135596800,
+      "size": 0,
+      "depth": 0
+    }
+  },
+  "Registry.Ports.DroneDB.EntryBuild": {
+    "full": {
+      "buildable": true,
+      "source": "Source-text",
+      "hash": "Hash-text",
+      "root": "Root-text",
+      "state": "pending",
+      "missingDependencies": [
+        "MissingDependencies-text"
+      ],
+      "awaitingFiles": true,
+      "lastAttempt": 1234567890123,
+      "retryAfter": 1234567890123,
+      "artifacts": [
+        {
+          "role": "Role-text",
+          "path": "Path-text",
+          "kind": "Kind-text",
+          "mediaType": "MediaType-text",
+          "downloadName": "DownloadName-text",
+          "index": "Index-text",
+          "legacy": true,
+          "fallbackFor": "FallbackFor-text",
+          "version": "Version-text"
+        }
+      ]
+    },
+    "sparse": {
+      "buildable": false,
+      "source": null,
+      "hash": null,
+      "root": null,
+      "state": "none",
+      "missingDependencies": null,
+      "awaitingFiles": false,
+      "lastAttempt": null,
+      "retryAfter": null,
+      "artifacts": null
+    }
+  },
+  "Registry.Ports.DroneDB.EntryBuildArtifacts": {
+    "full": {
+      "path": "Path-text",
+      "exists": true,
+      "hash": "Hash-text",
+      "type": 1,
+      "build": {
+        "buildable": true,
+        "source": "Source-text",
+        "hash": "Hash-text",
+        "root": "Root-text",
+        "state": "pending",
+        "missingDependencies": [
+          "MissingDependencies-text"
+        ],
+        "awaitingFiles": true,
+        "lastAttempt": 1234567890123,
+        "retryAfter": 1234567890123,
+        "artifacts": [
+          {
+            "role": "Role-text",
+            "path": "Path-text",
+            "kind": "Kind-text",
+            "mediaType": "MediaType-text",
+            "downloadName": "DownloadName-text",
+            "index": "Index-text",
+            "legacy": true,
+            "fallbackFor": "FallbackFor-text",
+            "version": "Version-text"
+          }
+        ]
+      }
+    },
+    "sparse": {
+      "path": null,
+      "exists": false,
+      "hash": null,
+      "type": 0,
+      "build": null
+    }
+  },
+  "Registry.Ports.DroneDB.EntrySummary": {
+    "full": {
+      "path": "Path-text",
+      "hash": "Hash-text",
+      "type": 1,
+      "mtime": 1792567877.123,
+      "size": 1234567890123,
+      "depth": 42
+    },
+    "sparse": {
+      "path": null,
+      "hash": null,
+      "type": 0,
+      "mtime": -62135596800,
+      "size": 0,
+      "depth": 0
+    }
+  },
+  "Registry.Ports.DroneDB.EntryTypeInfo": {
+    "full": {
+      "id": 1,
+      "name": "Name-text",
+      "buildable": true,
+      "thumbnail": "Thumbnail-text",
+      "sidecarExtensions": [
+        "SidecarExtensions-text"
+      ],
+      "roles": [
+        "Roles-text"
+      ]
+    },
+    "sparse": {
+      "id": 0,
+      "name": null,
+      "buildable": false,
+      "thumbnail": null,
+      "sidecarExtensions": null,
+      "roles": null
+    }
+  },
+  "Registry.Ports.DroneDB.Meta": {
+    "full": {
+      "id": "Id-text",
+      "data": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      },
+      "mtime": 1792567877.123
+    },
+    "sparse": {
+      "id": null,
+      "data": null,
+      "mtime": -62135596800
+    }
+  },
+  "Registry.Ports.DroneDB.MetaDump": {
+    "full": {
+      "path": "Path-text",
+      "key": "Key-text",
+      "id": "Id-text",
+      "data": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      },
+      "mtime": 1792567877.123
+    },
+    "sparse": {
+      "path": null,
+      "key": null,
+      "id": null,
+      "data": null,
+      "mtime": -62135596800
+    }
+  },
+  "Registry.Ports.DroneDB.MetaListItem": {
+    "full": {
+      "count": 42,
+      "key": "Key-text",
+      "path": "Path-text"
+    },
+    "sparse": {
+      "count": 0,
+      "key": null,
+      "path": null
+    }
+  },
+  "Registry.Ports.DroneDB.PendingBuildInfo": {
+    "full": {
+      "hash": "Hash-text",
+      "path": "Path-text",
+      "missingDependencies": [
+        "MissingDependencies-text"
+      ],
+      "lastAttempt": 1234567890123,
+      "retryAfter": 1234567890123,
+      "awaitingFiles": true
+    },
+    "sparse": {
+      "hash": null,
+      "path": null,
+      "missingDependencies": null,
+      "lastAttempt": 0,
+      "retryAfter": 0,
+      "awaitingFiles": false
+    }
+  },
+  "Registry.Ports.DroneDB.RemoveAction": {
+    "full": {
+      "path": "path-text",
+      "hash": "hash-text"
+    },
+    "sparse": {
+      "path": null,
+      "hash": null
+    }
+  },
+  "Registry.Ports.DroneDB.RescanResult": {
+    "full": {
+      "path": "Path-text",
+      "hash": "Hash-text",
+      "success": true,
+      "error": "Error-text"
+    },
+    "sparse": {
+      "path": null,
+      "hash": null,
+      "success": false,
+      "error": null
+    }
+  },
+  "Registry.Ports.DroneDB.SplatSpzExport": {
+    "full": {
+      "path": "Path-text",
+      "role": "Role-text",
+      "cached": true
+    },
+    "sparse": {
+      "path": null,
+      "role": null,
+      "cached": false
+    }
+  },
+  "Registry.Ports.DroneDB.SplatTrainingExport": {
+    "full": {
+      "warnings": [
+        "Warnings-text"
+      ],
+      "images": 42,
+      "points": 42
+    },
+    "sparse": {
+      "warnings": null,
+      "images": 0,
+      "points": 0
+    }
+  },
+  "Registry.Ports.DroneDB.SplatTrainingOptions": {
+    "full": {
+      "maxImageSize": 42,
+      "maxPoints": 42
+    },
+    "sparse": {
+      "maxImageSize": null,
+      "maxPoints": null
+    }
+  },
+  "Registry.Ports.DroneDB.Stamp": {
+    "full": {
+      "checksum": "Checksum-text",
+      "entries": [
+        {
+          "Alpha": "Alpha-text",
+          "snake_Key": "snake_Key-text"
+        }
+      ],
+      "meta": [
+        "Meta-text"
+      ]
+    },
+    "sparse": {
+      "checksum": null,
+      "entries": null,
+      "meta": null
+    }
+  },
+  "Registry.Web.Models.AuthenticateRequest": {
+    "full": {
+      "username": "Username-text",
+      "password": "Password-text",
+      "token": "Token-text"
+    },
+    "sparse": {
+      "username": null,
+      "password": null,
+      "token": null
+    }
+  },
+  "Registry.Web.Models.AuthenticateResponse": {
+    "full": {
+      "username": "username-text",
+      "token": "token-text",
+      "expires": 1792567877
+    },
+    "sparse": {
+      "username": null,
+      "token": null,
+      "expires": -62135596800
+    }
+  },
+  "Registry.Web.Models.ChangePasswordResult": {
+    "full": {
+      "userName": "UserName-text",
+      "password": "Password-text"
+    },
+    "sparse": {
+      "userName": null,
+      "password": null
+    }
+  },
+  "Registry.Web.Models.CreateUserRequest": {
+    "full": {
+      "userName": "UserName-text",
+      "password": "Password-text",
+      "email": "Email-text",
+      "roles": [
+        "Roles-text"
+      ]
+    },
+    "sparse": {
+      "userName": null,
+      "password": null,
+      "email": null,
+      "roles": null
+    }
+  },
+  "Registry.Web.Models.DTO.AddActionDto": {
+    "full": {
+      "path": "path-text",
+      "hash": "hash-text"
+    },
+    "sparse": {
+      "path": null,
+      "hash": null
+    }
+  },
+  "Registry.Web.Models.DTO.AddOrganizationMemberDto": {
+    "full": {
+      "userName": "UserName-text",
+      "permissions": 1
+    },
+    "sparse": {
+      "userName": null,
+      "permissions": 0
+    }
+  },
+  "Registry.Web.Models.DTO.AddUserToOrganizationDto": {
+    "full": {
+      "orgSlug": "OrgSlug-text",
+      "permissions": 1
+    },
+    "sparse": {
+      "orgSlug": null,
+      "permissions": 0
+    }
+  },
+  "Registry.Web.Models.DTO.AdminTaskListDto": {
+    "full": {
+      "items": [
+        {
+          "taskId": "TaskId-text",
+          "orgSlug": "OrgSlug-text",
+          "dsSlug": "DsSlug-text",
+          "toolId": "ToolId-text",
+          "version": "Version-text",
+          "state": "State-text",
+          "progressPercent": 42,
+          "phaseMessage": "PhaseMessage-text",
+          "createdAt": "2026-10-21T07:31:17.123Z",
+          "startedAt": "2026-10-21T07:31:17.123Z",
+          "finishedAt": "2026-10-21T07:31:17.123Z",
+          "path": "Path-text",
+          "userId": "UserId-text",
+          "owner": "Owner-text",
+          "errorType": "ErrorType-text",
+          "artifactExpiresAt": "2026-10-21T07:31:17.123Z",
+          "waitingForFiles": true,
+          "missingFiles": [
+            "MissingFiles-text"
+          ]
+        }
+      ],
+      "total": 1234567890123,
+      "skip": 42,
+      "take": 42
+    },
+    "sparse": {
+      "items": null,
+      "total": 0,
+      "skip": 0,
+      "take": 0
+    }
+  },
+  "Registry.Web.Models.DTO.AdminTaskSummaryDto": {
+    "full": {
+      "taskId": "TaskId-text",
+      "orgSlug": "OrgSlug-text",
+      "dsSlug": "DsSlug-text",
+      "toolId": "ToolId-text",
+      "version": "Version-text",
+      "state": "State-text",
+      "progressPercent": 42,
+      "phaseMessage": "PhaseMessage-text",
+      "createdAt": "2026-10-21T07:31:17.123Z",
+      "startedAt": "2026-10-21T07:31:17.123Z",
+      "finishedAt": "2026-10-21T07:31:17.123Z",
+      "path": "Path-text",
+      "userId": "UserId-text",
+      "owner": "Owner-text",
+      "errorType": "ErrorType-text",
+      "artifactExpiresAt": "2026-10-21T07:31:17.123Z",
+      "waitingForFiles": true,
+      "missingFiles": [
+        "MissingFiles-text"
+      ]
+    },
+    "sparse": {
+      "taskId": null,
+      "orgSlug": null,
+      "dsSlug": null,
+      "toolId": null,
+      "version": null,
+      "state": null,
+      "progressPercent": null,
+      "phaseMessage": null,
+      "createdAt": "0001-01-01T00:00:00Z",
+      "startedAt": null,
+      "finishedAt": null,
+      "path": null,
+      "userId": null,
+      "owner": null,
+      "errorType": null,
+      "artifactExpiresAt": null,
+      "waitingForFiles": false,
+      "missingFiles": null
+    }
+  },
+  "Registry.Web.Models.DTO.AlignRasterRequestDto": {
+    "full": {
+      "sourcePath": null,
+      "referencePath": null,
+      "outputPath": "OutputPath-text",
+      "mode": "Mode-text"
+    },
+    "sparse": {
+      "sourcePath": null,
+      "referencePath": null,
+      "outputPath": null,
+      "mode": null
+    }
+  },
+  "Registry.Web.Models.DTO.AlignmentStatusDto": {
+    "full": {
+      "detected": true,
+      "maxShiftPixels": 1.0,
+      "correctionApplied": true
+    },
+    "sparse": {
+      "detected": false,
+      "maxShiftPixels": 0.0,
+      "correctionApplied": false
+    }
+  },
+  "Registry.Web.Models.DTO.ArtifactLinkDto": {
+    "full": {
+      "role": "Role-text",
+      "url": "Url-text",
+      "mediaType": "MediaType-text",
+      "downloadName": "DownloadName-text"
+    },
+    "sparse": {
+      "role": null,
+      "url": null,
+      "mediaType": null
+    }
+  },
+  "Registry.Web.Models.DTO.AttributesDto": {
+    "full": {
+      "public": true
+    },
+    "sparse": {
+      "public": null
+    }
+  },
+  "Registry.Web.Models.DTO.BandInfoDto": {
+    "full": {
+      "index": 42,
+      "name": "Name-text",
+      "wavelength": 1.0,
+      "colorInterpretation": "ColorInterpretation-text"
+    },
+    "sparse": {
+      "index": 0,
+      "name": null,
+      "wavelength": null,
+      "colorInterpretation": null
+    }
+  },
+  "Registry.Web.Models.DTO.BandMappingDto": {
+    "full": {
+      "r": 42,
+      "g": 42,
+      "b": 42
+    },
+    "sparse": {
+      "r": 0,
+      "g": 0,
+      "b": 0
+    }
+  },
+  "Registry.Web.Models.DTO.BatchDto": {
+    "full": {
+      "token": "Token-text",
+      "userName": "UserName-text",
+      "start": "2026-10-21T07:31:17.123Z",
+      "end": "2026-10-21T07:31:17Z",
+      "status": 1,
+      "entries": [
+        {
+          "path": "Path-text",
+          "hash": "Hash-text",
+          "type": 1,
+          "size": 1234567890123,
+          "addedOn": "2026-10-21T07:31:17.123Z"
+        }
+      ]
+    },
+    "sparse": {
+      "token": null,
+      "userName": null,
+      "start": "0001-01-01T00:00:00Z",
+      "end": null,
+      "status": 0,
+      "entries": null
+    }
+  },
+  "Registry.Web.Models.DTO.BatchEntryDto": {
+    "full": {
+      "path": "Path-text",
+      "hash": "Hash-text",
+      "type": 1,
+      "size": 1234567890123,
+      "addedOn": "2026-10-21T07:31:17.123Z"
+    },
+    "sparse": {
+      "path": null,
+      "hash": null,
+      "type": 0,
+      "size": 0,
+      "addedOn": "0001-01-01T00:00:00Z"
+    }
+  },
+  "Registry.Web.Models.DTO.BrowseImportRequestDto": {
+    "full": {
+      "sourceType": "SourceType-text",
+      "params": {
+        "Alpha": "Alpha-text",
+        "snake_Key": "snake_Key-text"
+      },
+      "browseType": "BrowseType-text"
+    },
+    "sparse": {
+      "sourceType": null,
+      "params": null,
+      "browseType": null
+    }
+  },
+  "Registry.Web.Models.DTO.BrowseItemDto": {
+    "full": {
+      "slug": "Slug-text",
+      "name": "Name-text"
+    },
+    "sparse": {
+      "slug": null,
+      "name": null
+    }
+  },
+  "Registry.Web.Models.DTO.BuildPendingStatusDto": {
+    "full": {
+      "lastRun": "2026-10-21T07:31:17.123Z",
+      "totalDatasets": 42,
+      "datasetsChecked": 42,
+      "datasetsSkipped": 42,
+      "pendingBuildsFound": 42,
+      "jobsEnqueued": 42,
+      "errors": 42,
+      "durationMs": 1234567890123,
+      "cacheHitRate": 100.0,
+      "isEnabled": true,
+      "nextScheduledRun": "2026-10-21T07:32:17.123Z"
+    },
+    "sparse": {
+      "lastRun": null,
+      "totalDatasets": 0,
+      "datasetsChecked": 0,
+      "datasetsSkipped": 0,
+      "pendingBuildsFound": 0,
+      "jobsEnqueued": 0,
+      "errors": 0,
+      "durationMs": null,
+      "cacheHitRate": 0.0,
+      "isEnabled": false,
+      "nextScheduledRun": null
+    }
+  },
+  "Registry.Web.Models.DTO.ChangeUserPasswordRequestDto": {
+    "full": {
+      "currentPassword": "CurrentPassword-text",
+      "newPassword": "NewPassword-text"
+    },
+    "sparse": {
+      "currentPassword": null,
+      "newPassword": null
+    }
+  },
+  "Registry.Web.Models.DTO.ChunkStatusDto": {
+    "full": {
+      "fileId": "FileId-text",
+      "path": "Path-text",
+      "totalFileSize": 1234567890123,
+      "totalChunks": 42,
+      "chunkSize": 1234567890123,
+      "received": [
+        42
+      ],
+      "missing": [
+        42
+      ],
+      "complete": true
+    },
+    "sparse": {
+      "fileId": null,
+      "path": null,
+      "totalFileSize": 0,
+      "totalChunks": 0,
+      "chunkSize": 0,
+      "received": null,
+      "missing": null,
+      "complete": false
+    }
+  },
+  "Registry.Web.Models.DTO.ChunkUploadDto": {
+    "full": {
+      "fileId": "FileId-text",
+      "chunkIndex": 42,
+      "totalChunks": 42,
+      "totalFileSize": 1234567890123,
+      "fileName": "FileName-text",
+      "path": "Path-text",
+      "chunkSize": 1234567890123
+    },
+    "sparse": {
+      "fileId": null,
+      "chunkIndex": 0,
+      "totalChunks": 0,
+      "totalFileSize": 0,
+      "fileName": null,
+      "path": null,
+      "chunkSize": null
+    }
+  },
+  "Registry.Web.Models.DTO.ChunkUploadResultDto": {
+    "full": {
+      "fileId": "FileId-text",
+      "receivedChunk": 42,
+      "success": true,
+      "isComplete": true,
+      "hash": "Hash-text",
+      "size": 1234567890123
+    },
+    "sparse": {
+      "fileId": null,
+      "receivedChunk": 0,
+      "success": false,
+      "isComplete": false,
+      "hash": null,
+      "size": 0
+    }
+  },
+  "Registry.Web.Models.DTO.CleanupBatchesResultDto": {
+    "full": {
+      "removedBatches": [
+        {
+          "token": "Token-text",
+          "userName": "UserName-text",
+          "status": 1,
+          "start": "2026-10-21T07:31:17.123Z",
+          "end": "2026-10-21T07:31:17Z",
+          "organization": "Organization-text",
+          "dataset": "Dataset-text"
+        }
+      ],
+      "removeBatchErrors": [
+        {
+          "token": "Token-text",
+          "organization": "Organization-text",
+          "dataset": "Dataset-text",
+          "message": "Message-text"
+        }
+      ]
+    },
+    "sparse": {
+      "removedBatches": null,
+      "removeBatchErrors": null
+    }
+  },
+  "Registry.Web.Models.DTO.CleanupBuildRequestDto": {
+    "full": {
+      "organizationSlug": "OrganizationSlug-text",
+      "datasetSlug": "DatasetSlug-text"
+    },
+    "sparse": {
+      "organizationSlug": null,
+      "datasetSlug": null
+    }
+  },
+  "Registry.Web.Models.DTO.CleanupBuildResultDto": {
+    "full": {
+      "datasets": {
+        "Alpha": {
+          "removedEntries": [
+            "RemovedEntries-text"
+          ],
+          "removedBuilds": [
+            "RemovedBuilds-text"
+          ]
+        },
+        "snake_Key": {
+          "removedEntries": [
+            "RemovedEntries-text"
+          ],
+          "removedBuilds": [
+            "RemovedBuilds-text"
+          ]
+        }
+      },
+      "errors": {
+        "Alpha": "Alpha-text",
+        "snake_Key": "snake_Key-text"
+      },
+      "jobId": "JobId-text",
+      "jobIds": [
+        "JobIds-text"
+      ],
+      "async": true
+    },
+    "sparse": {
+      "datasets": null,
+      "errors": null,
+      "jobId": null,
+      "jobIds": null,
+      "async": false
+    }
+  },
+  "Registry.Web.Models.DTO.CleanupDatasetErrorDto": {
+    "full": {
+      "dataset": "Dataset-text",
+      "organization": "Organization-text",
+      "message": "Message-text"
+    },
+    "sparse": {
+      "dataset": null,
+      "organization": null,
+      "message": null
+    }
+  },
+  "Registry.Web.Models.DTO.CleanupDatasetResultDto": {
+    "full": {
+      "removedDatasets": [
+        "RemovedDatasets-text"
+      ],
+      "removeDatasetErrors": [
+        {
+          "dataset": "Dataset-text",
+          "organization": "Organization-text",
+          "message": "Message-text"
+        }
+      ]
+    },
+    "sparse": {
+      "removedDatasets": null,
+      "removeDatasetErrors": null
+    }
+  },
+  "Registry.Web.Models.DTO.CleanupJobIndicesResultDto": {
+    "full": {
+      "deletedCount": 42,
+      "retentionDays": 42
+    },
+    "sparse": {
+      "deletedCount": 0,
+      "retentionDays": 0
+    }
+  },
+  "Registry.Web.Models.DTO.CleanupResult": {
+    "full": {
+      "removedSessions": [
+        42
+      ]
+    },
+    "sparse": {
+      "removedSessions": null
+    }
+  },
+  "Registry.Web.Models.DTO.ClearCompletedBuildsResponse": {
+    "full": {
+      "deletedCount": 42
+    },
+    "sparse": {
+      "deletedCount": 0
+    }
+  },
+  "Registry.Web.Models.DTO.CommitResultDto": {
+    "full": {
+      "url": "Url-text",
+      "tag": "organizationSlug-text/datasetSlug-text"
+    },
+    "sparse": {
+      "url": null,
+      "tag": null
+    }
+  },
+  "Registry.Web.Models.DTO.ConfigurationDataDto": {
+    "full": {
+      "sections": [
+        {
+          "name": "Name-text",
+          "title": "Title-text",
+          "description": "Description-text",
+          "isActive": true,
+          "fields": [
+            {
+              "key": "Key-text",
+              "displayName": "DisplayName-text",
+              "currentValue": "CurrentValue-text",
+              "defaultValue": "DefaultValue-text",
+              "isSet": true,
+              "description": "Description-text",
+              "fieldType": "FieldType-text",
+              "enumOptions": [
+                null
+              ],
+              "sensitive": true,
+              "minValue": 42,
+              "maxValue": 42,
+              "unit": "Unit-text"
+            }
+          ]
+        }
+      ]
+    },
+    "sparse": {
+      "sections": null
+    }
+  },
+  "Registry.Web.Models.DTO.ConfigurationFieldDataDto": {
+    "full": {
+      "key": "Key-text",
+      "displayName": "DisplayName-text",
+      "currentValue": "CurrentValue-text",
+      "defaultValue": "DefaultValue-text",
+      "isSet": true,
+      "description": "Description-text",
+      "fieldType": "FieldType-text",
+      "enumOptions": [
+        "EnumOptions-text"
+      ],
+      "sensitive": true,
+      "minValue": 42,
+      "maxValue": 42,
+      "unit": "Unit-text"
+    },
+    "sparse": {
+      "key": null,
+      "displayName": null,
+      "currentValue": null,
+      "defaultValue": null,
+      "isSet": false,
+      "description": null,
+      "fieldType": null,
+      "enumOptions": null,
+      "sensitive": false,
+      "minValue": null,
+      "maxValue": null,
+      "unit": null
+    }
+  },
+  "Registry.Web.Models.DTO.ConfigurationSectionDataDto": {
+    "full": {
+      "name": "Name-text",
+      "title": "Title-text",
+      "description": "Description-text",
+      "isActive": true,
+      "fields": [
+        {
+          "key": "Key-text",
+          "displayName": "DisplayName-text",
+          "currentValue": "CurrentValue-text",
+          "defaultValue": "DefaultValue-text",
+          "isSet": true,
+          "description": "Description-text",
+          "fieldType": "FieldType-text",
+          "enumOptions": [
+            "EnumOptions-text"
+          ],
+          "sensitive": true,
+          "minValue": 42,
+          "maxValue": 42,
+          "unit": "Unit-text"
+        }
+      ]
+    },
+    "sparse": {
+      "name": null,
+      "title": null,
+      "description": null,
+      "isActive": false,
+      "fields": null
+    }
+  },
+  "Registry.Web.Models.DTO.ContourRequestDto": {
+    "full": {
+      "path": null,
+      "interval": 1.0,
+      "count": 42,
+      "baseOffset": 2.5,
+      "minElev": 1E-05,
+      "maxElev": 123456789.125,
+      "simplifyTolerance": 1.0,
+      "bandIndex": 42
+    },
+    "sparse": {
+      "path": null,
+      "interval": null,
+      "count": null,
+      "baseOffset": 0.0,
+      "minElev": null,
+      "maxElev": null,
+      "simplifyTolerance": 0.0,
+      "bandIndex": 0
+    }
+  },
+  "Registry.Web.Models.DTO.CreateImportRequestDto": {
+    "full": {
+      "sourceType": "SourceType-text",
+      "params": {
+        "Alpha": "Alpha-text",
+        "snake_Key": "snake_Key-text"
+      },
+      "slug": "Slug-text",
+      "name": "Name-text",
+      "visibility": 1
+    },
+    "sparse": {
+      "sourceType": null,
+      "params": null,
+      "slug": null,
+      "name": null,
+      "visibility": null
+    }
+  },
+  "Registry.Web.Models.DTO.CreateRoleRequestDto": {
+    "full": {
+      "roleName": "RoleName-text"
+    },
+    "sparse": {
+      "roleName": null
+    }
+  },
+  "Registry.Web.Models.DTO.DatasetCleanupBuildDto": {
+    "full": {
+      "removedEntries": [
+        "RemovedEntries-text"
+      ],
+      "removedBuilds": [
+        "RemovedBuilds-text"
+      ]
+    },
+    "sparse": {
+      "removedEntries": null,
+      "removedBuilds": null
+    }
+  },
+  "Registry.Web.Models.DTO.DatasetDto": {
+    "full": {
+      "slug": "Slug-text",
+      "creationDate": "2026-10-21T07:31:17.123Z",
+      "properties": {
+        "Alpha": {
+          "snake_case": 1.5,
+          "whole": 2.0,
+          "count": 3,
+          "List": [
+            1,
+            2.5,
+            "text",
+            true,
+            null
+          ],
+          "nested": {
+            "Pascal": null,
+            "flag": false
+          }
+        },
+        "snake_Key": {
+          "snake_case": 1.5,
+          "whole": 2.0,
+          "count": 3,
+          "List": [
+            1,
+            2.5,
+            "text",
+            true,
+            null
+          ],
+          "nested": {
+            "Pascal": null,
+            "flag": false
+          }
+        }
+      },
+      "size": 1234567890123,
+      "lastModified": "2026-10-21T07:31:17Z",
+      "permissions": {
+        "canRead": true,
+        "canWrite": true,
+        "canDelete": true
+      },
+      "hasThumbnail": true
+    },
+    "sparse": {
+      "slug": null,
+      "creationDate": "0001-01-01T00:00:00Z",
+      "properties": null,
+      "size": 0,
+      "lastModified": null,
+      "permissions": null,
+      "hasThumbnail": null
+    }
+  },
+  "Registry.Web.Models.DTO.DatasetEditDto": {
+    "full": {
+      "name": "Name-text",
+      "visibility": 1
+    },
+    "sparse": {
+      "name": null,
+      "visibility": null
+    }
+  },
+  "Registry.Web.Models.DTO.DatasetLocationDto": {
+    "full": {
+      "slug": "Slug-text",
+      "name": "Name-text",
+      "bbox": [
+        1.0
+      ]
+    },
+    "sparse": {
+      "slug": null,
+      "name": null,
+      "bbox": null
+    }
+  },
+  "Registry.Web.Models.DTO.DatasetNewDto": {
+    "full": {
+      "slug": "Slug-text",
+      "name": "Name-text",
+      "visibility": 1,
+      "tagline": "Tagline-text"
+    },
+    "sparse": {
+      "slug": null,
+      "name": null,
+      "visibility": null,
+      "tagline": null
+    }
+  },
+  "Registry.Web.Models.DTO.DatasetPermissionsDto": {
+    "full": {
+      "canRead": true,
+      "canWrite": true,
+      "canDelete": true
+    },
+    "sparse": {
+      "canRead": false,
+      "canWrite": false,
+      "canDelete": false
+    }
+  },
+  "Registry.Web.Models.DTO.DeleteBatchResponse": {
+    "full": {
+      "deleted": [
+        "Deleted-text"
+      ],
+      "failed": {
+        "Alpha": "Alpha-text",
+        "snake_Key": "snake_Key-text"
+      }
+    },
+    "sparse": {
+      "deleted": null,
+      "failed": null
+    }
+  },
+  "Registry.Web.Models.DTO.DeleteUserDto": {
+    "full": {
+      "userName": "UserName-text",
+      "successor": "Successor-text",
+      "conflictResolution": 1
+    },
+    "sparse": {
+      "userName": null,
+      "successor": null,
+      "conflictResolution": 0
+    }
+  },
+  "Registry.Web.Models.DTO.DeleteUserResultDto": {
+    "full": {
+      "userName": "UserName-text",
+      "successor": "Successor-text",
+      "organizationsTransferred": 42,
+      "organizationsDeleted": 42,
+      "datasetsTransferred": 42,
+      "datasetsDeleted": 42,
+      "batchesDeleted": 42,
+      "datasetResults": [
+        {
+          "originalSlug": "OriginalSlug-text",
+          "newSlug": "NewSlug-text",
+          "success": true,
+          "error": "Error-text"
+        }
+      ]
+    },
+    "sparse": {
+      "userName": null,
+      "successor": null,
+      "organizationsTransferred": 0,
+      "organizationsDeleted": 0,
+      "datasetsTransferred": 0,
+      "datasetsDeleted": 0,
+      "batchesDeleted": 0,
+      "datasetResults": null
+    }
+  },
+  "Registry.Web.Models.DTO.DeletedDto": {
+    "full": {
+      "deleted": true
+    },
+    "sparse": {
+      "deleted": false
+    }
+  },
+  "Registry.Web.Models.DTO.DeltaDto": {
+    "full": {
+      "adds": [
+        {
+          "path": "path-text",
+          "hash": "hash-text"
+        }
+      ],
+      "removes": [
+        {
+          "path": "path-text",
+          "hash": "hash-text"
+        }
+      ],
+      "metaAdds": [
+        "MetaAdds-text"
+      ],
+      "metaRemoves": [
+        "MetaRemoves-text"
+      ]
+    },
+    "sparse": {
+      "adds": null,
+      "removes": null,
+      "metaAdds": null,
+      "metaRemoves": null
+    }
+  },
+  "Registry.Web.Models.DTO.DownloadPackageDto": {
+    "full": {
+      "downloadUrl": "DownloadUrl-text",
+      "expiration": "2026-10-21T07:31:17.123Z"
+    },
+    "sparse": {
+      "downloadUrl": null,
+      "expiration": null
+    }
+  },
+  "Registry.Web.Models.DTO.EditUserRequestDto": {
+    "full": {
+      "email": "Email-text",
+      "roles": [
+        "Roles-text"
+      ]
+    },
+    "sparse": {
+      "email": null,
+      "roles": null
+    }
+  },
+  "Registry.Web.Models.DTO.EmailTemplateDto": {
+    "full": {
+      "name": "Name-text",
+      "title": "Title-text",
+      "subject": "Subject-text",
+      "body": "Body-text",
+      "isDefault": true,
+      "defaultSubject": "DefaultSubject-text",
+      "defaultBody": "DefaultBody-text",
+      "placeholders": [
+        {
+          "name": "Name-text",
+          "description": "Description-text",
+          "inSubject": true
+        }
+      ]
+    },
+    "sparse": {
+      "name": null,
+      "title": null,
+      "subject": null,
+      "body": null,
+      "isDefault": false,
+      "defaultSubject": null,
+      "defaultBody": null,
+      "placeholders": null
+    }
+  },
+  "Registry.Web.Models.DTO.EmailTemplatePlaceholderDto": {
+    "full": {
+      "name": "Name-text",
+      "description": "Description-text",
+      "inSubject": true
+    },
+    "sparse": {
+      "name": null,
+      "description": null,
+      "inSubject": false
+    }
+  },
+  "Registry.Web.Models.DTO.EmailTemplatePreviewDto": {
+    "full": {
+      "subject": "Subject-text",
+      "text": "Text-text",
+      "html": "Html-text"
+    },
+    "sparse": {
+      "subject": null,
+      "text": null,
+      "html": null
+    }
+  },
+  "Registry.Web.Models.DTO.EmailTemplateSummaryDto": {
+    "full": {
+      "name": "Name-text",
+      "title": "Title-text",
+      "isDefault": true
+    },
+    "sparse": {
+      "name": null,
+      "title": null,
+      "isDefault": false
+    }
+  },
+  "Registry.Web.Models.DTO.EmailTemplateTextDto": {
+    "full": {
+      "subject": "Subject-text",
+      "body": "Body-text"
+    },
+    "sparse": {
+      "subject": null,
+      "body": null
+    }
+  },
+  "Registry.Web.Models.DTO.EntryDto": {
+    "full": {
+      "path": "Path-text",
+      "hash": "Hash-text",
+      "type": 1,
+      "properties": {
+        "Alpha": {
+          "snake_case": 1.5,
+          "whole": 2.0,
+          "count": 3,
+          "List": [
+            1,
+            2.5,
+            "text",
+            true,
+            null
+          ],
+          "nested": {
+            "Pascal": null,
+            "flag": false
+          }
+        },
+        "snake_Key": {
+          "snake_case": 1.5,
+          "whole": 2.0,
+          "count": 3,
+          "List": [
+            1,
+            2.5,
+            "text",
+            true,
+            null
+          ],
+          "nested": {
+            "Pascal": null,
+            "flag": false
+          }
+        }
+      },
+      "mtime": 1792567877.123,
+      "size": 1234567890123,
+      "depth": 42,
+      "point_geom": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      },
+      "polygon_geom": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      },
+      "buildStatus": "BuildStatus-text",
+      "buildMissingDependencies": [
+        "BuildMissingDependencies-text"
+      ],
+      "buildAwaitingFiles": true,
+      "artifacts": [
+        {
+          "role": "Role-text",
+          "url": "Url-text",
+          "mediaType": "MediaType-text",
+          "downloadName": "DownloadName-text"
+        }
+      ]
+    },
+    "sparse": {
+      "path": null,
+      "hash": null,
+      "type": 0,
+      "properties": null,
+      "mtime": -62135596800,
+      "size": 0,
+      "depth": 0,
+      "point_geom": null,
+      "polygon_geom": null
+    }
+  },
+  "Registry.Web.Models.DTO.EntryTypeDto": {
+    "full": {
+      "id": 42,
+      "name": "Name-text",
+      "buildable": true,
+      "thumbnail": "Thumbnail-text",
+      "sidecarExtensions": [
+        "SidecarExtensions-text"
+      ],
+      "roles": [
+        "Roles-text"
+      ]
+    },
+    "sparse": {
+      "id": 0,
+      "name": null,
+      "buildable": false,
+      "thumbnail": null,
+      "sidecarExtensions": null,
+      "roles": null
+    }
+  },
+  "Registry.Web.Models.DTO.FeaturesDto": {
+    "full": {
+      "organizationMemberManagement": true,
+      "userManagement": true,
+      "storageLimiter": true,
+      "maxConcurrentDownloadsPerUser": 42,
+      "disableAnonymousBulkDownloads": true,
+      "emailEnabled": true,
+      "passwordPolicy": {
+        "minLength": 42,
+        "requireDigit": true,
+        "requireUppercase": true,
+        "requireLowercase": true,
+        "requireNonAlphanumeric": true
+      },
+      "datasetThumbnailCandidates": [
+        "DatasetThumbnailCandidates-text"
+      ],
+      "maxExportSizeBytes": 1234567890123,
+      "bulkDownloadAsyncThresholdBytes": 1234567890123,
+      "taskTools": [
+        {
+          "id": "Id-text",
+          "version": "Version-text",
+          "title": "Title-text",
+          "requiredAccess": "RequiredAccess-text",
+          "producesArtifact": true,
+          "resultExtension": "ResultExtension-text",
+          "hidden": true,
+          "disabled": true,
+          "disabledMessage": "DisabledMessage-text"
+        }
+      ],
+      "taskStates": [
+        {
+          "value": "Value-text",
+          "terminal": true
+        }
+      ],
+      "entryTypes": [
+        {
+          "id": 42,
+          "name": "Name-text",
+          "buildable": true,
+          "thumbnail": "Thumbnail-text",
+          "sidecarExtensions": [
+            "SidecarExtensions-text"
+          ],
+          "roles": [
+            "Roles-text"
+          ]
+        }
+      ],
+      "archiveExtensions": [
+        "ArchiveExtensions-text"
+      ],
+      "hubOptions": {
+        "appLogo": "AppLogo-text",
+        "appName": "AppName-text",
+        "appIcon": "AppIcon-text",
+        "showRegistrationLink": true,
+        "disableDatasetCreation": true,
+        "disableStorageInfo": true,
+        "disableAccountManagement": true,
+        "singleOrganization": "SingleOrganization-text",
+        "readOnlyOrgs": true,
+        "favicon": {
+          "faviconIco": "FaviconIco-text",
+          "favicon16": "Favicon16-text",
+          "favicon32": "Favicon32-text",
+          "appleTouchIcon": "AppleTouchIcon-text",
+          "manifest": "Manifest-text",
+          "themeColor": "ThemeColor-text"
+        }
+      },
+      "hubVersion": "HubVersion-text",
+      "registryVersion": "RegistryVersion-text",
+      "ddbVersion": "DdbVersion-text",
+      "updateCheckEnabled": true,
+      "instanceHash": "InstanceHash-text"
+    },
+    "sparse": {
+      "organizationMemberManagement": false,
+      "userManagement": false,
+      "storageLimiter": false,
+      "maxConcurrentDownloadsPerUser": null,
+      "disableAnonymousBulkDownloads": false,
+      "emailEnabled": false,
+      "passwordPolicy": null,
+      "datasetThumbnailCandidates": null,
+      "maxExportSizeBytes": null,
+      "bulkDownloadAsyncThresholdBytes": 0,
+      "taskTools": null,
+      "taskStates": null,
+      "entryTypes": null,
+      "archiveExtensions": null,
+      "hubOptions": null,
+      "hubVersion": null,
+      "registryVersion": null,
+      "ddbVersion": null,
+      "updateCheckEnabled": false,
+      "instanceHash": null
+    }
+  },
+  "Registry.Web.Models.DTO.FileDescriptorDto": {
+    "full": {
+      "name": "Name-text",
+      "physicalPath": "PhysicalPath-text",
+      "contentType": "ContentType-text"
+    },
+    "sparse": {
+      "name": null,
+      "physicalPath": null,
+      "contentType": null
+    }
+  },
+  "Registry.Web.Models.DTO.FileImportErrorDto": {
+    "full": {
+      "organization": "Organization-text",
+      "dataset": "Dataset-text",
+      "filePath": "FilePath-text",
+      "message": "Message-text",
+      "retryCount": 42
+    },
+    "sparse": {
+      "organization": null,
+      "dataset": null,
+      "filePath": null,
+      "message": null,
+      "retryCount": 0
+    }
+  },
+  "Registry.Web.Models.DTO.FixInvalidSlugsResultDto": {
+    "full": {
+      "dryRun": true,
+      "entries": [
+        {
+          "kind": "Kind-text",
+          "organizationSlug": "OrganizationSlug-text",
+          "oldSlug": "OldSlug-text",
+          "newSlug": "NewSlug-text",
+          "status": "Status-text",
+          "reason": "Reason-text"
+        }
+      ]
+    },
+    "sparse": {
+      "dryRun": false,
+      "entries": null
+    }
+  },
+  "Registry.Web.Models.DTO.GlobalReportContentDto": {
+    "full": {
+      "extension": "Extension-text",
+      "files": 42,
+      "size": 1234567890123
+    },
+    "sparse": {
+      "extension": null,
+      "files": 0,
+      "size": 0
+    }
+  },
+  "Registry.Web.Models.DTO.GlobalReportDatasetDto": {
+    "full": {
+      "name": "Name-text",
+      "slug": "Slug-text",
+      "creationDate": "2026-10-21T07:31:17.123Z",
+      "description": "Description-text",
+      "isPublic": true,
+      "owner": "Owner-text",
+      "size": 1234567890123,
+      "contents": [
+        {
+          "extension": "Extension-text",
+          "files": 42,
+          "size": 1234567890123
+        }
+      ],
+      "error": "Error-text"
+    },
+    "sparse": {
+      "name": null,
+      "slug": null,
+      "creationDate": "0001-01-01T00:00:00Z",
+      "description": null,
+      "isPublic": false,
+      "owner": null,
+      "size": 0,
+      "contents": null,
+      "error": null
+    }
+  },
+  "Registry.Web.Models.DTO.GlobalReportDto": {
+    "full": {
+      "userName": "UserName-text",
+      "organizations": [
+        {
+          "name": "Name-text",
+          "slug": "Slug-text",
+          "datasets": [
+            {
+              "name": "Name-text",
+              "slug": "Slug-text",
+              "creationDate": "2026-10-21T07:31:17.123Z",
+              "description": "Description-text",
+              "isPublic": true,
+              "owner": "Owner-text",
+              "size": 1234567890123,
+              "contents": [
+                null
+              ],
+              "error": "Error-text"
+            }
+          ]
+        }
+      ]
+    },
+    "sparse": {
+      "userName": null,
+      "organizations": null
+    }
+  },
+  "Registry.Web.Models.DTO.GlobalReportOrganizationDto": {
+    "full": {
+      "name": "Name-text",
+      "slug": "Slug-text",
+      "datasets": [
+        {
+          "name": "Name-text",
+          "slug": "Slug-text",
+          "creationDate": "2026-10-21T07:31:17.123Z",
+          "description": "Description-text",
+          "isPublic": true,
+          "owner": "Owner-text",
+          "size": 1234567890123,
+          "contents": [
+            {
+              "extension": "Extension-text",
+              "files": 42,
+              "size": 1234567890123
+            }
+          ],
+          "error": "Error-text"
+        }
+      ]
+    },
+    "sparse": {
+      "name": null,
+      "slug": null,
+      "datasets": null
+    }
+  },
+  "Registry.Web.Models.DTO.ImportBrowseResultDto": {
+    "full": {
+      "items": [
+        {
+          "slug": "Slug-text",
+          "name": "Name-text"
+        }
+      ]
+    },
+    "sparse": {
+      "items": null
+    }
+  },
+  "Registry.Web.Models.DTO.ImportCreateResultDto": {
+    "full": {
+      "taskId": "TaskId-text",
+      "orgSlug": "OrgSlug-text",
+      "dsSlug": "DsSlug-text",
+      "datasetUrl": "DatasetUrl-text"
+    },
+    "sparse": {
+      "taskId": null,
+      "orgSlug": null,
+      "dsSlug": null,
+      "datasetUrl": null
+    }
+  },
+  "Registry.Web.Models.DTO.ImportDatasetRequestDto": {
+    "full": {
+      "sourceRegistryUrl": "SourceRegistryUrl-text",
+      "username": "Username-text",
+      "password": "Password-text",
+      "sourceOrganization": "SourceOrganization-text",
+      "sourceDataset": "SourceDataset-text",
+      "destinationOrganization": "DestinationOrganization-text",
+      "destinationDataset": "DestinationDataset-text",
+      "mode": 1
+    },
+    "sparse": {
+      "sourceRegistryUrl": null,
+      "username": null,
+      "password": null,
+      "sourceOrganization": null,
+      "sourceDataset": null,
+      "destinationOrganization": null,
+      "destinationDataset": null,
+      "mode": 0
+    }
+  },
+  "Registry.Web.Models.DTO.ImportErrorDto": {
+    "full": {
+      "organization": "Organization-text",
+      "dataset": "Dataset-text",
+      "message": "Message-text",
+      "phase": 1
+    },
+    "sparse": {
+      "organization": null,
+      "dataset": null,
+      "message": null,
+      "phase": 0
+    }
+  },
+  "Registry.Web.Models.DTO.ImportOrganizationRequestDto": {
+    "full": {
+      "sourceRegistryUrl": "SourceRegistryUrl-text",
+      "username": "Username-text",
+      "password": "Password-text",
+      "sourceOrganization": "SourceOrganization-text",
+      "destinationOrganization": "DestinationOrganization-text",
+      "mode": 1
+    },
+    "sparse": {
+      "sourceRegistryUrl": null,
+      "username": null,
+      "password": null,
+      "sourceOrganization": null,
+      "destinationOrganization": null,
+      "mode": 0
+    }
+  },
+  "Registry.Web.Models.DTO.ImportResultDto": {
+    "full": {
+      "importedItems": [
+        {
+          "organization": "Organization-text",
+          "dataset": "Dataset-text",
+          "size": 1234567890123,
+          "fileCount": 42,
+          "skippedFileCount": 42,
+          "importedAt": "2026-10-21T07:31:17.123Z"
+        }
+      ],
+      "errors": [
+        {
+          "organization": "Organization-text",
+          "dataset": "Dataset-text",
+          "message": "Message-text",
+          "phase": 1
+        }
+      ],
+      "fileErrors": [
+        {
+          "organization": "Organization-text",
+          "dataset": "Dataset-text",
+          "filePath": "FilePath-text",
+          "message": "Message-text",
+          "retryCount": 42
+        }
+      ],
+      "totalSize": 1234567890123,
+      "totalFiles": 42,
+      "skippedFiles": 42,
+      "duration": "1.02:03:04"
+    },
+    "sparse": {
+      "importedItems": null,
+      "errors": null,
+      "fileErrors": null,
+      "totalSize": 0,
+      "totalFiles": 0,
+      "skippedFiles": 0,
+      "duration": "00:00:00"
+    }
+  },
+  "Registry.Web.Models.DTO.ImportVerifyResultDto": {
+    "full": {
+      "reachable": true,
+      "note": "Note-text",
+      "estimatedBytes": 1234567890123,
+      "fileCount": 42,
+      "suggestedName": "SuggestedName-text",
+      "suggestedSlug": "SuggestedSlug-text"
+    },
+    "sparse": {
+      "reachable": false,
+      "note": null,
+      "estimatedBytes": null,
+      "fileCount": null,
+      "suggestedName": null,
+      "suggestedSlug": null
+    }
+  },
+  "Registry.Web.Models.DTO.ImportedItemDto": {
+    "full": {
+      "organization": "Organization-text",
+      "dataset": "Dataset-text",
+      "size": 1234567890123,
+      "fileCount": 42,
+      "skippedFileCount": 42,
+      "importedAt": "2026-10-21T07:31:17.123Z"
+    },
+    "sparse": {
+      "organization": null,
+      "dataset": null,
+      "size": 0,
+      "fileCount": 0,
+      "skippedFileCount": 0,
+      "importedAt": "0001-01-01T00:00:00Z"
+    }
+  },
+  "Registry.Web.Models.DTO.IsBatchReadyResult": {
+    "full": {
+      "isReady": true,
+      "entryPaths": [
+        "EntryPaths-text"
+      ]
+    },
+    "sparse": {
+      "isReady": false,
+      "entryPaths": null
+    }
+  },
+  "Registry.Web.Models.DTO.JobAcceptedDto": {
+    "full": {
+      "jobId": "JobId-text"
+    },
+    "sparse": {
+      "jobId": null
+    }
+  },
+  "Registry.Web.Models.DTO.LoginResultDto": {
+    "full": {
+      "userName": "UserName-text",
+      "success": true,
+      "metadata": {
+        "Alpha": {
+          "snake_case": 1.5,
+          "whole": 2.0,
+          "count": 3,
+          "List": [
+            1,
+            2.5,
+            "text",
+            true,
+            null
+          ],
+          "nested": {
+            "Pascal": null,
+            "flag": false
+          }
+        },
+        "snake_Key": {
+          "snake_case": 1.5,
+          "whole": 2.0,
+          "count": 3,
+          "List": [
+            1,
+            2.5,
+            "text",
+            true,
+            null
+          ],
+          "nested": {
+            "Pascal": null,
+            "flag": false
+          }
+        }
+      }
+    },
+    "sparse": {
+      "userName": null,
+      "success": false,
+      "metadata": null
+    }
+  },
+  "Registry.Web.Models.DTO.MaskBordersCheckResponseDto": {
+    "full": {
+      "exists": true,
+      "outputPath": "OutputPath-text"
+    },
+    "sparse": {
+      "exists": false,
+      "outputPath": null
+    }
+  },
+  "Registry.Web.Models.DTO.MaskBordersRequestDto": {
+    "full": {
+      "path": null,
+      "near": 42,
+      "white": true
+    },
+    "sparse": {
+      "path": null,
+      "near": 0,
+      "white": false
+    }
+  },
+  "Registry.Web.Models.DTO.MergeMultispectralRequestDto": {
+    "full": {
+      "paths": [
+        null
+      ],
+      "previewBands": "PreviewBands-text",
+      "thumbSize": 42,
+      "outputPath": null
+    },
+    "sparse": {
+      "paths": null,
+      "previewBands": null,
+      "thumbSize": null,
+      "outputPath": null
+    }
+  },
+  "Registry.Web.Models.DTO.MergeOrganizationDto": {
+    "full": {
+      "sourceOrgSlug": "SourceOrgSlug-text",
+      "destinationOrgSlug": "DestinationOrgSlug-text",
+      "conflictResolution": 1,
+      "deleteSourceOrganization": true
+    },
+    "sparse": {
+      "sourceOrgSlug": null,
+      "destinationOrgSlug": null,
+      "conflictResolution": 0,
+      "deleteSourceOrganization": false
+    }
+  },
+  "Registry.Web.Models.DTO.MergeOrganizationResultDto": {
+    "full": {
+      "sourceOrgSlug": "SourceOrgSlug-text",
+      "destinationOrgSlug": "DestinationOrgSlug-text",
+      "datasetResults": [
+        {
+          "originalSlug": "OriginalSlug-text",
+          "newSlug": "NewSlug-text",
+          "success": true,
+          "error": "Error-text"
+        }
+      ],
+      "sourceOrganizationDeleted": true,
+      "datasetsMovedCount": 42,
+      "datasetsFailedCount": 42
+    },
+    "sparse": {
+      "sourceOrgSlug": null,
+      "destinationOrgSlug": null,
+      "datasetResults": null,
+      "sourceOrganizationDeleted": false,
+      "datasetsMovedCount": 0,
+      "datasetsFailedCount": 0
+    }
+  },
+  "Registry.Web.Models.DTO.MergeSummaryDto": {
+    "full": {
+      "totalBands": 42,
+      "dataType": "DataType-text",
+      "width": 42,
+      "height": 42,
+      "crs": "Crs-text",
+      "pixelSizeX": 1.0,
+      "pixelSizeY": 2.5,
+      "estimatedSize": 1234567890123
+    },
+    "sparse": {
+      "totalBands": 0,
+      "dataType": null,
+      "width": 0,
+      "height": 0,
+      "crs": null,
+      "pixelSizeX": 0.0,
+      "pixelSizeY": 0.0,
+      "estimatedSize": 0
+    }
+  },
+  "Registry.Web.Models.DTO.MergeValidationResultDto": {
+    "full": {
+      "ok": true,
+      "errors": [
+        "Errors-text"
+      ],
+      "warnings": [
+        "Warnings-text"
+      ],
+      "summary": {
+        "totalBands": 42,
+        "dataType": "DataType-text",
+        "width": 42,
+        "height": 42,
+        "crs": "Crs-text",
+        "pixelSizeX": 1.0,
+        "pixelSizeY": 2.5,
+        "estimatedSize": 1234567890123
+      },
+      "alignment": {
+        "detected": true,
+        "maxShiftPixels": 1E-05,
+        "correctionApplied": true
+      }
+    },
+    "sparse": {
+      "ok": false,
+      "errors": null,
+      "warnings": null,
+      "summary": null,
+      "alignment": null
+    }
+  },
+  "Registry.Web.Models.DTO.MetaDto": {
+    "full": {
+      "id": "Id-text",
+      "data": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      },
+      "mtime": 1792567877.123
+    },
+    "sparse": {
+      "id": null,
+      "data": null,
+      "mtime": -62135596800
+    }
+  },
+  "Registry.Web.Models.DTO.MetaDumpDto": {
+    "full": {
+      "path": "Path-text",
+      "key": "Key-text",
+      "id": "Id-text",
+      "data": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      },
+      "mtime": 1792567877.123
+    },
+    "sparse": {
+      "path": null,
+      "key": null,
+      "id": null,
+      "data": null,
+      "mtime": -62135596800
+    }
+  },
+  "Registry.Web.Models.DTO.MetaListItemDto": {
+    "full": {
+      "count": 42,
+      "key": "Key-text",
+      "path": "Path-text"
+    },
+    "sparse": {
+      "count": 0,
+      "key": null,
+      "path": null
+    }
+  },
+  "Registry.Web.Models.DTO.MigrateVisibilityEntryDTO": {
+    "full": {
+      "organizationSlug": "OrganizationSlug-text",
+      "datasetSlug": "DatasetSlug-text",
+      "isPublic": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      },
+      "visibility": 1
+    },
+    "sparse": {
+      "organizationSlug": null,
+      "datasetSlug": null,
+      "isPublic": null,
+      "visibility": 0
+    }
+  },
+  "Registry.Web.Models.DTO.MoveDatasetDto": {
+    "full": {
+      "sourceOrgSlug": "SourceOrgSlug-text",
+      "datasetSlugs": [
+        "DatasetSlugs-text"
+      ],
+      "destinationOrgSlug": "DestinationOrgSlug-text",
+      "conflictResolution": 1
+    },
+    "sparse": {
+      "sourceOrgSlug": null,
+      "datasetSlugs": null,
+      "destinationOrgSlug": null,
+      "conflictResolution": 0
+    }
+  },
+  "Registry.Web.Models.DTO.MoveDatasetResultDto": {
+    "full": {
+      "originalSlug": "OriginalSlug-text",
+      "newSlug": "NewSlug-text",
+      "success": true,
+      "error": "Error-text"
+    },
+    "sparse": {
+      "originalSlug": null,
+      "newSlug": null,
+      "success": false,
+      "error": null
+    }
+  },
+  "Registry.Web.Models.DTO.NodeOdxOptionDto": {
+    "full": {
+      "name": "Name-text",
+      "type": "Type-text",
+      "domain": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      },
+      "help": "Help-text",
+      "value": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      }
+    },
+    "sparse": {
+      "name": null,
+      "type": null,
+      "domain": null,
+      "help": null,
+      "value": null
+    }
+  },
+  "Registry.Web.Models.DTO.NotificationStatusDto": {
+    "full": {
+      "canReceiveEmail": true,
+      "reason": "Reason-text"
+    },
+    "sparse": {
+      "canReceiveEmail": false,
+      "reason": null
+    }
+  },
+  "Registry.Web.Models.DTO.Ogc.MvtMetadataDto": {
+    "full": {
+      "name": "Name-text",
+      "format": "Format-text",
+      "minzoom": 42,
+      "maxzoom": 42,
+      "bounds": [
+        1.0
+      ],
+      "center": [
+        2.5
+      ],
+      "vector_layers": [
+        {
+          "id": "Id-text",
+          "description": "Description-text",
+          "fields": {
+            "Alpha": "Alpha-text",
+            "snake_Key": "snake_Key-text"
+          },
+          "minzoom": 42,
+          "maxzoom": 42
+        }
+      ]
+    },
+    "sparse": {
+      "name": null,
+      "format": null,
+      "minzoom": 0,
+      "maxzoom": 0,
+      "bounds": null,
+      "center": null,
+      "vector_layers": null
+    }
+  },
+  "Registry.Web.Models.DTO.Ogc.MvtVectorLayerDto": {
+    "full": {
+      "id": "Id-text",
+      "description": "Description-text",
+      "fields": {
+        "Alpha": "Alpha-text",
+        "snake_Key": "snake_Key-text"
+      },
+      "minzoom": 42,
+      "maxzoom": 42
+    },
+    "sparse": {
+      "id": null,
+      "description": null,
+      "fields": null,
+      "minzoom": 0,
+      "maxzoom": 0
+    }
+  },
+  "Registry.Web.Models.DTO.Ogc.OgcApiCollectionDto": {
+    "full": {
+      "id": "Id-text",
+      "title": "Title-text",
+      "description": "Description-text",
+      "itemType": "ItemType-text",
+      "crs": [
+        "Crs-text"
+      ],
+      "extent": {
+        "spatial": {
+          "bbox": [
+            [
+              1.0
+            ]
+          ],
+          "crs": "Crs-text"
+        }
+      },
+      "links": [
+        {
+          "href": "Href-text",
+          "rel": "Rel-text",
+          "type": "Type-text",
+          "title": "Title-text"
+        }
+      ]
+    },
+    "sparse": {
+      "id": null,
+      "title": null,
+      "description": null,
+      "itemType": null,
+      "crs": null,
+      "extent": null,
+      "links": null
+    }
+  },
+  "Registry.Web.Models.DTO.Ogc.OgcApiCollectionsDto": {
+    "full": {
+      "links": [
+        {
+          "href": "Href-text",
+          "rel": "Rel-text",
+          "type": "Type-text",
+          "title": "Title-text"
+        }
+      ],
+      "collections": [
+        {
+          "id": "Id-text",
+          "title": "Title-text",
+          "description": "Description-text",
+          "itemType": "ItemType-text",
+          "crs": [
+            "Crs-text"
+          ],
+          "extent": {
+            "spatial": {
+              "bbox": [
+                null
+              ],
+              "crs": "Crs-text"
+            }
+          },
+          "links": [
+            {
+              "href": "Href-text",
+              "rel": "Rel-text",
+              "type": "Type-text",
+              "title": "Title-text"
+            }
+          ]
+        }
+      ]
+    },
+    "sparse": {
+      "links": null,
+      "collections": null
+    }
+  },
+  "Registry.Web.Models.DTO.Ogc.OgcApiExtentDto": {
+    "full": {
+      "spatial": {
+        "bbox": [
+          [
+            1.0
+          ]
+        ],
+        "crs": "Crs-text"
+      }
+    },
+    "sparse": {
+      "spatial": null
+    }
+  },
+  "Registry.Web.Models.DTO.Ogc.OgcApiLandingDto": {
+    "full": {
+      "title": "Title-text",
+      "description": "Description-text",
+      "links": [
+        {
+          "href": "Href-text",
+          "rel": "Rel-text",
+          "type": "Type-text",
+          "title": "Title-text"
+        }
+      ]
+    },
+    "sparse": {
+      "title": null,
+      "description": null,
+      "links": null
+    }
+  },
+  "Registry.Web.Models.DTO.Ogc.OgcApiLinkDto": {
+    "full": {
+      "href": "Href-text",
+      "rel": "Rel-text",
+      "type": "Type-text",
+      "title": "Title-text"
+    },
+    "sparse": {
+      "href": null,
+      "rel": null,
+      "type": null,
+      "title": null
+    }
+  },
+  "Registry.Web.Models.DTO.Ogc.OgcApiSpatialExtentDto": {
+    "full": {
+      "bbox": [
+        [
+          1.0
+        ]
+      ],
+      "crs": "Crs-text"
+    },
+    "sparse": {
+      "bbox": null,
+      "crs": null
+    }
+  },
+  "Registry.Web.Models.DTO.Ogc.OgcApiTileLinkDto": {
+    "full": {
+      "href": "Href-text",
+      "rel": "Rel-text",
+      "type": "Type-text"
+    },
+    "sparse": {
+      "href": null,
+      "rel": null,
+      "type": null
+    }
+  },
+  "Registry.Web.Models.DTO.Ogc.OgcApiTileSetDto": {
+    "full": {
+      "tileMatrixSetURI": "TileMatrixSetUri-text",
+      "links": [
+        {
+          "href": "Href-text",
+          "rel": "Rel-text",
+          "type": "Type-text"
+        }
+      ]
+    },
+    "sparse": {
+      "tileMatrixSetURI": null,
+      "links": null
+    }
+  },
+  "Registry.Web.Models.DTO.Ogc.OgcApiTileSetsDto": {
+    "full": {
+      "tilesets": [
+        {
+          "tileMatrixSetURI": "TileMatrixSetUri-text",
+          "links": [
+            {
+              "href": "Href-text",
+              "rel": "Rel-text",
+              "type": "Type-text"
+            }
+          ]
+        }
+      ]
+    },
+    "sparse": {
+      "tilesets": null
+    }
+  },
+  "Registry.Web.Models.DTO.Ogc.OgcBoundingBoxDto": {
+    "full": {
+      "crs": "Crs-text",
+      "minX": 1.0,
+      "minY": 2.5,
+      "maxX": 1E-05,
+      "maxY": 123456789.125
+    },
+    "sparse": {
+      "crs": null,
+      "minX": 0.0,
+      "minY": 0.0,
+      "maxX": 0.0,
+      "maxY": 0.0
+    }
+  },
+  "Registry.Web.Models.DTO.Ogc.OgcConformanceDto": {
+    "full": {
+      "conformsTo": [
+        "ConformsTo-text"
+      ]
+    },
+    "sparse": {
+      "conformsTo": null
+    }
+  },
+  "Registry.Web.Models.DTO.Ogc.OgcLayerDto": {
+    "full": {
+      "name": "Name-text",
+      "title": "Title-text",
+      "abstract": "Abstract-text",
+      "entryType": 1,
+      "entryPath": "EntryPath-text",
+      "entryHash": "EntryHash-text",
+      "innerLayerName": "InnerLayerName-text",
+      "bboxWgs84": [
+        1.0
+      ],
+      "supportedCrs": [
+        "SupportedCrs-text"
+      ],
+      "geometryType": "GeometryType-text",
+      "bandCount": 42,
+      "hasBuiltArtifact": true,
+      "isLocal": true
+    },
+    "sparse": {
+      "name": null,
+      "title": null,
+      "abstract": null,
+      "entryType": 0,
+      "entryPath": null,
+      "entryHash": null,
+      "innerLayerName": null,
+      "bboxWgs84": null,
+      "supportedCrs": null,
+      "geometryType": null,
+      "bandCount": 0,
+      "hasBuiltArtifact": false,
+      "isLocal": false
+    }
+  },
+  "Registry.Web.Models.DTO.Ogc.OgcServiceMetadataDto": {
+    "full": {
+      "title": "Title-text",
+      "abstract": "Abstract-text",
+      "contactName": "ContactName-text",
+      "contactEmail": "ContactEmail-text",
+      "keywords": [
+        "Keywords-text"
+      ]
+    },
+    "sparse": {
+      "title": null,
+      "abstract": null,
+      "contactName": null,
+      "contactEmail": null,
+      "keywords": null
+    }
+  },
+  "Registry.Web.Models.DTO.OkDto": {
+    "full": {
+      "ok": true
+    },
+    "sparse": {
+      "ok": false
+    }
+  },
+  "Registry.Web.Models.DTO.OrganizationDto": {
+    "full": {
+      "slug": "Slug-text",
+      "name": "Name-text",
+      "description": "Description-text",
+      "creationDate": "2026-10-21T07:31:17.123Z",
+      "owner": "Owner-text",
+      "isPublic": true,
+      "datasetCount": 42,
+      "lastModified": "2026-10-21T07:31:17Z",
+      "permissions": {
+        "canRead": true,
+        "canWrite": true,
+        "canDelete": true,
+        "canManageMembers": true
+      }
+    },
+    "sparse": {
+      "slug": null,
+      "name": null,
+      "description": null,
+      "creationDate": "0001-01-01T00:00:00Z",
+      "owner": null,
+      "isPublic": false,
+      "datasetCount": null,
+      "lastModified": null,
+      "permissions": null
+    }
+  },
+  "Registry.Web.Models.DTO.OrganizationMemberDto": {
+    "full": {
+      "userName": "UserName-text",
+      "email": "Email-text",
+      "permissions": 1,
+      "grantedAt": "2026-10-21T07:31:17.123Z",
+      "grantedBy": "GrantedBy-text"
+    },
+    "sparse": {
+      "userName": null,
+      "email": null,
+      "permissions": 0,
+      "grantedAt": null,
+      "grantedBy": null
+    }
+  },
+  "Registry.Web.Models.DTO.OrganizationPermissionsDto": {
+    "full": {
+      "canRead": true,
+      "canWrite": true,
+      "canDelete": true,
+      "canManageMembers": true
+    },
+    "sparse": {
+      "canRead": false,
+      "canWrite": false,
+      "canDelete": false,
+      "canManageMembers": false
+    }
+  },
+  "Registry.Web.Models.DTO.OrganizationRequestDto": {
+    "full": {
+      "slug": "Slug-text",
+      "name": "Name-text",
+      "description": "Description-text",
+      "owner": "Owner-text",
+      "isPublic": true
+    },
+    "sparse": {
+      "slug": null,
+      "name": null,
+      "description": null,
+      "owner": null,
+      "isPublic": false
+    }
+  },
+  "Registry.Web.Models.DTO.PasswordPolicyDto": {
+    "full": {
+      "minLength": 42,
+      "requireDigit": true,
+      "requireUppercase": true,
+      "requireLowercase": true,
+      "requireNonAlphanumeric": true
+    },
+    "sparse": {
+      "minLength": 0,
+      "requireDigit": false,
+      "requireUppercase": false,
+      "requireLowercase": false,
+      "requireNonAlphanumeric": false
+    }
+  },
+  "Registry.Web.Models.DTO.PendingBuildInfoDto": {
+    "full": {
+      "path": "Path-text",
+      "hash": "Hash-text",
+      "missingDependencies": [
+        "MissingDependencies-text"
+      ],
+      "lastAttempt": "2026-10-21T07:31:17.123Z",
+      "awaitingFiles": true,
+      "artifacts": [
+        {
+          "role": "Role-text",
+          "url": "Url-text",
+          "mediaType": "MediaType-text",
+          "downloadName": "DownloadName-text"
+        }
+      ]
+    },
+    "sparse": {
+      "path": null,
+      "hash": null,
+      "missingDependencies": null,
+      "lastAttempt": "0001-01-01T00:00:00Z",
+      "awaitingFiles": false
+    }
+  },
+  "Registry.Web.Models.DTO.PresetDto": {
+    "full": {
+      "id": "Id-text",
+      "name": "Name-text",
+      "bandMapping": {
+        "r": 42,
+        "g": 42,
+        "b": 42
+      },
+      "isDefault": true
+    },
+    "sparse": {
+      "id": null,
+      "name": null,
+      "bandMapping": null,
+      "isDefault": false
+    }
+  },
+  "Registry.Web.Models.DTO.ProcessingNodeDto": {
+    "full": {
+      "id": "Id-text",
+      "title": "Title-text"
+    },
+    "sparse": {
+      "id": null,
+      "title": null
+    }
+  },
+  "Registry.Web.Models.DTO.ProcessingNodeStatusDto": {
+    "full": {
+      "id": "Id-text",
+      "reachable": true,
+      "version": "Version-text",
+      "engine": "Engine-text",
+      "engineVersion": "EngineVersion-text",
+      "taskQueueCount": 42,
+      "maxParallelTasks": 42,
+      "errorMessage": "ErrorMessage-text"
+    },
+    "sparse": {
+      "id": null,
+      "reachable": false,
+      "version": null,
+      "engine": null,
+      "engineVersion": null,
+      "taskQueueCount": 0,
+      "maxParallelTasks": 0,
+      "errorMessage": null
+    }
+  },
+  "Registry.Web.Models.DTO.PushInitResultDto": {
+    "full": {
+      "neededFiles": [
+        "NeededFiles-text"
+      ],
+      "neededMeta": [
+        "NeededMeta-text"
+      ],
+      "pullRequired": true,
+      "token": "Token-text"
+    },
+    "sparse": {
+      "neededFiles": null,
+      "neededMeta": null,
+      "pullRequired": false,
+      "token": null
+    }
+  },
+  "Registry.Web.Models.DTO.RasterInfoDto": {
+    "full": {
+      "bandCount": 42,
+      "dataType": "DataType-text",
+      "width": 42,
+      "height": 42,
+      "detectedSensor": "DetectedSensor-text",
+      "bands": [
+        {
+          "index": 42,
+          "name": "Name-text",
+          "wavelength": 1.0,
+          "colorInterpretation": "ColorInterpretation-text"
+        }
+      ],
+      "availablePresets": [
+        {
+          "id": "Id-text",
+          "name": "Name-text",
+          "bandMapping": {
+            "r": 42,
+            "g": 42,
+            "b": 42
+          },
+          "isDefault": true
+        }
+      ],
+      "defaultPreset": "DefaultPreset-text"
+    },
+    "sparse": {
+      "bandCount": 0,
+      "dataType": null,
+      "width": 0,
+      "height": 0,
+      "detectedSensor": null,
+      "bands": null,
+      "availablePresets": null,
+      "defaultPreset": null
+    }
+  },
+  "Registry.Web.Models.DTO.RasterProfileRequestDto": {
+    "full": {
+      "path": null,
+      "lineString": "LineString-text",
+      "samples": 42
+    },
+    "sparse": {
+      "path": null,
+      "lineString": null,
+      "samples": null
+    }
+  },
+  "Registry.Web.Models.DTO.RemoteImportJobDto": {
+    "full": {
+      "jobId": "JobId-text",
+      "statusUrl": "StatusUrl-text"
+    },
+    "sparse": {
+      "jobId": null,
+      "statusUrl": null
+    }
+  },
+  "Registry.Web.Models.DTO.RemoteImportStatusDto": {
+    "full": {
+      "jobId": "JobId-text",
+      "state": "State-text",
+      "result": {
+        "importedItems": [
+          {
+            "organization": "Organization-text",
+            "dataset": "Dataset-text",
+            "size": 1234567890123,
+            "fileCount": 42,
+            "skippedFileCount": 42,
+            "importedAt": "2026-10-21T07:31:17.123Z"
+          }
+        ],
+        "errors": [
+          {
+            "organization": "Organization-text",
+            "dataset": "Dataset-text",
+            "message": "Message-text",
+            "phase": 1
+          }
+        ],
+        "fileErrors": [
+          {
+            "organization": "Organization-text",
+            "dataset": "Dataset-text",
+            "filePath": "FilePath-text",
+            "message": "Message-text",
+            "retryCount": 42
+          }
+        ],
+        "totalSize": 1234567890123,
+        "totalFiles": 42,
+        "skippedFiles": 42,
+        "duration": "1.02:03:04"
+      },
+      "error": "Error-text"
+    },
+    "sparse": {
+      "jobId": null,
+      "state": null,
+      "result": null,
+      "error": null
+    }
+  },
+  "Registry.Web.Models.DTO.RemoveActionDto": {
+    "full": {
+      "path": "path-text",
+      "hash": "hash-text"
+    },
+    "sparse": {
+      "path": null,
+      "hash": null
+    }
+  },
+  "Registry.Web.Models.DTO.RemoveBatchErrorDto": {
+    "full": {
+      "token": "Token-text",
+      "organization": "Organization-text",
+      "dataset": "Dataset-text",
+      "message": "Message-text"
+    },
+    "sparse": {
+      "token": null,
+      "organization": null,
+      "dataset": null,
+      "message": null
+    }
+  },
+  "Registry.Web.Models.DTO.RemoveResponse": {
+    "full": {
+      "removed": 42
+    },
+    "sparse": {
+      "removed": 0
+    }
+  },
+  "Registry.Web.Models.DTO.RemovedBatchDto": {
+    "full": {
+      "token": "Token-text",
+      "userName": "UserName-text",
+      "status": 1,
+      "start": "2026-10-21T07:31:17.123Z",
+      "end": "2026-10-21T07:31:17Z",
+      "organization": "Organization-text",
+      "dataset": "Dataset-text"
+    },
+    "sparse": {
+      "token": null,
+      "userName": null,
+      "status": 0,
+      "start": "0001-01-01T00:00:00Z",
+      "end": null,
+      "organization": null,
+      "dataset": null
+    }
+  },
+  "Registry.Web.Models.DTO.RescanEntryResultDto": {
+    "full": {
+      "path": "Path-text",
+      "hash": "Hash-text",
+      "success": true,
+      "error": "Error-text"
+    },
+    "sparse": {
+      "path": null,
+      "hash": null,
+      "success": false,
+      "error": null
+    }
+  },
+  "Registry.Web.Models.DTO.RescanJobDto": {
+    "full": {
+      "jobId": "JobId-text"
+    },
+    "sparse": {
+      "jobId": null
+    }
+  },
+  "Registry.Web.Models.DTO.RescanRequestDto": {
+    "full": {
+      "organizationSlug": "OrganizationSlug-text",
+      "datasetSlug": "DatasetSlug-text",
+      "types": [
+        "Types-text"
+      ],
+      "extensions": [
+        "Extensions-text"
+      ],
+      "stopOnError": true
+    },
+    "sparse": {
+      "organizationSlug": null,
+      "datasetSlug": null,
+      "types": null,
+      "extensions": null,
+      "stopOnError": false
+    }
+  },
+  "Registry.Web.Models.DTO.RescanResultDto": {
+    "full": {
+      "organizationSlug": "OrganizationSlug-text",
+      "datasetSlug": "DatasetSlug-text",
+      "totalProcessed": 42,
+      "successCount": 42,
+      "errorCount": 42,
+      "entries": [
+        {
+          "path": "Path-text",
+          "hash": "Hash-text",
+          "success": true,
+          "error": "Error-text"
+        }
+      ]
+    },
+    "sparse": {
+      "organizationSlug": null,
+      "datasetSlug": null,
+      "totalProcessed": 0,
+      "successCount": 0,
+      "errorCount": 0,
+      "entries": null
+    }
+  },
+  "Registry.Web.Models.DTO.ShareInitDto": {
+    "full": {
+      "tag": "Tag-text",
+      "orgSlug": "OrgSlug-text",
+      "datasetName": "DatasetName-text"
+    },
+    "sparse": {
+      "tag": null,
+      "orgSlug": null,
+      "datasetName": null
+    }
+  },
+  "Registry.Web.Models.DTO.ShareInitResultDto": {
+    "full": {
+      "token": "Token-text"
+    },
+    "sparse": {
+      "token": null
+    }
+  },
+  "Registry.Web.Models.DTO.SlugFixEntryDto": {
+    "full": {
+      "kind": "Kind-text",
+      "organizationSlug": "OrganizationSlug-text",
+      "oldSlug": "OldSlug-text",
+      "newSlug": "NewSlug-text",
+      "status": "Status-text",
+      "reason": "Reason-text"
+    },
+    "sparse": {
+      "kind": null,
+      "organizationSlug": null,
+      "oldSlug": null,
+      "newSlug": null,
+      "status": null,
+      "reason": null
+    }
+  },
+  "Registry.Web.Models.DTO.StacCatalogDto": {
+    "full": {
+      "type": "Type-text",
+      "stac_version": "StacVersion-text",
+      "id": "Id-text",
+      "description": "Description-text",
+      "links": [
+        {
+          "href": "Href-text",
+          "rel": "Relationship-text",
+          "type": "Type-text",
+          "title": "Title-text",
+          "method": "Method-text"
+        }
+      ],
+      "conformsTo": [
+        "ConformsTo-text"
+      ]
+    },
+    "sparse": {
+      "type": null,
+      "stac_version": null,
+      "id": null,
+      "description": null,
+      "links": null
+    }
+  },
+  "Registry.Web.Models.DTO.StacCollectionsDto": {
+    "full": {
+      "collections": [
+        {
+          "snake_case": 1.5,
+          "whole": 2.0,
+          "count": 3,
+          "List": [
+            1,
+            2.5,
+            "text",
+            true,
+            null
+          ],
+          "nested": {
+            "Pascal": null,
+            "flag": false
+          }
+        }
+      ],
+      "links": [
+        {
+          "href": "Href-text",
+          "rel": "Relationship-text",
+          "type": "Type-text",
+          "title": "Title-text",
+          "method": "Method-text"
+        }
+      ],
+      "numberMatched": 42,
+      "numberReturned": 42
+    },
+    "sparse": {
+      "collections": null,
+      "links": null,
+      "numberMatched": 0,
+      "numberReturned": 0
+    }
+  },
+  "Registry.Web.Models.DTO.StacConformanceDto": {
+    "full": {
+      "conformsTo": [
+        "ConformsTo-text"
+      ]
+    },
+    "sparse": {
+      "conformsTo": null
+    }
+  },
+  "Registry.Web.Models.DTO.StacItemDto": {
+    "full": {},
+    "sparse": {}
+  },
+  "Registry.Web.Models.DTO.StacLinkDto": {
+    "full": {
+      "href": "Href-text",
+      "rel": "Relationship-text",
+      "type": "Type-text",
+      "title": "Title-text",
+      "method": "Method-text"
+    },
+    "sparse": {
+      "href": null,
+      "rel": null
+    }
+  },
+  "Registry.Web.Models.DTO.StacSearchRequestDto": {
+    "full": {
+      "bbox": [
+        1.0
+      ],
+      "intersects": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      },
+      "datetime": "Datetime-text",
+      "limit": 42,
+      "collections": [
+        "Collections-text"
+      ],
+      "ids": [
+        "Ids-text"
+      ],
+      "token": "Token-text"
+    },
+    "sparse": {
+      "bbox": null,
+      "intersects": null,
+      "datetime": null,
+      "limit": null,
+      "collections": null,
+      "ids": null,
+      "token": null
+    }
+  },
+  "Registry.Web.Models.DTO.StampDto": {
+    "full": {
+      "checksum": "Checksum-text",
+      "entries": [
+        {
+          "Alpha": "Alpha-text",
+          "snake_Key": "snake_Key-text"
+        }
+      ],
+      "meta": [
+        "Meta-text"
+      ]
+    },
+    "sparse": {
+      "checksum": null,
+      "entries": null,
+      "meta": null
+    }
+  },
+  "Registry.Web.Models.DTO.StockpileBatchDetectionRequestDto": {
+    "full": {
+      "path": null,
+      "sensitivity": 1.5,
+      "minAreaM2": 1.0,
+      "maxResults": 42
+    },
+    "sparse": {
+      "path": null,
+      "sensitivity": null,
+      "minAreaM2": null,
+      "maxResults": null
+    }
+  },
+  "Registry.Web.Models.DTO.StockpileDetectionRequestDto": {
+    "full": {
+      "path": null,
+      "lat": 1.0,
+      "lon": 2.5,
+      "radius": 1E-05,
+      "sensitivity": 1.5
+    },
+    "sparse": {
+      "path": null,
+      "lat": null,
+      "lon": null,
+      "radius": null,
+      "sensitivity": null
+    }
+  },
+  "Registry.Web.Models.DTO.SubmitTaskRequestDto": {
+    "full": {
+      "toolId": "ToolId-text",
+      "version": "Version-text",
+      "path": "Path-text",
+      "params": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      },
+      "force": true
+    },
+    "sparse": {
+      "toolId": null,
+      "version": null,
+      "path": null,
+      "params": null,
+      "force": false
+    }
+  },
+  "Registry.Web.Models.DTO.SubmitTaskResponseDto": {
+    "full": {
+      "taskId": "TaskId-text",
+      "toolId": "ToolId-text",
+      "version": "Version-text",
+      "deduplicated": true,
+      "statusUrl": "StatusUrl-text",
+      "resultUrl": "ResultUrl-text",
+      "estimatedOutputBytes": 1234567890123
+    },
+    "sparse": {
+      "taskId": null,
+      "toolId": null,
+      "version": null,
+      "deduplicated": false,
+      "statusUrl": null,
+      "resultUrl": null,
+      "estimatedOutputBytes": null
+    }
+  },
+  "Registry.Web.Models.DTO.SyncFileErrorDto": {
+    "full": {
+      "path": "Path-text",
+      "errorMessage": "ErrorMessage-text"
+    },
+    "sparse": {
+      "path": null,
+      "errorMessage": null
+    }
+  },
+  "Registry.Web.Models.DTO.SyncFilesResDto": {
+    "full": {
+      "syncedFiles": [
+        "SyncedFiles-text"
+      ],
+      "errorFiles": [
+        {
+          "path": "Path-text",
+          "errorMessage": "ErrorMessage-text"
+        }
+      ]
+    },
+    "sparse": {
+      "syncedFiles": null,
+      "errorFiles": null
+    }
+  },
+  "Registry.Web.Models.DTO.TagDto": {
+    "full": "organizationSlug-text/datasetSlug-text",
+    "sparse": "/"
+  },
+  "Registry.Web.Models.DTO.TaskArtifactDto": {
+    "full": {
+      "sizeBytes": 1234567890123,
+      "sha256": "Sha256-text",
+      "resultUrl": "ResultUrl-text",
+      "expiresAt": "2026-10-21T07:31:17.123Z"
+    },
+    "sparse": {
+      "sizeBytes": 0,
+      "sha256": null,
+      "resultUrl": null,
+      "expiresAt": null
+    }
+  },
+  "Registry.Web.Models.DTO.TaskLogDto": {
+    "full": {
+      "cursor": 1234567890123,
+      "lines": [
+        "Lines-text"
+      ],
+      "truncatedFromTail": 1234567890123
+    },
+    "sparse": {
+      "cursor": 0,
+      "lines": null,
+      "truncatedFromTail": 0
+    }
+  },
+  "Registry.Web.Models.DTO.TaskProgressDto": {
+    "full": {
+      "percent": 42,
+      "phase": "Phase-text",
+      "message": "Message-text"
+    },
+    "sparse": {
+      "percent": null,
+      "phase": null,
+      "message": null
+    }
+  },
+  "Registry.Web.Models.DTO.TaskRequeuedDto": {
+    "full": {
+      "requeued": true
+    },
+    "sparse": {
+      "requeued": false
+    }
+  },
+  "Registry.Web.Models.DTO.TaskStateInfoDto": {
+    "full": {
+      "value": "Value-text",
+      "terminal": true
+    },
+    "sparse": {
+      "value": null,
+      "terminal": false
+    }
+  },
+  "Registry.Web.Models.DTO.TaskStatusDto": {
+    "full": {
+      "taskId": "TaskId-text",
+      "toolId": "ToolId-text",
+      "version": "Version-text",
+      "state": "State-text",
+      "progress": {
+        "percent": 42,
+        "phase": "Phase-text",
+        "message": "Message-text"
+      },
+      "createdAt": "2026-10-21T07:31:17.123Z",
+      "startedAt": "2026-10-21T07:31:17.123Z",
+      "finishedAt": "2026-10-21T07:31:17.123Z",
+      "parentJobId": "ParentJobId-text",
+      "workflowExecutionId": "WorkflowExecutionId-text",
+      "logCursor": 1234567890123,
+      "logTail": [
+        "LogTail-text"
+      ],
+      "artifact": {
+        "sizeBytes": 1234567890123,
+        "sha256": "Sha256-text",
+        "resultUrl": "ResultUrl-text",
+        "expiresAt": "2026-10-21T07:31:17.123Z"
+      },
+      "error": "Error-text",
+      "waitingForFiles": true,
+      "missingFiles": [
+        "MissingFiles-text"
+      ]
+    },
+    "sparse": {
+      "taskId": null,
+      "toolId": null,
+      "version": null,
+      "state": null,
+      "progress": null,
+      "createdAt": "0001-01-01T00:00:00Z",
+      "startedAt": null,
+      "finishedAt": null,
+      "parentJobId": null,
+      "workflowExecutionId": null,
+      "logCursor": 0,
+      "logTail": null,
+      "artifact": null,
+      "error": null,
+      "waitingForFiles": false,
+      "missingFiles": null
+    }
+  },
+  "Registry.Web.Models.DTO.TaskSummaryDto": {
+    "full": {
+      "taskId": "TaskId-text",
+      "toolId": "ToolId-text",
+      "version": "Version-text",
+      "state": "State-text",
+      "progressPercent": 42,
+      "phaseMessage": "PhaseMessage-text",
+      "createdAt": "2026-10-21T07:31:17.123Z",
+      "startedAt": "2026-10-21T07:31:17.123Z",
+      "finishedAt": "2026-10-21T07:31:17.123Z",
+      "path": "Path-text",
+      "parentJobId": "ParentJobId-text",
+      "workflowExecutionId": "WorkflowExecutionId-text",
+      "errorType": "ErrorType-text",
+      "artifactExpiresAt": "2026-10-21T07:31:17.123Z",
+      "background": true,
+      "waitingForFiles": true,
+      "missingFiles": [
+        "MissingFiles-text"
+      ]
+    },
+    "sparse": {
+      "taskId": null,
+      "toolId": null,
+      "version": null,
+      "state": null,
+      "progressPercent": null,
+      "phaseMessage": null,
+      "createdAt": "0001-01-01T00:00:00Z",
+      "startedAt": null,
+      "finishedAt": null,
+      "path": null,
+      "parentJobId": null,
+      "workflowExecutionId": null,
+      "errorType": null,
+      "artifactExpiresAt": null,
+      "background": false,
+      "waitingForFiles": false,
+      "missingFiles": null
+    }
+  },
+  "Registry.Web.Models.DTO.TaskToolDto": {
+    "full": {
+      "id": "Id-text",
+      "version": "Version-text",
+      "title": "Title-text",
+      "requiredAccess": "RequiredAccess-text",
+      "producesArtifact": true,
+      "inputSchema": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      },
+      "hidden": true,
+      "disabled": true,
+      "disabledMessage": "DisabledMessage-text"
+    },
+    "sparse": {
+      "id": null,
+      "version": null,
+      "title": null,
+      "requiredAccess": null,
+      "producesArtifact": false,
+      "inputSchema": null,
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    }
+  },
+  "Registry.Web.Models.DTO.TaskToolInfoDto": {
+    "full": {
+      "id": "Id-text",
+      "version": "Version-text",
+      "title": "Title-text",
+      "requiredAccess": "RequiredAccess-text",
+      "producesArtifact": true,
+      "resultExtension": "ResultExtension-text",
+      "hidden": true,
+      "disabled": true,
+      "disabledMessage": "DisabledMessage-text"
+    },
+    "sparse": {
+      "id": null,
+      "version": null,
+      "title": null,
+      "requiredAccess": null,
+      "producesArtifact": false,
+      "resultExtension": null,
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    }
+  },
+  "Registry.Web.Models.DTO.TasksClearedDto": {
+    "full": {
+      "cleared": 42
+    },
+    "sparse": {
+      "cleared": 0
+    }
+  },
+  "Registry.Web.Models.DTO.TestEmailRequestDto": {
+    "full": {
+      "to": "To-text"
+    },
+    "sparse": {
+      "to": null
+    }
+  },
+  "Registry.Web.Models.DTO.UpdateCheckSettingsDto": {
+    "full": {
+      "useDeclaration": "UseDeclaration-text",
+      "contactEmail": "ContactEmail-text",
+      "contactConsent": true
+    },
+    "sparse": {
+      "useDeclaration": null,
+      "contactEmail": null,
+      "contactConsent": false
+    }
+  },
+  "Registry.Web.Models.DTO.UpdateInfoDto": {
+    "full": {
+      "instanceId": "InstanceId-text",
+      "currentVersion": "CurrentVersion-text",
+      "latestVersion": "LatestVersion-text",
+      "isUpdateAvailable": true,
+      "isSecurityUpdate": true,
+      "releaseDate": "ReleaseDate-text",
+      "changelogUrl": "ChangelogUrl-text",
+      "compareUrl": "CompareUrl-text",
+      "releaseNotes": "ReleaseNotes-text",
+      "licenseRequestUrl": "LicenseRequestUrl-text",
+      "useDeclaration": "UseDeclaration-text",
+      "contactEmail": "ContactEmail-text",
+      "lastChecked": "2026-10-21T07:31:17.123Z"
+    },
+    "sparse": {
+      "instanceId": null,
+      "currentVersion": null,
+      "latestVersion": null,
+      "isUpdateAvailable": false,
+      "isSecurityUpdate": false,
+      "releaseDate": null,
+      "changelogUrl": null,
+      "compareUrl": null,
+      "releaseNotes": null,
+      "licenseRequestUrl": null,
+      "useDeclaration": null,
+      "contactEmail": null,
+      "lastChecked": null
+    }
+  },
+  "Registry.Web.Models.DTO.UpdateMemberPermissionsDto": {
+    "full": {
+      "permissions": 1
+    },
+    "sparse": {
+      "permissions": 0
+    }
+  },
+  "Registry.Web.Models.DTO.UploadNewSessionResultDto": {
+    "full": {
+      "sessionId": 42
+    },
+    "sparse": {
+      "sessionId": 0
+    }
+  },
+  "Registry.Web.Models.DTO.UploadPartResultDto": {
+    "full": {
+      "path": "Path-text",
+      "status": 42,
+      "entry": {
+        "path": "Path-text",
+        "hash": "Hash-text",
+        "type": 1,
+        "properties": {
+          "Alpha": {
+            "snake_case": 1.5,
+            "whole": 2.0,
+            "count": 3,
+            "List": [
+              1,
+              2.5,
+              "text",
+              true,
+              null
+            ],
+            "nested": {
+              "Pascal": null,
+              "flag": false
+            }
+          },
+          "snake_Key": {
+            "snake_case": 1.5,
+            "whole": 2.0,
+            "count": 3,
+            "List": [
+              1,
+              2.5,
+              "text",
+              true,
+              null
+            ],
+            "nested": {
+              "Pascal": null,
+              "flag": false
+            }
+          }
+        },
+        "mtime": 1792567877.123,
+        "size": 1234567890123,
+        "depth": 42,
+        "point_geom": {
+          "snake_case": 1.5,
+          "whole": 2.0,
+          "count": 3,
+          "List": [
+            1,
+            2.5,
+            "text",
+            true,
+            null
+          ],
+          "nested": {
+            "Pascal": null,
+            "flag": false
+          }
+        },
+        "polygon_geom": {
+          "snake_case": 1.5,
+          "whole": 2.0,
+          "count": 3,
+          "List": [
+            1,
+            2.5,
+            "text",
+            true,
+            null
+          ],
+          "nested": {
+            "Pascal": null,
+            "flag": false
+          }
+        },
+        "buildStatus": "BuildStatus-text",
+        "buildMissingDependencies": [
+          "BuildMissingDependencies-text"
+        ],
+        "buildAwaitingFiles": true,
+        "artifacts": [
+          {
+            "role": "Role-text",
+            "url": "Url-text",
+            "mediaType": "MediaType-text",
+            "downloadName": "DownloadName-text"
+          }
+        ]
+      },
+      "error": "Error-text",
+      "retryable": true
+    },
+    "sparse": {
+      "path": null,
+      "status": 0,
+      "entry": null,
+      "error": null,
+      "retryable": false
+    }
+  },
+  "Registry.Web.Models.DTO.UploadProbeResultDto": {
+    "full": {
+      "bytes": 1234567890123,
+      "serverMs": 1.0
+    },
+    "sparse": {
+      "bytes": 0,
+      "serverMs": 0.0
+    }
+  },
+  "Registry.Web.Models.DTO.UploadResultDto": {
+    "full": {
+      "path": "Path-text",
+      "hash": "Hash-text",
+      "size": 1234567890123
+    },
+    "sparse": {
+      "path": null,
+      "hash": null,
+      "size": 0
+    }
+  },
+  "Registry.Web.Models.DTO.UrlImportRequestDto": {
+    "full": {
+      "url": "Url-text",
+      "fileName": "FileName-text",
+      "folder": "Folder-text",
+      "overwrite": true,
+      "username": "Username-text",
+      "password": "Password-text",
+      "sizeBytes": 1234567890123
+    },
+    "sparse": {
+      "url": null,
+      "fileName": null,
+      "folder": null,
+      "overwrite": false,
+      "username": null,
+      "password": null,
+      "sizeBytes": null
+    }
+  },
+  "Registry.Web.Models.DTO.UrlImportResultDto": {
+    "full": {
+      "taskId": "TaskId-text"
+    },
+    "sparse": {
+      "taskId": null
+    }
+  },
+  "Registry.Web.Models.DTO.UrlImportVerifyRequestDto": {
+    "full": {
+      "url": "Url-text",
+      "username": "Username-text",
+      "password": "Password-text"
+    },
+    "sparse": {
+      "url": null,
+      "username": null,
+      "password": null
+    }
+  },
+  "Registry.Web.Models.DTO.UrlImportVerifyResultDto": {
+    "full": {
+      "reachable": true,
+      "sizeBytes": 1234567890123,
+      "fileName": "FileName-text",
+      "blocked": true,
+      "sizeExceedsLimit": true,
+      "note": "Note-text"
+    },
+    "sparse": {
+      "reachable": false,
+      "sizeBytes": null,
+      "fileName": null,
+      "blocked": false,
+      "sizeExceedsLimit": false,
+      "note": null
+    }
+  },
+  "Registry.Web.Models.DTO.UserDetailDto": {
+    "full": {
+      "id": "Id-text",
+      "userName": "UserName-text",
+      "email": "Email-text",
+      "roles": [
+        "Roles-text"
+      ],
+      "organizations": [
+        "Organizations-text"
+      ],
+      "storageQuota": 1234567890123,
+      "storageUsed": 1234567890123,
+      "organizationCount": 42,
+      "datasetCount": 42,
+      "createdDate": "2026-10-21T07:31:17.123Z"
+    },
+    "sparse": {
+      "id": null,
+      "userName": null,
+      "email": null,
+      "roles": null,
+      "organizations": null,
+      "storageQuota": null,
+      "storageUsed": 0,
+      "organizationCount": 0,
+      "datasetCount": 0,
+      "createdDate": "0001-01-01T00:00:00Z"
+    }
+  },
+  "Registry.Web.Models.DTO.UserDto": {
+    "full": {
+      "userName": "UserName-text",
+      "email": "Email-text",
+      "roles": [
+        "Roles-text"
+      ],
+      "organizations": [
+        "Organizations-text"
+      ]
+    },
+    "sparse": {
+      "userName": null,
+      "email": null,
+      "roles": null,
+      "organizations": null
+    }
+  },
+  "Registry.Web.Models.DTO.UserOrganizationMembershipDto": {
+    "full": {
+      "slug": "Slug-text",
+      "name": "Name-text",
+      "description": "Description-text",
+      "isPublic": true,
+      "isOwner": true,
+      "permissions": 1,
+      "grantedAt": "2026-10-21T07:31:17.123Z",
+      "grantedBy": "GrantedBy-text"
+    },
+    "sparse": {
+      "slug": null,
+      "name": null,
+      "description": null,
+      "isPublic": false,
+      "isOwner": false,
+      "permissions": null,
+      "grantedAt": null,
+      "grantedBy": null
+    }
+  },
+  "Registry.Web.Models.DTO.UserStorageInfo": {
+    "full": {
+      "total": 1234567890123,
+      "used": 1234567890123
+    },
+    "sparse": {
+      "total": null,
+      "used": 0
+    }
+  },
+  "Registry.Web.Models.DTO.VerifyImportRequestDto": {
+    "full": {
+      "sourceType": "SourceType-text",
+      "params": {
+        "Alpha": "Alpha-text",
+        "snake_Key": "snake_Key-text"
+      }
+    },
+    "sparse": {
+      "sourceType": null,
+      "params": null
+    }
+  },
+  "Registry.Web.Models.DTO.VolumeCalculationRequestDto": {
+    "full": {
+      "path": null,
+      "polygon": "Polygon-text",
+      "baseMethod": "BaseMethod-text",
+      "flatElevation": 1.0
+    },
+    "sparse": {
+      "path": null,
+      "polygon": null,
+      "baseMethod": null,
+      "flatElevation": 0.0
+    }
+  },
+  "Registry.Web.Models.PushSession": {
+    "full": {
+      "ourChecksum": "OurChecksum-text",
+      "delta": {
+        "adds": [
+          {
+            "path": "path-text",
+            "hash": "hash-text"
+          }
+        ],
+        "removes": [
+          {
+            "path": "path-text",
+            "hash": "hash-text"
+          }
+        ],
+        "metaAdds": [
+          "MetaAdds-text"
+        ],
+        "metaRemoves": [
+          "MetaRemoves-text"
+        ]
+      }
+    },
+    "sparse": {
+      "ourChecksum": null,
+      "delta": null
+    }
+  },
+  "Registry.Web.Models.StorageDataDto": {
+    "full": {
+      "data": "AQID",
+      "contentType": "ContentType-text",
+      "name": "Name-text"
+    },
+    "sparse": {
+      "data": null,
+      "contentType": null,
+      "name": null
+    }
+  },
+  "Registry.Web.Models.StorageEntryDto": {
+    "full": {
+      "type": 1,
+      "hash": "Hash-text",
+      "size": 1234567890123,
+      "physicalPath": "PhysicalPath-text",
+      "name": "Name-text",
+      "contentType": "ContentType-text"
+    },
+    "sparse": {
+      "type": 0,
+      "hash": null,
+      "size": 0,
+      "physicalPath": null,
+      "name": null,
+      "contentType": null
+    }
+  },
+  "Registry.Web.Models.StorageFileDto": {
+    "full": {
+      "physicalPath": "PhysicalPath-text",
+      "name": "Name-text",
+      "contentType": "ContentType-text"
+    },
+    "sparse": {
+      "physicalPath": null,
+      "name": null,
+      "contentType": null
+    }
+  },
+  "Registry.Web.Services.Ports.UploadReceipt": {
+    "full": {
+      "state": "Committing",
+      "results": [
+        {
+          "path": "Path-text",
+          "status": 42,
+          "entry": {
+            "path": "Path-text",
+            "hash": "Hash-text",
+            "type": 1,
+            "properties": {
+              "Alpha": {
+                "snake_case": 1.5,
+                "whole": 2.0,
+                "count": 3,
+                "List": [
+                  1,
+                  2.5,
+                  "text",
+                  true,
+                  null
+                ],
+                "nested": {
+                  "Pascal": null,
+                  "flag": false
+                }
+              },
+              "snake_Key": {
+                "snake_case": 1.5,
+                "whole": 2.0,
+                "count": 3,
+                "List": [
+                  1,
+                  2.5,
+                  "text",
+                  true,
+                  null
+                ],
+                "nested": {
+                  "Pascal": null,
+                  "flag": false
+                }
+              }
+            },
+            "mtime": 1792567877.123,
+            "size": 1234567890123,
+            "depth": 42,
+            "point_geom": {
+              "snake_case": 1.5,
+              "whole": 2.0,
+              "count": 3,
+              "List": [
+                1,
+                2.5,
+                "text",
+                true,
+                null
+              ],
+              "nested": {
+                "Pascal": null,
+                "flag": false
+              }
+            },
+            "polygon_geom": {
+              "snake_case": 1.5,
+              "whole": 2.0,
+              "count": 3,
+              "List": [
+                1,
+                2.5,
+                "text",
+                true,
+                null
+              ],
+              "nested": {
+                "Pascal": null,
+                "flag": false
+              }
+            },
+            "buildStatus": "BuildStatus-text",
+            "buildMissingDependencies": [
+              "BuildMissingDependencies-text"
+            ],
+            "buildAwaitingFiles": true,
+            "artifacts": [
+              {
+                "role": null,
+                "url": null,
+                "mediaType": null
+              }
+            ]
+          },
+          "error": "Error-text",
+          "retryable": true
+        }
+      ],
+      "status": 42,
+      "error": "Error-text",
+      "updatedUtc": "2026-10-21T07:31:17.123Z"
+    },
+    "sparse": {
+      "state": "Receiving",
+      "results": null,
+      "status": null,
+      "error": null,
+      "updatedUtc": "0001-01-01T00:00:00Z"
+    }
+  }
+}

@@ -1,8 +1,7 @@
-#nullable enable
+using Registry.Common;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 
 namespace Registry.Web.Services.Import;
@@ -89,7 +88,7 @@ public static class FileImportPolicy
         if (string.IsNullOrWhiteSpace(name)) return "imported-file";
 
         // Strip any directory components (both separators).
-        var bare = name.Replace('\\', '/');
+        var bare = name.ToDdbPath();
         var slash = bare.LastIndexOf('/');
         if (slash >= 0) bare = bare[(slash + 1)..];
 
@@ -122,7 +121,7 @@ public static class FileImportPolicy
     {
         if (string.IsNullOrWhiteSpace(relativePath)) return string.Empty;
 
-        var parts = relativePath.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var parts = relativePath.ToDdbPath().Split('/', StringSplitOptions.RemoveEmptyEntries);
         var outParts = new List<string>(parts.Length);
 
         foreach (var part in parts)

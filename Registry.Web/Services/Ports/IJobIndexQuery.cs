@@ -1,4 +1,3 @@
-﻿#nullable enable
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,7 +15,26 @@ public interface IJobIndexQuery
     /// <summary>Single task lookup scoped to its dataset, for per-task status/ownership checks.</summary>
     Task<JobIndex?> GetByJobIdAsync(string orgSlug, string dsSlug, string jobId, CancellationToken ct = default);
 
-    Task<JobIndex[]> GetByOrgDsHashAsync(string orgSlug, string dsSlug, string hash, int skip = 0, int take = 200, CancellationToken ct = default);
+    /// <summary>
+    /// The given paths that have a not-yet-finished job of <paramref name="toolId"/>.
+    /// Reads only the active rows of those paths.
+    /// </summary>
+    Task<HashSet<string>> GetActivePathsAsync(string orgSlug, string dsSlug, string toolId,
+        IReadOnlyCollection<string> paths, CancellationToken ct = default);
+
+    /// <summary>
+    /// The not-yet-finished jobs of <paramref name="toolId"/> of the given paths (a path may have several), with
+    /// what tells a waiting background rebuild from a running build. Reads only the active rows of those paths.
+    /// </summary>
+    Task<IReadOnlyList<ActiveJob>> GetActiveJobsAsync(string orgSlug, string dsSlug, string toolId,
+        IReadOnlyCollection<string> paths, CancellationToken ct = default);
+
+    /// <summary>
+    /// State of the most recent <paramref name="toolId"/> job of each given path that has one.
+    /// Reads only the jobs of those paths, never the whole dataset history.
+    /// </summary>
+    Task<Dictionary<string, string>> GetLatestStatesByPathAsync(string orgSlug, string dsSlug, string toolId,
+        IReadOnlyCollection<string> paths, CancellationToken ct = default);
     Task<JobIndex[]> GetByStateAsync(string state, int skip = 0, int take = 1000, CancellationToken ct = default);
 
     /// <summary>Flexible TaskHistory query filtered by tool/state/path/user/workflow.</summary>
@@ -39,10 +57,16 @@ public interface IJobIndexQuery
         string orgSlug, string dsSlug, string toolId, string requestHash,
         int lookbackHours, CancellationToken ct = default);
 
-    /// <summary>Counts active (non-terminal) tasks, optionally scoped by org, user and/or tool.</summary>
-    Task<long> CountActiveAsync(string? orgSlug = null, string? userId = null,
+    /// <summary>
+    /// Counts the active tasks of users (<see cref="HeavyTasks.UserTasks.CountTowardLimits"/>: no builds, no
+    /// jobs of the automatic build service or of no user), optionally scoped by org, user and/or tool.
+    /// </summary>
+    Task<long> CountActiveUserTasksAsync(string? orgSlug = null, string? userId = null,
         string? toolId = null, CancellationToken ct = default);
 }
+
+/// <summary>A job of an entry that has not finished: its Hangfire state and the method text of its row.</summary>
+public readonly record struct ActiveJob(string Path, string State, string? MethodDisplay);
 
 public sealed record JobIndexQueryFilter(
     string OrgSlug, string DsSlug,

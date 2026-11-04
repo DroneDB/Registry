@@ -14,11 +14,14 @@ public interface IDdbAnalytics
     /// <summary>
     /// Auto-detect a stockpile footprint starting from a click on the raster
     /// </summary>
+    /// <exception cref="DdbInvalidArgumentsException">Nothing to detect: the click is outside the raster, the
+    /// search region has no data or no pile, or the search window is too small.</exception>
     string DetectStockpile(string path, double lat, double lon, double radiusMeters, float sensitivity);
 
     /// <summary>
-    /// Auto-detect ALL stockpile footprints by full-DEM scan.
+    /// Auto-detect ALL stockpile footprints by full-DEM scan (no pile found is an empty list).
     /// </summary>
+    /// <exception cref="DdbInvalidArgumentsException">The raster has no valid elevation.</exception>
     string DetectAllStockpiles(string path, float sensitivity, double minAreaM2, int maxResults);
 
     /// <summary>

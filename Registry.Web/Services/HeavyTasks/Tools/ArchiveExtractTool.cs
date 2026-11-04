@@ -1,24 +1,16 @@
-#nullable enable
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Common;
-using Registry.Ports.Archives;
 using Registry.Ports.DroneDB;
-using Registry.Web.Exceptions;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
-using Registry.Web.Services.Import;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -33,8 +25,18 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// buildable entry (mirrors <c>ObjectsManager.AddNew</c>). Mutates the dataset in
 /// place, so it produces no downloadable artifact.
 /// </summary>
-public sealed class ArchiveExtractTool : IHeavyTool
+public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parameters>
 {
+    /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
+    public sealed record Parameters(string? SourcePath, string? DestPath, bool? DeleteArchive, bool? Overwrite);
+
+    protected override Parameters ReadParams(ToolParameters p) => new(
+        p.Text("sourcePath"),
+        p.Text("destPath"),
+        p.Flag("deleteArchive"),
+        p.Flag("overwrite"));
+
+
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -51,61 +53,60 @@ public sealed class ArchiveExtractTool : IHeavyTool
         }
         """);
 
-    private readonly IArchiveExtractor _extractor;
+    private readonly DatasetArchiveExtractor _archives;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ProcessingPlatformSettings _settings;
     private readonly ImportSettings _importSettings;
-    private readonly ILogger<ArchiveExtractTool> _logger;
+    private readonly DatasetPathPolicy _paths;
+    private readonly VolumeHeadroom _headroom;
+    private readonly TaskFileIndexer _indexer;
 
     public ArchiveExtractTool(
-        IArchiveExtractor extractor,
+        DatasetArchiveExtractor archives,
         IServiceScopeFactory scopeFactory,
-        IOptions<AppSettings> appSettings,
-        ILogger<ArchiveExtractTool> logger)
+        IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
+        DatasetPathPolicy paths,
+        VolumeHeadroom headroom,
+        TaskFileIndexer indexer)
     {
-        _extractor = extractor;
+        _headroom = headroom;
+        _indexer = indexer;
+        _archives = archives;
+        _paths = paths;
         _scopeFactory = scopeFactory;
-        _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
-        _importSettings = appSettings.Value.Import ?? new ImportSettings();
-        _logger = logger;
+        _settings = platformSettings.Value;
+        _importSettings = importSettings.Value;
     }
 
-    public string Id => "archive-extract";
-    public string Version => "1";
-    public string Title => "Extract archive";
-    public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
-    public bool ProducesArtifact => false;
-    public JsonDocument InputSchema => Schema;
+    public override string Id => "archive-extract";
+    public override string Version => "1";
+    public override string Title => "Extract archive";
+    public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
+    public override bool ProducesArtifact => false;
+    public override JsonDocument InputSchema => Schema;
 
-    // Files are indexed in batches of this size: bounds the per-transaction lock time and
-    // lets progress be reported between chunks while still collapsing the per-file native
-    // database opens into one-per-chunk.
-    private const int IndexChunkSize = 250;
-
-    public async Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
+    protected override async Task ValidateAsync(HeavyToolRequest request, Parameters args,
+        IHeavyToolValidationContext ctx, CancellationToken ct)
     {
-        var sourcePath = ReadString(request.Params, "sourcePath");
+        var sourcePath = args.SourcePath;
         if (string.IsNullOrWhiteSpace(sourcePath))
             throw new ArgumentException("A source archive path is required.");
+        sourcePath = _paths.Normalize(sourcePath, "archive path");
 
-        var destPath = ReadString(request.Params, "destPath") ?? string.Empty;
+        // Destination: libddb's path rule ("" is the dataset root)
+        var destPath = _paths.NormalizeFolder(args.DestPath);
 
         // Source must exist, be a file (not a directory) and a supported archive.
         var entry = ctx.Ddb.GetEntry(sourcePath)
                     ?? throw new ArgumentException($"Archive '{sourcePath}' was not found in the dataset.");
         if (entry.Type == EntryType.Directory)
             throw new ArgumentException("The source path is a folder, not an archive.");
-        if (!_extractor.IsSupported(sourcePath))
+        if (!_archives.IsSupported(sourcePath))
             throw new ArgumentException($"'{sourcePath}' is not a supported archive format.");
 
-        // Destination path safety (no traversal, not under the reserved .ddb folder,
-        // and not targeting an existing non-folder entry).
-        if (!string.IsNullOrEmpty(destPath))
+        // The destination may not be an existing non-folder entry
+        if (destPath.Length > 0)
         {
-            CommonUtils.ValidateRelativePath(destPath, ctx.Ddb.DatasetFolderPath);
-            if (IsReservedPath(destPath))
-                throw new ArgumentException($"'{destPath}' is a reserved path.");
-
             var destEntry = ctx.Ddb.GetEntry(destPath);
             if (destEntry != null && destEntry.Type != EntryType.Directory)
                 throw new ArgumentException($"The destination '{destPath}' is not a folder.");
@@ -125,8 +126,7 @@ public sealed class ArchiveExtractTool : IHeavyTool
         long? uncompressed;
         try
         {
-            using var session = _extractor.Open(localArchive);
-            uncompressed = session.FastUncompressedBytes;
+            uncompressed = _archives.FastUncompressedBytes(localArchive);
         }
         catch (Exception ex)
         {
@@ -143,27 +143,26 @@ public sealed class ArchiveExtractTool : IHeavyTool
             if (ctx.Caller is not null)
             {
                 using var scope = _scopeFactory.CreateScope();
-                var utils = scope.ServiceProvider.GetRequiredService<IUtils>();
-                await utils.CheckCurrentUserStorage(uncompressed.Value); // throws QuotaExceededException
+                var quota = scope.ServiceProvider.GetRequiredService<IStorageQuota>();
+                await quota.CheckCurrentUserStorage(uncompressed.Value); // throws QuotaExceededException
             }
 
-            // Free disk space on the dataset volume (best-effort). Runs in both
-            // contexts: at execution time it is the worker's disk that matters.
-            EnsureDiskSpace(ctx.Ddb.DatasetFolderPath, uncompressed.Value);
+            // Free disk space on the dataset volume, keeping the head-room (the safety margin plus
+            // libddb's free-disk floor). Runs in both contexts: at execution time it is the worker's
+            // disk that matters.
+            _headroom.EnsureFree(ctx.Ddb.DatasetFolderPath, uncompressed.Value, _settings.DiskSafetyMarginBytes);
         }
     }
 
-    public HeavyToolPlan Plan(HeavyToolRequest request, IHeavyToolValidationContext ctx)
+    protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
     {
         long? estimate = null;
         try
         {
-            var sourcePath = ReadString(request.Params, "sourcePath");
+            var sourcePath = args.SourcePath;
             if (!string.IsNullOrWhiteSpace(sourcePath))
             {
-                var localArchive = ctx.Ddb.GetLocalPath(sourcePath);
-                using var session = _extractor.Open(localArchive);
-                estimate = session.FastUncompressedBytes;
+                estimate = _archives.FastUncompressedBytes(ctx.Ddb.GetLocalPath(sourcePath));
             }
         }
         catch
@@ -175,158 +174,38 @@ public sealed class ArchiveExtractTool : IHeavyTool
             DefaultFileName: null, ContentType: null);
     }
 
-    public async Task<HeavyToolArtifact?> ExecuteAsync(
+    protected override async Task<HeavyToolArtifact?> ExecuteAsync(
         HeavyToolRequest request,
+        Parameters args,
         IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
-        var sourcePath = ReadString(request.Params, "sourcePath")
-                         ?? throw new InvalidOperationException("A source archive path is required.");
-        var destPath = ReadString(request.Params, "destPath") ?? string.Empty;
-        var deleteArchive = ReadBool(request.Params, "deleteArchive") ?? false;
-        var overwrite = ReadBool(request.Params, "overwrite") ?? false;
+        var sourcePath = _paths.Normalize(args.SourcePath, "archive path");
+        var destPath = _paths.NormalizeFolder(args.DestPath);
+        var deleteArchive = args.DeleteArchive ?? false;
+        var overwrite = args.Overwrite ?? false;
 
         var localArchive = ctx.Ddb.GetLocalPath(sourcePath);
-        var root = ctx.Ddb.DatasetFolderPath;
-        var done = 0;
-        var extracted = 0;
-        var skipped = 0;
-        int total;
-        var extractedPaths = new List<string>();
 
-        // For compressed tarballs the uncompressed size cannot be known without fully
-        // decompressing the archive (which we deliberately avoid), so instead of a
-        // submit-time guard we extract in a single streaming pass and enforce the space
-        // budget incrementally. If we run out of room we roll back everything extracted in
-        // this run and fail with a clear "not enough space" message. Indexing happens only
-        // AFTER the loop, so on abort nothing has been added to the index yet - we just
-        // delete the files written so far.
-        // Cap (primary) + disk head-room (secondary, re-sampled) consolidated in ExtractionBudget.
-        var budget = new ExtractionBudget(_settings.MaxArchiveExtractSizeBytes, root, _settings.DiskSafetyMarginBytes);
-
-        // The session (and its underlying file handle) is closed as soon as the
-        // extraction loop finishes, BEFORE indexing and deleteArchive. This is critical:
-        // keeping the session open through deleteArchive causes the OS to refuse the
-        // File.Delete because the handle is still held.
-        using (var session = _extractor.Open(localArchive))
-        {
-            // Null (=> 0) for compressed tarballs: the count is unknown without
-            // decompressing, so the progress bar is indeterminate during extraction.
-            total = session.FastFileEntryCount ?? 0;
-
-            progress.Report(new HeavyToolProgress(total > 0 ? 0 : -1, "extracting",
-                LogChunk: total > 0
-                    ? $"Extracting {total} file(s) from '{sourcePath}'"
-                    : $"Extracting '{sourcePath}'"));
-
-            foreach (var archiveEntry in session.Entries())
-            {
-                ct.ThrowIfCancellationRequested();
-                if (archiveEntry.IsDirectory) continue;
-
-                // Path sanitization (anti zip-slip + reserved-folder guard).
-                var target = SafeJoin(destPath, archiveEntry.Key);
-                CommonUtils.ValidateRelativePath(target, root); // defense in depth
-
-                // Extension policy (allow-list / block-list): skip disallowed types (e.g. executables
-                // or scripts) with a warning, mirroring the overwrite=false skip semantics.
-                if (!_importSettings.IsExtensionAllowed(target))
-                {
-                    _logger.LogWarning("Skipping disallowed file type during extraction: '{Path}'", target);
-                    skipped++;
-                    done++;
-                    ReportProgress(progress, done, total, archiveEntry.Key);
-                    continue;
-                }
-
-                // Overwrite / skip semantics.
-                if (ctx.Ddb.EntryExists(target) && !overwrite)
-                {
-                    skipped++;
-                    done++;
-                    ReportProgress(progress, done, total, archiveEntry.Key);
-                    continue;
-                }
-
-                var localTarget = ctx.Ddb.GetLocalPath(target);
-                var parent = Path.GetDirectoryName(localTarget);
-                if (!string.IsNullOrEmpty(parent))
-                    Directory.CreateDirectory(parent);
-
-                // Track the (possibly partial) file BEFORE writing so a rollback removes it too.
-                extractedPaths.Add(target);
-
-                // Stream the entry through the shared budget: the cap (primary) and disk head-room
-                // (secondary) are enforced BEFORE each chunk, so an under-reported or oversized entry
-                // cannot fill the volume mid-copy. File.Create truncates -> honors overwrite=true.
-                try
-                {
-                    await using var sourceStream = archiveEntry.OpenStream();
-                    await using var fileStream = File.Create(localTarget);
-                    await budget.CopyGuardedAsync(sourceStream, fileStream, ct);
-                }
-                catch (QuotaExceededException)
-                {
-                    progress.Report(new HeavyToolProgress(-1, "cleanup",
-                        LogChunk: $"Out of budget - rolling back {extractedPaths.Count} extracted file(s)"));
-                    CleanupExtracted(ctx, extractedPaths);
-                    throw;
-                }
-
-                extracted++;
-                done++;
-                ReportProgress(progress, done, total, archiveEntry.Key);
-            }
-        } // ← session.Dispose() - file handle released here
+        // One streaming pass through the shared extractor: the path rule decides every entry, the
+        // budget (cap, then disk head-room with libddb's floor) every chunk - compressed tarballs have
+        // no cheap uncompressed size, so the submit-time guard cannot cover them - and any failure
+        // leaves the dataset as it was. Indexing happens only AFTER the extraction, so a rollback has
+        // nothing to un-index. The archive is closed before indexing and deleteArchive.
+        var extraction = await _archives.ExtractAsync(
+            new ArchiveExtractionRequest(localArchive, ctx.Ddb.DatasetFolderPath, destPath,
+                _importSettings.IsExtensionAllowed,
+                target => !overwrite && ctx.Ddb.EntryExists(target),
+                _settings.MaxArchiveExtractSizeBytes, _settings.DiskSafetyMarginBytes),
+            new CallbackProgress<ArchiveExtractionProgress>(p => ReportProgress(progress, p, sourcePath)), ct);
+        var extractedPaths = extraction.Extracted.ToList();
 
         ct.ThrowIfCancellationRequested();
 
-        // Index everything in batches: one DDB transaction (and one native connection
-        // open) per chunk instead of one-per-file. The returned entries carry Type + Hash,
-        // so the buildable files can be scheduled without any extra per-file
-        // IsBuildable/GetEntry calls (each of which would re-open the native database).
-        var indexed = new List<Entry>(extractedPaths.Count);
-        for (var i = 0; i < extractedPaths.Count; i += IndexChunkSize)
-        {
-            ct.ThrowIfCancellationRequested();
-            var slice = extractedPaths.GetRange(i, Math.Min(IndexChunkSize, extractedPaths.Count - i));
-            indexed.AddRange(ctx.Ddb.AddRawBatch(slice));
-            progress.Report(new HeavyToolProgress(
-                extractedPaths.Count > 0 ? (double)(i + slice.Count) / extractedPaths.Count : -1,
-                "indexing", LogChunk: $"Indexed {i + slice.Count}/{extractedPaths.Count} file(s)"));
-        }
-
-        // Enqueue a per-file build job for every buildable extracted entry (mirrors
-        // ObjectsManager.AddNew). Buildability is derived from the indexed entry type, so
-        // no additional native calls are needed.
-        using (var scope = _scopeFactory.CreateScope())
-        {
-            var processor = scope.ServiceProvider.GetRequiredService<IBackgroundJobsProcessor>();
-            var buildableCount = 0;
-
-            foreach (var entry in indexed)
-            {
-                if (!ctx.Ddb.IsBuildable(entry.Path))
-                    continue;
-
-                var path = entry.Path;
-                var meta = new IndexPayload(
-                    request.OrgSlug,
-                    request.DsSlug,
-                    entry.Hash,
-                    null,
-                    Path: path,
-                    ParentJobId: ctx.TaskId);
-
-                Expression<Action> buildJob = () => HangfireUtils.BuildWrapper(ctx.Ddb, path, false, null);
-                processor.EnqueueIndexed(buildJob, meta);
-                buildableCount++;
-            }
-
-            _logger.LogInformation("Enqueued {Count} build job(s) for extracted files in {Org}/{Ds}",
-                buildableCount, request.OrgSlug, request.DsSlug);
-        }
+        // Index, queue the builds of the buildable files (children of this task), invalidate the caches
+        await _indexer.IndexAsync(new TaskFiles(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug,
+            extractedPaths, ctx.BuildQueue, ctx.TaskId, "extracted files"), progress, ct);
 
         // Optionally remove the source archive (index entry + physical file).
         if (deleteArchive)
@@ -346,123 +225,29 @@ public sealed class ArchiveExtractTool : IHeavyTool
             }
         }
 
-        // Invalidate cached tiles/thumbnails/OGC (no auth needed; keyed by org/ds). Uses the
-        // focused IDatasetCacheInvalidator, registered on every host including processing nodes.
-        try
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var cacheInvalidator = scope.ServiceProvider.GetRequiredService<IDatasetCacheInvalidator>();
-            await cacheInvalidator.InvalidateAllDatasetCachesAsync(request.OrgSlug, request.DsSlug);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cache invalidation after extract failed for {Org}/{Ds}",
-                request.OrgSlug, request.DsSlug);
-        }
-
         progress.Report(new HeavyToolProgress(1, "done",
-            LogChunk: $"Extraction complete: {extracted} extracted, {skipped} skipped"));
+            LogChunk: $"Extraction complete: {extraction.Extracted.Count} extracted, {extraction.Skipped} skipped"));
         return null;
     }
 
-    private void EnsureDiskSpace(string datasetFolderPath, long requiredBytes)
+    private static void ReportProgress(IProgress<HeavyToolProgress> progress, ArchiveExtractionProgress p, string sourcePath)
     {
-        try
+        if (p.Done == 0)
         {
-            var root = Path.GetPathRoot(Path.GetFullPath(datasetFolderPath));
-            if (string.IsNullOrEmpty(root)) return;
-
-            var drive = new DriveInfo(root);
-            if (!drive.IsReady) return;
-
-            if (drive.AvailableFreeSpace < requiredBytes)
-                throw new QuotaExceededException(
-                    "Not enough free disk space to extract the archive. " +
-                    $"Required: {CommonUtils.GetBytesReadable(requiredBytes)}, " +
-                    $"available: {CommonUtils.GetBytesReadable(drive.AvailableFreeSpace)}.");
+            // Total 0: a compressed tarball, the count is unknown without decompressing (indeterminate bar)
+            progress.Report(new HeavyToolProgress(p.Total > 0 ? 0 : -1, "extracting",
+                LogChunk: p.Total > 0 ? $"Extracting {p.Total} file(s) from '{sourcePath}'" : $"Extracting '{sourcePath}'"));
+            return;
         }
-        catch (QuotaExceededException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not determine free disk space for '{Path}'; skipping disk-space guard.",
-                datasetFolderPath);
-        }
+
+        progress.Report(new HeavyToolProgress(p.Total > 0 ? (double)p.Done / p.Total : -1, "extracting", Message: p.Key));
     }
 
-    // Removes the files written during a failed extraction run. Index entries are added
-    // only after extraction completes, so on abort there is nothing to un-index.
-    private void CleanupExtracted(IHeavyToolExecutionContext ctx, List<string> paths)
+    // Reports inline (System.Progress<T> posts to the thread pool)
+    private sealed class CallbackProgress<T>(Action<T> report) : IProgress<T>
     {
-        foreach (var p in paths)
-        {
-            try
-            {
-                var local = ctx.Ddb.GetLocalPath(p);
-                if (File.Exists(local))
-                    File.Delete(local);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not delete partially extracted file '{Path}'", p);
-            }
-        }
+        public void Report(T value) => report(value);
     }
 
-    private static string SafeJoin(string destPath, string entryKey)
-    {
-        var key = (entryKey ?? string.Empty).Replace('\\', '/').Trim();
-        while (key.StartsWith('/'))
-            key = key[1..];
 
-        if (string.IsNullOrWhiteSpace(key))
-            throw new InvalidOperationException("Archive entry has an empty name.");
-
-        if (Path.IsPathRooted(key) || key.Split('/').Any(seg => seg == ".."))
-            throw new InvalidOperationException($"Unsafe archive entry path (zip-slip): '{entryKey}'.");
-
-        // Normalize every path segment (invalid chars, Windows reserved device names, trailing
-        // dots/spaces, length). Leading dots are preserved so the reserved-folder guard below still
-        // recognizes the ".ddb" index folder.
-        key = FileImportPolicy.SanitizePathSegments(key);
-        if (string.IsNullOrWhiteSpace(key))
-            throw new InvalidOperationException($"Archive entry name is empty after sanitization: '{entryKey}'.");
-
-        var combined = CommonUtils.SafeCombine(destPath ?? string.Empty, key);
-
-        if (IsReservedPath(combined))
-            throw new InvalidOperationException($"Archive entry targets a reserved path: '{combined}'.");
-
-        return combined;
-    }
-
-    private static void ReportProgress(IProgress<HeavyToolProgress> progress, int done, int total, string currentKey)
-    {
-        var fraction = total > 0 ? (double)done / total : -1;
-        progress.Report(new HeavyToolProgress(fraction, "extracting", Message: currentKey));
-    }
-
-    private static bool IsReservedPath(string path)
-        => path.Replace('\\', '/').TrimStart('/').StartsWith(IDDB.DatabaseFolderName, StringComparison.Ordinal);
-
-    private static string? ReadString(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.String ? el.GetString() : null;
-    }
-
-    private static bool? ReadBool(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind switch
-        {
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            _ => null
-        };
-    }
 }

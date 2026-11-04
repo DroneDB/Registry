@@ -1,85 +1,86 @@
-#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Registry.Ports.DroneDB;
-using Registry.Ports.Import;
 using Registry.Web.Exceptions;
-using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.Import;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// Default <see cref="IImportManager"/>. Verifies sources cheaply, then (on create) gates quota, makes
-/// an empty dataset and submits the <c>import-dataset</c> heavy task, rolling the dataset back if the
-/// submission fails.
+/// Orchestrates importing a remote dataset (another Registry instance or a downloadable archive) into a
+/// newly created dataset. Verification is mandatory before an import can be created.
 /// </summary>
-public class ImportManager : IImportManager
+public class ImportManager
 {
-    private readonly IUtils _utils;
-    private readonly IAuthManager _authManager;
-    private readonly IDatasetsManager _datasetsManager;
-    private readonly IImportSourceFactory _factory;
-    private readonly IImportCredentialProtector _protector;
-    private readonly IHeavyTaskRunner _runner;
-    private readonly IHttpContextAccessor _httpContextAccessor;
-    private readonly ImportSettings _settings;
-    private readonly ILogger<ImportManager> _logger;
+    private readonly IDatasetAccessResolver _access;
+    private readonly ImportSourceCatalog _sources;
+    private readonly ImportQuotaGate _quota;
+    private readonly ImportTargetDatasets _targets;
+    private readonly CurrentUserTaskSubmitter _submitter;
+    private readonly ImportCredentials _credentials;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ImportManager"/> class.
     /// </summary>
     public ImportManager(
-        IUtils utils,
-        IAuthManager authManager,
-        IDatasetsManager datasetsManager,
-        IImportSourceFactory factory,
-        IImportCredentialProtector protector,
-        IHeavyTaskRunner runner,
-        IHttpContextAccessor httpContextAccessor,
-        IOptions<AppSettings> appSettings,
-        ILogger<ImportManager> logger)
+        IDatasetAccessResolver access,
+        ImportSourceCatalog sources,
+        ImportQuotaGate quota,
+        ImportTargetDatasets targets,
+        CurrentUserTaskSubmitter submitter,
+        ImportCredentials credentials)
     {
-        _utils = utils;
-        _authManager = authManager;
-        _datasetsManager = datasetsManager;
-        _factory = factory;
-        _protector = protector;
-        _runner = runner;
-        _httpContextAccessor = httpContextAccessor;
-        _settings = appSettings.Value.Import ?? new ImportSettings();
-        _logger = logger;
+        _access = access;
+        _sources = sources;
+        _quota = quota;
+        _targets = targets;
+        _submitter = submitter;
+        _credentials = credentials;
     }
 
-    /// <inheritdoc />
-    public IReadOnlyList<string> GetAvailableSourceTypes()
-        => [.. _factory.AvailableTypes.Where(IsSourceAllowed)];
+    /// <summary>
+    /// Returns the import source types enabled on this deployment (registered AND allow-listed) to a
+    /// caller who may import into the organization (write access), like the other import operations.
+    /// </summary>
+    /// <param name="orgSlug">The destination organization slug.</param>
+    /// <returns>The available source type identifiers.</returns>
+    public async Task<IReadOnlyList<string>> GetAvailableSourceTypes(string orgSlug, CancellationToken ct = default)
+    {
+        await RequireImportAccess(orgSlug, ct);
+        return _sources.AllowedTypes;
+    }
 
-    /// <inheritdoc />
+    // Every import operation needs write access to the destination organization
+    private async Task RequireImportAccess(string orgSlug, CancellationToken ct) =>
+        await _access.ResolveOrganizationAsync(orgSlug, AccessType.Write, ct: ct);
+
+    /// <summary>
+    /// Verifies (probes) an import source: checks reachability/credentials and returns cheap metadata
+    /// (estimated size, file count, a suggested name/slug) without creating anything.
+    /// </summary>
+    /// <param name="orgSlug">The destination organization slug.</param>
+    /// <param name="request">The verify request.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The probe result.</returns>
     public async Task<ImportVerifyResultDto> VerifyAsync(string orgSlug, VerifyImportRequestDto request,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var org = _utils.GetOrganization(orgSlug);
-        if (!await _authManager.RequestAccess(org, AccessType.Write))
-            throw new UnauthorizedException("The current user cannot import datasets into this organization.");
+        await RequireImportAccess(orgSlug, ct);
 
         EnsureSourceAllowed(request.SourceType);
 
-        var source = _factory.Resolve(request.SourceType);
+        var source = _sources.Resolve(request.SourceType);
         var probe = await source.ProbeAsync(ToJsonElement(request.Params), ct);
 
         return new ImportVerifyResultDto
@@ -89,23 +90,27 @@ public class ImportManager : IImportManager
             EstimatedBytes = probe.EstimatedBytes,
             FileCount = probe.FileCount,
             SuggestedName = probe.SuggestedName,
-            SuggestedSlug = Slugify(probe.SuggestedName)
+            SuggestedSlug = ImportDatasetNaming.Slugify(probe.SuggestedName)
         };
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Creates an empty dataset and submits a heavy task that imports the source into it.
+    /// </summary>
+    /// <param name="orgSlug">The destination organization slug.</param>
+    /// <param name="request">The create request.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The created dataset and the tracking task id.</returns>
     public async Task<ImportCreateResultDto> CreateAsync(string orgSlug, CreateImportRequestDto request,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var org = _utils.GetOrganization(orgSlug);
-        if (!await _authManager.RequestAccess(org, AccessType.Write))
-            throw new UnauthorizedException("The current user cannot import datasets into this organization.");
+        await RequireImportAccess(orgSlug, ct);
 
         EnsureSourceAllowed(request.SourceType);
 
-        var source = _factory.Resolve(request.SourceType);
+        var source = _sources.Resolve(request.SourceType);
 
         // Verify is mandatory: re-probe so we never submit against an unreachable source and so the
         // size/quota gate runs against fresh data.
@@ -116,87 +121,58 @@ public class ImportManager : IImportManager
         // Soft quota gate when a size is known (archive-url reports the compressed size, a lower bound;
         // the worker enforces the hard cap incrementally).
         if (probe.EstimatedBytes is > 0)
-            await _utils.CheckCurrentUserStorage(probe.EstimatedBytes.Value);
+            await _quota.CheckAsync(probe.EstimatedBytes.Value);
 
-        var budgetBytes = await ComputeRemainingBudgetAsync();
+        var budgetBytes = await _quota.RemainingBytesAsync();
 
-        var name = !string.IsNullOrWhiteSpace(request.Name)
-            ? request.Name!
-            : probe.SuggestedName ?? "Imported dataset";
-        var slug = !string.IsNullOrWhiteSpace(request.Slug)
-            ? request.Slug!
-            : Slugify(probe.SuggestedName ?? name);
-        if (string.IsNullOrWhiteSpace(slug))
-            slug = "imported-" + Guid.NewGuid().ToString("N")[..8];
+        var name = ImportDatasetNaming.NameOf(request.Name, probe);
+        var slug = ImportDatasetNaming.SlugOf(request.Slug, probe, name);
 
         // Create the empty destination dataset.
-        var ds = await _datasetsManager.AddNew(orgSlug, new DatasetNewDto
-        {
-            Slug = slug,
-            Name = name,
-            Visibility = request.Visibility ?? Visibility.Private
-        });
+        var ds = await _targets.CreateAsync(orgSlug, slug, name, request.Visibility ?? Visibility.Private, ct);
 
         try
         {
             var toolParams = BuildToolParams(request.SourceType, request.Params, budgetBytes);
-            var user = await _authManager.GetCurrentUser();
 
-            var submit = new HeavyTaskSubmitRequest(
-                orgSlug, ds.Slug, "import-dataset", "1", null, toolParams, false,
-                user?.Id, _httpContextAccessor.HttpContext?.User);
-
-            var result = await _runner.SubmitAsync(submit, ct);
-
-            string? url = null;
-            try
-            {
-                url = _utils.GenerateDatasetUrl(_utils.GetDataset(orgSlug, ds.Slug));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not generate dataset URL for {Org}/{Ds}", orgSlug, ds.Slug);
-            }
+            var result = await _submitter.SubmitAsync(orgSlug, ds.Slug, "import-dataset", "1", null, toolParams,
+                force: false, ct);
 
             return new ImportCreateResultDto
             {
                 TaskId = result.TaskId,
                 OrgSlug = orgSlug,
                 DsSlug = ds.Slug,
-                DatasetUrl = url
+                DatasetUrl = await _targets.UrlOfAsync(orgSlug, ds.Slug, ct)
             };
         }
         catch (Exception ex)
         {
             // Roll back the empty dataset so a failed submission leaves nothing behind.
-            _logger.LogError(ex, "Import submission failed for {Org}/{Ds}; rolling back the dataset",
-                orgSlug, ds.Slug);
-            try
-            {
-                await _datasetsManager.Delete(orgSlug, ds.Slug);
-            }
-            catch (Exception delEx)
-            {
-                _logger.LogError(delEx, "Rollback delete failed for {Org}/{Ds}", orgSlug, ds.Slug);
-            }
-
+            await _targets.RollBackAsync(orgSlug, ds.Slug, ex);
             throw;
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Browses the remote structure of an import source (lists organizations or datasets) without
+    /// creating or modifying anything. Only sources that implement
+    /// <see cref="Registry.Web.Services.Import.IBrowsableImportSource"/> support this operation.
+    /// </summary>
+    /// <param name="orgSlug">The destination organization slug (used for access-control only).</param>
+    /// <param name="request">The browse request specifying source type, params and browse type.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The browse result containing the matching items.</returns>
     public async Task<ImportBrowseResultDto> BrowseAsync(string orgSlug, BrowseImportRequestDto request,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var org = _utils.GetOrganization(orgSlug);
-        if (!await _authManager.RequestAccess(org, AccessType.Write))
-            throw new UnauthorizedException("The current user cannot browse import sources for this organization.");
+        await RequireImportAccess(orgSlug, ct);
 
         EnsureSourceAllowed(request.SourceType);
 
-        var source = _factory.Resolve(request.SourceType);
+        var source = _sources.Resolve(request.SourceType);
         if (source is not IBrowsableImportSource browsable)
             throw new BadRequestException($"The '{request.SourceType}' source does not support browsing.");
 
@@ -218,59 +194,24 @@ public class ImportManager : IImportManager
         };
     }
 
-    private async Task<long?> ComputeRemainingBudgetAsync()
-    {
-        var user = await _authManager.GetCurrentUser();
-        if (user is null) return null;
-
-        var info = _utils.GetUserStorage(user);
-        if (info.Total is null) return null; // unlimited
-
-        var remaining = info.Total.Value - info.Used;
-        return remaining < 0 ? 0 : remaining;
-    }
-
     private JsonElement BuildToolParams(string sourceType, Dictionary<string, string> source, long? budgetBytes)
     {
-        var sensitive = ImportSourceDefinitions.SensitiveFields.TryGetValue(sourceType, out var fields)
-            ? fields
-            : (IReadOnlySet<string>)new HashSet<string>();
-
-        var inner = new JsonObject();
-        foreach (var kv in source)
-        {
-            var value = kv.Value ?? string.Empty;
-            if (!string.IsNullOrEmpty(value) && sensitive.Contains(kv.Key))
-                value = "ENC:" + _protector.Protect(value);
-            inner[kv.Key] = value;
-        }
-
         var root = new JsonObject
         {
             ["sourceType"] = sourceType,
-            ["params"] = inner
+            ["params"] = _credentials.SealParameters(sourceType, source)
         };
         if (budgetBytes is { } b)
             root["budgetBytes"] = b;
 
-        using var doc = JsonDocument.Parse(root.ToJsonString());
-        return doc.RootElement.Clone();
+        return root.ToElement();
     }
 
     private void EnsureSourceAllowed(string sourceType)
     {
-        if (string.IsNullOrWhiteSpace(sourceType))
-            throw new BadRequestException("A source type is required.");
-
-        if (!_factory.AvailableTypes.Contains(sourceType, StringComparer.OrdinalIgnoreCase))
-            throw new BadRequestException($"Unknown import source type '{sourceType}'.");
-
-        if (!IsSourceAllowed(sourceType))
-            throw new BadRequestException($"The import source type '{sourceType}' is disabled on this server.");
+        if (_sources.Refusal(sourceType) is { } refusal)
+            throw new BadRequestException(refusal);
     }
-
-    private bool IsSourceAllowed(string sourceType)
-        => _settings.IsSourceTypeAllowed(sourceType);
 
     private static JsonElement ToJsonElement(Dictionary<string, string> dict)
     {
@@ -278,30 +219,6 @@ public class ImportManager : IImportManager
         foreach (var kv in dict)
             obj[kv.Key] = kv.Value;
 
-        using var doc = JsonDocument.Parse(obj.ToJsonString());
-        return doc.RootElement.Clone();
-    }
-
-    private static string Slugify(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
-
-        var sb = new StringBuilder(value.Length);
-        var lastDash = false;
-        foreach (var c in value.Trim().ToLowerInvariant())
-        {
-            if (char.IsLetterOrDigit(c) && c < 128)
-            {
-                sb.Append(c);
-                lastDash = false;
-            }
-            else if (!lastDash)
-            {
-                sb.Append('-');
-                lastDash = true;
-            }
-        }
-
-        return sb.ToString().Trim('-');
+        return obj.ToElement();
     }
 }

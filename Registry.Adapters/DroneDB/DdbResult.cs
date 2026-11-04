@@ -1,4 +1,4 @@
-﻿namespace Registry.Adapters.DroneDB;
+namespace Registry.Adapters.DroneDB;
 
 public enum DdbResult
 {
@@ -7,5 +7,11 @@ public enum DdbResult
     BuildDependencyMissing = 2,
     BuildInProgress = 3, // Another process holds the build lock
     Canceled = 4, // Operation canceled by the progress callback
-    Busy = 5 // Transient DB contention (SQLITE_BUSY/LOCKED); safe to retry
+    Busy = 5, // Transient DB contention (SQLITE_BUSY/LOCKED); safe to retry
+    NotFound = 6, // The requested entry does not exist
+    // Returned by the exports that report the reason of a failure (libddb 2.x, see NativeDdb): the
+    // older exports keep DDBERR_EXCEPTION. DDBERR_SHUTDOWN by every export once DDBShutdown started
+    InvalidArgs = 7, // An argument is invalid: fix the call, do not retry
+    Retryable = 8, // A transient failure (DDBGetLastErrorReason): retry later
+    Shutdown = 9 // The library is shut down (DDBShutdown): no call is accepted
 };

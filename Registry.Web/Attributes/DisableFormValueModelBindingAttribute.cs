@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using System;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 
@@ -17,7 +14,6 @@ public class DisableFormValueModelBindingAttribute : Attribute, IResourceFilter
         factories.RemoveType<FormFileValueProviderFactory>();
         factories.RemoveType<JQueryFormValueProviderFactory>();
         factories.RemoveType<QueryStringValueProviderFactory>();
-        //factories.Clear();
     }
 
     public void OnResourceExecuted(ResourceExecutedContext context)

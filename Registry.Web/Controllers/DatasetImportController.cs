@@ -1,14 +1,11 @@
-#nullable enable
-using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Managers;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Controllers;
@@ -19,24 +16,19 @@ namespace Registry.Web.Controllers;
 /// whole remote dataset into a freshly created one.
 /// </summary>
 [ApiController]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" +
-       RoutesHelper.DatasetRadix + "/" + RoutesHelper.DatasetSlug + "/import")]
+[Route(RoutesHelper.DatasetPrefix + "/import")]
 [Produces("application/json")]
 public class DatasetImportController : ControllerBaseEx
 {
-    private readonly IFileUrlImportManager _importManager;
-    private readonly ILogger<DatasetImportController> _logger;
+    private readonly FileUrlImportManager _importManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DatasetImportController"/> class.
     /// </summary>
     /// <param name="importManager">The single-file URL import manager.</param>
-    /// <param name="logger">The logger.</param>
-    public DatasetImportController(IFileUrlImportManager importManager,
-        ILogger<DatasetImportController> logger)
+    public DatasetImportController(FileUrlImportManager importManager)
     {
         _importManager = importManager;
-        _logger = logger;
     }
 
     /// <summary>
@@ -49,16 +41,16 @@ public class DatasetImportController : ControllerBaseEx
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The verification result.</returns>
     [HttpPost("verify-url", Name = nameof(VerifyUrlImport))]
-    [ProducesResponseType(typeof(UrlImportVerifyResultDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> VerifyUrlImport(
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<UrlImportVerifyResultDto>> VerifyUrlImport(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] UrlImportVerifyRequestDto body,
         CancellationToken ct)
     {
-        return Ok(await _importManager.VerifyAsync(orgSlug, dsSlug, body, ct));
+        return await _importManager.VerifyAsync(orgSlug, dsSlug, body, ct);
     }
 
     /// <summary>
@@ -70,15 +62,15 @@ public class DatasetImportController : ControllerBaseEx
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The tracking task id.</returns>
     [HttpPost("url", Name = nameof(ImportUrl))]
-    [ProducesResponseType(typeof(UrlImportResultDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> ImportUrl(
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<UrlImportResultDto>> ImportUrl(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] UrlImportRequestDto body,
         CancellationToken ct)
     {
-        return Ok(await _importManager.ImportAsync(orgSlug, dsSlug, body, ct));
+        return await _importManager.ImportAsync(orgSlug, dsSlug, body, ct);
     }
 }

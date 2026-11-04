@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Reflection;
+using System.Text.Json;
 using Shouldly;
 
 namespace Registry.Test.Common;
@@ -45,6 +46,17 @@ public static class ShouldlyExtensions
 
         var type = actual.GetType();
 
+        // JSON documents (the ports carry libddb's as JsonElement): equal when they hold the same values
+        if (actual is JsonElement actualJson && expected is JsonElement expectedJson)
+        {
+            if (!JsonEquivalent(actualJson, expectedJson))
+            {
+                var message = customMessage ?? $"JSON at {path} should be equivalent";
+                throw new ShouldAssertException($"{message}: expected {expectedJson.GetRawText()} but was {actualJson.GetRawText()}");
+            }
+            return;
+        }
+
         // Handle primitive types and strings
         if (type.IsPrimitive || type == typeof(string) || type == typeof(decimal) ||
             type == typeof(DateTime) || type == typeof(DateTimeOffset) || type == typeof(TimeSpan) ||
@@ -88,6 +100,36 @@ public static class ShouldlyExtensions
             var expectedValue = property.GetValue(expected);
 
             CompareObjects(actualValue, expectedValue, $"{path}.{property.Name}", customMessage);
+        }
+    }
+
+    /// <summary>
+    /// Same structure, same member names (any order), same values; numbers within a relative 1e-9, because two
+    /// libddb builds may print the last digit of a computed coordinate differently.
+    /// </summary>
+    public static bool JsonEquivalent(JsonElement actual, JsonElement expected)
+    {
+        if (actual.ValueKind != expected.ValueKind)
+            return false;
+
+        switch (actual.ValueKind)
+        {
+            case JsonValueKind.Object:
+                var members = actual.EnumerateObject().ToDictionary(p => p.Name, p => p.Value, StringComparer.Ordinal);
+                var others = expected.EnumerateObject().ToDictionary(p => p.Name, p => p.Value, StringComparer.Ordinal);
+                return members.Count == others.Count &&
+                       members.All(m => others.TryGetValue(m.Key, out var other) && JsonEquivalent(m.Value, other));
+            case JsonValueKind.Array:
+                return actual.GetArrayLength() == expected.GetArrayLength() &&
+                       actual.EnumerateArray().Zip(expected.EnumerateArray(), JsonEquivalent).All(equal => equal);
+            case JsonValueKind.Number:
+                var a = actual.GetDouble();
+                var e = expected.GetDouble();
+                return Math.Abs(a - e) <= 1e-9 * Math.Max(1, Math.Abs(e));
+            case JsonValueKind.String:
+                return actual.GetString() == expected.GetString();
+            default:
+                return true;
         }
     }
 }

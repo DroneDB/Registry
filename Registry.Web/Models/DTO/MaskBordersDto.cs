@@ -1,14 +1,14 @@
-#nullable enable
 using System.ComponentModel.DataAnnotations;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Models.DTO;
 
 public class MaskBordersRequestDto
 {
     [Required]
-    public string Path { get; set; } = null!;
+    public DatasetPath Path { get; set; } = null!;
     public int Near { get; set; } = 15;
-    public bool White { get; set; } = false;
+    public bool White { get; set; }
 }
 
 public class MaskBordersCheckResponseDto

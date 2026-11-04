@@ -1,4 +1,4 @@
-﻿namespace Registry.Web.Models.DTO;
+namespace Registry.Web.Models.DTO;
 
 public class UploadNewSessionResultDto
 {

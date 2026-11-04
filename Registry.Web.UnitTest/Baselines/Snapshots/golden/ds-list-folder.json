@@ -1,0 +1,49 @@
+{
+  "request": "POST /orgs/golden-org/ds/golden-ds/list",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": [
+    {
+      "path": "sub/img.jpg",
+      "hash": "5f323dac61d614a0cf94c65fa166cddbd5f5013b19163238b06d94966076d357",
+      "type": 3,
+      "properties": {
+        "cameraPitch": -90.0,
+        "cameraRoll": 0.0,
+        "cameraYaw": 0.0,
+        "captureTime": 1714972089000.0,
+        "hasCameraOrientation": false,
+        "height": 24,
+        "make": "Contract",
+        "model": "Camera",
+        "orientation": 1,
+        "sensor": "contract camera",
+        "width": 32
+      },
+      "mtime": 1700000000,
+      "size": 1151,
+      "depth": 1,
+      "point_geom": {
+        "crs": {
+          "properties": {
+            "name": "EPSG:4326"
+          },
+          "type": "name"
+        },
+        "geometry": {
+          "coordinates": [
+            8.25,
+            46.841667,
+            120.0
+          ],
+          "type": "Point"
+        },
+        "properties": {},
+        "type": "Feature"
+      },
+      "polygon_geom": null
+    }
+  ]
+}

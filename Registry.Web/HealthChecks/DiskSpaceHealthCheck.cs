@@ -1,6 +1,4 @@
-﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -10,12 +8,12 @@ namespace Registry.Web.HealthChecks;
 
 public class DiskSpaceHealthCheck : IHealthCheck
 {
-    private readonly string _path;
+    private readonly string? _path;
     private readonly float _freeSpacePercWarningThreshold;
 
     public const float DefaultFreeSpacePercWarningThreshold = 0.1f;
 
-    public DiskSpaceHealthCheck(string path, float freeSpacePercWarningThreshold = DefaultFreeSpacePercWarningThreshold)
+    public DiskSpaceHealthCheck(string? path, float freeSpacePercWarningThreshold = DefaultFreeSpacePercWarningThreshold)
     {
         _path = path;
         _freeSpacePercWarningThreshold = freeSpacePercWarningThreshold;
@@ -24,16 +22,19 @@ public class DiskSpaceHealthCheck : IHealthCheck
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = new CancellationToken())
     {
 
-        var info = CommonUtils.GetStorageInfo(_path);
+        // The path's own volume, the one disk-space API
+        var volume = VolumeInfo.For(_path);
+        float? freePerc = volume is { TotalBytes: > 0 } ? (float)volume.AvailableFreeBytes / volume.TotalBytes : null;
 
-        var data = new Dictionary<string, object>
+        // The sizes are null when the volume is not found: the health report shows them as null
+        IReadOnlyDictionary<string, object> data = new Dictionary<string, object?>
         {
-            {"StorageTotalSize", info?.TotalSize},
-            {"StorageFreeSpace", info?.FreeSpace},
-            {"StorageFreeSpacePerc", info?.FreeSpacePerc}
-        };
-            
-        if (info != null && info.FreeSpacePerc <= _freeSpacePercWarningThreshold)
+            {"StorageTotalSize", volume?.TotalBytes},
+            {"StorageFreeSpace", volume?.AvailableFreeBytes},
+            {"StorageFreeSpacePerc", freePerc}
+        }!;
+
+        if (freePerc <= _freeSpacePercWarningThreshold)
             return Task.FromResult(HealthCheckResult.Degraded("Low on available disk space", null, data));
 
         return Task.FromResult(HealthCheckResult.Healthy("Free disk space is fine", data));

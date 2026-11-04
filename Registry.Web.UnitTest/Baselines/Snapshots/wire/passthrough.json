@@ -1,0 +1,371 @@
+{
+  "entries": {
+    "input": [
+      {
+        "path": "sub/a.jpg",
+        "hash": "0a1b2c",
+        "type": 5,
+        "mtime": 1700000000,
+        "size": 1234,
+        "depth": 1,
+        "properties": {
+          "captureTime": 1700000000.5,
+          "altitude": 100,
+          "altitudeFraction": 100.0,
+          "exposure": 1e-05,
+          "huge": 1.5E+20,
+          "bigInt": 12345678901234567890,
+          "negativeZero": -0.0,
+          "fraction": 0.1,
+          "longFraction": 0.30000000000000004,
+          "iso": "100",
+          "day": "2026-01-01",
+          "instant": "2026-01-01T00:00:00.000Z",
+          "precise": "2026-01-01T00:00:00.1234567Z",
+          "offset": "2026-01-01T10:00:00+02:00",
+          "local": "2026-01-01T10:00:00",
+          "unicode": "città 日本 \uD83D\uDE00",
+          "escapes": "a\"b\\c\n\t",
+          "html": "<&>'",
+          "slash": "a/b",
+          "snake_case": 1,
+          "CamelKey": 2,
+          "flag": true,
+          "none": null,
+          "list": [
+            1,
+            2.0,
+            "2026-01-01T00:00:00Z",
+            null,
+            []
+          ],
+          "nested": {
+            "a": {
+              "b": [
+                {}
+              ]
+            }
+          }
+        },
+        "point_geom": {
+          "type": "Point",
+          "coordinates": [
+            11.123456789012345,
+            45.0,
+            100.0
+          ]
+        },
+        "polygon_geom": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                11.0,
+                45.0,
+                0
+              ],
+              [
+                11.5,
+                45.0,
+                0
+              ],
+              [
+                11.5,
+                45.5,
+                0
+              ],
+              [
+                11.0,
+                45.0,
+                0
+              ]
+            ]
+          ]
+        }
+      },
+      {
+        "path": "b.txt",
+        "hash": "",
+        "type": 1,
+        "mtime": 1700000001.25,
+        "size": 0,
+        "depth": 0,
+        "properties": {},
+        "point_geom": null,
+        "polygon_geom": null
+      }
+    ],
+    "output": [
+      {
+        "path": "sub/a.jpg",
+        "hash": "0a1b2c",
+        "type": 5,
+        "properties": {
+          "captureTime": 1700000000.5,
+          "altitude": 100,
+          "altitudeFraction": 100.0,
+          "exposure": 1e-05,
+          "huge": 1.5E+20,
+          "bigInt": 12345678901234567890,
+          "negativeZero": -0.0,
+          "fraction": 0.1,
+          "longFraction": 0.30000000000000004,
+          "iso": "100",
+          "day": "2026-01-01",
+          "instant": "2026-01-01T00:00:00.000Z",
+          "precise": "2026-01-01T00:00:00.1234567Z",
+          "offset": "2026-01-01T10:00:00+02:00",
+          "local": "2026-01-01T10:00:00",
+          "unicode": "città 日本 \uD83D\uDE00",
+          "escapes": "a\"b\\c\n\t",
+          "html": "<&>'",
+          "slash": "a/b",
+          "snake_case": 1,
+          "CamelKey": 2,
+          "flag": true,
+          "none": null,
+          "list": [
+            1,
+            2.0,
+            "2026-01-01T00:00:00Z",
+            null,
+            []
+          ],
+          "nested": {
+            "a": {
+              "b": [
+                {}
+              ]
+            }
+          }
+        },
+        "mtime": 1700000000,
+        "size": 1234,
+        "depth": 1,
+        "point_geom": {
+          "type": "Point",
+          "coordinates": [
+            11.123456789012345,
+            45.0,
+            100.0
+          ]
+        },
+        "polygon_geom": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                11.0,
+                45.0,
+                0
+              ],
+              [
+                11.5,
+                45.0,
+                0
+              ],
+              [
+                11.5,
+                45.5,
+                0
+              ],
+              [
+                11.0,
+                45.0,
+                0
+              ]
+            ]
+          ]
+        }
+      },
+      {
+        "path": "b.txt",
+        "hash": "",
+        "type": 1,
+        "properties": {},
+        "mtime": 1700000001.25,
+        "size": 0,
+        "depth": 0,
+        "point_geom": null,
+        "polygon_geom": null
+      }
+    ]
+  },
+  "meta": {
+    "{\"note\":\"tree\",\"level\":2,\"ratio\":0.5,\"when\":\"2026-01-01T00:00:00.000Z\",\"geo\":{\"type\":\"Point\",\"coordinates\":[1.0,2.0]}}": {
+      "output": {
+        "id": "0a223495",
+        "data": {
+          "note": "tree",
+          "level": 2,
+          "ratio": 0.5,
+          "when": "2026-01-01T00:00:00.000Z",
+          "geo": {
+            "type": "Point",
+            "coordinates": [
+              1.0,
+              2.0
+            ]
+          }
+        },
+        "mtime": 1700000000
+      }
+    },
+    "[\"a\",\"2026-01-01\",3,4.0]": {
+      "output": {
+        "id": "0a223495",
+        "data": [
+          "a",
+          "2026-01-01",
+          3,
+          4.0
+        ],
+        "mtime": 1700000000
+      }
+    },
+    "\"plain text\"": {
+      "output": {
+        "id": "0a223495",
+        "data": "plain text",
+        "mtime": 1700000000
+      }
+    },
+    "42": {
+      "output": {
+        "id": "0a223495",
+        "data": 42,
+        "mtime": 1700000000
+      }
+    },
+    "1e3": {
+      "output": {
+        "id": "0a223495",
+        "data": 1e3,
+        "mtime": 1700000000
+      }
+    },
+    "2.50": {
+      "output": {
+        "id": "0a223495",
+        "data": 2.50,
+        "mtime": 1700000000
+      }
+    },
+    "true": {
+      "output": {
+        "id": "0a223495",
+        "data": true,
+        "mtime": 1700000000
+      }
+    },
+    "null": {
+      "output": {
+        "id": "0a223495",
+        "data": null,
+        "mtime": 1700000000
+      }
+    },
+    "[]": {
+      "output": {
+        "id": "0a223495",
+        "data": [],
+        "mtime": 1700000000
+      }
+    },
+    "{}": {
+      "output": {
+        "id": "0a223495",
+        "data": {},
+        "mtime": 1700000000
+      }
+    },
+    "\"2026-01-01T00:00:00.000Z\"": {
+      "output": {
+        "id": "0a223495",
+        "data": "2026-01-01T00:00:00.000Z",
+        "mtime": 1700000000
+      }
+    },
+    "12345678901234567890": {
+      "output": {
+        "id": "0a223495",
+        "data": 12345678901234567890,
+        "mtime": 1700000000
+      }
+    }
+  },
+  "stac": {
+    "input": {
+      "stac_version": "1.0.0",
+      "type": "Feature",
+      "id": "a.jpg",
+      "bbox": [
+        11.0,
+        45.0,
+        11.5,
+        45.5
+      ],
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.1,
+          45.2
+        ]
+      },
+      "properties": {
+        "datetime": "2026-01-01T00:00:00.000Z",
+        "gsd": 0.05,
+        "proj:epsg": 32632,
+        "eo:cloud_cover": 0.0,
+        "updated": "2026-01-01"
+      },
+      "assets": {
+        "data": {
+          "href": "a.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "file:size": 1234
+        }
+      },
+      "links": []
+    },
+    "output": {
+      "stac_version": "1.0.0",
+      "type": "Feature",
+      "id": "a.jpg",
+      "bbox": [
+        11.0,
+        45.0,
+        11.5,
+        45.5
+      ],
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.1,
+          45.2
+        ]
+      },
+      "properties": {
+        "datetime": "2026-01-01T00:00:00.000Z",
+        "gsd": 0.05,
+        "proj:epsg": 32632,
+        "eo:cloud_cover": 0.0,
+        "updated": "2026-01-01"
+      },
+      "assets": {
+        "data": {
+          "href": "a.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "file:size": 1234
+        }
+      },
+      "links": []
+    }
+  }
+}

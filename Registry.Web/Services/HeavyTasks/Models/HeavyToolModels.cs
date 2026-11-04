@@ -1,9 +1,10 @@
-#nullable enable
 using System.Security.Claims;
 using System.Text.Json;
 using Hangfire.Server;
-using Microsoft.Extensions.Logging;
 using Registry.Ports.DroneDB;
+using Registry.Web.Services.Jobs;
+using Registry.Web.Services.Ports;
+using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Services.HeavyTasks.Models;
 
@@ -57,7 +58,6 @@ public interface IHeavyToolValidationContext
 {
     IDDB Ddb { get; }
     ClaimsPrincipal? Caller { get; }
-    ILogger Logger { get; }
 }
 
 /// <summary>
@@ -68,4 +68,13 @@ public interface IHeavyToolExecutionContext : IHeavyToolValidationContext
     string TaskId { get; }
     string? WorkDir { get; }    // null when ProducesArtifact = false
     PerformContext Hangfire { get; }
+
+    /// <summary>The task's dataset, as a background job names it.</summary>
+    DatasetKey Dataset { get; }
+
+    /// <summary>Queues the builds of what the tool added (as children of the task), in the task's scope.</summary>
+    BuildScheduler BuildQueue { get; }
+
+    /// <summary>Runs builds inline, in the task's own job (the build and rescan tools).</summary>
+    DdbJobs Builds { get; }
 }

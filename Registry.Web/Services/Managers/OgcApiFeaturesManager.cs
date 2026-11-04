@@ -1,46 +1,37 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Xml;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using Registry.Ports.Json;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO.Ogc;
-using Registry.Web.Services.Ports;
-using Registry.Web.Utilities;
-using Registry.Web.Utilities.Ogc;
 
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
 /// OGC API – Features manager (JSON-based REST).
 /// </summary>
-public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
+public class OgcApiFeaturesManager : OgcManagerBase
 {
     private readonly ILogger<OgcApiFeaturesManager> _logger;
 
-    public OgcApiFeaturesManager(IUtils u, IAuthManager a, IDdbManager d, IBuildArtifactResolver ar,
-        IDdbWrapper w, IOgcLayerCatalog c, IDistributedCache cache, IHttpContextAccessor ctx, ILogger<OgcApiFeaturesManager> logger)
-        : base(u, a, d, ar, w, c, cache, ctx)
+    public OgcApiFeaturesManager(OgcManagerDependencies dependencies, ILogger<OgcApiFeaturesManager> logger)
+        : base(dependencies)
     {
         _logger = logger;
     }
 
     public Task<OgcConformanceDto> GetConformanceAsync() => Task.FromResult(new OgcConformanceDto());
 
-    public async Task<OgcApiLandingDto> GetLandingAsync(string orgSlug, string dsSlug, string baseUrl)
+    public async Task<OgcApiLandingDto> GetLandingAsync(string orgSlug, string dsSlug, string baseUrl,
+        CancellationToken ct = default)
     {
-        await ResolveAsync(orgSlug, dsSlug);
+        await ResolveAsync(orgSlug, dsSlug, ct);
         var b = baseUrl.TrimEnd('/');
         return new OgcApiLandingDto
         {
@@ -54,16 +45,18 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
         };
     }
 
-    public async Task<OgcApiCollectionsDto> GetCollectionsAsync(string orgSlug, string dsSlug, string baseUrl)
+    public async Task<OgcApiCollectionsDto> GetCollectionsAsync(string orgSlug, string dsSlug, string baseUrl,
+        CancellationToken ct = default)
     {
-        await ResolveAsync(orgSlug, dsSlug);
-        var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug);
+        await ResolveAsync(orgSlug, dsSlug, ct);
+        var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, ct: ct);
         var b = baseUrl.TrimEnd('/');
         var dto = new OgcApiCollectionsDto
         {
             Links = [new() { Href = $"{b}/collections", Rel = "self", Type = "application/json" }]
         };
-        foreach (var l in layers)
+        // A raster without a COG is left out, as from the capabilities of the other OGC services
+        foreach (var l in layers.Where(l => !IsUnbuiltRaster(l)))
         {
             dto.Collections.Add(BuildCollection(l, b));
         }
@@ -71,48 +64,50 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
     }
 
     public async Task<OgcApiCollectionDto?> GetCollectionAsync(string orgSlug, string dsSlug,
-        string collectionId, string baseUrl)
+        string collectionId, string baseUrl, CancellationToken ct = default)
     {
         var name = Uri.UnescapeDataString(collectionId);
-        await ResolveAsync(orgSlug, dsSlug);
-        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name);
-        return layer == null ? null : BuildCollection(layer, baseUrl.TrimEnd('/'));
+        await ResolveAsync(orgSlug, dsSlug, ct);
+        // Local layers (no CRS) resolve here and in items for the Hub's local viewer; they are
+        // never listed in /collections.
+        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, includeLocal: true, ct: ct);
+        // A raster without a COG is not found, as it is not in /collections
+        return layer == null || IsUnbuiltRaster(layer) ? null : BuildCollection(layer, baseUrl.TrimEnd('/'));
     }
 
     public async Task<string> GetItemsAsync(string orgSlug, string dsSlug, string collectionId,
-        double[]? bbox, int limit, int offset)
+        double[]? bbox, int limit, int offset, CancellationToken ct = default)
     {
         if (limit <= 0) limit = 10;
         limit = Math.Clamp(limit, 1, 1000);
         if (offset < 0) offset = 0;
 
-        var name = Uri.UnescapeDataString(collectionId);
-        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug);
-        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name)
-                    ?? throw new OgcException("InvalidParameterValue",
-                        $"Unknown collection '{collectionId}'", 404, "collectionId");
-        if (layer.EntryType != EntryType.Vector)
-            throw new OgcException("OperationNotSupported",
-                "OGC API – Features supports only Vector layers", 400);
+        var (gpkg, layer) = await ResolveFeatureCollectionAsync(orgSlug, dsSlug, collectionId, ct);
+        if (layer.IsLocal && bbox != null)
+            throw new OgcException("InvalidParameterValue",
+                "This collection has no coordinate system (local drawing coordinates); bbox is not supported",
+                400, "bbox");
 
-        var gpkg = ResolveVectorArtifact(ddb, layer);
-        return DdbWrapper.QueryVector(gpkg, layer.InnerLayerName, bbox, bbox != null ? "EPSG:4326" : null,
-            limit, offset, "application/json");
+        return DdbWrapper.QueryVector(gpkg, new VectorQuery(layer.InnerLayerName, bbox,
+            bbox != null ? "EPSG:4326" : null, MaxFeatures: limit, StartIndex: offset));
     }
 
-    public async Task<string> GetItemAsync(string orgSlug, string dsSlug, string collectionId, string featureId)
+    public async Task<string> GetItemAsync(string orgSlug, string dsSlug, string collectionId, string featureId,
+        CancellationToken ct = default)
     {
-        // Best-effort: pull a single page of features and filter client-side by 'id'/'fid' property.
-        var items = await GetItemsAsync(orgSlug, dsSlug, collectionId, bbox: null, limit: 1000, offset: 0);
+        // Feature ids are the GeoPackage fids (GeoJSON "id"): one primary-key read
+        if (!long.TryParse(featureId, NumberStyles.None, CultureInfo.InvariantCulture, out var fid))
+            return "{}";
+
+        var (gpkg, layer) = await ResolveFeatureCollectionAsync(orgSlug, dsSlug, collectionId, ct);
+        var items = DdbWrapper.QueryVector(gpkg, new VectorQuery(layer.InnerLayerName, Fids: [fid], MaxFeatures: 1));
         try
         {
-            var fc = JObject.Parse(items);
-            var features = fc["features"] as JArray;
-            if (features == null) return "{}";
-            var match = features.OfType<JObject>().FirstOrDefault(f =>
-                f["id"]?.ToString() == featureId
-                || (f["properties"] is JObject p && p["fid"]?.ToString() == featureId));
-            return match?.ToString(Newtonsoft.Json.Formatting.None) ?? "{}";
+            using var collection = JsonDocument.Parse(items);
+            return collection.RootElement.Member("features") is { ValueKind: JsonValueKind.Array } features &&
+                   features.GetArrayLength() > 0
+                ? features[0].GetRawText()
+                : "{}";
         }
         catch (Exception ex)
         {
@@ -121,6 +116,21 @@ public class OgcApiFeaturesManager : OgcManagerBase, IOgcApiFeaturesManager
                 orgSlug, dsSlug, collectionId, featureId);
             return "{}";
         }
+    }
+
+    /// <summary>The GeoPackage and layer of a vector collection (local layers included).</summary>
+    private async Task<(string Gpkg, OgcLayerDto Layer)> ResolveFeatureCollectionAsync(string orgSlug, string dsSlug,
+        string collectionId, CancellationToken ct)
+    {
+        var name = Uri.UnescapeDataString(collectionId);
+        var (_, ddb) = await ResolveAsync(orgSlug, dsSlug, ct);
+        var layer = await LayerCatalog.ResolveAsync(orgSlug, dsSlug, name, includeLocal: true, ct: ct)
+                    ?? throw new OgcException("InvalidParameterValue",
+                        $"Unknown collection '{collectionId}'", 404, "collectionId");
+        if (layer.EntryType != EntryType.Vector)
+            throw new OgcException("OperationNotSupported",
+                "OGC API – Features supports only Vector layers", 400);
+        return (ResolveVectorArtifact(ddb, layer), layer);
     }
 
     private static OgcApiCollectionDto BuildCollection(OgcLayerDto layer, string baseUrl)

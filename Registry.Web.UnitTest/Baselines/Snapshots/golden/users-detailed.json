@@ -1,0 +1,65 @@
+{
+  "request": "GET /users/detailed",
+  "caller": "admin",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": [
+    {
+      "id": "<guid>",
+      "userName": "admin",
+      "email": "admin@example.com",
+      "roles": [
+        "admin"
+      ],
+      "organizations": [
+        "admin"
+      ],
+      "storageQuota": null,
+      "storageUsed": 0,
+      "organizationCount": 1,
+      "datasetCount": 0,
+      "createdDate": "<datetime:Z>"
+    },
+    {
+      "id": "<guid>",
+      "userName": "golden-owner",
+      "email": "golden-owner@example.com",
+      "roles": [],
+      "organizations": [
+        "golden-org"
+      ],
+      "storageQuota": null,
+      "storageUsed": 5729,
+      "organizationCount": 1,
+      "datasetCount": 1,
+      "createdDate": "<datetime:Z>"
+    },
+    {
+      "id": "<guid>",
+      "userName": "golden-user",
+      "email": "golden-user@example.com",
+      "roles": [],
+      "organizations": [],
+      "storageQuota": null,
+      "storageUsed": 0,
+      "organizationCount": 0,
+      "datasetCount": 0,
+      "createdDate": "<datetime:Z>"
+    },
+    {
+      "id": "<guid>",
+      "userName": "golden-writer",
+      "email": "golden-writer@example.com",
+      "roles": [],
+      "organizations": [
+        "golden-write"
+      ],
+      "storageQuota": null,
+      "storageUsed": 0,
+      "organizationCount": 1,
+      "datasetCount": 0,
+      "createdDate": "<datetime:Z>"
+    }
+  ]
+}

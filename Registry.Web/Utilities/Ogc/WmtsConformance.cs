@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using Microsoft.AspNetCore.Http;
 using Registry.Web.Exceptions;
 
 namespace Registry.Web.Utilities.Ogc;

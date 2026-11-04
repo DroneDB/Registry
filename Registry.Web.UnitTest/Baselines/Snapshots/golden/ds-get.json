@@ -1,0 +1,39 @@
+{
+  "request": "GET /orgs/golden-org/ds/golden-ds",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": [
+    {
+      "path": "ddb+unsafe://localhost/golden-org/golden-ds",
+      "hash": null,
+      "type": 7,
+      "properties": {
+        "entries": 6,
+        "meta": {
+          "name": {
+            "data": "Golden dataset",
+            "id": "<guid>",
+            "mtime": 1700000000
+          },
+          "visibility": {
+            "data": 0,
+            "id": "<guid>",
+            "mtime": 1700000000
+          }
+        },
+        "permissions": {
+          "canRead": true,
+          "canWrite": true,
+          "canDelete": true
+        }
+      },
+      "mtime": 1700000000,
+      "size": 5729,
+      "depth": 0,
+      "point_geom": null,
+      "polygon_geom": null
+    }
+  ]
+}

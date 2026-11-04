@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using System.IO;
 using System.Threading;
@@ -12,15 +11,12 @@ namespace Registry.Web.Services.HeavyTasks;
 /// Shared streaming guard against decompression bombs and disk exhaustion, used by every tool that
 /// writes archive/import entries to disk. The deterministic uncompressed-byte <b>cap</b> is the
 /// primary limit; the free-disk-space check is a best-effort secondary net that is re-sampled
-/// periodically so it never relies on a single stale snapshot. This centralizes the budgeting logic
-/// that was previously duplicated across <c>ArchiveExtractTool</c>, <c>ArchiveUrlImportSource</c> and
-/// <c>ImportDatasetTool</c>.
+/// periodically so it never relies on a single stale snapshot. Created by
+/// <see cref="VolumeHeadroom.CreateBudget"/>, which measures the volume and adds libddb's floor to
+/// the margin.
 /// </summary>
 public sealed class ExtractionBudget
 {
-    /// <summary>Built-in disk head-room (256 MiB) used when a caller does not supply one.</summary>
-    public const long DefaultDiskSafetyMarginBytes = 256L * 1024 * 1024;
-
     // Re-sample free disk space at most once per this many bytes written: bounds the number of
     // syscalls while still reacting to space consumed by other processes during a long extraction.
     private const long ResampleEveryBytes = 256L * 1024 * 1024;
@@ -29,6 +25,7 @@ public sealed class ExtractionBudget
     private readonly long _maxBytes;          // 0 => no cap
     private readonly string _destinationRoot;
     private readonly long _safetyMarginBytes; // 0 => disk guard disabled
+    private readonly Func<string, long> _availableBytes;
 
     private long _freeDiskBytesAtSample;
     private long _bytesSinceSample;
@@ -42,13 +39,15 @@ public sealed class ExtractionBudget
     /// <param name="maxBytes">Absolute uncompressed-size cap in bytes; <c>0</c> (or less) disables the cap.</param>
     /// <param name="destinationRoot">A path on the target volume, used to sample free disk space.</param>
     /// <param name="safetyMarginBytes">Disk head-room to keep free; <c>0</c> (or less) disables the disk guard.</param>
-    public ExtractionBudget(long maxBytes, string destinationRoot,
-        long safetyMarginBytes = DefaultDiskSafetyMarginBytes)
+    /// <param name="availableBytes">Free bytes on the volume of a path (<see cref="long.MaxValue"/> when unknown).</param>
+    public ExtractionBudget(long maxBytes, string destinationRoot, long safetyMarginBytes,
+        Func<string, long> availableBytes)
     {
         _maxBytes = maxBytes > 0 ? maxBytes : 0;
         _destinationRoot = destinationRoot;
         _safetyMarginBytes = safetyMarginBytes > 0 ? safetyMarginBytes : 0;
-        _freeDiskBytesAtSample = GetAvailableDiskBytes(destinationRoot);
+        _availableBytes = availableBytes ?? throw new ArgumentNullException(nameof(availableBytes));
+        _freeDiskBytesAtSample = _availableBytes(destinationRoot);
     }
 
     /// <summary>
@@ -98,7 +97,7 @@ public sealed class ExtractionBudget
         {
             if (_bytesSinceSample >= ResampleEveryBytes)
             {
-                _freeDiskBytesAtSample = GetAvailableDiskBytes(_destinationRoot);
+                _freeDiskBytesAtSample = _availableBytes(_destinationRoot);
                 _bytesSinceSample = 0;
             }
 
@@ -114,27 +113,5 @@ public sealed class ExtractionBudget
         }
 
         BytesWritten = projected;
-    }
-
-    /// <summary>
-    /// Free bytes on the volume backing <paramref name="path"/>, or <see cref="long.MaxValue"/> when it
-    /// cannot be determined (the disk guard then relies on the cap only - best effort).
-    /// </summary>
-    /// <param name="path">A path on the target volume.</param>
-    /// <returns>Available free bytes, or <see cref="long.MaxValue"/> when unknown.</returns>
-    public static long GetAvailableDiskBytes(string path)
-    {
-        try
-        {
-            var root = Path.GetPathRoot(Path.GetFullPath(path));
-            if (string.IsNullOrEmpty(root)) return long.MaxValue;
-
-            var drive = new DriveInfo(root);
-            return drive.IsReady ? drive.AvailableFreeSpace : long.MaxValue;
-        }
-        catch
-        {
-            return long.MaxValue;
-        }
     }
 }

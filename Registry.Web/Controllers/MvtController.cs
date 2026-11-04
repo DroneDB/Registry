@@ -1,131 +1,82 @@
-using System;
 using System.ComponentModel.DataAnnotations;
-using System.IO;
-using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using Registry.Common.Model;
-using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Filters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Models;
-using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using Registry.Web.Utilities.Ogc;
 
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// Mapbox Vector Tile (MVT) endpoint. Serves precomputed tiles from
-/// {dataset}/.ddb/build/{hash}/mvt/{z}/{x}/{y}.pbf for the Vue/OpenLayers frontend
-/// and OGC API Tiles delegate.
+/// Mapbox Vector Tile (MVT) endpoint. Serves the precomputed tiles of a vector's build (the <c>vector.mvt</c>
+/// artifact of libddb's build manifest: <see cref="MvtTiles"/>) for the Vue/OpenLayers frontend and the
+/// OGC API Tiles delegate. Authorized like the OGC endpoints: Basic credentials, then
+/// <see cref="OgcAuthorizationFilter"/> (read access, its denials in the OGC envelope).
 /// </summary>
 [ApiController]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" +
-       RoutesHelper.DatasetRadix + "/" + RoutesHelper.DatasetSlug + "/mvt")]
+[BasicAuthentication]
+[ServiceFilter(typeof(OgcAuthorizationFilter))]
+[Route(RoutesHelper.DatasetPrefix + "/mvt")]
 [Tags("MVT")]
 public class MvtController : ControllerBaseEx
 {
-    private readonly IUtils _utils;
-    private readonly IAuthManager _authManager;
-    private readonly IDdbManager _ddbManager;
+    private readonly IDatasetAccessResolver _access;
     private readonly IBuildArtifactResolver _artifacts;
-    private readonly IFileSystem _fs;
-    private readonly ILogger<MvtController> _logger;
 
-    public MvtController(IUtils utils, IAuthManager authManager, IDdbManager ddbManager,
-        IBuildArtifactResolver artifacts, IFileSystem fs, ILogger<MvtController> logger)
+    public MvtController(IDatasetAccessResolver access, IBuildArtifactResolver artifacts)
     {
-        _utils = utils;
-        _authManager = authManager;
-        _ddbManager = ddbManager;
+        _access = access;
         _artifacts = artifacts;
-        _fs = fs;
-        _logger = logger;
     }
 
-    [ServiceFilter(typeof(BasicAuthFilter))]
     [HttpGet("{hash}/{z:int}/{x:int}/{y:int}.pbf")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)] // OGC exception XML (OgcAuthorizationFilter)
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTile(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromRoute, Required] string hash,
-        [FromRoute] int z, [FromRoute] int x, [FromRoute] int y)
+        [FromRoute] int z, [FromRoute] int x, [FromRoute] int y, CancellationToken ct)
     {
-        try
-        {
-            if (z < 0 || z > 24 || x < 0 || y < 0)
-                return BadRequest(new ErrorResponse("Invalid tile coordinates"));
+        if (z < 0 || z > 24 || x < 0 || y < 0)
+            throw new BadRequestException("Invalid tile coordinates");
 
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
-            if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            {
-                BasicAuthFilter.SendBasicAuthRequest(Response);
-                throw new UnauthorizedException("Authentication required");
-            }
+        // The filter granted read access: the resolver reuses the grant
+        var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct)).Ddb;
+        var tilePath = _artifacts.FindArtifactFile(ddb, hash, ArtifactRoles.VectorMvt, MvtTiles.Tile(z, x, y));
+        if (tilePath == null)
+            return NotFound();
 
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var tilePath = _artifacts.GetMvtTilePath(ddb, hash, z, x, y);
-
-            if (!_artifacts.ArtifactExists(tilePath))
-                return NotFound();
-
-            // Tiles are already gzip-compressed (COMPRESS=YES in MVT driver).
-            Response.Headers.ContentEncoding = "gzip";
-            Response.Headers.CacheControl = "public, max-age=31536000, immutable";
-            Response.Headers.ETag = $"\"{hash}-{z}-{x}-{y}\"";
-            return PhysicalFile(tilePath, "application/vnd.mapbox-vector-tile");
-        }
-        catch (UnauthorizedException)
-        {
-            // Attach the challenge header, then let the global classifier produce the
-            // canonical 401 body (the per-action result builder was removed during unification).
-            BasicAuthFilter.SendBasicAuthRequest(Response);
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in MVT GetTile {Org}/{Ds} {Hash} z={Z}", orgSlug, dsSlug, hash, z);
-            throw;
-        }
+        // Tiles are already gzip-compressed (COMPRESS=YES in MVT driver). The tag names the tile of a build: it never
+        // changes, so a client that has it gets a 304
+        Response.Headers.ContentEncoding = "gzip";
+        Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+        return ValidatedPhysicalFile(tilePath, "application/vnd.mapbox-vector-tile", $"\"{hash}-{z}-{x}-{y}\"");
     }
 
-    [ServiceFilter(typeof(BasicAuthFilter))]
     [HttpGet("{hash}/metadata.json")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)] // OGC exception XML (OgcAuthorizationFilter)
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMetadata(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromRoute, Required] string hash)
+        [FromRoute, Required] string hash, CancellationToken ct)
     {
-        try
-        {
-            var ds = _utils.GetDataset(orgSlug, dsSlug);
-            if (!await _authManager.RequestAccess(ds, AccessType.Read))
-            {
-                BasicAuthFilter.SendBasicAuthRequest(Response);
-                throw new UnauthorizedException("Authentication required");
-            }
-
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            var path = _artifacts.GetMvtMetadataPath(ddb, hash);
-            if (!_artifacts.ArtifactExists(path)) return NotFound();
-            return PhysicalFile(path, "application/json");
-        }
-        catch (UnauthorizedException)
-        {
-            // Attach the challenge header, then let the global classifier produce the
-            // canonical 401 body (the per-action result builder was removed during unification).
-            BasicAuthFilter.SendBasicAuthRequest(Response);
-            throw;
-        }
+        var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct)).Ddb;
+        // The pyramid's descriptor (metadata.json)
+        var path = _artifacts.FindArtifactFile(ddb, hash, ArtifactRoles.VectorMvt);
+        if (path == null) return NotFound();
+        return PhysicalFile(path, "application/json");
     }
 }

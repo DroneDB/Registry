@@ -1,0 +1,112 @@
+# EditorConfig for DroneDB Registry: https://editorconfig.org
+#
+# These rules describe what the code base already follows. A rule is
+# a warning only if it has 0 violations today. The other rules are
+# suggestions, so the build warning count does not change. Raise a rule to
+# warning after its violations are fixed.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+
+# Every file of these types already ends with a newline. The rule is not set
+# for *.cs, *.json, *.md, *.xml and *.yml, because many of them have no
+# final newline today.
+[*.{csproj,props,targets,sln,sh,ps1,py,sql}]
+insert_final_newline = true
+
+[Dockerfile]
+insert_final_newline = true
+
+[*.{json,yml,yaml,xml,pubxml,gml}]
+indent_size = 2
+
+# Visual Studio writes solution files with tabs.
+[*.sln]
+indent_style = tab
+
+[*.cs]
+# Namespaces: file-scoped (0 block-scoped namespaces outside Migrations).
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_diagnostic.IDE0161.severity = warning
+
+# Naming of private fields (0 violations each, so all three rules are warnings).
+#   private const              -> PascalCase  (DefaultTimeout)
+#   private static readonly    -> PascalCase  (SupportedExtensions)
+#   other private fields       -> _camelCase  (_logger, _consoleFilters)
+# Note: `dotnet build` reports IDE1006 only when EnforceCodeStyleInBuild is on and
+# dotnet_diagnostic.IDE1006.severity is set. Both are set (R2-2).
+dotnet_diagnostic.IDE1006.severity = warning
+dotnet_naming_rule.private_constants_pascal.symbols = private_constants
+dotnet_naming_rule.private_constants_pascal.style = pascal_case
+dotnet_naming_rule.private_constants_pascal.severity = warning
+
+dotnet_naming_rule.private_static_readonly_pascal.symbols = private_static_readonly_fields
+dotnet_naming_rule.private_static_readonly_pascal.style = pascal_case
+dotnet_naming_rule.private_static_readonly_pascal.severity = warning
+
+dotnet_naming_rule.private_fields_underscore_camel.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore_camel.style = underscore_camel_case
+dotnet_naming_rule.private_fields_underscore_camel.severity = warning
+
+dotnet_naming_symbols.private_constants.applicable_kinds = field
+dotnet_naming_symbols.private_constants.applicable_accessibilities = private
+dotnet_naming_symbols.private_constants.required_modifiers = const
+
+dotnet_naming_symbols.private_static_readonly_fields.applicable_kinds = field
+dotnet_naming_symbols.private_static_readonly_fields.applicable_accessibilities = private
+dotnet_naming_symbols.private_static_readonly_fields.required_modifiers = static, readonly
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+
+dotnet_naming_style.underscore_camel_case.required_prefix = _
+dotnet_naming_style.underscore_camel_case.capitalization = camel_case
+
+# Analyzers (AnalysisLevel = latest-recommended, R2-2). The recommended rules are warnings,
+# and the build has none: build/warnings-baseline.txt is empty, so scripts/check-warnings.sh
+# fails on any warning.
+#
+# CA1848 and CA1873 (logging performance: LoggerMessage delegates, no argument evaluation for a
+# disabled level) are off on purpose. They ask for a source-generated method per log call, which
+# saves an argument array and some boxing per call; Registry's requests spend milliseconds in the
+# database, libddb and the disk and make a few log calls each, so the gain is not measurable, while
+# the migration adds a method per call (about 480) for every log line. The template checks that
+# matter (CA2017, CA2253, CA2254) stay warnings. A log call on a measured hot path gets an
+# IsEnabled guard or its own [LoggerMessage] method instead.
+# CA1707 (underscores in names) is a suggestion in the test projects only (see below).
+dotnet_diagnostic.CA1848.severity = none
+dotnet_diagnostic.CA1873.severity = none
+
+# Naming rules that do not fit this code base:
+#   CA1716: Registry is C# only, and Get/Set are keywords only in Visual Basic. The managers and
+#     ports name their operations with plain verbs (List, Get, Add, Edit, Delete) on purpose.
+#   CA1711: "Ex" names the extended variant of a libddb call or endpoint (GenerateThumbnailEx,
+#     /ex), "Queue" names the dataset and thumbnail work queues, which are not System.Collections
+#     queues, and "Permission" names an enum of tool permissions.
+dotnet_diagnostic.CA1716.severity = none
+dotnet_code_quality.CA1711.allowed_suffixes = Ex|Queue|Permission
+
+# Test methods are named Method_Scenario_Result (1420 CA1707 hits, all in test projects).
+# Production code has 0 CA1707 violations, so the rule stays a warning there.
+[*Test/**.cs]
+dotnet_diagnostic.CA1707.severity = suggestion
+# NUnit creates a fixture once and disposes its fields in [TearDown] or [OneTimeTearDown], not in
+# Dispose. NUnit.Analyzers checks that (NUnit1032), so CA1001 does not apply to the test projects.
+dotnet_diagnostic.CA1001.severity = none
+
+# EF Core scaffolds migrations with block-scoped namespaces. Do not edit them by hand.
+[**/Migrations/*.cs]
+dotnet_diagnostic.IDE0161.severity = none
+# The generated column arrays of a migration run once, when the migration is applied.
+dotnet_diagnostic.CA1861.severity = none
+
+# FileDescriptorType.Single means "one file" (as opposed to Multiple and Dataset), not System.Single.
+[Registry.Web/Models/DTO/FileStreamDescriptor.cs]
+dotnet_diagnostic.CA1720.severity = none

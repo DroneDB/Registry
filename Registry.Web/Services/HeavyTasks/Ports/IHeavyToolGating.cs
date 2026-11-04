@@ -1,6 +1,4 @@
-#nullable enable
 using System.Threading.Tasks;
-using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Services.HeavyTasks.Ports;
 
@@ -11,12 +9,6 @@ namespace Registry.Web.Services.HeavyTasks.Ports;
 /// </summary>
 public interface IHeavyToolGating
 {
-    /// <summary>
-    /// Returns the per-tool configuration for the given tool id, applying defaults
-    /// (Enabled, no restrictions) when the tool is not explicitly configured.
-    /// </summary>
-    HeavyToolConfig GetConfig(string toolId);
-
     /// <summary>
     /// Computes the effective state of a tool for the current caller. Pass
     /// <paramref name="orgSlug"/> = <c>null</c> for the global (features endpoint)

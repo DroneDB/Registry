@@ -1,20 +1,20 @@
-﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
 public class Delta
 {
-    [JsonProperty("adds")]
-    public AddAction[] Adds { get; set; }
+    [JsonPropertyName("adds")]
+    public AddAction[] Adds { get; set; } = [];
 
-    [JsonProperty("removes")]
-    public RemoveAction[] Removes { get; set; }
+    [JsonPropertyName("removes")]
+    public RemoveAction[] Removes { get; set; } = [];
 
-    [JsonProperty("metaAdds")]
-    public string[] MetaAdds { get; set; }
+    [JsonPropertyName("metaAdds")]
+    public string[] MetaAdds { get; set; } = [];
         
-    [JsonProperty("metaRemoves")]
-    public string[] MetaRemoves { get; set; }
+    [JsonPropertyName("metaRemoves")]
+    public string[] MetaRemoves { get; set; } = [];
 
 
 }

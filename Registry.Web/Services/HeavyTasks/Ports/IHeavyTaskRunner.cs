@@ -1,4 +1,3 @@
-#nullable enable
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -12,11 +11,4 @@ namespace Registry.Web.Services.HeavyTasks.Ports;
 public interface IHeavyTaskRunner
 {
     Task<HeavyTaskSubmitResult> SubmitAsync(HeavyTaskSubmitRequest request, CancellationToken ct = default);
-
-    /// <summary>
-    /// System (non-user) submit used by the gradual migration of the legacy
-    /// <c>EnqueueIndexed</c> build call sites. Bypasses quota and dedup, enqueues a
-    /// <c>build</c> task with <c>UserId = null</c>.
-    /// </summary>
-    string SubmitSystemBuild(string orgSlug, string dsSlug, string? path, bool force, string? hash = null);
 }
