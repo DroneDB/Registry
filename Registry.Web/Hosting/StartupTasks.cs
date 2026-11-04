@@ -51,12 +51,6 @@ public static class StartupTaskOrder
 
     /// <summary>Recurring job definitions (every host with the job storage), before the Hangfire servers start.</summary>
     public const int RecurringJobs = 300;
-
-    /// <summary>
-    /// The tasks the earlier process left queued or running end (InMemory job storage only), after the
-    /// database and before the Hangfire servers start.
-    /// </summary>
-    public const int LostJobs = 350;
 }
 
 /// <summary>

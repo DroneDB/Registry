@@ -80,7 +80,12 @@ public sealed class TaskLifecycle
         {
             return _processor.Delete(jobId);
         }
-        catch (Exception ex) when (ex is FormatException or ArgumentException)
+        catch (FormatException ex)
+        {
+            _logger.LogDebug(ex, "Job id {JobId} is not one of the job store", jobId);
+            return false;
+        }
+        catch (ArgumentException ex)
         {
             _logger.LogDebug(ex, "Job id {JobId} is not one of the job store", jobId);
             return false;

@@ -195,7 +195,12 @@ public class JobIndexSyncService
         {
             return monitoringApi.JobDetails(jobId) != null;
         }
-        catch (Exception ex) when (ex is FormatException or ArgumentException)
+        catch (FormatException ex)
+        {
+            _logger.LogDebug(ex, "Job id {JobId} is not one of the storage", jobId);
+            return false;
+        }
+        catch (ArgumentException ex)
         {
             _logger.LogDebug(ex, "Job id {JobId} is not one of the storage", jobId);
             return false;

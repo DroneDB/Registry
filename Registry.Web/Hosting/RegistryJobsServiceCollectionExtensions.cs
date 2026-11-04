@@ -65,7 +65,7 @@ public static class RegistryJobsServiceCollectionExtensions
 
         // The InMemory storage starts empty: the tasks the earlier process left queued or running are lost
         if (store.HangfireProvider == HangfireProvider.InMemory)
-            services.AddStartupTask<LostJobsStartupTask>();
+            services.AddBackgroundStartupTask<LostJobsStartupTask>();
 
         return services;
     }
