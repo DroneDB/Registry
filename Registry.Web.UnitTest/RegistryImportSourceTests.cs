@@ -1,11 +1,18 @@
+using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
+using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
+using Registry.Web.Models.DTO;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Import;
 using Registry.Web.Utilities;
@@ -102,5 +109,77 @@ public class RegistryImportSourceTests
         descriptor.StatusCode.ShouldBe(StatusCodes.Status403Forbidden);
         descriptor.NoRetry.ShouldBeTrue();
         descriptor.Message.ShouldBe(RegistryImportSource.AuthFailureMessage);
+    }
+}
+
+/// <summary>
+/// Tests for the URL of a remote registry given as the link of a page or of the API (pasted from the
+/// browser) instead of the address of the registry, and for an address that answers with a web page.
+/// </summary>
+[TestFixture]
+public class RegistryImportSourceUrlTests
+{
+    [TestCase("https://hub.dronedb.app", "https://hub.dronedb.app", null, null)]
+    [TestCase("https://hub.dronedb.app/", "https://hub.dronedb.app", null, null)]
+    [TestCase("https://hub.dronedb.app/r/odm/brighton-beach", "https://hub.dronedb.app", "odm", "brighton-beach")]
+    [TestCase("https://hub.dronedb.app/r/odm/brighton-beach/view/b2R/map?x=1#top", "https://hub.dronedb.app", "odm", "brighton-beach")]
+    [TestCase("https://hub.dronedb.app/r/odm", "https://hub.dronedb.app", "odm", null)]
+    [TestCase("https://hub.dronedb.app/orgs/odm/ds/brighton-beach/search", "https://hub.dronedb.app", "odm", "brighton-beach")]
+    [TestCase("http://example.org:5000/registry/r/acme/site", "http://example.org:5000/registry", "acme", "site")]
+    [TestCase("http://example.org:5000/registry", "http://example.org:5000/registry", null, null)]
+    public void SplitRegistryUrl_TakesTheBaseAddressOutOfTheLinkOfAPage(string url, string baseUrl, string? org,
+        string? ds)
+    {
+        var (b, o, d) = RegistryImportSource.SplitRegistryUrl(new Uri(url));
+
+        b.ShouldBe(baseUrl);
+        o.ShouldBe(org);
+        d.ShouldBe(ds);
+    }
+
+    [Test]
+    public async Task Probe_OfTheLinkOfADatasetPage_ListsTheDatasetOfTheLinkOnTheBaseAddress()
+    {
+        var client = new Mock<IRemoteRegistryClient>();
+        client.Setup(c => c.ListFilesAsync("http://8.8.8.8", null, "odm", "brighton-beach", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new EntryDto { Path = "a.jpg", Size = 10, Type = EntryType.Image }]);
+
+        var parameters = JsonSerializer.SerializeToElement(new Dictionary<string, string>
+        {
+            ["url"] = "http://8.8.8.8/r/odm/brighton-beach"
+        });
+
+        var probe = await new RegistryImportSource(client.Object, new SsrfGuard(new ImportSettings()))
+            .ProbeAsync(parameters, CancellationToken.None);
+
+        probe.Reachable.ShouldBeTrue();
+        probe.FileCount.ShouldBe(1);
+        probe.SuggestedName.ShouldBe("brighton-beach");
+    }
+
+    [Test]
+    public async Task ListFiles_OfAnAddressThatAnswersWithAWebPage_IsABadRequestThatNamesTheAddress()
+    {
+        var factory = new Mock<IHttpClientFactory>();
+        factory.Setup(f => f.CreateClient(It.IsAny<string>()))
+            .Returns(() => new HttpClient(new HtmlHandler()));
+        var client = new RemoteRegistryClient(factory.Object, new ImportSettings(), null!,
+            NullLogger<RemoteRegistryClient>.Instance);
+
+        var ex = await Should.ThrowAsync<BadRequestException>(() =>
+            client.ListFilesAsync("http://8.8.8.8/somewhere", null, "odm", "brighton-beach", CancellationToken.None));
+
+        ex.Message.ShouldBe(RemoteRegistryClient.NotARegistryMessage("http://8.8.8.8/somewhere"));
+        ex.NoRetry.ShouldBeTrue();
+    }
+
+    // The web app of a site: every path is its HTML page.
+    private sealed class HtmlHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("<!doctype html><html></html>", Encoding.UTF8, "text/html")
+            });
     }
 }

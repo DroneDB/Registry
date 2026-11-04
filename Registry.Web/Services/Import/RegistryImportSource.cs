@@ -86,9 +86,10 @@ public sealed class RegistryImportSource : IImportSource, IBrowsableImportSource
     private static RegistryParams ReadParams(JsonElement parameters)
     {
         var (url, host, username, password) = ReadConnectionParams(parameters);
-        var org = GetString(parameters, "organization")
+        var link = SplitRegistryUrl(new Uri(GetString(parameters, "url")!));
+        var org = GetString(parameters, "organization") ?? link.Organization
                   ?? throw new ArgumentException("A source organization is required.");
-        var dataset = GetString(parameters, "dataset")
+        var dataset = GetString(parameters, "dataset") ?? link.Dataset
                       ?? throw new ArgumentException("A source dataset is required.");
 
         return new RegistryParams(url, host, org, dataset, username, password);
@@ -112,6 +113,7 @@ public sealed class RegistryImportSource : IImportSource, IBrowsableImportSource
     {
         var (url, host, username, password) = ReadConnectionParams(parameters);
         var org = GetString(parameters, "organization")
+                  ?? SplitRegistryUrl(new Uri(GetString(parameters, "url")!)).Organization
                   ?? throw new ArgumentException("A source organization is required.");
         await _ssrfGuard.AssertAllowedAsync(host, ct);
 
@@ -133,7 +135,39 @@ public sealed class RegistryImportSource : IImportSource, IBrowsableImportSource
 
         var username = GetString(parameters, "username") ?? string.Empty;
         var password = GetString(parameters, "password") ?? string.Empty;
-        return (url, uri.Host, username, password);
+        return (SplitRegistryUrl(uri).BaseUrl, uri.Host, username, password);
+    }
+
+    /// <summary>
+    /// Splits the URL of a registry into its base address and the organization and the dataset it names
+    /// when it is the link of a page (<c>/r/{org}[/{ds}[/...]]</c>) or of the API
+    /// (<c>/orgs/{org}[/ds/{ds}[/...]]</c>) rather than the address of the registry: the API paths are
+    /// appended to the base address, and appended to the link of a page they reach the web app, which
+    /// answers every path with its HTML page. A path before <c>/r/</c> or <c>/orgs/</c> is kept
+    /// (a registry served below a prefix); the query and the fragment are dropped.
+    /// </summary>
+    /// <param name="uri">The absolute http/https URL given for the registry.</param>
+    /// <returns>The base address, and the organization and the dataset of the link (null when absent).</returns>
+    internal static (string BaseUrl, string? Organization, string? Dataset) SplitRegistryUrl(Uri uri)
+    {
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(Uri.UnescapeDataString).ToArray();
+        var origin = uri.GetLeftPart(UriPartial.Authority);
+
+        string Base(int count) => count == 0
+            ? origin
+            : $"{origin}/{string.Join('/', segments.Take(count).Select(Uri.EscapeDataString))}";
+
+        var r = Array.IndexOf(segments, "r");
+        if (r >= 0 && r + 1 < segments.Length)
+            return (Base(r), segments[r + 1], r + 2 < segments.Length ? segments[r + 2] : null);
+
+        var orgs = Array.IndexOf(segments, "orgs");
+        if (orgs >= 0 && orgs + 1 < segments.Length)
+            return (Base(orgs), segments[orgs + 1],
+                orgs + 3 < segments.Length && segments[orgs + 2] == "ds" ? segments[orgs + 3] : null);
+
+        return (uri.GetLeftPart(UriPartial.Path).TrimEnd('/'), null, null);
     }
 
     private static string? GetString(JsonElement obj, string name)

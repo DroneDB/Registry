@@ -13,6 +13,7 @@ using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.Import;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 
 namespace Registry.Web.Services.Import;
@@ -100,7 +101,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
             return [];
         }
 
-        var result = await response.Content.ReadAsStringAsync(ct);
+        var result = await ReadJsonAsync(response, registryUrl, ct);
         var entries = ApiJson.Deserialize<EntryDto[]>(result) ?? [];
 
         return [.. entries.Where(e => e.Type != EntryType.Directory)];
@@ -216,7 +217,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
             return [];
         }
 
-        var json = await response.Content.ReadAsStringAsync(ct);
+        var json = await ReadJsonAsync(response, registryUrl, ct);
         return BrowseItems(json);
     }
 
@@ -238,8 +239,26 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
             return [];
         }
 
-        var json = await response.Content.ReadAsStringAsync(ct);
+        var json = await ReadJsonAsync(response, registryUrl, ct);
         return BrowseItems(json);
+    }
+
+    /// <summary>The message of a registry URL that answers with something other than the JSON of the API.</summary>
+    internal static string NotARegistryMessage(string registryUrl) =>
+        $"{registryUrl} does not answer as a DroneDB Registry. Enter the address of the registry " +
+        "(for example https://hub.dronedb.app) or the link of a dataset (https://hub.dronedb.app/r/odm/brighton-beach).";
+
+    // The body of a successful answer of the API. The web app of a registry (or any other site) answers
+    // the API paths below a wrong address with an HTML page and 200: a 400 that names the address,
+    // not a JSON parse failure surfacing as a 500.
+    private static async Task<string> ReadJsonAsync(HttpResponseMessage response, string registryUrl,
+        CancellationToken ct)
+    {
+        var mediaType = response.Content.Headers.ContentType?.MediaType;
+        if (mediaType is null || !mediaType.Contains("json", StringComparison.OrdinalIgnoreCase))
+            throw new BadRequestException(NotARegistryMessage(registryUrl), noRetry: true);
+
+        return await response.Content.ReadAsStringAsync(ct);
     }
 
     // The slug and the name of each object of a remote listing (an organization, a dataset)
