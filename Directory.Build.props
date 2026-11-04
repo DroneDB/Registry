@@ -60,17 +60,17 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-11-02): the DroneDB v2.0.0 release, the first of libddb 2.x (ABI 2.0; the
-        handshake requires libddb 2.x). It is the code Registry was proven on with the CI build of
-        commit d74b2a65, plus the licence of the Debian package (MPL-2.0) and two fixes of the
-        release workflow (the tag build names the .deb ddb_2.0.0_amd64.deb). The SHA256 values
-        are those of the release's SHA256SUMS.
+        Pinned now (2026-11-04): the DroneDB v2.0.1 release (ABI 2.0; the handshake requires
+        libddb 2.x). It is v2.0.0 plus one Windows fix: the folders that libddb prepares for the
+        sandboxed gdal-util helper get their low integrity label below C:\ too, so vector builds
+        of a dataset there (registry-data below C:\) no longer fail. ddb.h and ddb.symbols are
+        identical to v2.0.0. The SHA256 values are those of the release's SHA256SUMS.
     -->
     <PropertyGroup>
         <DdbSource>release</DdbSource>
-        <DdbVersion>2.0.0</DdbVersion>
-        <DdbDebSha256>ec2cf606465e5f639557758d283fa5e2f2b2cfb71df7301a5b9860764b0efba2</DdbDebSha256>
-        <DdbWindowsZipSha256>8e3c81ec50a3115a0c651ed1002cbed872e32c3df62a3d4e3b0986861fa882ac</DdbWindowsZipSha256>
+        <DdbVersion>2.0.1</DdbVersion>
+        <DdbDebSha256>9a601d1c6653d35a10bfcafa74e90e04b39f0bca2f5881345686fd534f5129b5</DdbDebSha256>
+        <DdbWindowsZipSha256>f42df430b38288345ead728dc6f31edb1033f283a311732bdd9a557c4e1ef7d4</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
