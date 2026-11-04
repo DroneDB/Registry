@@ -4,8 +4,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
 using Hangfire.Server;
+using Hangfire.States;
+using Hangfire.Storage;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Attributes;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 
@@ -137,5 +140,65 @@ public class JobIndexSyncService
         }
 
         return new SyncResult(updated, notFound, skipped);
+    }
+
+    /// <summary>
+    /// Ends the tasks of jobs lost before this process started: rows still in an active state
+    /// (<see cref="TaskStateCatalog.Active"/>) whose last change is before <paramref name="startedUtc"/> and whose
+    /// job is missing from the storage become Deleted. The InMemory storage starts empty, so every task the
+    /// earlier process left queued or running is such a row; without this they stay Enqueued or Processing
+    /// for ever, and Cancel cannot delete their job. A row changed after <paramref name="startedUtc"/> is never
+    /// touched: the state filter writes a row before Hangfire commits its job, so a job created meanwhile may
+    /// not be visible yet (which is why <see cref="SyncAsync"/> leaves the states after Indexing alone).
+    /// </summary>
+    /// <returns>The number of rows ended.</returns>
+    internal async Task<int> CloseLostAsync(DateTime startedUtc, int pageSize = 1000, CancellationToken ct = default)
+    {
+        var monitoringApi = _storage.GetMonitoringApi();
+        var closed = 0;
+
+        foreach (var state in TaskStateCatalog.Active)
+        {
+            // The rows ended leave the state: the next page starts after the rows kept
+            var kept = 0;
+            while (true)
+            {
+                var page = await _jobIndexQuery.GetByStateAsync(state, kept, pageSize, ct);
+                foreach (var row in page)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if ((row.LastStateChangeUtc ?? row.CreatedAtUtc) < startedUtc && !Exists(monitoringApi, row.JobId) &&
+                        await _jobIndexWriter.UpdateStateIfCurrentAsync(row.JobId, [state], DeletedState.StateName,
+                            DateTime.UtcNow, ct))
+                    {
+                        closed++;
+                        continue;
+                    }
+
+                    kept++;
+                }
+
+                if (page.Length < pageSize)
+                    break;
+            }
+        }
+
+        if (closed > 0)
+            _logger.LogWarning("Ended {Count} task(s) whose job was lost when the job storage restarted", closed);
+        return closed;
+    }
+
+    // A job id the storage cannot read (a number of the earlier numbering in a GUID storage) is not there
+    private bool Exists(IMonitoringApi monitoringApi, string jobId)
+    {
+        try
+        {
+            return monitoringApi.JobDetails(jobId) != null;
+        }
+        catch (Exception ex) when (ex is FormatException or ArgumentException)
+        {
+            _logger.LogDebug(ex, "Job id {JobId} is not one of the storage", jobId);
+            return false;
+        }
     }
 }

@@ -485,6 +485,7 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/tools
   200 application/json array<TaskToolDto>
 DELETE /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}
   200 application/json DeletedDto
+  400 application/json ProblemDetails
   404 application/json ProblemDetails
 GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/{id}
   200 application/json TaskStatusDto

@@ -65,9 +65,11 @@ public interface ITasksManager
     Task<TaskArtifactFile> GetResultAsync(string orgSlug, string dsSlug, string id, CancellationToken ct = default);
 
     /// <summary>
-    /// Cancels a task, removing it from the job store.
+    /// Cancels a queued or running task, removing it from the job store; a task whose job the store no
+    /// longer has ends too.
     /// </summary>
-    /// <returns>True when the job store accepted the deletion.</returns>
+    /// <returns>True when the task was cancelled; false when it ended meanwhile.</returns>
+    /// <exception cref="Registry.Web.Exceptions.BadRequestException">The task has already ended.</exception>
     Task<bool> CancelAsync(string orgSlug, string dsSlug, string id, CancellationToken ct = default);
 
     /// <summary>

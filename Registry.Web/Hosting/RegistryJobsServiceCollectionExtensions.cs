@@ -3,6 +3,7 @@ using System.Linq;
 using System.Transactions;
 using Hangfire;
 using Hangfire.Console;
+using Hangfire.InMemory;
 using Hangfire.MySql;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -61,6 +62,11 @@ public static class RegistryJobsServiceCollectionExtensions
         IndexingStateHandler.EnsureRegistered();
 
         services.AddStartupTask<HangfireJobsInitializer>();
+
+        // The InMemory storage starts empty: the tasks the earlier process left queued or running are lost
+        if (store.HangfireProvider == HangfireProvider.InMemory)
+            services.AddStartupTask<LostJobsStartupTask>();
+
         return services;
     }
 
@@ -191,6 +197,14 @@ public static class RegistryJobsServiceCollectionExtensions
         TablesPrefix = tablesPrefix
     };
 
+    /// <summary>
+    /// The InMemory storage numbers its jobs with GUIDs: with numbers it starts from 1 at every start, while the
+    /// JobIndex (the task list, in the registry database) keeps the rows of the jobs of the earlier process, so a
+    /// new job took the id of an old task, its state changes overwrote that task's row and cancelling the old task
+    /// deleted the new job.
+    /// </summary>
+    internal static InMemoryStorageOptions InMemoryStorageOptions => new() { IdType = InMemoryStorageIdType.Guid };
+
     private static void UseStorage(IGlobalConfiguration hangfire, HangfireProvider provider,
         JobScheduleOptions schedule, string? connectionString)
     {
@@ -199,7 +213,7 @@ public static class RegistryJobsServiceCollectionExtensions
         switch (provider)
         {
             case HangfireProvider.InMemory:
-                hangfire.UseConsole().UseInMemoryStorage();
+                hangfire.UseConsole().UseInMemoryStorage(InMemoryStorageOptions);
                 break;
 
             case HangfireProvider.Mysql:

@@ -174,6 +174,7 @@ public class TasksController : ControllerBaseEx
 
     [HttpDelete("{id}", Name = nameof(TasksController) + "." + nameof(Cancel))]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<DeletedDto>> Cancel(
         [FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,

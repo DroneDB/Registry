@@ -1,8 +1,11 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Hangfire.States;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Services.Managers;
 using Registry.Web.Exceptions;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.PlatformTasks;
@@ -44,11 +47,44 @@ public sealed class TaskLifecycle
         return removedIds.Count;
     }
 
-    /// <summary>Cancels (deletes from the job store) a task; false when the job store no longer has it.</summary>
+    /// <summary>
+    /// Cancels a queued or running task: deletes its job from the job store. A task whose job the store no
+    /// longer has (lost when an InMemory store restarted) can never run, so it ends here too (Deleted); false
+    /// only when the task ended meanwhile.
+    /// </summary>
+    /// <exception cref="BadRequestException">The task has already ended.</exception>
     public async Task<bool> CancelAsync(string orgSlug, string dsSlug, string id, CancellationToken ct = default)
     {
         var job = await _authorizer.LoadAsync(orgSlug, dsSlug, id, AccessType.Write, ct);
-        return _processor.Delete(job.JobId);
+        if (TaskStateCatalog.IsTerminal(job.CurrentState))
+            throw new BadRequestException(
+                $"The task has already ended ({job.CurrentState}); only a queued or running task can be cancelled",
+                noRetry: true);
+
+        if (DeleteJob(job.JobId))
+            return true;
+
+        var ended = await _writer.UpdateStateIfCurrentAsync(job.JobId, TaskStateCatalog.Active,
+            DeletedState.StateName, DateTime.UtcNow, ct);
+        if (ended)
+            _logger.LogWarning("Cancelled task {JobId} of {Org}/{Ds}, whose job the job store no longer has",
+                job.JobId, orgSlug, dsSlug);
+        return ended;
+    }
+
+    // False when the store has no such job; a job id the store cannot read (a number of the earlier numbering
+    // in a GUID store) is not there either
+    private bool DeleteJob(string jobId)
+    {
+        try
+        {
+            return _processor.Delete(jobId);
+        }
+        catch (Exception ex) when (ex is FormatException or ArgumentException)
+        {
+            _logger.LogDebug(ex, "Job id {JobId} is not one of the job store", jobId);
+            return false;
+        }
     }
 
     /// <summary>Removes one concluded task from the history and purges its artifacts.</summary>
