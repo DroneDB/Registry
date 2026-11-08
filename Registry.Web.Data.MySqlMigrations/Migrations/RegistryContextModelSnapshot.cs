@@ -17,7 +17,7 @@ namespace Registry.Web.Data.Mysql.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.7")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
@@ -223,6 +223,10 @@ namespace Registry.Web.Data.Mysql.Migrations
                     b.Property<long?>("ArtifactSizeBytes")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("CancelledBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime(6)");
 
@@ -238,6 +242,10 @@ namespace Registry.Web.Data.Mysql.Migrations
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("varchar(128)");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(2048)
+                        .HasColumnType("varchar(2048)");
 
                     b.Property<string>("ErrorType")
                         .HasMaxLength(128)
@@ -264,6 +272,9 @@ namespace Registry.Web.Data.Mysql.Migrations
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("varchar(128)");
+
+                    b.Property<string>("OutputPathsJson")
+                        .HasColumnType("longtext");
 
                     b.Property<string>("ParentJobId")
                         .HasMaxLength(36)
@@ -300,6 +311,10 @@ namespace Registry.Web.Data.Mysql.Migrations
                     b.Property<DateTime?>("SucceededAtUtc")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<string>("TargetLabel")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
                     b.Property<string>("ToolId")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -318,9 +333,17 @@ namespace Registry.Web.Data.Mysql.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("varchar(128)");
 
+                    b.Property<bool>("WaitingForNode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("WorkflowExecutionId")
                         .HasMaxLength(36)
                         .HasColumnType("varchar(36)");
+
+                    b.Property<string>("WriteRecordJson")
+                        .HasColumnType("longtext");
 
                     b.HasKey("JobId");
 

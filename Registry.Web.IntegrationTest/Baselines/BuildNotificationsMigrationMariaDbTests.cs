@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -57,7 +58,11 @@ public class BuildNotificationsMigrationMariaDbTests
         var migrator = context.GetService<IMigrator>();
         await migrator.MigrateAsync();
 
-        await migrator.MigrateAsync(context.Database.GetMigrations().ToList()[^2]);
+        // The migration before BuildNotifications, found by name: later migrations follow it.
+        var beforeBuildNotifications = context.Database.GetMigrations()
+            .TakeWhile(m => !m.EndsWith("_BuildNotifications", StringComparison.Ordinal)).Last();
+
+        await migrator.MigrateAsync(beforeBuildNotifications);
         (await DuplicateDatasetSlugs.IndexNamesAsync(context, "BuildNotifications")).ShouldBeEmpty();
 
         await migrator.MigrateAsync();

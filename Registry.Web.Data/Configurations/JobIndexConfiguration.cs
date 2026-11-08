@@ -30,6 +30,12 @@ internal sealed class JobIndexConfiguration : IEntityTypeConfiguration<JobIndex>
         e.Property(x => x.ParentJobId).HasMaxLength(36);
         e.Property(x => x.WorkflowExecutionId).HasMaxLength(36);
 
+        // Task record (UX audit) columns
+        e.Property(x => x.ErrorMessage).HasMaxLength(2048);
+        e.Property(x => x.TargetLabel).HasMaxLength(256);
+        e.Property(x => x.WaitingForNode).HasDefaultValue(false);
+        e.Property(x => x.CancelledBy).HasMaxLength(128);
+
         e.HasIndex(x => new { x.OrgSlug, x.DsSlug });
         e.HasIndex(x => new { x.OrgSlug, x.DsSlug, x.Hash });
         e.HasIndex(x => x.UserId);

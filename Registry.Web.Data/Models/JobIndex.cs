@@ -80,6 +80,9 @@ public class JobIndex : IDatasetSlugKeyed
     /// <summary>Exception type name when the task failed.</summary>
     public string? ErrorType { get; set; }
 
+    /// <summary>User-readable message of the task error, without server paths (FR-XC-06).</summary>
+    public string? ErrorMessage { get; set; }
+
     /// <summary>Deduplication hash: sha256(toolId || version || entryHash || canonicalJson(params)).</summary>
     public string? RequestHash { get; set; }
 
@@ -94,4 +97,21 @@ public class JobIndex : IDatasetSlugKeyed
 
     /// <summary>Timestamp of the last progress update, for ETag on status.</summary>
     public DateTime? ProgressUpdatedAtUtc { get; set; }
+
+    // --- Task record (UX audit) extensions ---
+
+    /// <summary>JSON array of the dataset paths the task outputs, from the tool's OutputPaths (D-024).</summary>
+    public string? OutputPathsJson { get; set; }
+
+    /// <summary>Label of the task target shown in the task list (D-024).</summary>
+    public string? TargetLabel { get; set; }
+
+    /// <summary>True while a processing-node task waits for its node to start it (D-024, FR-PRC-37).</summary>
+    public bool WaitingForNode { get; set; }
+
+    /// <summary>User ID of the user who cancelled the task; set only by CancelAsync (D-038).</summary>
+    public string? CancelledBy { get; set; }
+
+    /// <summary>JSON write record: the dataset the task created and the paths it wrote, for rollback (D-045, FR-XC-27).</summary>
+    public string? WriteRecordJson { get; set; }
 }

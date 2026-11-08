@@ -15,7 +15,7 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.7");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.14");
 
             modelBuilder.Entity("Registry.Web.Data.Models.Batch", b =>
                 {
@@ -212,6 +212,10 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                     b.Property<long?>("ArtifactSizeBytes")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("CancelledBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("TEXT");
 
@@ -226,6 +230,10 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                     b.Property<string>("DsSlug")
                         .IsRequired()
                         .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(2048)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ErrorType")
@@ -252,6 +260,9 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                     b.Property<string>("OrgSlug")
                         .IsRequired()
                         .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OutputPathsJson")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ParentJobId")
@@ -289,6 +300,10 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                     b.Property<DateTime?>("SucceededAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("TargetLabel")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ToolId")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -307,8 +322,16 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("WaitingForNode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("WorkflowExecutionId")
                         .HasMaxLength(36)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WriteRecordJson")
                         .HasColumnType("TEXT");
 
                     b.HasKey("JobId");

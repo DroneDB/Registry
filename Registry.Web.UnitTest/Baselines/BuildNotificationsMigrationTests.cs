@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -67,9 +68,11 @@ public class BuildNotificationsMigrationTests
         using var context = Context(services);
         var migrator = context.GetService<IMigrator>();
         await migrator.MigrateAsync();
-        var migrations = context.Database.GetMigrations().ToList();
+        // The migration before BuildNotifications, found by name: later migrations follow it.
+        var beforeBuildNotifications = context.Database.GetMigrations()
+            .TakeWhile(m => !m.EndsWith("_BuildNotifications", StringComparison.Ordinal)).Last();
 
-        await migrator.MigrateAsync(migrations[^2]);
+        await migrator.MigrateAsync(beforeBuildNotifications);
         (await DuplicateDatasetSlugs.IndexNamesAsync(context, "BuildNotifications")).ShouldBeEmpty();
 
         await migrator.MigrateAsync();
