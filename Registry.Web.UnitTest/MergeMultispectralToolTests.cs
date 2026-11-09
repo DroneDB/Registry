@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
@@ -43,11 +44,30 @@ public class MergeMultispectralToolTests
     [TearDown]
     public void TearDown() => _h.Dispose();
 
-    private static HeavyToolRequest Request(string output, bool? overwrite = null) =>
+    private static HeavyToolRequest Request(string output, bool? overwrite = null, bool? deleteSources = null,
+        string[]? paths = null) =>
         new("merge-multispectral", "1", "org", "ds", null, JsonSerializer.SerializeToElement(new
         {
-            paths = new[] { "bands/b1.tif", "bands/b2.tif" }, outputPath = output, overwrite
+            paths = paths ?? ["bands/b1.tif", "bands/b2.tif"], outputPath = output, overwrite, deleteSources
         }));
+
+    /// <summary>The log of a run, synchronously (<see cref="Progress{T}"/> posts its reports).</summary>
+    private sealed class LogRecorder : IProgress<HeavyToolProgress>
+    {
+        public List<string> Lines { get; } = [];
+        public void Report(HeavyToolProgress value)
+        {
+            if (value.LogChunk is { } line) Lines.Add(line);
+        }
+    }
+
+    /// <summary>Records the raster open of the output and the removal of an entry in <see cref="OutputToolHarness.Calls"/>.</summary>
+    private void TrackSourceDeletes()
+    {
+        _h.Ddb.Setup(d => d.GetRasterInfo(It.IsAny<string>())).Callback<string>(p => _h.Calls.Add("open " + p))
+            .Returns("{}");
+        _h.Ddb.Setup(d => d.Remove(It.IsAny<string>())).Callback<string>(p => _h.Calls.Add("remove " + p));
+    }
 
     private Task Execute(HeavyToolRequest request) =>
         _tool.ExecuteAsync(request, _h.Ctx.Object, new Progress<HeavyToolProgress>(), CancellationToken.None);
@@ -164,5 +184,138 @@ public class MergeMultispectralToolTests
         await Should.ThrowAsync<DdbBusyException>(() => Execute(Request("bands/new.tif")));
 
         _h.Ctx.Verify(c => c.MarkOutputPublished("bands/new.tif"), Times.Once);
+    }
+
+    [Test]
+    public void DeclaresTheDeleteSourcesFlag()
+    {
+        var property = _tool.InputSchema.RootElement.GetProperty("properties").GetProperty("deleteSources");
+
+        property.GetProperty("type").GetString().ShouldBe("boolean");
+        property.GetProperty("default").GetBoolean().ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task DeleteSources_DeletesTheBands_OnlyAfterThePublishTheIndexAndTheRasterOpen()
+    {
+        TrackSourceDeletes();
+
+        await Execute(Request("bands/new.tif", deleteSources: true));
+
+        _h.Calls.ShouldBe([
+            "merge bands/new.tif", "published bands/new.tif", "index bands/new.tif", "open bands/new.tif",
+            "remove bands/b1.tif", "remove bands/b2.tif"
+        ]);
+        File.Exists(_h.Local("bands/b1.tif")).ShouldBeFalse();
+        File.Exists(_h.Local("bands/b2.tif")).ShouldBeFalse();
+        File.ReadAllText(_h.Local("bands/new.tif")).ShouldBe("merged");
+    }
+
+    [Test]
+    public async Task WithoutDeleteSources_TheBandsAreKept()
+    {
+        TrackSourceDeletes();
+
+        await Execute(Request("bands/new.tif"));
+
+        _h.Ddb.Verify(d => d.Remove(It.IsAny<string>()), Times.Never);
+        File.Exists(_h.Local("bands/b1.tif")).ShouldBeTrue();
+        File.Exists(_h.Local("bands/b2.tif")).ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task DeleteSources_AFailedMerge_KeepsTheBands()
+    {
+        TrackSourceDeletes();
+        _h.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()))
+            .Throws(new DdbException("merge failed"));
+
+        await Should.ThrowAsync<DdbException>(() => Execute(Request("bands/new.tif", deleteSources: true)));
+
+        _h.Ddb.Verify(d => d.Remove(It.IsAny<string>()), Times.Never);
+        File.Exists(_h.Local("bands/b1.tif")).ShouldBeTrue();
+        File.Exists(_h.Local("bands/b2.tif")).ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task DeleteSources_AFailedIndex_KeepsTheBands()
+    {
+        TrackSourceDeletes();
+        _h.Ddb.Setup(d => d.AddRaw("bands/new.tif")).Throws(new DdbBusyException("busy"));
+
+        await Should.ThrowAsync<DdbBusyException>(() => Execute(Request("bands/new.tif", deleteSources: true)));
+
+        _h.Ddb.Verify(d => d.Remove(It.IsAny<string>()), Times.Never);
+        File.Exists(_h.Local("bands/b1.tif")).ShouldBeTrue();
+        File.Exists(_h.Local("bands/b2.tif")).ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task DeleteSources_AnOutputThatDoesNotOpenAsARaster_KeepsTheBands()
+    {
+        TrackSourceDeletes();
+        _h.Ddb.Setup(d => d.GetRasterInfo("bands/new.tif")).Throws(new DdbException("not a raster"));
+
+        var ex = await Should.ThrowAsync<InvalidOperationException>(() =>
+            Execute(Request("bands/new.tif", deleteSources: true)));
+
+        ex.Message.ShouldContain("the source bands were kept");
+        _h.Ddb.Verify(d => d.Remove(It.IsAny<string>()), Times.Never);
+        File.Exists(_h.Local("bands/b1.tif")).ShouldBeTrue();
+        File.Exists(_h.Local("bands/b2.tif")).ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task DeleteSources_ALaterAttempt_SkipsTheBandsAnEarlierAttemptDeleted()
+    {
+        // The earlier attempt wrote the output and deleted b1, then failed: the retry indexes the output, skips b1
+        // (neither indexed nor on disk) and deletes b2, without failing
+        TrackSourceDeletes();
+        _h.File("bands/new.tif", "merged");
+        _h.PublishedBefore("bands/new.tif");
+        File.Delete(_h.Local("bands/b1.tif"));
+        _h.Ddb.Setup(d => d.EntryExists("bands/b1.tif")).Returns(false);
+        _h.Ddb.Setup(d => d.FindSummaries(It.Is<EntryQuery>(q => q.Path == "bands"))).Returns([
+            new EntrySummary { Path = "bands/b2.tif", Type = EntryType.GeoRaster },
+            new EntrySummary { Path = "bands/new.tif", Type = EntryType.GeoRaster }
+        ]);
+
+        await Execute(Request("bands/new.tif", deleteSources: true));
+
+        _h.Calls.ShouldBe(["index bands/new.tif", "open bands/new.tif", "remove bands/b2.tif"]);
+        _h.Ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()), Times.Never);
+        File.Exists(_h.Local("bands/b2.tif")).ShouldBeFalse();
+        File.ReadAllText(_h.Local("bands/new.tif")).ShouldBe("merged");
+    }
+
+    [Test]
+    public async Task DeleteSources_FindsEachBandWithoutRegardToLetterCase()
+    {
+        // The request names 'images/b3.tif', the dataset holds 'Images/B3.TIF' (D-040): that entry and its file go
+        TrackSourceDeletes();
+        _h.File("Images/B3.TIF");
+
+        await Execute(Request("bands/new.tif", deleteSources: true, paths: ["images/b3.tif", "bands/b2.tif"]));
+
+        _h.Calls.ShouldContain("remove Images/B3.TIF");
+        _h.Calls.ShouldContain("remove bands/b2.tif");
+        File.Exists(_h.Local("Images/B3.TIF")).ShouldBeFalse();
+        File.Exists(_h.Local("bands/b2.tif")).ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task DeleteSources_ABandThatCannotBeDeleted_IsLogged_AndTheMergeSucceeds()
+    {
+        TrackSourceDeletes();
+        _h.Ddb.Setup(d => d.Remove("bands/b1.tif")).Throws(new DdbException("the file is locked"));
+        var log = new LogRecorder();
+
+        await _tool.ExecuteAsync(Request("bands/new.tif", deleteSources: true), _h.Ctx.Object, log, CancellationToken.None);
+
+        log.Lines.ShouldContain("Could not delete source band 'bands/b1.tif': the file is locked");
+        _h.Calls.ShouldContain("remove bands/b2.tif");
+        File.Exists(_h.Local("bands/b1.tif")).ShouldBeTrue();
+        File.Exists(_h.Local("bands/b2.tif")).ShouldBeFalse();
+        log.Lines.ShouldContain("Merge complete");
     }
 }

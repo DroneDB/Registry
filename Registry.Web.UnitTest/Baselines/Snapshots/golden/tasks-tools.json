@@ -250,6 +250,11 @@
             "type": "boolean",
             "default": false,
             "description": "Replace the output file when it exists (without it, an existing output is refused with 409)."
+          },
+          "deleteSources": {
+            "type": "boolean",
+            "default": false,
+            "description": "Delete the band files once the merged output is written, indexed and opens as a raster."
           }
         },
         "additionalProperties": false

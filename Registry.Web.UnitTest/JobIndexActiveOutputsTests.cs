@@ -13,7 +13,8 @@ namespace Registry.Web.Test;
 
 /// <summary>
 /// <see cref="JobIndexQuery.GetActiveOutputsAsync"/> on SQLite: the declared outputs of the unfinished tasks of one
-/// dataset (Indexing included), never those of ended tasks, of other datasets or of rows without outputs.
+/// dataset (Indexing included), never those of ended tasks, of other datasets or of rows without outputs; and
+/// <see cref="JobIndexQuery.FindActiveDedupCandidateAsync"/>, the deduplication of a tool that writes the dataset.
 /// </summary>
 [TestFixture]
 public class JobIndexActiveOutputsTests
@@ -45,6 +46,38 @@ public class JobIndexActiveOutputsTests
         active.OrderBy(a => a.JobId).Select(a => (a.JobId, string.Join(",", a.Paths)))
             .ShouldBe([("indexing", "a.tif"), ("processing", "b.tif,c.tif")]);
         active.ShouldAllBe(a => a.ToolId == "merge-multispectral");
+    }
+
+    [Test]
+    public async Task ActiveDedupCandidate_IsTheNewestUnfinishedTaskOfTheSameRequest_NeverAFinishedOne()
+    {
+        JobIndex Same(string id, string state, int minutesAgo, string hash = "h", string ds = "ds")
+        {
+            var row = Row(id, state, "[\"out.tif\"]", ds);
+            row.RequestHash = hash;
+            row.CreatedAtUtc = DateTime.UtcNow.AddMinutes(-minutesAgo);
+            return row;
+        }
+
+        await using var db = TestDb.CreateContext<RegistryContext>(ctx =>
+        {
+            ctx.JobIndices.AddRange(
+                Same("succeeded", "Succeeded", 1),
+                Same("failed", "Failed", 2),
+                Same("other-hash", "Processing", 1, hash: "x"),
+                Same("other-ds", "Processing", 1, ds: "other"));
+            ctx.SaveChanges();
+        });
+        var query = new JobIndexQuery(db);
+
+        // A succeeded merge whose output was since deleted: the same request is not a duplicate of it
+        (await query.FindActiveDedupCandidateAsync("org", "ds", "merge-multispectral", "h")).ShouldBeNull();
+        (await query.FindDedupCandidateAsync("org", "ds", "merge-multispectral", "h", 24))!.JobId.ShouldBe("succeeded");
+
+        db.JobIndices.AddRange(Same("old-active", "Enqueued", 30), Same("indexing", "Indexing", 5));
+        await db.SaveChangesAsync();
+
+        (await query.FindActiveDedupCandidateAsync("org", "ds", "merge-multispectral", "h"))!.JobId.ShouldBe("indexing");
     }
 
     [Test]

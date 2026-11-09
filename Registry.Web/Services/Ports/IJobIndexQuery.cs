@@ -58,6 +58,14 @@ public interface IJobIndexQuery
         int lookbackHours, CancellationToken ct = default);
 
     /// <summary>
+    /// Finds an unfinished task (<c>Indexing</c> included) with the same dedup hash, never a finished one: the
+    /// submit deduplication of a tool that writes the dataset, whose earlier result may since have been deleted
+    /// or replaced (FR-PRC-02).
+    /// </summary>
+    Task<JobIndex?> FindActiveDedupCandidateAsync(
+        string orgSlug, string dsSlug, string toolId, string requestHash, CancellationToken ct = default);
+
+    /// <summary>
     /// Counts the active tasks of users (<see cref="HeavyTasks.UserTasks.CountTowardLimits"/>: no builds, no
     /// jobs of the automatic build service or of no user), optionally scoped by org, user and/or tool.
     /// </summary>

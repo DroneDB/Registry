@@ -147,14 +147,25 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
     {
         var cutoff = System.DateTime.UtcNow.AddHours(-lookbackHours);
 
-        return await db.JobIndices.AsNoTracking()
-            .Where(x => x.OrgSlug == orgSlug && x.DsSlug == dsSlug
-                        && x.ToolId == toolId && x.RequestHash == requestHash)
+        return await SameRequest(orgSlug, dsSlug, toolId, requestHash)
             .Where(x => ActiveStates.Contains(x.CurrentState)
                         || (x.CurrentState == "Succeeded" && x.CreatedAtUtc >= cutoff))
             .OrderByDescending(x => x.CreatedAtUtc)
             .FirstOrDefaultAsync(ct);
     }
+
+    public async Task<JobIndex?> FindActiveDedupCandidateAsync(
+        string orgSlug, string dsSlug, string toolId, string requestHash, CancellationToken ct = default) =>
+        await SameRequest(orgSlug, dsSlug, toolId, requestHash)
+            .Where(x => ActiveStates.Contains(x.CurrentState))
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .FirstOrDefaultAsync(ct);
+
+    // The task records of the dataset with the same tool and request hash
+    private IQueryable<JobIndex> SameRequest(string orgSlug, string dsSlug, string toolId, string requestHash) =>
+        db.JobIndices.AsNoTracking()
+            .Where(x => x.OrgSlug == orgSlug && x.DsSlug == dsSlug
+                        && x.ToolId == toolId && x.RequestHash == requestHash);
 
     public async Task<IReadOnlyList<ActiveTaskOutputs>> GetActiveOutputsAsync(string orgSlug, string dsSlug,
         CancellationToken ct = default)

@@ -103,7 +103,7 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         // Dedup first: an equivalent task is the one that writes these outputs, so a second click gets its id.
         // Workflow sub-tasks always force (never reuse a pre-existing terminal task).
         if (!request.Force &&
-            await _dedup.FindAsync(request.OrgSlug, request.DsSlug, tool.Id, requestHash, ct) is { } candidateId &&
+            await FindDuplicateAsync(request, tool, requestHash, ct) is { } candidateId &&
             candidateId != ownJobId)
         {
             _log.LogInformation("Deduplicated task submit for tool {ToolId} -> {JobId}", tool.Id, candidateId);
@@ -120,6 +120,20 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
             declared.Label), ct);
 
         return new HeavyTaskSubmitResult(jobId, tool.Id, tool.Version, false, plan.EstimatedOutputBytes);
+    }
+
+    // The task an equivalent submit gets (null: none, or deduplication is off). A finished task is reused only for a
+    // tool whose result is a downloadable artifact; a tool that writes the dataset reuses only an unfinished task,
+    // since what a finished one wrote may have been deleted or replaced since (FR-PRC-02)
+    private async Task<string?> FindDuplicateAsync(HeavyTaskSubmitRequest request, IHeavyTool tool, string requestHash,
+        CancellationToken ct)
+    {
+        var candidateId = await _dedup.FindAsync(request.OrgSlug, request.DsSlug, tool.Id, requestHash, ct);
+        if (candidateId is null || tool.ProducesArtifact)
+            return candidateId;
+
+        return (await _jobIndex.FindActiveDedupCandidateAsync(request.OrgSlug, request.DsSlug, tool.Id, requestHash, ct))
+            ?.JobId;
     }
 
     // An output that an unfinished task of the dataset writes (its own record excluded): 409

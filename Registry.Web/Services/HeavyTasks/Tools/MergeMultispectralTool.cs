@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Ports.DroneDB;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.HeavyTasks.Ports;
@@ -15,17 +16,19 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// Native tool that merges single-band rasters into a multi-band COG.
 /// CPU-bound (GDAL); offloaded from the request thread. Mutates the dataset in
 /// place (re-indexes the merged output) so it produces no downloadable artifact.
-/// Mirrors the legacy <c>ObjectsManager.MergeMultispectral</c> behaviour exactly.
+/// Mirrors the legacy <c>ObjectsManager.MergeMultispectral</c> behaviour exactly. With <c>deleteSources</c> it deletes
+/// the band files itself, only after the output is published, indexed and opens as a raster (FR-PRC-02).
 /// </summary>
 public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : HeavyToolBase<MergeMultispectralTool.Parameters>
 {
     /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
-    public sealed record Parameters(string[]? Paths, string? OutputPath, bool? Overwrite);
+    public sealed record Parameters(string[]? Paths, string? OutputPath, bool? Overwrite, bool? DeleteSources);
 
     protected override Parameters ReadParams(ToolParameters p) => new(
         p.NonBlankStrings("paths"),
         p.Text("outputPath"),
-        p.Flag("overwrite"));
+        p.Flag("overwrite"),
+        p.Flag("deleteSources"));
 
 
     private static readonly JsonDocument Schema = JsonDocument.Parse(
@@ -37,7 +40,8 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
           "properties": {
             "paths": { "type": "array", "items": { "type": "string" }, "description": "Single-band raster entry paths to merge, in band order." },
             "outputPath": { "type": "string", "description": "Output multi-band COG file name (dataset-relative)." },
-            "overwrite": { "type": "boolean", "default": false, "description": "Replace the output file when it exists (without it, an existing output is refused with 409)." }
+            "overwrite": { "type": "boolean", "default": false, "description": "Replace the output file when it exists (without it, an existing output is refused with 409)." },
+            "deleteSources": { "type": "boolean", "default": false, "description": "Delete the band files once the merged output is written, indexed and opens as a raster." }
           },
           "additionalProperties": false
         }
@@ -174,8 +178,56 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
         progress.Report(new HeavyToolProgress(-1, "indexing", LogChunk: "Indexing merged output"));
         ctx.Ddb.AddRaw(outputPath);
 
+        if (args.DeleteSources == true)
+            DeleteSources(ctx.Ddb, paths, outputPath, progress);
+
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: "Merge complete"));
         return null;
+    }
+
+    /// <summary>
+    /// Deletes the band files (index entry, then file) once the merged output opens as a raster (GDAL): a failed
+    /// open throws and keeps every band. Runs after the output is marked published and indexed, with no cancellation
+    /// check from the first delete on. Each band is found as the dataset names it (letter case ignored, D-040); a band
+    /// that is already gone (a retry of an attempt that deleted it) is skipped, and one that cannot be deleted (a locked
+    /// file) is logged and left, as the delete of entries does: the merge itself succeeded.
+    /// NOTE: unlike the delete of entries (EntryCommandService), this tells no one that the bands left the dataset
+    /// (EntryChangeNotifier.EntriesLeftAsync: OGC catalog, dataset thumbnail, waits of builds): the notifier is scoped
+    /// and this tool a singleton; the change notification of what a task writes or deletes belongs to FR-XC-27.
+    /// </summary>
+    private static void DeleteSources(IDDB ddb, string[] paths, string outputPath, IProgress<HeavyToolProgress> progress)
+    {
+        try
+        {
+            ddb.GetRasterInfo(outputPath);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"The merged output '{outputPath}' cannot be opened as a raster: the source bands were kept ({ex.Message})", ex);
+        }
+
+        progress.Report(new HeavyToolProgress(-1, "cleanup", LogChunk: $"Deleting {paths.Length} source bands"));
+        foreach (var path in paths)
+        {
+            // The band as the dataset holds it (indexed, or a file the index no longer lists)
+            if (DatasetEntryLookup.Locate(ddb, path).Existing is not { IsFolder: false } band)
+                continue;
+
+            try
+            {
+                if (ddb.EntryExists(band.Path))
+                    ddb.Remove(band.Path);
+                var local = ddb.GetLocalPath(band.Path);
+                if (File.Exists(local))
+                    File.Delete(local);
+            }
+            catch (Exception ex)
+            {
+                progress.Report(new HeavyToolProgress(-1, "cleanup",
+                    LogChunk: $"Could not delete source band '{band.Path}': {ex.Message}"));
+            }
+        }
     }
 
     private static string[] ReadErrors(JsonElement root)

@@ -75,7 +75,8 @@ public class HeavyTaskRunnerTests
 
     // ---- The two tools: they read "input" and write "output", and validate as told ----
 
-    private sealed class PathTool(string id, Func<Exception?>? validation = null) : HeavyToolBase<PathTool.P>
+    private sealed class PathTool(string id, Func<Exception?>? validation = null, bool producesArtifact = false)
+        : HeavyToolBase<PathTool.P>
     {
         public sealed record P(string? Input, string? Output);
 
@@ -85,7 +86,7 @@ public class HeavyTaskRunnerTests
         public override string Version => "1";
         public override string Title => id;
         public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
-        public override bool ProducesArtifact => false;
+        public override bool ProducesArtifact => producesArtifact;
         public override JsonDocument InputSchema { get; } = JsonDocument.Parse("{}");
 
         protected override P ReadParams(ToolParameters p) => new(p.Text("input"), p.Text("output"));
@@ -143,10 +144,16 @@ public class HeavyTaskRunnerTests
         _index.Setup(q => q.GetActiveOutputsAsync(Org, Ds, It.IsAny<CancellationToken>()))
             .ReturnsAsync([new ActiveTaskOutputs(jobId, tool, outputs)]);
 
-    private void Duplicate(string tool, string jobId) =>
+    // A task of the same request in the history: an unfinished one is also found by the active-only lookup
+    private void Duplicate(string tool, string jobId, string state = "Processing")
+    {
+        var row = new JobIndex { JobId = jobId, ToolId = tool, CurrentState = state };
         _index.Setup(q => q.FindDedupCandidateAsync(Org, Ds, tool, It.IsAny<string>(), It.IsAny<int>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new JobIndex { JobId = jobId, ToolId = tool, CurrentState = "Processing" });
+            .ReturnsAsync(row);
+        _index.Setup(q => q.FindActiveDedupCandidateAsync(Org, Ds, tool, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(state == "Succeeded" ? null : row);
+    }
 
     // ---- Output is an input ----
 
@@ -179,6 +186,46 @@ public class HeavyTaskRunnerTests
         result.TaskId.ShouldBe("first");
         result.Deduplicated.ShouldBeTrue();
         _enqueued.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task ASucceededTaskOfAToolThatWritesTheDataset_IsNotReused_ANewTaskStarts()
+    {
+        // A merge that succeeded, whose output the user deleted: the same submit runs again (FR-PRC-02)
+        Duplicate("writer", "done", state: "Succeeded");
+
+        var result = await Runner().SubmitAsync(Submit("writer", "in.tif", "out/a.tif"));
+
+        result.Deduplicated.ShouldBeFalse();
+        result.TaskId.ShouldBe("task-1");
+        _enqueued.Count.ShouldBe(1);
+    }
+
+    [Test]
+    public async Task ASucceededTaskOfAToolThatProducesAnArtifact_IsReused()
+    {
+        _tools["export"] = new PathTool("export", producesArtifact: true);
+        Duplicate("export", "done", state: "Succeeded");
+
+        var result = await Runner().SubmitAsync(Submit("export", "in.tif", null));
+
+        result.TaskId.ShouldBe("done");
+        result.Deduplicated.ShouldBeTrue();
+        _enqueued.ShouldBeEmpty();
+        _index.Verify(q => q.FindActiveDedupCandidateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task WithDeduplicationOff_NoTaskIsReused()
+    {
+        _settings.DedupEnabled = false;
+        Duplicate("writer", "running");
+
+        var result = await Runner().SubmitAsync(Submit("writer", "in.tif", "out/a.tif"));
+
+        result.Deduplicated.ShouldBeFalse();
+        _enqueued.Count.ShouldBe(1);
     }
 
     // ---- An output that an unfinished task writes ----
