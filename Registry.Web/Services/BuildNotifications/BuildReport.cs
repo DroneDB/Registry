@@ -33,15 +33,16 @@ public sealed record BuildReport(
     BuildRequest Request)
 {
     /// <summary>
-    /// <paramref name="error"/> as an e-mail shows it: the dataset folder replaced (the e-mail goes outside the server)
-    /// and at most <see cref="BuildNotification.ErrorMaxLength"/> characters. Null for a blank text.
+    /// <paramref name="error"/> as an e-mail shows it: the text of <see cref="JobLogText.UserMessage(string?, string?)"/>
+    /// (a known message in plain words, no server path: the e-mail goes outside the server) and at most
+    /// <see cref="BuildNotification.ErrorMaxLength"/> characters. Null for a blank text.
     /// </summary>
     public static string? ShortError(string? error, string? datasetFolderPath)
     {
         if (string.IsNullOrWhiteSpace(error))
             return null;
 
-        var scrubbed = JobLogText.ScrubDatasetPath(error.Trim(), datasetFolderPath);
+        var scrubbed = JobLogText.UserMessage(error, datasetFolderPath);
         return scrubbed.Length <= BuildNotification.ErrorMaxLength
             ? scrubbed
             : string.Concat(scrubbed.AsSpan(0, BuildNotification.ErrorMaxLength - 1), "…");

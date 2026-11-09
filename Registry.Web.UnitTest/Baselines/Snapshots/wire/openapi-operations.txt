@@ -1010,7 +1010,7 @@ GET /users/{userName}/storage
 schema AddOrganizationMemberDto { userName:string, permissions:OrganizationPermissions }
 schema AddUserToOrganizationDto { orgSlug:string, permissions:OrganizationPermissions }
 schema AdminTaskListDto { items:array<AdminTaskSummaryDto>, total:integer(int64), skip:integer(int32), take:integer(int32) }
-schema AdminTaskSummaryDto { taskId:string, orgSlug:string, dsSlug:string, toolId:string, version:string, state:string, progressPercent:integer(int32), phaseMessage:string, createdAt:string(date-time), startedAt:string(date-time), finishedAt:string(date-time), path:string, userId:string, owner:string, errorType:string, artifactExpiresAt:string(date-time), waitingForFiles:boolean, missingFiles:array<string> }
+schema AdminTaskSummaryDto { taskId:string, orgSlug:string, dsSlug:string, toolId:string, version:string, state:string, progressPercent:integer(int32), phaseMessage:string, createdAt:string(date-time), startedAt:string(date-time), finishedAt:string(date-time), path:string, userId:string, owner:string, errorType:string, error:string, artifactExpiresAt:string(date-time), waitingForFiles:boolean, missingFiles:array<string> }
 schema AlignRasterRequestDto { sourcePath:string, referencePath:string, outputPath:string, mode:string }
 schema ArtifactLinkDto { role:string, url:string, mediaType:string, downloadName:string }
 schema AuthenticateResponse { username:string, token:string, expires:string(date-time) }

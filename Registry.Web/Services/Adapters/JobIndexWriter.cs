@@ -10,6 +10,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Caching;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
@@ -132,6 +133,7 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
                 .SetProperty(x => x.ArtifactSizeBytes, (long?)null)
                 .SetProperty(x => x.ArtifactSha256, (string?)null)
                 .SetProperty(x => x.ErrorType, (string?)null)
+                .SetProperty(x => x.ErrorMessage, (string?)null)
                 .SetProperty(x => x.LogTailJson, (string?)null)
                 .SetProperty(x => x.ProgressUpdatedAtUtc, (DateTime?)null), ct);
         return updated > 0;
@@ -168,6 +170,7 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
         row.ArtifactSizeBytes = null;
         row.ArtifactSha256 = null;
         row.ErrorType = null;
+        row.ErrorMessage = null;
         row.LogTailJson = null;
         row.ProgressUpdatedAtUtc = null;
     }
@@ -193,6 +196,7 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
         ji.ArtifactSizeBytes = null;
         ji.ArtifactSha256 = null;
         ji.ErrorType = null;
+        ji.ErrorMessage = null;
         ji.LogTailJson = null;
         ji.ProgressUpdatedAtUtc = null;
 
@@ -251,10 +255,12 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
                     .SetProperty(x => x.LastStateChangeUtc, changedAtUtc);
                 if (newState == ProcessingState.StateName)
                     s.SetProperty(x => x.ProcessingAtUtc, changedAtUtc)
-                        .SetProperty(x => x.ErrorType, (string?)null);
+                        .SetProperty(x => x.ErrorType, (string?)null)
+                        .SetProperty(x => x.ErrorMessage, (string?)null);
                 else if (newState == SucceededState.StateName)
                     s.SetProperty(x => x.SucceededAtUtc, changedAtUtc)
-                        .SetProperty(x => x.ErrorType, (string?)null);
+                        .SetProperty(x => x.ErrorType, (string?)null)
+                        .SetProperty(x => x.ErrorMessage, (string?)null);
                 else if (newState == FailedState.StateName)
                     s.SetProperty(x => x.FailedAtUtc, changedAtUtc);
                 else if (newState == DeletedState.StateName)
@@ -287,11 +293,13 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
         {
             ji.ProcessingAtUtc = changedAtUtc;
             ji.ErrorType = null;
+            ji.ErrorMessage = null;
         }
         else if (newState == SucceededState.StateName)
         {
             ji.SucceededAtUtc = changedAtUtc;
             ji.ErrorType = null;
+            ji.ErrorMessage = null;
         }
         else if (newState == FailedState.StateName)
             ji.FailedAtUtc = changedAtUtc;
@@ -417,7 +425,8 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
             await InvalidateTasksListCacheAsync(ji.OrgSlug, ji.DsSlug, ct);
     }
 
-    public async Task UpdateErrorAsync(string jobId, string errorType, CancellationToken ct = default)
+    public async Task UpdateErrorAsync(string jobId, string errorType, string? errorMessage,
+        CancellationToken ct = default)
     {
         var ji = await db.JobIndices.AsTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
         if (ji is null)
@@ -427,6 +436,10 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
         }
 
         ji.ErrorType = errorType;
+        // The column's limit (JobLogText.UserMessage keeps to it already)
+        ji.ErrorMessage = errorMessage is { Length: > JobLogText.UserMessageMaxLength }
+            ? errorMessage[..JobLogText.UserMessageMaxLength]
+            : errorMessage;
 
         try
         {

@@ -1,9 +1,11 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
+using Registry.Ports.DroneDB;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
@@ -72,7 +74,99 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
         if (!ctx.Ddb.EntryExists(request.Path!))
             throw new ArgumentException($"Source raster '{request.Path}' does not exist in the dataset.");
 
+        if (!string.IsNullOrWhiteSpace(p.Formula))
+            ValidateFormula(ctx.Ddb, request.Path!, p.Formula!, p.BandFilter, ct);
+
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Refuses (400) a formula the raster cannot compute before the task is queued, with the reason raster-metadata
+    /// gives (FR-DEV-05): libddb 2.1 refuses it itself (<see cref="DdbInvalidArgumentsException"/>: "Unknown formula:
+    /// BOGUS", "Requires bands: RN"); libddb 2.0 computes it all the same and only marks it in its list of formulas
+    /// (<c>disabled</c>, <c>disabledReason</c>), or fails with a plain error. Any other failure is left to the export,
+    /// which says what is wrong with the file.
+    /// </summary>
+    private static void ValidateFormula(IDDB ddb, string path, string formula, string? bandFilter, CancellationToken ct)
+    {
+        string metadata;
+        try
+        {
+            metadata = ddb.GetRasterMetadata(path, formula, bandFilter);
+        }
+        catch (DdbInvalidArgumentsException ex)
+        {
+            if (RendersAnyway(formula, ex.Message))
+                return;
+            throw new ArgumentException(FormulaRefusal(formula, ex.Message), ex);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // libddb 2.0: the formula fails as a plain error; its list of formulas says why
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                metadata = ddb.GetRasterMetadata(path, null, bandFilter);
+            }
+            catch (Exception listEx) when (listEx is not OperationCanceledException)
+            {
+                return;
+            }
+        }
+
+        if (ListedRefusal(metadata, formula) is { } refusal)
+            throw new ArgumentException(refusal);
+    }
+
+    // The temperature formulas read the single band of a DEM or of a thermal raster without a sensor profile: libddb's
+    // list of formulas marks them "Requires bands: T" (no band is mapped to T), while the rendering computes them from
+    // the first band. A missing band is no refusal for them; any other reason is.
+    private static readonly string[] SingleBandFormulas = ["CELSIUS", "KELVIN"];
+
+    private static bool RendersAnyway(string formula, string reason) =>
+        SingleBandFormulas.Contains(formula, StringComparer.Ordinal) &&
+        reason.StartsWith("Requires bands", StringComparison.OrdinalIgnoreCase);
+
+    // The reason libddb gave, with the formula it is about
+    private static string FormulaRefusal(string formula, string reason) =>
+        reason.StartsWith("Unknown formula", StringComparison.OrdinalIgnoreCase)
+            ? reason
+            : $"{formula} is not available for this raster: {reason}";
+
+    // Why the list of formulas of raster-metadata refuses formula (unknown or disabled), or null
+    private static string? ListedRefusal(string metadata, string formula)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(metadata);
+            if (!doc.RootElement.TryGetProperty("algorithms", out var algorithms) ||
+                algorithms.ValueKind != JsonValueKind.Array)
+                return null;
+
+            foreach (var algorithm in algorithms.EnumerateArray())
+            {
+                if (algorithm.ValueKind != JsonValueKind.Object ||
+                    !algorithm.TryGetProperty("id", out var id) || id.ValueKind != JsonValueKind.String ||
+                    id.GetString() != formula)
+                    continue;
+
+                if (!algorithm.TryGetProperty("disabled", out var disabled) || disabled.ValueKind != JsonValueKind.True)
+                    return null;
+
+                var reason = algorithm.TryGetProperty("disabledReason", out var why) &&
+                             why.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(why.GetString())
+                    ? why.GetString()!
+                    : "its bands are missing";
+                return RendersAnyway(formula, reason) ? null : FormulaRefusal(formula, reason);
+            }
+
+            return $"Unknown formula: {formula}";
+        }
+        catch (JsonException)
+        {
+            // Not the shape of raster-metadata: the export decides
+            return null;
+        }
     }
 
     protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters p, IHeavyToolValidationContext ctx)

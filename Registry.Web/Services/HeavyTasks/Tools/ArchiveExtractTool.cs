@@ -12,6 +12,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -241,7 +242,8 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
             catch (Exception ex)
             {
                 progress.Report(new HeavyToolProgress(1, "cleanup",
-                    LogChunk: $"Could not delete source archive '{sourcePath}': {ex.Message}"));
+                    LogChunk: $"Could not delete source archive '{sourcePath}': " +
+                              JobLogText.UserMessage(ex, ctx.Ddb.DatasetFolderPath)));
             }
         }
 

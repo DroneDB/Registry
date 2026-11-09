@@ -85,6 +85,10 @@ public class IndexedJobPublicationRecoveryService
     /// <summary>Prefix of the reason stored on a job cancelled because of its publication record.</summary>
     internal const string InvalidRecordReasonPrefix = "Invalid publication record";
 
+    /// <summary>The error message of a task cancelled because of its publication record, for <paramref name="category"/>.</summary>
+    internal static string InvalidRecordMessage(string category) =>
+        $"The task could not be started and was cancelled: its queue record is invalid ({category}).";
+
     /// <summary>Short, stable reason categories stored in Hangfire; the full detail goes to the log only.</summary>
     internal const string MalformedRecordCategory = "malformed";
     internal const string UnsupportedDestinationCategory = "unsupported destination";
@@ -390,7 +394,7 @@ public class IndexedJobPublicationRecoveryService
             {
                 // No-ops when the publication never created its JobIndex row.
                 await _writer.UpdateStateAsync(jobId, DeletedState.StateName, now, ct);
-                await _writer.UpdateErrorAsync(jobId, InvalidRecordErrorType, ct);
+                await _writer.UpdateErrorAsync(jobId, InvalidRecordErrorType, InvalidRecordMessage(category), ct);
             }
             catch (Exception ex)
             {

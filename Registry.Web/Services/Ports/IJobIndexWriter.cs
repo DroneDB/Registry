@@ -91,6 +91,10 @@ public interface IJobIndexWriter
     /// <summary>Persists produced-artifact metadata (size + SHA-256) for a task.</summary>
     Task UpdateArtifactAsync(string jobId, long sizeBytes, string? sha256, CancellationToken ct = default);
 
-    /// <summary>Records the exception type name when a task failed.</summary>
-    Task UpdateErrorAsync(string jobId, string errorType, CancellationToken ct = default);
+    /// <summary>
+    /// Records why a task failed: the exception type name (<c>ErrorType</c>, for administrators and the retry rules) and
+    /// the message a reader of the task sees (<c>ErrorMessage</c>, from <c>JobLogText.UserMessage</c>: no server path;
+    /// null when there is none).
+    /// </summary>
+    Task UpdateErrorAsync(string jobId, string errorType, string? errorMessage, CancellationToken ct = default);
 }

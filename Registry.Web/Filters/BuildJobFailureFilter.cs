@@ -1,7 +1,11 @@
+using System;
+using Hangfire.Common;
 using Hangfire.States;
 using Hangfire.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
@@ -44,17 +48,20 @@ public sealed class BuildJobFailureFilter(
                 jobId, methodName, orgSlug, dsSlug);
 
             using var scope = scopes.CreateScope();
-            // Persist WHY the build failed: JobIndex.ErrorType = bare exception type name,
-            // same convention as heavy tasks (HeavyTaskJobWrapper). The message itself lives
-            // in the log tail persisted by BuildLogCaptureFilter; here we only record the
-            // class (native failures surface as DdbException). Synchronous filter ->
+            // Persist WHY the build failed, as heavy tasks do (HeavyTaskJobWrapper): JobIndex.ErrorType =
+            // bare exception type name (native failures surface as DdbException), JobIndex.ErrorMessage = the
+            // reason a reader of the task may see (JobLogText.UserMessage: no server path). The full log
+            // lives in the log tail persisted by BuildLogCaptureFilter. Synchronous filter ->
             // GetAwaiter().GetResult() like the observation refresh below.
             // Runs only when org/ds params are present (above early return): the writer
             // also busts the org/ds-scoped tasks-list cache. Errors stay inside the guard
             // so logging-path failures never break state transitions.
             var errorType = failedState.Exception?.GetType().Name ?? "Failed";
+            var errorMessage = failedState.Exception is { } failure
+                ? JobLogText.UserMessage(failure, DatasetFolderOf(context.BackgroundJob.Job, orgSlug, scope.ServiceProvider))
+                : null;
             var writer = scope.ServiceProvider.GetRequiredService<IJobIndexWriter>();
-            writer.UpdateErrorAsync(jobId, errorType).GetAwaiter().GetResult();
+            writer.UpdateErrorAsync(jobId, errorType, errorMessage).GetAwaiter().GetResult();
             log.LogInformation(
                 "BuildJobFailureFilter: job {JobId} ErrorType recorded as '{ErrorType}'",
                 jobId, errorType);
@@ -62,6 +69,26 @@ public sealed class BuildJobFailureFilter(
             var pending = scope.ServiceProvider.GetRequiredService<BuildPendingService>();
             pending.RefreshPendingStatus(orgSlug, dsSlug, context.Storage).GetAwaiter().GetResult();
         });
+
+    // The folder of the dataset the build job worked on, so its error names files relative to it; null when the job
+    // does not say (JobLogText.UserMessage then removes every server path all the same)
+    private string? DatasetFolderOf(Job job, string orgSlug, IServiceProvider services)
+    {
+        try
+        {
+            // DdbJobs: (orgSlug, internalRef, ...); the jobs of earlier releases: (IDDB ddb, ...)
+            if (job.Args is [IDDB ddb, ..])
+                return ddb.DatasetFolderPath;
+            if (job.Args is [_, Guid internalRef, ..])
+                return services.GetService<IDdbManager>()?.GetDatasetFolder(orgSlug, internalRef);
+        }
+        catch (Exception ex)
+        {
+            log.LogDebug(ex, "BuildJobFailureFilter: cannot tell the dataset folder of a failed build");
+        }
+
+        return null;
+    }
 
     public void OnStateUnapplied(ApplyStateContext context, IWriteOnlyTransaction transaction)
     {

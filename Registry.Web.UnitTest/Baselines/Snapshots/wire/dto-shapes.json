@@ -807,6 +807,7 @@
           "userId": "UserId-text",
           "owner": "Owner-text",
           "errorType": "ErrorType-text",
+          "error": "Error-text",
           "artifactExpiresAt": "2026-10-21T07:31:17.123Z",
           "waitingForFiles": true,
           "missingFiles": [
@@ -842,6 +843,7 @@
       "userId": "UserId-text",
       "owner": "Owner-text",
       "errorType": "ErrorType-text",
+      "error": "Error-text",
       "artifactExpiresAt": "2026-10-21T07:31:17.123Z",
       "waitingForFiles": true,
       "missingFiles": [
@@ -864,6 +866,7 @@
       "userId": null,
       "owner": null,
       "errorType": null,
+      "error": null,
       "artifactExpiresAt": null,
       "waitingForFiles": false,
       "missingFiles": null
@@ -3976,6 +3979,7 @@
       "parentJobId": "ParentJobId-text",
       "workflowExecutionId": "WorkflowExecutionId-text",
       "errorType": "ErrorType-text",
+      "error": "Error-text",
       "artifactExpiresAt": "2026-10-21T07:31:17.123Z",
       "background": true,
       "waitingForFiles": true,
@@ -3997,6 +4001,7 @@
       "parentJobId": null,
       "workflowExecutionId": null,
       "errorType": null,
+      "error": null,
       "artifactExpiresAt": null,
       "background": false,
       "waitingForFiles": false,

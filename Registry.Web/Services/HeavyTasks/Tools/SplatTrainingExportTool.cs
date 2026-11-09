@@ -115,7 +115,8 @@ public sealed class SplatTrainingExportTool : HeavyToolBase<SplatTrainingExportT
         progress.Report(new HeavyToolProgress(0, "cameras", LogChunk: $"Exporting the training data of '{project}'"));
 
         var lastPhase = "cameras";
-        var export = await progress.ReportingFailureAsync(() => Task.Run(() => ctx.Ddb.ExportSplatTrainingData(project,
+        // A failure is the task's: HeavyTaskJobWrapper records it and ends the log with its message, without server paths
+        var export = await Task.Run(() => ctx.Ddb.ExportSplatTrainingData(project,
             exportFolder, options,
             (fraction, phase) =>
             {
@@ -123,7 +124,7 @@ public sealed class SplatTrainingExportTool : HeavyToolBase<SplatTrainingExportT
                 var logChunk = !string.IsNullOrEmpty(phase) && phase != lastPhase ? $"Phase: {phase}" : null;
                 lastPhase = phase ?? lastPhase;
                 progress.Report(new HeavyToolProgress(fraction * ExportShare, phase, LogChunk: logChunk));
-            }, ct), ct));
+            }, ct), ct);
 
         // What the user should know before training goes to the log, one line each
         foreach (var warning in export.Warnings)

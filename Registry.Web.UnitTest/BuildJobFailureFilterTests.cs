@@ -115,7 +115,7 @@ public class BuildJobFailureFilterTests
 
         _filter.OnStateApplied(ctx, Mock.Of<IWriteOnlyTransaction>());
 
-        _writerMock.Verify(w => w.UpdateErrorAsync(JobId, "DdbException", default), Times.Once);
+        _writerMock.Verify(w => w.UpdateErrorAsync(JobId, "DdbException", "gdal cannot open", default), Times.Once);
         _cacheMock.Verify(c => c.RemoveByCategoryAsync(
             MagicStrings.BuildPendingTrackerCacheSeed, It.IsAny<string>()), Times.Never);
         _cacheMock.Verify(c => c.GetAsync(MagicStrings.BuildPendingTrackerCacheSeed, It.IsAny<string>()), Times.Once);
@@ -129,7 +129,7 @@ public class BuildJobFailureFilterTests
 
         _filter.OnStateApplied(ctx, Mock.Of<IWriteOnlyTransaction>());
 
-        _writerMock.Verify(w => w.UpdateErrorAsync(JobId, "DdbException", default), Times.Once);
+        _writerMock.Verify(w => w.UpdateErrorAsync(JobId, "DdbException", "gdal cannot open", default), Times.Once);
     }
 
     [Test]
@@ -139,7 +139,7 @@ public class BuildJobFailureFilterTests
 
         _filter.OnStateApplied(ctx, Mock.Of<IWriteOnlyTransaction>());
 
-        _writerMock.Verify(w => w.UpdateErrorAsync(It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
+        _writerMock.Verify(w => w.UpdateErrorAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), default), Times.Never);
     }
 
     [Test]
@@ -150,7 +150,26 @@ public class BuildJobFailureFilterTests
 
         _filter.OnStateApplied(ctx, Mock.Of<IWriteOnlyTransaction>());
 
-        _writerMock.Verify(w => w.UpdateErrorAsync(JobId, "InvalidOperationException", default), Times.Once);
+        _writerMock.Verify(w => w.UpdateErrorAsync(JobId, "InvalidOperationException", "boom", default), Times.Once);
+    }
+
+    // FR-XC-06, FR-PRC-24: the build records the reason a reader of the task may see, relative to its dataset folder,
+    // without the folder of the server
+    [Test]
+    public void OnStateApplied_FailedBuild_WritesTheUserMessageWithoutTheDatasetFolder()
+    {
+        const string folder = "/mnt/data/datasets/org/0b9c4a52-3f5e-4c1e-9a65-1f0e2d3c4b5a";
+        var ddb = Mock.Of<IDDB>(d => d.DatasetFolderPath == folder);
+        var method = typeof(HangfireUtils).GetMethod(nameof(HangfireUtils.BuildWrapper))!;
+        var job = new BackgroundJob(JobId, new Job(typeof(HangfireUtils), method, ddb, "a.tif", false, null), DateTime.UtcNow);
+        var ctx = new ApplyStateContext(JobStorage.Current, _connMock.Object, Mock.Of<IWriteOnlyTransaction>(), job,
+            new FailedState(new InvalidOperationException("Cannot build 'a.tif'",
+                new DdbException($"Cannot open {folder}/sub/a.tif: no such file"))), "Processing");
+
+        _filter.OnStateApplied(ctx, Mock.Of<IWriteOnlyTransaction>());
+
+        _writerMock.Verify(w => w.UpdateErrorAsync(JobId, "InvalidOperationException",
+            "Cannot open [dataset]/sub/a.tif: no such file", default), Times.Once);
     }
 
     [Test]
@@ -160,7 +179,7 @@ public class BuildJobFailureFilterTests
 
         _filter.OnStateApplied(ctx, Mock.Of<IWriteOnlyTransaction>());
 
-        _writerMock.Verify(w => w.UpdateErrorAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _writerMock.Verify(w => w.UpdateErrorAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
         _cacheMock.Verify(c => c.RemoveByCategoryAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
@@ -172,7 +191,7 @@ public class BuildJobFailureFilterTests
 
         _filter.OnStateApplied(ctx, Mock.Of<IWriteOnlyTransaction>());
 
-        _writerMock.Verify(w => w.UpdateErrorAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _writerMock.Verify(w => w.UpdateErrorAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
         _cacheMock.Verify(c => c.RemoveByCategoryAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
@@ -188,14 +207,14 @@ public class BuildJobFailureFilterTests
 
         _filter.OnStateApplied(ctx, Mock.Of<IWriteOnlyTransaction>());
 
-        _writerMock.Verify(w => w.UpdateErrorAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _writerMock.Verify(w => w.UpdateErrorAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
         _cacheMock.Verify(c => c.RemoveByCategoryAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Test]
     public void OnStateApplied_WriterThrows_DoesNotPropagate()
     {
-        _writerMock.Setup(w => w.UpdateErrorAsync(JobId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _writerMock.Setup(w => w.UpdateErrorAsync(JobId, It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("db down"));
 
         var ctx = BuildContext(nameof(HangfireUtils.BuildWrapper),

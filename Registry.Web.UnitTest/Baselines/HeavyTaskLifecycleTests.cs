@@ -49,6 +49,8 @@ public class HeavyTaskLifecycleTests
     private Mock<IJobIndexWriter> _writer = null!;
     private Mock<IBackgroundJobsProcessor> _jobs = null!;
     private readonly List<string> _errors = [];
+    private readonly List<string?> _messages = [];
+    private string? _logTail;
     private ServiceProvider _provider = null!;
 
     private string WorkDir => TaskJobHelpers.ArtifactDirectory(TaskId, _temp)!;
@@ -59,6 +61,7 @@ public class HeavyTaskLifecycleTests
         _temp = Path.Combine(Path.GetTempPath(), "heavytasklifecycle-heavy-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_temp);
         _errors.Clear();
+        _messages.Clear();
         _db = TestDb.Create<RegistryContext>();
         using (var context = _db.NewContext())
         {
@@ -70,13 +73,23 @@ public class HeavyTaskLifecycleTests
 
         _writer = new Mock<IJobIndexWriter>();
         // Like EF: a cancelled token fails the write
-        _writer.Setup(w => w.UpdateErrorAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Returns<string, string, CancellationToken>((_, error, ct) =>
+        _writer.Setup(w => w.UpdateErrorAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<string, string, string?, CancellationToken>((_, error, message, ct) =>
             {
                 ct.ThrowIfCancellationRequested();
                 _errors.Add(error);
+                _messages.Add(message);
                 return Task.CompletedTask;
             });
+        _logTail = null;
+        _writer.Setup(w => w.UpdateProgressAsync(It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .Callback<string, int?, string?, string?, DateTime, CancellationToken>((_, _, _, tail, _, _) =>
+            {
+                if (tail != null) _logTail = tail;
+            })
+            .Returns(Task.CompletedTask);
         _jobs = new Mock<IBackgroundJobsProcessor>();
 
         var ddb = new Mock<IDDB>();
@@ -119,6 +132,16 @@ public class HeavyTaskLifecycleTests
             new BackgroundJob(TaskId, Job.FromExpression<HealthCheckJob>(j => j.Ping(null)), DateTime.UtcNow),
             Mock.Of<IJobCancellationToken>());
 
+    // The attempt after retryCount retries (Hangfire's "RetryCount" job parameter)
+    private static PerformContext Context(int retryCount)
+    {
+        var connection = new Mock<IStorageConnection>();
+        connection.Setup(c => c.GetJobParameter(TaskId, "RetryCount")).Returns(retryCount.ToString());
+        return new(null, connection.Object,
+            new BackgroundJob(TaskId, Job.FromExpression<HealthCheckJob>(j => j.Ping(null)), DateTime.UtcNow),
+            Mock.Of<IJobCancellationToken>());
+    }
+
     private static string Request(string ds = Ds) =>
         JsonSerializer.Serialize(new HeavyToolRequest("t", "1", Org, ds, null, JsonDocument.Parse("{}").RootElement));
 
@@ -157,6 +180,34 @@ public class HeavyTaskLifecycleTests
 
         Directory.Exists(WorkDir).ShouldBeFalse();
         tool.SeenWorkDir.ShouldBeNull();
+        // A task that cannot start failed too: it says why
+        _errors.ShouldBe([nameof(InvalidOperationException)]);
+        _messages.ShouldBe([$"Dataset '{Org}/deleted' not found for task {TaskId}."]);
+    }
+
+    [Test]
+    public async Task AToolThatIsNotRegistered_RecordsWhy()
+    {
+        var registry = new Mock<IHeavyToolRegistry>();
+        var wrapper = new HeavyTaskJobWrapper(_provider.GetRequiredService<IServiceScopeFactory>(), registry.Object,
+            Microsoft.Extensions.Options.Options.Create(new ProcessingPlatformSettings()),
+            new TaskWorkDirectories(TestScratch.For(_temp), new FileSystem(), Microsoft.Extensions.Logging.Abstractions.NullLogger<TaskWorkDirectories>.Instance),
+            new FileJobs(new FileSystem(), Mock.Of<ILogger<FileJobs>>()), Mock.Of<ILogger<HeavyTaskJobWrapper>>());
+
+        await Should.ThrowAsync<InvalidOperationException>(() =>
+            wrapper.Run("gone", "1", Request(), Context(), CancellationToken.None));
+
+        _errors.ShouldBe([nameof(InvalidOperationException)]);
+        _messages.ShouldBe(["Tool 'gone' v'1' is not registered."]);
+    }
+
+    [Test]
+    public async Task AnUnreadableRequest_RecordsWhy()
+    {
+        await Should.ThrowAsync<InvalidOperationException>(() =>
+            Wrapper(new Tool((_, _) => null)).Run("t", "1", "null", Context(), CancellationToken.None));
+
+        _messages.ShouldBe(["Invalid heavy task request payload."]);
     }
 
     [Test]
@@ -207,6 +258,58 @@ public class HeavyTaskLifecycleTests
         Directory.Exists(WorkDir).ShouldBeFalse();
     }
 
+    // OBS-001, FR-XC-06: the task keeps the message a reader may see, not only the exception type, and its log ends
+    // with it; the dataset folder of the server is not in either
+    // A failure the retry policy runs again (DdbRetriedJob) is not the task's end: no error, a neutral log line
+    [Test]
+    public async Task ARetriedFailure_RecordsNoError_AndTheLogSaysItRetries()
+    {
+        var tool = new Tool((_, _) => throw new DdbBusyException("The index /mnt/data/datasets/org/x is busy"));
+
+        await Should.ThrowAsync<DdbBusyException>(() =>
+            Wrapper(tool).Run("t", "1", Request(), Context(retryCount: 0), CancellationToken.None));
+
+        _errors.ShouldBeEmpty();
+        _messages.ShouldBeEmpty();
+        var last = LogTailSnapshot.Parse(_logTail).Lines[^1];
+        last.Msg.ShouldBe("Retrying: The index [server path] is busy");
+        last.Lvl.ShouldBe("warn");
+    }
+
+    // The last attempt: the same error is final, recorded and logged as the failure
+    [Test]
+    public async Task ARetriableFailureWithoutAttemptsLeft_IsFinal()
+    {
+        var tool = new Tool((_, _) => throw new DdbBusyException("The index is busy"));
+
+        await Should.ThrowAsync<DdbBusyException>(() =>
+            Wrapper(tool).Run("t", "1", Request(), Context(retryCount: DdbRetryPolicy.Attempts), CancellationToken.None));
+
+        _errors.ShouldBe([nameof(DdbBusyException)]);
+        _messages.ShouldBe(["The index is busy"]);
+        LogTailSnapshot.Parse(_logTail).Lines[^1].Msg.ShouldBe("Failed: The index is busy");
+    }
+
+    [Test]
+    public async Task Failure_RecordsTheUserMessage_AndEndsTheLogWithIt()
+    {
+        var folder = Path.Combine(_temp, "ds");
+        var tool = new Tool((_, _) => throw new InvalidOperationException("Cannot build 'a.tif'",
+            new DdbException($"Cannot open {Path.Combine(folder, "a.tif")}: not a raster")));
+
+        await Should.ThrowAsync<InvalidOperationException>(() =>
+            Wrapper(tool).Run("t", "1", Request(), Context(), CancellationToken.None));
+
+        _errors.ShouldBe([nameof(InvalidOperationException)]);
+        var expected = $"Cannot open {JobLogText.DatasetPlaceholder}{Path.DirectorySeparatorChar}a.tif: not a raster";
+        _messages.ShouldBe([expected]);
+
+        var last = LogTailSnapshot.Parse(_logTail).Lines[^1];
+        last.Msg.ShouldBe("Failed: " + expected);
+        last.Lvl.ShouldBe("error");
+        LogTailSnapshot.Parse(_logTail).Lines.ShouldAllBe(l => !l.Msg.Contains(folder));
+    }
+
     [Test]
     public async Task Cancellation_DeletesTheWorkFolder_AndRethrows()
     {
@@ -223,5 +326,6 @@ public class HeavyTaskLifecycleTests
 
         Directory.Exists(WorkDir).ShouldBeFalse();
         _errors.ShouldBeEmpty("a cancellation is not a failure of the tool");
+        _messages.ShouldBeEmpty();
     }
 }

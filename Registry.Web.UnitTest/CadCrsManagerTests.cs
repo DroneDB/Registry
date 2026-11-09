@@ -80,6 +80,23 @@ public class CadCrsManagerTests
             Times.Never);
     }
 
+    // FR-PRC-16: the adapter's ArgumentException names its parameter ("... (Parameter 'crs')"); the 400 says the reason only
+    [Test]
+    public async Task InvalidCoordinateSystem_SaysTheReasonWithoutTheParameterName()
+    {
+        _wrapper.Setup(w => w.MakeCadPrj("abc")).Throws(new ArgumentException("Not a coordinate system: abc", "crs",
+            new DdbInvalidArgumentsException("Not a coordinate system: abc")));
+        _wrapper.Setup(w => w.MakeCadPrj("xyz")).Throws(new ArgumentException("Not a coordinate system: xyz", "crs"));
+
+        var wrapped = await Should.ThrowAsync<BadRequestException>(() => Create().SetAsync(Org, Ds, "site/plan.dwg", "abc"));
+        var plain = await Should.ThrowAsync<BadRequestException>(() => Create().SetAsync(Org, Ds, "site/plan.dwg", "xyz"));
+
+        wrapped.Message.ShouldBe("Not a coordinate system: abc");
+        plain.Message.ShouldBe("Not a coordinate system: xyz");
+        wrapped.Message.ShouldNotContain("(Parameter");
+        plain.Message.ShouldNotContain("(Parameter");
+    }
+
     [TestCase("site/photo.jpg")]
     [TestCase("")]
     public async Task NotADrawing_IsBadRequest(string path)

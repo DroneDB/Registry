@@ -72,6 +72,7 @@ public class JobIndexWriterPreparationTests
             DeletedAtUtc = state == "Deleted" ? created.AddSeconds(2) : null,
             ScheduledAtUtc = created.AddSeconds(3), ProgressPercent = 77, PhaseMessage = "phase",
             ArtifactSizeBytes = 99, ArtifactSha256 = "sha", ErrorType = state == "Failed" ? "Boom" : null,
+            ErrorMessage = state == "Failed" ? "The file is damaged or not a valid GeoTIFF" : null,
             LogTailJson = "[\"x\"]", ProgressUpdatedAtUtc = created.AddSeconds(4)
         };
     }
@@ -256,6 +257,7 @@ public class JobIndexWriterPreparationTests
 
         var row = t.Row("1")!;
         row.ErrorType.ShouldBeNull();
+        row.ErrorMessage.ShouldBeNull();
         row.OutputPathsJson.ShouldBe("[\"bands/merged.tif\"]");
         row.TargetLabel.ShouldBe("→ bands/merged.tif");
     }
@@ -298,6 +300,7 @@ public class JobIndexWriterPreparationTests
         row.ArtifactSizeBytes.ShouldBeNull();
         row.ArtifactSha256.ShouldBeNull();
         row.ErrorType.ShouldBeNull();
+        row.ErrorMessage.ShouldBeNull();
         row.LogTailJson.ShouldBeNull();
         row.ProgressUpdatedAtUtc.ShouldBeNull();
         t.Db.ChangeTracker.Entries().ShouldBeEmpty();
@@ -427,6 +430,7 @@ public class JobIndexWriterPreparationTests
         using var t = new Sqlite();
         var row = Telemetry("a", "Indexing", Created);
         row.ErrorType = "Old";
+        row.ErrorMessage = "Old message";
         t.Seed(row);
 
         (await t.Writer.UpdateStateIfCurrentAsync("a", ["Indexing"], "Processing", Changed)).ShouldBeTrue();
@@ -434,6 +438,44 @@ public class JobIndexWriterPreparationTests
         var after = t.Row("a")!;
         after.ProcessingAtUtc.ShouldBe(Changed);
         after.ErrorType.ShouldBeNull();
+        after.ErrorMessage.ShouldBeNull();
+    }
+
+    // U-102 carry-over: the message of an earlier failure goes with its error type, whatever clears it
+    [TestCase("Processing")]
+    [TestCase("Succeeded")]
+    public async Task UpdateIfCurrent_AndUpdateState_ClearTheErrorMessage(string state)
+    {
+        using var t = new Sqlite();
+        foreach (var id in new[] { "a", "b" })
+        {
+            var row = Telemetry(id, "Enqueued", Created);
+            row.ErrorType = "Old";
+            row.ErrorMessage = "Old message";
+            t.Seed(row);
+        }
+
+        (await t.Writer.UpdateStateIfCurrentAsync("a", ["Enqueued"], state, Changed)).ShouldBeTrue();
+        await t.Writer.UpdateStateAsync("b", state, Changed);
+
+        t.Row("a")!.ErrorMessage.ShouldBeNull();
+        t.Row("b")!.ErrorMessage.ShouldBeNull();
+        t.Row("b")!.ErrorType.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task UpdateError_StoresTheTypeAndTheMessage_CutToTheColumn()
+    {
+        using var t = new Sqlite();
+        t.Seed(Telemetry("a", "Processing", Created));
+        t.Seed(Telemetry("b", "Processing", Created));
+
+        await t.Writer.UpdateErrorAsync("a", "DdbException", "The file is damaged or not a valid GeoTIFF");
+        await t.Writer.UpdateErrorAsync("b", "DdbException", new string('x', 3000));
+
+        t.Row("a")!.ErrorType.ShouldBe("DdbException");
+        t.Row("a")!.ErrorMessage.ShouldBe("The file is damaged or not a valid GeoTIFF");
+        t.Row("b")!.ErrorMessage!.Length.ShouldBe(Registry.Web.Services.Jobs.JobLogText.UserMessageMaxLength);
     }
 
     [TestCase("Processing")]

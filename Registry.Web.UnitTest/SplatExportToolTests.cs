@@ -189,20 +189,26 @@ public sealed class SplatExportToolTests
         File.Exists(Path.Combine(_work, expected)).ShouldBeTrue();
     }
 
+    // The failure is the task's: the tool rethrows it and writes nothing of it, HeavyTaskJobWrapper records it and ends
+    // the log with its message without server paths (HeavyTaskLifecycleTests); a native message names absolute paths
     [Test]
-    public async Task Training_Failure_IsExplainedInTheLog_AndRethrown()
+    public async Task Training_Failure_IsRethrown_AndNoRawPathReachesTheLog()
     {
+        const string folder = "/mnt/data/datasets/org/0b9c4a52-3f5e-4c1e-9a65-1f0e2d3c4b5a";
         var ddb = new Mock<IDDB>();
         ddb.Setup(d => d.ExportSplatTrainingData(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<SplatTrainingOptions?>(),
                 It.IsAny<Action<double, string?>?>(), It.IsAny<CancellationToken>()))
-            .Throws(new InvalidOperationException("Cannot export the training data of 'odm': coords.txt is missing"));
+            .Throws(new InvalidOperationException($"Cannot export the training data of 'odm': {folder}/odm/coords.txt is missing"));
         var log = new Log();
 
         var ex = await Should.ThrowAsync<InvalidOperationException>(() => TrainingTool().ExecuteAsync(
             Request("splat-training-export", "odm"), Context(ddb), log, CancellationToken.None));
 
         ex.Message.ShouldContain("coords.txt");
-        log.Lines.ShouldContain(l => l.StartsWith("Failed:") && l.Contains("coords.txt is missing"));
+        log.Lines.ShouldNotContain(l => l.Contains("/mnt/"));
+        log.Lines.ShouldNotContain(l => l.StartsWith("Failed:"));
+        Registry.Web.Services.Jobs.JobLogText.UserMessage(ex, folder)
+            .ShouldBe("Cannot export the training data of 'odm': [dataset]/odm/coords.txt is missing");
     }
 
     [Test]
@@ -254,17 +260,21 @@ public sealed class SplatExportToolTests
     }
 
     [Test]
-    public async Task Spz_AFormatThatIsNotConverted_IsExplainedInTheLog()
+    public async Task Spz_AFailure_IsRethrown_AndNoRawPathReachesTheLog()
     {
         var ddb = new Mock<IDDB>();
         ddb.Setup(d => d.ExportSplatSpz(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Throws(new DdbInvalidArgumentsException("The format .ksplat is not converted to SPZ"));
+            .Throws(new DdbInvalidArgumentsException(
+                @"The format .ksplat of C:\data\datasets\org\ds\scene.ksplat is not converted to SPZ"));
         var log = new Log();
 
-        await Should.ThrowAsync<DdbInvalidArgumentsException>(() => new SplatSpzExportTool().ExecuteAsync(
+        var ex = await Should.ThrowAsync<DdbInvalidArgumentsException>(() => new SplatSpzExportTool().ExecuteAsync(
             Request("splat-spz-export", "scene.ksplat"), Context(ddb), log, CancellationToken.None));
 
-        log.Lines.ShouldContain(l => l.StartsWith("Failed:") && l.Contains(".ksplat is not converted"));
+        log.Lines.ShouldNotContain(l => l.Contains(@"C:"));
+        log.Lines.ShouldNotContain(l => l.StartsWith("Failed:"));
+        Registry.Web.Services.Jobs.JobLogText.UserMessage(ex, @"C:\data\datasets\org\ds")
+            .ShouldBe(@"The format .ksplat of [dataset]\scene.ksplat is not converted to SPZ");
     }
 
     [Test]

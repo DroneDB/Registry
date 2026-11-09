@@ -125,6 +125,24 @@ public class AlignRasterToolTests
     private Task Execute(HeavyToolRequest request) =>
         _tool.ExecuteAsync(request, _h.Ctx.Object, new Progress<HeavyToolProgress>(), CancellationToken.None);
 
+    // FR-PRC-06: the validation of libddb refuses rasters that do not overlap (after reprojection when their CRS
+    // differ): the submit is a 400 (ArgumentException) that says so, and nothing is written
+    [Test]
+    public async Task NativeValidationRefusal_IsAnArgumentErrorWithItsMessage()
+    {
+        _h.Ddb.Setup(d => d.ValidateAlignRaster("src.tif", "ref.tif")).Returns(
+            "{\"ok\":false,\"errors\":[\"Insufficient overlap after reprojection (0%)\"],\"warnings\":[]," +
+            "\"summary\":{\"crsMismatch\":true,\"overlapPercent\":0}}");
+
+        var ex = await Should.ThrowAsync<ArgumentException>(() =>
+            _tool.ValidateAsync(Request("out/aligned.tif"), _h.Ctx.Object, CancellationToken.None));
+
+        ex.Message.ShouldContain("Insufficient overlap after reprojection (0%)");
+        ex.ParamName.ShouldBeNull("the message is shown as it is, without a parameter name");
+        _h.Ddb.Verify(d => d.AlignRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
     [Test]
     public void DeclaresItsInputsOutputAndLabel()
     {

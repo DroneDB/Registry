@@ -50,7 +50,9 @@ public sealed record TaskArtifactDto(long SizeBytes, string? Sha256, string Resu
 /// <c>WaitingForFiles</c> is set for a succeeded build whose entry waits now for the files it names
 /// (<c>MissingFiles</c>, dataset-relative; null otherwise): libddb defers such a build without failing it, and it
 /// runs by itself when one of those files is added. It is read from the entry when the list is made, not kept with
-/// the task.
+/// the task. <c>Error</c> is why a failed task failed, as any reader of the task may see it (no server path;
+/// <c>JobLogText.UserMessage</c>), next to <c>ErrorType</c>, the exception type name; null when the task did not fail
+/// or failed before the message was recorded.
 /// </summary>
 public sealed record TaskSummaryDto(
     string TaskId,
@@ -66,12 +68,17 @@ public sealed record TaskSummaryDto(
     string? ParentJobId,
     string? WorkflowExecutionId,
     string? ErrorType,
+    string? Error,
     DateTime? ArtifactExpiresAt,
     bool Background = false,
     bool WaitingForFiles = false,
     IReadOnlyList<string>? MissingFiles = null);
 
-/// <summary>Full status (GET /tasks/{id}); <c>WaitingForFiles</c> and <c>MissingFiles</c> as in <see cref="TaskSummaryDto"/>.</summary>
+/// <summary>
+/// Full status (GET /tasks/{id}); <c>Error</c>, <c>WaitingForFiles</c> and <c>MissingFiles</c> as in
+/// <see cref="TaskSummaryDto"/> (<c>Error</c> falls back to the exception type name of a task that failed before the
+/// message was recorded).
+/// </summary>
 public sealed record TaskStatusDto(
     string TaskId,
     string ToolId,

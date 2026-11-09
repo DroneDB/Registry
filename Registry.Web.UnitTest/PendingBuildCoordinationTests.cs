@@ -435,7 +435,7 @@ public class PendingBuildCoordinationTests
         _delays.ShouldBe([TimeSpan.FromMinutes(10)]);
         State().GetProperty("RetryAttempt").GetInt32().ShouldBe(4);
         State().GetProperty("ScheduledRetryJobId").GetString().ShouldBe("retry-1");
-        writer.Verify(x => x.UpdateErrorAsync("entry-job", nameof(DdbException), default), Times.Once);
+        writer.Verify(x => x.UpdateErrorAsync("entry-job", nameof(DdbException), It.IsAny<string?>(), default), Times.Once);
     }
 
     [TestCase("other.obj", "model-hash")]

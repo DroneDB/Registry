@@ -46,7 +46,7 @@ public sealed class CadCrsManager(
         }
         catch (ArgumentException ex)
         {
-            throw new BadRequestException(ex.Message);
+            throw new BadRequestException(PlainMessage(ex));
         }
 
         var prjPath = Path.ChangeExtension(entry.Path, ".prj");
@@ -55,5 +55,18 @@ public sealed class CadCrsManager(
 
         await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(prj));
         return await objectsManager.AddNew(orgSlug, dsSlug, prjPath, stream);
+    }
+
+    // The reason alone: the native message the exception wraps ("Not a coordinate system: abc"), or its own message
+    // without the " (Parameter 'crs')" that ArgumentException adds for its parameter name
+    private static string PlainMessage(ArgumentException ex)
+    {
+        if (ex.InnerException is { Message: var inner } && !string.IsNullOrWhiteSpace(inner))
+            return inner;
+
+        var suffix = ex.ParamName is { } name ? $" (Parameter '{name}')" : null;
+        return suffix != null && ex.Message.EndsWith(suffix, StringComparison.Ordinal)
+            ? ex.Message[..^suffix.Length]
+            : ex.Message;
     }
 }

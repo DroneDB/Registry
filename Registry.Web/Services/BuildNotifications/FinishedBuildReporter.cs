@@ -63,7 +63,8 @@ public sealed class FinishedBuildReporter
 
         var error = classified.Outcome switch
         {
-            BuildOutcome.Failed => BuildReport.ShortError(JobLogText.Cause(build.Failure), ddb.DatasetFolderPath),
+            BuildOutcome.Failed => BuildReport.ShortError(JobLogText.UserMessage(build.Failure, ddb.DatasetFolderPath),
+                ddb.DatasetFolderPath),
             // libddb names the missing files relative to the dataset
             BuildOutcome.WaitingForFiles => BuildReport.ShortError(string.Join(", ", classified.MissingFiles),
                 ddb.DatasetFolderPath),

@@ -2,6 +2,8 @@ using Registry.Web.Test.Support;
 using System;
 using System.IO;
 using System.IO.Compression;
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
@@ -320,6 +322,64 @@ public class ArchiveExtractToolTests
 
         plan.QuotaKey.ShouldBe("archive-extract");
         plan.EstimatedOutputBytes.ShouldBe(5); // "hello"
+    }
+
+    // FR-PRC-16: an entry outside the dataset stops the extraction; the task error names the entry and says that
+    // nothing was extracted (JobLogText.UserMessage, as HeavyTaskJobWrapper records it)
+    [Test]
+    public async Task ExecuteAsync_AnEntryOutsideTheDataset_FailsWithAnErrorThatNamesIt()
+    {
+        var local = Path.Combine(_dir, "flight.zip");
+        CreateZip(local, "../escape.txt", "evil");
+        var ddb = MockDdb("flight.zip", local);
+        var ctx = new Mock<IHeavyToolExecutionContext>();
+        ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
+        ctx.SetupGet(c => c.TaskId).Returns("task-1");
+        var (tool, _) = CreateTool();
+
+        var ex = await Should.ThrowAsync<InvalidDatasetPathException>(() => tool.ExecuteAsync(
+            Request(new { sourcePath = "flight.zip" }), ctx.Object, new Progress<HeavyToolProgress>(),
+            CancellationToken.None));
+
+        Registry.Web.Services.Jobs.JobLogText.UserMessage(ex, _dir)
+            .ShouldBe("The archive contains an unsafe path: ../escape.txt. Nothing was extracted.");
+        File.Exists(Path.Combine(Path.GetDirectoryName(_dir)!, "escape.txt")).ShouldBeFalse();
+    }
+
+    // The archive could not be deleted after the extraction: the log line says why, without server paths
+    [Test]
+    public async Task ExecuteAsync_AnArchiveThatCannotBeDeleted_IsLoggedWithoutServerPaths()
+    {
+        var local = Path.Combine(_dir, "flight.zip");
+        CreateZip(local, "a.txt", "hello");
+        var ddb = MockDdb("flight.zip", local);
+        ddb.Setup(d => d.Remove("flight.zip")).Throws(new IOException(
+            $"Cannot remove {local}: locked by /var/lib/registry/locks/flight.lock"));
+        // Nothing indexed: no build to queue (the indexer is not what this test is about)
+        ddb.Setup(d => d.AddRawBatch(It.IsAny<IReadOnlyList<string>>())).Returns([]);
+        var ctx = new Mock<IHeavyToolExecutionContext>();
+        ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
+        ctx.SetupGet(c => c.TaskId).Returns("task-1");
+        var lines = new System.Collections.Generic.List<string>();
+        var progress = new SyncLog(lines);
+        var (tool, _) = CreateTool();
+
+        await tool.ExecuteAsync(Request(new { sourcePath = "flight.zip", deleteArchive = true }), ctx.Object,
+            progress, CancellationToken.None);
+
+        var line = lines.Single(l => l.StartsWith("Could not delete source archive", StringComparison.Ordinal));
+        line.ShouldBe("Could not delete source archive 'flight.zip': " +
+                      $"Cannot remove {Registry.Web.Services.Jobs.JobLogText.DatasetPlaceholder}" +
+                      $"{Path.DirectorySeparatorChar}flight.zip: locked by [server path]");
+        line.ShouldNotContain(_dir);
+    }
+
+    private sealed class SyncLog(System.Collections.Generic.List<string> lines) : IProgress<HeavyToolProgress>
+    {
+        public void Report(HeavyToolProgress value)
+        {
+            if (value.LogChunk != null) lines.Add(value.LogChunk);
+        }
     }
 
     private static void CreateZip(string path, string entryName, string content)

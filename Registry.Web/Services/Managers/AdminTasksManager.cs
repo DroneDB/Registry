@@ -124,7 +124,7 @@ public sealed class AdminTasksManager
         return new AdminTaskSummaryDto(
             j.JobId, j.OrgSlug, j.DsSlug, j.ToolId, j.ToolVersion, j.CurrentState,
             j.ProgressPercent, j.PhaseMessage, j.CreatedAtUtc, j.ProcessingAtUtc, TaskJobHelpers.FinishedAt(j),
-            j.Path, j.UserId, owner, j.ErrorType, TaskJobHelpers.ArtifactExpiresAt(j, _artifactTtlHours),
+            j.Path, j.UserId, owner, j.ErrorType, j.ErrorMessage, TaskJobHelpers.ArtifactExpiresAt(j, _artifactTtlHours),
             missingFiles != null, missingFiles);
     }
 }

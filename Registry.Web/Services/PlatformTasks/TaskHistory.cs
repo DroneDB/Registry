@@ -103,7 +103,7 @@ public sealed class TaskHistory
             job.CreatedAtUtc, job.ProcessingAtUtc, TaskJobHelpers.FinishedAt(job),
             job.ParentJobId, job.WorkflowExecutionId,
             snapshot.Cursor, snapshot.AsStrings(), BuildArtifactDto(job, orgSlug, dsSlug),
-            job.ErrorType, missing != null, missing);
+            job.ErrorMessage ?? job.ErrorType, missing != null, missing);
     }
 
     // The files the task waits for, when it is a succeeded build whose entry waits for them; the authorizer granted the
@@ -164,7 +164,7 @@ public sealed class TaskHistory
     private TaskSummaryDto ToSummary(JobIndex j, IReadOnlyList<string>? missingFiles) => new(
         j.JobId, j.ToolId, j.ToolVersion, j.CurrentState, j.ProgressPercent, j.PhaseMessage,
         j.CreatedAtUtc, j.ProcessingAtUtc, TaskJobHelpers.FinishedAt(j), j.Path, j.ParentJobId,
-        j.WorkflowExecutionId, j.ErrorType, TaskJobHelpers.ArtifactExpiresAt(j, _settings.ArtifactTtlHours),
+        j.WorkflowExecutionId, j.ErrorType, j.ErrorMessage, TaskJobHelpers.ArtifactExpiresAt(j, _settings.ArtifactTtlHours),
         DdbJobDescriptor.IsBackgroundRebuildDisplay(j.MethodDisplay), missingFiles != null, missingFiles);
 
     private TaskArtifactDto? BuildArtifactDto(JobIndex j, string orgSlug, string dsSlug) =>

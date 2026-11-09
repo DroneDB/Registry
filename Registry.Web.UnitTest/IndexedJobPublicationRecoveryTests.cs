@@ -594,6 +594,7 @@ public class IndexedJobPublicationRecoveryTests
         var row = _env.Row(id)!;
         row.CurrentState.ShouldBe("Deleted");
         row.ErrorType.ShouldBe("InvalidPublicationRecord");
+        row.ErrorMessage.ShouldBe("The task could not be started and was cancelled: its queue record is invalid (malformed).");
         row.DeletedAtUtc.ShouldNotBeNull();
         _env.InSet(id).ShouldBeFalse();
         _env.Param(id, JobParamKeys.OrgSlug).ShouldBeNull("nothing is published for an invalid record");

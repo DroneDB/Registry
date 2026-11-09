@@ -84,8 +84,8 @@ public sealed class SplatSpzExportTool : HeavyToolBase<SplatSpzExportTool.Parame
     {
         progress.Report(new HeavyToolProgress(-1, "exporting", LogChunk: $"Exporting '{request.Path}' as a .spz file"));
 
-        var export = await progress.ReportingFailureAsync(
-            () => Task.Run(() => ctx.Ddb.ExportSplatSpz(request.Path!, ct), ct));
+        // A failure is the task's: HeavyTaskJobWrapper records it and ends the log with its message, without server paths
+        var export = await Task.Run(() => ctx.Ddb.ExportSplatSpz(request.Path!, ct), ct);
 
         progress.Report(new HeavyToolProgress(1, "done",
             LogChunk: export.Cached ? "The .spz file was already exported" : "Export complete"));
