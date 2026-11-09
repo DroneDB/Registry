@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
@@ -51,6 +53,41 @@ public sealed class UserPasswords
         return await ChangePasswordInternal(currentUser, currentPassword, newPassword);
     }
 
+    /// <summary>Member of the request that carries the current password (D-047).</summary>
+    public const string CurrentPasswordField = "currentPassword";
+
+    /// <summary>Member of the request that carries the new password (D-047).</summary>
+    public const string NewPasswordField = "newPassword";
+
+    /// <summary>The message of a wrong current password (Identity's own text names no field).</summary>
+    public const string CurrentPasswordIncorrect = "The current password is incorrect.";
+
+    /// <summary>
+    /// The one place that maps Identity's password refusals to the field they concern (D-047, FR-ADM-08,
+    /// FR-ACC-21): <c>PasswordMismatch</c> to the current password, the other password rules (length,
+    /// digit, case, symbol, ...) to the new one, as the Identity descriptions joined by spaces without their
+    /// codes. A refusal that concerns no field (a locked user, a concurrency failure) is left out: with no
+    /// field at all the answer carries no <c>errors</c> member and the Hub shows its message form-level.
+    /// </summary>
+    private static Dictionary<string, string[]>? FieldErrorsOf(IEnumerable<IdentityError> errors)
+    {
+        var list = errors.ToList();
+        var fields = new Dictionary<string, string[]>();
+
+        if (list.Any(e => e.Code == nameof(IdentityErrorDescriber.PasswordMismatch)))
+            fields[CurrentPasswordField] = [CurrentPasswordIncorrect];
+
+        var policy = list
+            .Where(e => e.Code.StartsWith("Password", StringComparison.Ordinal) &&
+                        e.Code != nameof(IdentityErrorDescriber.PasswordMismatch))
+            .Select(e => e.Description)
+            .ToList();
+        if (policy.Count > 0)
+            fields[NewPasswordField] = [string.Join(" ", policy)];
+
+        return fields.Count > 0 ? fields : null;
+    }
+
     private async Task<ChangePasswordResult> ChangePasswordInternal(User user, string? currentPassword,
         string newPassword)
     {
@@ -85,7 +122,13 @@ public sealed class UserPasswords
 
             var policyResult = _passwordPolicyValidator.Validate(newPassword);
             if (!policyResult.IsValid)
-                throw new BadRequestException("Password does not meet the requirements: " + string.Join("; ", policyResult.Errors));
+                throw new BadRequestException("Password does not meet the requirements: " + string.Join("; ", policyResult.Errors))
+                {
+                    FieldErrors = new Dictionary<string, string[]>
+                    {
+                        [NewPasswordField] = [string.Join(" ", policyResult.Errors)]
+                    }
+                };
 
             res = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
         }
@@ -95,7 +138,10 @@ public sealed class UserPasswords
             var errors = string.Join(";", res.Errors.Select(item => $"{item.Code} - {item.Description}"));
             _logger.LogWarning("Errors in changing user password: {Errors}", errors);
 
-            throw new BadRequestException("Cannot change user password: " + errors);
+            throw new BadRequestException("Cannot change user password: " + errors)
+            {
+                FieldErrors = FieldErrorsOf(res.Errors)
+            };
         }
 
         _logger.LogInformation("User {UserName} changed password", user.UserName);

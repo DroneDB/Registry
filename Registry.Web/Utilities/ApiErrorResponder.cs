@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
@@ -59,7 +60,9 @@ public sealed class ApiErrorResponder
 
         var problem = ApiExceptionClassifier.IsClientGone(descriptor)
             ? null
-            : Create(httpContext, descriptor.StatusCode, descriptor.Message, descriptor.NoRetry);
+            : exception is RegistryException { FieldErrors.Count: > 0 } fieldRefusal
+                ? CreateFieldRefusal(httpContext, descriptor, fieldRefusal.FieldErrors)
+                : Create(httpContext, descriptor.StatusCode, descriptor.Message, descriptor.NoRetry);
         if (problem != null && exception is NameClashException clash)
             problem.Extensions[ConflictPathMember] = clash.ConflictPath;
         return (descriptor, problem);
@@ -70,6 +73,25 @@ public sealed class ApiErrorResponder
     {
         var problem = _factory.CreateProblemDetails(httpContext, statusCode, detail: detail);
         problem.Extensions[NoRetryMember] = noRetry;
+        return problem;
+    }
+
+    /// <summary>
+    /// The body of a refusal that concerns single input fields (D-047): a ValidationProblemDetails with
+    /// <c>errors</c> keyed by the request member, the status of <paramref name="descriptor"/> and its message as
+    /// <c>detail</c>.
+    /// </summary>
+    private ValidationProblemDetails CreateFieldRefusal(HttpContext httpContext, ApiErrorDescriptor descriptor,
+        IReadOnlyDictionary<string, string[]> fieldErrors)
+    {
+        var modelState = new ModelStateDictionary();
+        foreach (var (field, messages) in fieldErrors)
+            foreach (var message in messages)
+                modelState.AddModelError(field, message);
+
+        var problem = _factory.CreateValidationProblemDetails(httpContext, modelState, descriptor.StatusCode,
+            detail: descriptor.Message);
+        problem.Extensions[NoRetryMember] = descriptor.NoRetry;
         return problem;
     }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -26,6 +27,14 @@ public abstract class RegistryException : Exception
     /// <summary>Surfaced as the <c>noRetry</c> member of the ProblemDetails body: true when the same
     /// request can never succeed.</summary>
     public bool NoRetry { get; init; }
+
+    /// <summary>
+    /// The refusals of single input fields, keyed by the member of the request (<c>currentPassword</c>,
+    /// <c>name</c>, <c>userName</c>, ...). When set, the response is a ValidationProblemDetails whose
+    /// <c>errors</c> member carries them, with the same status as without (D-047, FR-XC-11). The
+    /// <see cref="Exception.Message"/> stays the <c>detail</c> for clients that do not read <c>errors</c>.
+    /// </summary>
+    public IReadOnlyDictionary<string, string[]>? FieldErrors { get; init; }
 
     /// <summary>Seconds advertised in <c>Retry-After</c> (transient errors only).</summary>
     public virtual int? RetryAfterSeconds => null;
