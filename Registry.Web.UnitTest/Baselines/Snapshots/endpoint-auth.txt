@@ -206,6 +206,8 @@ GET /users/storage -> Authorize [authenticated] @ UsersController.GetCurrentUser
 DELETE /users/{userName} -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.DeleteUserRoute
 PUT /users/{userName} -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.UpdateUser
 PUT /users/{userName}/changepwd -> Authorize [authenticated] @ UsersController.ChangePassword
+POST /users/{userName}/disable -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.DisableUser
+POST /users/{userName}/enable -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.EnableUser
 GET /users/{userName}/meta -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.GetUserMeta
 POST /users/{userName}/meta -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.SetUserMeta
 GET /users/{userName}/orgs -> Authorize + Authorize(Policy=Admin) [admin] @ UsersController.GetOrganizations

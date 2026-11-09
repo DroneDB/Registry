@@ -44,7 +44,22 @@ public class UsersManager
     public Task<UserDto> CreateUser(string userName, string? email, string password, string[]? roles) =>
         _accounts.CreateUser(userName, email, password, roles);
 
-    public Task UpdateUser(string userName, string? email) => _accounts.UpdateUser(userName, email);
+    /// <summary>
+    /// Edit User: the e-mail address and the roles. The role list is checked before the address is saved, so a refused
+    /// list changes nothing; the role <c>deactivated</c> is kept as it is (D-043).
+    /// </summary>
+    public async Task UpdateUser(string userName, string? email, string[]? roles)
+    {
+        await _roles.ValidateUserRoles(userName, roles);
+        await _accounts.UpdateUser(userName, email);
+        await _roles.UpdateUserRoles(userName, roles);
+    }
+
+    /// <summary>Disables a user (the system role <c>deactivated</c>): sign-in and access are refused at once.</summary>
+    public Task DisableUser(string userName) => _roles.DisableUser(userName);
+
+    /// <summary>Enables a disabled user.</summary>
+    public Task EnableUser(string userName) => _roles.EnableUser(userName);
 
     public Task<Dictionary<string, object>> GetUserMeta(string? userName = null) => _accounts.GetUserMeta(userName);
 

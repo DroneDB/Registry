@@ -44,6 +44,11 @@ internal sealed class DefaultAdminProvisioner
 
     public async Task EnsureAsync(CancellationToken token)
     {
+        // The system roles exist whatever the provider: disabling a user adds 'deactivated', and an external
+        // provider's users are deactivated, not deleted
+        await EnsureRoleExistsAsync(_roleManager, ApplicationDbContext.AdminRoleName);
+        await EnsureRoleExistsAsync(_roleManager, ApplicationDbContext.DeactivatedRoleName);
+
         // BEHAVIOR CHANGE (deliberate): when an external identity provider is active
         // (LDAP or Remote), skip creating a local default admin. Admin privileges are granted
         // via the provider's group mapping instead. This change also affects Remote mode.
@@ -56,16 +61,11 @@ internal sealed class DefaultAdminProvisioner
         }
 
         var userManager = _userManager;
-        var roleManager = _roleManager;
         var context = _registry;
 
         var defaultAdmin = _identityProvider.DefaultAdmin!;
 
         _logger.LogInformation("Setting up default admin user '{Username}'", defaultAdmin.UserName);
-
-        // Ensure admin role exists
-        await EnsureRoleExistsAsync(roleManager, ApplicationDbContext.AdminRoleName);
-        await EnsureRoleExistsAsync(roleManager, ApplicationDbContext.DeactivatedRoleName);
 
         // Get or create admin user
         var adminUser = await userManager.Users.FirstOrDefaultAsync(usr => usr.UserName == defaultAdmin.UserName, token);

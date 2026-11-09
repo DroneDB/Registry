@@ -1401,6 +1401,18 @@
       "roleName": null
     }
   },
+  "Registry.Web.Models.DTO.CronRuleDto": {
+    "full": {
+      "disableWords": [
+        "DisableWords-text"
+      ],
+      "description": "Description-text"
+    },
+    "sparse": {
+      "disableWords": null,
+      "description": null
+    }
+  },
   "Registry.Web.Models.DTO.DatasetCleanupBuildDto": {
     "full": {
       "removedEntries": [
@@ -1810,6 +1822,24 @@
       "polygon_geom": null
     }
   },
+  "Registry.Web.Models.DTO.EntryNameRuleDto": {
+    "full": {
+      "pattern": "Pattern-text",
+      "reservedNames": [
+        "ReservedNames-text"
+      ],
+      "rootReservedNames": [
+        "RootReservedNames-text"
+      ],
+      "description": "Description-text"
+    },
+    "sparse": {
+      "pattern": null,
+      "reservedNames": null,
+      "rootReservedNames": null,
+      "description": null
+    }
+  },
   "Registry.Web.Models.DTO.EntryTypeDto": {
     "full": {
       "id": 42,
@@ -1847,6 +1877,52 @@
         "requireLowercase": true,
         "requireNonAlphanumeric": true
       },
+      "inputRules": {
+        "slug": {
+          "pattern": "Pattern-text",
+          "minLength": 42,
+          "maxLength": 42,
+          "description": "Description-text",
+          "message": "Message-text"
+        },
+        "email": {
+          "pattern": "Pattern-text",
+          "minLength": 42,
+          "maxLength": 42,
+          "description": "Description-text",
+          "message": "Message-text"
+        },
+        "entryName": {
+          "pattern": "Pattern-text",
+          "reservedNames": [
+            "ReservedNames-text"
+          ],
+          "rootReservedNames": [
+            "RootReservedNames-text"
+          ],
+          "description": "Description-text"
+        },
+        "nameClash": {
+          "message": "Message-text",
+          "caseInsensitive": true
+        },
+        "cron": {
+          "disableWords": [
+            "DisableWords-text"
+          ],
+          "description": "Description-text"
+        },
+        "latinName": {
+          "pattern": "Pattern-text",
+          "normalization": "Normalization-text",
+          "description": "Description-text",
+          "message": "Message-text",
+          "messageWithoutSlug": "MessageWithoutSlug-text"
+        }
+      },
+      "systemRoles": [
+        "SystemRoles-text"
+      ],
       "datasetThumbnailCandidates": [
         "DatasetThumbnailCandidates-text"
       ],
@@ -1921,6 +1997,8 @@
       "disableAnonymousBulkDownloads": false,
       "emailEnabled": false,
       "passwordPolicy": null,
+      "inputRules": null,
+      "systemRoles": null,
       "datasetThumbnailCandidates": null,
       "maxExportSizeBytes": null,
       "bulkDownloadAsyncThresholdBytes": 0,
@@ -2246,6 +2324,75 @@
       "importedAt": "0001-01-01T00:00:00Z"
     }
   },
+  "Registry.Web.Models.DTO.InputRuleDto": {
+    "full": {
+      "pattern": "Pattern-text",
+      "minLength": 42,
+      "maxLength": 42,
+      "description": "Description-text",
+      "message": "Message-text"
+    },
+    "sparse": {
+      "pattern": null,
+      "minLength": null,
+      "maxLength": null,
+      "description": null,
+      "message": null
+    }
+  },
+  "Registry.Web.Models.DTO.InputRulesDto": {
+    "full": {
+      "slug": {
+        "pattern": "Pattern-text",
+        "minLength": 42,
+        "maxLength": 42,
+        "description": "Description-text",
+        "message": "Message-text"
+      },
+      "email": {
+        "pattern": "Pattern-text",
+        "minLength": 42,
+        "maxLength": 42,
+        "description": "Description-text",
+        "message": "Message-text"
+      },
+      "entryName": {
+        "pattern": "Pattern-text",
+        "reservedNames": [
+          "ReservedNames-text"
+        ],
+        "rootReservedNames": [
+          "RootReservedNames-text"
+        ],
+        "description": "Description-text"
+      },
+      "nameClash": {
+        "message": "Message-text",
+        "caseInsensitive": true
+      },
+      "cron": {
+        "disableWords": [
+          "DisableWords-text"
+        ],
+        "description": "Description-text"
+      },
+      "latinName": {
+        "pattern": "Pattern-text",
+        "normalization": "Normalization-text",
+        "description": "Description-text",
+        "message": "Message-text",
+        "messageWithoutSlug": "MessageWithoutSlug-text"
+      }
+    },
+    "sparse": {
+      "slug": null,
+      "email": null,
+      "entryName": null,
+      "nameClash": null,
+      "cron": null,
+      "latinName": null
+    }
+  },
   "Registry.Web.Models.DTO.IsBatchReadyResult": {
     "full": {
       "isReady": true,
@@ -2264,6 +2411,22 @@
     },
     "sparse": {
       "jobId": null
+    }
+  },
+  "Registry.Web.Models.DTO.LatinNameRuleDto": {
+    "full": {
+      "pattern": "Pattern-text",
+      "normalization": "Normalization-text",
+      "description": "Description-text",
+      "message": "Message-text",
+      "messageWithoutSlug": "MessageWithoutSlug-text"
+    },
+    "sparse": {
+      "pattern": null,
+      "normalization": null,
+      "description": null,
+      "message": null,
+      "messageWithoutSlug": null
     }
   },
   "Registry.Web.Models.DTO.LoginResultDto": {
@@ -2570,6 +2733,16 @@
       "newSlug": null,
       "success": false,
       "error": null
+    }
+  },
+  "Registry.Web.Models.DTO.NameClashRuleDto": {
+    "full": {
+      "message": "Message-text",
+      "caseInsensitive": true
+    },
+    "sparse": {
+      "message": null,
+      "caseInsensitive": false
     }
   },
   "Registry.Web.Models.DTO.NodeOdxOptionDto": {

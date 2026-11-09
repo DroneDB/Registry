@@ -961,6 +961,16 @@ PUT /users/{userName}/changepwd
   200
   400 application/json ProblemDetails
   401 application/json ProblemDetails
+POST /users/{userName}/disable
+  204
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
+POST /users/{userName}/enable
+  204
+  400 application/json ProblemDetails
+  401 application/json ProblemDetails
+  404 application/json ProblemDetails
 GET /users/{userName}/meta
   200 application/json map<any>
   400 application/json ProblemDetails
@@ -1024,6 +1034,7 @@ schema ContourRequestDto { path:string, interval:number(double), count:integer(i
 schema CreateImportRequestDto { sourceType:string, params:map<string>, slug:string, name:string, visibility:Visibility }
 schema CreateRoleRequestDto { roleName:string }
 schema CreateUserRequest { userName:string, password:string, email:string, roles:array<string> }
+schema CronRuleDto { disableWords:array<string>, description:string }
 schema DatasetCleanupBuildDto { removedEntries:array<string>, removedBuilds:array<string> }
 schema DatasetDto { slug:string, creationDate:string(date-time), properties:map<any>, size:integer(int64), lastModified:string(date-time), permissions:DatasetPermissionsDto, hasThumbnail:boolean }
 schema DatasetLocationDto { slug:string, name:string, bbox:array<number(double)> }
@@ -1038,10 +1049,11 @@ schema EmailTemplatePreviewDto { subject:string, text:string, html:string }
 schema EmailTemplateSummaryDto { name:string, title:string, isDefault:boolean }
 schema EmailTemplateTextDto { subject:string, body:string }
 schema EntryDto { path:string, hash:string, type:EntryType, properties:map<any>, mtime:string(date-time), size:integer(int64), depth:integer(int32), point_geom:any, polygon_geom:any, buildStatus:string, buildMissingDependencies:array<string>, buildAwaitingFiles:boolean, artifacts:array<ArtifactLinkDto> }
+schema EntryNameRuleDto { pattern:string, reservedNames:array<string>, rootReservedNames:array<string>, description:string }
 schema EntryType {  }
 schema EntryTypeDto { id:integer(int32), name:string, buildable:boolean, thumbnail:string, sidecarExtensions:array<string>, roles:array<string> }
 schema FaviconOptions { faviconIco:string, favicon16:string, favicon32:string, appleTouchIcon:string, manifest:string, themeColor:string }
-schema FeaturesDto { organizationMemberManagement:boolean, userManagement:boolean, storageLimiter:boolean, maxConcurrentDownloadsPerUser:integer(int32), disableAnonymousBulkDownloads:boolean, emailEnabled:boolean, passwordPolicy:PasswordPolicyDto, datasetThumbnailCandidates:array<string>, maxExportSizeBytes:integer(int64), bulkDownloadAsyncThresholdBytes:integer(int64), taskTools:array<TaskToolInfoDto>, taskStates:array<TaskStateInfoDto>, entryTypes:array<EntryTypeDto>, archiveExtensions:array<string>, hubOptions:HubOptions, hubVersion:string, registryVersion:string, ddbVersion:string, updateCheckEnabled:boolean, instanceHash:string }
+schema FeaturesDto { organizationMemberManagement:boolean, userManagement:boolean, storageLimiter:boolean, maxConcurrentDownloadsPerUser:integer(int32), disableAnonymousBulkDownloads:boolean, emailEnabled:boolean, passwordPolicy:PasswordPolicyDto, inputRules:InputRulesDto, systemRoles:array<string>, datasetThumbnailCandidates:array<string>, maxExportSizeBytes:integer(int64), bulkDownloadAsyncThresholdBytes:integer(int64), taskTools:array<TaskToolInfoDto>, taskStates:array<TaskStateInfoDto>, entryTypes:array<EntryTypeDto>, archiveExtensions:array<string>, hubOptions:HubOptions, hubVersion:string, registryVersion:string, ddbVersion:string, updateCheckEnabled:boolean, instanceHash:string }
 schema FileImportErrorDto { organization:string, dataset:string, filePath:string, message:string, retryCount:integer(int32) }
 schema FixInvalidSlugsResultDto { dryRun:boolean, entries:array<SlugFixEntryDto> }
 schema GlobalReportContentDto { extension:string, files:integer(int32), size:integer(int64) }
@@ -1059,6 +1071,9 @@ schema ImportPhase {  }
 schema ImportResultDto { importedItems:array<ImportedItemDto>, errors:array<ImportErrorDto>, fileErrors:array<FileImportErrorDto>, totalSize:integer(int64), totalFiles:integer(int32), skippedFiles:integer(int32), duration:string(date-span) }
 schema ImportVerifyResultDto { reachable:boolean, note:string, estimatedBytes:integer(int64), fileCount:integer(int32), suggestedName:string, suggestedSlug:string }
 schema ImportedItemDto { organization:string, dataset:string, size:integer(int64), fileCount:integer(int32), skippedFileCount:integer(int32), importedAt:string(date-time) }
+schema InputRuleDto { pattern:string, minLength:integer(int32), maxLength:integer(int32), description:string, message:string }
+schema InputRulesDto { slug:InputRuleDto, email:InputRuleDto, entryName:EntryNameRuleDto, nameClash:NameClashRuleDto, cron:CronRuleDto, latinName:LatinNameRuleDto }
+schema LatinNameRuleDto { pattern:string, normalization:string, description:string, message:string, messageWithoutSlug:string }
 schema MaskBordersCheckResponseDto { exists:boolean, outputPath:string }
 schema MaskBordersRequestDto { path:string, near:integer(int32), white:boolean }
 schema MergeMultispectralRequestDto { paths:array<string>, previewBands:string, thumbSize:integer(int32), outputPath:string }
@@ -1070,6 +1085,7 @@ schema MetaListItemDto { count:integer(int32), key:string, path:string }
 schema MigrateVisibilityEntryDTO { organizationSlug:string, datasetSlug:string, isPublic:any, visibility:Visibility }
 schema MoveDatasetDto { sourceOrgSlug:string, datasetSlugs:array<string>, destinationOrgSlug:string, conflictResolution:ConflictResolutionStrategy }
 schema MoveDatasetResultDto { originalSlug:string, newSlug:string, success:boolean, error:string }
+schema NameClashRuleDto { message:string, caseInsensitive:boolean }
 schema NodeOdxOptionDto { name:string, type:string, domain:any, help:string, value:any }
 schema NotificationStatusDto { canReceiveEmail:boolean, reason:string }
 schema OgcApiCollectionDto { id:string, title:string, description:string, itemType:string, crs:array<string>, extent:OgcApiExtentDto, links:array<OgcApiLinkDto> }

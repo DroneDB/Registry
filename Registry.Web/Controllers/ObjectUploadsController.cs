@@ -69,6 +69,7 @@ public class ObjectUploadsController : ControllerBaseEx
     /// repeating the id of an upload that is already done is answered from its receipt.
     /// </remarks>
     [HttpPost(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + ".Post")]
+    [TypeFilter(typeof(UploadAnswerFilter))]
     [DisableFormValueModelBinding]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [ConfigurableUploadSizeLimit]
@@ -166,6 +167,7 @@ public class ObjectUploadsController : ControllerBaseEx
     /// one checks access, path and quota. Commit with <c>POST obj/chunk/{fileId}/commit</c>.
     /// </summary>
     [HttpPost(RoutesHelper.ObjectsRadix + "/chunk", Name = nameof(ObjectUploadsController) + "." + nameof(PostChunk))]
+    [TypeFilter(typeof(UploadAnswerFilter))]
     [DisableFormValueModelBinding]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [ConfigurableUploadSizeLimit]
@@ -207,6 +209,7 @@ public class ObjectUploadsController : ControllerBaseEx
     /// committed upload again returns its entry. 409 lists the missing chunks.
     /// </summary>
     [HttpPost(RoutesHelper.ObjectsRadix + "/chunk/{fileId}/commit", Name = nameof(ObjectUploadsController) + "." + nameof(CommitChunks))]
+    [TypeFilter(typeof(UploadAnswerFilter))]
     [ProducesResponseType(typeof(EntryDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<EntryDto>> CommitChunks([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
@@ -221,8 +224,8 @@ public class ObjectUploadsController : ControllerBaseEx
         var single = results[0];
         return single.Entry != null
             ? Created(orgSlug, dsSlug, single.Entry)
-            : ApiErrorResponder.ToActionResult(
-                _errors.Create(HttpContext, single.Status, single.Error ?? "Upload failed", noRetry: false));
+            : ApiErrorResponder.ToActionResult(_errors.Create(HttpContext, single.Status, single.Error ?? "Upload failed",
+                noRetry: UploadRetryRule.IsFinalStatus(single.Status)));
     }
 
     private CreatedAtRouteResult Created(string orgSlug, string dsSlug, EntryDto entry) =>

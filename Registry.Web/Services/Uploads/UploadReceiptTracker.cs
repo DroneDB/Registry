@@ -32,7 +32,7 @@ public sealed class UploadReceiptTracker
     /// Starts the receipt of the upload of <paramref name="ctx"/> (<see cref="UploadRequestContext.UploadId"/> set):
     /// an upload already done puts its receipt on the context and returns false (nothing else must be done).
     /// </summary>
-    /// <exception cref="ConflictException">An upload with that id is still running.</exception>
+    /// <exception cref="RecoverableConflictException">An upload with that id is still running.</exception>
     public async Task<bool> BeginAsync(UploadRequestContext ctx)
     {
         if (ctx.UploadId == null || _receipts == null)
@@ -44,8 +44,9 @@ public sealed class UploadReceiptTracker
             case UploadReceiptState.Done:
                 ctx.Receipt = receipt;
                 return false;
+            // Recoverable: once the running upload ends, its receipt answers the same request (noRetry stays false)
             case UploadReceiptState.Receiving or UploadReceiptState.Committing:
-                throw new ConflictException($"Upload '{ctx.UploadId}' is still in progress");
+                throw new RecoverableConflictException($"Upload '{ctx.UploadId}' is still in progress");
         }
 
         await _receipts.SetAsync(ctx.OrgSlug, ctx.DsSlug, ctx.UploadId,

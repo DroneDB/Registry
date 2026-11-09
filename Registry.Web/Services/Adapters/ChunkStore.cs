@@ -160,13 +160,15 @@ public sealed partial class ChunkStore
     /// Moves the finished file to <paramref name="destination"/> and forgets the upload.
     /// </summary>
     /// <returns>The file's hash hint (its SHA-256, size and write time).</returns>
-    /// <exception cref="Registry.Web.Exceptions.ConflictException">Chunks are missing.</exception>
+    /// <exception cref="Registry.Web.Exceptions.RecoverableConflictException">Chunks are missing.</exception>
     public async Task<FileHashHint> TakeAsync(string root, string fileId, string destination)
     {
         var folder = Folder(root, fileId);
         var status = GetStatus(root, fileId) ?? throw new NotFoundException($"Unknown upload '{fileId}'");
+        // Recoverable: once the client sends the missing chunks, the same commit succeeds (noRetry stays false)
         if (!status.Complete)
-            throw new ConflictException($"Upload '{fileId}' is missing chunks: {string.Join(",", status.Missing)}");
+            throw new RecoverableConflictException(
+                $"Upload '{fileId}' is missing chunks: {string.Join(",", status.Missing)}");
 
         var upload = _uploads.GetOrAdd(Key(folder), _ => new Upload());
         await upload.Lock.WaitAsync();

@@ -69,6 +69,21 @@ public sealed class DatasetPathPolicy
     public bool IsReserved(string path) => Check(path).Rejected == EntryPathRejection.Reserved;
 
     /// <summary>
+    /// Whether <paramref name="name"/> is the name of one entry in the normalized folder <paramref name="folder"/>
+    /// ("" for the dataset root): not blank, no separator, and the path it makes is accepted as written (not ".",
+    /// "..", a drive, NUL or a reserved name). The entry name rule that <c>GET /sys/features</c> describes
+    /// (<see cref="InputRules.EntryNamePattern"/>).
+    /// </summary>
+    public bool IsEntryName(string? name, string folder = "")
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.IndexOfAny(Separators) >= 0)
+            return false;
+
+        var path = string.IsNullOrEmpty(folder) ? name : folder + "/" + name;
+        return CheckIn(folder, name).Path == path;
+    }
+
+    /// <summary>
     /// A path received in a request names an entry from the dataset root: one leading '/' is dropped
     /// ("/img.jpg" names "img.jpg"), then <see cref="Normalize"/>. The one seam of request paths
     /// (<c>IDatasetAccessResolver</c>).

@@ -495,7 +495,7 @@ public class UsersController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Deletes a role. Requires admin privileges. The admin role cannot be deleted.
+    /// Deletes a role. Requires admin privileges. The system roles (<c>admin</c>, <c>deactivated</c>) cannot be deleted.
     /// </summary>
     /// <param name="roleName">The name of the role to delete.</param>
     /// <returns>No content on success.</returns>
@@ -512,7 +512,8 @@ public class UsersController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Updates a user's email and roles. Requires admin privileges.
+    /// Updates a user's email and roles. Requires admin privileges. The role list cannot add or remove the system role
+    /// <c>deactivated</c> (use the disable and enable endpoints); it still grants and removes <c>admin</c>.
     /// </summary>
     /// <param name="userName">The username of the user to update.</param>
     /// <param name="request">The update request containing email and roles.</param>
@@ -526,10 +527,46 @@ public class UsersController : ControllerBaseEx
         [FromRoute, Required] string userName,
         [FromBody, Required] EditUserRequestDto request, CancellationToken ct)
     {
-        await _usersManager.UpdateUser(userName, request.Email);
-        await _usersManager.UpdateUserRoles(userName, request.Roles);
+        await _usersManager.UpdateUser(userName, request.Email, request.Roles);
 
         return Ok();
+    }
+
+    /// <summary>
+    /// Disables a user: they can no longer sign in, and their sessions lose access at once (the system role
+    /// <c>deactivated</c>). Works whatever the identity provider. Requires admin privileges.
+    /// </summary>
+    /// <param name="userName">The username of the user to disable.</param>
+    /// <returns>No content on success, also when the user is already disabled.</returns>
+    [HttpPost("{userName}/disable", Name = nameof(DisableUser))]
+    [Authorize(Policy = Policies.Admin)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DisableUser([FromRoute, Required] string userName, CancellationToken ct)
+    {
+        await _usersManager.DisableUser(userName);
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Enables a disabled user (removes the system role <c>deactivated</c>). Requires admin privileges.
+    /// </summary>
+    /// <param name="userName">The username of the user to enable.</param>
+    /// <returns>No content on success, also when the user is already enabled.</returns>
+    [HttpPost("{userName}/enable", Name = nameof(EnableUser))]
+    [Authorize(Policy = Policies.Admin)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> EnableUser([FromRoute, Required] string userName, CancellationToken ct)
+    {
+        await _usersManager.EnableUser(userName);
+
+        return NoContent();
     }
 }
 

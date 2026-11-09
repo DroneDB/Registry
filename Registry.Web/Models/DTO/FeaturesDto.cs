@@ -46,6 +46,18 @@ public class FeaturesDto
     public PasswordPolicyDto? PasswordPolicy { get; set; }
 
     /// <summary>
+    /// The input rules a client checks before it submits a form (slugs, e-mail, entry names, the "already exists"
+    /// message, cron words, the Latin letter rule of names). The server check stays the authority.
+    /// </summary>
+    public InputRulesDto? InputRules { get; set; }
+
+    /// <summary>
+    /// The roles the server depends on (<c>admin</c>, <c>deactivated</c>): they cannot be deleted, and only the
+    /// disable and enable endpoints add or remove <c>deactivated</c>.
+    /// </summary>
+    public string[]? SystemRoles { get; set; }
+
+    /// <summary>
     /// File names (in dataset root) considered as dataset thumbnail candidates.
     /// </summary>
     public string[]? DatasetThumbnailCandidates { get; set; }

@@ -21,7 +21,8 @@ public sealed record UploadPartOutcome(string Path, EntryDto? Entry, Exception? 
             Path = Path,
             Status = d.StatusCode,
             Error = d.Message,
-            Retryable = !d.NoRetry && d.StatusCode is StatusCodes.Status503ServiceUnavailable
+            // Only a transient error is worth sending again; a final upload status never is (UploadRetryRule)
+            Retryable = !UploadRetryRule.NoRetry(d, Error) && d.StatusCode is StatusCodes.Status503ServiceUnavailable
                 or StatusCodes.Status429TooManyRequests
         };
     }

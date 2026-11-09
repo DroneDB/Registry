@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -10,7 +11,9 @@ using Registry.Web.Exceptions;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.DTO;
+using Registry.Web.Models.Email;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Users;
 
@@ -49,6 +52,9 @@ public sealed class UserAccounts
         if (!IsValidUserName(userName))
             throw new BadRequestException("The provided username is not valid");
 
+        // The e-mail address is optional; one that is given must be one valid address
+        email = string.IsNullOrWhiteSpace(email) ? null : CheckedEmail(email);
+
         var user = await _userManager.FindByNameAsync(userName);
 
         if (user != null)
@@ -78,6 +84,10 @@ public sealed class UserAccounts
         return Regex.IsMatch(userName, "^[a-z0-9]{1,127}$", RegexOptions.Singleline);
     }
 
+    // The address as stored (trimmed), or the 400 of the e-mail rule
+    private static string CheckedEmail(string email) =>
+        EmailAddress.IsValid(email) ? email.Trim() : throw new BadRequestException(InputRules.InvalidEmailMessage);
+
     public async Task UpdateUser(string userName, string? email)
     {
         if (string.IsNullOrWhiteSpace(userName))
@@ -96,8 +106,9 @@ public sealed class UserAccounts
             throw new ForbiddenException(
                 "Profile data (email) is synchronised from the identity provider and cannot be modified locally.", noRetry: true);
 
-        if (!string.IsNullOrWhiteSpace(email))
-            user.Email = email;
+        // Checked only when it changes: an address stored before the rule does not block an edit of the roles
+        if (!string.Equals(email.Trim(), user.Email?.Trim(), StringComparison.Ordinal))
+            user.Email = CheckedEmail(email);
 
         _applicationDbContext.Entry(user).State = EntityState.Modified;
         await _applicationDbContext.SaveChangesAsync();
@@ -135,6 +146,9 @@ public sealed class UserAccounts
 
         if (user == null)
             throw new BadRequestException("Cannot find user " + userName);
+
+        // The roles of the metadata are applied: they cannot disable the user (D-043)
+        await _provisioning.RefuseDeactivatedAsync(user, UserProvisioning.RequestedMetadataRoles(meta));
 
         user.Metadata = meta;
 

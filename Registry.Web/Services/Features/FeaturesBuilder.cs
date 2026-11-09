@@ -81,6 +81,17 @@ public sealed class AccountFeatures : IFeatureSection
     }
 }
 
+/// <summary>The input rules and the system role names, each from its one definition (<see cref="InputRules"/>, <see cref="SystemRoles"/>).</summary>
+public sealed class InputRuleFeatures : IFeatureSection
+{
+    public Task FillAsync(FeaturesDto features)
+    {
+        features.InputRules = InputRules.Describe();
+        features.SystemRoles = [.. SystemRoles.Names];
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>E-mail: whether the server sends it, as <see cref="IEmailService"/> decides.</summary>
 public sealed class EmailFeatures : IFeatureSection
 {

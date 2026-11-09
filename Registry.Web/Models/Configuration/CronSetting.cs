@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Linq;
+
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>
@@ -6,8 +9,12 @@ namespace Registry.Web.Models.Configuration;
 /// </summary>
 public static class CronSetting
 {
+    /// <summary>The words that switch a job off, in lowercase (a setting matches them in any case).</summary>
+    public static IReadOnlyList<string> DisableWords { get; } = ["disabled", "off", "none"];
+
     /// <summary>Whether <paramref name="raw"/> switches the job off.</summary>
-    public static bool IsDisabled(string? raw) => raw?.Trim().ToLowerInvariant() is "disabled" or "off" or "none";
+    public static bool IsDisabled(string? raw) =>
+        raw != null && DisableWords.Contains(raw.Trim().ToLowerInvariant());
 
     /// <summary>
     /// The cron expression to schedule: <paramref name="defaultCron"/> for a null or blank setting, null when the job

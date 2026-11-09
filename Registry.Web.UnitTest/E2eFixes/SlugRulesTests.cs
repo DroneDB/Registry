@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
+using Registry.Web.Test.Rules;
 using Registry.Web.Utilities;
 using Shouldly;
 
@@ -90,6 +91,19 @@ public class SlugRulesTests
         }
 
         failures.ShouldBeEmpty();
+    }
+
+    // The cases the Hub runs against libs/slug.js (Rules/input-rule-vectors.json) are the validator's answers
+    [Test]
+    public void SharedCases_AreTheValidatorsAnswers()
+    {
+        var accepted = InputRuleVectors.Values("slug", "accept");
+        var rejected = InputRuleVectors.Values("slug", "reject");
+
+        accepted.ShouldNotBeEmpty();
+        rejected.ShouldNotBeEmpty();
+        accepted.Where(s => !s.IsValidSlug()).ShouldBeEmpty();
+        rejected.Where(s => s.IsValidSlug()).ShouldBeEmpty();
     }
 
     [Test]

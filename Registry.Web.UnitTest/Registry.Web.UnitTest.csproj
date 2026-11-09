@@ -60,6 +60,10 @@
         <None Include="Baselines\Snapshots\**">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+        <!-- The input rule test cases the Hub also runs (InputRulesTests) -->
+        <None Include="Rules\*.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
 </Project>

@@ -18,6 +18,55 @@
       "requireLowercase": false,
       "requireNonAlphanumeric": false
     },
+    "inputRules": {
+      "slug": {
+        "pattern": "^(?!.*--)[a-z0-9][a-z0-9_\\-]{1,127}$",
+        "minLength": 2,
+        "maxLength": 128,
+        "description": "it has 2 to 128 characters (lowercase letters, digits, '_' and '-'), starts with a letter or digit and has no '--'",
+        "message": null
+      },
+      "email": {
+        "pattern": "^[^\\s@]+@[^\\s@]+$",
+        "minLength": null,
+        "maxLength": null,
+        "description": "one address, such as name@example.com",
+        "message": "The e-mail address is not valid: enter one address, such as name@example.com"
+      },
+      "entryName": {
+        "pattern": "^(?![A-Za-z]:)(?!\\.\\.?$)(?!\\s*$)[^\\/\\\\\\u0000]+$",
+        "reservedNames": [
+          ".ddb"
+        ],
+        "rootReservedNames": [
+          ".uploads"
+        ],
+        "description": "a name that is not empty, not '.' or '..', has no '/', '\\' or NUL character, does not start with a drive (such as 'C:') and is not a reserved name"
+      },
+      "nameClash": {
+        "message": "A file or folder named '{name}' already exists in this folder",
+        "caseInsensitive": true
+      },
+      "cron": {
+        "disableWords": [
+          "disabled",
+          "off",
+          "none"
+        ],
+        "description": "leave it empty for the default schedule; 'disabled', 'off' or 'none' (any case) turns the job off"
+      },
+      "latinName": {
+        "pattern": "[A-Za-z0-9]",
+        "normalization": "NFD",
+        "description": "the name needs a Latin letter (a–z) or a digit (accents are dropped), unless you enter a slug",
+        "message": "Use at least one Latin letter (a–z) or digit in the name, or enter a slug",
+        "messageWithoutSlug": "Use at least one Latin letter (a–z) or digit"
+      }
+    },
+    "systemRoles": [
+      "admin",
+      "deactivated"
+    ],
     "datasetThumbnailCandidates": [
       "thumbnail.webp",
       "thumbnail.jpg",

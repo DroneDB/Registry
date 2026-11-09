@@ -201,6 +201,9 @@ scheme also answers with an empty body (plus `WWW-Authenticate: Bearer`, not rec
   sends, with the instance id (`<guid>` here), and its fields are the cron, the e-mail mode, the instance id and the
   documentation link.
 * `sys-features`: `updateCheckEnabled` (the cron is not disabled) and `instanceHash` (scrubbed: random per host).
+* `sys-features`: `inputRules` (FR-XC-12: the slug, e-mail, entry name, "already exists", cron and Latin-letter rules,
+  each with its ECMAScript pattern, limits and texts) and `systemRoles` (`admin`, `deactivated`), additive
+  (`InputRulesTests`, `UserRolesHttpTests.Features_ListTheInputRules_AndBothSystemRoles`).
 * Organizations: `datasetCount` and `lastModified` (the newest write to the index of one of its datasets, its creation date when none can
   be read). Filled for the owner, administrators and members (`orgs-list`, `orgs-list-admin`, `orgs-get`; `orgs-create` has 0 and its
   creation date), `null` for the others (the shared public organization in `orgs-list`, `orgs-public`). Datasets: `lastModified` in
