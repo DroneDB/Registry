@@ -253,7 +253,7 @@ public class JobIndexWriterPreparationTests
         failed.TargetLabel = "→ bands/merged.tif";
         t.Seed(failed);
 
-        await t.Writer.ResetForRequeueAsync("1");
+        await t.Writer.ResetForRequeueAsync("1", DateTime.UtcNow);
 
         var row = t.Row("1")!;
         row.ErrorType.ShouldBeNull();

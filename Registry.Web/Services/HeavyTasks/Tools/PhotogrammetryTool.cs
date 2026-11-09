@@ -32,7 +32,7 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parameters>
 {
     /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
-    public sealed record Parameters(string? NodeId, string? Folder, List<string>? Images, bool? CreateNewDataset, string? DestPath, string? NewDatasetName, string? NewDatasetOrgSlug, string? NewDatasetVisibility, string? Name, string? Options);
+    public sealed record Parameters(string? NodeId, string? Folder, List<string>? Images, bool? CreateNewDataset, string? DestPath, string? NewDatasetName, string? NewDatasetOrgSlug, string? NewDatasetVisibility, string? Name, string? Options, string? Profile = null);
 
     protected override Parameters ReadParams(ToolParameters p) => new(
         p.Text("nodeId"),
@@ -44,7 +44,8 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         p.Text("newDatasetOrgSlug"),
         p.Text("newDatasetVisibility"),
         p.Text("name"),
-        p.RawArray("options"));
+        p.RawArray("options"),
+        p.Text("profile"));
 
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
@@ -56,6 +57,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
             "images": { "type": ["array", "null"], "items": { "type": "string" }, "description": "Explicit list of image entry paths." },
             "nodeId": { "type": ["string", "null"], "description": "Target NodeODX node id (default: first configured)." },
             "name": { "type": ["string", "null"], "description": "Task name shown on the node." },
+            "profile": { "type": ["string", "null"], "description": "Name of the processing profile the options come from, shown in the task's label." },
             "options": { "type": ["array", "null"], "description": "NodeODX options array [{name,value}]." },
             "destPath": { "type": ["string", "null"], "description": "Destination folder within the dataset for extracted results (required unless createNewDataset is true)." },
             "createNewDataset": { "type": ["boolean", "null"], "description": "If true, create a new dataset for the photogrammetry results instead of extracting into the current dataset." },
@@ -101,6 +103,26 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
     /// <inheritdoc />
     public override bool AddsDatasetFiles => true;
     public override JsonDocument InputSchema => Schema;
+
+    /// <summary>
+    /// The label of a run, so that runs can be told apart in the task lists (FR-PRC-22): the task name, the image
+    /// folder (or the number of images), the output and the profile, as in
+    /// "limit-1 · images/ → photogrammetry_output (Fast Orthophoto)".
+    /// </summary>
+    protected override string? Label(Parameters p)
+    {
+        var source = !string.IsNullOrWhiteSpace(p.Folder) ? p.Folder.Trim().TrimEnd('/') + "/"
+            : p.Images is { Count: > 0 } images ? $"{images.Count} images" : null;
+        var head = string.Join(" \u00b7 ",
+            new[] { p.Name?.Trim(), source }.Where(part => !string.IsNullOrEmpty(part)));
+        var target = p.CreateNewDataset == true
+            ? ("new dataset " + (p.NewDatasetName ?? string.Empty)).Trim()
+            : p.DestPath?.Trim();
+        var label = string.IsNullOrEmpty(target) ? head : $"{head} \u2192 {target}".Trim();
+        if (!string.IsNullOrWhiteSpace(p.Profile))
+            label = $"{label} ({p.Profile.Trim()})".Trim();
+        return string.IsNullOrWhiteSpace(label) ? null : label;
+    }
 
     protected override async Task ValidateAsync(HeavyToolRequest request, Parameters args,
         IHeavyToolValidationContext ctx, CancellationToken ct)
@@ -159,9 +181,12 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
                     .ResolveOrganizationAsync(newOrgSlug, AccessType.Write, ct: ct);
 
             // Fails fast on a slug that is taken (the worker checks again before it creates the dataset, at submit
-            // and when the task starts); nothing is created here
-            if (hasName && await scope.ServiceProvider.GetRequiredService<DatasetCreation>()
-                    .SlugIsTakenAsync(newOrgSlug, newDatasetName!, ct))
+            // and when the task starts); nothing is created here. The retry of a task whose earlier run created its
+            // dataset, still there in that organization, imports into it again (the rule of the worker,
+            // ReusableCreatedDatasetAsync): its own dataset is not a taken slug (D-037)
+            var creation = scope.ServiceProvider.GetRequiredService<DatasetCreation>();
+            if (hasName && !await OwnDatasetExistsAsync(creation, ctx.OwnCreatedDataset, newOrgSlug, ct) &&
+                await creation.SlugIsTakenAsync(newOrgSlug, newDatasetName!, ct))
                 throw new ConflictException(SlugTakenMessage(newDatasetName!, newOrgSlug));
         }
         else
@@ -207,6 +232,13 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
             ? (recorded.InternalRef, slug)
             : null;
     }
+
+    // Whether the dataset an earlier run of the task created (the retry's OwnCreatedDataset) is still there in the target
+    // organization, found by its folder id as the worker finds it: the re-run imports into it
+    private static async Task<bool> OwnDatasetExistsAsync(DatasetCreation creation, TaskCreatedDataset? own,
+        string orgSlug, CancellationToken ct) =>
+        own is not null && string.Equals(own.Org, orgSlug, StringComparison.Ordinal) &&
+        await creation.ExistingSlugAsync(orgSlug, own.InternalRef, ct) is not null;
 
     // The one text of a slug that is taken, at submit and in the worker (§7.1)
     private static string SlugTakenMessage(string slug, string orgSlug) =>

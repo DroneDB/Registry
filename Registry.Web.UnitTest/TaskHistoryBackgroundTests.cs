@@ -10,6 +10,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Caching;
 using Registry.Web.Services.Jobs;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.PlatformTasks;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
@@ -48,8 +49,13 @@ public class TaskHistoryBackgroundTests
         Add("rebuild", () => Job.FromExpression<DdbJobs>(j => j.RebuildInBackground("org", Guid.Empty, "m.obj", null)).ToString());
         Add("build", () => Job.FromExpression<DdbJobs>(j => j.Build("org", Guid.Empty, "m.obj", false, null)).ToString());
         Add("legacy", () => null);
-        var history = new TaskHistory(Mock.Of<IDatasetAccessResolver>(), new JobIndexQuery(_db),
-            Mock.Of<IRecordCache>(), null!, null!, TestJobs.BuildTaskWaits(_db), TestSettings.Options<ProcessingPlatformSettings>(new AppSettings()));
+        // The list asks who reads it (the actions of its rows, D-024): an anonymous reader
+        var access = new Mock<IDatasetAccessResolver>();
+        access.Setup(a => a.ResolveAsync("org", "ds", AccessType.Read, null, It.IsAny<System.Threading.CancellationToken>()))
+            .ReturnsAsync(() => new DatasetAccess(new Dataset { Slug = "ds" }, Mock.Of<Registry.Ports.DroneDB.IDDB>));
+        var history = new TaskHistory(access.Object, new JobIndexQuery(_db),
+            Mock.Of<IRecordCache>(), new TaskAuthorizer(access.Object, new JobIndexQuery(_db), Mock.Of<IAuthManager>()),
+            null!, TestJobs.BuildTaskWaits(_db), TestSettings.Options<ProcessingPlatformSettings>(new AppSettings()));
 
         // A filter bypasses the cache of the canonical page
         var page = await history.ListPageAsync("org", "ds", "build", null, 0, 50);

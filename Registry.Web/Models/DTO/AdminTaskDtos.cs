@@ -5,8 +5,9 @@ namespace Registry.Web.Models.DTO;
 
 /// <summary>
 /// Summary of a single task for the admin dashboard. Extends the
-/// per-dataset task summary with org/dataset and owner identity columns; <c>Error</c>, <c>WaitingForFiles</c> and
-/// <c>MissingFiles</c> as in <see cref="TaskSummaryDto"/>.
+/// per-dataset task summary with org/dataset and owner identity columns; <c>Error</c>, <c>WaitingForFiles</c>,
+/// <c>MissingFiles</c>, <c>TargetLabel</c>, <c>Actions</c>, <c>WaitingForNode</c> and <c>CancelledBy</c> as in
+/// <see cref="TaskSummaryDto"/>.
 /// </summary>
 public sealed record AdminTaskSummaryDto(
     string TaskId,
@@ -27,7 +28,11 @@ public sealed record AdminTaskSummaryDto(
     string? Error,
     DateTime? ArtifactExpiresAt,
     bool WaitingForFiles = false,
-    IReadOnlyList<string>? MissingFiles = null);
+    IReadOnlyList<string>? MissingFiles = null,
+    string? TargetLabel = null,
+    IReadOnlyList<string>? Actions = null,
+    bool WaitingForNode = false,
+    string? CancelledBy = null);
 
 /// <summary>Paged result of the admin task list.</summary>
 public sealed record AdminTaskListDto(

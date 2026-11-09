@@ -47,12 +47,16 @@ public sealed record HeavyToolArtifact(
     long SizeBytes,
     string? Sha256 = null);
 
-/// <summary>Incremental progress emitted by a tool during execution.</summary>
+/// <summary>
+/// Incremental progress emitted by a tool during execution. <c>WaitingForNode</c> says whether a processing node
+/// holds the task in its queue (true) or has started it (false); null when the tool does not say (D-024).
+/// </summary>
 public sealed record HeavyToolProgress(
     double Fraction,            // 0..1, or -1 for indeterminate
     string? Phase = null,
     string? Message = null,
-    string? LogChunk = null);   // additional text to append to the log tail
+    string? LogChunk = null,    // additional text to append to the log tail
+    bool? WaitingForNode = null);
 
 /// <summary>
 /// Context available to a tool during validation and planning.
@@ -67,6 +71,13 @@ public interface IHeavyToolValidationContext
     /// (at submit, and on the first attempt). A tool that refuses an existing output does not refuse this one.
     /// </summary>
     string? PublishedOutput { get; }
+
+    /// <summary>
+    /// The dataset an earlier run of this task created (its write record, FR-XC-27), for the retry of a task (D-037);
+    /// null at submit and during the execution (the worker reads its record). A tool that refuses a taken dataset slug
+    /// does not refuse the dataset of the task itself, which the re-run imports into again.
+    /// </summary>
+    TaskCreatedDataset? OwnCreatedDataset => null;
 
     /// <summary>
     /// Whether the task was queued before tools refused an existing output without <c>overwrite</c> (its record

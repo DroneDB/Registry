@@ -402,7 +402,7 @@ public class TaskWriteRecordStoreTests
         record.Add(Dataset, ["written-by-the-new-run.tif"], []);
         env.SeedTask("1", "Enqueued", record.ToJson());
 
-        await PublicationEnv.NewWriter(env.Db).ResetForRequeueAsync("1");
+        await PublicationEnv.NewWriter(env.Db).ResetForRequeueAsync("1", DateTime.UtcNow);
 
         // The retry resets the record by compare-and-swap before the re-queue (TaskRetry): a run that started at once
         // keeps what it recorded

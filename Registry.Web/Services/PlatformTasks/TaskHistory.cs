@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Hangfire.States;
 using Microsoft.Extensions.Options;
 using Registry.Web.Services.Managers;
 using Registry.Web.Data.Models;
@@ -34,10 +35,11 @@ public sealed class TaskHistory
     private readonly TaskArtifactStore _artifacts;
     private readonly BuildTaskWaits _waits;
     private readonly ProcessingPlatformSettings _settings;
+    private readonly TaskUserNames? _userNames;
 
     public TaskHistory(IDatasetAccessResolver access, IJobIndexQuery query, IRecordCache cache,
         TaskAuthorizer authorizer, TaskArtifactStore artifacts, BuildTaskWaits waits,
-        IOptions<ProcessingPlatformSettings> platformSettings)
+        IOptions<ProcessingPlatformSettings> platformSettings, TaskUserNames? userNames = null)
     {
         _access = access;
         _query = query;
@@ -46,6 +48,7 @@ public sealed class TaskHistory
         _artifacts = artifacts;
         _waits = waits;
         _settings = platformSettings.Value;
+        _userNames = userNames;
     }
 
     /// <summary>The page of the dataset's task history, newest first, with the entity tag of the page.</summary>
@@ -53,6 +56,9 @@ public sealed class TaskHistory
         int skip, int take, CancellationToken ct = default)
     {
         var dataset = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
+        // The actions of a row are the caller's (D-024): they are added after the cache, which every reader of the
+        // dataset shares, and the entity tag is that of the page the caller gets
+        var caller = await _authorizer.CallerAsync(dataset.Dataset);
 
         var clampedTake = Math.Clamp(take, 1, MaxTake);
 
@@ -65,7 +71,7 @@ public sealed class TaskHistory
         {
             var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state,
                 Skip: Math.Max(0, skip), Take: clampedTake);
-            var page = Summaries(await _query.QueryAsync(filter, ct), dataset);
+            var page = ForCaller(await ListedAsync(await _query.QueryAsync(filter, ct), dataset, ct), caller);
             return new TaskListPage(page, ETagOf(JsonSerializer.SerializeToUtf8Bytes(page), clampedTake));
         }
 
@@ -77,14 +83,24 @@ public sealed class TaskHistory
             async token =>
             {
                 var filter = new JobIndexQueryFilter(orgSlug, dsSlug, toolId, state, Skip: 0, Take: MaxTake);
-                return JsonSerializer.SerializeToUtf8Bytes(Summaries(await _query.QueryAsync(filter, token), dataset));
+                return JsonSerializer.SerializeToUtf8Bytes(
+                    await ListedAsync(await _query.QueryAsync(filter, token), dataset, token));
             }, TasksListCacheOptions, ct);
-        var canonical = JsonSerializer.Deserialize<TaskSummaryDto[]>(cachedBytes) ?? [];
+        var canonical = JsonSerializer.Deserialize<ListedTask[]>(cachedBytes) ?? [];
 
-        // The tag of a page of the canonical list: the canonical bytes and the page size
-        return new TaskListPage(canonical.Length > clampedTake ? canonical[..clampedTake] : canonical,
-            ETagOf(cachedBytes, clampedTake));
+        // The tag of the page the caller gets: its actions are part of it
+        var cachedPage = ForCaller(canonical.Length > clampedTake ? canonical[..clampedTake] : canonical, caller);
+        return new TaskListPage(cachedPage, ETagOf(JsonSerializer.SerializeToUtf8Bytes(cachedPage), clampedTake));
     }
+
+    /// <summary>
+    /// A row of the task list without the caller's actions: the summary, the user the task belongs to and whether the
+    /// task committed its result (FR-XC-27).
+    /// </summary>
+    internal sealed record ListedTask(string? UserId, TaskSummaryDto Task, bool Committed = false);
+
+    private static TaskSummaryDto[] ForCaller(IEnumerable<ListedTask> rows, TaskCaller caller) =>
+        [.. rows.Select(r => r.Task with { Actions = caller.ActionsOn(r.Task.State, r.UserId, r.Committed) })];
 
     // Weak: equal tags mean the same tasks, not byte-identical bodies
     private static string ETagOf(byte[] content, int take) =>
@@ -96,15 +112,48 @@ public sealed class TaskHistory
     {
         var job = await _authorizer.LoadAsync(orgSlug, dsSlug, id, AccessType.Read, ct);
         var missing = await MissingFilesOfAsync(job, orgSlug, dsSlug, ct);
+        var dataset = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
+        var caller = await _authorizer.CallerAsync(dataset.Dataset);
+        var cancelledBy = await CancelledByAsync(job, ct);
 
-        var snapshot = LogTailSnapshot.Parse(job.LogTailJson);
+        var (cursor, lines) = LogOf(job, cancelledBy);
         return new TaskStatusDto(
             job.JobId, job.ToolId, job.ToolVersion, job.CurrentState,
             new TaskProgressDto(job.ProgressPercent, job.PhaseMessage, null),
             job.CreatedAtUtc, job.ProcessingAtUtc, TaskJobHelpers.FinishedAt(job),
             job.ParentJobId, job.WorkflowExecutionId,
-            snapshot.Cursor, snapshot.AsStrings(), BuildArtifactDto(job, orgSlug, dsSlug),
-            job.ErrorMessage ?? job.ErrorType, missing != null, missing);
+            cursor, lines, BuildArtifactDto(job, orgSlug, dsSlug),
+            job.ErrorMessage ?? job.ErrorType, missing != null, missing,
+            job.TargetLabel, caller.ActionsOn(job.CurrentState, job.UserId, TaskWriteRecord.IsCommitted(job.WriteRecordJson)),
+            job.WaitingForNode, cancelledBy);
+    }
+
+    // The name of the user who cancelled the task (D-038), or null
+    private async Task<string?> CancelledByAsync(JobIndex job, CancellationToken ct)
+    {
+        if (job.CancelledBy is null)
+            return null;
+        var names = await NamesOfAsync([job.CancelledBy], ct);
+        return names.GetValueOrDefault(job.CancelledBy, job.CancelledBy);
+    }
+
+    private async Task<IReadOnlyDictionary<string, string>> NamesOfAsync(IEnumerable<string?> userIds,
+        CancellationToken ct) =>
+        _userNames is null ? new Dictionary<string, string>() : await _userNames.ResolveAsync(userIds, ct);
+
+    /// <summary>
+    /// The log of a task: its tail and, for a task that a user cancelled, a last line that says who did (FR-PRC-20).
+    /// The line is added when the log is read, after the job's own last write of its tail, which cannot remove it.
+    /// </summary>
+    private static (long Cursor, IReadOnlyList<string> Lines) LogOf(JobIndex job, string? cancelledBy)
+    {
+        var snapshot = LogTailSnapshot.Parse(job.LogTailJson);
+        var lines = snapshot.AsStrings();
+        if (cancelledBy is null || job.CurrentState != DeletedState.StateName)
+            return (snapshot.Cursor, lines);
+
+        var at = job.DeletedAtUtc ?? job.LastStateChangeUtc;
+        return (snapshot.Cursor + 1, [.. lines, $"[{at:HH:mm:ss}] Cancelled by {cancelledBy}"]);
     }
 
     // The files the task waits for, when it is a succeeded build whose entry waits for them; the authorizer granted the
@@ -126,16 +175,16 @@ public sealed class TaskHistory
         var job = await _authorizer.LoadAsync(orgSlug, dsSlug, id, AccessType.Read, ct);
 
         var snapshot = LogTailSnapshot.Parse(job.LogTailJson);
-        var allLines = snapshot.AsStrings();
+        var (cursor, allLines) = LogOf(job, await CancelledByAsync(job, ct));
 
         // Return only lines beyond the caller's cursor. The ring buffer cursor is a
         // monotonic count; the available tail starts at (cursor - lines.Count).
-        var tailStart = snapshot.Cursor - allLines.Count;
+        var tailStart = cursor - allLines.Count;
         var skip = since > tailStart ? (int)(since - tailStart) : 0;
         skip = Math.Clamp(skip, 0, allLines.Count);
         var lines = allLines.Skip(skip).ToArray();
 
-        return new TaskLogDto(snapshot.Cursor, lines, snapshot.TruncatedFromTail);
+        return new TaskLogDto(cursor, lines, snapshot.TruncatedFromTail);
     }
 
     /// <summary>The file a succeeded task produced.</summary>
@@ -156,18 +205,22 @@ public sealed class TaskHistory
             MimeMapping.MimeUtility.GetMimeMapping(file), etag);
     }
 
-    private TaskSummaryDto[] Summaries(JobIndex[] rows, DatasetAccess dataset)
+    private async Task<ListedTask[]> ListedAsync(JobIndex[] rows, DatasetAccess dataset, CancellationToken ct)
     {
         var waits = _waits.Find(rows, () => dataset.Ddb);
-        return [.. rows.Select(j => ToSummary(j, waits.MissingFilesOf(j.JobId)))];
+        var names = await NamesOfAsync(rows.Select(j => j.CancelledBy), ct);
+        return [.. rows.Select(j => new ListedTask(j.UserId, ToSummary(j, waits.MissingFilesOf(j.JobId), names),
+            TaskWriteRecord.IsCommitted(j.WriteRecordJson)))];
     }
 
-    private TaskSummaryDto ToSummary(JobIndex j, IReadOnlyList<string>? missingFiles) => new(
+    private TaskSummaryDto ToSummary(JobIndex j, IReadOnlyList<string>? missingFiles,
+        IReadOnlyDictionary<string, string> names) => new(
         j.JobId, j.ToolId, j.ToolVersion, j.CurrentState, j.ProgressPercent, j.PhaseMessage,
         j.CreatedAtUtc, j.ProcessingAtUtc, TaskJobHelpers.FinishedAt(j), j.Path, j.ParentJobId,
         j.WorkflowExecutionId, j.ErrorType, j.ErrorMessage, TaskJobHelpers.ArtifactExpiresAt(j, _settings.ArtifactTtlHours),
         DdbJobDescriptor.IsBackgroundRebuildDisplay(j.MethodDisplay), missingFiles != null, missingFiles,
-        IsCancellable(j));
+        IsCancellable(j), j.TargetLabel, [], j.WaitingForNode,
+        j.CancelledBy is null ? null : names.GetValueOrDefault(j.CancelledBy, j.CancelledBy));
 
     /// <summary>Whether a cancel of the task is accepted: it has not ended, and has not committed its result (FR-XC-27).</summary>
     internal static bool IsCancellable(JobIndex j) =>

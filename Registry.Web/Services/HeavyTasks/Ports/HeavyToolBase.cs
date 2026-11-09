@@ -54,7 +54,8 @@ public abstract class HeavyToolBase<TParams> : IHeavyTool where TParams : class
     public IReadOnlyList<string> OutputPaths(HeavyToolRequest request) => OutputPaths(Params(request));
 
     /// <inheritdoc cref="IHeavyTool.Label"/>
-    public string? Label(HeavyToolRequest request) => Label(Params(request));
+    /// <remarks>A tool whose label needs more than its parameters (the request's path) overrides this one.</remarks>
+    public virtual string? Label(HeavyToolRequest request) => Label(Params(request));
 
     /// <summary>The files the task reads (normalized); none unless the tool overrides it.</summary>
     /// <returns>The input paths.</returns>

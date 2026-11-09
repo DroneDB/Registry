@@ -86,31 +86,47 @@ public sealed class TaskLifecycle
         if (await _records.RequestCancelAsync(job.JobId, ct) == TaskCancelRequestResult.Committed)
             throw new BadRequestException(CommittedMessage, noRetry: true);
 
+        // Who cancelled, before the job ends: the task is then labelled "Cancelled", not "Deleted" (D-038). The
+        // other writers of Deleted (job sync, recoveries, dataset clean-up) never set it
+        var userId = await _authorizer.CurrentUserIdAsync();
+        var marked = userId is not null && await _writer.SetCancelledByAsync(job.JobId, userId, ct);
+
+        var ended = await EndAsync(job.JobId, orgSlug, dsSlug, ct);
+
+        // The task ended by itself meanwhile: nobody cancelled it
+        if (!ended && marked)
+            await _writer.SetCancelledByAsync(job.JobId, null, ct);
+        return ended;
+    }
+
+    // Ends the job of a cancelled task; false when it ended by itself meanwhile
+    private async Task<bool> EndAsync(string jobId, string orgSlug, string dsSlug, CancellationToken ct)
+    {
         // Deleted before a worker took it: it never runs, so nothing else rolls it back. Twice: a job that moved from one
         // of these states to another while they were tried
-        if (DeleteJob(job.JobId, NotStartedStates) || DeleteJob(job.JobId, NotStartedStates))
+        if (DeleteJob(jobId, NotStartedStates) || DeleteJob(jobId, NotStartedStates))
         {
-            await RollBackAsync(job.JobId);
+            await RollBackAsync(jobId);
             return true;
         }
 
         // Running: its worker rolls back when it sees its job deleted. Only from Processing, never from any state: a job
         // that ended meanwhile (Succeeded, Failed) keeps its end
-        if (DeleteJob(job.JobId, [ProcessingState.StateName]))
+        if (DeleteJob(jobId, [ProcessingState.StateName]))
             return true;
 
         // Ended meanwhile, or in no state the cancel knows: the task stays as it is. Only a task whose job the store no
         // longer has ends here
-        if (!JobLost(job.JobId))
+        if (!JobLost(jobId))
             return false;
 
-        var ended = await _writer.UpdateStateIfCurrentAsync(job.JobId, TaskStateCatalog.Active,
+        var ended = await _writer.UpdateStateIfCurrentAsync(jobId, TaskStateCatalog.Active,
             DeletedState.StateName, DateTime.UtcNow, ct);
         if (ended)
         {
             _logger.LogWarning("Cancelled task {JobId} of {Org}/{Ds}, whose job the job store no longer has",
-                job.JobId, orgSlug, dsSlug);
-            await RollBackAsync(job.JobId);
+                jobId, orgSlug, dsSlug);
+            await RollBackAsync(jobId);
         }
 
         return ended;

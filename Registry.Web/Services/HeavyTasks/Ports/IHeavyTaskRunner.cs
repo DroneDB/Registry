@@ -27,7 +27,9 @@ public interface IHeavyTaskRunner
     /// </summary>
     /// <param name="request">The submit, as the caller resolved it.</param>
     /// <param name="enqueue">Starts the task once every check passed; returns its id. Runs under the submit lock.</param>
-    /// <param name="ownJobId">The task being re-run (a retry): its own record is neither a duplicate nor a writer of its outputs.</param>
+    /// <param name="ownJobId">The task being re-run (a retry): its own record is neither a duplicate nor a writer of its
+    /// outputs, and the tool's validation sees the output an earlier attempt of it wrote (<c>PublishedOutput</c>) and the
+    /// dataset an earlier run of it created (<c>OwnCreatedDataset</c>, from <see cref="HeavyTaskSubmitRequest.CreatedDataset"/>).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The started task, or the equivalent task already there (deduplicated).</returns>
     Task<HeavyTaskSubmitResult> CheckSubmitAsync(HeavyTaskSubmitRequest request,

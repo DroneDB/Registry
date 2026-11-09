@@ -138,6 +138,13 @@
             ],
             "description": "Task name shown on the node."
           },
+          "profile": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Name of the processing profile the options come from, shown in the task's label."
+          },
           "options": {
             "type": [
               "array",

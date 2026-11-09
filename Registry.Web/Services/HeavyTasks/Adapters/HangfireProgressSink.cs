@@ -46,6 +46,9 @@ public sealed class HangfireProgressSink : IProgress<HeavyToolProgress>, IAsyncD
     private string? _lastPhase;
     private Snapshot? _pending;
     private int _completed;
+    // The wait on a processing node as the tool reported it last, and a change of it not written yet
+    private bool? _waiting;
+    private (bool Waiting, DateTime AtUtc)? _pendingWaiting;
 
     private sealed record Snapshot(int? Percent, string? Phase, string LogTailJson);
 
@@ -90,6 +93,13 @@ public sealed class HangfireProgressSink : IProgress<HeavyToolProgress>, IAsyncD
             }
 
             var now = DateTime.UtcNow;
+            var waitingChanged = value.WaitingForNode is { } waiting && waiting != _waiting;
+            if (waitingChanged)
+            {
+                _waiting = value.WaitingForNode;
+                _pendingWaiting = (_waiting!.Value, now);
+            }
+
             var phaseChanged = value.Phase is not null && value.Phase != _lastPhase;
             if (phaseChanged || now - _lastFlushUtc >= _throttle)
             {
@@ -98,7 +108,7 @@ public sealed class HangfireProgressSink : IProgress<HeavyToolProgress>, IAsyncD
                 _lastPhase = value.Phase ?? _lastPhase;
                 _pending = new Snapshot(_lastPercent, _lastPhase, _logBuffer.ToJson());
             }
-            else if (_consoleLines.Count == 0)
+            else if (_consoleLines.Count == 0 && !waitingChanged)
             {
                 return;
             }
@@ -139,13 +149,19 @@ public sealed class HangfireProgressSink : IProgress<HeavyToolProgress>, IAsyncD
     {
         Snapshot? snapshot;
         string[] lines;
+        (bool Waiting, DateTime AtUtc)? waiting;
         lock (_gate)
         {
             snapshot = _pending;
             _pending = null;
             lines = [.. _consoleLines];
             _consoleLines.Clear();
+            waiting = _pendingWaiting;
+            _pendingWaiting = null;
         }
+
+        if (waiting is { } change)
+            await WriteWaitingAsync(change.Waiting, change.AtUtc);
 
         foreach (var line in lines)
         {
@@ -155,6 +171,19 @@ public sealed class HangfireProgressSink : IProgress<HeavyToolProgress>, IAsyncD
 
         if (snapshot != null)
             await WriteAsync(snapshot);
+    }
+
+    // The wait on a processing node (D-024): when it ends, the processing starts (FR-PRC-37)
+    private async Task WriteWaitingAsync(bool waiting, DateTime atUtc)
+    {
+        try
+        {
+            await _writer.SetWaitingForNodeAsync(_taskId, waiting, atUtc, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "Cannot write the node wait of task {TaskId}", _taskId);
+        }
     }
 
     // Progress is telemetry: a failed write is logged and never fails the tool

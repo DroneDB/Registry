@@ -142,6 +142,34 @@ public class ProgressSinkTests
         tail.Snapshot().Lines.Select(l => l.Msg).ShouldBe(["first", "second", "finished"]);
     }
 
+    /// <summary>
+    /// The wait on a processing node (FR-PRC-37, D-024): the sink writes each change of the flag the tool reports, once,
+    /// even when the progress is throttled, and a report that does not say leaves it as it is.
+    /// </summary>
+    [Test]
+    public async Task TheWaitOnANode_IsWrittenOncePerChange_EvenWhenTheProgressIsThrottled()
+    {
+        using var recorder = new RecordingWriter();
+        var writer = recorder.Mock();
+        var changes = new ConcurrentQueue<bool>();
+        writer.Setup(w => w.SetWaitingForNodeAsync("task-1", It.IsAny<bool>(), It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, bool, DateTime, CancellationToken>((_, waiting, _, _) => changes.Enqueue(waiting))
+            .ReturnsAsync(true);
+        var sink = Sink(writer.Object, throttle: 3600);
+
+        sink.Report(new HeavyToolProgress(0, "queued", WaitingForNode: true));
+        sink.Report(new HeavyToolProgress(0, "queued", WaitingForNode: true));
+        // The node polls are seconds apart: the consumer writes the wait before the node starts the task
+        SpinWait.SpinUntil(() => !changes.IsEmpty, TimeSpan.FromSeconds(10)).ShouldBeTrue();
+        sink.Report(new HeavyToolProgress(0, "queued"));
+        sink.Report(new HeavyToolProgress(0.1, "queued", WaitingForNode: false));
+        sink.Report(new HeavyToolProgress(0.2, "queued", WaitingForNode: false));
+        await sink.CompleteAsync();
+
+        changes.ToArray().ShouldBe([true, false]);
+    }
+
     [Test]
     public async Task AFailingWrite_IsTelemetryOnly()
     {

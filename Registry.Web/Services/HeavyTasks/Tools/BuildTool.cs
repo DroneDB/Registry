@@ -50,6 +50,13 @@ public sealed class BuildTool : HeavyToolBase<BuildTool.Parameters>
     public override bool RunsNativeBuild => true;
     public override JsonDocument InputSchema => Schema;
 
+    /// <summary>The label of a build that has no entry: it builds what is pending in the dataset (FR-PRC-43).</summary>
+    public const string PendingBuildsLabel = "Pending builds check";
+
+    /// <inheritdoc />
+    public override string? Label(HeavyToolRequest request) =>
+        string.IsNullOrEmpty(request.Path) ? PendingBuildsLabel : null;
+
     protected override Task ValidateAsync(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx,
         CancellationToken ct) => Task.CompletedTask;
 

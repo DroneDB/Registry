@@ -22,7 +22,8 @@ public sealed record HeavyTaskQuotaResult(HeavyTaskQuotaCode Code, string? Messa
 
 /// <summary>
 /// A request to submit a heavy task, as resolved by the controller. <c>CreatedDataset</c> is the dataset the server created
-/// for the task (an import), which its write record holds from the start (FR-XC-27); never read from the parameters.
+/// for the task (an import), which its write record holds from the start (FR-XC-27); never read from the parameters. The
+/// retry of a task (D-037) passes the dataset its write record names, which its validation does not refuse.
 /// </summary>
 public sealed record HeavyTaskSubmitRequest(
     string OrgSlug,

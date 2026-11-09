@@ -20,6 +20,9 @@ using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.Jobs;
+using Registry.Web.Services.Managers;
+using Registry.Web.Services.PlatformTasks;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Registry.Web.Utilities;
@@ -75,7 +78,8 @@ public class HeavyTaskRunnerTests
 
     // ---- The two tools: they read "input" and write "output", and validate as told ----
 
-    private sealed class PathTool(string id, Func<Exception?>? validation = null, bool producesArtifact = false)
+    private sealed class PathTool(string id, Func<Exception?>? validation = null, bool producesArtifact = false,
+        Action<IHeavyToolValidationContext>? seen = null)
         : HeavyToolBase<PathTool.P>
     {
         public sealed record P(string? Input, string? Output);
@@ -95,6 +99,7 @@ public class HeavyTaskRunnerTests
             CancellationToken ct)
         {
             Validations++;
+            seen?.Invoke(ctx);
             if (validation?.Invoke() is { } error)
                 throw error;
             return Task.CompletedTask;
@@ -394,5 +399,255 @@ public class HeavyTaskRunnerTests
         var label = _enqueued.ShouldHaveSingleItem().TargetLabel!;
         label.Length.ShouldBe(HeavyTaskJobs.TargetLabelMaxLength);
         label.ShouldEndWith("…");
+    }
+
+    // ---- The retry of a failed task (D-037): the submit checks run first, through CheckSubmitAsync ----
+
+    private const string FailedJob = "failed-merge";
+
+    // The write record of the failed task (TaskWriteRecordStore): a compare-and-swap on one stored record
+    private TaskWriteRecord? _record;
+    private Mock<ITaskWriteRecordStore> _records = null!;
+
+    private (TaskRetry Retry, Mock<IJobIndexWriter> Writer) RetryOf(string state, string tool = "writer",
+        string? published = null, TaskWriteRecord? record = null)
+    {
+        var job = new JobIndex
+        {
+            JobId = FailedJob, OrgSlug = Org, DsSlug = Ds, ToolId = tool, ToolVersion = "1", CurrentState = state,
+            UserId = "owner"
+        };
+        _index.Setup(q => q.GetByJobIdAsync(Org, Ds, FailedJob, It.IsAny<CancellationToken>())).ReturnsAsync(job);
+
+        var request = new HeavyToolRequest(tool, "1", Org, Ds, null,
+            JsonSerializer.SerializeToElement(new { input = "in.tif", output = "out/a.tif" }));
+        _processor.Setup(p => p.GetStoredJob(FailedJob)).Returns(new StoredJob(typeof(HeavyTaskJobWrapper),
+            nameof(HeavyTaskJobWrapper.Run), [tool, "1", JsonSerializer.Serialize(request), null, CancellationToken.None]));
+        _processor.Setup(p => p.GetJobParameter(FailedJob, PublishedOutputMarker.Key)).Returns(published);
+        // The live state of the job: Failed until a re-queue is accepted, then queued
+        var live = state == "Failed" ? JobStatus.Failed : JobStatus.Unknown;
+        _processor.Setup(p => p.GetJobStatus(FailedJob)).Returns(() => live);
+        _processor.Setup(p => p.Requeue(FailedJob)).Returns(() =>
+        {
+            if (live != JobStatus.Failed)
+                return false;
+            live = JobStatus.Enqueued;
+            return true;
+        });
+
+        var dataset = new Dataset { Slug = Ds, InternalRef = Guid.NewGuid(), Organization = new Organization { Slug = Org } };
+        var access = new Mock<IDatasetAccessResolver>();
+        access.Setup(a => a.ResolveAsync(Org, Ds, It.IsAny<AccessType>(), null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => new DatasetAccess(dataset, Mock.Of<IDDB>));
+        var auth = new Mock<IAuthManager>();
+        auth.Setup(a => a.IsOwnerOrAdmin(It.IsAny<Dataset>())).ReturnsAsync(true);
+        var writer = new Mock<IJobIndexWriter>();
+
+        // Without a record: a tool that adds no dataset files, which the retry has none to reset
+        _record = record;
+        _records = new Mock<ITaskWriteRecordStore>();
+        _records.Setup(r => r.ReadAsync(FailedJob, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => _record is null ? null : TaskWriteRecord.Parse(_record.ToJson()));
+        _records.Setup(r => r.ChangeAsync(FailedJob, It.IsAny<Func<TaskWriteRecord?, TaskWriteRecord?>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, Func<TaskWriteRecord?, TaskWriteRecord?> change, CancellationToken _) =>
+            {
+                var changed = change(_record is null ? null : TaskWriteRecord.Parse(_record.ToJson()));
+                if (changed is null)
+                    return new TaskWriteRecordChange(_record, false, true);
+                _record = changed;
+                return new TaskWriteRecordChange(changed, true, true);
+            });
+
+        return (new TaskRetry(new TaskAuthorizer(access.Object, _index.Object, auth.Object), _processor.Object,
+            writer.Object, Mock.Of<IDatasetResolver>(), Mock.Of<IDdbManager>(), _records.Object,
+            NullLogger<TaskRetry>.Instance, Runner()), writer);
+    }
+
+    // The record of a photogrammetry run that created its dataset and failed: rolled back, its dataset deleted later
+    private static readonly TaskCreatedDataset RunDataset =
+        new("org", Guid.Parse("4a7e0c1e-58f4-4d8b-9a55-2d3c1f0b9e01"), "run-2");
+
+    private static TaskWriteRecord RolledBackRun() => new()
+    {
+        State = TaskWriteState.RolledBack, CreatedDataset = RunDataset, CreatedDatasetDeleteJob = "delete-run-2"
+    };
+
+    [Test]
+    public async Task Retry_OfAFailedTask_RunsTheChecksThenRequeuesItsOwnJob()
+    {
+        var (retry, writer) = RetryOf("Failed");
+
+        (await retry.RetryAsync(Org, Ds, FailedJob)).ShouldBeTrue();
+
+        ((PathTool)_tools["writer"]).Validations.ShouldBe(1);
+        _processor.Verify(p => p.Requeue(FailedJob), Times.Once);
+        writer.Verify(w => w.ResetForRequeueAsync(FailedJob, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+        _enqueued.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task Retry_OfAFailedMergeWhoseOutputAnotherActiveTaskWrites_Is409_AndRequeuesNothing()
+    {
+        var (retry, writer) = RetryOf("Failed");
+        ActiveTask("other-task", "other", "out/a.tif");
+
+        var ex = await Should.ThrowAsync<ConflictException>(() => retry.RetryAsync(Org, Ds, FailedJob));
+
+        ex.StatusCode.ShouldBe(409);
+        _processor.Verify(p => p.Requeue(It.IsAny<string>()), Times.Never);
+        writer.Verify(w => w.ResetForRequeueAsync(It.IsAny<string>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task Retry_ForAnOwnerOverAQuota_IsRefusedByTheQuota_AndRequeuesNothing()
+    {
+        _settings.MaxConcurrentTasksGlobal = 1;
+        _index.Setup(q => q.CountActiveUserTasksAsync(null, null, null, It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        var (retry, _) = RetryOf("Failed");
+
+        await Should.ThrowAsync<HeavyTaskQuotaException>(() => retry.RetryAsync(Org, Ds, FailedJob));
+
+        _processor.Verify(p => p.Requeue(It.IsAny<string>()), Times.Never);
+    }
+
+    [TestCase("Succeeded")]
+    [TestCase("Deleted")]
+    public async Task Retry_OfASucceededOrCancelledTask_Is409(string state)
+    {
+        var (retry, _) = RetryOf(state);
+
+        var ex = await Should.ThrowAsync<ConflictException>(() => retry.RetryAsync(Org, Ds, FailedJob));
+
+        ex.StatusCode.ShouldBe(409);
+        _processor.Verify(p => p.Requeue(It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
+    public async Task Retry_OfATaskThatWroteItsOutput_ValidatesWithThatOutputPublished()
+    {
+        string? seen = null;
+        _tools["writer"] = new PathTool("writer", seen: ctx => seen = ctx.PublishedOutput);
+        var (retry, _) = RetryOf("Failed", published: "out/a.tif");
+
+        await retry.RetryAsync(Org, Ds, FailedJob);
+
+        seen.ShouldBe("out/a.tif");
+    }
+
+    [Test]
+    public async Task ASubmit_ValidatesWithNoPublishedOutput()
+    {
+        string? seen = "unset";
+        _tools["writer"] = new PathTool("writer", seen: ctx => seen = ctx.PublishedOutput);
+
+        await Runner().SubmitAsync(Submit("writer", "in.tif", "out/a.tif"));
+
+        seen.ShouldBeNull();
+        _processor.Verify(p => p.GetJobParameter(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    // ---- The retry of a run that created its dataset (D-037, FR-XC-27) ----
+
+    [Test]
+    public async Task Retry_OfARunThatCreatedItsDataset_ValidatesWithThatDatasetAsItsOwn()
+    {
+        TaskCreatedDataset? seen = null;
+        _tools["writer"] = new PathTool("writer", seen: ctx => seen = ctx.OwnCreatedDataset);
+        var (retry, _) = RetryOf("Failed", record: RolledBackRun());
+
+        (await retry.RetryAsync(Org, Ds, FailedJob)).ShouldBeTrue();
+
+        seen.ShouldBe(new TaskCreatedDataset("org", Guid.Parse("4a7e0c1e-58f4-4d8b-9a55-2d3c1f0b9e01"), "run-2"));
+    }
+
+    [Test]
+    public async Task ASubmit_ValidatesWithNoOwnCreatedDataset_EvenWhenTheServerCreatedOneForIt()
+    {
+        TaskCreatedDataset? seen = RunDataset;
+        _tools["writer"] = new PathTool("writer", seen: ctx => seen = ctx.OwnCreatedDataset);
+
+        await Runner().SubmitAsync(Submit("writer", "in.tif", "out/a.tif") with { CreatedDataset = RunDataset });
+
+        seen.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task Retry_OfARunThatCreatedItsDataset_CancelsTheWaitingDeleteOfThatDataset_AndKeepsItInTheRecord()
+    {
+        _processor.Setup(p => p.Delete("delete-run-2", "Scheduled")).Returns(true);
+        var (retry, _) = RetryOf("Failed", record: RolledBackRun());
+
+        (await retry.RetryAsync(Org, Ds, FailedJob)).ShouldBeTrue();
+
+        _processor.Verify(p => p.Delete("delete-run-2", "Scheduled"), Times.Once);
+        _processor.Verify(p => p.Delete("delete-run-2"), Times.Never);
+        _record.ShouldNotBeNull().ToJson().ShouldBe(
+            """{"state":"open","attempt":0,"createdDataset":{"org":"org","internalRef":"4a7e0c1e-58f4-4d8b-9a55-2d3c1f0b9e01","slug":"run-2"},"datasets":[]}""");
+    }
+
+    [Test]
+    public async Task Retry_RefusedByTheValidation_LeavesTheStateAndTheWriteRecordUntouched()
+    {
+        _tools["writer"] = new PathTool("writer", () => new ConflictException("A dataset named \"run-2\" already exists"));
+        var (retry, writer) = RetryOf("Failed", record: RolledBackRun());
+        var before = _record!.ToJson();
+
+        var ex = await Should.ThrowAsync<ConflictException>(() => retry.RetryAsync(Org, Ds, FailedJob));
+
+        ex.Message.ShouldBe("A dataset named \"run-2\" already exists");
+        _record!.ToJson().ShouldBe(before);
+        _records.Verify(r => r.ChangeAsync(It.IsAny<string>(), It.IsAny<Func<TaskWriteRecord?, TaskWriteRecord?>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        _processor.Verify(p => p.Requeue(It.IsAny<string>()), Times.Never);
+        _processor.Verify(p => p.Delete(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        writer.Verify(w => w.ResetForRequeueAsync(It.IsAny<string>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task ASecondRetry_OfATaskTheFirstStartedAgain_Is409_AndKeepsTheWriteRecordOfTheNewRun()
+    {
+        var (retry, writer) = RetryOf("Failed", record: RolledBackRun());
+        (await retry.RetryAsync(Org, Ds, FailedJob)).ShouldBeTrue();
+
+        // The new run starts and records what it writes
+        _record!.Add(new DatasetKey("org", RunDataset.InternalRef), ["odm_orthophoto/odm_orthophoto.tif"], ["odm_orthophoto"]);
+        var ofTheNewRun = _record.ToJson();
+
+        // The second click: its row still read Failed when it was authorized
+        var ex = await Should.ThrowAsync<ConflictException>(() => retry.RetryAsync(Org, Ds, FailedJob));
+
+        ex.StatusCode.ShouldBe(409);
+        ex.Message.ShouldBe("The task is already running again; only a failed task can be run again");
+        _record!.ToJson().ShouldBe(ofTheNewRun);
+        // Only the first retry reset the record: the second never touched it, not even for a moment
+        _records.Verify(r => r.ChangeAsync(FailedJob, It.IsAny<Func<TaskWriteRecord?, TaskWriteRecord?>>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        _processor.Verify(p => p.Requeue(FailedJob), Times.Once);
+        writer.Verify(w => w.ResetForRequeueAsync(FailedJob, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task Retry_TakesTheRequeueTimeBeforeTheRequeue()
+    {
+        var (retry, writer) = RetryOf("Failed");
+        DateTime? requeuedAt = null;
+        DateTime? requeueCalled = null;
+        _processor.Setup(p => p.Requeue(FailedJob)).Returns(() =>
+        {
+            requeueCalled = DateTime.UtcNow;
+            return true;
+        });
+        writer.Setup(w => w.ResetForRequeueAsync(FailedJob, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .Callback<string, DateTime, CancellationToken>((_, at, _) => requeuedAt = at)
+            .Returns(Task.CompletedTask);
+
+        await retry.RetryAsync(Org, Ds, FailedJob);
+
+        requeuedAt.ShouldNotBeNull().ShouldBeLessThanOrEqualTo(requeueCalled!.Value);
     }
 }

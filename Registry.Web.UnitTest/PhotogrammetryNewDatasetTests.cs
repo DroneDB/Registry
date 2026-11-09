@@ -21,6 +21,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Datasets;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.NodeOdx;
 using Registry.Web.Services.HeavyTasks.Tools;
@@ -208,6 +209,71 @@ public class PhotogrammetryNewDatasetTests
         ex.StatusCode.ShouldBe(409);
         StoredDatasets().ShouldBe(1);
         _ddbManager.Verify(m => m.Get(It.IsAny<string>(), It.IsAny<Guid>()), Times.Never);
+    }
+
+    // ---- The retry of a run that created its dataset (D-037): its own dataset is not a taken slug ----
+
+    private static readonly Guid RunDatasetRef = Guid.Parse("0d9f6b52-7a1c-4e43-8c2e-5b1f3a9d7e10");
+
+    // The dataset "run-2" that a failed run of the task created: its delayed delete has not run yet
+    private void SeedRunDataset()
+    {
+        using var db = _db.NewContext();
+        var org = db.Organizations.Single(o => o.Slug == "r3photo");
+        db.Datasets.Add(new Dataset
+            { Slug = "run-2", Organization = org, InternalRef = RunDatasetRef, CreationDate = DateTime.UtcNow });
+        db.SaveChanges();
+    }
+
+    private static Registry.Web.Services.HeavyTasks.Adapters.HeavyToolValidationContext RetryValidation(IDDB ddb,
+        TaskCreatedDataset? own) =>
+        new(ddb,
+            new ClaimsPrincipal(new ClaimsIdentity()), NullLogger.Instance, null, own);
+
+    [Test]
+    public async Task ValidateAsync_TheRetryOfTheRunThatCreatedTheDataset_IsAccepted_AndTheDatasetStays()
+    {
+        SeedRunDataset();
+        var tool = CreateTool(withAccessResolver: true);
+
+        await tool.ValidateAsync(Request(new { createNewDataset = true, newDatasetName = "run-2" }),
+            RetryValidation(SourceDdb().Object, new TaskCreatedDataset("r3photo", RunDatasetRef, "run-2")),
+            CancellationToken.None);
+
+        using var db = _db.NewContext();
+        db.Datasets.Count(d => d.Slug == "run-2" && d.InternalRef == RunDatasetRef).ShouldBe(1);
+        StoredDatasets().ShouldBe(2);
+    }
+
+    [Test]
+    public void ValidateAsync_TheRetryOfAnotherTask_WhoseSlugADatasetOfAnotherTaskHas_IsRefused()
+    {
+        SeedRunDataset();
+        var tool = CreateTool(withAccessResolver: true);
+
+        // This task created another dataset (gone since), "run-2" is the dataset of another task
+        var ex = Should.Throw<ConflictException>(async () => await tool.ValidateAsync(
+            Request(new { createNewDataset = true, newDatasetName = "run-2" }),
+            RetryValidation(SourceDdb().Object,
+                new TaskCreatedDataset("r3photo", Guid.Parse("6c2b8e47-1d3a-4f59-b7e0-9a4c2d1e8f33"), "run-2")),
+            CancellationToken.None));
+
+        ex.Message.ShouldBe("A dataset named \"run-2\" already exists in \"r3photo\"");
+        ex.StatusCode.ShouldBe(409);
+    }
+
+    [Test]
+    public void ValidateAsync_TheRetryOfARunWhoseDatasetIsInAnotherOrganization_StillRefusesATakenSlug()
+    {
+        SeedRunDataset();
+        var tool = CreateTool(withAccessResolver: true);
+
+        var ex = Should.Throw<ConflictException>(async () => await tool.ValidateAsync(
+            Request(new { createNewDataset = true, newDatasetName = "run-2" }),
+            RetryValidation(SourceDdb().Object, new TaskCreatedDataset("other", RunDatasetRef, "run-2")),
+            CancellationToken.None));
+
+        ex.Message.ShouldBe("A dataset named \"run-2\" already exists in \"r3photo\"");
     }
 
     [Test]

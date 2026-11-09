@@ -15,6 +15,7 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Attributes;
 using Registry.Web.Models;
 using Registry.Web.Services.Builds;
+using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -192,10 +193,19 @@ public class BuildPendingService : IPendingBuildFlag, IPendingBuildRetry
         });
 
     /// <summary>
+    /// The shortest time between two coordinators that added entries start in a dataset (FR-PRC-43): an add within it
+    /// of the last one schedules the next one at its end, and the adds meanwhile find that one live (scheduled) and
+    /// start no other. A model uploaded with its textures one file per request gets one sweep per 10 seconds, not one
+    /// per file; a single add, or the first of a batch, starts its sweep at once.
+    /// </summary>
+    public static readonly TimeSpan AddedEntrySweepInterval = TimeSpan.FromSeconds(10);
+
+    /// <summary>
     /// Starts a bounded retry epoch of the coordinator of <paramref name="target"/> when libddb reports pending work a
     /// retry can progress and no coordinator of the dataset is live: what an added or moved entry calls for, since
-    /// libddb makes the builds that waited for that file due. Failures are logged and do not fail the caller (its
-    /// entries are in the index already); the sweep starts the retry then.
+    /// libddb makes the builds that waited for that file due. At most one per <see cref="AddedEntrySweepInterval"/>:
+    /// one within it of the last is scheduled at its end. Failures are logged and do not fail the caller (its entries
+    /// are in the index already); the sweep starts the retry then.
     /// </summary>
     /// <returns>The coordinator's job id, or null when none was started.</returns>
     public Task<string?> StartIfRetryableAsync(BuildTarget target)
@@ -212,7 +222,8 @@ public class BuildPendingService : IPendingBuildFlag, IPendingBuildRetry
             var state = await ReadState(target.OrgSlug, target.DsSlug);
             // The add changed the stamp: the observation is pending without one, so the sweep reads it again
             Observe(state, true, null);
-            return await StartEpochUnlessLiveAsync(state, target.Dataset, target.OrgSlug, target.DsSlug);
+            return await StartEpochUnlessLiveAsync(state, target.Dataset, target.OrgSlug, target.DsSlug,
+                addedEntry: true);
         });
     }
 
@@ -233,9 +244,10 @@ public class BuildPendingService : IPendingBuildFlag, IPendingBuildRetry
     }
 
     // Under the dataset's coordination lock, with retryable pending work observed in state: a fresh bounded epoch of the
-    // coordinator, enqueued now, unless one is live (it reaches the work itself). Returns the job id, or null.
+    // coordinator, enqueued now, unless one is live (it reaches the work itself). For an added entry, one within
+    // AddedEntrySweepInterval of the last such start is scheduled at the end of it. Returns the job id, or null.
     private async Task<string?> StartEpochUnlessLiveAsync(CacheState state, DatasetKey dataset, string orgSlug,
-        string dsSlug)
+        string dsSlug, bool addedEntry = false)
     {
         if (HasLiveCoordinator(state))
         {
@@ -245,16 +257,32 @@ public class BuildPendingService : IPendingBuildFlag, IPendingBuildRetry
 
         // Restart one bounded epoch only after the previous coordinator
         // is missing/terminal, irrespective of an unchanged database stamp.
-        var meta = new IndexPayload(orgSlug, dsSlug, null, MagicStrings.AutoBuildServiceUserId);
-        var jobId = _backgroundJob.EnqueueBuildPending(dataset, meta);
+        var meta = new IndexPayload(orgSlug, dsSlug, null, MagicStrings.AutoBuildServiceUserId,
+                TargetLabel: BuildTool.PendingBuildsLabel);
+        var delay = addedEntry ? AddedEntryDelay(state, DateTime.UtcNow) : null;
+        var jobId = delay is { } wait
+            ? _backgroundJob.ScheduleBuildPending(dataset, meta, wait)
+            : _backgroundJob.EnqueueBuildPending(dataset, meta);
         if (string.IsNullOrWhiteSpace(jobId))
             throw new InvalidOperationException("Pending coordinator enqueue returned no job ID");
+        if (addedEntry)
+            state.AddedEntrySweepAtBinary = (DateTime.UtcNow + (delay ?? TimeSpan.Zero)).ToBinary();
         state.RetryAttempt = 0;
         state.RetryEpoch = Guid.NewGuid().ToString("N");
         state.ScheduledRetryJobId = jobId;
         await SaveState(orgSlug, dsSlug, state);
         _logger.LogInformation("Started pending recovery epoch for {Org}/{Ds}: {JobId}", orgSlug, dsSlug, jobId);
         return jobId;
+    }
+
+    // How long the coordinator an added entry starts waits: until AddedEntrySweepInterval after the last one that added
+    // entries started (never longer), or not at all
+    private static TimeSpan? AddedEntryDelay(CacheState state, DateTime now)
+    {
+        if (state.AddedEntrySweepAtBinary is not { } last)
+            return null;
+        var wait = DateTime.FromBinary(last) + AddedEntrySweepInterval - now;
+        return wait <= TimeSpan.Zero ? null : wait > AddedEntrySweepInterval ? AddedEntrySweepInterval : wait;
     }
 
     internal async Task RefreshPendingStatus(string orgSlug, string dsSlug, JobStorage? storage)
@@ -331,7 +359,8 @@ public class BuildPendingService : IPendingBuildFlag, IPendingBuildRetry
             }
 
             var delayMinutes = RetryBackoffMinutes[Math.Min(state.RetryAttempt, RetryBackoffMinutes.Length - 1)];
-            var meta = new IndexPayload(orgSlug, dsSlug, null, MagicStrings.AutoBuildServiceUserId);
+            var meta = new IndexPayload(orgSlug, dsSlug, null, MagicStrings.AutoBuildServiceUserId,
+                TargetLabel: BuildTool.PendingBuildsLabel);
             var jobId = _backgroundJob.ScheduleBuildPending(new DatasetKey(orgSlug, ds.InternalRef), meta,
                 TimeSpan.FromMinutes(delayMinutes));
             if (string.IsNullOrWhiteSpace(jobId))
@@ -474,6 +503,8 @@ public class BuildPendingService : IPendingBuildFlag, IPendingBuildRetry
         public string? ScheduledRetryJobId { get; set; }
         public string? RetryEpoch { get; set; }
         public int RetryControlsVersion { get; set; }
+        // When the last coordinator that added entries started ran, or runs (FR-PRC-43)
+        public long? AddedEntrySweepAtBinary { get; set; }
         [System.Text.Json.Serialization.JsonIgnore]
         public bool LegacyImportComplete { get; set; }
     }

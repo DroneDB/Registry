@@ -331,6 +331,34 @@ public class PendingBuildCoordinationTests
         State().GetProperty("StampChecksum").ValueKind.ShouldBe(JsonValueKind.Null, "the sweep reads the dataset again");
     }
 
+    /// <summary>
+    /// A model uploaded with its 168 textures and its .mtl one file per request (FR-PRC-43), each coordinator ending
+    /// before the next file arrives: the first add starts its pending-builds check at once, the next one schedules the
+    /// following check 10 seconds after it, and the 168 adds after it find that one live. Red before: one check per add.
+    /// </summary>
+    [Test]
+    public async Task AModelUploadedWithItsTexturesOneFileAtATime_GetsOnePendingBuildsCheckPer10Seconds()
+    {
+        Seed(0);
+
+        for (var i = 0; i < 170; i++)
+        {
+            await _service.StartIfRetryableAsync(AddTarget);
+            // A coordinator enqueued now runs at once and ends; a scheduled one waits for its time
+            foreach (var id in _statuses.Keys.Where(k => k.StartsWith("sweep-")).ToArray())
+                _statuses[id] = JobStatus.Succeeded;
+        }
+
+        _enqueued.ShouldBe(1);
+        _delays.Count.ShouldBe(1);
+        _delays[0].ShouldBeGreaterThan(TimeSpan.FromSeconds(9));
+        _delays[0].ShouldBeLessThanOrEqualTo(TimeSpan.FromSeconds(10));
+        _jobs.Verify(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(),
+            It.Is<IndexPayload>(p => p.TargetLabel == "Pending builds check" && p.Path == null)), Times.Once);
+        _jobs.Verify(x => x.ScheduleIndexed(It.IsAny<Expression<Action<DdbJobs>>>(),
+            It.Is<IndexPayload>(p => p.TargetLabel == "Pending builds check"), It.IsAny<TimeSpan>()), Times.Once);
+    }
+
     [TestCase(JobStatus.Scheduled)]
     [TestCase(JobStatus.Enqueued)]
     [TestCase(JobStatus.Processing)]

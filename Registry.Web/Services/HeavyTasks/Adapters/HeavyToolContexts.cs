@@ -12,19 +12,29 @@ namespace Registry.Web.Services.HeavyTasks.Adapters;
 /// <summary>Concrete validation context handed to a tool during validation/planning.</summary>
 public sealed class HeavyToolValidationContext : IHeavyToolValidationContext
 {
-    public HeavyToolValidationContext(IDDB ddb, ClaimsPrincipal? caller, ILogger logger)
+    /// <param name="publishedOutput">The output an earlier attempt of the task wrote, for the retry of a task
+    /// (<see cref="PublishedOutputMarker"/>); null for a submit.</param>
+    /// <param name="ownCreatedDataset">The dataset an earlier run of the task created (its write record), for the retry
+    /// of a task; null for a submit.</param>
+    public HeavyToolValidationContext(IDDB ddb, ClaimsPrincipal? caller, ILogger logger,
+        string? publishedOutput = null, TaskCreatedDataset? ownCreatedDataset = null)
     {
         Ddb = ddb;
         Caller = caller;
         Logger = logger;
+        PublishedOutput = publishedOutput;
+        OwnCreatedDataset = ownCreatedDataset;
     }
 
     public IDDB Ddb { get; }
     public ClaimsPrincipal? Caller { get; }
     public ILogger Logger { get; }
 
-    /// <summary>Always null: a submit has no earlier attempt.</summary>
-    public string? PublishedOutput => null;
+    /// <summary>Null for a submit, which has no earlier attempt; the retry of a task passes what it wrote.</summary>
+    public string? PublishedOutput { get; }
+
+    /// <summary>Null for a submit; the retry of a task passes the dataset its write record names.</summary>
+    public TaskCreatedDataset? OwnCreatedDataset { get; }
 
     /// <summary>Always false: a submit follows the overwrite rule.</summary>
     public bool QueuedBeforeOverwriteRule => false;

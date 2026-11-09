@@ -90,6 +90,21 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
     // Non-terminal states a task can be in while still running (canonical catalog).
     private static readonly string[] ActiveStates = TaskStateCatalog.Active;
 
+    /// <summary>
+    /// The state filter of the task lists (D-024, FR-PRC-37): a task that waits in the queue of a processing node
+    /// (<c>WaitingForNode</c>) is listed as <c>Enqueued</c>, not as <c>Processing</c>, although its job runs.
+    /// </summary>
+    private static IQueryable<JobIndex> WhereState(IQueryable<JobIndex> q, string state) => state switch
+    {
+        EnqueuedState => q.Where(x => x.CurrentState == EnqueuedState
+                                      || (x.CurrentState == ProcessingState && x.WaitingForNode)),
+        ProcessingState => q.Where(x => x.CurrentState == ProcessingState && !x.WaitingForNode),
+        _ => q.Where(x => x.CurrentState == state)
+    };
+
+    private const string EnqueuedState = "Enqueued";
+    private const string ProcessingState = "Processing";
+
     public async Task<JobIndex[]> QueryAsync(JobIndexQueryFilter filter, CancellationToken ct = default)
     {
         var q = db.JobIndices.AsNoTracking()
@@ -98,7 +113,7 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
         if (!string.IsNullOrEmpty(filter.ToolId))
             q = q.Where(x => x.ToolId == filter.ToolId);
         if (!string.IsNullOrEmpty(filter.State))
-            q = q.Where(x => x.CurrentState == filter.State);
+            q = WhereState(q, filter.State);
         if (!string.IsNullOrEmpty(filter.Path))
             q = q.Where(x => x.Path == filter.Path);
         if (!string.IsNullOrEmpty(filter.UserId))
@@ -155,7 +170,7 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
         if (!string.IsNullOrEmpty(toolId))
             q = q.Where(x => x.ToolId == toolId);
         if (!string.IsNullOrEmpty(state))
-            q = q.Where(x => x.CurrentState == state);
+            q = WhereState(q, state);
         if (!string.IsNullOrEmpty(userId))
             q = q.Where(x => x.UserId == userId);
 
