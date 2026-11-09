@@ -56,7 +56,8 @@ public class IndexReconciliationServiceTests
     }
 
     private static IndexReconciliationService CreateService(RegistryContext context, string datasetFolderPath,
-        Mock<IDDB> ddb, Mock<IDatasetIndexQueue> indexQueue, ReconciliationSettings? settings = null)
+        Mock<IDDB> ddb, Mock<IDatasetIndexQueue> indexQueue, ReconciliationSettings? settings = null,
+        ITaskWriteRecordStore? writeRecords = null)
     {
         ddb.Setup(d => d.DatasetFolderPath).Returns(datasetFolderPath);
 
@@ -68,7 +69,100 @@ public class IndexReconciliationServiceTests
         return new IndexReconciliationService(new DatasetSweep(context), ddbManager.Object, indexQueue.Object, TestSettings.Options<ReconciliationSettings>(appSettings),
             new FileSystem(),
             TestPaths.Policy,
-            NullLogger<IndexReconciliationService>.Instance);
+            NullLogger<IndexReconciliationService>.Instance, writeRecords);
+    }
+
+    [Test]
+    public async Task AFileATaskIsWritingOrRollingBack_IsNotIndexed()
+    {
+        using var context = CreateContext(out var orgSlug, out var dsSlug, out var internalRef);
+        var root = Path.Combine(Path.GetTempPath(), "ddb_reconcile_test_" + Guid.NewGuid());
+        Directory.CreateDirectory(Path.Combine(root, "import"));
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "import", "partial.tif"), "data");
+            File.WriteAllText(Path.Combine(root, "uploaded.jpg"), "data");
+            var record = new Registry.Web.Services.HeavyTasks.TaskWriteRecord();
+            record.Add(new DatasetKey(orgSlug, internalRef), ["import/partial.tif"], ["import"]);
+            context.JobIndices.Add(new JobIndex
+            {
+                JobId = "import-1", OrgSlug = orgSlug, DsSlug = dsSlug, ToolId = "import-dataset", ToolVersion = "1",
+                CurrentState = "Deleted", CreatedAtUtc = DateTime.UtcNow, LastStateChangeUtc = DateTime.UtcNow,
+                WriteRecordJson = record.ToJson()
+            });
+            context.SaveChanges();
+
+            var ddb = new Mock<IDDB>();
+            ddb.Setup(d => d.FindSummaries(EntryQuery.All)).Returns([]);
+            var indexQueue = new Mock<IDatasetIndexQueue>();
+            indexQueue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<string>>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync((IReadOnlyList<Entry>)Array.Empty<Entry>());
+            var store = new TaskWriteRecordStore(context, Mock.Of<Registry.Web.Services.Caching.IRecordCache>(),
+                NullLogger<TaskWriteRecordStore>.Instance);
+
+            await CreateService(context, root, ddb, indexQueue, writeRecords: store)
+                .ReconcileAllDatasetsAsync(null, CancellationToken.None);
+
+            indexQueue.Verify(q => q.EnqueueAsync(It.IsAny<DatasetKey>(),
+                It.Is<IReadOnlyList<string>>(paths => paths.Count == 1 && paths[0] == "uploaded.jpg"),
+                It.IsAny<CancellationToken>()), Times.Once);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [TestCase("Failed", "rollingBack")]
+    [TestCase("Deleted", "cancelRequested")]
+    [TestCase("Failed", "rolledBack")]
+    public async Task AFileOfAFailedOrCancelledImport_IsNeverIndexed(string taskState, string recordState)
+    {
+        // FR-UPL-05, §8.2: while the rollback runs (or has not run) the import's files are held; once it ran they are
+        // gone. Either way the sweep queues only the user's upload
+        using var context = CreateContext(out var orgSlug, out var dsSlug, out var internalRef);
+        var root = Path.Combine(Path.GetTempPath(), "ddb_reconcile_test_" + Guid.NewGuid());
+        Directory.CreateDirectory(Path.Combine(root, "import"));
+        try
+        {
+            var rolledBack = recordState == "rolledBack";
+            if (!rolledBack)
+                File.WriteAllText(Path.Combine(root, "import", "partial.tif"), "data");
+            File.WriteAllText(Path.Combine(root, "uploaded.jpg"), "data");
+            var record = new Registry.Web.Services.HeavyTasks.TaskWriteRecord
+            {
+                State = Enum.Parse<Registry.Web.Services.HeavyTasks.TaskWriteState>(recordState, ignoreCase: true)
+            };
+            record.Add(new DatasetKey(orgSlug, internalRef), ["import/partial.tif"], ["import"]);
+            context.JobIndices.Add(new JobIndex
+            {
+                JobId = "import-1", OrgSlug = orgSlug, DsSlug = dsSlug, ToolId = "import-dataset", ToolVersion = "1",
+                CurrentState = taskState, CreatedAtUtc = DateTime.UtcNow, LastStateChangeUtc = DateTime.UtcNow,
+                WriteRecordJson = record.ToJson()
+            });
+            context.SaveChanges();
+
+            var ddb = new Mock<IDDB>();
+            ddb.Setup(d => d.FindSummaries(EntryQuery.All)).Returns([]);
+            var indexQueue = new Mock<IDatasetIndexQueue>();
+            indexQueue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<string>>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync((IReadOnlyList<Entry>)Array.Empty<Entry>());
+            var store = new TaskWriteRecordStore(context, Mock.Of<Registry.Web.Services.Caching.IRecordCache>(),
+                NullLogger<TaskWriteRecordStore>.Instance);
+
+            await CreateService(context, root, ddb, indexQueue, writeRecords: store)
+                .ReconcileAllDatasetsAsync(null, CancellationToken.None);
+
+            indexQueue.Verify(q => q.EnqueueAsync(It.IsAny<DatasetKey>(),
+                It.Is<IReadOnlyList<string>>(paths => paths.Count == 1 && paths[0] == "uploaded.jpg"),
+                It.IsAny<CancellationToken>()), Times.Once);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     [Test]

@@ -206,6 +206,8 @@ public sealed class ArchiveExtractionTests
         var ctx = new Mock<IHeavyToolExecutionContext>();
         ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
         ctx.SetupGet(c => c.TaskId).Returns("task-1");
+        ctx.SetupGet(c => c.Dataset).Returns(new DatasetKey("org", Guid.NewGuid()));
+        ctx.SetupGet(c => c.WriteRecord).Returns(new Support.FakeTaskWriteRecorder());
         ctx.SetupGet(c => c.BuildQueue).Returns(Support.TestJobs.Scheduler());
         return ctx.Object;
     }

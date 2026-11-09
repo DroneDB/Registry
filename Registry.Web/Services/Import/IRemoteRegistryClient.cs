@@ -39,8 +39,12 @@ public interface IRemoteRegistryClient
         CancellationToken ct);
 
     /// <summary>
-    /// Downloads the given files into <paramref name="destFolder"/> in parallel, skipping files already
-    /// present on disk with the matching size (resumable re-import). Reports incremental progress.
+    /// Downloads the given files into <paramref name="destFolder"/> in parallel, each through a temporary file in the
+    /// uploads folder of the dataset, a batch at a time: the destinations and the folders created for them are recorded
+    /// in <paramref name="writes"/> and saved (§8.1) before they are created, and each file is moved without replacing
+    /// anything. A cancel drops the downloaded files of the batch not moved yet. A file that is not the task's
+    /// is kept and skipped; one the task wrote before at the matching size is kept (resumable re-import). Reports
+    /// incremental progress. A cancellation throws <see cref="OperationCanceledException"/>.
     /// </summary>
     /// <param name="registryUrl">The remote registry base URL.</param>
     /// <param name="authToken">The bearer token, or null for anonymous.</param>
@@ -48,11 +52,13 @@ public interface IRemoteRegistryClient
     /// <param name="sourceDs">The remote dataset slug.</param>
     /// <param name="destFolder">The destination folder (the dataset folder).</param>
     /// <param name="files">The files to download.</param>
+    /// <param name="writes">The write record of the task.</param>
     /// <param name="progress">Progress sink (may be null).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A task that completes when all files have been downloaded.</returns>
     Task DownloadFilesParallelAsync(string registryUrl, string? authToken, string sourceOrg, string sourceDs,
-        string destFolder, EntryDto[] files, IProgress<ImportProgress>? progress, CancellationToken ct);
+        string destFolder, EntryDto[] files, IImportWriteRecord writes, IProgress<ImportProgress>? progress,
+        CancellationToken ct);
 
     /// <summary>
     /// Downloads one file of a remote dataset to <paramref name="localPath"/>, retrying transient failures

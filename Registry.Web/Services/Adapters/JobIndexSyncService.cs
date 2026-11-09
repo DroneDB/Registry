@@ -38,14 +38,16 @@ public class JobIndexSyncService
     private readonly IJobIndexWriter _jobIndexWriter;
     private readonly JobStorage _storage;
     private readonly ILogger<JobIndexSyncService> _logger;
+    private readonly ITaskRollback? _rollback;
 
     public JobIndexSyncService(IJobIndexQuery jobIndexQuery, IJobIndexWriter jobIndexWriter, JobStorage storage,
-        ILogger<JobIndexSyncService> logger)
+        ILogger<JobIndexSyncService> logger, ITaskRollback? rollback = null)
     {
         _jobIndexQuery = jobIndexQuery ?? throw new ArgumentNullException(nameof(jobIndexQuery));
         _jobIndexWriter = jobIndexWriter ?? throw new ArgumentNullException(nameof(jobIndexWriter));
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _rollback = rollback;
     }
 
     /// <summary>The job as stored by earlier releases: runs with the context's shutdown token.</summary>
@@ -126,8 +128,8 @@ public class JobIndexSyncService
                     // Not in Hangfire any more (deleted or expired): Deleted, at the time it was found missing
                     _logger.LogDebug("Job {JobId} not found in Hangfire, marking as deleted", jobIndex.JobId);
 
-                    if (await _jobIndexWriter.UpdateStateIfCurrentAsync(jobIndex.JobId, SyncedStates,
-                            "Deleted", DateTime.UtcNow, ct))
+                    // It never ran: a dataset created for it goes (FR-XC-27)
+                    if (await EndLostAsync(jobIndex.JobId, SyncedStates, ct))
                         notFound++;
                     else
                         skipped++;
@@ -149,7 +151,8 @@ public class JobIndexSyncService
     /// earlier process left queued or running is such a row; without this they stay Enqueued or Processing
     /// for ever, and Cancel cannot delete their job. A row changed after <paramref name="startedUtc"/> is never
     /// touched: the state filter writes a row before Hangfire commits its job, so a job created meanwhile may
-    /// not be visible yet (which is why <see cref="SyncAsync"/> leaves the states after Indexing alone).
+    /// not be visible yet (which is why <see cref="SyncAsync"/> leaves the states after Indexing alone). A task that
+    /// ends here is rolled back from its write record (FR-XC-27, §8.2): its job never runs again.
     /// </summary>
     /// <returns>The number of rows ended.</returns>
     internal async Task<int> CloseLostAsync(DateTime startedUtc, int pageSize = 1000, CancellationToken ct = default)
@@ -168,8 +171,7 @@ public class JobIndexSyncService
                 {
                     ct.ThrowIfCancellationRequested();
                     if ((row.LastStateChangeUtc ?? row.CreatedAtUtc) < startedUtc && !Exists(monitoringApi, row.JobId) &&
-                        await _jobIndexWriter.UpdateStateIfCurrentAsync(row.JobId, [state], DeletedState.StateName,
-                            DateTime.UtcNow, ct))
+                        await EndLostAsync(row.JobId, [state], ct))
                     {
                         closed++;
                         continue;
@@ -186,6 +188,81 @@ public class JobIndexSyncService
         if (closed > 0)
             _logger.LogWarning("Ended {Count} task(s) whose job was lost when the job storage restarted", closed);
         return closed;
+    }
+
+    // Ends the task of a lost job while its row is in one of fromStates; false when the row is kept. A task lost after
+    // its commit is not rolled back: it ends Failed, its output kept, with the message that names the sources it had
+    // not deleted yet (FR-XC-27), the one the worker gives when such a task runs again. Its message is written first,
+    // then the row goes straight to Failed with one guarded change: a crash between the two leaves it active, and the
+    // next start ends it again (never Deleted, nor Failed without its message). Any other task ends Deleted and is
+    // rolled back from its write record
+    private async Task<bool> EndLostAsync(string jobId, IReadOnlyCollection<string> fromStates, CancellationToken ct)
+    {
+        TaskCommittedLostException? lost = null;
+        if (_rollback != null)
+        {
+            try
+            {
+                lost = await _rollback.CommittedLostAsync(jobId, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Kept as it is: the next start reads its record again
+                _logger.LogError(ex, "Cannot read the write record of the lost task {JobId}", jobId);
+                return false;
+            }
+        }
+
+        if (lost != null)
+        {
+            await _jobIndexWriter.UpdateErrorAsync(jobId, nameof(TaskCommittedLostException), lost.Message, ct);
+            if (!await _jobIndexWriter.UpdateStateIfCurrentAsync(jobId, fromStates, FailedState.StateName,
+                    DateTime.UtcNow, ct))
+                return false;
+
+            _logger.LogWarning("The lost task {JobId} had committed its output: it ends Failed ({Message})", jobId,
+                lost.Message);
+            return true;
+        }
+
+        if (!await _jobIndexWriter.UpdateStateIfCurrentAsync(jobId, fromStates, DeletedState.StateName,
+                DateTime.UtcNow, ct))
+            return false;
+
+        await RollBackLostAsync(jobId, ct);
+        return true;
+    }
+
+    // A failed rollback is logged: the row ended Deleted, so the startup sweep finishes it at the next start. A record
+    // committed after the check of EndLostAsync is not rolled back: the task ends Failed (its message first)
+    private async Task RollBackLostAsync(string jobId, CancellationToken ct)
+    {
+        if (_rollback is null)
+            return;
+
+        try
+        {
+            if (await _rollback.RollBackAsync(jobId, null, ct) == TaskRollbackOutcome.Committed)
+                await FailCommittedLostAsync(jobId, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Cannot roll back the lost task {JobId}", jobId);
+        }
+    }
+
+    private async Task FailCommittedLostAsync(string jobId, CancellationToken ct)
+    {
+        if (await _rollback!.CommittedLostAsync(jobId, ct) is not { } lost)
+            return;
+
+        await _jobIndexWriter.UpdateErrorAsync(jobId, nameof(TaskCommittedLostException), lost.Message, ct);
+        if (!await _jobIndexWriter.UpdateStateIfCurrentAsync(jobId, [DeletedState.StateName], FailedState.StateName,
+                DateTime.UtcNow, ct))
+            return;
+
+        _logger.LogWarning("The lost task {JobId} had committed its output: it ends Failed ({Message})", jobId,
+            lost.Message);
     }
 
     // A job id the storage cannot read (a number of the earlier numbering in a GUID storage) is not there

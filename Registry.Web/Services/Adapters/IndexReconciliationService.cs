@@ -45,6 +45,7 @@ public class IndexReconciliationService
     private readonly IFileSystem _fs;
     private readonly DatasetPathPolicy _paths;
     private readonly ILogger<IndexReconciliationService> _logger;
+    private readonly ITaskWriteRecordStore? _writeRecords;
 
     public IndexReconciliationService(
         DatasetSweep sweep,
@@ -53,8 +54,10 @@ public class IndexReconciliationService
         IOptions<ReconciliationSettings> settings,
         IFileSystem fs,
         DatasetPathPolicy paths,
-        ILogger<IndexReconciliationService> logger)
+        ILogger<IndexReconciliationService> logger,
+        ITaskWriteRecordStore? writeRecords = null)
     {
+        _writeRecords = writeRecords;
         _sweep = sweep ?? throw new ArgumentNullException(nameof(sweep));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _indexQueue = indexQueue ?? throw new ArgumentNullException(nameof(indexQueue));
@@ -109,7 +112,12 @@ public class IndexReconciliationService
                 .Select(e => e.Path),
             StringComparer.Ordinal);
 
-        var unindexedPaths = onDisk.Except(indexed).ToArray();
+        // A file a task is writing, or one its rollback has not deleted yet, is the task's (FR-UPL-05, FR-XC-27): the
+        // sweep never indexes a partial import
+        var held = _writeRecords is null
+            ? (IReadOnlySet<string>)new HashSet<string>()
+            : await _writeRecords.HeldPathsAsync(new DatasetKey(orgSlug, internalRef), ct);
+        var unindexedPaths = onDisk.Except(indexed).Where(p => !held.Contains(p)).ToArray();
         var missingPaths = indexed.Except(onDisk).ToArray();
 
         // 3. Unindexed on disk -> re-enqueue through the same coalescing lane uploads use, capped per run.

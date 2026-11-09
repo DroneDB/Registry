@@ -19,6 +19,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.PlatformTasks;
@@ -101,8 +102,11 @@ public class RetryEndpointTest : IDisposable
                     new Mock<IHttpContextAccessor>().Object)),
             new TaskHistory(access, new JobIndexQuery(_db), new Mock<IRecordCache>().Object, authorizer, artifacts,
                 TestJobs.BuildTaskWaits(_db, ddbManager: ddbManager.Object), TestSettings.Options<ProcessingPlatformSettings>(appSettings)),
-            new TaskLifecycle(access, authorizer, processor, writer, artifacts, NullLogger<TaskLifecycle>.Instance),
+            new TaskLifecycle(access, authorizer, processor, writer, artifacts,
+                new TaskWriteRecordStore(_db, new Mock<IRecordCache>().Object, NullLogger<TaskWriteRecordStore>.Instance),
+                new Mock<ITaskRollback>().Object, NullLogger<TaskLifecycle>.Instance),
             new TaskRetry(authorizer, processor, writer, _utils.Object, ddbManager.Object,
+                new TaskWriteRecordStore(_db, new Mock<IRecordCache>().Object, NullLogger<TaskWriteRecordStore>.Instance),
                 NullLogger<TaskRetry>.Instance),
             access);
     }
@@ -132,11 +136,11 @@ public class RetryEndpointTest : IDisposable
         return _db.SaveChanges();
     }
 
-    private int Retry(string id)
+    private int Retry(string id, string ds = Ds)
     {
         try
         {
-            _manager.RetryAsync(Org, Ds, id, CancellationToken.None).GetAwaiter().GetResult();
+            _manager.RetryAsync(Org, ds, id, CancellationToken.None).GetAwaiter().GetResult();
             return 200;
         }
         catch (Exception ex)
@@ -198,6 +202,64 @@ public class RetryEndpointTest : IDisposable
         row.FailedAtUtc.ShouldBeNull();
     }
 
+    private string? RecordJson(string jobId) =>
+        _db.JobIndices.AsNoTracking().Single(r => r.JobId == jobId).WriteRecordJson;
+
+    private void SetRecord(string jobId, TaskWriteRecord record)
+    {
+        _db.JobIndices.Single(r => r.JobId == jobId).WriteRecordJson = record.ToJson();
+        _db.SaveChanges();
+        _db.ChangeTracker.Clear();
+    }
+
+    [Test]
+    public void Retry_ATaskThatCommittedItsOutput_Returns409_AndIsNeitherRequeuedNorReset()
+    {
+        var jobId = SeedFailedJob("merge-multispectral");
+        var committed = new TaskWriteRecord { State = TaskWriteState.Committed };
+        SetRecord(jobId, committed);
+
+        Retry(jobId).ShouldBe(409);
+
+        _client.Verify(x => x.ChangeState(jobId, It.IsAny<IState>(), It.IsAny<string>()), Times.Never);
+        RecordJson(jobId).ShouldBe(committed.ToJson(), "a committed record is never reset");
+    }
+
+    [Test]
+    public void Retry_ResetsTheWriteRecord_BeforeTheJobIsRequeued()
+    {
+        var jobId = SeedFailedJob("import-dataset");
+        var created = new TaskCreatedDataset(Org, Guid.NewGuid(), Ds);
+        var rolledBack = TaskWriteRecord.ForCreatedDataset(created);
+        rolledBack.State = TaskWriteState.RolledBack;
+        rolledBack.Add(new DatasetKey(Org, created.InternalRef), ["a.tif"], []);
+        SetRecord(jobId, rolledBack);
+        string? atRequeue = null;
+        _client.Setup(x => x.ChangeState(jobId, It.Is<IState>(st => st is EnqueuedState), It.IsAny<string>()))
+            .Callback(() => atRequeue = RecordJson(jobId))
+            .Returns(true);
+
+        Retry(jobId).ShouldBe(200);
+
+        // The delayed delete of the created dataset sees the task run again from the moment its job is queued
+        atRequeue.ShouldBe(TaskWriteRecord.ForCreatedDataset(created).ToJson());
+        RecordJson(jobId).ShouldBe(TaskWriteRecord.ForCreatedDataset(created).ToJson());
+    }
+
+    [Test]
+    public void Retry_Rejected_PutsTheWriteRecordBack()
+    {
+        var row = NewRow(Guid.NewGuid().ToString("N"), "Failed", "import-dataset");
+        Seed(row);
+        var rolledBack = new TaskWriteRecord { State = TaskWriteState.RolledBack };
+        SetRecord(row.JobId, rolledBack);
+
+        // The job is gone from Hangfire: the re-queue is rejected
+        Retry(row.JobId).ShouldBe(409);
+
+        RecordJson(row.JobId).ShouldBe(rolledBack.ToJson());
+    }
+
     [Test]
     public void Retry_BuildTask_WithPendingMarker_Returns409_SweepOwns()
     {
@@ -254,6 +316,38 @@ public class RetryEndpointTest : IDisposable
         Retry(row.JobId).ShouldBe(409);
         // Row keeps its Succeeded state -- non-Failed rows are not touched by the retry path.
         _db.JobIndices.AsNoTracking().Single(r => r.JobId == row.JobId).CurrentState.ShouldBe("Succeeded");
+    }
+
+    [TestCase("Deleted")]
+    [TestCase("Succeeded")]
+    public void Retry_OfACancelledOrSucceededTask_Returns409_AndLeavesIt(string state)
+    {
+        // D-037: only a Failed task is retried; a cancelled one (Deleted) is started again by the user
+        var row = NewRow(Guid.NewGuid().ToString("N"), state, "import-dataset");
+        SetLiveState(row.JobId, state);
+        Seed(row);
+
+        Retry(row.JobId).ShouldBe(409);
+
+        _client.Verify(x => x.ChangeState(row.JobId, It.IsAny<IState>(), It.IsAny<string>()), Times.Never);
+        _db.JobIndices.AsNoTracking().Single(r => r.JobId == row.JobId).CurrentState.ShouldBe(state);
+    }
+
+    [Test]
+    public void Retry_OfAFailedImportWhoseDatasetWasDeleted_Returns404()
+    {
+        // The rollback deleted the dataset the import created (D-004): the task is no longer under it
+        const string gone = "deleted-import";
+        _utils.Setup(x => x.GetDatasetAsync(Org, gone, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Dataset?)null);
+        var row = NewRow(Guid.NewGuid().ToString("N"), "Failed", "import-dataset");
+        row.DsSlug = gone;
+        SetLiveState(row.JobId, FailedState.StateName);
+        Seed(row);
+
+        Retry(row.JobId, gone).ShouldBe(404);
+
+        _client.Verify(x => x.ChangeState(row.JobId, It.IsAny<IState>(), It.IsAny<string>()), Times.Never);
     }
 
     [Test]

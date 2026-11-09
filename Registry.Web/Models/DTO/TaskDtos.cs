@@ -52,7 +52,8 @@ public sealed record TaskArtifactDto(long SizeBytes, string? Sha256, string Resu
 /// runs by itself when one of those files is added. It is read from the entry when the list is made, not kept with
 /// the task. <c>Error</c> is why a failed task failed, as any reader of the task may see it (no server path;
 /// <c>JobLogText.UserMessage</c>), next to <c>ErrorType</c>, the exception type name; null when the task did not fail
-/// or failed before the message was recorded.
+/// or failed before the message was recorded. <c>Cancellable</c> is whether a cancel is accepted: false for an ended task
+/// and for one that committed its result (FR-XC-27, D-002: its cancel answers 400).
 /// </summary>
 public sealed record TaskSummaryDto(
     string TaskId,
@@ -72,7 +73,8 @@ public sealed record TaskSummaryDto(
     DateTime? ArtifactExpiresAt,
     bool Background = false,
     bool WaitingForFiles = false,
-    IReadOnlyList<string>? MissingFiles = null);
+    IReadOnlyList<string>? MissingFiles = null,
+    bool Cancellable = false);
 
 /// <summary>
 /// Full status (GET /tasks/{id}); <c>Error</c>, <c>WaitingForFiles</c> and <c>MissingFiles</c> as in

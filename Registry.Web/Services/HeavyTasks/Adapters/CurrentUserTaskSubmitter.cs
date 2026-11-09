@@ -28,12 +28,13 @@ public sealed class CurrentUserTaskSubmitter
 
     /// <summary>Validates, plans and enqueues <paramref name="toolId"/> for the dataset (see <see cref="IHeavyTaskRunner.SubmitAsync"/>).</summary>
     public async Task<HeavyTaskSubmitResult> SubmitAsync(string orgSlug, string dsSlug, string toolId,
-        string? version, string? path, JsonElement parameters, bool force = false, CancellationToken ct = default)
+        string? version, string? path, JsonElement parameters, bool force = false,
+        TaskCreatedDataset? createdDataset = null, CancellationToken ct = default)
     {
         var user = await _authManager.GetCurrentUser();
 
         var request = new HeavyTaskSubmitRequest(orgSlug, dsSlug, toolId, version, path, parameters, force,
-            user?.Id, _httpContextAccessor.HttpContext?.User);
+            user?.Id, _httpContextAccessor.HttpContext?.User, CreatedDataset: createdDataset);
 
         return await _runner.SubmitAsync(request, ct);
     }

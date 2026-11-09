@@ -73,9 +73,6 @@ public static class ImportServiceCollectionExtensions
         services.AddScoped<RemoteRegistryImporter>();
         services.AddScoped<RemoteImportJob>();
 
-        // The files of a dataset folder as the dataset import sees them (before, added, rollback)
-        services.AddSingleton<DatasetFolderFiles>();
-
         // The import heavy tools must run on every host that executes heavy tasks.
         services.AddSingleton<IHeavyTool, ImportDatasetTool>();
         services.AddSingleton<IHeavyTool, FileUrlImportTool>();

@@ -62,8 +62,8 @@ public sealed class RegistryImportSource : IImportSource, IBrowsableImportSource
     }
 
     /// <inheritdoc />
-    public async Task FetchAsync(JsonElement parameters, string destFolder, IProgress<ImportProgress> progress,
-        CancellationToken ct)
+    public async Task FetchAsync(JsonElement parameters, string destFolder, IImportWriteRecord writes,
+        IProgress<ImportProgress> progress, CancellationToken ct)
     {
         var p = ReadParams(parameters);
         await _ssrfGuard.AssertAllowedAsync(p.Host, ct);
@@ -80,7 +80,7 @@ public sealed class RegistryImportSource : IImportSource, IBrowsableImportSource
             throw new InvalidOperationException("The remote dataset was not found or is empty.");
 
         await _client.DownloadFilesParallelAsync(p.Url, token, p.Organization, p.Dataset, destFolder, files,
-            progress, ct);
+            writes, progress, ct);
     }
 
     private static RegistryParams ReadParams(JsonElement parameters)

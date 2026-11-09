@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -11,6 +12,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Utilities;
 using Registry.Web.Services.Import;
 
 namespace Registry.Web.Services.HeavyTasks.Tools;
@@ -19,7 +21,9 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// Native tool that populates a freshly created (empty) dataset from a remote source - another Registry
 /// instance or a downloadable archive (spec ImportDataset). Runs on the Hangfire worker, HTTP-context
 /// free, and works entirely through <see cref="IDDB"/>: the resolved <see cref="IImportSource"/> writes
-/// files straight into the dataset folder, then the tool indexes them with <c>AddRawBatch</c> and
+/// files into the dataset folder through the task's write record (FR-XC-27: every file and folder is recorded before
+/// it is created, and a cancelled, failed or lost import is rolled back from the record by the task, never by
+/// comparing the folder), then the tool indexes them with <c>AddRawBatch</c> and
 /// enqueues a per-file build job for every buildable entry (mirrors <see cref="ArchiveExtractTool"/>).
 /// Mutates the dataset in place, so it produces no downloadable artifact.
 /// </summary>
@@ -54,7 +58,6 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
     private readonly ImportSettings _settings;
     private readonly long _diskSafetyMarginBytes;
     private readonly VolumeHeadroom _headroom;
-    private readonly DatasetFolderFiles _files;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ImportDatasetTool"/> class.
@@ -65,14 +68,12 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
     /// <param name="importSettings">The import settings.</param>
     /// <param name="platformSettings">The processing platform settings (size cap, disk safety margin).</param>
     /// <param name="headroom">The disk head-room of the dataset volume.</param>
-    /// <param name="files">The files of the dataset folder: what was there, what the import added, the rollback.</param>
     public ImportDatasetTool(
         ImportSourceCatalog sources,
         ImportCredentials credentials,
         TaskFileIndexer indexer,
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
-        VolumeHeadroom headroom,
-        DatasetFolderFiles files)
+        VolumeHeadroom headroom)
     {
         _headroom = headroom;
         _sources = sources;
@@ -81,7 +82,6 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
         _settings = importSettings.Value;
         _diskSafetyMarginBytes =
             platformSettings.Value.DiskSafetyMarginBytes;
-        _files = files;
     }
 
     /// <inheritdoc />
@@ -98,6 +98,9 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
 
     /// <inheritdoc />
     public override bool ProducesArtifact => false;
+
+    /// <inheritdoc />
+    public override bool AddsDatasetFiles => true;
 
     /// <inheritdoc />
     public override JsonDocument InputSchema => Schema;
@@ -145,9 +148,12 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
 
         var root = ctx.Ddb.DatasetFolderPath;
 
-        // Resumability: files already present from a previous partial run are kept; only the files
-        // written during THIS run are rolled back on a budget breach.
-        var before = _files.Prepare(root);
+        Directory.CreateDirectory(root);
+
+        // What the source creates is recorded before it is written (FR-XC-27): a breach of the budget, the timeout, a
+        // cancel or any failure ends the task, and the task deletes what its record holds, and only that. A retry
+        // finds the files of the earlier attempts in the record.
+        var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, ct);
 
         // Effective cap = the tightest of: per-user remaining quota (budgetBytes), the absolute
         // MaxImportSizeBytes ceiling, and the free disk space minus the head-room (the safety
@@ -194,26 +200,25 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
 
         try
         {
-            await source.FetchAsync(sourceParams, root, sink, linkedCts.Token);
+            await source.FetchAsync(sourceParams, root, writes, sink, linkedCts.Token);
         }
         catch (OperationCanceledException) when (breached)
         {
-            // Expected: the budget guard cancelled the transfer. Roll back below.
+            // Expected: the budget guard cancelled the transfer (a cancel the source reports as such)
         }
         catch (OperationCanceledException)
             when (transferTimeout > 0 && linkedCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
-            // The per-task transfer timeout elapsed (not a user cancellation). Roll back below.
+            // The per-task transfer timeout elapsed (not a user cancellation)
             timedOut = true;
         }
 
         if (breached || timedOut)
         {
-            var added = _files.AddedSince(root, before);
+            // The failed task is rolled back from its write record (FR-XC-27)
             var reason = breached ? "Storage budget exceeded" : "Transfer timed out";
             progress.Report(new HeavyToolProgress(-1, "cleanup",
-                LogChunk: $"{reason} - rolling back {added.Count} file(s)"));
-            _files.Delete(root, added);
+                LogChunk: $"{reason} - the {writes.Created.Count} file(s) imported so far are deleted"));
 
             if (breached)
                 throw new QuotaExceededException(
@@ -224,12 +229,14 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
                 $"The import exceeded the configured transfer timeout of {transferTimeout}s.");
         }
 
-        // A genuine user cancellation (not a breach/timeout) leaves partial files in place for resume.
+        // A user cancellation rolls the task back
         ct.ThrowIfCancellationRequested();
 
-        // Index everything now in the dataset folder, queue the builds of the buildable files (children
-        // of this task), invalidate the caches
-        var allFiles = _files.All(root).ToList();
+        // Index the files the import created (those of an earlier attempt included), never the other files of the
+        // folder; queue the builds of the buildable files (children of this task), invalidate the caches
+        var recorded = await ctx.WriteRecord.RecordedPathsAsync(ctx.Dataset, ct);
+        var allFiles = recorded.Concat(writes.Created).Distinct(StringComparer.Ordinal)
+            .Where(f => File.Exists(DatasetPathPolicy.ToLocalPath(root, f))).Order(StringComparer.Ordinal).ToList();
         await _indexer.IndexAsync(new TaskFiles(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug, allFiles,
             ctx.BuildQueue, ctx.TaskId, "imported files"), progress, ct);
 

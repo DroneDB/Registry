@@ -170,6 +170,114 @@ public class GuardedHttpDownloaderTests
         probe.Reachable.ShouldBeFalse();
     }
 
+    // FR-UPL-12, FR-UPL-13: the probe of an archive URL
+
+    private static HttpResponseMessage Body(string contentType, byte[] body, long? contentLength = null)
+    {
+        var resp = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) };
+        resp.Content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        if (contentLength != null)
+            resp.Content.Headers.ContentLength = contentLength;
+        return resp;
+    }
+
+    [Test]
+    public async Task ProbeAsync_RequireArchive_AnHtmlPage_IsRefused()
+    {
+        var dl = DownloaderFor(new StubHandler(_ => Body("text/html", "<!doctype html><html></html>"u8.ToArray())));
+
+        var probe = await dl.ProbeAsync(Url, null, null, requireArchive: true, CancellationToken.None);
+
+        probe.Reachable.ShouldBeFalse();
+        probe.Message.ShouldBe("The file is not a ZIP, TAR, 7z or RAR archive");
+        probe.Message.ShouldBe(GuardedHttpDownloader.NotAnArchiveMessage);
+    }
+
+    [Test]
+    public async Task ProbeAsync_RequireArchive_APageServedWithABinaryContentType_IsRefusedFromItsFirstBytes()
+    {
+        // HEAD answers like a file; the first bytes of a ranged GET are markup (a login page behind an archive name)
+        var dl = DownloaderFor(new StubHandler(req => req.Method == HttpMethod.Head
+            ? Body("application/octet-stream", [], 4096)
+            : Body("application/octet-stream", "\n  <html><body>Sign in</body></html>"u8.ToArray())));
+
+        var probe = await dl.ProbeAsync(Url, null, null, requireArchive: true, CancellationToken.None);
+
+        probe.Reachable.ShouldBeFalse();
+        probe.Message.ShouldBe("The file is not a ZIP, TAR, 7z or RAR archive");
+    }
+
+    [Test]
+    public async Task ProbeAsync_RequireArchive_AnArchive_IsReachable_WithItsSize()
+    {
+        var dl = DownloaderFor(new StubHandler(req => req.Method == HttpMethod.Head
+            ? Body("application/zip", [], 4096)
+            : Body("application/zip", [0x50, 0x4B, 0x03, 0x04, 0, 0, 0, 0])));
+
+        var probe = await dl.ProbeAsync(Url, null, null, requireArchive: true, CancellationToken.None);
+
+        probe.Reachable.ShouldBeTrue();
+        probe.SizeBytes.ShouldBe(4096);
+    }
+
+    [Test]
+    public async Task ProbeAsync_RequireArchive_Head405AndGet200_IsReachable_WithTheContentLengthOfTheGet()
+    {
+        var dl = DownloaderFor(new StubHandler(req =>
+        {
+            if (req.Method == HttpMethod.Head)
+                return new HttpResponseMessage(HttpStatusCode.MethodNotAllowed);
+
+            // The ranged GET of the content check, then the plain GET of the fallback
+            return req.Headers.Range != null
+                ? Body("application/zip", [0x50, 0x4B, 0x03, 0x04, 0, 0, 0, 0])
+                : Body("application/zip", [], 123456);
+        }));
+
+        var probe = await dl.ProbeAsync(Url, null, null, requireArchive: true, CancellationToken.None);
+
+        probe.Reachable.ShouldBeTrue();
+        probe.SizeBytes.ShouldBe(123456);
+    }
+
+    [Test]
+    public async Task ProbeAsync_RequireArchive_ReadsNoMoreThanTheProbeBytes_WhenTheServerIgnoresTheRange()
+    {
+        var stream = new CountingStream(new byte[64 * 1024]);
+        var dl = DownloaderFor(new StubHandler(req => req.Method == HttpMethod.Head
+            ? Body("application/octet-stream", [], 65536)
+            : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(stream) }));
+
+        var probe = await dl.ProbeAsync(Url, null, null, requireArchive: true, CancellationToken.None);
+
+        probe.Reachable.ShouldBeTrue();
+        stream.BytesRead.ShouldBeLessThanOrEqualTo(GuardedHttpDownloader.ArchiveProbeBytes);
+    }
+
+    [Test]
+    public async Task ProbeAsync_WithoutRequireArchive_DoesNotRefuseAPage()
+    {
+        // The single-file import accepts any file type
+        var dl = DownloaderFor(new StubHandler(_ => Body("text/html", "<html></html>"u8.ToArray(), 13)));
+
+        var probe = await dl.ProbeAsync(Url, null, null, CancellationToken.None);
+
+        probe.Reachable.ShouldBeTrue();
+        probe.SizeBytes.ShouldBe(13);
+    }
+
+    private sealed class CountingStream(byte[] data) : MemoryStream(data)
+    {
+        public int BytesRead { get; private set; }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        {
+            var n = await base.ReadAsync(buffer, ct);
+            BytesRead += n;
+            return n;
+        }
+    }
+
     private static void TryDelete(string path)
     {
         try { if (File.Exists(path)) File.Delete(path); } catch { /* ignore */ }

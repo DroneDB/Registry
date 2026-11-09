@@ -20,6 +20,9 @@ public abstract class HeavyToolBase<TParams> : IHeavyTool where TParams : class
     public abstract HeavyToolPermission RequiredAccess { get; }
     public abstract bool ProducesArtifact { get; }
     public virtual bool RunsNativeBuild => false;
+
+    /// <inheritdoc cref="IHeavyTool.AddsDatasetFiles"/>
+    public virtual bool AddsDatasetFiles => false;
     public virtual string? ResultExtension => null;
     public abstract JsonDocument InputSchema { get; }
 
@@ -43,6 +46,10 @@ public abstract class HeavyToolBase<TParams> : IHeavyTool where TParams : class
     /// <inheritdoc cref="IHeavyTool.InputPaths"/>
     public IReadOnlyList<string> InputPaths(HeavyToolRequest request) => InputPaths(Params(request));
 
+    /// <inheritdoc cref="IHeavyTool.SourcesDeletedAfterCommit"/>
+    public IReadOnlyList<string> SourcesDeletedAfterCommit(HeavyToolRequest request) =>
+        SourcesDeletedAfterCommit(Params(request));
+
     /// <inheritdoc cref="IHeavyTool.OutputPaths"/>
     public IReadOnlyList<string> OutputPaths(HeavyToolRequest request) => OutputPaths(Params(request));
 
@@ -52,6 +59,10 @@ public abstract class HeavyToolBase<TParams> : IHeavyTool where TParams : class
     /// <summary>The files the task reads (normalized); none unless the tool overrides it.</summary>
     /// <returns>The input paths.</returns>
     protected virtual IReadOnlyList<string> InputPaths(TParams p) => [];
+
+    /// <summary>The files the task deletes after it commits (normalized); none unless the tool overrides it.</summary>
+    /// <returns>The sources deleted after the commit.</returns>
+    protected virtual IReadOnlyList<string> SourcesDeletedAfterCommit(TParams p) => [];
 
     /// <summary>The files the task writes (normalized); none unless the tool overrides it.</summary>
     /// <returns>The output paths.</returns>

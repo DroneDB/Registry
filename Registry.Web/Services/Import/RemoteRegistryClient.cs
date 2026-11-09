@@ -15,6 +15,9 @@ using Registry.Ports.Import;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
+using Registry.Web.Services.HeavyTasks;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Import;
 
@@ -28,6 +31,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ImportSettings _settings;
     private readonly DatasetPathPolicy _paths;
+    private readonly ScratchFileProvider _scratch;
     private readonly ILogger<RemoteRegistryClient> _logger;
 
     /// <summary>
@@ -35,13 +39,16 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
     /// </summary>
     /// <param name="httpClientFactory">The HTTP client factory.</param>
     /// <param name="settings">The import settings (download concurrency / retry policy).</param>
+    /// <param name="paths">The dataset path policy (the untrusted paths of a remote listing).</param>
+    /// <param name="scratch">Where a file is downloaded before it is moved into the dataset.</param>
     /// <param name="logger">The logger.</param>
     public RemoteRegistryClient(IHttpClientFactory httpClientFactory, ImportSettings settings,
-        DatasetPathPolicy paths, ILogger<RemoteRegistryClient> logger)
+        DatasetPathPolicy paths, ScratchFileProvider scratch, ILogger<RemoteRegistryClient> logger)
     {
         _httpClientFactory = httpClientFactory;
         _settings = settings;
         _paths = paths;
+        _scratch = scratch;
         _logger = logger;
     }
 
@@ -109,9 +116,10 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
 
     /// <inheritdoc />
     public async Task DownloadFilesParallelAsync(string registryUrl, string? authToken, string sourceOrg,
-        string sourceDs, string destFolder, EntryDto[] files, IProgress<ImportProgress>? progress,
-        CancellationToken ct)
+        string sourceDs, string destFolder, EntryDto[] files, IImportWriteRecord writes,
+        IProgress<ImportProgress>? progress, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(writes);
         Directory.CreateDirectory(destFolder);
 
         // The remote registry is untrusted: every path is validated up front (rooted/".." paths fail
@@ -121,7 +129,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         // Extension policy (allow-list / block-list): disallowed file types (e.g. executables/scripts)
         // are skipped here too, mirroring every other ingestion path (ArchiveExtractTool,
         // ArchiveUrlImportSource, PhotogrammetryTool, FileUrlImportTool).
-        var toDownload = _paths.ResolveUntrustedPaths(destFolder, files, e => e.Path)
+        var allowed = _paths.ResolveUntrustedPaths(destFolder, files, e => e.Path)
             .Where(t =>
             {
                 if (_settings.IsExtensionAllowed(t.Item.Path)) return true;
@@ -129,6 +137,13 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
                 return false;
             })
             .ToArray();
+
+        // A path listed twice (or in two letter cases, on a file system that ignores them) is one file: the last entry
+        // wins, as in an archive extraction, and it is downloaded and moved once
+        var last = new Dictionary<string, int>(PathComparison.Comparer);
+        for (var i = 0; i < allowed.Length; i++)
+            last[allowed[i].LocalPath] = i;
+        var toDownload = allowed.Where((t, i) => last[t.LocalPath] == i).ToArray();
 
         var totalFiles = toDownload.Length;
         var filesDone = 0;
@@ -139,40 +154,177 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         // and honor Retry-After (see HttpHelper.DownloadFileWithRetryAsync).
         var maxParallel = Math.Max(1, _settings.RegistryDownloadConcurrency);
 
-        await Parallel.ForEachAsync(
-            toDownload,
-            new ParallelOptions { MaxDegreeOfParallelism = maxParallel, CancellationToken = ct },
-            async (target, token) =>
+        // The files this run moved into the dataset (local paths): never forgotten from the record
+        var moved = new HashSet<string>(StringComparer.Ordinal);
+
+        // A batch of files at a time (FR-XC-27, §8.1): downloaded in parallel to temporary files of the uploads folder,
+        // which is never part of the dataset; then their destinations and folders are recorded and saved with one change
+        // of the write record, and only then moved into place. A process lost at any point leaves no file in the dataset
+        // that the record does not hold. A cancel drops the files of the batch not moved yet
+        foreach (var batch in toDownload.Chunk(Math.Max(1, PlaceBatchSize)))
+        {
+            var fetched = new FetchedFile?[batch.Length];
+            try
             {
-                var (entry, localPath) = target;
+                await Parallel.ForEachAsync(
+                    Enumerable.Range(0, batch.Length),
+                    new ParallelOptions { MaxDegreeOfParallelism = maxParallel, CancellationToken = ct },
+                    async (i, token) =>
+                    {
+                        var (entry, localPath) = batch[i];
+                        var path = Path.GetRelativePath(destFolder, localPath).Replace('\\', '/');
 
-                // Resumability: a file already present at the expected size is treated as complete.
-                if (File.Exists(localPath) && new FileInfo(localPath).Length == entry.Size)
-                {
-                    Interlocked.Add(ref bytesSoFar, entry.Size);
-                }
-                else
-                {
-                    var result = await DownloadFileAsync(registryUrl, authToken, sourceOrg, sourceDs, entry.Path,
-                        localPath, token);
+                        fetched[i] = await FetchFileAsync(registryUrl, authToken, sourceOrg, sourceDs, destFolder, entry,
+                            path, localPath, writes, token);
 
-                    if (!result.Success)
-                        throw new IOException(
-                            $"Failed to download '{entry.Path}': {result.ErrorMessage ?? "unknown error"}");
+                        var done = Interlocked.Increment(ref filesDone);
+                        var currentBytes = Interlocked.Add(ref bytesSoFar, fetched[i]?.Bytes ?? 0);
+                        progress?.Report(new ImportProgress(
+                            totalFiles == 0 ? 1.0 : (double)done / totalFiles,
+                            Phase: "downloading",
+                            Message: $"Downloaded {done}/{totalFiles} files",
+                            BytesSoFar: currentBytes,
+                            FilesDone: done,
+                            FilesTotal: totalFiles));
+                    });
 
-                    Interlocked.Add(ref bytesSoFar, result.BytesDownloaded);
-                }
+                await PlaceAsync(destFolder, fetched, writes, moved, ct);
+            }
+            finally
+            {
+                foreach (var file in fetched)
+                    file?.Temp?.Dispose();
+            }
+        }
+    }
 
-                var done = Interlocked.Increment(ref filesDone);
-                var currentBytes = Interlocked.Read(ref bytesSoFar);
-                progress?.Report(new ImportProgress(
-                    totalFiles == 0 ? 1.0 : (double)done / totalFiles,
-                    Phase: "downloading",
-                    Message: $"Downloaded {done}/{totalFiles} files",
-                    BytesSoFar: currentBytes,
-                    FilesDone: done,
-                    FilesTotal: totalFiles));
-            });
+    /// <summary>How many files are downloaded, recorded and moved into the dataset together.</summary>
+    internal int PlaceBatchSize { get; init; } = TaskImportWrites.SaveBatch;
+
+    // A file of the import, downloaded (Temp: its temporary file) or complete already (Temp null: written by an earlier
+    // attempt of the task)
+    private sealed record FetchedFile(string Path, string LocalPath, ScratchFile? Temp, long Bytes);
+
+    // One file of the import (FR-XC-27): downloaded to a temporary file in the uploads folder of the dataset, which is
+    // never part of it. A file that is not the task's is kept and skipped (null).
+    private async Task<FetchedFile?> FetchFileAsync(string registryUrl, string? authToken, string sourceOrg,
+        string sourceDs, string destFolder, EntryDto entry, string path, string localPath, IImportWriteRecord writes,
+        CancellationToken ct)
+    {
+        if (File.Exists(localPath))
+        {
+            if (!writes.MayWrite(path))
+            {
+                _logger.LogWarning("Skipping '{Path}' of the registry import: the file is already in the dataset", path);
+                return null;
+            }
+
+            // Resumability: a file this task wrote before, already at the expected size, is complete
+            if (new FileInfo(localPath).Length == entry.Size)
+                return new FetchedFile(path, localPath, null, entry.Size);
+
+            // The task's own, incomplete or different: written again
+            File.Delete(localPath);
+        }
+
+        var temp = _scratch.CreateForDataset(destFolder);
+        try
+        {
+            var result = await DownloadFileAsync(registryUrl, authToken, sourceOrg, sourceDs, entry.Path, temp.Path, ct);
+
+            // HttpHelper.DownloadFileWithRetryAsync reports a cancellation as a failure: a cancel (the user's, the quota
+            // stop of D-039) is a cancellation, not an I/O error of this file
+            ct.ThrowIfCancellationRequested();
+
+            if (!result.Success)
+                throw new IOException($"Failed to download '{entry.Path}': {result.ErrorMessage ?? "unknown error"}");
+
+            return new FetchedFile(path, localPath, temp, result.BytesDownloaded);
+        }
+        catch
+        {
+            temp.Dispose();
+            throw;
+        }
+    }
+
+    // The downloaded files of a batch go into the dataset: their destinations and new folders are recorded, each file
+    // stamped from its complete temporary file (a move keeps size and time), the record is saved, and only then the
+    // folders are created and the files moved, never over a file. A file that appeared meanwhile is kept, and is not the
+    // task's
+    private async Task PlaceAsync(string destFolder, IReadOnlyList<FetchedFile?> fetched, IImportWriteRecord writes,
+        HashSet<string> moved, CancellationToken ct)
+    {
+        var toMove = new List<FetchedFile>(fetched.Count);
+        var folders = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var file in fetched)
+        {
+            if (file is null)
+                continue;
+
+            if (file.Temp is null)
+            {
+                // Complete already, the task's own: recorded with its stamp
+                writes.Record(file.Path);
+                writes.Written(file.Path);
+                continue;
+            }
+
+            if (!writes.MayWrite(file.Path))
+            {
+                // Somebody created it while this one was downloaded: kept, not the task's
+                _logger.LogWarning("Skipping '{Path}' of the registry import: the file appeared meanwhile", file.Path);
+                continue;
+            }
+
+            TaskImportWrites.RecordFolders(writes, destFolder, TaskImportWrites.ParentOf(file.Path), folders);
+            writes.Record(file.Path);
+            writes.Written(file.Path, file.Temp.Path);
+            toMove.Add(file);
+        }
+
+        if (toMove.Count == 0)
+        {
+            await writes.FlushIfDueAsync(ct);
+            return;
+        }
+
+        await TaskImportWrites.SaveAsync(writes, ct);
+
+        foreach (var file in toMove)
+        {
+            TaskImportWrites.CreateFolder(destFolder, TaskImportWrites.ParentOf(file.Path));
+            try
+            {
+                File.Move(file.Temp!.Path, file.LocalPath, overwrite: false);
+                file.Temp.Release();
+                moved.Add(file.LocalPath);
+            }
+            catch (IOException) when (File.Exists(file.LocalPath))
+            {
+                // Created between the check and the move: never replaced. Not the task's, unless this run moved it
+                // there (the same file under another letter case): a file the task wrote stays in its record
+                _logger.LogWarning("Skipping '{Path}' of the registry import: the file appeared meanwhile", file.Path);
+                if (!MovedByThisRun(file.LocalPath, moved))
+                    await writes.ForgetAsync(file.Path, CancellationToken.None);
+            }
+        }
+    }
+
+    // Whether the file at localPath is one this run moved. On a file system that ignores letter case the path can name
+    // a file moved under another letter case: its exact name is then not in its folder
+    private static bool MovedByThisRun(string localPath, HashSet<string> moved)
+    {
+        if (moved.Contains(localPath))
+            return true;
+
+        var folder = Path.GetDirectoryName(localPath);
+        var name = Path.GetFileName(localPath);
+        if (string.IsNullOrEmpty(folder) || Directory.EnumerateFileSystemEntries(folder)
+                .Any(e => string.Equals(Path.GetFileName(e), name, StringComparison.Ordinal)))
+            return false;
+
+        return moved.Any(m => string.Equals(m, localPath, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <inheritdoc />

@@ -21,11 +21,16 @@ public static class HeavyTaskJobs
     /// <param name="requestHash">See <see cref="HeavyTaskRequestHash"/>; null skips deduplication.</param>
     /// <param name="outputPaths">The files the task writes (<see cref="Ports.IHeavyTool.OutputPaths"/>), stored in the task record.</param>
     /// <param name="targetLabel">The label of the task's target files (<see cref="Ports.IHeavyTool.Label"/>), stored in the task record.</param>
+    /// <param name="createdDataset">The dataset created for the task at submit (an import), recorded in its write record
+    /// from the start (FR-XC-27): a rollback of the task deletes it. Set by the server only, never from request parameters.</param>
+    /// <param name="addsDatasetFiles">Whether the tool records what it adds (<see cref="Ports.IHeavyTool.AddsDatasetFiles"/>):
+    /// its task is queued with a write record, so that only a task queued before the upgrade has none (§8.3).</param>
     /// <returns>The task (Hangfire job) id.</returns>
     public static string EnqueueHeavyTask(this IBackgroundJobsProcessor processor, HeavyToolRequest request,
         string? userId, string? entryHash = null, string? requestHash = null,
         string? parentJobId = null, string? workflowExecutionId = null,
-        IReadOnlyList<string>? outputPaths = null, string? targetLabel = null)
+        IReadOnlyList<string>? outputPaths = null, string? targetLabel = null,
+        TaskCreatedDataset? createdDataset = null, bool addsDatasetFiles = false)
     {
         var requestJson = JsonSerializer.Serialize(request);
         var toolId = request.ToolId;
@@ -39,7 +44,10 @@ public static class HeavyTaskJobs
             ParentJobId: parentJobId,
             WorkflowExecutionId: workflowExecutionId,
             OutputPathsJson: OutputPathsJson(outputPaths),
-            TargetLabel: FitLabel(targetLabel));
+            TargetLabel: FitLabel(targetLabel),
+            WriteRecordJson: createdDataset is not null ? TaskWriteRecord.ForCreatedDataset(createdDataset).ToJson()
+                : addsDatasetFiles ? new TaskWriteRecord().ToJson()
+                : null);
 
         return processor.EnqueueIndexed<HeavyTaskJobWrapper>(
             w => w.Run(toolId, version, requestJson, null!, CancellationToken.None), payload);

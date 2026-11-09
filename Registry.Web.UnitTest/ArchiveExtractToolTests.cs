@@ -335,6 +335,8 @@ public class ArchiveExtractToolTests
         var ctx = new Mock<IHeavyToolExecutionContext>();
         ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
         ctx.SetupGet(c => c.TaskId).Returns("task-1");
+        ctx.SetupGet(c => c.Dataset).Returns(new DatasetKey("org", Guid.NewGuid()));
+        ctx.SetupGet(c => c.WriteRecord).Returns(new FakeTaskWriteRecorder());
         var (tool, _) = CreateTool();
 
         var ex = await Should.ThrowAsync<InvalidDatasetPathException>(() => tool.ExecuteAsync(
@@ -360,6 +362,8 @@ public class ArchiveExtractToolTests
         var ctx = new Mock<IHeavyToolExecutionContext>();
         ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
         ctx.SetupGet(c => c.TaskId).Returns("task-1");
+        ctx.SetupGet(c => c.Dataset).Returns(new DatasetKey("org", Guid.NewGuid()));
+        ctx.SetupGet(c => c.WriteRecord).Returns(new FakeTaskWriteRecorder());
         var lines = new System.Collections.Generic.List<string>();
         var progress = new SyncLog(lines);
         var (tool, _) = CreateTool();

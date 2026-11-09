@@ -229,7 +229,8 @@ public sealed record IndexedJobPublicationRecord
             var p = doc.Payload;
             var record = new IndexedJobPublicationRecord(doc.SchemaVersion, doc.CreatedAtUtc,
                 new IndexPayload(p.OrgSlug!, p.DsSlug!, p.Hash, p.UserId, p.Queue, p.Path, p.ToolId!, p.ToolVersion!,
-                    p.RequestHash, p.ParentJobId, p.WorkflowExecutionId, p.OutputPathsJson, p.TargetLabel),
+                    p.RequestHash, p.ParentJobId, p.WorkflowExecutionId, p.OutputPathsJson, p.TargetLabel,
+                    p.WriteRecordJson),
                 destination, doc.Queue, doc.EnqueueAtUtc);
 
             var reason = record.Validate();
@@ -272,7 +273,8 @@ public sealed record IndexedJobPublicationRecord
             ParentJobId = Payload.ParentJobId,
             WorkflowExecutionId = Payload.WorkflowExecutionId,
             OutputPathsJson = Payload.OutputPathsJson,
-            TargetLabel = Payload.TargetLabel
+            TargetLabel = Payload.TargetLabel,
+            WriteRecordJson = Payload.WriteRecordJson
         }
     };
 
@@ -306,5 +308,11 @@ public sealed record IndexedJobPublicationRecord
         // earlier reader ignores them
         [JsonPropertyName("outputPathsJson")] public string? OutputPathsJson { get; set; }
         [JsonPropertyName("targetLabel")] public string? TargetLabel { get; set; }
+
+        // Added the same way (FR-XC-27): absent from an earlier record (null, no write record), ignored by an earlier
+        // reader. Omitted when null, so the record of a task without one is written as before
+        [JsonPropertyName("writeRecordJson")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? WriteRecordJson { get; set; }
     }
 }

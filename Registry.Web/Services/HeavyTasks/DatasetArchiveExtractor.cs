@@ -22,6 +22,9 @@ namespace Registry.Web.Services.HeavyTasks;
 /// <param name="KeepExisting">True when the file at this dataset path must be kept (the entry is skipped).</param>
 /// <param name="MaxBytes">The uncompressed-size cap; 0 (or less) disables it.</param>
 /// <param name="SafetyMarginBytes">The disk head-room to keep (<see cref="VolumeHeadroom.MarginBytes"/>).</param>
+/// <param name="Writes">The write record of the task that extracts (FR-XC-27): every file and folder the extraction
+/// creates is recorded before it is created; a file it replaces (<paramref name="KeepExisting"/> false for an existing
+/// file) is not. Null: nothing is recorded.</param>
 public sealed record ArchiveExtractionRequest(
     string ArchivePath,
     string DatasetFolder,
@@ -29,7 +32,8 @@ public sealed record ArchiveExtractionRequest(
     Func<string, bool> IsExtensionAllowed,
     Func<string, bool> KeepExisting,
     long MaxBytes,
-    long SafetyMarginBytes);
+    long SafetyMarginBytes,
+    Registry.Ports.Import.IImportWriteRecord? Writes = null);
 
 /// <summary>Progress of an extraction, after each entry (and once before the first, with <see cref="Done"/> 0).</summary>
 /// <param name="Done">Entries handled (extracted or skipped).</param>
@@ -104,7 +108,7 @@ public sealed class DatasetArchiveExtractor
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var journal = new Journal(this, request.DatasetFolder);
+        var journal = new Journal(this, request.DatasetFolder, request.Writes);
         var committed = false;
         try
         {
@@ -121,6 +125,16 @@ public sealed class DatasetArchiveExtractor
         }
     }
 
+    /// <summary>How many entries are extracted, recorded and moved into the dataset together.</summary>
+    internal int PlaceBatchSize { get; init; } = TaskImportWrites.SaveBatch;
+
+    // An entry extracted to its temporary file, to be moved to its dataset path
+    private sealed record StagedEntry(string Key, string Target, string Local, ScratchFile Temp);
+
+    // Every entry is extracted to a temporary file of the dataset's uploads folder (never part of the dataset), a batch
+    // at a time; then the batch is recorded in the task's write record and saved with one change (FR-XC-27, §8.1), and
+    // only then its folders are created and its files moved into place: a process lost at any point leaves no file in
+    // the dataset that the record does not hold
     private async Task<ArchiveExtractionResult> ExtractEntriesAsync(ArchiveExtractionRequest request, Journal journal,
         IProgress<ArchiveExtractionProgress>? progress, CancellationToken ct)
     {
@@ -128,42 +142,101 @@ public sealed class DatasetArchiveExtractor
         var extracted = new List<string>();
         var skipped = 0;
         var done = 0;
+        var batch = new List<StagedEntry>();
 
-        // The session (and its file handle) is closed when the loop ends, before the caller deletes
-        // or indexes anything
-        using var session = _archives.Open(request.ArchivePath);
-        var total = session.FastFileEntryCount ?? 0;
-        progress?.Report(new ArchiveExtractionProgress(0, total, string.Empty, 0));
-
-        foreach (var entry in session.Entries())
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            if (entry.IsDirectory)
-                continue;
-
-            var target = Target(request, entry.Key);
-            if (target == null || !Allowed(request, target) || request.KeepExisting(target))
+            // The session (and its file handle) is closed when the loop ends, before the caller deletes
+            // or indexes anything
+            using (var session = _archives.Open(request.ArchivePath))
             {
+                var total = session.FastFileEntryCount ?? 0;
+                progress?.Report(new ArchiveExtractionProgress(0, total, string.Empty, 0));
+
+                foreach (var entry in session.Entries())
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (entry.IsDirectory)
+                        continue;
+
+                    var target = Target(request, entry.Key);
+                    if (target == null || !Allowed(request, target) || request.KeepExisting(target))
+                    {
+                        skipped++;
+                    }
+                    else
+                    {
+                        var temp = _scratch.CreateForDataset(request.DatasetFolder);
+                        batch.Add(new StagedEntry(entry.Key, target,
+                            DatasetPathPolicy.ToLocalPath(request.DatasetFolder, target), temp));
+
+                        // The cap and the head-room are checked before each chunk, so an entry whose header
+                        // under-reports its size cannot fill the volume
+                        await using (var source = entry.OpenStream())
+                        await using (var file = _fs.OpenWrite(temp.Path, FileMode.CreateNew))
+                            await budget.CopyGuardedAsync(source, file, ct);
+
+                        if (batch.Count >= Math.Max(1, PlaceBatchSize))
+                        {
+                            skipped += await PlaceAsync(request, journal, batch, extracted, ct);
+                            batch.Clear();
+                        }
+                    }
+
+                    done++;
+                    progress?.Report(new ArchiveExtractionProgress(done, total, entry.Key, budget.BytesWritten));
+                }
+
+                skipped += await PlaceAsync(request, journal, batch, extracted, ct);
+                batch.Clear();
+                return new ArchiveExtractionResult(extracted, skipped, budget.BytesWritten, total);
+            }
+        }
+        finally
+        {
+            // The entries not moved into the dataset (a failure, a cancel)
+            foreach (var staged in batch)
+                staged.Temp.Dispose();
+        }
+    }
+
+    // Records the batch (the new files, stamped from their complete temporary files, and the folders they need), saves
+    // the record, then moves each file to its place. The entries skipped because their file appeared meanwhile
+    private async Task<int> PlaceAsync(ArchiveExtractionRequest request, Journal journal, List<StagedEntry> batch,
+        List<string> extracted, CancellationToken ct)
+    {
+        if (batch.Count == 0)
+            return 0;
+
+        var replacing = new HashSet<string>(Common.PathComparison.Comparer);
+        foreach (var staged in batch)
+            if (!journal.Plan(staged.Local, staged.Target, staged.Temp.Path))
+                replacing.Add(staged.Local);
+
+        if (request.Writes != null)
+            await TaskImportWrites.SaveAsync(request.Writes, ct);
+
+        var skipped = 0;
+        foreach (var staged in batch)
+        {
+            var placed = journal.Place(staged.Local, staged.Temp, replacing.Contains(staged.Local));
+            if (placed is null)
+            {
+                // Another writer created the file between the check and the move: it is kept, never replaced, and it
+                // is not the extraction's (its record drops it)
+                _logger.LogWarning("Skipping archive entry '{Key}': '{Path}' was created meanwhile", staged.Key,
+                    staged.Target);
+                if (request.Writes != null)
+                    await request.Writes.ForgetAsync(staged.Target, CancellationToken.None);
                 skipped++;
-            }
-            else
-            {
-                var local = DatasetPathPolicy.ToLocalPath(request.DatasetFolder, target);
-                if (journal.BeforeWrite(local))
-                    extracted.Add(target);
-
-                // The cap and the head-room are checked before each chunk, so an entry whose header
-                // under-reports its size cannot fill the volume
-                await using (var source = entry.OpenStream())
-                await using (var file = _fs.OpenWrite(local, FileMode.CreateNew))
-                    await budget.CopyGuardedAsync(source, file, ct);
+                continue;
             }
 
-            done++;
-            progress?.Report(new ArchiveExtractionProgress(done, total, entry.Key, budget.BytesWritten));
+            if (placed.Value)
+                extracted.Add(staged.Target);
         }
 
-        return new ArchiveExtractionResult(extracted, skipped, budget.BytesWritten, total);
+        return skipped;
     }
 
     // The dataset path of an entry, or null to skip it (a folder entry, a reserved path)
@@ -195,20 +268,62 @@ public sealed class DatasetArchiveExtractor
     }
 
     /// <summary>
-    /// What one extraction changed in the dataset, so it can be undone: the files written (recorded
-    /// before the first byte, so a partial file is removed too), the files replaced (moved aside)
-    /// and the folders created. Never throws from <see cref="Commit"/> or <see cref="Rollback"/>:
+    /// What one extraction changed in the dataset, so it can be undone: the files moved into it, the files replaced
+    /// (moved aside) and the folders created. Never throws from <see cref="Commit"/> or <see cref="Rollback"/>:
     /// they run in a finally block.
     /// </summary>
-    private sealed class Journal(DatasetArchiveExtractor owner, string datasetFolder)
+    private sealed class Journal(DatasetArchiveExtractor owner, string datasetFolder,
+        Registry.Ports.Import.IImportWriteRecord? writes)
     {
         private readonly List<string> _written = [];
         private readonly HashSet<string> _writtenSet = new(Common.PathComparison.Comparer);
+
+        // The files that were there before the extraction and that it replaces: never recorded, also when a later
+        // entry has the same path again (FR-XC-27)
+        private readonly HashSet<string> _replacedSet = new(Common.PathComparison.Comparer);
         private readonly List<(string Target, ScratchFile Backup)> _replaced = [];
         private readonly List<string> _createdFolders = [];
+        private readonly HashSet<string> _recordedFolders = new(Common.PathComparison.Comparer);
 
-        /// <summary>Prepares <paramref name="local"/> for a new file; false when this extraction already wrote it.</summary>
-        public bool BeforeWrite(string local)
+        /// <summary>
+        /// Records what placing the file at <paramref name="local"/> (the dataset path <paramref name="target"/>) will
+        /// create, before anything of it exists: the missing folders, and the file when nothing is there (stamped from
+        /// <paramref name="tempFile"/>, its complete content). False when it replaces a file that is there, which is not
+        /// recorded (FR-XC-27): the rollback must not delete it.
+        /// </summary>
+        public bool Plan(string local, string target, string tempFile)
+        {
+            var fs = owner._fs;
+            var missing = new Stack<string>();
+            for (var f = Path.GetDirectoryName(local); !string.IsNullOrEmpty(f) && !fs.FolderExists(f);
+                 f = Path.GetDirectoryName(f))
+                missing.Push(f);
+            while (missing.Count > 0)
+            {
+                var f = missing.Pop();
+                if (_recordedFolders.Add(f))
+                    writes?.RecordFolder(Path.GetRelativePath(datasetFolder, f).Replace('\\', '/'));
+            }
+
+            // Written by this extraction already (two entries with the same normalized path), or not there: its own.
+            // A file that was there before (replaced by an earlier entry) stays out of the record
+            if (_replacedSet.Contains(local) || (!_writtenSet.Contains(local) && fs.Exists(local)))
+            {
+                _replacedSet.Add(local);
+                return false;
+            }
+
+            writes?.Record(target);
+            writes?.Written(target, tempFile);
+            return true;
+        }
+
+        /// <summary>
+        /// Moves <paramref name="temp"/> to <paramref name="local"/>, creating its folders: true when the dataset path
+        /// is new to this extraction, false when the extraction wrote it already (the last entry wins), null when the
+        /// file appeared meanwhile (another writer created it after <see cref="Plan"/>: kept, never replaced).
+        /// </summary>
+        public bool? Place(string local, ScratchFile temp, bool replacing)
         {
             var fs = owner._fs;
             CreateFolders(Path.GetDirectoryName(local)!);
@@ -217,16 +332,28 @@ public sealed class DatasetArchiveExtractor
             {
                 // Two entries with the same normalized path: the last one wins, as in the archive tools
                 fs.Delete(local);
+                fs.Move(temp.Path, local, false);
+                temp.Release();
                 return false;
             }
 
-            if (fs.Exists(local))
+            if (replacing && fs.Exists(local))
             {
                 var backup = owner._scratch.CreateForDataset(datasetFolder, ".bak");
                 fs.Move(local, backup.Path);
                 _replaced.Add((local, backup));
             }
 
+            try
+            {
+                fs.Move(temp.Path, local, false);
+            }
+            catch (IOException) when (!replacing && fs.Exists(local))
+            {
+                return null;
+            }
+
+            temp.Release();
             _written.Add(local);
             _writtenSet.Add(local);
             return true;
@@ -280,7 +407,7 @@ public sealed class DatasetArchiveExtractor
             }
         }
 
-        // Creates the missing folders of a file, top-down, and records them
+        // Creates the missing folders of a file, top-down (recorded and saved by Plan)
         private void CreateFolders(string folder)
         {
             var fs = owner._fs;

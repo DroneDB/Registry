@@ -10,6 +10,7 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Tools;
+using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Shouldly;
 
@@ -317,5 +318,189 @@ public class MergeMultispectralToolTests
         File.Exists(_h.Local("bands/b1.tif")).ShouldBeTrue();
         File.Exists(_h.Local("bands/b2.tif")).ShouldBeFalse();
         log.Lines.ShouldContain("Merge complete");
+    }
+
+    // FR-XC-26, FR-XC-27 (D-045): the output the merge creates is in the write record before it is written
+
+    [Test]
+    public void AddsDatasetFiles() => _tool.AddsDatasetFiles.ShouldBeTrue();
+
+    [Test]
+    public async Task NewOutput_IsRecordedBeforeTheNativeMerge_FlushedAndStampedAfterIt()
+    {
+        _h.TrackWrites();
+
+        await Execute(Request("bands/new.tif"));
+
+        _h.Calls.ShouldBe(["record bands/new.tif", "merge bands/new.tif", "published bands/new.tif",
+            "index bands/new.tif"]);
+        _h.Recorder.Paths.ShouldBe(["bands/new.tif"]);
+        _h.Recorder.Flushes.ShouldBeGreaterThan(0, "the record is written before the long merge starts");
+        _h.Recorder.Stamped.ShouldContainKey("bands/new.tif");
+    }
+
+    [Test]
+    public async Task NewOutput_AndItsNewFolders_AreSavedInTheRecord_BeforeEitherExists()
+    {
+        var saved = false;
+        _h.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()))
+            .Callback<string[], string>((_, output) =>
+            {
+                // §8.1: a process lost from here on leaves a record that rolls the output back
+                _h.Recorder.SavedPaths.ShouldBe([output]);
+                _h.Recorder.SavedFolders.ShouldBe(["out", "out/deep"]);
+                saved = true;
+                File.WriteAllText(_h.Local(output), "merged");
+            });
+
+        await Execute(Request("out/deep/new.tif"));
+
+        saved.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task AnOutputAnotherWriterCreatesBeforeLibddbWrites_IsKept_AndForgotten()
+    {
+        // Created while the record is saved: after the first check, before the native call
+        _h.Recorder.OnRecord = p => File.WriteAllText(_h.Local(p), "somebody else's");
+
+        await Should.ThrowAsync<NameClashException>(() => Execute(Request("bands/new.tif")));
+
+        File.ReadAllText(_h.Local("bands/new.tif")).ShouldBe("somebody else's");
+        _h.Recorder.Paths.ShouldBeEmpty("a rollback must not delete the other writer's file");
+        _h.Recorder.Forgotten.ShouldBe(["bands/new.tif"]);
+        _h.Ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
+    public async Task APartialOutputLibddbLeavesWhenItFails_StaysRecorded_SoTheRollbackDeletesIt()
+    {
+        _h.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()))
+            .Callback<string[], string>((_, output) => File.WriteAllText(_h.Local(output), "partial"))
+            .Throws(new InvalidOperationException("Cannot merge multispectral: the write failed"));
+
+        await Should.ThrowAsync<InvalidOperationException>(() => Execute(Request("bands/new.tif")));
+
+        File.Exists(_h.Local("bands/new.tif")).ShouldBeTrue();
+        _h.Recorder.SavedPaths.ShouldBe(["bands/new.tif"], "the task's own partial file: the rollback deletes it");
+        _h.Recorder.Forgotten.ShouldBeEmpty();
+        _h.Recorder.Stamped.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task NewOutput_InNewFolders_RecordsTheFoldersBeforeTheOutput()
+    {
+        await Execute(Request("out/deep/new.tif"));
+
+        _h.Recorder.Folders.ShouldBe(["out", "out/deep"]);
+        _h.Recorder.Paths.ShouldBe(["out/deep/new.tif"]);
+    }
+
+    [Test]
+    public async Task Overwrite_OfAnExistingOutput_IsNotRecorded_SoARollbackNeverDeletesTheFileThatWasThere()
+    {
+        _h.File("bands/merged.tif");
+
+        await Execute(Request("bands/merged.tif", overwrite: true));
+
+        File.ReadAllText(_h.Local("bands/merged.tif")).ShouldBe("merged");
+        _h.Recorder.Paths.ShouldBeEmpty();
+        _h.Recorder.Folders.ShouldBeEmpty();
+        _h.Recorder.Stamped.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task Overwrite_CancelledBeforeTheMerge_KeepsTheExistingOutput_AndRecordsNothing()
+    {
+        _h.File("bands/merged.tif");
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Should.ThrowAsync<OperationCanceledException>(() => _tool.ExecuteAsync(
+            Request("bands/merged.tif", overwrite: true), _h.Ctx.Object, new Progress<HeavyToolProgress>(), cts.Token));
+
+        File.ReadAllText(_h.Local("bands/merged.tif")).ShouldBe("original");
+        _h.Recorder.Paths.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task Overwrite_CancelledWhileMerging_DoesNotRecordTheReplacedOutput()
+    {
+        // The decision is made before the existing output is deleted: a cancel in the middle changes nothing
+        _h.File("bands/merged.tif");
+        using var cts = new CancellationTokenSource();
+        _h.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()))
+            .Callback<string[], string>((_, output) =>
+            {
+                File.WriteAllText(_h.Local(output), "merged");
+                cts.Cancel();
+            });
+
+        try
+        {
+            await _tool.ExecuteAsync(Request("bands/merged.tif", overwrite: true), _h.Ctx.Object,
+                new Progress<HeavyToolProgress>(), cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // either way the replaced output is not the task's
+        }
+
+        _h.Recorder.Paths.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task ANameThatAppearedSinceTheCheck_WithoutOverwrite_IsNeverReplaced_NorRecorded()
+    {
+        // The file is created when the tool asks where the output goes: after the check of the worker, before the write
+        _h.Ddb.Setup(d => d.GetLocalPath("bands/late.tif")).Returns(() =>
+        {
+            File.WriteAllText(_h.Local("bands/late.tif"), "somebody else's");
+            return _h.Local("bands/late.tif");
+        });
+
+        await Should.ThrowAsync<NameClashException>(() => Execute(Request("bands/late.tif")));
+
+        File.ReadAllText(_h.Local("bands/late.tif")).ShouldBe("somebody else's");
+        _h.Recorder.Paths.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task DeleteSources_CommitsBeforeTheFirstDelete_AndTellsTheDatasetWhichBandsLeft()
+    {
+        TrackSourceDeletes();
+        _h.TrackWrites();
+
+        await Execute(Request("bands/new.tif", deleteSources: true));
+
+        _h.Calls.ShouldBe([
+            "record bands/new.tif", "merge bands/new.tif", "published bands/new.tif", "index bands/new.tif",
+            "open bands/new.tif", "commit", "remove bands/b1.tif", "remove bands/b2.tif"
+        ]);
+        _h.Recorder.Committed.ShouldBeTrue();
+        _h.Recorder.EntriesLeft.ShouldBe(["bands/b1.tif", "bands/b2.tif"]);
+    }
+
+    [Test]
+    public async Task DeleteSources_ACommitRefusedByACancel_DeletesNothing()
+    {
+        TrackSourceDeletes();
+        _h.Recorder.RefuseCommit = true;
+
+        await Should.ThrowAsync<TaskWriteRecordClosedException>(() =>
+            Execute(Request("bands/new.tif", deleteSources: true)));
+
+        _h.Ddb.Verify(d => d.Remove(It.IsAny<string>()), Times.Never);
+        File.Exists(_h.Local("bands/b1.tif")).ShouldBeTrue();
+        File.Exists(_h.Local("bands/b2.tif")).ShouldBeTrue();
+        _h.Recorder.Paths.ShouldBe(["bands/new.tif"], "the output is the task's: the rollback deletes it");
+    }
+
+    [Test]
+    public async Task WithoutDeleteSources_TheTaskNeverCommits()
+    {
+        await Execute(Request("bands/new.tif"));
+
+        _h.Recorder.Committed.ShouldBeFalse();
     }
 }

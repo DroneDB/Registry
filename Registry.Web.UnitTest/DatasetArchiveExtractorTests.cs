@@ -52,7 +52,9 @@ public class DatasetArchiveExtractorTests
 
         result.Extracted.ShouldBe(["a.txt", "photos/.uploads/y.jpg"]);
         result.Skipped.ShouldBe(1);
-        Directory.Exists(Path.Combine(_dataset, IDDB.UploadsFolderName)).ShouldBeFalse();
+        // The uploads folder holds only the extraction's own temporary files while it runs: none is left, and no entry
+        var uploads = Path.Combine(_dataset, IDDB.UploadsFolderName);
+        (Directory.Exists(uploads) ? Directory.GetFileSystemEntries(uploads) : []).ShouldBeEmpty();
     }
 
     [Test]
@@ -64,6 +66,27 @@ public class DatasetArchiveExtractorTests
 
         result.Extracted.ShouldBe(["a/b.txt"]);
         File.ReadAllText(Path.Combine(_dataset, "a", "b.txt")).ShouldBe("second");
+    }
+
+    [Test]
+    public async Task InBatchesOfOne_EveryEntryIsPlaced_AndADuplicateInALaterBatchWins()
+    {
+        Zip(("a/b.txt", "first"), ("c.txt", "c"), (@"a\b.txt", "second"));
+        var extractor = new DatasetArchiveExtractor(new SharpCompressArchiveExtractor(), TestPaths.Policy,
+            TestScratch.Provider, new Registry.Adapters.FileSystem(), TestHeadroom.Default,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<DatasetArchiveExtractor>.Instance)
+        {
+            PlaceBatchSize = 1
+        };
+
+        var result = await extractor.ExtractAsync(
+            new ArchiveExtractionRequest(_archive, _dataset, string.Empty, _ => true, _ => false, 0, 0), null,
+            CancellationToken.None);
+
+        result.Extracted.ShouldBe(["a/b.txt", "c.txt"]);
+        File.ReadAllText(Path.Combine(_dataset, "a", "b.txt")).ShouldBe("second");
+        var uploads = Path.Combine(_dataset, IDDB.UploadsFolderName);
+        (Directory.Exists(uploads) ? Directory.GetFileSystemEntries(uploads) : []).ShouldBeEmpty();
     }
 
     [Test]

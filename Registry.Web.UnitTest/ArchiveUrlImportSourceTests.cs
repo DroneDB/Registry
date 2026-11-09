@@ -1,6 +1,15 @@
+using System;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using Registry.Adapters.Archives;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Import;
+using Registry.Web.Test.Support;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -44,4 +53,84 @@ public class ArchiveUrlImportSourceTests
     [TestCase("https://host/data/", "imported-dataset")]
     public void SuggestName_StripsTheLongestSuffixOfTheExtractorsList(string url, string expected) =>
         ArchiveUrlImportSource.SuggestName(new System.Uri(url), Extractor.SupportedExtensions).ShouldBe(expected);
+
+    // FR-UPL-12, FR-UPL-13: the verify step of an archive URL is the probe of the downloader (HEAD, then GET for a server
+    // that refuses HEAD, and the first bytes of the content)
+
+    private static ArchiveUrlImportSource SourceFor(HttpMessageHandler handler)
+    {
+        var settings = new ImportSettings { SsrfAllowPrivateNetworks = true };
+        var downloader = new GuardedHttpDownloader(new SsrfGuard(settings), new HandlerFactory(handler),
+            TestHeadroom.Default);
+        return new ArchiveUrlImportSource(Extractor, downloader, Microsoft.Extensions.Options.Options.Create(settings),
+            Microsoft.Extensions.Options.Options.Create(new ProcessingPlatformSettings()), TestArchives.Extractor(Extractor), TestScratch.Provider);
+    }
+
+    private static JsonElement Params(string url = "http://download.test/flight.zip") =>
+        JsonSerializer.SerializeToElement(new { url });
+
+    private static HttpResponseMessage Zip(long? length = null)
+    {
+        var resp = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent([0x50, 0x4B, 0x03, 0x04, 0, 0, 0, 0])
+        };
+        resp.Content.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
+        if (length != null)
+            resp.Content.Headers.ContentLength = length;
+        return resp;
+    }
+
+    [Test]
+    public async Task Probe_AnHtmlPage_IsNotReachable_WithTheArchiveMessage()
+    {
+        var source = SourceFor(new Handler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<!doctype html><html>Not found</html>", System.Text.Encoding.UTF8, "text/html")
+        }));
+
+        var probe = await source.ProbeAsync(Params(), CancellationToken.None);
+
+        probe.Reachable.ShouldBeFalse();
+        probe.Message.ShouldBe("The file is not a ZIP, TAR, 7z or RAR archive");
+    }
+
+    [Test]
+    public async Task Probe_Head405AndGet200_IsReachable_WithTheContentLength()
+    {
+        var source = SourceFor(new Handler(req =>
+        {
+            if (req.Method == HttpMethod.Head)
+                return new HttpResponseMessage(HttpStatusCode.MethodNotAllowed);
+            return req.Headers.Range != null ? Zip() : Zip(length: 5_000_000);
+        }));
+
+        var probe = await source.ProbeAsync(Params(), CancellationToken.None);
+
+        probe.Reachable.ShouldBeTrue();
+        probe.EstimatedBytes.ShouldBe(5_000_000);
+        probe.SuggestedName.ShouldBe("flight");
+    }
+
+    [Test]
+    public async Task Probe_AnUnreachableUrl_IsNotReachable()
+    {
+        var source = SourceFor(new Handler(_ => new HttpResponseMessage(HttpStatusCode.NotFound)));
+
+        var probe = await source.ProbeAsync(Params(), CancellationToken.None);
+
+        probe.Reachable.ShouldBeFalse();
+        probe.Message.ShouldContain("404");
+    }
+
+    private sealed class Handler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(responder(request));
+    }
+
+    private sealed class HandlerFactory(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
+    }
 }

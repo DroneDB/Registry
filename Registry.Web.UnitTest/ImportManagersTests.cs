@@ -204,6 +204,25 @@ public class ImportManagersTests
     }
 
     [Test]
+    public async Task Create_RecordsTheCreatedDataset_ByItsFolderId_InTheTaskNotItsParameters()
+    {
+        var internalRef = Guid.NewGuid();
+        _datasets.Setup(d => d.GetDatasetAsync(Org, "chosen-slug", It.IsAny<bool>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dataset { Slug = "chosen-slug", InternalRef = internalRef });
+
+        await CreateImportManager().CreateAsync(Org, new CreateImportRequestDto
+        {
+            SourceType = "archive-url", Slug = "chosen-slug"
+        }, CancellationToken.None);
+
+        var request = _submitted.ShouldNotBeNull();
+        request.CreatedDataset.ShouldBe(
+            new Registry.Web.Services.HeavyTasks.TaskCreatedDataset(Org, internalRef, "chosen-slug"));
+        request.Params.TryGetProperty("createdDataset", out _).ShouldBeFalse();
+    }
+
+    [Test]
     public async Task Create_UsesTheNameAndSlugOfTheRequest_AndHasNoBudgetWithoutALimit()
     {
         _quota.Setup(q => q.GetUserStorage(It.IsAny<User>())).Returns(new UserStorageInfo { Total = null, Used = 4_000 });

@@ -27,17 +27,17 @@ public sealed class DatasetCommands
     private readonly IDatasetAccessResolver _access;
     private readonly IDdbManager _ddbManager;
     private readonly IDatasetListingInvalidator _listings;
-    private readonly IBackgroundJobsProcessor _backgroundJob;
+    private readonly DatasetRemoval _removal;
     private readonly ILogger<DatasetCommands> _logger;
 
-    public DatasetCommands(RegistryContext context, IDatasetResolver datasets, IDatasetAccessResolver access, IDdbManager ddbManager, IDatasetListingInvalidator listings, IBackgroundJobsProcessor backgroundJob, ILogger<DatasetCommands> logger)
+    public DatasetCommands(RegistryContext context, IDatasetResolver datasets, IDatasetAccessResolver access, IDdbManager ddbManager, IDatasetListingInvalidator listings, DatasetRemoval removal, ILogger<DatasetCommands> logger)
     {
         _context = context;
         _datasets = datasets;
         _access = access;
         _ddbManager = ddbManager;
         _listings = listings;
-        _backgroundJob = backgroundJob;
+        _removal = removal;
         _logger = logger;
     }
 
@@ -115,47 +115,7 @@ public sealed class DatasetCommands
         var ds = await _datasets.GetRequiredDatasetAsync(orgSlug, dsSlug, withTracking: true, ct: ct);
         await _access.EnsureAccessAsync(ds, AccessType.Delete);
 
-        // Save references before removing from DB
-        var internalRef = ds.InternalRef;
-
-        // Remove from database immediately (fast operation). Its job rows leave with it, to a slug nobody can have: the
-        // cleanup below runs later, and by then another dataset may hold this slug (a rename or a move into it) with
-        // its own history and jobs, which a cleanup by slug would delete and cancel
-        _context.Datasets.Remove(ds);
-        await _context.FollowDatasetAsync(orgSlug, ds.Slug, orgSlug, SlugKeyedRows.TombstoneSlug(internalRef),
-            CancellationToken.None);
-        await _context.SaveChangesAsync(CancellationToken.None);
-
-        // It leaves every listing
-        await _listings.ListingChangedAsync(orgSlug, internalRef, CancellationToken.None);
-
-        // Schedule background cleanup job for: cancelling active jobs, removing JobIndex entries, deleting filesystem
-        string? jobId = null;
-        try
-        {
-            jobId = _backgroundJob.Enqueue<DatasetCleanupService>(
-                service => service.CleanupDeletedAsync(orgSlug, internalRef, null));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Failed to enqueue cleanup job for dataset {OrgSlug}/{DsSlug} with internalRef {InternalRef}",
-                orgSlug, dsSlug, internalRef);
-        }
-
-        if (string.IsNullOrEmpty(jobId))
-        {
-            _logger.LogError(
-                "Cleanup job could not be scheduled for dataset {OrgSlug}/{DsSlug} with internalRef {InternalRef}. " +
-                "Orphaned folder cleanup will handle this later.",
-                orgSlug, dsSlug, internalRef);
-        }
-        else
-        {
-            _logger.LogInformation(
-                "Dataset {OrgSlug}/{DsSlug} removed from DB, cleanup job scheduled with JobId {JobId}",
-                orgSlug, dsSlug, jobId);
-        }
+        await _removal.RemoveAsync(orgSlug, ds);
     }
 
     public async Task Rename(string orgSlug, string dsSlug, string newSlug, CancellationToken ct = default)

@@ -11,6 +11,7 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Tools;
+using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Shouldly;
 
@@ -27,6 +28,10 @@ internal sealed class OutputToolHarness : IDisposable
     public Mock<IDDB> Ddb { get; } = new();
     public Mock<IHeavyToolExecutionContext> Ctx { get; } = new();
     public List<string> Calls { get; } = [];
+
+    /// <summary>The write record of the task (FR-XC-27): what the tool records, in <see cref="Calls"/> too.</summary>
+    public FakeTaskWriteRecorder Recorder { get; } = new();
+
     private readonly List<EntrySummary> _entries = [];
 
     public OutputToolHarness()
@@ -43,7 +48,16 @@ internal sealed class OutputToolHarness : IDisposable
 
         Ctx.SetupGet(c => c.Ddb).Returns(Ddb.Object);
         Ctx.SetupGet(c => c.TaskId).Returns("task-1");
+        Ctx.SetupGet(c => c.Dataset).Returns(new DatasetKey("org", Guid.NewGuid()));
+        Ctx.SetupGet(c => c.WriteRecord).Returns(Recorder);
         Ctx.Setup(c => c.MarkOutputPublished(It.IsAny<string>())).Callback<string>(p => Calls.Add("published " + p));
+    }
+
+    /// <summary>From now on <see cref="Calls"/> also holds "record path" and "commit", in the order they happen.</summary>
+    public void TrackWrites()
+    {
+        Recorder.OnRecord = p => Calls.Add("record " + p);
+        Recorder.OnCommit = () => Calls.Add("commit");
     }
 
     public string Local(string path) => Path.Combine(Folder, path.Replace('/', Path.DirectorySeparatorChar));
@@ -288,5 +302,118 @@ public class AlignRasterToolTests
         _h.Ddb.Verify(d => d.AlignRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
             Times.Never);
         File.ReadAllText(_h.Local("new.tif")).ShouldBe("aligned");
+    }
+
+    // FR-XC-26, FR-XC-27 (D-045): the output the alignment creates is in the write record before it is written
+
+    [Test]
+    public void AddsDatasetFiles() => _tool.AddsDatasetFiles.ShouldBeTrue();
+
+    [Test]
+    public async Task NewOutput_IsRecordedBeforeTheNativeAlignment_FlushedAndStampedAfterIt()
+    {
+        _h.TrackWrites();
+
+        await Execute(Request("out/new.tif"));
+
+        _h.Calls.ShouldBe(["record out/new.tif", "align out/new.tif", "published out/new.tif", "index out/new.tif"]);
+        _h.Recorder.Folders.ShouldBe(["out"]);
+        _h.Recorder.Paths.ShouldBe(["out/new.tif"]);
+        _h.Recorder.Flushes.ShouldBeGreaterThan(0, "the record is written before the long alignment starts");
+        _h.Recorder.Stamped.ShouldContainKey("out/new.tif");
+    }
+
+    [Test]
+    public async Task NewOutput_AndItsNewFolders_AreSavedInTheRecord_BeforeEitherExists()
+    {
+        var saved = false;
+        _h.Ddb.Setup(d => d.AlignRaster("src.tif", "ref.tif", It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<string, string, string, string>((_, _, output, _) =>
+            {
+                // §8.1: a process lost from here on leaves a record that rolls the output back
+                _h.Recorder.SavedPaths.ShouldBe([output]);
+                _h.Recorder.SavedFolders.ShouldBe(["out"]);
+                Directory.Exists(_h.Local("out")).ShouldBeTrue("created once it is in the saved record");
+                saved = true;
+                File.WriteAllText(_h.Local(output), "aligned");
+            })
+            .Returns("{ \"ok\": true }");
+
+        await Execute(Request("out/new.tif"));
+
+        saved.ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task AnOutputAnotherWriterCreatesBeforeLibddbWrites_IsKept_AndForgotten()
+    {
+        // Created while the record is saved: after the first check, before the native call
+        _h.Recorder.OnRecord = p => File.WriteAllText(_h.Local(p), "somebody else's");
+
+        await Should.ThrowAsync<NameClashException>(() => Execute(Request("new.tif")));
+
+        File.ReadAllText(_h.Local("new.tif")).ShouldBe("somebody else's");
+        _h.Recorder.Paths.ShouldBeEmpty("a rollback must not delete the other writer's file");
+        _h.Recorder.Forgotten.ShouldBe(["new.tif"]);
+        _h.Ddb.Verify(d => d.AlignRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task APartialOutputLibddbLeavesWhenItFails_StaysRecorded_SoTheRollbackDeletesIt()
+    {
+        _h.Ddb.Setup(d => d.AlignRaster("src.tif", "ref.tif", It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<string, string, string, string>((_, _, output, _) => File.WriteAllText(_h.Local(output), "partial"))
+            .Throws(new InvalidOperationException("Cannot align raster: the write failed"));
+
+        await Should.ThrowAsync<InvalidOperationException>(() => Execute(Request("new.tif")));
+
+        File.Exists(_h.Local("new.tif")).ShouldBeTrue();
+        _h.Recorder.SavedPaths.ShouldBe(["new.tif"], "the task's own partial file: the rollback deletes it");
+        _h.Recorder.Forgotten.ShouldBeEmpty();
+        _h.Recorder.Stamped.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task Overwrite_OfAnExistingOutput_IsNotRecorded_SoARollbackNeverDeletesTheFileThatWasThere()
+    {
+        _h.File("out/a.tif");
+
+        await Execute(Request("out/a.tif", overwrite: true));
+
+        File.ReadAllText(_h.Local("out/a.tif")).ShouldBe("aligned");
+        _h.Recorder.Paths.ShouldBeEmpty();
+        _h.Recorder.Folders.ShouldBeEmpty();
+        _h.Recorder.Stamped.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task Overwrite_CancelledBeforeTheAlignment_KeepsTheExistingOutput_AndRecordsNothing()
+    {
+        _h.File("out/a.tif");
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Should.ThrowAsync<OperationCanceledException>(() => _tool.ExecuteAsync(
+            Request("out/a.tif", overwrite: true), _h.Ctx.Object, new Progress<HeavyToolProgress>(), cts.Token));
+
+        File.ReadAllText(_h.Local("out/a.tif")).ShouldBe("original");
+        _h.Recorder.Paths.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task ANameThatAppearedSinceTheCheck_WithoutOverwrite_IsNeverReplaced_NorRecorded()
+    {
+        // The file is created when the tool asks where the output goes: after the check of the worker, before the write
+        _h.Ddb.Setup(d => d.GetLocalPath("late.tif")).Returns(() =>
+        {
+            File.WriteAllText(_h.Local("late.tif"), "somebody else's");
+            return _h.Local("late.tif");
+        });
+
+        await Should.ThrowAsync<NameClashException>(() => Execute(Request("late.tif")));
+
+        File.ReadAllText(_h.Local("late.tif")).ShouldBe("somebody else's");
+        _h.Recorder.Paths.ShouldBeEmpty();
     }
 }

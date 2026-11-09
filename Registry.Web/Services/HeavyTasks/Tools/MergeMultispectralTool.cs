@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports.DroneDB;
+using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.HeavyTasks.Ports;
@@ -53,6 +54,9 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
     public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
     public override bool ProducesArtifact => false;
     public override bool RunsNativeBuild => true;
+
+    /// <inheritdoc />
+    public override bool AddsDatasetFiles => true;
     public override JsonDocument InputSchema => Schema;
 
     protected override Task ValidateAsync(HeavyToolRequest request, Parameters args,
@@ -103,6 +107,10 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
 
     protected override IReadOnlyList<string> InputPaths(Parameters p) =>
         p.Paths is null ? [] : Array.ConvertAll(p.Paths, x => pathPolicy.Normalize(x));
+
+    // The bands go after the commit when the request says so
+    protected override IReadOnlyList<string> SourcesDeletedAfterCommit(Parameters p) =>
+        p.DeleteSources == true ? InputPaths(p) : [];
 
     protected override IReadOnlyList<string> OutputPaths(Parameters p) =>
         string.IsNullOrWhiteSpace(p.OutputPath) ? [] : [pathPolicy.Normalize(p.OutputPath, "output path")];
@@ -162,12 +170,43 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
             progress.Report(new HeavyToolProgress(-1, "merging",
                 LogChunk: $"Merging {paths.Length} bands → {outputPath}"));
 
-            // NOTE: libddb 2.0 refuses an existing output: the request asked for the replace
+            // NOTE: libddb 2.0 refuses an existing output: the request asked for the replace. Decided BEFORE that delete:
+            // an output the merge replaces is never recorded (FR-XC-27, FR-XC-07), a rollback must not delete the file
+            // that was there (and cannot bring the replaced one back)
             var outputFullPath = ctx.Ddb.GetLocalPath(outputPath);
-            if (File.Exists(outputFullPath))
+            var replacing = (args.Overwrite ?? ctx.QueuedBeforeOverwriteRule) && File.Exists(outputFullPath);
+            if (!replacing && File.Exists(outputFullPath))
+                throw new NameClashException(outputPath);
+            var root = ctx.Ddb.DatasetFolderPath;
+            var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, ct);
+
+            // A new output (and the folders it needs) is in the saved record before it is written (§8.1)
+            if (!replacing)
+            {
+                TaskImportWrites.RecordFolders(writes, root, TaskImportWrites.ParentOf(outputPath));
+                writes.Record(outputPath);
+                await writes.SaveAsync(ct);
+                TaskImportWrites.CreateFolder(root, TaskImportWrites.ParentOf(outputPath));
+            }
+
+            // A cancel that came meanwhile stops here, before the file that was there is deleted
+            ct.ThrowIfCancellationRequested();
+            if (replacing)
                 File.Delete(outputFullPath);
 
+            // Created by another writer while the record was saved: kept, and not the task's
+            if (!replacing && File.Exists(outputFullPath))
+            {
+                await writes.ForgetAsync(outputPath, CancellationToken.None);
+                throw new NameClashException(outputPath);
+            }
+
+            // A failed run keeps the output recorded: a partial file that libddb wrote before it failed is the task's,
+            // and the rollback deletes it (FR-XC-27)
             await Task.Run(() => ctx.Ddb.MergeMultispectral(paths, outputPath), ct);
+
+            if (!replacing)
+                writes.Written(outputPath);
 
             // The very next step after the write: from here a later attempt indexes the output, and no
             // cancellation check stands between the write and the index. NOTE: a process crash between the
@@ -179,7 +218,7 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
         ctx.Ddb.AddRaw(outputPath);
 
         if (args.DeleteSources == true)
-            DeleteSources(ctx.Ddb, paths, outputPath, progress);
+            await DeleteSourcesAsync(ctx, paths, outputPath, progress, ct);
 
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: "Merge complete"));
         return null;
@@ -187,16 +226,18 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
 
     /// <summary>
     /// Deletes the band files (index entry, then file) once the merged output opens as a raster (GDAL): a failed
-    /// open throws and keeps every band. Runs after the output is marked published and indexed, with no cancellation
+    /// open throws and keeps every band (the task is rolled back: the output is deleted). Then the task commits
+    /// (FR-XC-27: from here it is never cancelled nor rolled back, and a cancel that came first refuses the commit, which
+    /// throws before anything is deleted). Runs after the output is marked published and indexed, with no cancellation
     /// check from the first delete on. Each band is found as the dataset names it (letter case ignored, D-040); a band
     /// that is already gone (a retry of an attempt that deleted it) is skipped, and one that cannot be deleted (a locked
     /// file) is logged and left, as the delete of entries does: the merge itself succeeded.
-    /// NOTE: unlike the delete of entries (EntryCommandService), this tells no one that the bands left the dataset
-    /// (EntryChangeNotifier.EntriesLeftAsync: OGC catalog, dataset thumbnail, waits of builds): the notifier is scoped
-    /// and this tool a singleton; the change notification of what a task writes or deletes belongs to FR-XC-27.
+    /// The bands that left the dataset are told to it as a rollback does (<see cref="ITaskWriteRecorder.EntriesLeftAsync"/>).
     /// </summary>
-    private static void DeleteSources(IDDB ddb, string[] paths, string outputPath, IProgress<HeavyToolProgress> progress)
+    private static async Task DeleteSourcesAsync(IHeavyToolExecutionContext ctx, string[] paths, string outputPath,
+        IProgress<HeavyToolProgress> progress, CancellationToken ct)
     {
+        var ddb = ctx.Ddb;
         try
         {
             ddb.GetRasterInfo(outputPath);
@@ -207,7 +248,12 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
                 $"The merged output '{outputPath}' cannot be opened as a raster: the source bands were kept ({ex.Message})", ex);
         }
 
+        // Commits before the first delete: a cancel that came first refuses it (the exception ends the task, which is
+        // rolled back, and the bands are all still there)
+        await ctx.WriteRecord.MarkCommittedAsync(ct);
+
         progress.Report(new HeavyToolProgress(-1, "cleanup", LogChunk: $"Deleting {paths.Length} source bands"));
+        var left = new List<string>();
         foreach (var path in paths)
         {
             // The band as the dataset holds it (indexed, or a file the index no longer lists)
@@ -221,6 +267,7 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
                 var local = ddb.GetLocalPath(band.Path);
                 if (File.Exists(local))
                     File.Delete(local);
+                left.Add(band.Path);
             }
             catch (Exception ex)
             {
@@ -228,6 +275,9 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
                     LogChunk: $"Could not delete source band '{band.Path}': {ex.Message}"));
             }
         }
+
+        if (left.Count > 0)
+            await ctx.WriteRecord.EntriesLeftAsync(ctx.Dataset, left);
     }
 
     private static string[] ReadErrors(JsonElement root)

@@ -80,7 +80,38 @@ public sealed class GuardedHttpDownloader
     /// <param name="password">Optional HTTP basic-auth password.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The probe result.</returns>
-    public async Task<UrlProbeResult> ProbeAsync(Uri url, string? username, string? password, CancellationToken ct)
+    public Task<UrlProbeResult> ProbeAsync(Uri url, string? username, string? password, CancellationToken ct) =>
+        ProbeAsync(url, username, password, requireArchive: false, ct);
+
+    /// <summary>The refusal of a URL whose content is not an archive (FR-UPL-12).</summary>
+    public const string NotAnArchiveMessage = "The file is not a ZIP, TAR, 7z or RAR archive";
+
+    /// <summary>The bytes of the file <see cref="ProbeAsync(Uri,string?,string?,bool,CancellationToken)"/> reads to tell an archive.</summary>
+    internal const int ArchiveProbeBytes = 8;
+
+    /// <summary>
+    /// <see cref="ProbeAsync(Uri,string?,string?,CancellationToken)"/>; with <paramref name="requireArchive"/>, the URL
+    /// must also serve an archive: a page (an HTML content type, or content that starts with markup, such as the
+    /// error or login page of a server) is refused with <see cref="NotAnArchiveMessage"/>. The first
+    /// <see cref="ArchiveProbeBytes"/> bytes are read with a range request, and never more, even when the server
+    /// ignores the range.
+    /// </summary>
+    public async Task<UrlProbeResult> ProbeAsync(Uri url, string? username, string? password, bool requireArchive,
+        CancellationToken ct)
+    {
+        var probe = await ProbeReachableAsync(url, username, password, ct);
+        if (!requireArchive || !probe.Result.Reachable)
+            return probe.Result;
+
+        if (probe.Html || await StartsWithMarkupAsync(url, username, password, ct))
+            return probe.Result with { Reachable = false, Message = NotAnArchiveMessage };
+        return probe.Result;
+    }
+
+    private readonly record struct ReachableProbe(UrlProbeResult Result, bool Html);
+
+    private async Task<ReachableProbe> ProbeReachableAsync(Uri url, string? username, string? password,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(url);
         await _ssrfGuard.AssertAllowedAsync(url.Host, ct);
@@ -92,15 +123,17 @@ public sealed class GuardedHttpDownloader
             ApplyAuth(head, username, password);
             using var headResp = await client.SendAsync(head, HttpCompletionOption.ResponseHeadersRead, ct);
             if (headResp.IsSuccessStatusCode)
-                return Reachable(headResp);
+                return new ReachableProbe(Reachable(headResp), IsHtml(headResp));
 
             // Some servers reject HEAD (405/501). Fall back to a headers-only GET.
             using var get = new HttpRequestMessage(HttpMethod.Get, url);
             ApplyAuth(get, username, password);
             using var getResp = await client.SendAsync(get, HttpCompletionOption.ResponseHeadersRead, ct);
             return getResp.IsSuccessStatusCode
-                ? Reachable(getResp)
-                : new UrlProbeResult(false, $"The URL is not reachable (HTTP {(int)getResp.StatusCode}).", null, null);
+                ? new ReachableProbe(Reachable(getResp), IsHtml(getResp))
+                : new ReachableProbe(
+                    new UrlProbeResult(false, $"The URL is not reachable (HTTP {(int)getResp.StatusCode}).", null, null),
+                    false);
         }
         catch (OperationCanceledException)
         {
@@ -108,8 +141,65 @@ public sealed class GuardedHttpDownloader
         }
         catch (Exception ex)
         {
-            return new UrlProbeResult(false, $"The URL could not be reached: {ex.Message}", null, null);
+            return new ReachableProbe(new UrlProbeResult(false, $"The URL could not be reached: {ex.Message}", null, null),
+                false);
         }
+    }
+
+    private static bool IsHtml(HttpResponseMessage response) =>
+        response.Content.Headers.ContentType?.MediaType is { } type &&
+        (type.Equals("text/html", StringComparison.OrdinalIgnoreCase) ||
+         type.Equals("application/xhtml+xml", StringComparison.OrdinalIgnoreCase));
+
+    // Whether the content starts with markup ('<' after a BOM or blanks): a page, not an archive. A server that does not
+    // answer the ranged GET cannot tell: the download checks the archive again
+    private async Task<bool> StartsWithMarkupAsync(Uri url, string? username, string? password, CancellationToken ct)
+    {
+        try
+        {
+            using var get = new HttpRequestMessage(HttpMethod.Get, url);
+            ApplyAuth(get, username, password);
+            get.Headers.Range = new RangeHeaderValue(0, ArchiveProbeBytes - 1);
+            using var response = await CreateClient().SendAsync(get, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (!response.IsSuccessStatusCode)
+                return false;
+            if (IsHtml(response))
+                return true;
+
+            // Never more than the probe bytes, even when the server ignores the range and sends the whole file
+            var head = new byte[ArchiveProbeBytes];
+            var read = 0;
+            await using (var stream = await response.Content.ReadAsStreamAsync(ct))
+            {
+                int n;
+                while (read < head.Length && (n = await stream.ReadAsync(head.AsMemory(read), ct)) > 0)
+                    read += n;
+            }
+
+            return LooksLikeMarkup(head.AsSpan(0, read));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (HttpRequestException)
+        {
+            return false;
+        }
+    }
+
+    internal static bool LooksLikeMarkup(ReadOnlySpan<byte> head)
+    {
+        if (head.StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF]))
+            head = head[3..];
+        foreach (var b in head)
+        {
+            if (b is 0x20 or 0x09 or 0x0D or 0x0A)
+                continue;
+            return b == (byte)'<';
+        }
+
+        return false;
     }
 
     /// <summary>

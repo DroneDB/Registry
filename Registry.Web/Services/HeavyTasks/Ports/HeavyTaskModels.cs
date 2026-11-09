@@ -20,7 +20,10 @@ public sealed record HeavyTaskQuotaResult(HeavyTaskQuotaCode Code, string? Messa
     public static HeavyTaskQuotaResult Ok { get; } = new(HeavyTaskQuotaCode.Ok);
 }
 
-/// <summary>A request to submit a heavy task, as resolved by the controller.</summary>
+/// <summary>
+/// A request to submit a heavy task, as resolved by the controller. <c>CreatedDataset</c> is the dataset the server created
+/// for the task (an import), which its write record holds from the start (FR-XC-27); never read from the parameters.
+/// </summary>
 public sealed record HeavyTaskSubmitRequest(
     string OrgSlug,
     string DsSlug,
@@ -33,7 +36,8 @@ public sealed record HeavyTaskSubmitRequest(
     ClaimsPrincipal? Caller,
     string? Hash = null,
     string? ParentJobId = null,
-    string? WorkflowExecutionId = null);
+    string? WorkflowExecutionId = null,
+    TaskCreatedDataset? CreatedDataset = null);
 
 /// <summary>Result of a submit (either a freshly enqueued task or a dedup hit).</summary>
 public sealed record HeavyTaskSubmitResult(

@@ -12,10 +12,12 @@ using NUnit.Framework;
 using Registry.Ports.DroneDB;
 using Registry.Ports.Import;
 using Registry.Test.Common;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.Import;
+using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Shouldly;
 
@@ -40,6 +42,7 @@ public sealed class FileUrlImportVolumeTests
     [SetUp]
     public void SetUp()
     {
+        Recorder = new FakeTaskWriteRecorder();
         _dataset = Path.Combine(Path.GetTempPath(), "fileurlimportvolume-fileimport-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_dataset);
     }
@@ -80,6 +83,71 @@ public sealed class FileUrlImportVolumeTests
         (Directory.Exists(Uploads) ? Directory.GetFiles(Uploads) : []).ShouldBeEmpty();
     }
 
+    // FR-XC-27: the file the task creates and the folders it creates for it are in its write record, before they exist;
+    // the stamp is taken from the complete file in the uploads folder, before the move
+    [Test]
+    public async Task Execute_NewFile_RecordsTheFileAndItsNewFolder_StampedBeforeTheMove()
+    {
+        var tool = CreateTool(new PayloadHandler(() => { }));
+        var ctx = Ctx(out _);
+
+        await tool.ExecuteAsync(Request("photos/2026"), ctx, new Progress<HeavyToolProgress>(), CancellationToken.None);
+
+        Recorder.Paths.ShouldBe(["photos/2026/cloud.laz"]);
+        Recorder.Folders.ShouldBe(["photos", "photos/2026"]);
+        Recorder.Stamped.Keys.ShouldBe(["photos/2026/cloud.laz"]);
+        Recorder.Stamped["photos/2026/cloud.laz"].ShouldStartWith(Uploads);
+        Recorder.Flushes.ShouldBeGreaterThan(0, "the record is written before the file is moved");
+    }
+
+    [Test]
+    public async Task Execute_AFolderThatExists_IsNotRecorded()
+    {
+        Directory.CreateDirectory(Path.Combine(_dataset, "photos"));
+        var tool = CreateTool(new PayloadHandler(() => { }));
+
+        await tool.ExecuteAsync(Request("photos"), Ctx(out _), new Progress<HeavyToolProgress>(), CancellationToken.None);
+
+        Recorder.Folders.ShouldBeEmpty();
+        Recorder.Paths.ShouldBe(["photos/cloud.laz"]);
+    }
+
+    // FR-XC-07: a file the request replaces is never recorded: a rollback must not delete what was there
+    [Test]
+    public async Task Execute_OverwriteOfAnExistingFile_ReplacesIt_AndDoesNotRecordIt()
+    {
+        Directory.CreateDirectory(Path.Combine(_dataset, "photos"));
+        File.WriteAllText(Path.Combine(_dataset, "photos", "cloud.laz"), "original");
+        var tool = CreateTool(new PayloadHandler(() => { }));
+
+        await tool.ExecuteAsync(Request("photos", overwrite: true), Ctx(out _), new Progress<HeavyToolProgress>(),
+            CancellationToken.None);
+
+        File.ReadAllBytes(Path.Combine(_dataset, "photos", "cloud.laz")).ShouldBe(Payload);
+        Recorder.Paths.ShouldBeEmpty();
+        Recorder.Folders.ShouldBeEmpty();
+        Recorder.Stamped.ShouldBeEmpty();
+    }
+
+    // A file that appeared since the check of the worker is never replaced (no overwrite was asked), and never recorded
+    [Test]
+    public async Task Execute_AFileThatAppearsBeforeTheMove_IsKept_AndNeverRecorded()
+    {
+        var target = Path.Combine(_dataset, "cloud.laz");
+        var tool = CreateTool(new PayloadHandler(() => File.WriteAllText(target, "somebody else's")));
+
+        await Should.ThrowAsync<NameClashException>(() =>
+            tool.ExecuteAsync(Request(""), Ctx(out _), new Progress<HeavyToolProgress>(), CancellationToken.None));
+
+        File.ReadAllText(target).ShouldBe("somebody else's");
+        Recorder.Paths.ShouldBeEmpty();
+        Recorder.Forgotten.ShouldBeEmpty();
+        Directory.GetFiles(Uploads).ShouldBeEmpty();
+    }
+
+    [Test]
+    public void DeclaresThatItAddsDatasetFiles() => CreateTool(new PayloadHandler(() => { })).AddsDatasetFiles.ShouldBeTrue();
+
     private static FileUrlImportTool CreateTool(HttpMessageHandler handler)
     {
         var settings = new ImportSettings { SsrfAllowPrivateNetworks = true };
@@ -96,6 +164,8 @@ public sealed class FileUrlImportVolumeTests
             Support.TestJobs.FileIndexer(), TestSettings.Options<ImportSettings>(options), TestSettings.Options<ProcessingPlatformSettings>(options), TestPaths.Policy, TestScratch.Provider);
     }
 
+    private FakeTaskWriteRecorder Recorder { get; set; } = new();
+
     private IHeavyToolExecutionContext Ctx(out Mock<IDDB> ddb)
     {
         ddb = new Mock<IDDB>();
@@ -109,14 +179,16 @@ public sealed class FileUrlImportVolumeTests
         var ctx = new Mock<IHeavyToolExecutionContext>();
         ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
         ctx.SetupGet(c => c.TaskId).Returns("task-1");
+        ctx.SetupGet(c => c.Dataset).Returns(new DatasetKey("org", Guid.NewGuid()));
+        ctx.SetupGet(c => c.WriteRecord).Returns(Recorder);
         ctx.SetupGet(c => c.BuildQueue).Returns(Support.TestJobs.Scheduler());
         return ctx.Object;
     }
 
-    private static HeavyToolRequest Request(string folder) => new("import-file", "1", "org", "ds", null,
+    private static HeavyToolRequest Request(string folder, bool overwrite = false) => new("import-file", "1", "org", "ds", null,
         JsonSerializer.SerializeToElement(new
         {
-            url = "http://download.test/cloud.laz", fileName = "cloud.laz", folder, overwrite = false
+            url = "http://download.test/cloud.laz", fileName = "cloud.laz", folder, overwrite
         }));
 
     // Serves the payload; onBodyRead runs after the client read the whole body (the file is still partial)

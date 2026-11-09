@@ -49,6 +49,12 @@ public static class StartupTaskOrder
     /// </summary>
     public const int InstanceIdentity = 250;
 
+    /// <summary>
+    /// The rollback sweep of the ended tasks (every host that runs tasks, FR-XC-27): after the database and the caches,
+    /// before the Hangfire servers start.
+    /// </summary>
+    public const int TaskRollbacks = 275;
+
     /// <summary>Recurring job definitions (every host with the job storage), before the Hangfire servers start.</summary>
     public const int RecurringJobs = 300;
 }

@@ -14,6 +14,7 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Test.Support;
 using Registry.Web.Services.Import;
 using Registry.Web.Utilities;
 using Shouldly;
@@ -163,7 +164,7 @@ public class RegistryImportSourceUrlTests
         var factory = new Mock<IHttpClientFactory>();
         factory.Setup(f => f.CreateClient(It.IsAny<string>()))
             .Returns(() => new HttpClient(new HtmlHandler()));
-        var client = new RemoteRegistryClient(factory.Object, new ImportSettings(), null!,
+        var client = new RemoteRegistryClient(factory.Object, new ImportSettings(), null!, TestScratch.Provider,
             NullLogger<RemoteRegistryClient>.Instance);
 
         var ex = await Should.ThrowAsync<BadRequestException>(() =>

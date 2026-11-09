@@ -17,7 +17,9 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Import;
+using Registry.Web.Services.Ports;
 using Registry.Web.Services.RemoteImport;
 using Registry.Web.Test.Support;
 using Registry.Web.Utilities;
@@ -165,13 +167,16 @@ public class ReservedPathCallSitesTests
         factory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(() => ClientFor(handler));
 
         var client = new RemoteRegistryClient(factory.Object, new ImportSettings(),
-            TestPaths.Policy,
+            TestPaths.Policy, TestScratch.Provider,
             NullLogger<RemoteRegistryClient>.Instance);
 
         var entries = paths.Select(p => new EntryDto { Path = p, Type = EntryType.Image, Size = 4 }).ToArray();
+        var root = Path.Combine(_root, "dataset");
+        var writes = await TaskImportWrites.StartAsync(new FakeTaskWriteRecorder(),
+            new DatasetKey("org", Guid.NewGuid()), root, CancellationToken.None);
 
         await client.DownloadFilesParallelAsync("http://remote.test", null, "src", "ds",
-            Path.Combine(_root, "dataset"), entries, null, CancellationToken.None);
+            root, entries, writes, null, CancellationToken.None);
     }
 
     private async Task<ImportResultDto> ImportWithRemoteImporterAsync(RegistryContext context,

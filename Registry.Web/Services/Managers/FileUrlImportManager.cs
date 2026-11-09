@@ -115,7 +115,7 @@ public class FileUrlImportManager
         var toolParams = BuildToolParams(uri, fileName, folder, request);
 
         var result = await _submitter.SubmitAsync(orgSlug, ds.Slug, "import-file", "1", fileName, toolParams,
-            force: false, ct);
+            force: false, ct: ct);
 
         return new UrlImportResultDto { TaskId = result.TaskId };
     }

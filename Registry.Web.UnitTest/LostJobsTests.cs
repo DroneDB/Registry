@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -18,6 +19,7 @@ using Registry.Web.Hosting;
 using Registry.Web.Identity.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Caching;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.PlatformTasks;
 using Registry.Web.Services.Ports;
@@ -66,6 +68,19 @@ public class LostJobsSweepTests
         var row = _env.Row("34")!;
         row.CurrentState.ShouldBe("Deleted");
         row.DeletedAtUtc.ShouldNotBeNull();
+    }
+
+    [Test]
+    public async Task ALostTask_IsRolledBack()
+    {
+        _env.SeedRow("34", Before, "Processing");
+        var rollback = new Mock<ITaskRollback>();
+        var service = new JobIndexSyncService(new JobIndexQuery(_env.Db), _env.Writer, GuidStorage(),
+            NullLogger<JobIndexSyncService>.Instance, rollback.Object);
+
+        (await service.CloseLostAsync(Started)).ShouldBe(1);
+
+        rollback.Verify(r => r.RollBackAsync("34", null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -161,7 +176,11 @@ public class CancelTaskTests : IDisposable
     private RegistryContext _db = null!;
 
     [SetUp]
-    public void SetUp() => _db = TestDb.CreateContext<RegistryContext>();
+    public void SetUp()
+    {
+        _db = TestDb.CreateContext<RegistryContext>();
+        _rollback = new Mock<ITaskRollback>();
+    }
 
     [TearDown]
     public void Dispose()
@@ -170,7 +189,10 @@ public class CancelTaskTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private TaskLifecycle Lifecycle(JobStorage storage)
+    private TaskLifecycle Lifecycle(JobStorage storage) =>
+        Lifecycle(new BackgroundJobsProcessor(new BackgroundJobClient(storage), NullIndexedEnqueuer.Create(), storage));
+
+    private TaskLifecycle Lifecycle(IBackgroundJobsProcessor processor)
     {
         var authManager = new Mock<IAuthManager>();
         authManager.Setup(x => x.RequestAccess<Dataset>(It.IsAny<Dataset>(), It.IsAny<AccessType>())).ReturnsAsync(true);
@@ -186,19 +208,22 @@ public class CancelTaskTests : IDisposable
 
         var access = new DatasetAccessResolver(utils.Object, authManager.Object, ddbManager.Object, TestPaths.Policy);
         var authorizer = new TaskAuthorizer(access, new JobIndexQuery(_db), authManager.Object);
-        var processor = new BackgroundJobsProcessor(new BackgroundJobClient(storage), NullIndexedEnqueuer.Create(), storage);
         var writer = new JobIndexWriter(_db, NullLogger<JobIndexWriter>.Instance, new Mock<IRecordCache>().Object);
         var artifacts = new TaskArtifactStore(new Registry.Adapters.FileSystem(), TestScratch.Provider,
             NullLogger<TaskArtifactStore>.Instance);
-        return new TaskLifecycle(access, authorizer, processor, writer, artifacts, NullLogger<TaskLifecycle>.Instance);
+        return new TaskLifecycle(access, authorizer, processor, writer, artifacts,
+            new TaskWriteRecordStore(_db, new Mock<IRecordCache>().Object, NullLogger<TaskWriteRecordStore>.Instance),
+            _rollback.Object, NullLogger<TaskLifecycle>.Instance);
     }
 
-    private void Seed(string jobId, string state)
+    private Mock<ITaskRollback> _rollback = new();
+
+    private void Seed(string jobId, string state, string? writeRecord = null)
     {
         _db.JobIndices.Add(new JobIndex
         {
             JobId = jobId, OrgSlug = Org, DsSlug = Ds, ToolId = "build", ToolVersion = "1", CurrentState = state,
-            CreatedAtUtc = DateTime.UtcNow, LastStateChangeUtc = DateTime.UtcNow
+            CreatedAtUtc = DateTime.UtcNow, LastStateChangeUtc = DateTime.UtcNow, WriteRecordJson = writeRecord
         });
         _db.SaveChanges();
     }
@@ -210,6 +235,16 @@ public class CancelTaskTests : IDisposable
     }
 
     private static InMemoryStorage GuidStorage() => new(RegistryJobsServiceCollectionExtensions.InMemoryStorageOptions);
+
+    /// <summary>The state of a job a worker took (Hangfire's own ProcessingState cannot be made outside it).</summary>
+    private sealed class RunningState : IState
+    {
+        public string Name => ProcessingState.StateName;
+        public string Reason => "test";
+        public bool IsFinal => false;
+        public bool IgnoreJobLoadException => false;
+        public Dictionary<string, string> SerializeData() => [];
+    }
 
     [Test]
     public async Task QueuedTaskWithItsJob_DeletesTheJob()
@@ -245,6 +280,120 @@ public class CancelTaskTests : IDisposable
         (await Lifecycle(new InMemoryStorage()).CancelAsync(Org, Ds, "34")).ShouldBeTrue();
 
         Row("34").CurrentState.ShouldBe("Deleted");
+    }
+
+    [Test]
+    public async Task AQueuedTask_IsRolledBackAtOnce_AfterItsCancelIsRecorded()
+    {
+        var storage = GuidStorage();
+        var id = new BackgroundJobClient(storage).Create(PublicationEnv.NewJob(), new EnqueuedState());
+        Seed(id, "Enqueued", new TaskWriteRecord().ToJson());
+
+        (await Lifecycle(storage).CancelAsync(Org, Ds, id)).ShouldBeTrue();
+
+        TaskWriteRecord.Parse(Row(id).WriteRecordJson)!.State.ShouldBe(TaskWriteState.CancelRequested);
+        _rollback.Verify(r => r.RollBackAsync(id, null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task ARunningTask_IsRolledBackByItsWorker_NotByTheCancel()
+    {
+        var storage = GuidStorage();
+        var client = new BackgroundJobClient(storage);
+        var id = client.Create(PublicationEnv.NewJob(), new EnqueuedState());
+        client.ChangeState(id, new RunningState(), EnqueuedState.StateName).ShouldBeTrue();
+        Seed(id, "Processing", new TaskWriteRecord().ToJson());
+
+        (await Lifecycle(storage).CancelAsync(Org, Ds, id)).ShouldBeTrue();
+
+        using (var connection = storage.GetConnection())
+            connection.GetStateData(id)!.Name.ShouldBe(DeletedState.StateName);
+        TaskWriteRecord.Parse(Row(id).WriteRecordJson)!.State.ShouldBe(TaskWriteState.CancelRequested);
+        _rollback.Verify(r => r.RollBackAsync(It.IsAny<string>(), It.IsAny<IReadOnlyCollection<PendingWrite>?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task ATaskWhoseJobWasLost_IsRolledBack()
+    {
+        Seed("34", "Processing", new TaskWriteRecord().ToJson());
+
+        (await Lifecycle(GuidStorage()).CancelAsync(Org, Ds, "34")).ShouldBeTrue();
+
+        _rollback.Verify(r => r.RollBackAsync("34", null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task ACommittedTask_IsABadRequest_AndKeepsRunning()
+    {
+        var storage = GuidStorage();
+        var client = new BackgroundJobClient(storage);
+        var id = client.Create(PublicationEnv.NewJob(), new EnqueuedState());
+        client.ChangeState(id, new RunningState(), EnqueuedState.StateName).ShouldBeTrue();
+        Seed(id, "Processing", new TaskWriteRecord { State = TaskWriteState.Committed }.ToJson());
+
+        var ex = await Should.ThrowAsync<BadRequestException>(() => Lifecycle(storage).CancelAsync(Org, Ds, id));
+
+        ex.Message.ShouldBe(TaskLifecycle.CommittedMessage);
+        using (var connection = storage.GetConnection())
+            connection.GetStateData(id)!.Name.ShouldBe(ProcessingState.StateName);
+        Row(id).CurrentState.ShouldBe("Processing");
+    }
+
+    [Test]
+    public async Task TheCancel_TriesTheStatesBeforeAWorker_InTheOrderAJobGoesThrough_TwiceThenProcessing()
+    {
+        Seed("7", "Enqueued", new TaskWriteRecord().ToJson());
+        var tried = new List<string>();
+        var processor = new Mock<IBackgroundJobsProcessor>();
+        processor.Setup(p => p.Delete("7", It.IsAny<string>()))
+            .Callback<string, string>((_, state) => tried.Add(state))
+            .Returns<string, string>((_, state) => state == ProcessingState.StateName);
+
+        (await Lifecycle(processor.Object).CancelAsync(Org, Ds, "7")).ShouldBeTrue();
+
+        string[] once = [IndexingState.StateName, AwaitingState.StateName, ScheduledState.StateName,
+            EnqueuedState.StateName];
+        tried.ShouldBe([.. once, .. once, ProcessingState.StateName]);
+        processor.Verify(p => p.Delete(It.IsAny<string>()), Times.Never);
+        // Running: its worker rolls it back
+        _rollback.Verify(r => r.RollBackAsync(It.IsAny<string>(), It.IsAny<IReadOnlyCollection<PendingWrite>?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task AJobThatMovedOnWhileTheStatesWereTried_IsFoundInTheSecondPass_AndRolledBack()
+    {
+        Seed("7", "Scheduled", new TaskWriteRecord().ToJson());
+        var enqueuedTries = 0;
+        var processor = new Mock<IBackgroundJobsProcessor>();
+        processor.Setup(p => p.Delete("7", It.IsAny<string>()))
+            .Returns<string, string>((_, state) => state == EnqueuedState.StateName && ++enqueuedTries == 2);
+
+        (await Lifecycle(processor.Object).CancelAsync(Org, Ds, "7")).ShouldBeTrue();
+
+        processor.Verify(p => p.Delete("7", ProcessingState.StateName), Times.Never);
+        _rollback.Verify(r => r.RollBackAsync("7", null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task ATaskWhoseJobEndedMeanwhile_KeepsItsEnd()
+    {
+        var storage = GuidStorage();
+        var client = new BackgroundJobClient(storage);
+        var id = client.Create(PublicationEnv.NewJob(), new EnqueuedState());
+        client.ChangeState(id, new RunningState(), EnqueuedState.StateName).ShouldBeTrue();
+        client.ChangeState(id, new SucceededState(null, 1, 1), ProcessingState.StateName).ShouldBeTrue();
+        // The row has not seen the end yet
+        Seed(id, "Processing", new TaskWriteRecord().ToJson());
+
+        (await Lifecycle(storage).CancelAsync(Org, Ds, id)).ShouldBeFalse();
+
+        using (var connection = storage.GetConnection())
+            connection.GetStateData(id)!.Name.ShouldBe(SucceededState.StateName);
+        Row(id).CurrentState.ShouldBe("Processing");
+        _rollback.Verify(r => r.RollBackAsync(It.IsAny<string>(), It.IsAny<IReadOnlyCollection<PendingWrite>?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [TestCase("Succeeded")]

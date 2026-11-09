@@ -11,4 +11,7 @@ public static class HeavyToolIds
 
     /// <summary>Index rescan tool.</summary>
     public const string RescanIndex = "rescan-index";
+
+    /// <summary>Dataset import tool: <c>ImportManager</c> creates the dataset it fills.</summary>
+    public const string ImportDataset = "import-dataset";
 }

@@ -37,6 +37,14 @@ public interface IHeavyTool
     bool RunsNativeBuild => false;
 
     /// <summary>
+    /// Whether the tool adds files to a dataset (FR-XC-26): photogrammetry, the imports, archive extract, Merge, Align and
+    /// Mask. Such a tool records what it creates in the task's write record
+    /// (<see cref="Models.IHeavyToolExecutionContext.WriteRecord"/>), and a cancelled, failed or lost task deletes it
+    /// (FR-XC-27, D-045). False by default.
+    /// </summary>
+    bool AddsDatasetFiles => false;
+
+    /// <summary>
     /// Default file extension (without the leading dot) of the produced artifact, or
     /// null when the tool produces none. Authoritative source for client result naming.
     /// </summary>
@@ -51,6 +59,14 @@ public interface IHeavyTool
     /// </summary>
     /// <returns>The input paths; empty by default.</returns>
     IReadOnlyList<string> InputPaths(HeavyToolRequest request) => [];
+
+    /// <summary>
+    /// The dataset files the task deletes after it commits its output (FR-XC-27, FR-PRC-02: Merge with "Delete source
+    /// files", archive extract with "Delete archive"), normalized: a task that a restart lost after its commit does not
+    /// run again, and its error names those that remain. Invalid parameters may throw.
+    /// </summary>
+    /// <returns>The sources deleted after the commit; empty by default.</returns>
+    IReadOnlyList<string> SourcesDeletedAfterCommit(HeavyToolRequest request) => [];
 
     /// <summary>
     /// The dataset files the task writes, normalized; compared as whole paths without regard to case (FR-XC-25, D-013, D-040): the task record

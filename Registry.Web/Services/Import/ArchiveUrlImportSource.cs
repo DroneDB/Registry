@@ -2,9 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,7 +23,6 @@ namespace Registry.Web.Services.Import;
 public sealed class ArchiveUrlImportSource : IImportSource
 {
     private readonly IArchiveExtractor _extractor;
-    private readonly IHttpClientFactory _httpClientFactory;
     private readonly GuardedHttpDownloader _downloader;
     private readonly ImportSettings _settings;
     private readonly long _maxImportSizeBytes;
@@ -38,20 +34,17 @@ public sealed class ArchiveUrlImportSource : IImportSource
     /// Initializes a new instance of the <see cref="ArchiveUrlImportSource"/> class.
     /// </summary>
     /// <param name="extractor">The archive extractor.</param>
-    /// <param name="httpClientFactory">The HTTP client factory.</param>
     /// <param name="downloader">The SSRF-hardened, disk- and speed-guarded single-file downloader (it also pre-validates the host).</param>
     /// <param name="importSettings">The import settings.</param>
     /// <param name="platformSettings">The processing platform settings (size cap, disk safety margin).</param>
     /// <param name="archives">The shared extraction into a dataset (path rule, budget, rollback).</param>
     /// <param name="scratch">Where the downloaded archive is written (the configured temp folder).</param>
-    public ArchiveUrlImportSource(IArchiveExtractor extractor,
-        IHttpClientFactory httpClientFactory, GuardedHttpDownloader downloader,
+    public ArchiveUrlImportSource(IArchiveExtractor extractor, GuardedHttpDownloader downloader,
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings, DatasetArchiveExtractor archives, ScratchFileProvider scratch)
     {
         _archives = archives;
         _scratch = scratch;
         _extractor = extractor;
-        _httpClientFactory = httpClientFactory;
         _downloader = downloader;
         _settings = importSettings.Value;
         _maxImportSizeBytes = _settings.MaxImportSizeBytes;
@@ -59,48 +52,33 @@ public sealed class ArchiveUrlImportSource : IImportSource
             platformSettings.Value.DiskSafetyMarginBytes;
     }
 
-    // Outbound calls go through the SSRF-hardened client (connect-time IP validation + redirect
-    // guard); the host is also pre-validated by SsrfGuard before probe/fetch.
-    private HttpClient CreateClient() => _httpClientFactory.CreateClient(SsrfHttpHandler.HttpClientName);
-
     /// <inheritdoc />
     public string SourceType => "archive-url";
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The probe of the downloader (HEAD, then a GET for a server that refuses HEAD), which also reads the first bytes
+    /// and refuses a page that is not an archive (an HTML error or login page) before anything is queued.
+    /// </remarks>
     public async Task<ImportSourceProbe> ProbeAsync(JsonElement parameters, CancellationToken ct)
     {
         var p = ReadParams(parameters);
-        await _downloader.AssertHostAllowedAsync(p.Host, ct);
-
-        var client = CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Head, p.Url);
-        ApplyAuth(request, p);
-
-        long? size = null;
-        try
-        {
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-            if (!response.IsSuccessStatusCode)
-                return new ImportSourceProbe(false, $"The URL is not reachable (HTTP {(int)response.StatusCode}).",
-                    null, null, p.SuggestedName);
-            size = response.Content.Headers.ContentLength;
-        }
-        catch (Exception ex)
-        {
-            return new ImportSourceProbe(false, $"The URL could not be reached: {ex.Message}", null, null,
-                p.SuggestedName);
-        }
+        var probe = await _downloader.ProbeAsync(new Uri(p.Url),
+            string.IsNullOrWhiteSpace(p.Username) ? null : p.Username,
+            string.IsNullOrWhiteSpace(p.Password) ? null : p.Password, requireArchive: true, ct);
+        if (!probe.Reachable)
+            return new ImportSourceProbe(false, probe.Message, null, null, p.SuggestedName);
 
         // EstimatedBytes is the COMPRESSED size (Content-Length); the uncompressed footprint is unknown
         // until extraction, so it is only a lower bound for the storage check.
         return new ImportSourceProbe(true,
             "Estimated size is the compressed archive size; the extracted dataset may be larger.",
-            size, null, p.SuggestedName);
+            probe.SizeBytes, null, p.SuggestedName);
     }
 
     /// <inheritdoc />
-    public async Task FetchAsync(JsonElement parameters, string destFolder, IProgress<ImportProgress> progress,
-        CancellationToken ct)
+    public async Task FetchAsync(JsonElement parameters, string destFolder, IImportWriteRecord writes,
+        IProgress<ImportProgress> progress, CancellationToken ct)
     {
         var p = ReadParams(parameters);
         await _downloader.AssertHostAllowedAsync(p.Host, ct);
@@ -121,7 +99,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
                 "The downloaded file is not a valid or supported archive.");
 
         // _extractor.Open throws on a truly unsupported/corrupt archive (surfaced as a task failure).
-        await ExtractIntoAsync(scratch.Path, destFolder, progress, ct);
+        await ExtractIntoAsync(scratch.Path, destFolder, writes, progress, ct);
     }
 
     private async Task DownloadToFileAsync(ArchiveParams p, string scratch, IProgress<ImportProgress> progress,
@@ -155,14 +133,15 @@ public sealed class ArchiveUrlImportSource : IImportSource
     // The shared extractor, into the dataset root: the path rule decides every entry (an unsafe name
     // fails the import, a reserved one is skipped), the budget every chunk (MaxImportSizeBytes, then
     // the disk head-room with libddb's floor; the outer ImportDatasetTool sink still enforces the
-    // per-user quota). Files are overwritten (an interrupted import is run again from the start), and
-    // a failed import leaves the dataset as it was.
-    private async Task ExtractIntoAsync(string scratch, string destFolder, IProgress<ImportProgress> progress,
-        CancellationToken ct)
+    // per-user quota). A file that is not the task's is kept (the entry is skipped), every file and folder
+    // created is recorded in the task's write record first (FR-XC-27), and a failed import leaves the
+    // dataset as it was.
+    private async Task ExtractIntoAsync(string scratch, string destFolder, IImportWriteRecord writes,
+        IProgress<ImportProgress> progress, CancellationToken ct)
     {
         await _archives.ExtractAsync(
-            new ArchiveExtractionRequest(scratch, destFolder, string.Empty, _settings.IsExtensionAllowed, _ => false,
-                _maxImportSizeBytes, _diskSafetyMarginBytes),
+            new ArchiveExtractionRequest(scratch, destFolder, string.Empty, _settings.IsExtensionAllowed,
+                target => !writes.MayWrite(target), _maxImportSizeBytes, _diskSafetyMarginBytes, writes),
             new CallbackProgress<ArchiveExtractionProgress>(p =>
             {
                 if (p.Done == 0) return;
@@ -174,13 +153,6 @@ public sealed class ArchiveUrlImportSource : IImportSource
                     FilesDone: p.Done,
                     FilesTotal: p.Total > 0 ? p.Total : null));
             }), ct);
-    }
-
-    private static void ApplyAuth(HttpRequestMessage request, ArchiveParams p)
-    {
-        if (string.IsNullOrWhiteSpace(p.Username)) return;
-        var raw = Encoding.UTF8.GetBytes($"{p.Username}:{p.Password}");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(raw));
     }
 
     private ArchiveParams ReadParams(JsonElement parameters)

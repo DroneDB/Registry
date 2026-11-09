@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
@@ -6,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
 using Hangfire.Server;
+using Hangfire.States;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -70,21 +73,32 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         var indexWriter = sp.GetRequiredService<IJobIndexWriter>();
 
         // A task that cannot even start (its tool gone, its request unreadable, its dataset deleted) failed too: it
-        // records why, as one that fails while it runs does
+        // records why, as one that fails while it runs does, and what was created for it (a dataset, at submit) goes
         Prepared prepared;
         try
         {
             prepared = await PrepareAsync(toolId, toolVersion, requestJson, ctx, sp, taskId, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        catch (Exception ex)
         {
-            _log.LogWarning(ex, "Task {TaskId} ({ToolId}) could not start", taskId, toolId);
-            if (!WillRetry(ex, ctx))
-                await RecordErrorAsync(indexWriter, taskId, ex, JobLogText.UserMessage(ex, null));
+            var cancelled = ex is OperationCanceledException && cancellationToken.IsCancellationRequested;
+            var final = false;
+            if (!cancelled)
+            {
+                _log.LogWarning(ex, "Task {TaskId} ({ToolId}) could not start", taskId, toolId);
+                final = !WillRetry(ex, ctx);
+                if (final)
+                    await RecordErrorAsync(indexWriter, taskId, ex, JobLogText.UserMessage(ex, null));
+            }
+
+            // A tool that adds no dataset files has no record; an unknown tool may (a dataset created for it)
+            if (_registry.Resolve(toolId, toolVersion) is not { AddsDatasetFiles: false })
+                await EndWriteRecordAsync(sp, taskId, null, final, cancellationToken);
             throw;
         }
 
-        var (tool, request, workDir, ddb, execCtx) = prepared;
+        var (tool, request, workDir, ddb, execCtx, recorder) = prepared;
+        using var ownedRecorder = recorder;
         var processor = sp.GetRequiredService<IBackgroundJobsProcessor>();
         var logBuffer = new LogRingBuffer(_settings.LogTailMaxLines, _settings.LogTailMaxBytes);
         await using var progress = new HangfireProgressSink(ctx, _scopeFactory, logBuffer, taskId,
@@ -93,13 +107,32 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         // The work folder has one owner from here: kept with its TTL delete when the tool produced an
         // artifact, deleted on every other outcome
         var keepWorkDir = false;
+        // A failure that ends the task (not retried): what it wrote is rolled back (FR-XC-27)
+        var failedForGood = false;
         try
         {
+            if (recorder.Enabled)
+                await StartAttemptAsync(sp, taskId, ctx, tool, request, ddb, cancellationToken);
+
             if (workDir is not null)
                 _workDirs.Create(workDir);
 
             await tool.ValidateAsync(request, execCtx, cancellationToken);
-            var artifact = await tool.ExecuteAsync(request, execCtx, progress, cancellationToken);
+            HeavyToolArtifact? artifact;
+            try
+            {
+                artifact = await tool.ExecuteAsync(request, execCtx, progress, cancellationToken);
+                if (recorder.Enabled)
+                    await CommitAsync(sp, taskId, recorder, cancellationToken);
+            }
+            catch (TaskWriteRecordClosedException) when (recorder.Enabled)
+            {
+                // A commit (the wrapper's or the tool's own, before it deletes its sources) or a write refused by a
+                // cancel request or a rollback: the cancel's, before it deleted the job
+                EndCancelledRun(sp, taskId);
+                throw;
+            }
+
             await progress.CompleteAsync();
 
             if (artifact is not null)
@@ -120,6 +153,15 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
             await progress.CompleteAsync();
             throw;
         }
+        catch (Exception ex) when (recorder.Enabled && JobDeleted(sp, taskId))
+        {
+            // The user cancelled the task (its job is deleted) and it stopped with another exception than a
+            // cancellation: its commit or a write was refused by the cancel or its rollback. A cancel, not a failure:
+            // no error is recorded, and the end of its write record rolls it back
+            _log.LogInformation(ex, "Task {TaskId} ({ToolId}) stopped after it was cancelled", taskId, toolId);
+            await progress.CompleteAsync();
+            throw;
+        }
         catch (Exception ex)
         {
             // The whole exception, with its stack, for the administrator; the task keeps the message a reader of the
@@ -133,19 +175,160 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
             logBuffer.Append(retried ? $"Retrying: {message}" : $"Failed: {message}", retried ? "warn" : "error");
             await progress.CompleteAsync();
             if (!retried)
+            {
+                failedForGood = true;
                 await RecordErrorAsync(indexWriter, taskId, ex, message);
+            }
+
             throw;
         }
         finally
         {
             if (!keepWorkDir)
                 _workDirs.Delete(workDir);
+            if (recorder.Enabled)
+                await EndWriteRecordAsync(sp, taskId, recorder, failedForGood, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// The attempt rule of the write record (<see cref="ITaskRollback.StartAttemptAsync"/>): what a lost run of this
+    /// attempt wrote goes before the attempt writes; a task lost after it committed does not run again, and fails with
+    /// the sources it was to delete after its commit that remain (FR-XC-27).
+    /// </summary>
+    private async Task StartAttemptAsync(IServiceProvider sp, string taskId, PerformContext ctx, IHeavyTool tool,
+        HeavyToolRequest request, IDDB ddb, CancellationToken ct)
+    {
+        var start = await sp.GetRequiredService<ITaskRollback>().StartAttemptAsync(taskId, RetryCountOf(ctx), ct);
+        if (start == TaskAttemptStart.LostRunRolledBack)
+            _log.LogWarning("Task {TaskId} runs again after a run that was lost: what that run wrote was deleted", taskId);
+        else if (start == TaskAttemptStart.CommittedLost)
+            throw CommittedLost(taskId, tool, request, ddb);
+    }
+
+    // The sources the tool deletes after its commit that are still in the dataset folder (an indexed entry whose file
+    // is gone was deleted: the tools remove the entry, then the file)
+    private TaskCommittedLostException CommittedLost(string taskId, IHeavyTool tool, HeavyToolRequest request, IDDB ddb)
+    {
+        IReadOnlyList<string> sources;
+        try
+        {
+            sources = tool.SourcesDeletedAfterCommit(request);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Cannot read the sources task {TaskId} deletes after its commit", taskId);
+            return new TaskCommittedLostException();
+        }
+
+        return TaskCommittedLostException.For(sources, path =>
+        {
+            try
+            {
+                return File.Exists(ddb.GetLocalPath(path));
+            }
+            catch (Exception ex)
+            {
+                _log.LogDebug(ex, "Cannot tell whether source '{Path}' of task {TaskId} remains", path, taskId);
+                return true;
+            }
+        });
+    }
+
+    // The task did all its work: the buffered records are written, and the record is committed, so a cancel that
+    // comes now is refused and nothing rolls the task back. A cancel requested before (or a rollback that claimed the
+    // record) refuses the commit: the task ends there as cancelled (its job is deleted, EndCancelledRun), with no error
+    // and no retry, and is rolled back
+    private async Task CommitAsync(IServiceProvider sp, string taskId, TaskWriteRecorder recorder,
+        CancellationToken ct)
+    {
+        await recorder.FlushAsync(ct);
+        if (await sp.GetRequiredService<ITaskWriteRecordStore>().MarkCommittedAsync(taskId, CancellationToken.None,
+                recorder.CommittedSources))
+            return;
+
+        _log.LogInformation("Task {TaskId} finished after a cancel request: it is not committed, and is rolled back",
+            taskId);
+        throw TaskWriteRecordClosedException.Cancelled(taskId);
+    }
+
+    // The record refused the run (a cancel request came between the cancel's record change and its delete of the job,
+    // or a rollback claimed it): the job is deleted from Processing here, so that the run ends as the cancel it is
+    // (Deleted, no error, no Retry) rather than as a failure. A job that left Processing meanwhile keeps its state
+    private void EndCancelledRun(IServiceProvider sp, string taskId)
+    {
+        try
+        {
+            if (sp.GetRequiredService<IBackgroundJobsProcessor>().Delete(taskId, ProcessingState.StateName))
+                _log.LogInformation("Task {TaskId} was cancelled while it finished: its job is deleted", taskId);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Cannot delete the job of the cancelled task {TaskId}", taskId);
+        }
+    }
+
+    /// <summary>
+    /// The end of a task's write record. The task is rolled back (FR-XC-27) when the user cancelled it (its job is
+    /// Deleted: the Hangfire state is read, since the token also fires when the server stops) or when it failed for
+    /// good; never when the server stops, nor before an automatic retry: then the records still buffered are written,
+    /// for the retry or for the attempt rule of the next run. Never throws: the outcome of the job is its own.
+    /// </summary>
+    private async Task EndWriteRecordAsync(IServiceProvider sp, string taskId, TaskWriteRecorder? recorder,
+        bool failedForGood, CancellationToken jobToken)
+    {
+        try
+        {
+            var deleted = JobDeleted(sp, taskId);
+            var stopping = jobToken.IsCancellationRequested && !deleted;
+            if (deleted || (failedForGood && !stopping))
+            {
+                await sp.GetRequiredService<ITaskRollback>().RollBackAsync(taskId, recorder?.Pending,
+                    CancellationToken.None);
+                return;
+            }
+
+            if (recorder != null)
+                await recorder.FlushAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Cannot end the write record of task {TaskId}: the startup sweep or its next run rolls it back",
+                taskId);
+        }
+    }
+
+    // Whether the user deleted (cancelled) the job; a storage that cannot tell is taken as no
+    private bool JobDeleted(IServiceProvider sp, string taskId)
+    {
+        try
+        {
+            return sp.GetRequiredService<IBackgroundJobsProcessor>().GetJobStatus(taskId) == JobStatus.Deleted;
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "Cannot read the job state of task {TaskId}", taskId);
+            return false;
+        }
+    }
+
+    // Hangfire's retry count of this attempt (0 on the first; unreadable: 0)
+    private int RetryCountOf(PerformContext ctx)
+    {
+        try
+        {
+            return ctx.GetJobParameter<int>("RetryCount");
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "Cannot read the retry count of task {TaskId}", ctx.BackgroundJob.Id);
+            return 0;
         }
     }
 
     /// <summary>What a task needs to run, resolved before its work folder exists.</summary>
     private sealed record Prepared(IHeavyTool Tool, HeavyToolRequest Request, string? WorkDir, IDDB Ddb,
-        HeavyToolExecutionContext ExecCtx);
+        HeavyToolExecutionContext ExecCtx, TaskWriteRecorder Recorder);
 
     private async Task<Prepared> PrepareAsync(string toolId, string toolVersion, string requestJson, PerformContext ctx,
         IServiceProvider sp, string taskId, CancellationToken cancellationToken)
@@ -170,11 +353,33 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
                  ?? throw new InvalidOperationException(
                      $"Dataset '{request.OrgSlug}/{request.DsSlug}' not found for task {taskId}.");
         var ddb = ddbManager.Get(request.OrgSlug, ds.InternalRef);
+        var dataset = new DatasetKey(request.OrgSlug, ds.InternalRef);
 
-        var execCtx = new HeavyToolExecutionContext(ddb, new DatasetKey(request.OrgSlug, ds.InternalRef), _log,
+        // Only a tool that adds dataset files records them (FR-XC-27); the sources it deletes after its commit are
+        // written with the commit, for a task lost after it (TaskRollback.CommittedLostAsync)
+        var recorder = tool.AddsDatasetFiles
+            ? TaskWriteRecorder.For(sp.GetRequiredService<ITaskWriteRecordStore>(), taskId, dataset, tool.Id,
+                sp.GetRequiredService<TaskEntryChanges>(), SourcesAfterCommit(tool, request, taskId))
+            : TaskWriteRecorder.Disabled(taskId, dataset, tool.Id);
+
+        var execCtx = new HeavyToolExecutionContext(ddb, dataset, _log,
             new TaskRun(taskId, workDir), ctx, sp.GetRequiredService<BuildScheduler>(), builds,
-            await QueuedBeforeOverwriteRuleAsync(db, taskId, cancellationToken));
-        return new Prepared(tool, request, workDir, ddb, execCtx);
+            await QueuedBeforeOverwriteRuleAsync(db, taskId, cancellationToken), recorder);
+        return new Prepared(tool, request, workDir, ddb, execCtx, recorder);
+    }
+
+    // The sources the tool deletes after its commit; none when the request cannot tell (the tool fails on it later)
+    private IReadOnlyList<string> SourcesAfterCommit(IHeavyTool tool, HeavyToolRequest request, string taskId)
+    {
+        try
+        {
+            return tool.SourcesDeletedAfterCommit(request);
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "Cannot read the sources task {TaskId} deletes after its commit", taskId);
+            return [];
+        }
     }
 
     // A task record without output paths was written before the tools declared them (U-103): its request, without

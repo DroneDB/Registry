@@ -12,6 +12,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Caching;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
@@ -165,7 +166,12 @@ public sealed class TaskHistory
         j.JobId, j.ToolId, j.ToolVersion, j.CurrentState, j.ProgressPercent, j.PhaseMessage,
         j.CreatedAtUtc, j.ProcessingAtUtc, TaskJobHelpers.FinishedAt(j), j.Path, j.ParentJobId,
         j.WorkflowExecutionId, j.ErrorType, j.ErrorMessage, TaskJobHelpers.ArtifactExpiresAt(j, _settings.ArtifactTtlHours),
-        DdbJobDescriptor.IsBackgroundRebuildDisplay(j.MethodDisplay), missingFiles != null, missingFiles);
+        DdbJobDescriptor.IsBackgroundRebuildDisplay(j.MethodDisplay), missingFiles != null, missingFiles,
+        IsCancellable(j));
+
+    /// <summary>Whether a cancel of the task is accepted: it has not ended, and has not committed its result (FR-XC-27).</summary>
+    internal static bool IsCancellable(JobIndex j) =>
+        !TaskStateCatalog.IsTerminal(j.CurrentState) && !TaskWriteRecord.IsCommitted(j.WriteRecordJson);
 
     private TaskArtifactDto? BuildArtifactDto(JobIndex j, string orgSlug, string dsSlug) =>
         j.CurrentState == "Succeeded" && j.ArtifactSizeBytes is { } size

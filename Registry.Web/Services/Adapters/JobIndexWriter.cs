@@ -10,6 +10,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Caching;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 
@@ -123,6 +124,7 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
                 .SetProperty(x => x.WorkflowExecutionId, meta.WorkflowExecutionId)
                 .SetProperty(x => x.OutputPathsJson, meta.OutputPathsJson)
                 .SetProperty(x => x.TargetLabel, meta.TargetLabel)
+                .SetProperty(x => x.WriteRecordJson, meta.WriteRecordJson)
                 .SetProperty(x => x.ProcessingAtUtc, (DateTime?)null)
                 .SetProperty(x => x.SucceededAtUtc, (DateTime?)null)
                 .SetProperty(x => x.FailedAtUtc, (DateTime?)null)
@@ -160,6 +162,8 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
         row.WorkflowExecutionId = meta.WorkflowExecutionId;
         row.OutputPathsJson = meta.OutputPathsJson;
         row.TargetLabel = meta.TargetLabel;
+        // The write record of an earlier job with the same id is not this task's (FR-XC-27)
+        row.WriteRecordJson = meta.WriteRecordJson;
         row.ProcessingAtUtc = null;
         row.SucceededAtUtc = null;
         row.FailedAtUtc = null;
@@ -199,7 +203,8 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
         ji.ErrorMessage = null;
         ji.LogTailJson = null;
         ji.ProgressUpdatedAtUtc = null;
-
+        // The write record is not touched here: the retry resets it by compare-and-swap BEFORE the re-queue
+        // (TaskRetry, TaskWriteRecord.ForRequeue), so a run that starts at once never has its record replaced
         await db.SaveChangesAsync(ct);
 
         if (ji.OrgSlug != null && ji.DsSlug != null)

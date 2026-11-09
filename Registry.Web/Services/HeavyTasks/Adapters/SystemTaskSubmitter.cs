@@ -37,6 +37,6 @@ public sealed class SystemTaskSubmitter : ISystemTaskSubmitter
         var declared = HeavyToolPaths.Declared(tool, request);
         return _processor.EnqueueHeavyTask(request, userId,
             requestHash: HeavyTaskRequestHash.Compute(tool.Id, tool.Version, null, prms),
-            outputPaths: declared.Outputs, targetLabel: declared.Label);
+            outputPaths: declared.Outputs, targetLabel: declared.Label, addsDatasetFiles: tool.AddsDatasetFiles);
     }
 }

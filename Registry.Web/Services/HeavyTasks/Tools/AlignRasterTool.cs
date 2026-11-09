@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.HeavyTasks.Ports;
@@ -61,6 +62,9 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
     public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
     public override bool ProducesArtifact => false;
     public override bool RunsNativeBuild => true;
+
+    /// <inheritdoc />
+    public override bool AddsDatasetFiles => true;
     public override JsonDocument InputSchema => Schema;
 
     protected override Task ValidateAsync(HeavyToolRequest request, Parameters args,
@@ -186,15 +190,46 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
             progress.Report(new HeavyToolProgress(-1, "aligning",
                 LogChunk: $"Aligning '{sourcePath}' → '{outputPath}' (mode: {mode})"));
 
-            // NOTE: libddb 2.0 writes the output in place and needs it gone: the request asked for the replace
+            // NOTE: libddb 2.0 writes the output in place and needs it gone: the request asked for the replace. Decided
+            // BEFORE that delete: an output the alignment replaces is never recorded (FR-XC-27, FR-XC-07), a rollback
+            // must not delete the file that was there (and cannot bring the replaced one back)
             var outputFullPath = ctx.Ddb.GetLocalPath(outputPath);
-            if (File.Exists(outputFullPath))
+            var replacing = Overwrite(args, ctx) && File.Exists(outputFullPath);
+            if (!replacing && File.Exists(outputFullPath))
+                throw new NameClashException(outputPath);
+            var root = ctx.Ddb.DatasetFolderPath;
+            var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, ct);
+
+            // A new output (and the folders it needs) is in the saved record before it is written (§8.1)
+            if (!replacing)
+            {
+                TaskImportWrites.RecordFolders(writes, root, TaskImportWrites.ParentOf(outputPath));
+                writes.Record(outputPath);
+                await writes.SaveAsync(ct);
+                TaskImportWrites.CreateFolder(root, TaskImportWrites.ParentOf(outputPath));
+            }
+
+            // A cancel that came meanwhile stops here, before the file that was there is deleted
+            ct.ThrowIfCancellationRequested();
+            if (replacing)
                 File.Delete(outputFullPath);
 
             ct.ThrowIfCancellationRequested();
 
+            // Created by another writer while the record was saved: kept, and not the task's
+            if (!replacing && File.Exists(outputFullPath))
+            {
+                await writes.ForgetAsync(outputPath, CancellationToken.None);
+                throw new NameClashException(outputPath);
+            }
+
+            // A failed run keeps the output recorded: a partial file that libddb wrote before it failed is the task's,
+            // and the rollback deletes it (FR-XC-27)
             var resultJson = await Task.Run(
                 () => ctx.Ddb.AlignRaster(sourcePath, referencePath, outputPath, mode), ct);
+
+            if (!replacing)
+                writes.Written(outputPath);
 
             // The very next step after the write: from here a later attempt indexes the output, and no
             // cancellation check stands between the write and the index. NOTE: a process crash between the

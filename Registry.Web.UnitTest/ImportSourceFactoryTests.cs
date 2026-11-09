@@ -23,8 +23,8 @@ public class ImportSourceFactoryTests
         public Task<ImportSourceProbe> ProbeAsync(JsonElement parameters, CancellationToken ct)
             => Task.FromResult(new ImportSourceProbe(true, null, null, null, null));
 
-        public Task FetchAsync(JsonElement parameters, string destFolder, IProgress<ImportProgress> progress,
-            CancellationToken ct) => Task.CompletedTask;
+        public Task FetchAsync(JsonElement parameters, string destFolder, IImportWriteRecord writes,
+            IProgress<ImportProgress> progress, CancellationToken ct) => Task.CompletedTask;
     }
 
     private static ImportSourceFactory Factory()

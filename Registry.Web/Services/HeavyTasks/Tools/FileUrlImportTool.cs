@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Registry.Common;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
@@ -108,6 +109,9 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
 
     /// <inheritdoc />
     public override bool ProducesArtifact => false;
+
+    /// <inheritdoc />
+    public override bool AddsDatasetFiles => true;
 
     /// <inheritdoc />
     public override JsonDocument InputSchema => Schema;
@@ -231,16 +235,41 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
         }
 
         var localTarget = ctx.Ddb.GetLocalPath(target);
-        var parent = Path.GetDirectoryName(localTarget);
-        if (!string.IsNullOrEmpty(parent))
-            Directory.CreateDirectory(parent);
+        var root = ctx.Ddb.DatasetFolderPath;
 
         progress.Report(new HeavyToolProgress(-1, "indexing",
             LogChunk: $"Adding {fileName} ({CommonUtils.GetBytesReadable(downloaded)}) to the dataset"));
 
-        // Overwrite was already checked (ResolveOutput); move the scratch file into place (a rename on the
-        // same volume, atomic over an existing file)
-        File.Move(scratch.Path, localTarget, overwrite: true);
+        // What the task creates is recorded before it is created (FR-XC-27): the folders and the file, which is complete
+        // and stamped here, in its scratch file. Decided before the move: a file the request replaces (overwrite,
+        // FR-XC-07) is never recorded, a rollback must not delete the file that was there.
+        var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, ct);
+        var replacing = args.Overwrite == true && File.Exists(localTarget);
+        if (args.Overwrite != true && File.Exists(localTarget))
+            throw new NameClashException(target);
+        // Saved before the folders and the file exist (§8.1): a process lost after the move leaves a record that rolls
+        // it back
+        TaskImportWrites.RecordFolders(writes, root, TaskImportWrites.ParentOf(target));
+        if (!replacing)
+        {
+            writes.Record(target);
+            writes.Written(target, scratch.Path);
+        }
+
+        await writes.SaveAsync(ct);
+        TaskImportWrites.CreateFolder(root, TaskImportWrites.ParentOf(target));
+
+        // Overwrite was already checked (ResolveOutput). A new file never replaces one that appeared meanwhile; a
+        // replaced one is moved over (a rename on the same volume, atomic over an existing file)
+        try
+        {
+            File.Move(scratch.Path, localTarget, overwrite: replacing);
+        }
+        catch (IOException) when (!replacing && File.Exists(localTarget))
+        {
+            await writes.ForgetAsync(target, CancellationToken.None);
+            throw new NameClashException(target);
+        }
 
         // The very next step after the move: from here a later attempt indexes the file. NOTE: a process crash
         // between the move and this line leaves the file without the marker (the retry then refuses it as existing)
