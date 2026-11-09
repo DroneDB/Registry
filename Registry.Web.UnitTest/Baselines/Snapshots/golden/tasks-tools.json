@@ -288,7 +288,7 @@
           },
           "outputPath": {
             "type": "string",
-            "description": "Dataset-relative path for the aligned output COG."
+            "description": "Dataset-relative path for the aligned output (a lossless GeoTIFF in the source projection and grid)."
           },
           "mode": {
             "type": "string",

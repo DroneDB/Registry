@@ -46,7 +46,7 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
           "properties": {
             "sourcePath":    { "type": "string", "description": "Dataset-relative path of the GeoTIFF to align." },
             "referencePath": { "type": "string", "description": "Dataset-relative path of the reference GeoTIFF." },
-            "outputPath":    { "type": "string", "description": "Dataset-relative path for the aligned output COG." },
+            "outputPath":    { "type": "string", "description": "Dataset-relative path for the aligned output (a lossless GeoTIFF in the source projection and grid)." },
             "mode":          { "type": "string", "enum": ["similarity", "translation"], "default": "similarity",
                                "description": "Alignment mode: similarity (4-DOF) or translation (2-DOF, fast)." },
             "overwrite":     { "type": "boolean", "default": false,
