@@ -44,6 +44,12 @@ public class User : IdentityUser
     }
 
     /// <summary>
+    /// When the user was created (UTC), set once when the user is created (<c>UserProvisioning</c>, the default
+    /// admin). Null for a user created before the Registry stored it: the date is not known.
+    /// </summary>
+    public DateTime? CreatedDate { get; set; }
+
+    /// <summary>
     /// The name of a user of the identity store. Identity's user validator refuses a user without a name, so a user
     /// that was read from the store or created in it always has one (a method, so that EF does not map it).
     /// </summary>

@@ -4358,7 +4358,7 @@
       "storageUsed": 0,
       "organizationCount": 0,
       "datasetCount": 0,
-      "createdDate": "0001-01-01T00:00:00Z"
+      "createdDate": null
     }
   },
   "Registry.Web.Models.DTO.UserDto": {

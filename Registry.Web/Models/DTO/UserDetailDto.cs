@@ -13,5 +13,6 @@ public class UserDetailDto
     public long StorageUsed { get; set; }
     public int OrganizationCount { get; set; }
     public int DatasetCount { get; set; }
-    public DateTime CreatedDate { get; set; }
+    /// <summary>When the user was created (UTC); null for a user created before the Registry stored it.</summary>
+    public DateTime? CreatedDate { get; set; }
 }

@@ -194,8 +194,8 @@ public sealed class UserDirectory
         });
     }
 
-    /// <summary>A user and the names of their roles (empty when they have none).</summary>
-    private sealed record UserWithRoles(string Id, string UserName, string Email, string[] Roles);
+    /// <summary>A user, when they were created (null when not known) and the names of their roles (empty when they have none).</summary>
+    private sealed record UserWithRoles(string Id, string UserName, string Email, DateTime? CreatedDate, string[] Roles);
 
     /// <summary>
     /// Every user with the names of their roles, for the user listings. The LEFT JOIN gives a user
@@ -214,13 +214,14 @@ public sealed class UserDirectory
                 UserId = user.Id,
                 user.UserName,
                 user.Email,
+                user.CreatedDate,
                 RoleName = role.Name
             }).ToArrayAsync(ct);
 
         return
         [
             .. rows.GroupBy(row => row.UserId).Select(user => new UserWithRoles(
-                user.Key, user.First().UserName, user.First().Email,
+                user.Key, user.First().UserName, user.First().Email, user.First().CreatedDate,
                 [.. user.Select(row => row.RoleName).Where(name => !string.IsNullOrEmpty(name))]))
         ];
     }
@@ -300,7 +301,7 @@ public sealed class UserDirectory
                 StorageUsed = storageInfo.Used,
                 OrganizationCount = orgInfo?.OrgCount ?? 0,
                 DatasetCount = totalDatasets,
-                CreatedDate = DateTime.UtcNow // Placeholder since User doesn't have Created field
+                CreatedDate = user.CreatedDate
             });
         }
 
