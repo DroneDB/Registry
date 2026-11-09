@@ -44,12 +44,16 @@ public sealed record HeavyToolArtifact(
     long SizeBytes,
     string? Sha256 = null);
 
-/// <summary>Incremental progress emitted by a tool during execution.</summary>
+/// <summary>
+/// Incremental progress emitted by a tool during execution. <c>WaitingForNode</c> says whether a processing node
+/// holds the task in its queue (true) or has started it (false); null when the tool does not say (D-024).
+/// </summary>
 public sealed record HeavyToolProgress(
     double Fraction,            // 0..1, or -1 for indeterminate
     string? Phase = null,
     string? Message = null,
-    string? LogChunk = null);   // additional text to append to the log tail
+    string? LogChunk = null,    // additional text to append to the log tail
+    bool? WaitingForNode = null);
 
 /// <summary>
 /// Context available to a tool during validation and planning.

@@ -15,6 +15,7 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Attributes;
 using Registry.Web.Models;
 using Registry.Web.Services.Builds;
+using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -245,7 +246,8 @@ public class BuildPendingService : IPendingBuildFlag, IPendingBuildRetry
 
         // Restart one bounded epoch only after the previous coordinator
         // is missing/terminal, irrespective of an unchanged database stamp.
-        var meta = new IndexPayload(orgSlug, dsSlug, null, MagicStrings.AutoBuildServiceUserId);
+        var meta = new IndexPayload(orgSlug, dsSlug, null, MagicStrings.AutoBuildServiceUserId,
+                TargetLabel: BuildTool.PendingBuildsLabel);
         var jobId = _backgroundJob.EnqueueBuildPending(dataset, meta);
         if (string.IsNullOrWhiteSpace(jobId))
             throw new InvalidOperationException("Pending coordinator enqueue returned no job ID");
@@ -331,7 +333,8 @@ public class BuildPendingService : IPendingBuildFlag, IPendingBuildRetry
             }
 
             var delayMinutes = RetryBackoffMinutes[Math.Min(state.RetryAttempt, RetryBackoffMinutes.Length - 1)];
-            var meta = new IndexPayload(orgSlug, dsSlug, null, MagicStrings.AutoBuildServiceUserId);
+            var meta = new IndexPayload(orgSlug, dsSlug, null, MagicStrings.AutoBuildServiceUserId,
+                TargetLabel: BuildTool.PendingBuildsLabel);
             var jobId = _backgroundJob.ScheduleBuildPending(new DatasetKey(orgSlug, ds.InternalRef), meta,
                 TimeSpan.FromMinutes(delayMinutes));
             if (string.IsNullOrWhiteSpace(jobId))

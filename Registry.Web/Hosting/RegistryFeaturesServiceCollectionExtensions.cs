@@ -100,6 +100,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<TaskLifecycle>();
         services.AddScoped<TaskRetry>();
         services.AddScoped<TaskAuthorizer>();
+        services.AddScoped<TaskUserNames>();
         services.AddScoped<TaskArtifactStore>();
 
         // Web-only submission side of the task substrate (gating, quota, runner)

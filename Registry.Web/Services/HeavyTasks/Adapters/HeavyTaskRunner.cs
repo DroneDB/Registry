@@ -8,6 +8,7 @@ using Registry.Ports;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.HeavyTasks.Adapters;
@@ -75,9 +76,10 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         var toolRequest = new HeavyToolRequest(
             tool.Id, tool.Version, request.OrgSlug, request.DsSlug, request.Path, request.Params);
 
-        // TODO: U-302 (M3): when ownJobId is set (a retry), this context must expose PublishedOutput from that
-        // job's PublishedOutputMarker parameter; without it a task that already wrote its output gets its own 409.
-        var validationCtx = new HeavyToolValidationContext(ddb, request.Caller, _log);
+        // The retry of a task that already wrote its output (then failed to index it) does not refuse its own output
+        // as an existing file: the validation sees what the earlier attempt wrote, as the job's next run does
+        var published = ownJobId is null ? null : _processor.GetJobParameter(ownJobId, PublishedOutputMarker.Key);
+        var validationCtx = new HeavyToolValidationContext(ddb, request.Caller, _log, published);
 
         // An output that is one of the inputs is a 400 (D-040). It is checked before the tool's validation,
         // which would refuse it as an existing file (409) that no overwrite can make valid. Parameters that are

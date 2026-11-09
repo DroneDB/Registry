@@ -51,7 +51,8 @@ public sealed class NodeOdxTaskRunner
             LogChunk: $"Submitting {imagePaths.Count} images to NodeODX node '{node.Id}'"));
 
         var uuid = await _client.CreateTaskAsync(node, taskName, imagePaths, optionsJson, ct);
-        progress.Report(new HeavyToolProgress(0, "queued", LogChunk: $"NodeODX task created: {uuid}"));
+        progress.Report(new HeavyToolProgress(0, "queued", LogChunk: $"NodeODX task created: {uuid}",
+            WaitingForNode: true));
 
         try
         {
@@ -96,17 +97,20 @@ public sealed class NodeOdxTaskRunner
             var info = await _client.GetTaskInfoAsync(node, uuid, ct);
             var fraction = Math.Clamp(info.Progress / 100.0, 0, 1);
             var phase = PhaseFor(info.StatusCode);
+            // The task waits while the node keeps it queued; the first other status starts its processing (D-024)
+            var waiting = info.StatusCode == NodeOdxTaskStatusCode.Queued;
 
             var lines = await _client.GetTaskOutputAsync(node, uuid, outputLine, ct);
             if (lines.Count > 0)
             {
                 outputLine += lines.Count;
                 foreach (var line in lines)
-                    progress.Report(new HeavyToolProgress(fraction * 0.95, phase, LogChunk: line));
+                    progress.Report(new HeavyToolProgress(fraction * 0.95, phase, LogChunk: line,
+                        WaitingForNode: waiting));
             }
             else
             {
-                progress.Report(new HeavyToolProgress(fraction * 0.95, phase));
+                progress.Report(new HeavyToolProgress(fraction * 0.95, phase, WaitingForNode: waiting));
             }
 
             switch (info.StatusCode)

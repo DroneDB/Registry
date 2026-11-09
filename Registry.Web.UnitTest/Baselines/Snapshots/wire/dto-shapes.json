@@ -812,7 +812,13 @@
           "waitingForFiles": true,
           "missingFiles": [
             "MissingFiles-text"
-          ]
+          ],
+          "targetLabel": "TargetLabel-text",
+          "actions": [
+            "Actions-text"
+          ],
+          "waitingForNode": true,
+          "cancelledBy": "CancelledBy-text"
         }
       ],
       "total": 1234567890123,
@@ -848,7 +854,13 @@
       "waitingForFiles": true,
       "missingFiles": [
         "MissingFiles-text"
-      ]
+      ],
+      "targetLabel": "TargetLabel-text",
+      "actions": [
+        "Actions-text"
+      ],
+      "waitingForNode": true,
+      "cancelledBy": "CancelledBy-text"
     },
     "sparse": {
       "taskId": null,
@@ -869,7 +881,11 @@
       "error": null,
       "artifactExpiresAt": null,
       "waitingForFiles": false,
-      "missingFiles": null
+      "missingFiles": null,
+      "targetLabel": null,
+      "actions": null,
+      "waitingForNode": false,
+      "cancelledBy": null
     }
   },
   "Registry.Web.Models.DTO.AlignRasterRequestDto": {
@@ -3943,7 +3959,13 @@
       "waitingForFiles": true,
       "missingFiles": [
         "MissingFiles-text"
-      ]
+      ],
+      "targetLabel": "TargetLabel-text",
+      "actions": [
+        "Actions-text"
+      ],
+      "waitingForNode": true,
+      "cancelledBy": "CancelledBy-text"
     },
     "sparse": {
       "taskId": null,
@@ -3961,7 +3983,11 @@
       "artifact": null,
       "error": null,
       "waitingForFiles": false,
-      "missingFiles": null
+      "missingFiles": null,
+      "targetLabel": null,
+      "actions": null,
+      "waitingForNode": false,
+      "cancelledBy": null
     }
   },
   "Registry.Web.Models.DTO.TaskSummaryDto": {
@@ -3985,7 +4011,13 @@
       "waitingForFiles": true,
       "missingFiles": [
         "MissingFiles-text"
-      ]
+      ],
+      "targetLabel": "TargetLabel-text",
+      "actions": [
+        "Actions-text"
+      ],
+      "waitingForNode": true,
+      "cancelledBy": "CancelledBy-text"
     },
     "sparse": {
       "taskId": null,
@@ -4005,7 +4037,11 @@
       "artifactExpiresAt": null,
       "background": false,
       "waitingForFiles": false,
-      "missingFiles": null
+      "missingFiles": null,
+      "targetLabel": null,
+      "actions": null,
+      "waitingForNode": false,
+      "cancelledBy": null
     }
   },
   "Registry.Web.Models.DTO.TaskToolDto": {

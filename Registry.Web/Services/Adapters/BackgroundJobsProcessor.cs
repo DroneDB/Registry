@@ -59,6 +59,35 @@ public class BackgroundJobsProcessor : IBackgroundJobsProcessor
         return Enum.TryParse(stateName, out JobStatus state) ? state : JobStatus.Unknown;
     }
 
+    public StoredJob? GetStoredJob(string jobId)
+    {
+        try
+        {
+            using var connection = _storage.GetConnection();
+            var job = connection.GetJobData(jobId)?.Job;
+            return job is null ? null : new StoredJob(job.Type, job.Method.Name, job.Args);
+        }
+        catch (Exception ex) when (ex is FormatException or ArgumentException or InvalidOperationException)
+        {
+            // An id the store cannot read (another numbering), or a job whose type cannot be loaded
+            return null;
+        }
+    }
+
+    public string? GetJobParameter(string jobId, string name)
+    {
+        try
+        {
+            using var connection = _storage.GetConnection();
+            var value = connection.GetJobParameter(jobId, name);
+            return string.IsNullOrWhiteSpace(value) ? null : value;
+        }
+        catch (Exception ex) when (ex is FormatException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
     public string EnqueueIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta) =>
         _indexedEnqueuer.Enqueue(methodCall, meta);
 

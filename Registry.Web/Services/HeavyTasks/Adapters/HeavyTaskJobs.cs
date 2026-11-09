@@ -45,6 +45,27 @@ public static class HeavyTaskJobs
             w => w.Run(toolId, version, requestJson, null!, CancellationToken.None), payload);
     }
 
+    /// <summary>
+    /// The request a heavy task was enqueued with (<see cref="EnqueueHeavyTask"/>), as the job store keeps it, for
+    /// the retry of the task (D-037); null when the job is not a heavy task or the store cannot read it.
+    /// </summary>
+    public static HeavyToolRequest? StoredHeavyRequest(this IBackgroundJobsProcessor processor, string jobId)
+    {
+        var job = processor.GetStoredJob(jobId);
+        if (job is null || job.Type != typeof(HeavyTaskJobWrapper) || job.Method != nameof(HeavyTaskJobWrapper.Run) ||
+            job.Args.Count < 3 || job.Args[2] is not string requestJson)
+            return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<HeavyToolRequest>(requestJson);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Longest label the task record keeps (the <c>TargetLabel</c> column, <c>JobIndexConfiguration</c>).</summary>
     public const int TargetLabelMaxLength = 256;
 

@@ -73,6 +73,11 @@ public class SimpleBackgroundJobsProcessor : IBackgroundJobsProcessor
         return !_jobs.TryGetValue(int.Parse(jobId, CultureInfo.InvariantCulture), out var status) ? JobStatus.Unknown : status;
     }
 
+    // Nothing is stored but the status: no job has a method, arguments or parameters to read
+    public StoredJob? GetStoredJob(string jobId) => null;
+
+    public string? GetJobParameter(string jobId, string name) => null;
+
     public string EnqueueIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta) => Record(JobStatus.Succeeded);
 
     public string EnqueueIndexed<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta) => Record(JobStatus.Succeeded);

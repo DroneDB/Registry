@@ -87,7 +87,7 @@ public sealed class AdminTasksManager
     }
 
     /// <summary>
-    /// Batch-resolves userId → userName for the current page. JobIndex lives in
+    /// Batch-resolves userId → userName for the current page: the owners and the users who cancelled a task (D-038). JobIndex lives in
     /// RegistryContext while users live in the Identity DbContext, so we collect the
     /// distinct ids and look them up via the Identity store (no cross-context join).
     /// </summary>
@@ -95,8 +95,9 @@ public sealed class AdminTasksManager
         IReadOnlyCollection<JobIndex> rows, CancellationToken ct)
     {
         var ids = rows
-            .Where(r => !string.IsNullOrEmpty(r.UserId))
-            .Select(r => r.UserId!)
+            .SelectMany(r => new[] { r.UserId, r.CancelledBy })
+            .Where(id => !string.IsNullOrEmpty(id))
+            .Select(id => id!)
             .Distinct()
             .ToArray();
 
@@ -121,10 +122,16 @@ public sealed class AdminTasksManager
         if (!string.IsNullOrEmpty(j.UserId) && ownerNames.TryGetValue(j.UserId, out var name))
             owner = name;
 
+        string? cancelledBy = null;
+        if (j.CancelledBy is not null)
+            cancelledBy = ownerNames.GetValueOrDefault(j.CancelledBy, j.CancelledBy);
+
+        // An admin may do with every task what its state allows (D-024)
         return new AdminTaskSummaryDto(
             j.JobId, j.OrgSlug, j.DsSlug, j.ToolId, j.ToolVersion, j.CurrentState,
             j.ProgressPercent, j.PhaseMessage, j.CreatedAtUtc, j.ProcessingAtUtc, TaskJobHelpers.FinishedAt(j),
             j.Path, j.UserId, owner, j.ErrorType, j.ErrorMessage, TaskJobHelpers.ArtifactExpiresAt(j, _artifactTtlHours),
-            missingFiles != null, missingFiles);
+            missingFiles != null, missingFiles, j.TargetLabel,
+            TaskActions.For(j.CurrentState, mayTouch: true, canWrite: true), j.WaitingForNode, cancelledBy);
     }
 }

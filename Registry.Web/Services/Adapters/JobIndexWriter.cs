@@ -10,6 +10,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Caching;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 
@@ -135,7 +136,9 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
                 .SetProperty(x => x.ErrorType, (string?)null)
                 .SetProperty(x => x.ErrorMessage, (string?)null)
                 .SetProperty(x => x.LogTailJson, (string?)null)
-                .SetProperty(x => x.ProgressUpdatedAtUtc, (DateTime?)null), ct);
+                .SetProperty(x => x.ProgressUpdatedAtUtc, (DateTime?)null)
+                .SetProperty(x => x.WaitingForNode, false)
+                .SetProperty(x => x.CancelledBy, (string?)null), ct);
         return updated > 0;
     }
 
@@ -173,37 +176,103 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
         row.ErrorMessage = null;
         row.LogTailJson = null;
         row.ProgressUpdatedAtUtc = null;
+        row.WaitingForNode = false;
+        row.CancelledBy = null;
     }
+
+    private static readonly string[] RequeueStates = [FailedState.StateName, EnqueuedState.StateName];
 
     public async Task ResetForRequeueAsync(string jobId, CancellationToken ct = default)
     {
-        var ji = await db.JobIndices.AsTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
-        // Called AFTER an accepted re-queue: the row is still "Failed" (async stamp not yet
-        // visible) or freshly "Enqueued". Refuse anything else - a row already at a live/terminal
-        // state belongs to a fresh/final run and its fields must not be wiped.
-        if (ji is null || (ji.CurrentState != "Failed" && ji.CurrentState != "Enqueued"))
+        var ji = await db.JobIndices.AsNoTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+        if (ji is null)
             return;
 
-        // Mirror the reset block in UpsertOnEnqueueAsync so a re-queued run starts clean. The identity of the
-        // task stays: the same job writes the same outputs (OutputPathsJson) under the same label (TargetLabel).
-        ji.ProcessingAtUtc = null;
-        ji.SucceededAtUtc = null;
-        ji.FailedAtUtc = null;
-        ji.DeletedAtUtc = null;
-        ji.ScheduledAtUtc = null;
-        ji.ProgressPercent = null;
-        ji.PhaseMessage = null;
-        ji.ArtifactSizeBytes = null;
-        ji.ArtifactSha256 = null;
-        ji.ErrorType = null;
-        ji.ErrorMessage = null;
-        ji.LogTailJson = null;
-        ji.ProgressUpdatedAtUtc = null;
+        // Called AFTER an accepted re-queue: the row is still "Failed" (async stamp not yet
+        // visible) or freshly "Enqueued". Refuse anything else - a row already at a live/terminal
+        // state belongs to a fresh/final run and its fields must not be wiped. The guard is evaluated by the
+        // database, so a run that the job server started meanwhile (Processing) is never moved back.
+        // Mirror the reset block in UpsertOnEnqueueAsync so a re-queued run starts clean, and show it queued at once
+        // (FR-PRC-19). The identity of the task stays: the same job writes the same outputs (OutputPathsJson) under
+        // the same label (TargetLabel).
+        var now = DateTime.UtcNow;
+        var updated = await db.JobIndices
+            .Where(x => x.JobId == jobId && RequeueStates.Contains(x.CurrentState))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.CurrentState, EnqueuedState.StateName)
+                .SetProperty(x => x.LastStateChangeUtc, now)
+                .SetProperty(x => x.ProcessingAtUtc, (DateTime?)null)
+                .SetProperty(x => x.SucceededAtUtc, (DateTime?)null)
+                .SetProperty(x => x.FailedAtUtc, (DateTime?)null)
+                .SetProperty(x => x.DeletedAtUtc, (DateTime?)null)
+                .SetProperty(x => x.ScheduledAtUtc, (DateTime?)null)
+                .SetProperty(x => x.ProgressPercent, (int?)null)
+                .SetProperty(x => x.PhaseMessage, (string?)null)
+                .SetProperty(x => x.ArtifactSizeBytes, (long?)null)
+                .SetProperty(x => x.ArtifactSha256, (string?)null)
+                .SetProperty(x => x.ErrorType, (string?)null)
+                .SetProperty(x => x.ErrorMessage, (string?)null)
+                .SetProperty(x => x.LogTailJson, (string?)null)
+                .SetProperty(x => x.ProgressUpdatedAtUtc, (DateTime?)null)
+                .SetProperty(x => x.WaitingForNode, false)
+                .SetProperty(x => x.CancelledBy, (string?)null), ct);
 
-        await db.SaveChangesAsync(ct);
+        await ReloadTrackedAsync(jobId, ct);
 
-        if (ji.OrgSlug != null && ji.DsSlug != null)
+        if (updated > 0 && ji.OrgSlug != null && ji.DsSlug != null)
             await InvalidateTasksListCacheAsync(ji.OrgSlug, ji.DsSlug, ct);
+    }
+
+    // A set-based update bypasses the change tracker: a tracked copy of the row reads the stored values again
+    private async Task ReloadTrackedAsync(string jobId, CancellationToken ct)
+    {
+        var local = db.JobIndices.Local.FirstOrDefault(x => x.JobId == jobId);
+        if (local != null)
+            await db.Entry(local).ReloadAsync(ct);
+    }
+
+    public async Task<bool> SetCancelledByAsync(string jobId, string? userId, CancellationToken ct = default)
+    {
+        var ji = await db.JobIndices.AsNoTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+        if (ji is null)
+            return false;
+
+        var active = TaskStateCatalog.Active;
+        var updated = userId is not null
+            ? await db.JobIndices.Where(x => x.JobId == jobId && active.Contains(x.CurrentState))
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.CancelledBy, userId), ct)
+            : await db.JobIndices.Where(x => x.JobId == jobId && x.CancelledBy != null
+                                             && x.CurrentState != DeletedState.StateName)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.CancelledBy, (string?)null), ct);
+
+        await ReloadTrackedAsync(jobId, ct);
+        if (updated > 0 && ji.OrgSlug != null && ji.DsSlug != null)
+            await InvalidateTasksListCacheAsync(ji.OrgSlug, ji.DsSlug, ct);
+        return updated > 0;
+    }
+
+    public async Task<bool> SetWaitingForNodeAsync(string jobId, bool waiting, DateTime changedAtUtc,
+        CancellationToken ct = default)
+    {
+        var ji = await db.JobIndices.AsNoTracking().FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+        if (ji is null)
+            return false;
+
+        var updated = waiting
+            ? await db.JobIndices
+                .Where(x => x.JobId == jobId && x.CurrentState == ProcessingState.StateName && !x.WaitingForNode)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.WaitingForNode, true), ct)
+            // The node started the task: its processing, and the duration shown, start now
+            : await db.JobIndices
+                .Where(x => x.JobId == jobId && x.WaitingForNode)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(x => x.WaitingForNode, false)
+                    .SetProperty(x => x.ProcessingAtUtc, changedAtUtc), ct);
+
+        await ReloadTrackedAsync(jobId, ct);
+        if (updated > 0 && ji.OrgSlug != null && ji.DsSlug != null)
+            await InvalidateTasksListCacheAsync(ji.OrgSlug, ji.DsSlug, ct);
+        return updated > 0;
     }
 
     public async Task UpdateStateAsync(string jobId, string newState, DateTime changedAtUtc,
@@ -251,8 +320,10 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
             .Where(x => x.JobId == jobId && expected.Contains(x.CurrentState))
             .ExecuteUpdateAsync(s =>
             {
+                // A new state ends a wait on a processing node: the runner sets the flag again while the node waits
                 s.SetProperty(x => x.CurrentState, newState)
-                    .SetProperty(x => x.LastStateChangeUtc, changedAtUtc);
+                    .SetProperty(x => x.LastStateChangeUtc, changedAtUtc)
+                    .SetProperty(x => x.WaitingForNode, false);
                 if (newState == ProcessingState.StateName)
                     s.SetProperty(x => x.ProcessingAtUtc, changedAtUtc)
                         .SetProperty(x => x.ErrorType, (string?)null)
@@ -287,6 +358,8 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
     {
         ji.CurrentState = newState;
         ji.LastStateChangeUtc = changedAtUtc;
+        // A new state ends a wait on a processing node: the runner sets the flag again while the node waits
+        ji.WaitingForNode = false;
         // A fresh attempt (Processing) or a recovery (Succeeded) supersedes any transient error a
         // prior attempt recorded (e.g. a DdbBusyException auto-retried to success).
         if (newState == ProcessingState.StateName)

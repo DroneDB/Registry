@@ -53,6 +53,10 @@ public sealed record TaskArtifactDto(long SizeBytes, string? Sha256, string Resu
 /// the task. <c>Error</c> is why a failed task failed, as any reader of the task may see it (no server path;
 /// <c>JobLogText.UserMessage</c>), next to <c>ErrorType</c>, the exception type name; null when the task did not fail
 /// or failed before the message was recorded.
+/// <c>TargetLabel</c> names the task's target files (the tool's label, FR-XC-25), or null. <c>Actions</c> are what the
+/// caller may do with the task (<see cref="Services.PlatformTasks.TaskActions"/>: <c>cancel</c>, <c>retry</c>,
+/// <c>delete</c>, <c>viewLog</c>; D-024). <c>WaitingForNode</c> is set while a processing node holds the task in its
+/// queue. <c>CancelledBy</c> is the name of the user who cancelled a <c>Deleted</c> task, or null (D-038).
 /// </summary>
 public sealed record TaskSummaryDto(
     string TaskId,
@@ -72,10 +76,15 @@ public sealed record TaskSummaryDto(
     DateTime? ArtifactExpiresAt,
     bool Background = false,
     bool WaitingForFiles = false,
-    IReadOnlyList<string>? MissingFiles = null);
+    IReadOnlyList<string>? MissingFiles = null,
+    string? TargetLabel = null,
+    IReadOnlyList<string>? Actions = null,
+    bool WaitingForNode = false,
+    string? CancelledBy = null);
 
 /// <summary>
-/// Full status (GET /tasks/{id}); <c>Error</c>, <c>WaitingForFiles</c> and <c>MissingFiles</c> as in
+/// Full status (GET /tasks/{id}); <c>Error</c>, <c>WaitingForFiles</c>, <c>MissingFiles</c>, <c>TargetLabel</c>,
+/// <c>Actions</c>, <c>WaitingForNode</c> and <c>CancelledBy</c> as in
 /// <see cref="TaskSummaryDto"/> (<c>Error</c> falls back to the exception type name of a task that failed before the
 /// message was recorded).
 /// </summary>
@@ -95,7 +104,11 @@ public sealed record TaskStatusDto(
     TaskArtifactDto? Artifact,
     string? Error,
     bool WaitingForFiles = false,
-    IReadOnlyList<string>? MissingFiles = null);
+    IReadOnlyList<string>? MissingFiles = null,
+    string? TargetLabel = null,
+    IReadOnlyList<string>? Actions = null,
+    bool WaitingForNode = false,
+    string? CancelledBy = null);
 
 /// <summary>Incremental log response (GET /tasks/{id}/log).</summary>
 public sealed record TaskLogDto(long Cursor, IReadOnlyList<string> Lines, long TruncatedFromTail);

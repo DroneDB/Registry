@@ -20,6 +20,9 @@ using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.Jobs;
+using Registry.Web.Services.Managers;
+using Registry.Web.Services.PlatformTasks;
 using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Registry.Web.Utilities;
@@ -75,7 +78,8 @@ public class HeavyTaskRunnerTests
 
     // ---- The two tools: they read "input" and write "output", and validate as told ----
 
-    private sealed class PathTool(string id, Func<Exception?>? validation = null, bool producesArtifact = false)
+    private sealed class PathTool(string id, Func<Exception?>? validation = null, bool producesArtifact = false,
+        Action<IHeavyToolValidationContext>? seen = null)
         : HeavyToolBase<PathTool.P>
     {
         public sealed record P(string? Input, string? Output);
@@ -95,6 +99,7 @@ public class HeavyTaskRunnerTests
             CancellationToken ct)
         {
             Validations++;
+            seen?.Invoke(ctx);
             if (validation?.Invoke() is { } error)
                 throw error;
             return Task.CompletedTask;
@@ -394,5 +399,113 @@ public class HeavyTaskRunnerTests
         var label = _enqueued.ShouldHaveSingleItem().TargetLabel!;
         label.Length.ShouldBe(HeavyTaskJobs.TargetLabelMaxLength);
         label.ShouldEndWith("…");
+    }
+
+    // ---- The retry of a failed task (D-037): the submit checks run first, through CheckSubmitAsync ----
+
+    private const string FailedJob = "failed-merge";
+
+    private (TaskRetry Retry, Mock<IJobIndexWriter> Writer) RetryOf(string state, string tool = "writer",
+        string? published = null)
+    {
+        var job = new JobIndex
+        {
+            JobId = FailedJob, OrgSlug = Org, DsSlug = Ds, ToolId = tool, ToolVersion = "1", CurrentState = state,
+            UserId = "owner"
+        };
+        _index.Setup(q => q.GetByJobIdAsync(Org, Ds, FailedJob, It.IsAny<CancellationToken>())).ReturnsAsync(job);
+
+        var request = new HeavyToolRequest(tool, "1", Org, Ds, null,
+            JsonSerializer.SerializeToElement(new { input = "in.tif", output = "out/a.tif" }));
+        _processor.Setup(p => p.GetStoredJob(FailedJob)).Returns(new StoredJob(typeof(HeavyTaskJobWrapper),
+            nameof(HeavyTaskJobWrapper.Run), [tool, "1", JsonSerializer.Serialize(request), null, CancellationToken.None]));
+        _processor.Setup(p => p.GetJobParameter(FailedJob, PublishedOutputMarker.Key)).Returns(published);
+        _processor.Setup(p => p.Requeue(FailedJob)).Returns(true);
+
+        var dataset = new Dataset { Slug = Ds, InternalRef = Guid.NewGuid(), Organization = new Organization { Slug = Org } };
+        var access = new Mock<IDatasetAccessResolver>();
+        access.Setup(a => a.ResolveAsync(Org, Ds, It.IsAny<AccessType>(), null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => new DatasetAccess(dataset, Mock.Of<IDDB>));
+        var auth = new Mock<IAuthManager>();
+        auth.Setup(a => a.IsOwnerOrAdmin(It.IsAny<Dataset>())).ReturnsAsync(true);
+        var writer = new Mock<IJobIndexWriter>();
+
+        return (new TaskRetry(new TaskAuthorizer(access.Object, _index.Object, auth.Object), _processor.Object,
+            writer.Object, Mock.Of<IDatasetResolver>(), Mock.Of<IDdbManager>(), NullLogger<TaskRetry>.Instance,
+            Runner()), writer);
+    }
+
+    [Test]
+    public async Task Retry_OfAFailedTask_RunsTheChecksThenRequeuesItsOwnJob()
+    {
+        var (retry, writer) = RetryOf("Failed");
+
+        (await retry.RetryAsync(Org, Ds, FailedJob)).ShouldBeTrue();
+
+        ((PathTool)_tools["writer"]).Validations.ShouldBe(1);
+        _processor.Verify(p => p.Requeue(FailedJob), Times.Once);
+        writer.Verify(w => w.ResetForRequeueAsync(FailedJob, It.IsAny<CancellationToken>()), Times.Once);
+        _enqueued.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task Retry_OfAFailedMergeWhoseOutputAnotherActiveTaskWrites_Is409_AndRequeuesNothing()
+    {
+        var (retry, writer) = RetryOf("Failed");
+        ActiveTask("other-task", "other", "out/a.tif");
+
+        var ex = await Should.ThrowAsync<ConflictException>(() => retry.RetryAsync(Org, Ds, FailedJob));
+
+        ex.StatusCode.ShouldBe(409);
+        _processor.Verify(p => p.Requeue(It.IsAny<string>()), Times.Never);
+        writer.Verify(w => w.ResetForRequeueAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task Retry_ForAnOwnerOverAQuota_IsRefusedByTheQuota_AndRequeuesNothing()
+    {
+        _settings.MaxConcurrentTasksGlobal = 1;
+        _index.Setup(q => q.CountActiveUserTasksAsync(null, null, null, It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        var (retry, _) = RetryOf("Failed");
+
+        await Should.ThrowAsync<HeavyTaskQuotaException>(() => retry.RetryAsync(Org, Ds, FailedJob));
+
+        _processor.Verify(p => p.Requeue(It.IsAny<string>()), Times.Never);
+    }
+
+    [TestCase("Succeeded")]
+    [TestCase("Deleted")]
+    public async Task Retry_OfASucceededOrCancelledTask_Is409(string state)
+    {
+        var (retry, _) = RetryOf(state);
+
+        var ex = await Should.ThrowAsync<ConflictException>(() => retry.RetryAsync(Org, Ds, FailedJob));
+
+        ex.StatusCode.ShouldBe(409);
+        _processor.Verify(p => p.Requeue(It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
+    public async Task Retry_OfATaskThatWroteItsOutput_ValidatesWithThatOutputPublished()
+    {
+        string? seen = null;
+        _tools["writer"] = new PathTool("writer", seen: ctx => seen = ctx.PublishedOutput);
+        var (retry, _) = RetryOf("Failed", published: "out/a.tif");
+
+        await retry.RetryAsync(Org, Ds, FailedJob);
+
+        seen.ShouldBe("out/a.tif");
+    }
+
+    [Test]
+    public async Task ASubmit_ValidatesWithNoPublishedOutput()
+    {
+        string? seen = "unset";
+        _tools["writer"] = new PathTool("writer", seen: ctx => seen = ctx.PublishedOutput);
+
+        await Runner().SubmitAsync(Submit("writer", "in.tif", "out/a.tif"));
+
+        seen.ShouldBeNull();
+        _processor.Verify(p => p.GetJobParameter(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 }

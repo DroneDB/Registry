@@ -80,8 +80,9 @@ public interface IJobIndexWriter
     Task<(bool deleted, string? orgSlug, string? dsSlug)> DeleteTerminalJobByIdAsync(string jobId, CancellationToken ct = default);
 
     /// <summary>
-    /// Clears stale prior-run state (state timestamps, progress, artifact, error fields) from a
-    /// JobIndex record after the job has been re-queued under the same id. Call it only when the
+    /// Clears stale prior-run state (state timestamps, progress, artifact, error fields, the waiting flag and who
+    /// cancelled) from a JobIndex record after the job has been re-queued under the same id, and sets its state to
+    /// <c>Enqueued</c> at once, so that the list shows the task queued (FR-PRC-19). Call it only when the
     /// re-queue was accepted. No-op unless the row is in the <c>Failed</c> or (freshly stamped)
     /// <c>Enqueued</c> state, which protects against wiping a row already at a live/terminal state
     /// after a concurrent fresh run has started.
@@ -97,4 +98,20 @@ public interface IJobIndexWriter
     /// null when there is none).
     /// </summary>
     Task UpdateErrorAsync(string jobId, string errorType, string? errorMessage, CancellationToken ct = default);
+
+    /// <summary>
+    /// Records who cancelled a task (<c>CancelledBy</c>, D-038): only the cancel of a user sets it, while the task is
+    /// active. A null <paramref name="userId"/> removes it again (the cancel found the task ended), unless the task
+    /// is <c>Deleted</c>.
+    /// </summary>
+    /// <returns>Whether the record changed.</returns>
+    Task<bool> SetCancelledByAsync(string jobId, string? userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Records whether a processing node holds the task in its queue (<c>WaitingForNode</c>, D-024). The flag is set
+    /// only on a <c>Processing</c> task; when it clears, the processing starts at <paramref name="changedAtUtc"/>
+    /// (<c>ProcessingAtUtc</c>), so that the duration counts from the node's start (FR-PRC-37).
+    /// </summary>
+    /// <returns>Whether the record changed.</returns>
+    Task<bool> SetWaitingForNodeAsync(string jobId, bool waiting, DateTime changedAtUtc, CancellationToken ct = default);
 }

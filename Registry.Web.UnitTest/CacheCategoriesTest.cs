@@ -56,7 +56,7 @@ public class CacheCategoriesTest
         CacheCategories.OgcDocument("o", "d", "abc", "caps-wfs-v2-2.0.0", "sub").ShouldBe("ogc-caps-wfs-v2-2.0.0-o-d-gabc-sub");
         CacheCategories.DatasetLookup("o", "d").ShouldBe("ds-lookup:o/d");
         CacheCategories.UploadReceipt("o", "d", "u").ShouldBe("upload-receipt-o-d-u");
-        CacheCategories.TasksList("o", "d").ShouldBe("tasks-list:o/d");
+        CacheCategories.TasksList("o", "d").ShouldBe("tasks-list-v2:o/d");
         CacheCategories.PushSession("/p/session.json").ShouldBe("push-session:/p/session.json");
         CacheCategories.DatasetLocation(Guid.Parse("11111111-2222-3333-4444-555555555555"), "12-34-56-78")
             .ShouldBe("ds-location:11111111-2222-3333-4444-555555555555:12-34-56-78");

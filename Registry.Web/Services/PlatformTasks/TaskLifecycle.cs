@@ -61,14 +61,24 @@ public sealed class TaskLifecycle
                 $"The task has already ended ({job.CurrentState}); only a queued or running task can be cancelled",
                 noRetry: true);
 
-        if (DeleteJob(job.JobId))
-            return true;
+        // Who cancelled, before the job ends: the task is then labelled "Cancelled", not "Deleted" (D-038). The
+        // other writers of Deleted (job sync, recoveries, dataset clean-up) never set it
+        var userId = await _authorizer.CurrentUserIdAsync();
+        var marked = userId is not null && await _writer.SetCancelledByAsync(job.JobId, userId, ct);
 
-        var ended = await _writer.UpdateStateIfCurrentAsync(job.JobId, TaskStateCatalog.Active,
-            DeletedState.StateName, DateTime.UtcNow, ct);
-        if (ended)
-            _logger.LogWarning("Cancelled task {JobId} of {Org}/{Ds}, whose job the job store no longer has",
-                job.JobId, orgSlug, dsSlug);
+        var ended = DeleteJob(job.JobId);
+        if (!ended)
+        {
+            ended = await _writer.UpdateStateIfCurrentAsync(job.JobId, TaskStateCatalog.Active,
+                DeletedState.StateName, DateTime.UtcNow, ct);
+            if (ended)
+                _logger.LogWarning("Cancelled task {JobId} of {Org}/{Ds}, whose job the job store no longer has",
+                    job.JobId, orgSlug, dsSlug);
+        }
+
+        // The task ended by itself meanwhile: nobody cancelled it
+        if (!ended && marked)
+            await _writer.SetCancelledByAsync(job.JobId, null, ct);
         return ended;
     }
 

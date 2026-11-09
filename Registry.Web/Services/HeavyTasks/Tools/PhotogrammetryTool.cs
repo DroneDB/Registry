@@ -30,7 +30,7 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parameters>
 {
     /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
-    public sealed record Parameters(string? NodeId, string? Folder, List<string>? Images, bool? CreateNewDataset, string? DestPath, string? NewDatasetName, string? NewDatasetOrgSlug, string? NewDatasetVisibility, string? Name, string? Options);
+    public sealed record Parameters(string? NodeId, string? Folder, List<string>? Images, bool? CreateNewDataset, string? DestPath, string? NewDatasetName, string? NewDatasetOrgSlug, string? NewDatasetVisibility, string? Name, string? Options, string? Profile = null);
 
     protected override Parameters ReadParams(ToolParameters p) => new(
         p.Text("nodeId"),
@@ -42,7 +42,8 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         p.Text("newDatasetOrgSlug"),
         p.Text("newDatasetVisibility"),
         p.Text("name"),
-        p.RawArray("options"));
+        p.RawArray("options"),
+        p.Text("profile"));
 
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
@@ -54,6 +55,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
             "images": { "type": ["array", "null"], "items": { "type": "string" }, "description": "Explicit list of image entry paths." },
             "nodeId": { "type": ["string", "null"], "description": "Target NodeODX node id (default: first configured)." },
             "name": { "type": ["string", "null"], "description": "Task name shown on the node." },
+            "profile": { "type": ["string", "null"], "description": "Name of the processing profile the options come from, shown in the task's label." },
             "options": { "type": ["array", "null"], "description": "NodeODX options array [{name,value}]." },
             "destPath": { "type": ["string", "null"], "description": "Destination folder within the dataset for extracted results (required unless createNewDataset is true)." },
             "createNewDataset": { "type": ["boolean", "null"], "description": "If true, create a new dataset for the photogrammetry results instead of extracting into the current dataset." },
@@ -96,6 +98,26 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
     public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
     public override bool ProducesArtifact => false;
     public override JsonDocument InputSchema => Schema;
+
+    /// <summary>
+    /// The label of a run, so that runs can be told apart in the task lists (FR-PRC-22): the task name, the image
+    /// folder (or the number of images), the output and the profile, as in
+    /// "limit-1 · images/ → photogrammetry_output (Fast Orthophoto)".
+    /// </summary>
+    protected override string? Label(Parameters p)
+    {
+        var source = !string.IsNullOrWhiteSpace(p.Folder) ? p.Folder.Trim().TrimEnd('/') + "/"
+            : p.Images is { Count: > 0 } images ? $"{images.Count} images" : null;
+        var head = string.Join(" \u00b7 ",
+            new[] { p.Name?.Trim(), source }.Where(part => !string.IsNullOrEmpty(part)));
+        var target = p.CreateNewDataset == true
+            ? ("new dataset " + (p.NewDatasetName ?? string.Empty)).Trim()
+            : p.DestPath?.Trim();
+        var label = string.IsNullOrEmpty(target) ? head : $"{head} \u2192 {target}".Trim();
+        if (!string.IsNullOrWhiteSpace(p.Profile))
+            label = $"{label} ({p.Profile.Trim()})".Trim();
+        return string.IsNullOrWhiteSpace(label) ? null : label;
+    }
 
     protected override async Task ValidateAsync(HeavyToolRequest request, Parameters args,
         IHeavyToolValidationContext ctx, CancellationToken ct)
