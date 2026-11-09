@@ -100,10 +100,11 @@ public class DatasetLocationQueriesTests
     }
 
     [Test]
-    public async Task ASignedInNonMember_IsRefusedByTheOrganizationRule_AsTheDatasetListIs()
+    public async Task ASignedInNonMember_InAPublicOrganization_GetsTheListedPublicDatasetsOnly()
     {
-        // The organization rule lets only anonymous callers read a public organization they do not belong to
-        await Should.ThrowAsync<ForbiddenException>(() => Locations(_outsider, PublicOrg));
+        // D-003, FR-ORG-02: every signed-in user reads a Public organization, as an anonymous caller does (it was
+        // refused to a signed-in non-member); its private and unlisted datasets stay out of the list
+        (await Slugs(_outsider, PublicOrg)).ShouldBe(["a-public"]);
     }
 
     [Test]

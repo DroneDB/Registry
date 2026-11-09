@@ -42,9 +42,12 @@ public sealed class OrganizationQueries
     private sealed record OrganizationActivity(int DatasetCount, DateTime? LastWriteUtc);
 
     /// <summary>
-    /// The organizations the current user can see (or owns, with <paramref name="ownedOnly"/>), with its permissions in each,
-    /// by name. The dataset count and the last modified date are shown for the organizations the user owns, administers or
-    /// belongs to; they are null for the others (the datasets of an organization are not public knowledge).
+    /// The organizations the current user can see, with its permissions in each, by name. <paramref name="ownedOnly"/>:
+    /// the user's own list, the organizations it owns or belongs to and the Public ones; otherwise every organization
+    /// it can read (all of them, for an administrator). A Public organization is listed to those who are not its
+    /// members while its owner is active, the rule that lets them read it (D-003). The dataset count and the last
+    /// modified date are shown for the organizations the user owns, administers or belongs to; they are null for the
+    /// others (the datasets of an organization are not public knowledge).
     /// </summary>
     public async Task<IEnumerable<OrganizationDto>> List(bool ownedOnly = false, CancellationToken ct = default)
     {
@@ -58,11 +61,14 @@ public sealed class OrganizationQueries
         // Use projection to load only necessary data
         // We compute the raw permission level in the query, then derive boolean permissions in memory
         Expression<Func<Organization, bool>> isVisible = org => ownedOnly
-            ? org.OwnerId == currentUser.Id
+            ? org.OwnerId == currentUser.Id ||
+              org.Users.Any(u => u.UserId == currentUser.Id) ||
+              org.IsPublic
             : isAdmin ||
               org.OwnerId == currentUser.Id ||
               org.Slug == MagicStrings.PublicOrganizationSlug ||
-              org.Users.Any(u => u.UserId == currentUser.Id);
+              org.Users.Any(u => u.UserId == currentUser.Id) ||
+              org.IsPublic;
         var visibleOrganizations = _context.Organizations.AsNoTracking().Where(isVisible);
 
         var organizationsQuery = visibleOrganizations
@@ -83,6 +89,20 @@ public sealed class OrganizationQueries
             });
 
         var rawOrganizations = await organizationsQuery.ToListAsync(ct);
+
+        // Listed only because it is Public (the user neither owns, administers nor belongs to it; the default "public"
+        // organization keeps its own place in the full list): it goes when its owner is not active, the rule that
+        // makes it unreadable then (one look-up per owner, from the cached authorization snapshots)
+        var listedAsPublic = rawOrganizations
+            .Where(org => org.IsPublic && !org.IsOwnerOrAdmin && org.MemberPermission == null &&
+                          (ownedOnly || org.Slug != MagicStrings.PublicOrganizationSlug))
+            .ToList();
+        var activeOwners = new Dictionary<string, bool>(StringComparer.Ordinal);
+        foreach (var owner in listedAsPublic.Select(org => org.Owner).OfType<string>().Distinct(StringComparer.Ordinal))
+            activeOwners[owner] = await _authManager.IsOwnerActive(owner);
+        foreach (var org in listedAsPublic)
+            if (org.Owner == null || !activeOwners[org.Owner])
+                rawOrganizations.Remove(org);
 
         // Only for the organizations the user owns, administers or belongs to
         var memberSlugs = rawOrganizations

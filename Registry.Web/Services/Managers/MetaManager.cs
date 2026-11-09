@@ -36,19 +36,12 @@ public class MetaManager : IMetaManager
 
     /// <summary>
     /// The dataset's visibility or name (root meta) may decide who lists it and how: their caches go
-    /// (<see cref="IDatasetListingInvalidator"/>).
+    /// (<see cref="IDatasetListingInvalidator.MetaChangedAsync"/>).
     /// </summary>
     private async Task OnDatasetMetaChanged(Data.Models.Dataset ds, string key, string? path)
     {
-        if (key == SafeMetaManager.VisibilityField)
-        {
-            await _listings.VisibilityChangedAsync(ds.Organization.Slug, ds.InternalRef);
-            _logger.LogDebug("Invalidated the visibility and listings of {OrgSlug}/{DsSlug}", ds.Organization.Slug, ds.Slug);
-        }
-        else if (key == SafeMetaManager.NameField && path == null)
-        {
-            await _listings.ListingChangedAsync(ds.Organization.Slug, ds.InternalRef);
-        }
+        await _listings.MetaChangedAsync(ds.Organization.Slug, ds.InternalRef, key, path);
+        _logger.LogDebug("Meta {Key} of {OrgSlug}/{DsSlug} changed", key, ds.Organization.Slug, ds.Slug);
     }
 
     public async Task<MetaDto> Add(string orgSlug, string dsSlug, string? key, string? data, string? path = null, CancellationToken ct = default)

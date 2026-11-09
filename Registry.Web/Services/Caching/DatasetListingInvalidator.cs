@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Caching;
@@ -19,6 +20,14 @@ public interface IDatasetListingInvalidator
 
     /// <summary>The dataset's name, slugs or existence changed: every listing (and its cached name) goes.</summary>
     Task ListingChangedAsync(string orgSlug, Guid internalRef, CancellationToken ct = default);
+
+    /// <summary>
+    /// The meta <paramref name="key"/> of <paramref name="path"/> (null or empty: the dataset's root) was set, unset,
+    /// pushed or removed by a push: the one rule of which meta decides who lists the dataset and how. The visibility
+    /// (any path) is <see cref="VisibilityChangedAsync"/>, the name of the root is <see cref="ListingChangedAsync"/>,
+    /// any other key changes no cache.
+    /// </summary>
+    Task MetaChangedAsync(string orgSlug, Guid internalRef, string key, string? path, CancellationToken ct = default);
 }
 
 /// <summary>Default <see cref="IDatasetListingInvalidator"/>.</summary>
@@ -36,5 +45,15 @@ public sealed class DatasetListingInvalidator(ICacheManager cacheManager, IDdbMa
     {
         await cacheManager.RemoveDatasetNameAsync(orgSlug, internalRef, ddbManager);
         await generations.RenewAsync(CacheCategories.StacGeneration, ct);
+    }
+
+    public async Task MetaChangedAsync(string orgSlug, Guid internalRef, string key, string? path,
+        CancellationToken ct = default)
+    {
+        if (key == SafeMetaManager.VisibilityField)
+            await VisibilityChangedAsync(orgSlug, internalRef, ct);
+        // The root: null from the meta API, "" in a meta dump (libddb's own spelling of it)
+        else if (key == SafeMetaManager.NameField && string.IsNullOrEmpty(path))
+            await ListingChangedAsync(orgSlug, internalRef, ct);
     }
 }

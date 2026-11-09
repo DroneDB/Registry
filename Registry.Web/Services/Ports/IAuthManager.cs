@@ -46,6 +46,12 @@ public interface IAuthManager
     /// unlisted dataset by its link takes <see cref="RequestAccess{T}"/>, not this.
     /// </summary>
     public Task<bool> CanListDataset(Dataset dataset);
+
+    /// <summary>
+    /// Whether the owner <paramref name="ownerId"/> of a resource exists and is not deactivated: the rule that lets
+    /// those who are not members read and list a Public organization (false for null).
+    /// </summary>
+    public Task<bool> IsOwnerActive(string? ownerId);
 }
 
 /// <summary>Lookups of the current user for operations that need one.</summary>

@@ -37,9 +37,10 @@ public abstract class AccessControlBase
     }
 
     /// <summary>
-    /// Checks that a resource owner exists and is not deactivated
+    /// Checks that a resource owner exists and is not deactivated: a Public organization of an owner who is not is
+    /// neither readable nor listed by those who are not its members
     /// </summary>
-    protected async Task<bool> IsOwnerActive(string? ownerId)
+    public async Task<bool> IsOwnerActive(string? ownerId)
     {
         return ownerId != null && (await Snapshots.GetAsync(ownerId)).IsActive;
     }

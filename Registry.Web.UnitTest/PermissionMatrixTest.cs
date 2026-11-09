@@ -409,7 +409,8 @@ public class PermissionMatrixTest : TestBase
     #region Organization Access Control - Non-Member
 
     [Test]
-    [TestCase(true, AccessType.Read, false, TestName = "NonMember_PublicOrg_Read_Denied")]
+    // Every signed-in user reads a Public organization (D-003, FR-ORG-02): it was refused to a non-member only
+    [TestCase(true, AccessType.Read, true, TestName = "NonMember_PublicOrg_Read_Allowed")]
     [TestCase(true, AccessType.Write, false, TestName = "NonMember_PublicOrg_Write_Denied")]
     [TestCase(true, AccessType.Delete, false, TestName = "NonMember_PublicOrg_Delete_Denied")]
     [TestCase(false, AccessType.Read, false, TestName = "NonMember_PrivateOrg_Read_Denied")]
@@ -1441,6 +1442,27 @@ public class PermissionMatrixTest : TestBase
         var result = await control.CanAccessOrganization(_deactivatedOwnerOrg, AccessType.Read, (User?)null);
 
         result.ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task OrgAccess_NonMember_DeactivatedOwner_PublicOrg_Denied()
+    {
+        // The public read is one rule for anonymous and signed-in callers: no read while the owner is deactivated
+        var control = CreateOrgAccessControl();
+
+        var result = await control.CanAccessOrganization(_deactivatedOwnerOrg, AccessType.Read, _nonMemberUser);
+
+        result.ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task OrgAccess_IsOwnerActive_IsTheRuleOfThePublicRead()
+    {
+        var control = CreateOrgAccessControl();
+
+        (await control.IsOwnerActive(_ownerUser.Id)).ShouldBeTrue();
+        (await control.IsOwnerActive(_deactivatedOwner.Id)).ShouldBeFalse();
+        (await control.IsOwnerActive(null)).ShouldBeFalse();
     }
 
     [Test]

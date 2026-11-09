@@ -26,21 +26,18 @@ public class OrganizationAccessControl : AccessControlBase
     {
         ArgumentNullException.ThrowIfNull(org);
 
-        // Anonymous access check
-        if (userId == null)
-        {
-            // Anonymous users can access only public organizations with Read access,
-            // and only while the owner is not deactivated
-            if (access != AccessType.Read || !org.IsPublic)
-                return false;
+        var user = userId == null ? null : await Snapshots.GetAsync(userId);
 
-            return await IsOwnerActive(org.OwnerId);
-        }
+        // Deactivated user check: before any other rule, the public read included
+        if (user is { IsDeactivated: true })
+            return false;
 
-        var user = await Snapshots.GetAsync(userId);
+        // Public read: anyone, signed in or not, reads a Public organization while its owner is active (D-003)
+        if (access == AccessType.Read && org.IsPublic && await IsOwnerActive(org.OwnerId))
+            return true;
 
-        // Deactivated user check
-        if (user.IsDeactivated)
+        // Anonymous users have no other access
+        if (user == null)
             return false;
 
         // Admin privileges - system admins have full access

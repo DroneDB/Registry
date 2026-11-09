@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,8 +11,10 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Builds;
+using Registry.Web.Services.Caching;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Push;
 
@@ -24,8 +27,10 @@ public sealed class PushCommit
     private readonly IFileSystem _fileSystem;
     private readonly ImportSettings _importSettings;
     private readonly BuildScheduler _builds;
+    private readonly IDatasetListingInvalidator _listings;
 
-    public PushCommit(IDatasetAccessResolver access, PushSessionStore sessionStore, IDdbWrapper ddbWrapper, IFileSystem fileSystem, IOptions<ImportSettings> importSettings, BuildScheduler builds)
+    public PushCommit(IDatasetAccessResolver access, PushSessionStore sessionStore, IDdbWrapper ddbWrapper, IFileSystem fileSystem, IOptions<ImportSettings> importSettings, BuildScheduler builds,
+        IDatasetListingInvalidator listings)
     {
         _access = access;
         _sessionStore = sessionStore;
@@ -33,6 +38,7 @@ public sealed class PushCommit
         _fileSystem = fileSystem;
         _importSettings = importSettings.Value;
         _builds = builds;
+        _listings = listings;
     }
 
     public async Task Commit(string orgSlug, string dsSlug, string token, CancellationToken ct = default)
@@ -89,6 +95,9 @@ public sealed class PushCommit
             metaDump = await _fileSystem.ReadAllTextAsync(metaFile, ct);
         }
 
+        // The meta keys the delta touches, read before it applies: a removed meta is gone after it
+        var touchedMeta = TouchedMetaKeys(ddb, delta, metaDump);
+
         // Applies delta. Atomic to a cancel (libddb): a request that goes away while it reads and hashes the
         // added files stops it with the dataset and the pushed files as they were (DdbCanceledException, the session
         // stays: the client commits again); once it starts to change the dataset it finishes whole, returns normally
@@ -104,6 +113,12 @@ public sealed class PushCommit
             throw new ConflictException("Merge conflicts detected, try pulling first.");
         }
 
+        // A pushed visibility or name decides who lists the dataset and how, from the next request on (the delta is
+        // applied: whatever the request's token says now)
+        var ds = access.Dataset;
+        foreach (var (key, path) in touchedMeta)
+            await _listings.MetaChangedAsync(ds.Organization.Slug, ds.InternalRef, key, path, CancellationToken.None);
+
         // Delete temp folder
         _fileSystem.FolderDelete(baseTempFolder);
 
@@ -111,4 +126,31 @@ public sealed class PushCommit
         await _builds.QueueAddedAsync(BuildTarget.Of(access, orgSlug, dsSlug),
             [.. delta.Adds.Where(item => item.Hash.Length > 0).Select(item => item.Path)], ct: CancellationToken.None);
     }
+
+    /// <summary>
+    /// The distinct (key, path) of the meta <paramref name="delta"/> adds and removes: its meta are ids, so the keys of
+    /// the adds come from the pushed <paramref name="metaDump"/> and those of the removes from the dataset. The path of
+    /// the root is null, as in the meta API (a dump writes it "").
+    /// </summary>
+    private static HashSet<(string Key, string? Path)> TouchedMetaKeys(IDDB ddb, Delta delta, string? metaDump)
+    {
+        var touched = new HashSet<(string Key, string? Path)>();
+
+        if (delta.MetaAdds.Length > 0 && metaDump != null)
+        {
+            var added = delta.MetaAdds.ToHashSet(StringComparer.Ordinal);
+            foreach (var meta in ApiJson.Deserialize<List<MetaDump>>(metaDump) ?? [])
+                if (added.Contains(meta.Id))
+                    touched.Add((meta.Key, RootAsNull(meta.Path)));
+        }
+
+        // Never with no ids: libddb dumps every meta of the dataset for an empty list
+        if (delta.MetaRemoves.Length > 0)
+            foreach (var meta in ddb.Meta.Dump(ApiJson.Serialize(delta.MetaRemoves.ToList())))
+                touched.Add((meta.Key, RootAsNull(meta.Path)));
+
+        return touched;
+    }
+
+    private static string? RootAsNull(string? path) => string.IsNullOrEmpty(path) ? null : path;
 }

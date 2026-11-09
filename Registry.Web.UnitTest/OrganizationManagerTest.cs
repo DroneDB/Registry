@@ -763,8 +763,9 @@ public class OrganizationManagerTest : TestBase
         org.Owner.ShouldBe("admin"); // The username from the app context
     }
 
+    // D-003, FR-ORG-02: a Public organization of another user is listed to every signed-in user (it was not)
     [Test]
-    public async Task List_DoesNotIncludePublicOrganizationsOfOtherUsers()
+    public async Task List_IncludesPublicOrganizationsOfOtherUsers()
     {
         // Arrange
         var standardUser = SetupStandardUser("standard-user");
@@ -787,10 +788,8 @@ public class OrganizationManagerTest : TestBase
         var organizations = (await _organizationsManager.List()).ToArray();
 
         // Assert
-        // Should NOT include the other user's public organization
-        // Should only include: the special 'public' org and user's own orgs
         organizations.ShouldContain(org => org.Slug == MagicStrings.PublicOrganizationSlug);
-        organizations.ShouldNotContain(org => org.Slug == "other-user-public-org");
+        organizations.ShouldContain(org => org.Slug == "other-user-public-org");
     }
 
     #endregion
@@ -1004,13 +1003,17 @@ public class OrganizationManagerTest : TestBase
         organizations.ShouldNotContain(o => o.Slug == "private-org");
     }
 
+    // FR-ORG-11, D-003: ownedOnly is the user's own list, the organizations it owns or belongs to and the Public ones
+    // (it was the owned ones only: a new member could not find its organization)
     [Test]
-    public async Task List_OwnedOnly_ReturnsOnlyOwnedOrganizations()
+    public async Task List_OwnedOnly_ReturnsOwnedMemberAndPublicOrganizations()
     {
         // Arrange
         var user = SetupStandardUser("filter-user");
         await CreateOrganizationForUser(user.Id, "my-org-1", isPublic: false);
         await CreateOrganizationForUser(user.Id, "my-org-2", isPublic: false);
+        await CreateOrganizationForUser("someone-else", "others-public-org", isPublic: true);
+        await CreateOrganizationForUser("someone-else", "others-private-org", isPublic: false);
 
         // Also create org where user is member but not owner
         var memberOrg = new Organization
@@ -1038,12 +1041,65 @@ public class OrganizationManagerTest : TestBase
         // Assert
         allOrgs.Length.ShouldBeGreaterThan(ownedOrgs.Length);
         allOrgs.ShouldContain(o => o.Slug == "member-only-org");
+        allOrgs.ShouldContain(o => o.Slug == "others-public-org");
+        allOrgs.ShouldNotContain(o => o.Slug == "others-private-org");
         allOrgs.ShouldContain(o => o.Slug == MagicStrings.PublicOrganizationSlug);
 
         ownedOrgs.ShouldContain(o => o.Slug == "my-org-1");
         ownedOrgs.ShouldContain(o => o.Slug == "my-org-2");
-        ownedOrgs.ShouldNotContain(o => o.Slug == "member-only-org");
+        ownedOrgs.ShouldContain(o => o.Slug == "member-only-org");
+        ownedOrgs.ShouldContain(o => o.Slug == "others-public-org");
+        ownedOrgs.ShouldNotContain(o => o.Slug == "others-private-org");
+        // The default organization has no owner: not readable by those who are not members, so not in their list
         ownedOrgs.ShouldNotContain(o => o.Slug == MagicStrings.PublicOrganizationSlug);
+    }
+
+    // FR-ORG-02, D-003: a Public organization is listed to every signed-in user, read-only, without its activity
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task List_PublicOrganizationOfAnotherUser_IsListedReadOnly(bool ownedOnly)
+    {
+        SetupStandardUser("public-reader");
+        await CreateOrganizationForUser("someone-else", "others-public-org", isPublic: true);
+
+        var listed = (await _organizationsManager.List(ownedOnly)).Single(o => o.Slug == "others-public-org");
+
+        var permissions = listed.Permissions.ShouldNotBeNull();
+        permissions.CanRead.ShouldBeTrue();
+        permissions.CanWrite.ShouldBeFalse();
+        permissions.CanDelete.ShouldBeFalse();
+        permissions.CanManageMembers.ShouldBeFalse();
+        listed.DatasetCount.ShouldBeNull();
+        listed.LastModified.ShouldBeNull();
+    }
+
+    // The list and the access check share IsOwnerActive: a Public organization of a deactivated owner is neither
+    // readable nor listed by those who are not its members; a member still finds it
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task List_PublicOrganizationOfDeactivatedOwner_IsListedToItsMembersOnly(bool ownedOnly)
+    {
+        var member = SetupStandardUser("member-of-gone");
+        _authManagerMock.Setup(x => x.IsOwnerActive("gone-owner")).ReturnsAsync(false);
+        await CreateOrganizationForUser("gone-owner", "gone-public-org", isPublic: true);
+        var withMember = new Organization
+        {
+            Slug = "gone-public-member-org", Name = "Gone Member", Description = "Test", IsPublic = true,
+            OwnerId = "gone-owner", CreationDate = DateTime.Now,
+            Users = new List<OrganizationUser>
+            {
+                new() { UserId = member.Id, Permissions = OrganizationPermissions.ReadOnly,
+                        OrganizationSlug = "gone-public-member-org" }
+            }
+        };
+        await _context.Organizations.AddAsync(withMember);
+        await _context.SaveChangesAsync();
+
+        var organizations = (await _organizationsManager.List(ownedOnly)).ToArray();
+
+        organizations.ShouldNotContain(o => o.Slug == "gone-public-org");
+        organizations.ShouldContain(o => o.Slug == "gone-public-member-org");
+        _authManagerMock.Verify(x => x.IsOwnerActive("gone-owner"), Times.Once, "one look-up per owner");
     }
 
     [Test]
@@ -1521,6 +1577,7 @@ public class OrganizationManagerTest : TestBase
         _authManagerMock.Setup(x => x.CanListOrganizations(It.IsAny<User>())).ReturnsAsync(true);
         _authManagerMock.Setup(x => x.RequestAccess(It.IsAny<Organization>(), It.IsAny<AccessType>()))
             .ReturnsAsync(true);
+        _authManagerMock.Setup(x => x.IsOwnerActive(It.IsAny<string?>())).ReturnsAsync(true);
     }
 
     private static OrganizationRequestDto CreateTestOrganizationDto(string slug, string? owner = null)

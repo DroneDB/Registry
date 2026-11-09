@@ -27,6 +27,7 @@ using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Caching;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -54,6 +55,7 @@ public class PushPipelineTests : TestBase
     private Mock<IObjectsManager> _objects = null!;
     private Mock<IBackgroundJobsProcessor> _jobs = null!;
     private Mock<ICacheManager> _pendingCache = null!;
+    private Mock<IDatasetListingInvalidator> _listings = null!;
     private Dataset _ds = null!;
     private RegistryContext _ctx = null!;
     private Delta _delta = null!;
@@ -124,6 +126,7 @@ public class PushPipelineTests : TestBase
 
         _jobs = new Mock<IBackgroundJobsProcessor>();
         _pendingCache = new Mock<ICacheManager>();
+        _listings = new Mock<IDatasetListingInvalidator>();
     }
 
     [TearDown]
@@ -148,7 +151,8 @@ public class PushPipelineTests : TestBase
         return TestPush.Manager(_utils.Object, ddbManager.Object, Mock.Of<IDatasetsManager>(),
             auth.Object, new DatasetAccessResolver(_utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper.Object,
             TestJobs.Scheduler(_jobs.Object, buildPending, userId: "u"), TestSettings.Options<ImportSettings>(settings), fileSystem,
-            new PushSessionStore(fileSystem), new UploadQuotaGuard(_ledger, _storageQuota.Object), TestPaths.Policy, TestScratch.Provider);
+            new PushSessionStore(fileSystem), new UploadQuotaGuard(_ledger, _storageQuota.Object), TestPaths.Policy, TestScratch.Provider,
+            _listings.Object);
     }
 
     private static StampDto ClientStamp() => new() { Checksum = "client", Entries = [], Meta = [] };
@@ -228,6 +232,68 @@ public class PushPipelineTests : TestBase
 
         methods.Count(m => m == nameof(DdbJobs.BuildPending)).ShouldBe(1);
         methods.Count(m => m == nameof(DdbJobs.Build)).ShouldBe(2 * Adds / 10, "the buildable pushed files");
+    }
+
+    /// <summary>
+    /// A pushed visibility or name takes effect at once (FR-DEV-03, SEC-002): Commit hands each meta key the delta
+    /// touches, once, to the invalidator's rule. The delta names its meta by id: the keys of the adds come from the
+    /// pushed dump (its other meta are not part of the delta), those of the removes from the dataset, read before the
+    /// delta applies; the root's "" of a dump is the null of the meta API (red before: a push dropped no cache, a
+    /// dataset made private stayed readable by anonymous callers for a day).
+    /// </summary>
+    [Test]
+    public async Task Commit_HandsEachMetaKeyTheDeltaTouches_ToTheInvalidator()
+    {
+        _delta.MetaAdds = ["m-vis", "m-name", "m-entry"];
+        _delta.MetaRemoves = ["r-vis", "r-entry-name"];
+        var order = new List<string>();
+        var meta = new Mock<Registry.Ports.DroneDB.IMetaManager>();
+        meta.Setup(m => m.Dump("[\"r-vis\",\"r-entry-name\"]")).Callback(() => order.Add("dump")).Returns(
+        [
+            new MetaDump { Id = "r-vis", Key = "visibility", Path = "" },
+            new MetaDump { Id = "r-entry-name", Key = "name", Path = "photos/IMG_1.JPG" }
+        ]);
+        _ddb.SetupGet(d => d.Meta).Returns(meta.Object);
+        _wrapper.Setup(w => w.ApplyDelta(It.IsAny<Delta>(), It.IsAny<string>(), _root, It.IsAny<MergeStrategy>(),
+                It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, string>>()))
+            .Callback(() => order.Add("apply")).Returns([]);
+        _listings.Setup(l => l.MetaChangedAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string>(),
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Callback(() => order.Add("invalidate")).Returns(Task.CompletedTask);
+        var mgr = CreateManager();
+        var token = await InitAndStage(mgr);
+        await mgr.SaveMeta("org", "ds", token, """
+            [
+              {"id":"m-vis","path":"","key":"visibility","data":0,"mtime":1},
+              {"id":"m-name","path":"","key":"name","data":"Survey","mtime":1},
+              {"id":"m-entry","path":"photos/IMG_0.JPG","key":"annotations","data":[],"mtime":1},
+              {"id":"m-other","path":"","key":"tags","data":[],"mtime":1}
+            ]
+            """);
+
+        await mgr.Commit("org", "ds", token);
+
+        void Once(string key, string? path) => _listings.Verify(l => l.MetaChangedAsync("org", _ds.InternalRef, key, path,
+            It.IsAny<CancellationToken>()), Times.Once, $"{key} of '{path}'");
+        Once("visibility", null);
+        Once("name", null);
+        Once("annotations", "photos/IMG_0.JPG");
+        Once("name", "photos/IMG_1.JPG");
+        _listings.VerifyNoOtherCalls();
+        order.IndexOf("dump").ShouldBeLessThan(order.IndexOf("apply"), "a removed meta is gone once the delta applies");
+        order.IndexOf("apply").ShouldBeLessThan(order.IndexOf("invalidate"));
+    }
+
+    /// <summary>A delta without meta reads no meta (libddb dumps every meta of the dataset for no ids) and drops no cache.</summary>
+    [Test]
+    public async Task Commit_DeltaWithoutMeta_ReadsNoMetaAndDropsNoCache()
+    {
+        var mgr = CreateManager();
+
+        await mgr.Commit("org", "ds", await InitAndStage(mgr));
+
+        _ddb.VerifyGet(d => d.Meta, Times.Never);
+        _listings.VerifyNoOtherCalls();
     }
 
     [Test]

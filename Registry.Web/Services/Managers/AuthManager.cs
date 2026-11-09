@@ -112,6 +112,8 @@ public class AuthManager : IAuthManager
         return await RequestAccessById(obj, access, await _currentUserIdLazy.Value);
     }
 
+    public Task<bool> IsOwnerActive(string? ownerId) => _organizationAccess.IsOwnerActive(ownerId);
+
     public async Task<bool> CanListOrganizations(User? user)
     {
         // User can list organizations if it's not null and not deactivated
