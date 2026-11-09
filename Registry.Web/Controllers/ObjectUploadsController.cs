@@ -17,6 +17,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Models.Forms;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
@@ -78,6 +79,7 @@ public class ObjectUploadsController : ControllerBaseEx
     [HttpPost(RoutesHelper.ObjectsRadix, Name = nameof(ObjectsController) + ".Post")]
     [TypeFilter(typeof(UploadAnswerFilter))]
     [DisableFormValueModelBinding]
+    [StreamedRequestBody(typeof(ObjectUploadForm))]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [ConfigurableUploadSizeLimit]
     [EnforceContentLength]
@@ -215,6 +217,7 @@ public class ObjectUploadsController : ControllerBaseEx
     [HttpPost(RoutesHelper.ObjectsRadix + "/chunk", Name = nameof(ObjectUploadsController) + "." + nameof(PostChunk))]
     [TypeFilter(typeof(UploadAnswerFilter))]
     [DisableFormValueModelBinding]
+    [StreamedRequestBody(typeof(DatasetChunkForm))]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [ConfigurableUploadSizeLimit]
     [EnforceContentLength(ContentLengthLimit.Chunk)]
@@ -259,6 +262,7 @@ public class ObjectUploadsController : ControllerBaseEx
     [HttpPost(RoutesHelper.ObjectsRadix + "/chunk/{fileId}/commit", Name = nameof(ObjectUploadsController) + "." + nameof(CommitChunks))]
     [TypeFilter(typeof(UploadAnswerFilter))]
     [DisableFormValueModelBinding]
+    [StreamedRequestBody(typeof(ChunkCommitForm), Required = false)]
     [ProducesResponseType(typeof(EntryDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<EntryDto>> CommitChunks([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,

@@ -189,13 +189,13 @@ public class Startup
                         Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "undefined");
                 });
 
-            // Registered once, as an endpoint: signed-in callers only, then the admin check of the
-            // dashboard itself; an unknown dashboard page is Hangfire's 404 (registering the middleware form too
-            // made it a 500)
+            // Registered once, as an endpoint: the admin policy, so a refusal is the ProblemDetails of every
+            // other endpoint (FR-XC-29), then the admin check of the dashboard itself; an unknown dashboard page
+            // is Hangfire's 404 (registering the middleware form too made it a 500)
             endpoints.MapHangfireDashboard(MagicStrings.HangFireUrl, new DashboardOptions
             {
                 AsyncAuthorization = [new HangfireAuthorizationFilter()]
-            }).RequireAuthorization();
+            }).RequireAuthorization(Policies.Admin);
         });
 
         app.UseWhen(context => !context.Request.Path.StartsWithSegments("/static"), builder =>

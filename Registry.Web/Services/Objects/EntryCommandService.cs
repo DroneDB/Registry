@@ -50,8 +50,27 @@ public sealed class EntryCommandService : IEntryCommandService
         _logger.LogInformation("Adding folder '{Path}' to '{OrgSlug}/{DsSlug}'", folder, orgSlug, dsSlug);
         ddb.Add(folder);
 
-        return new EntryDto { Path = folder, Type = EntryType.Directory, Size = 0 };
+        // The entry as indexed, with its real mtime (FR-DEV-13); now when the index cannot give it back. The folder
+        // exists by now: a failed read must not turn the creation into an error (a retry would be a 409). Any
+        // failure counts (Ddb wraps only a plain DdbException; its subclasses and others pass through), except
+        // cancellation
+        Entry? indexed = null;
+        try
+        {
+            indexed = ddb.GetEntry(folder);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Cannot read back folder '{Path}' of '{OrgSlug}/{DsSlug}'", folder, orgSlug, dsSlug);
+        }
+
+        return indexed.ToDto() ??
+               new EntryDto { Path = folder, Type = EntryType.Directory, Size = 0, ModifiedTime = WholeSecondsNow() };
     }
+
+    // mtime is whole Unix seconds, like the index's
+    private static DateTime WholeSecondsNow() =>
+        DateTime.UnixEpoch.AddSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
     public async Task<EntryDto> MoveAsync(string orgSlug, string dsSlug, string? sourcePath, string? destPath,
         CancellationToken ct = default)

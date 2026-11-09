@@ -144,15 +144,15 @@ field, `detail` with the joined field messages). 401 only for anonymous callers.
 |---|---|---|---|---|
 | error-400-invalid-slug | POST /orgs/{org}/ds slug="Not A Slug!" | owner | 400 | manager `BadRequestException` |
 | error-400-model-validation | POST …/meta/remove without `id` | owner | 400 | model validation |
-| error-401-anonymous-gate | GET /users/storage | anonymous | 401 | empty, no Content-Type (`[Authorize]` challenge) |
+| error-401-anonymous-gate | GET /users/storage | anonymous | 401 | `[Authorize]` challenge: "Not signed in" (`RegistryAuthorizationResultHandler`) |
 | error-401-anonymous-private-org | GET /orgs/{org}/ds | anonymous | 401 | manager `ForbiddenException`, anonymous caller |
 | error-403-non-member | GET /orgs/{org}/ds/{ds} | user | 403 | manager `ForbiddenException`, authenticated caller |
-| error-403-non-admin | GET /sys/config | user | 403 | empty, no Content-Type (Admin policy) |
+| error-403-non-admin | GET /sys/config | user | 403 | Admin policy (`RegistryAuthorizationResultHandler`) |
 | error-404-missing-dataset | GET /orgs/{org}/ds/golden-missing | owner | 404 | manager `NotFoundException` |
 | error-404-missing-organization | GET /orgs/golden-nowhere/ | owner | 404 | manager `NotFoundException` |
 
-The empty 401/403 come from the test authentication scheme's challenge/forbid; production's JWT
-scheme also answers with an empty body (plus `WWW-Authenticate: Bearer`, not recorded).
+The authorization middleware's 401 and 403 are written by `RegistryAuthorizationResultHandler` (FR-XC-29)
+after the scheme's own challenge: production's JWT scheme adds `WWW-Authenticate: Bearer` (not recorded).
 
 ## Not covered (and why)
 

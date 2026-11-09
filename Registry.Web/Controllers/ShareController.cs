@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
+using Registry.Web.Models.Forms;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using System.ComponentModel.DataAnnotations;
@@ -79,13 +80,14 @@ public class ShareController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Uploads a file to the share by streaming a <c>multipart/form-data</c> request: the single file
+    /// Uploads a file to the share. The <c>multipart/form-data</c> request is streamed: the single file
     /// part is written straight to the dataset volume and the destination is taken from a <c>path</c> form field.
     /// </summary>
     /// <param name="token">The share token.</param>
     /// <returns>The upload result.</returns>
     [HttpPost("upload/{token}", Name = nameof(ShareController) + "." + nameof(Upload))]
     [DisableFormValueModelBinding]
+    [StreamedRequestBody(typeof(ShareUploadForm))]
     [ConfigurableUploadSizeLimit]
     [EnforceContentLength]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
@@ -163,6 +165,7 @@ public class ShareController : ControllerBaseEx
     /// <returns>The chunk upload result, or the final upload result if this was the last chunk.</returns>
     [HttpPost("upload-chunk/{token}", Name = nameof(ShareController) + "." + nameof(UploadChunked))]
     [DisableFormValueModelBinding]
+    [StreamedRequestBody(typeof(ShareChunkForm))]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     [ConfigurableUploadSizeLimit]
     [ProducesResponseType(typeof(ChunkUploadResultDto), StatusCodes.Status200OK)]

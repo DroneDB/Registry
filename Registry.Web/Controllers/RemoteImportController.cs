@@ -13,9 +13,10 @@ using Registry.Web.Utilities.Auth;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// Imports from another Registry (out of <see cref="SystemController"/>): the import runs as a background
+/// Imports from another Registry: the import runs as a background
 /// job; these endpoints queue it, report its state and result, and cancel it. Admin only.
 /// </summary>
+/// <remarks>Moved out of <see cref="SystemController"/>.</remarks>
 [Authorize]
 [ApiController]
 [Route(RoutesHelper.SystemRadix)]
@@ -61,7 +62,8 @@ public class RemoteImportController : ControllerBaseEx
     }
 
     /// <summary>
-    /// The state of an import job and, once it succeeded, its result (imported datasets, errors, statistics).
+    /// The state of an import job and, once it succeeded, its result. The result lists the imported datasets,
+    /// errors and statistics.
     /// </summary>
     /// <param name="jobId">The id returned when the import was queued.</param>
     [HttpGet("imports/{jobId}", Name = SystemRoutes.Prefix + nameof(GetImportStatus))]

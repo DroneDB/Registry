@@ -15,7 +15,8 @@ using Registry.Web.Utilities.Auth;
 
 namespace Registry.Web.Controllers;
 
-/// <summary>The outgoing e-mail of the instance (route names of <see cref="SystemRoutes"/>). Administrators only.</summary>
+/// <summary>The outgoing e-mail of the instance. Administrators only.</summary>
+/// <remarks>Route names of <see cref="SystemRoutes"/>.</remarks>
 [Authorize]
 [ApiController]
 [Route(RoutesHelper.SystemRadix)]

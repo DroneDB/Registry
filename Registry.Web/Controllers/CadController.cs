@@ -17,7 +17,7 @@ namespace Registry.Web.Controllers;
 public class CadController(CadCrsManager crsManager) : ControllerBaseEx
 {
     /// <summary>
-    /// Sets the coordinate system of a CAD drawing by writing its .prj: an authority code
+    /// Sets the coordinate system of a CAD drawing by writing its .prj. The value is an authority code
     /// ("EPSG:32632"), WKT or PROJ string, or "local" to keep the drawing in its own coordinates.
     /// Delete the .prj to go back to the drawing's own GEODATA.
     /// </summary>

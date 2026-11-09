@@ -12,9 +12,10 @@ using Registry.Web.Utilities.Ogc;
 
 namespace Registry.Web.Controllers.Ogc;
 
-/// <summary>WCS controller. Supports versions 1.0.0 / 1.1.1 / 2.0.1 via version
-/// negotiation; the per-version wire format is handled by
-/// <see cref="Services.Managers.Wcs.IWcsProtocolHandler"/> implementations.</summary>
+/// <summary>OGC Web Coverage Service (WCS) of a dataset: versions 1.0.0, 1.1.1 and 2.0.1, by version
+/// negotiation.</summary>
+/// <remarks>The per-version wire format is handled by
+/// <see cref="Services.Managers.Wcs.IWcsProtocolHandler"/> implementations.</remarks>
 [ApiController]
 [BasicAuthentication]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]
@@ -34,7 +35,7 @@ public class WcsController : ControllerBaseEx
         _mgr = mgr;
     }
 
-    /// <summary>WCS KVP request (1.0.0, 1.1.1, 2.0.1): capabilities and coverage descriptions (XML), coverages (a raster file).</summary>
+    /// <summary>WCS KVP request (1.0.0, 1.1.1, 2.0.1). It answers capabilities and coverage descriptions (XML), coverages (a raster file).</summary>
     [HttpGet("wcs")]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "text/xml", "application/xml", "image/tiff", "image/png", "image/jpeg")]
     public Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)

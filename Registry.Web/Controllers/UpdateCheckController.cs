@@ -12,9 +12,11 @@ using Registry.Web.Utilities.Auth;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// What the update check knows and what an administrator tells it (out of <see cref="SystemController"/>). Same
-/// routes, same route names (<see cref="SystemRoutes"/>).
+/// What the update check knows and what an administrator tells it.
 /// </summary>
+/// <remarks>
+/// Moved out of <see cref="SystemController"/>: same routes, same route names (<see cref="SystemRoutes"/>).
+/// </remarks>
 [Authorize]
 [ApiController]
 [Route(RoutesHelper.SystemRadix)]
@@ -31,7 +33,7 @@ public class UpdateCheckController : ControllerBaseEx
     }
 
     /// <summary>
-    /// What the update check knows: the installed and the latest version, whether an update is available and
+    /// What the update check knows. It has the installed and the latest version, whether an update is available and
     /// whether it carries security fixes, the merged release notes (Markdown from the update check service: render it
     /// sanitized), the link to request a licence, and what the administrator declared. The version fields are null until
     /// a check succeeded.
@@ -48,8 +50,8 @@ public class UpdateCheckController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Saves how the deployment is used and, with the administrator's consent, the address to send security and release
-    /// news to. A change queues one update check (at most one every 10 minutes, none while the check is disabled), so
+    /// Saves how the deployment is used. With the administrator's consent, it also saves the address to send security
+    /// and release news to. A change queues one update check (at most one every 10 minutes, none while the check is disabled), so
     /// the declaration reaches the update check service the same day.
     /// </summary>
     /// <param name="request">The declaration, the address and the consent.</param>

@@ -14,11 +14,13 @@ using Registry.Web.Utilities.Auth;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// Admin-only dashboard listing tasks across all users and datasets.
-/// Lives under the system radix (<c>/sys/tasks</c>). Per-task actions (log, result,
-/// cancel, retry) reuse the existing per-dataset endpoints in <see cref="TasksController"/>,
-/// which already authorize admins via dataset ownership.
+/// Tasks of every dataset (admin): the list across all users and datasets, and the removal of an ended task.
+/// The other actions of a task (log, result, cancel, retry) are those of the tasks of its dataset.
 /// </summary>
+/// <remarks>
+/// Lives under the system radix (<c>/sys/tasks</c>). Per-task actions reuse the per-dataset endpoints in
+/// <see cref="TasksController"/>, which already authorize admins via dataset ownership.
+/// </remarks>
 [Authorize]
 [ApiController]
 [Route(RoutesHelper.SystemRadix + "/tasks")]
@@ -34,6 +36,7 @@ public class AdminTasksController : ControllerBaseEx
 
     // ---- GET /sys/tasks ---------------------------------------------------
 
+    /// <summary>Lists the tasks of every dataset, one page at a time, filtered by tool, state or user.</summary>
     [HttpGet(Name = nameof(AdminTasksController) + "." + nameof(List))]
     [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -48,6 +51,7 @@ public class AdminTasksController : ControllerBaseEx
 
     // ---- POST /sys/tasks/{id}/delete ------------------------------------
 
+    /// <summary>Removes an ended task of any dataset and its files.</summary>
     [HttpPost("{id}/delete", Name = nameof(AdminTasksController) + "." + nameof(Delete))]
     [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(StatusCodes.Status200OK)]

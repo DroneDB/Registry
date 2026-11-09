@@ -32,8 +32,8 @@ public class ImportController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Lists the import source types enabled on this server, to a caller who may import into the
-    /// organization (write access).
+    /// Lists the import source types enabled on this server. Only a caller who may import into the
+    /// organization (write access) gets them.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
     /// <returns>The available source type identifiers.</returns>
@@ -81,7 +81,7 @@ public class ImportController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Browses the remote structure of an import source (lists organizations or datasets) without
+    /// Browses the remote structure of an import source. It lists organizations or datasets without
     /// creating or modifying anything. Only the <c>registry</c> source type supports this operation.
     /// </summary>
     /// <param name="orgSlug">The organization slug (used for access control only).</param>

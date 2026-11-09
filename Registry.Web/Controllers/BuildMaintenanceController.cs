@@ -14,10 +14,11 @@ using Registry.Web.Utilities.Auth;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// Build and index maintenance across datasets (out of <see cref="SystemController"/>): the build cleanup,
+/// Build and index maintenance across datasets: the build cleanup,
 /// the system rescan, the pending-build sweep status, the job index retention, the artifact completeness check.
 /// Admin only.
 /// </summary>
+/// <remarks>Moved out of <see cref="SystemController"/>.</remarks>
 [Authorize]
 [ApiController]
 [Route(RoutesHelper.SystemRadix)]
@@ -29,7 +30,7 @@ public class BuildMaintenanceController : ControllerBaseEx
     public BuildMaintenanceController(BuildMaintenance maintenance) => _maintenance = maintenance;
 
     /// <summary>
-    /// Cleans up build artifacts and stale entries on a single dataset, all datasets in
+    /// Cleans up build artifacts and stale entries. It works on a single dataset, all datasets in
     /// an organization, or every dataset in the system. Admin only.
     /// When more than one dataset is targeted, the cleanup is enqueued as background jobs.
     /// </summary>
@@ -53,7 +54,7 @@ public class BuildMaintenanceController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Rescans the index entries that match a type and/or extension filter across all
+    /// Rescans the index entries that match a type and/or extension filter. It works across all
     /// organizations, one organization or one dataset, e.g. to re-read every DWG drawing
     /// after DroneDB learns the format. Admin only.
     /// A background job submits one rescan-index task per dataset that holds matching

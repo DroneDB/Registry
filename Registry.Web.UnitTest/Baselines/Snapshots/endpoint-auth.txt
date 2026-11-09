@@ -5,7 +5,7 @@
 #   gate: who passes the HTTP gate: open (manager checks), anonymous, authenticated, admin
 # Regenerate on purpose: REGISTRY_UPDATE_SNAPSHOTS=1 dotnet test Registry.Web.UnitTest --filter
 #   "FullyQualifiedName~ControllerSmokeTests.EndpointAuthorization_MatchesSnapshot"
-ANY /hangfire/{**path} -> Authorize [authenticated] @ /hangfire/{**path}
+ANY /hangfire/{**path} -> Authorize(Policy=Admin) [admin] @ /hangfire/{**path}
 ANY /health -> Authorize + Policy(inline: AdminOrMonitorTokenRequirement) [admin] @ Health checks
 GET /health/live -> AllowAnonymous [anonymous] @ HTTP: GET /health/live
 GET /orgs -> none [open] @ OrganizationsController.GetAll

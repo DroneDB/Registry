@@ -15,11 +15,13 @@ using Registry.Web.Utilities.Ogc;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// Mapbox Vector Tile (MVT) endpoint. Serves the precomputed tiles of a vector's build (the <c>vector.mvt</c>
-/// artifact of libddb's build manifest: <see cref="MvtTiles"/>) for the Vue/OpenLayers frontend and the
-/// OGC API Tiles delegate. Authorized like the OGC endpoints: Basic credentials, then
-/// <see cref="OgcAuthorizationFilter"/> (read access, its denials in the OGC envelope).
+/// Mapbox Vector Tiles (MVT) of a vector file: the precomputed tiles of its build and their metadata. Authorized
+/// like the OGC services: Basic credentials or a token, and read access to the dataset (denials in the OGC envelope).
 /// </summary>
+/// <remarks>
+/// Serves the <c>vector.mvt</c> artifact of libddb's build manifest (<see cref="MvtTiles"/>) for the Hub and the
+/// OGC API Tiles delegate; <see cref="OgcAuthorizationFilter"/> checks the access.
+/// </remarks>
 [ApiController]
 [BasicAuthentication]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]
@@ -36,6 +38,7 @@ public class MvtController : ControllerBaseEx
         _artifacts = artifacts;
     }
 
+    /// <summary>A vector tile of a vector file's build (gzip-compressed Mapbox Vector Tile).</summary>
     [HttpGet("{hash}/{z:int}/{x:int}/{y:int}.pbf")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)] // OGC exception XML (OgcAuthorizationFilter)
@@ -63,6 +66,7 @@ public class MvtController : ControllerBaseEx
         return ValidatedPhysicalFile(tilePath, "application/vnd.mapbox-vector-tile", $"\"{hash}-{z}-{x}-{y}\"");
     }
 
+    /// <summary>The metadata (metadata.json) of the vector tiles of a vector file's build.</summary>
     [HttpGet("{hash}/metadata.json")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)] // OGC exception XML (OgcAuthorizationFilter)

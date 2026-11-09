@@ -31,7 +31,7 @@ public class WfsController : ControllerBaseEx
     private readonly WfsManager _mgr;
     public WfsController(WfsManager mgr) { _mgr = mgr; }
 
-    /// <summary>WFS 2.0.0 KVP request: capabilities, feature types, stored queries (XML) and features (GML or GeoJSON).</summary>
+    /// <summary>WFS 2.0.0 KVP request. It answers capabilities, feature types, stored queries (XML) and features (GML or GeoJSON).</summary>
     [HttpGet("wfs")]
     [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "text/xml", "application/xml", "application/gml+xml", "application/geo+json", "application/json")]
     public Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)
