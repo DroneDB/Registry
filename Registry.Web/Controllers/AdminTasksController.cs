@@ -36,17 +36,26 @@ public class AdminTasksController : ControllerBaseEx
 
     // ---- GET /sys/tasks ---------------------------------------------------
 
-    /// <summary>Lists the tasks of every dataset, one page at a time, filtered by tool, state or user.</summary>
+    /// <summary>Lists the tasks of every dataset, one page at a time, filtered and sorted by one column.</summary>
+    /// <param name="toolId">Only the tasks of this tool.</param>
+    /// <param name="state">Only the tasks in this state.</param>
+    /// <param name="userId">Only the tasks of this user.</param>
+    /// <param name="skip">Tasks to skip (paging).</param>
+    /// <param name="take">Tasks per page, 1 to 200.</param>
+    /// <param name="sortField">Column to sort by: <c>createdAt</c> (default), <c>state</c> or <c>toolId</c>. Any other value is a 400 with <c>errors.sortField</c>.</param>
+    /// <param name="sortOrder">Direction: <c>asc</c> or <c>desc</c> (default). Any other value is a 400 with <c>errors.sortOrder</c>. Rows that tie are ordered by creation time (newest first), then by task id.</param>
     [HttpGet(Name = nameof(AdminTasksController) + "." + nameof(List))]
     [Authorize(Policy = Policies.Admin)]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<AdminTaskListDto>> List(
         [FromQuery] string? toolId, [FromQuery] string? state, [FromQuery] string? userId,
-        [FromQuery] int skip = 0, [FromQuery] int take = 50, CancellationToken ct = default)
+        [FromQuery] int skip = 0, [FromQuery] int take = 50,
+        [FromQuery] string? sortField = null, [FromQuery] string? sortOrder = null, CancellationToken ct = default)
     {
-        return await _admin.ListAsync(toolId, state, userId, skip, take, ct);
+        return await _admin.ListAsync(toolId, state, userId, skip, take, sortField, sortOrder, ct);
     }
 
     // ---- POST /sys/tasks/{id}/delete ------------------------------------

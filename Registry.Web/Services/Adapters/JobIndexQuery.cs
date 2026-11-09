@@ -118,10 +118,31 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
     {
         var q = ApplyGlobalFilters(filter.ToolId, filter.State, filter.UserId);
 
-        return await q
-            .OrderByDescending(x => x.CreatedAtUtc)
+        return await ApplyGlobalOrder(q, filter.SortField, filter.SortOrder)
             .Skip(filter.Skip).Take(filter.Take)
             .ToArrayAsync(ct);
+    }
+
+    // The whitelisted order of the admin list (FR-PRC-28): the chosen column in the chosen direction, then the
+    // newest first and the job id, so rows that tie never swap between pages. Only these columns can be sorted by.
+    private static IOrderedQueryable<JobIndex> ApplyGlobalOrder(IQueryable<JobIndex> q,
+        JobIndexSortField field, JobIndexSortOrder order)
+    {
+        var desc = order == JobIndexSortOrder.Descending;
+        switch (field)
+        {
+            case JobIndexSortField.CreatedAt:
+                return (desc ? q.OrderByDescending(x => x.CreatedAtUtc) : q.OrderBy(x => x.CreatedAtUtc))
+                    .ThenBy(x => x.JobId);
+            case JobIndexSortField.State:
+                return (desc ? q.OrderByDescending(x => x.CurrentState) : q.OrderBy(x => x.CurrentState))
+                    .ThenByDescending(x => x.CreatedAtUtc).ThenBy(x => x.JobId);
+            case JobIndexSortField.ToolId:
+                return (desc ? q.OrderByDescending(x => x.ToolId) : q.OrderBy(x => x.ToolId))
+                    .ThenByDescending(x => x.CreatedAtUtc).ThenBy(x => x.JobId);
+            default:
+                throw new System.ArgumentOutOfRangeException(nameof(field), field, "Not a sortable column of the task list");
+        }
     }
 
     public async Task<long> CountGlobalAsync(string? toolId, string? state, string? userId, CancellationToken ct = default)

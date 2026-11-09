@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Registry.Ports;
 using Registry.Web.Data.Models;
+using Registry.Web.Exceptions;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
@@ -67,13 +68,29 @@ public sealed class AdminTasksManager
         return true;
     }
 
+    /// <summary>The wire names of the sortable columns of the list (FR-PRC-28), the whitelist of <c>sortField</c>.</summary>
+    private static readonly (string Name, JobIndexSortField Field)[] SortFields =
+    [
+        ("createdAt", JobIndexSortField.CreatedAt),
+        ("state", JobIndexSortField.State),
+        ("toolId", JobIndexSortField.ToolId)
+    ];
+
+    /// <summary>
+    /// Lists the tasks of every dataset, one page at a time. <paramref name="sortField"/> is one of
+    /// <c>createdAt</c> (default), <c>state</c>, <c>toolId</c>; <paramref name="sortOrder"/> is <c>asc</c> or
+    /// <c>desc</c> (default); an empty value is the default, any other value is a 400 that names the field.
+    /// </summary>
     public async Task<AdminTaskListDto> ListAsync(string? toolId, string? state, string? userId,
-        int skip, int take, CancellationToken ct = default)
+        int skip, int take, string? sortField = null, string? sortOrder = null, CancellationToken ct = default)
     {
+        var field = ParseSortField(sortField);
+        var order = ParseSortOrder(sortOrder);
+
         take = Math.Clamp(take, 1, 200);
         skip = Math.Max(0, skip);
 
-        var filter = new JobIndexGlobalQueryFilter(toolId, state, userId, skip, take);
+        var filter = new JobIndexGlobalQueryFilter(toolId, state, userId, skip, take, field, order);
 
         // Sequential: both queries share the same (non-thread-safe) RegistryContext.
         var rows = await _query.QueryGlobalAsync(filter, ct);
@@ -85,6 +102,30 @@ public sealed class AdminTasksManager
         var items = rows.Select(j => ToSummary(j, ownerNames, waits.MissingFilesOf(j.JobId))).ToArray();
         return new AdminTaskListDto(items, total, skip, take);
     }
+
+    private static JobIndexSortField ParseSortField(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return JobIndexSortField.CreatedAt;
+
+        foreach (var (name, field) in SortFields)
+            if (string.Equals(name, value, StringComparison.OrdinalIgnoreCase))
+                return field;
+
+        var allowed = string.Join(", ", SortFields.Select(f => f.Name));
+        throw FieldRefusal("sortField", $"'{value}' is not a sortable column. Use one of: {allowed}.");
+    }
+
+    private static JobIndexSortOrder ParseSortOrder(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return JobIndexSortOrder.Descending;
+        if (string.Equals(value, "asc", StringComparison.OrdinalIgnoreCase)) return JobIndexSortOrder.Ascending;
+        if (string.Equals(value, "desc", StringComparison.OrdinalIgnoreCase)) return JobIndexSortOrder.Descending;
+
+        throw FieldRefusal("sortOrder", $"'{value}' is not a sort order. Use one of: asc, desc.");
+    }
+
+    private static BadRequestException FieldRefusal(string field, string message) =>
+        new(message) { FieldErrors = new Dictionary<string, string[]> { [field] = [message] } };
 
     /// <summary>
     /// Batch-resolves userId → userName for the current page. JobIndex lives in

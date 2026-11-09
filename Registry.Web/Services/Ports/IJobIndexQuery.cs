@@ -42,7 +42,8 @@ public interface IJobIndexQuery
 
     /// <summary>
     /// Global (cross org/dataset) task query for the admin dashboard.
-    /// Filtered by tool/state/user with server-side paging, ordered by creation desc.
+    /// Filtered by tool/state/user with server-side paging, ordered by the whitelisted field and direction of the
+    /// filter (creation, newest first, by default) with a deterministic tie-break.
     /// </summary>
     Task<JobIndex[]> QueryGlobalAsync(JobIndexGlobalQueryFilter filter, CancellationToken ct = default);
 
@@ -92,13 +93,37 @@ public sealed record JobIndexQueryFilter(
     string? UserId = null, string? WorkflowExecutionId = null, string? ParentJobId = null,
     int Skip = 0, int Take = 50);
 
+/// <summary>The columns of the admin task list that the server can sort by (FR-PRC-28).</summary>
+public enum JobIndexSortField
+{
+    /// <summary>The creation time of the task (wire name <c>createdAt</c>), the default.</summary>
+    CreatedAt,
+    /// <summary>The state of the task (wire name <c>state</c>).</summary>
+    State,
+    /// <summary>The tool of the task (wire name <c>toolId</c>).</summary>
+    ToolId
+}
+
+/// <summary>The direction of the sort of the admin task list (wire names <c>asc</c>, <c>desc</c>).</summary>
+public enum JobIndexSortOrder
+{
+    /// <summary>Smallest first.</summary>
+    Ascending,
+    /// <summary>Largest first, the default.</summary>
+    Descending
+}
+
 /// <summary>
 /// Global task filter for the admin dashboard. Unlike <see cref="JobIndexQueryFilter"/>
-/// it is not scoped to a single org/dataset; all filters are optional.
+/// it is not scoped to a single org/dataset; all filters are optional. The order is the whitelisted
+/// <see cref="SortField"/> in the <see cref="SortOrder"/> direction, then by creation time (newest first), then by
+/// job id, so a page is the same on every request.
 /// </summary>
 public sealed record JobIndexGlobalQueryFilter(
     string? ToolId = null,
     string? State = null,
     string? UserId = null,
     int Skip = 0,
-    int Take = 50);
+    int Take = 50,
+    JobIndexSortField SortField = JobIndexSortField.CreatedAt,
+    JobIndexSortOrder SortOrder = JobIndexSortOrder.Descending);

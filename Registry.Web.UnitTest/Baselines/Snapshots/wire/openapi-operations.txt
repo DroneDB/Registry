@@ -998,6 +998,7 @@ POST /sys/rescan
   403 application/problem+json ProblemDetails
 GET /sys/tasks
   200 application/json AdminTaskListDto
+  400 application/problem+json ProblemDetails
   401 application/problem+json ProblemDetails
   403 application/problem+json ProblemDetails
 POST /sys/tasks/{id}/delete
