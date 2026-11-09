@@ -27,6 +27,7 @@ public class RecurringDatasetCleanupService
     private readonly DatasetSweep _sweep;
     private readonly IDdbManager _ddbManager;
     private readonly IFileSystem _fileSystem;
+    private readonly ChunkStore? _chunks;
     private readonly TimeProvider _time;
     private readonly ILogger<RecurringDatasetCleanupService> _logger;
 
@@ -35,11 +36,14 @@ public class RecurringDatasetCleanupService
         IDdbManager ddbManager,
         IFileSystem fileSystem,
         ILogger<RecurringDatasetCleanupService> logger,
-        TimeProvider? time = null)
+        TimeProvider? time = null,
+        ChunkStore? chunks = null)
     {
         _sweep = sweep ?? throw new ArgumentNullException(nameof(sweep));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+        // None on a processing node (no upload is received there): the sweep removes through a store of its own
+        _chunks = chunks;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _time = time ?? TimeProvider.System;
     }
@@ -65,7 +69,7 @@ public class RecurringDatasetCleanupService
             var entries = cleanup.Entries?.Length ?? 0;
             var builds = cleanup.Builds?.Length ?? 0;
             var uploads = DatasetUploads.RemoveAbandoned(_fileSystem, ddb.DatasetFolderPath,
-                _time.GetUtcNow().UtcDateTime, DatasetUploads.AbandonedAfter);
+                _time.GetUtcNow().UtcDateTime, DatasetUploads.AbandonedAfter, chunks: _chunks);
             totalEntries += entries;
             totalBuilds += builds;
             totalUploads += uploads;
@@ -75,6 +79,9 @@ public class RecurringDatasetCleanupService
                     ds.Key, entries, builds, uploads);
             return Task.CompletedTask;
         }, cancellationToken);
+
+        // The state in memory of uploads whose folder went without the store (a deleted dataset)
+        _chunks?.PruneRemoved();
 
         console.Info("Recurring dataset cleanup completed: {Succeeded}/{Datasets} datasets processed, {Failed} failed, " +
                      "{Entries} entries removed, {Builds} build artifacts removed, {Uploads} abandoned uploads removed",

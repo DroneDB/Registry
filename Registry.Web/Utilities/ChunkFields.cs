@@ -14,7 +14,8 @@ public static class ChunkFields
 {
     public static ChunkRequest ToDatasetChunk(IReadOnlyDictionary<string, string> fields) =>
         new(Required(fields, "fileId"), Int(fields, "chunkIndex"), Int(fields, "totalChunks"),
-            Long(fields, "totalFileSize"), Long(fields, "chunkSize"), Required(fields, "path"), Overwrite(fields));
+            Long(fields, "totalFileSize"), Long(fields, "chunkSize"), Required(fields, "path"), Overwrite(fields),
+            Optional(fields, "fileName"), OptionalLong(fields, "lastModified"));
 
     /// <summary>
     /// The <c>overwrite</c> field of an upload (D-040): true only when it is sent as <c>true</c> (any case) or
@@ -56,6 +57,12 @@ public static class ChunkFields
         fields.TryGetValue(name, out var value) && !string.IsNullOrWhiteSpace(value)
             ? value
             : throw new BadRequestException($"Missing '{name}' (form fields must come before the chunk)");
+
+    private static string? Optional(IReadOnlyDictionary<string, string> fields, string name) =>
+        fields.TryGetValue(name, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
+
+    private static long? OptionalLong(IReadOnlyDictionary<string, string> fields, string name) =>
+        Optional(fields, name) == null ? null : Long(fields, name);
 
     private static int Int(IReadOnlyDictionary<string, string> fields, string name) =>
         int.TryParse(Required(fields, name), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v)

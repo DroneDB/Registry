@@ -140,14 +140,15 @@ public sealed class UploadNoRetryHttpTests : IDisposable
     }
 
     [Test]
-    public async Task Chunk_OfAnUploadWithAnotherFile_Is409_NoRetry()
+    public async Task Chunk_OfAnUploadWithAnotherSize_Is409_NoRetry()
     {
         var (stored, _) = await SendAsync(HttpMethod.Post, $"/orgs/{Org}/ds/{Ds}/obj/chunk", Owner,
             Chunk("other-file-0001", "one.bin", 0, 2));
         stored.ShouldBe(HttpStatusCode.OK);
 
+        // Another file under the same id (three chunks of 4 bytes, not two)
         var (status, noRetry) = await SendAsync(HttpMethod.Post, $"/orgs/{Org}/ds/{Ds}/obj/chunk", Owner,
-            Chunk("other-file-0001", "two.bin", 1, 2));
+            Chunk("other-file-0001", "one.bin", 1, 3));
 
         status.ShouldBe(HttpStatusCode.Conflict);
         noRetry.ShouldBe(true);

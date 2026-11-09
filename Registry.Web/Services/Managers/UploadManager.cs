@@ -141,6 +141,13 @@ public sealed partial class UploadManager
 
     public Task FailAsync(UploadRequestContext ctx, Exception error) => _receipts.FailAsync(ctx, error);
 
+    /// <summary>The id of the signed-in user, or null (anonymous).</summary>
+    public async Task<string?> CurrentUserIdAsync() => (await _authManager.GetCurrentUser())?.Id;
+
+    /// <summary>Forgets the receipt of an upload id that a new upload takes again (a chunked upload of the same file).</summary>
+    public Task ForgetReceiptAsync(string orgSlug, string dsSlug, string uploadId) =>
+        _receipts.ForgetAsync(orgSlug, dsSlug, uploadId);
+
     /// <summary>The outcome of an upload by its id, or null when unknown (write access required).</summary>
     public async Task<UploadReceipt?> GetReceiptAsync(string orgSlug, string dsSlug, string uploadId,
         CancellationToken ct = default)

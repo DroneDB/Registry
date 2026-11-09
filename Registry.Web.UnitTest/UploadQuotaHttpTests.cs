@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Moq;
 using NUnit.Framework;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Models.DTO;
@@ -35,6 +37,8 @@ public sealed class UploadQuotaHttpTests : IDisposable
 
     private RegistryWebFactory _factory = null!;
     private HttpClient _client = null!;
+    private string _folder = null!;
+    private string _ownerId = null!;
     private readonly SwitchableQuota _quota = new();
 
     [OneTimeSetUp]
@@ -57,11 +61,14 @@ public sealed class UploadQuotaHttpTests : IDisposable
         _client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
         var owner = await _factory.CreateUserAsync(Owner);
+        _ownerId = owner.Id;
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<RegistryContext>();
         var org = Seed.Organization(context, Org, ownerId: owner.Id, isPublic: false);
-        Seed.Dataset(context, org, Ds);
+        var ds = Seed.Dataset(context, org, Ds);
         await context.SaveChangesAsync();
+
+        _folder = scope.ServiceProvider.GetRequiredService<IDdbManager>().Get(Org, ds.InternalRef).DatasetFolderPath;
     }
 
     [SetUp]
@@ -101,18 +108,22 @@ public sealed class UploadQuotaHttpTests : IDisposable
         return content;
     }
 
-    private static MultipartFormDataContent Chunk(string fileId, string path, int index, int total)
+    private static MultipartFormDataContent Chunk(string fileId, string path, int index, int total) =>
+        Chunk(fileId, path, index, total, 4, 4 * total);
+
+    private static MultipartFormDataContent Chunk(string fileId, string path, int index, int total, int chunkSize,
+        long totalFileSize)
     {
         var content = new MultipartFormDataContent
         {
             { new StringContent(fileId), "fileId" },
             { new StringContent(index.ToString(CultureInfo.InvariantCulture)), "chunkIndex" },
             { new StringContent(total.ToString(CultureInfo.InvariantCulture)), "totalChunks" },
-            { new StringContent((4 * total).ToString(CultureInfo.InvariantCulture)), "totalFileSize" },
-            { new StringContent("4"), "chunkSize" },
+            { new StringContent(totalFileSize.ToString(CultureInfo.InvariantCulture)), "totalFileSize" },
+            { new StringContent(chunkSize.ToString(CultureInfo.InvariantCulture)), "chunkSize" },
             { new StringContent(path), "path" }
         };
-        var chunk = new ByteArrayContent([1, 2, 3, 4]);
+        var chunk = new ByteArrayContent(new byte[chunkSize]);
         chunk.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         content.Add(chunk, "chunk", "blob");
         return content;
@@ -154,6 +165,123 @@ public sealed class UploadQuotaHttpTests : IDisposable
         var (response, problem) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj/chunk/quota-commit-0001/commit");
 
         ShouldBeQuotaProblem(response, problem);
+    }
+
+    // FR-UPL-04: an open chunked upload holds room for its whole file until it is committed or removed (7 days), so the
+    // first chunk of another one must fit with the open ones: else many large open uploads pass the quota
+    [Test]
+    public async Task SecondOpenChunkedUpload_ThatDoesNotFitWithTheFirst_Is507ProblemDetails()
+    {
+        const long gib = 1024L * 1024 * 1024;
+        const int mib = 1024 * 1024;
+        var chunks = Path.Combine(_folder, IDDB.UploadsFolderName, "chunks");
+        if (Directory.Exists(chunks)) Directory.Delete(chunks, true);
+        // 10 GiB left
+        _quota.Limit = new UserStorageInfo { Total = 20 * gib, Used = 10 * gib };
+
+        try
+        {
+            // Two files of 9 GiB in chunks of 1 MiB (9216 chunks): each fits alone, not both
+            var (first, _) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj/chunk",
+                Chunk("quota-open-0001", "first-9gib.bin", 0, 9216, mib, 9 * gib));
+            first.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+            var (response, problem) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj/chunk",
+                Chunk("quota-open-0002", "second-9gib.bin", 0, 9216, mib, 9 * gib));
+
+            ShouldBeQuotaProblem(response, problem);
+            Directory.GetDirectories(chunks).Length.ShouldBe(1, "the refused upload stores nothing");
+        }
+        finally
+        {
+            if (Directory.Exists(chunks)) Directory.Delete(chunks, true);
+        }
+    }
+
+    // Two first chunks of one file sent at once: the second one finds the session that the first one just started (here
+    // started while the second one checks the name). That session is the upload being checked, not another open one: it
+    // is not counted twice against the quota
+    [Test]
+    public async Task FirstChunk_RacingTheSameFilesFirstChunk_DoesNotCountItsOwnSession()
+    {
+        const long gib = 1024L * 1024 * 1024;
+        const int mib = 1024 * 1024;
+        const string fileId = "quota-race-0001";
+        const string path = "racing-9gib.bin";
+        var chunks = Path.Combine(_folder, IDDB.UploadsFolderName, "chunks");
+        if (Directory.Exists(chunks)) Directory.Delete(chunks, true);
+        // 10 GiB left: the 9 GiB file fits once, not twice
+        _quota.Limit = new UserStorageInfo { Total = 20 * gib, Used = 10 * gib };
+        var store = _factory.Services.GetRequiredService<Registry.Web.Services.Adapters.ChunkStore>();
+        var started = false;
+        _factory.DdbWrapper.Setup(d => d.ListEntrySummaries(It.IsAny<string>(), It.Is<EntryQuery>(q => !q.Recursive)))
+            .Returns(() =>
+            {
+                if (!started)
+                {
+                    // The other request's first chunk starts the session now
+                    started = true;
+                    store.Open(chunks, Registry.Web.Services.Managers.ChunkedUploadManager.SessionKey(_ownerId, fileId),
+                        new ChunkManifest(path, 9 * gib, 9216, mib, _ownerId, Overwrite: false, FileId: fileId));
+                }
+
+                return [];
+            });
+
+        try
+        {
+            var (response, _) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj/chunk",
+                Chunk(fileId, path, 0, 9216, mib, 9 * gib));
+
+            started.ShouldBeTrue("the session was started while the chunk was checked");
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            Directory.GetDirectories(chunks).Length.ShouldBe(1, "one session for the file");
+        }
+        finally
+        {
+            _factory.DdbWrapper.Setup(d => d.ListEntrySummaries(It.IsAny<string>(), It.Is<EntryQuery>(q => !q.Recursive)))
+                .Returns([]);
+            if (Directory.Exists(chunks)) Directory.Delete(chunks, true);
+        }
+    }
+
+    // The quota of a first chunk counts the open uploads of every dataset of the organization: a dataset whose chunks
+    // folder cannot be read (or is removed meanwhile) is skipped, not a server error for the caller
+    [Test]
+    public async Task FirstChunk_WithAnUnreadableChunksFolderInAnotherDataset_IsStored()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Ignore("Unix file modes");
+            return;
+        }
+
+        var other = Path.Combine(Path.GetDirectoryName(_folder)!, "unreadable-" + Guid.NewGuid().ToString("N"));
+        var otherChunks = Directory.CreateDirectory(Path.Combine(other, IDDB.UploadsFolderName, "chunks")).FullName;
+        Directory.CreateDirectory(Path.Combine(otherChunks, "someone-elses"));
+        System.IO.File.SetUnixFileMode(otherChunks, UnixFileMode.None);
+        try
+        {
+            try
+            {
+                Directory.GetDirectories(otherChunks);
+                Assert.Ignore("The folder stays readable for this user (root)");
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Expected: the folder cannot be read
+            }
+
+            var (response, _) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj/chunk",
+                Chunk("quota-unreadable-0001", "beside-unreadable.bin", 0, 2));
+
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+        finally
+        {
+            System.IO.File.SetUnixFileMode(otherChunks, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            Directory.Delete(other, true);
+        }
     }
 
     /// <summary>The storage limit of the current user: none (null) or the one a test sets.</summary>

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Utilities;
 
@@ -56,12 +57,19 @@ public static class DatasetUploads
     /// <summary>
     /// Deletes what interrupted uploads leave in a dataset: push folders
     /// (<c>.ddb/tmp/push-*</c>, a push that was never committed) and streamed temp files
-    /// (<c>.uploads/*.tmp</c>) and resumable uploads (<c>.uploads/chunks/*</c>) with no write for
-    /// <paramref name="maxAge"/>. The quarantine
-    /// folder is left to the reconciliation sweep.
+    /// (<c>.uploads/*.tmp</c>) with no write for <paramref name="maxAge"/>, and resumable uploads
+    /// (<c>.uploads/chunks/*</c>) with no chunk written: a session that the client can resume (its manifest keeps the
+    /// file id) after <paramref name="chunksMaxAge"/> (7 days, <see cref="ChunkStore.AbandonedAfter"/>, §8.3: a user
+    /// can come back to a paused upload within the week), any other one after <paramref name="maxAge"/>: a session
+    /// from before the fix (no file id in its manifest, no client can reach it), the chunks of a share batch (its
+    /// rollback goes after 24 hours too) and a folder without a readable manifest. The quarantine
+    /// folder is left to the reconciliation sweep. A resumable upload is removed through <paramref name="chunks"/>
+    /// (the store of the uploads of this process; none: a store of its own), under the upload's lock and with its state
+    /// in memory.
     /// </summary>
     /// <returns>How many folders and files were deleted.</returns>
-    public static int RemoveAbandoned(IFileSystem fs, string datasetFolderPath, DateTime utcNow, TimeSpan maxAge)
+    public static int RemoveAbandoned(IFileSystem fs, string datasetFolderPath, DateTime utcNow, TimeSpan maxAge,
+        TimeSpan? chunksMaxAge = null, ChunkStore? chunks = null)
     {
         var removed = 0;
         bool Abandoned(string path) => utcNow - fs.GetLastWriteTime(path).ToUniversalTime() > maxAge;
@@ -91,22 +99,41 @@ public static class DatasetUploads
             }
 
             // Resumable uploads nobody came back to (last chunk written that long ago)
+            var resumableAge = chunksMaxAge ?? ChunkStore.AbandonedAfter;
             var chunksFolder = Path.Combine(uploadsFolder, ChunksFolderName);
             if (fs.FolderExists(chunksFolder))
             {
+                var store = chunks ?? new ChunkStore();
                 foreach (var upload in fs.GetDirectories(chunksFolder, "*"))
                 {
-                    if (!Abandoned(upload) ||
-                        fs.EnumerateFiles(upload, "*", SearchOption.AllDirectories).Any(f => !Abandoned(f)))
-                        continue;
+                    var age = Resumable(fs, upload) ? resumableAge : maxAge;
+                    bool ChunkAbandoned(string path) => utcNow - fs.GetLastWriteTime(path).ToUniversalTime() > age;
+                    bool UploadAbandoned(string folder) => ChunkAbandoned(folder) &&
+                        !fs.EnumerateFiles(folder, "*", SearchOption.AllDirectories).Any(f => !ChunkAbandoned(f));
 
-                    fs.FolderDelete(upload);
-                    removed++;
+                    // Checked again under the upload's lock: a chunk may arrive meanwhile (the first check does not wait
+                    // for a chunk being stored)
+                    if (UploadAbandoned(upload) && store.RemoveAbandoned(upload, UploadAbandoned))
+                        removed++;
                 }
             }
         }
 
         return removed;
+    }
+
+    // Whether a chunk session is one a client can resume: its manifest keeps the file id the client gave (§7.1)
+    private static bool Resumable(IFileSystem fs, string upload)
+    {
+        var manifest = Path.Combine(upload, ChunkStore.ManifestFileName);
+        try
+        {
+            return fs.Exists(manifest) && ApiJson.Deserialize<ChunkManifest>(fs.ReadAllText(manifest))?.FileId != null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            return false; // removed meanwhile or unreadable: not a session a client can resume
+        }
     }
 }
 

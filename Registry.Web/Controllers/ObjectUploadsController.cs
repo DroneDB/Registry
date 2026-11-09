@@ -191,7 +191,9 @@ public class ObjectUploadsController : ControllerBaseEx
     public async Task<ActionResult<UploadReceipt>> GetUpload([FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug, [FromRoute, Required] string uploadId, CancellationToken ct)
     {
-        var receipt = await _uploads.GetReceiptAsync(orgSlug, dsSlug, uploadId, ct: ct);
+        // The commit of a chunked upload keeps its receipt under the caller's session of the file id
+        var receipt = await _uploads.GetReceiptAsync(orgSlug, dsSlug, uploadId, ct: ct)
+                      ?? await _chunks.GetCommitReceiptAsync(orgSlug, dsSlug, uploadId, ct);
         Response.Headers.CacheControl = "no-store";
 
         return receipt switch
@@ -242,7 +244,26 @@ public class ObjectUploadsController : ControllerBaseEx
         return status ?? throw new BadRequestException("No chunk uploaded");
     }
 
+    /// <summary>The open resumable uploads of the caller in the dataset.</summary>
+    /// <remarks>
+    /// The Hub offers to resume them after a reload. For each: its <c>fileId</c>, path, size, source file name,
+    /// <c>lastModified</c> and the chunks stored. They are selected by the <c>UserId</c> of the upload manifest; a
+    /// session of another user is not listed.
+    /// </remarks>
+    [HttpGet(RoutesHelper.ObjectsRadix + "/chunk", Name = nameof(ObjectUploadsController) + "." + nameof(ListChunks))]
+    [ProducesResponseType(typeof(ChunkStatusDto[]), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ChunkStatusDto[]>> ListChunks([FromRoute, Required] string orgSlug,
+        [FromRoute, Required] string dsSlug, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        return await _chunks.ListAsync(orgSlug, dsSlug, ct);
+    }
+
     /// <summary>Which chunks of a resumable upload are stored and which are missing.</summary>
+    /// <remarks>
+    /// <c>404</c> for an unknown upload and for a session of another user: an upload is keyed by the caller and the
+    /// <c>fileId</c>.
+    /// </remarks>
     [HttpGet(RoutesHelper.ObjectsRadix + "/chunk/{fileId}", Name = nameof(ObjectUploadsController) + "." + nameof(GetChunks))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -251,6 +272,21 @@ public class ObjectUploadsController : ControllerBaseEx
     {
         Response.Headers.CacheControl = "no-store";
         return await _chunks.GetStatusAsync(orgSlug, dsSlug, fileId, ct: ct);
+    }
+
+    /// <summary>Removes the stored chunks of a resumable upload.</summary>
+    /// <remarks>
+    /// The Cancel of the Hub: the files that the same batch already sent stay. <c>404</c> for an unknown upload and for a
+    /// session of another user.
+    /// </remarks>
+    [HttpDelete(RoutesHelper.ObjectsRadix + "/chunk/{fileId}", Name = nameof(ObjectUploadsController) + "." + nameof(DeleteChunks))]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteChunks([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
+        [FromRoute, Required] string fileId, CancellationToken ct)
+    {
+        await _chunks.DeleteAsync(orgSlug, dsSlug, fileId, ct);
+        return NoContent();
     }
 
     /// <summary>

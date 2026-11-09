@@ -97,6 +97,25 @@ public sealed class UploadReceiptTracker
         }
     }
 
+    /// <summary>
+    /// Forgets the receipt of <paramref name="uploadId"/>: a new upload that takes an id again (the Hub makes a chunked
+    /// upload's id from the file, so the same file sent again has it) must not be answered from the earlier one.
+    /// </summary>
+    public async Task ForgetAsync(string orgSlug, string dsSlug, string uploadId)
+    {
+        if (_receipts == null)
+            return;
+
+        try
+        {
+            await _receipts.RemoveAsync(orgSlug, dsSlug, uploadId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Cannot forget the receipt of upload {UploadId}", uploadId);
+        }
+    }
+
     /// <summary>The receipt of upload <paramref name="uploadId"/> of the dataset, or null.</summary>
     public async Task<UploadReceipt?> GetAsync(string orgSlug, string dsSlug, string uploadId) =>
         _receipts == null ? null : await _receipts.GetAsync(orgSlug, dsSlug, uploadId);

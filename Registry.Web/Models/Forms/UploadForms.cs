@@ -46,6 +46,12 @@ public sealed class DatasetChunkForm
     /// <summary>true: replace the file whose name exists at path. The first chunk fixes it.</summary>
     public bool? Overwrite { get; init; }
 
+    /// <summary>The name of the file on the client's disk. The first chunk fixes it; a file selected again after a reload is matched to its open upload by it.</summary>
+    public string? FileName { get; init; }
+
+    /// <summary>The file's last-modified time on the client, milliseconds since 1970. The first chunk fixes it.</summary>
+    public long? LastModified { get; init; }
+
     /// <summary>The bytes of the chunk, after the other fields.</summary>
     [Required] public IFormFile? Chunk { get; init; }
 }

@@ -66,7 +66,9 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/obj -> none [open] @ ObjectsController.Get
 POST /orgs/{orgSlug}/ds/{dsSlug}/obj -> none [open] @ ObjectUploadsController.Post
 PUT /orgs/{orgSlug}/ds/{dsSlug}/obj -> none [open] @ ObjectsController.Move
 DELETE /orgs/{orgSlug}/ds/{dsSlug}/obj/batch -> none [open] @ ObjectsController.DeleteBatch
+GET /orgs/{orgSlug}/ds/{dsSlug}/obj/chunk -> none [open] @ ObjectUploadsController.ListChunks
 POST /orgs/{orgSlug}/ds/{dsSlug}/obj/chunk -> none [open] @ ObjectUploadsController.PostChunk
+DELETE /orgs/{orgSlug}/ds/{dsSlug}/obj/chunk/{fileId} -> none [open] @ ObjectUploadsController.DeleteChunks
 GET /orgs/{orgSlug}/ds/{dsSlug}/obj/chunk/{fileId} -> none [open] @ ObjectUploadsController.GetChunks
 POST /orgs/{orgSlug}/ds/{dsSlug}/obj/chunk/{fileId}/commit -> none [open] @ ObjectUploadsController.CommitChunks
 POST /orgs/{orgSlug}/ds/{dsSlug}/obj/copy -> none [open] @ ObjectsController.Copy

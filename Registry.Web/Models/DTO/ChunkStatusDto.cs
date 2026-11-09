@@ -9,6 +9,12 @@ public class ChunkStatusDto
     public int TotalChunks { get; set; }
     public long ChunkSize { get; set; }
 
+    /// <summary>The name of the file on the client's disk, as the first chunk said (null when it did not).</summary>
+    public string? SourceFileName { get; set; }
+
+    /// <summary>The client file's last-modified time, milliseconds since 1970, as the first chunk said (null when it did not).</summary>
+    public long? LastModified { get; set; }
+
     /// <summary>Chunks stored, in order.</summary>
     public int[] Received { get; set; } = [];
 

@@ -1057,6 +1057,8 @@
       "totalFileSize": 1234567890123,
       "totalChunks": 42,
       "chunkSize": 1234567890123,
+      "sourceFileName": "SourceFileName-text",
+      "lastModified": 1234567890123,
       "received": [
         42
       ],
@@ -1071,6 +1073,8 @@
       "totalFileSize": 0,
       "totalChunks": 0,
       "chunkSize": 0,
+      "sourceFileName": null,
+      "lastModified": null,
       "received": null,
       "missing": null,
       "complete": false

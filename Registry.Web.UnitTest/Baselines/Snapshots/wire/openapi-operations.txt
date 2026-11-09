@@ -362,6 +362,10 @@ DELETE /orgs/{orgSlug}/ds/{dsSlug}/obj/batch
   400 application/problem+json ProblemDetails
   401 application/problem+json ProblemDetails
   403 application/problem+json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/obj/chunk
+  200 application/json array<ChunkStatusDto>
+  401 application/problem+json ProblemDetails
+  403 application/problem+json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/obj/chunk
   body multipart/form-data object
   200 application/json ChunkStatusDto
@@ -370,6 +374,11 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/obj/chunk
   403 application/problem+json ProblemDetails
   409 application/problem+json ProblemDetails
   507 application/problem+json ProblemDetails
+DELETE /orgs/{orgSlug}/ds/{dsSlug}/obj/chunk/{fileId}
+  204
+  401 application/problem+json ProblemDetails
+  403 application/problem+json ProblemDetails
+  404 application/problem+json ProblemDetails
 GET /orgs/{orgSlug}/ds/{dsSlug}/obj/chunk/{fileId}
   200 application/json ChunkStatusDto
   401 application/problem+json ProblemDetails
@@ -1184,7 +1193,7 @@ schema BrowseImportRequestDto { sourceType:string, params:map<string>, browseTyp
 schema BrowseItemDto { slug:string, name:string }
 schema BuildPendingStatusDto { lastRun:string(date-time), totalDatasets:integer(int32), datasetsChecked:integer(int32), datasetsSkipped:integer(int32), pendingBuildsFound:integer(int32), jobsEnqueued:integer(int32), errors:integer(int32), durationMs:integer(int64), cacheHitRate:number(double), isEnabled:boolean, nextScheduledRun:string(date-time) }
 schema ChangeUserPasswordRequestDto { currentPassword:string, newPassword:string }
-schema ChunkStatusDto { fileId:string, path:string, totalFileSize:integer(int64), totalChunks:integer(int32), chunkSize:integer(int64), received:array<integer(int32)>, missing:array<integer(int32)>, complete:boolean }
+schema ChunkStatusDto { fileId:string, path:string, totalFileSize:integer(int64), totalChunks:integer(int32), chunkSize:integer(int64), sourceFileName:string, lastModified:integer(int64), received:array<integer(int32)>, missing:array<integer(int32)>, complete:boolean }
 schema CleanupBatchesResultDto { removedBatches:array<RemovedBatchDto>, removeBatchErrors:array<RemoveBatchErrorDto> }
 schema CleanupBuildRequestDto { organizationSlug:string, datasetSlug:string }
 schema CleanupBuildResultDto { datasets:map<DatasetCleanupBuildDto>, errors:map<string>, jobId:string, jobIds:array<string>, async:boolean }
