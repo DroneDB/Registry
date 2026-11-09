@@ -7,5 +7,6 @@ namespace Registry.Web.Services.Ports;
 /// <param name="TotalFileSize">Size of the whole file.</param>
 /// <param name="ChunkSize">Size of every chunk but the last.</param>
 /// <param name="Path">Destination path in the dataset.</param>
+/// <param name="Overwrite">Whether the upload may replace a file that holds its name (read from the first chunk).</param>
 public sealed record ChunkRequest(string FileId, int ChunkIndex, int TotalChunks, long TotalFileSize, long ChunkSize,
-    string Path);
+    string Path, bool Overwrite = true);

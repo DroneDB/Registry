@@ -86,8 +86,8 @@ public static class MultipartRequestHelper
     /// <summary>
     /// Reads a streamed <c>multipart/form-data</c> body with up to <paramref name="maxFiles"/> file
     /// parts. Each file part is handed to <paramref name="streamFile"/> as it arrives, with the
-    /// <c>path</c> field sent just before it (null when there is none), so the destination can be
-    /// checked before the first byte of the file is written. The form fields are collected whatever
+    /// <c>path</c> and <c>overwrite</c> fields sent since the previous file part (null when there are none),
+    /// so the destination can be checked before the first byte of the file is written. The form fields are collected whatever
     /// their order. On failure every file already written is handed to <paramref name="discard"/>.
     /// </summary>
     /// <exception cref="BadRequestException">The body has more than <paramref name="maxFiles"/> file parts, or a
@@ -100,6 +100,8 @@ public static class MultipartRequestHelper
         var reader = new MultipartReader(boundary, request.Body);
         var form = new StreamedMultipartFiles<TFile>();
         string? pendingPath = null;
+        // Each file of a bundle has its own flag: one file's overwrite never reaches the next
+        string? pendingOverwrite = null;
 
         try
         {
@@ -116,9 +118,11 @@ public static class MultipartRequestHelper
                             ? "Only a single file part is allowed per upload"
                             : $"At most {maxFiles} file parts are allowed per upload");
 
-                    var file = await streamFile(new MultipartFilePart(section.Body, pendingPath, form.Fields));
+                    var file = await streamFile(new MultipartFilePart(section.Body, pendingPath, form.Fields,
+                        pendingOverwrite));
                     form.Files.Add((pendingPath, file));
                     pendingPath = null;
+                    pendingOverwrite = null;
                 }
                 else if (HasFormDataContentDisposition(contentDisposition))
                 {
@@ -130,6 +134,8 @@ public static class MultipartRequestHelper
                     form.Fields[key] = value;
                     if (string.Equals(key, "path", StringComparison.OrdinalIgnoreCase))
                         pendingPath = value;
+                    else if (string.Equals(key, "overwrite", StringComparison.OrdinalIgnoreCase))
+                        pendingOverwrite = value;
                 }
             }
         }
@@ -147,8 +153,11 @@ public static class MultipartRequestHelper
 /// <summary>A file part of a streamed multipart body, with the <c>path</c> field sent before it.</summary>
 /// <param name="Body">The file content (forward-only).</param>
 /// <param name="Path">The <c>path</c> field that precedes the part, or null.</param>
-/// <param name="Fields">Every field sent before the part.</param>
-public sealed record MultipartFilePart(Stream Body, string? Path, IReadOnlyDictionary<string, string> Fields);
+/// <param name="Fields">Every field sent before the part (of every earlier part too).</param>
+/// <param name="Overwrite">The <c>overwrite</c> field sent since the previous file part, or null: the flag of this
+/// part only (D-040).</param>
+public sealed record MultipartFilePart(Stream Body, string? Path, IReadOnlyDictionary<string, string> Fields,
+    string? Overwrite = null);
 
 /// <summary>The form fields and the file parts (already on disk) of a streamed multipart upload.</summary>
 public sealed class StreamedMultipartFiles<TFile>

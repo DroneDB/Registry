@@ -41,6 +41,10 @@ public sealed class InvalidUploadContentHttpTests : IDisposable
         // A dataset without visibility metadata is private (native ddb throws on a missing key)
         _factory.DdbWrapper.Setup(d => d.MetaGet(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .Throws(new DdbException("Key not found"));
+        // An empty index (the contract dataset holds ortho.tif): the name rule of an upload (D-040) finds no clash
+        _factory.DdbWrapper.Setup(d => d.GetEntry(It.IsAny<string>(), It.IsAny<string>())).Returns((Entry?)null);
+        _factory.DdbWrapper.Setup(d => d.ListEntrySummaries(It.IsAny<string>(), It.Is<EntryQuery>(q => !q.Recursive)))
+            .Returns([]);
         _client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
         var owner = await _factory.CreateUserAsync(OwnerUser);

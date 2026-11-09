@@ -97,14 +97,28 @@ public sealed partial class UploadManager
     /// <exception cref="Registry.Web.Exceptions.ExtensionBlockedException">The import policy blocks the extension.</exception>
     public string ValidatePath(string path) => _files.ValidatePath(path);
 
+    /// <summary>
+    /// The dataset path a file uploaded to <paramref name="path"/> is written at: <see cref="ValidatePath"/>, then
+    /// the name rule (D-040). Asked before the first byte of a file is stored, and again at its commit.
+    /// </summary>
+    /// <exception cref="Registry.Web.Exceptions.NameClashException">The name exists (any letter case) and
+    /// <paramref name="overwrite"/> is false, or it is a folder.</exception>
+    public string ResolveTarget(UploadRequestContext ctx, string path, bool overwrite) =>
+        _files.ResolveTarget(ctx, path, overwrite);
+
     /// <summary>Streams one file part to a temp file in the dataset, hashing it on the way.</summary>
     public Task<StreamedFile> StreamAsync(UploadRequestContext ctx, Stream body, CancellationToken ct = default) =>
         _files.StreamAsync(ctx, body, ct);
 
-    /// <summary>Commits a single file: moves it into place and indexes it. Throws on failure.</summary>
-    public async Task<EntryDto> CommitAsync(UploadRequestContext ctx, string path, StreamedFile file)
+    /// <summary>
+    /// Commits a single file: moves it into place and indexes it. Throws on failure. Without
+    /// <paramref name="overwrite"/> a name that exists is refused (<see cref="Registry.Web.Exceptions.NameClashException"/>);
+    /// the internal callers replace.
+    /// </summary>
+    public async Task<EntryDto> CommitAsync(UploadRequestContext ctx, string path, StreamedFile file,
+        bool overwrite = true)
     {
-        var outcomes = await _committer.CommitAsync(ctx, [new StreamedPart(path, file)]);
+        var outcomes = await _committer.CommitAsync(ctx, [new StreamedPart(path, file, overwrite)]);
         var outcome = outcomes[0];
         if (outcome.Error != null)
             System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(outcome.Error);

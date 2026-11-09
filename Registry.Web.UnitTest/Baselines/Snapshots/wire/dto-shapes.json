@@ -4239,6 +4239,7 @@
         ]
       },
       "error": "Error-text",
+      "conflictPath": "ConflictPath-text",
       "retryable": true
     },
     "sparse": {
@@ -4246,6 +4247,7 @@
       "status": 0,
       "entry": null,
       "error": null,
+      "conflictPath": null,
       "retryable": false
     }
   },
@@ -4601,6 +4603,7 @@
             ]
           },
           "error": "Error-text",
+          "conflictPath": "ConflictPath-text",
           "retryable": true
         }
       ],

@@ -1149,7 +1149,7 @@ schema TestEmailRequestDto { to:string }
 schema UpdateCheckSettingsDto { useDeclaration:string, contactEmail:string, contactConsent:boolean }
 schema UpdateInfoDto { instanceId:string, currentVersion:string, latestVersion:string, isUpdateAvailable:boolean, isSecurityUpdate:boolean, releaseDate:string, changelogUrl:string, compareUrl:string, releaseNotes:string, licenseRequestUrl:string, useDeclaration:string, contactEmail:string, lastChecked:string(date-time) }
 schema UpdateMemberPermissionsDto { permissions:OrganizationPermissions }
-schema UploadPartResultDto { path:string, status:integer(int32), entry:EntryDto, error:string, retryable:boolean }
+schema UploadPartResultDto { path:string, status:integer(int32), entry:EntryDto, error:string, conflictPath:string, retryable:boolean }
 schema UploadProbeResultDto { bytes:integer(int64), serverMs:number(double) }
 schema UploadReceipt { state:UploadReceiptState, results:array<UploadPartResultDto>, status:integer(int32), error:string, updatedUtc:string(date-time) }
 schema UploadReceiptState {  }

@@ -434,6 +434,86 @@ public class UploadManagerTests
         Directory.Exists(Path.Combine(_root, IDDB.UploadsFolderName, "chunks", "big-file-0001")).ShouldBeFalse();
     }
 
+    // ---- names that exist (FR-UPL-03, D-040)
+
+    [Test]
+    public async Task Commit_OfAnInternalCaller_ReplacesAFileThatHoldsTheName()
+    {
+        // Share uploads and the .prj of a CAD file call without the flag: they keep replacing
+        File.WriteAllText(Path.Combine(_root, "keep.txt"), "old");
+        var uploads = CreateManager();
+        using var ctx = await uploads.BeginAsync(Org, Ds);
+
+        var file = await uploads.StreamAsync(ctx, new MemoryStream("new"u8.ToArray()));
+        (await uploads.CommitAsync(ctx, "keep.txt", file)).Path.ShouldBe("keep.txt");
+
+        File.ReadAllText(Path.Combine(_root, "keep.txt")).ShouldBe("new");
+    }
+
+    [Test]
+    public async Task Commit_WithoutOverwrite_RefusesANameThatExists_AndKeepsTheFile()
+    {
+        File.WriteAllText(Path.Combine(_root, "keep.txt"), "old");
+        var uploads = CreateManager();
+        using var ctx = await uploads.BeginAsync(Org, Ds);
+
+        var file = await uploads.StreamAsync(ctx, new MemoryStream("new"u8.ToArray()));
+        var clash = await Should.ThrowAsync<NameClashException>(() => uploads.CommitAsync(ctx, "keep.txt", file, overwrite: false));
+
+        clash.ConflictPath.ShouldBe("keep.txt");
+        File.ReadAllText(Path.Combine(_root, "keep.txt")).ShouldBe("old");
+        File.Exists(file.TempPath).ShouldBeFalse("the refused file leaves no temp file");
+    }
+
+    [Test]
+    public async Task Bundle_TwoPartsWithOneName_WithoutOverwrite_RefusesTheSecond()
+    {
+        var uploads = CreateManager();
+        using var ctx = await uploads.BeginAsync(Org, Ds);
+        var first = await uploads.StreamAsync(ctx, new MemoryStream("1"u8.ToArray()));
+        var second = await uploads.StreamAsync(ctx, new MemoryStream("2"u8.ToArray()));
+
+        var results = await uploads.CommitAsync(ctx,
+            [new StreamedPart("dup.txt", first, Overwrite: false), new StreamedPart("dup.txt", second, Overwrite: false)]);
+
+        results[0].Status.ShouldBe(StatusCodes.Status201Created);
+        results[1].Status.ShouldBe(StatusCodes.Status409Conflict);
+        results[1].ConflictPath.ShouldBe("dup.txt");
+        File.ReadAllText(Path.Combine(_root, "dup.txt")).ShouldBe("1");
+    }
+
+    [Test]
+    public async Task Chunked_TheFirstChunkFixesOverwrite_AndARefusedCommitKeepsTheChunks()
+    {
+        var uploads = CreateManager();
+        var chunks = CreateChunks(uploads);
+
+        await chunks.WriteChunkAsync(Org, Ds, Chunk(0) with { Overwrite = false }, Body(0));
+        // Later chunks do not change the flag (and are not refused for another one)
+        await chunks.WriteChunkAsync(Org, Ds, Chunk(1), Body(1));
+        await chunks.WriteChunkAsync(Org, Ds, Chunk(2) with { Overwrite = false }, Body(2));
+
+        // Another upload writes the name before the commit
+        File.WriteAllText(Path.Combine(_root, "big.bin"), "other");
+        var clash = await Should.ThrowAsync<NameClashException>(() => chunks.CommitAsync(Org, Ds, "big-file-0001"));
+
+        clash.ConflictPath.ShouldBe("big.bin");
+        File.ReadAllText(Path.Combine(_root, "big.bin")).ShouldBe("other");
+        (await chunks.GetStatusAsync(Org, Ds, "big-file-0001")).Complete.ShouldBeTrue("the chunks are kept");
+    }
+
+    [Test]
+    public async Task Chunked_FirstChunkOfANameThatExists_IsRefusedBeforeStoringAnything()
+    {
+        File.WriteAllText(Path.Combine(_root, "big.bin"), "old");
+        var chunks = CreateChunks(CreateManager());
+
+        await Should.ThrowAsync<NameClashException>(() =>
+            chunks.WriteChunkAsync(Org, Ds, Chunk(0) with { Overwrite = false }, Body(0)));
+
+        Directory.Exists(Path.Combine(_root, IDDB.UploadsFolderName, "chunks", "big-file-0001")).ShouldBeFalse();
+    }
+
     // ---- dataset lookups
 
     [Test]

@@ -40,7 +40,7 @@ public class DatasetEntryLookupTests
             Directory.Delete(_folder, true);
     }
 
-    // A dataset whose index lists the given entries (folders end with '/')
+    // A dataset whose index lists the given entries (folders end with '/'), each on disk as in a real dataset
     private Mock<IDDB> Dataset(params string[] entries)
     {
         var all = entries.Select(e => new EntrySummary
@@ -48,6 +48,18 @@ public class DatasetEntryLookupTests
             Path = e.TrimEnd('/'),
             Type = e.EndsWith('/') ? EntryType.Directory : EntryType.GeoRaster
         }).ToList();
+        foreach (var e in all)
+        {
+            var local = Path.Combine(_folder, e.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (e.Type == EntryType.Directory)
+                Directory.CreateDirectory(local);
+            else
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(local)!);
+                // A case-insensitive file system keeps one of two names that differ only in case
+                if (!File.Exists(local)) File.WriteAllText(local, "x");
+            }
+        }
 
         var ddb = new Mock<IDDB>();
         ddb.Setup(d => d.EntryExists(It.IsAny<string>())).Returns<string>(p => all.Any(e => e.Path == p));
@@ -102,6 +114,47 @@ public class DatasetEntryLookupTests
     {
         DatasetEntryLookup.FindExisting(Dataset("Photos/").Object, "photos")
             .ShouldBe(new ExistingEntry("Photos", true));
+    }
+
+    // FR-UPL-03: every upload asks twice; a large folder must not be listed for each file
+    [Test]
+    public void TheLookup_AsksTheIndexByName_AndFindsANameInAnotherCase()
+    {
+        var ddb = Dataset("Big/", "Big/IMG_1.TIF", "Big/IMG_2.TIF");
+
+        DatasetEntryLookup.ResolveOutput(ddb.Object, "big/new.tif", overwrite: false).ShouldBe("Big/new.tif");
+        DatasetEntryLookup.FindExisting(ddb.Object, "big/img_2.tif").ShouldBe(new ExistingEntry("Big/IMG_2.TIF", false));
+
+        // Every index query asks for one name, never for the whole folder
+        ddb.Verify(d => d.FindSummaries(It.Is<EntryQuery>(q => string.IsNullOrEmpty(q.NamePattern) || q.Recursive)), Times.Never);
+        ddb.Verify(d => d.FindSummaries(It.IsAny<EntryQuery>()), Times.AtLeastOnce);
+        ddb.Verify(d => d.Find(It.IsAny<EntryQuery>()), Times.Never);
+    }
+
+    [Test]
+    public void AnIndexedEntryInAnotherCase_IsFound_AlsoWithoutItsFileOnDisk()
+    {
+        var ddb = Dataset("Out/", "Out/Merged.tif");
+        File.Delete(Path.Combine(_folder, "Out", "Merged.tif"));
+
+        DatasetEntryLookup.FindExisting(ddb.Object, "out/merged.TIF").ShouldBe(new ExistingEntry("Out/Merged.tif", false));
+    }
+
+    [Test]
+    public void ANameWithAWildcard_MatchesOnlyItself()
+    {
+        File.WriteAllText(Path.Combine(_folder, "ab.tif"), "x");
+
+        DatasetEntryLookup.FindExisting(Dataset().Object, "a?.tif").ShouldBeNull();
+        DatasetEntryLookup.FindExisting(Dataset().Object, "AB.TIF").ShouldBe(new ExistingEntry("ab.tif", false));
+    }
+
+    [Test]
+    public void AFolderOnDiskThatTheIndexDoesNotList_IsAFolder()
+    {
+        Directory.CreateDirectory(Path.Combine(_folder, "Loose"));
+
+        DatasetEntryLookup.FindExisting(Dataset().Object, "loose").ShouldBe(new ExistingEntry("Loose", true));
     }
 
     [Test]

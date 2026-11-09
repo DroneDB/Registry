@@ -19,7 +19,9 @@ public sealed record EntryLocation(string Path, ExistingEntry? Existing);
 /// <summary>
 /// The one lookup of "does this name already exist" for what the Registry writes into a dataset (D-040,
 /// <see cref="InputRules.NamesClashIgnoringCase"/>): names in a folder clash without regard to letter case, so
-/// <c>Images/A.tif</c> finds <c>images/a.tif</c>. A tool output, an import, an extraction and a rename ask it,
+/// <c>Images/A.tif</c> finds <c>images/a.tif</c>. Each folder level is one index query for that name (libddb's
+/// name pattern ignores the case of ASCII letters), then the disk for a file the index does not list: never a listing
+/// of the folder. A tool output, an import, an extraction and a rename ask it,
 /// and refuse a clash with <see cref="NameClashException"/> (409 with <c>conflictPath</c>).
 /// </summary>
 public static class DatasetEntryLookup
@@ -50,21 +52,15 @@ public static class DatasetEntryLookup
         if (ddb.EntryExists(path))
             return new EntryLocation(path, new ExistingEntry(path, ddb.GetEntry(path)?.Type == EntryType.Directory));
 
-        var (indexed, located) = WalkIgnoringCase(ddb, path);
-        if (indexed is not null)
-            return new EntryLocation(indexed.Path, indexed);
-
-        // A file the index does not list (an interrupted write, a file copied in by hand) is replaced just the same
-        var local = ddb.GetLocalPath(located);
-        if (!string.IsNullOrEmpty(local))
-        {
-            if (File.Exists(local))
-                return new EntryLocation(located, new ExistingEntry(located, false));
-            if (Directory.Exists(local))
-                return new EntryLocation(located, new ExistingEntry(located, true));
-        }
-
-        return new EntryLocation(located, null);
+        // An indexed entry, or one on disk that the index does not list (an interrupted write, a file copied in by
+        // hand), which is replaced just the same
+        var (found, located, indexedType) = WalkIgnoringCase(ddb, path);
+        if (!found)
+            return new EntryLocation(located, null);
+        var isFolder = indexedType is { } type
+            ? type == EntryType.Directory
+            : Directory.Exists(ddb.GetLocalPath(located));
+        return new EntryLocation(located, new ExistingEntry(located, isFolder));
     }
 
     /// <summary>
@@ -90,36 +86,76 @@ public static class DatasetEntryLookup
         return existing.Path;
     }
 
-    // Walks the path one segment at a time through the index, matching each name without regard to case (an exact
-    // match first, so two entries that differ only in case resolve to the one asked for). Returns the entry when
-    // every segment matched, and the path in the case of the segments that did, followed by the others
-    private static (ExistingEntry? Entry, string Path) WalkIgnoringCase(IDDB ddb, string path)
+    // What a folder enumeration of NameOnDisk sees: hidden entries too, any letter case
+    private static readonly EnumerationOptions OneNameIgnoringCase = new()
+    {
+        MatchCasing = MatchCasing.CaseInsensitive,
+        MatchType = MatchType.Simple,
+        AttributesToSkip = 0,
+        IgnoreInaccessible = true,
+        RecurseSubdirectories = false
+    };
+
+    // Walks the path one segment at a time: the entry of the index with that name (an exact match first, so two entries
+    // that differ only in case resolve to the one asked for), else the name on disk, both without regard to case. Each
+    // segment costs one index query filtered by the name and, when the index has no such entry, one folder
+    // enumeration filtered by it: a burst of uploads into a large folder never lists it once per file. Returns whether
+    // every segment matched, the path in the case of the segments that did followed by the others, and the indexed
+    // type of the last one (null when only the disk has it)
+    private static (bool Found, string Path, EntryType? IndexedType) WalkIgnoringCase(IDDB ddb, string path)
     {
         var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
         var current = string.Empty;
-        EntrySummary? match = null;
+        EntryType? indexedType = null;
 
         for (var i = 0; i < segments.Length; i++)
         {
-            var parent = current;
-            var children = (ddb.FindSummaries(new EntryQuery(parent, Recursive: false)) ?? [])
-                .Where(c => c.Path is { Length: > 0 } && string.Equals(ParentOf(c.Path), parent, StringComparison.Ordinal))
-                .ToList();
+            var indexed = IndexedChild(ddb, current, segments[i]);
+            var name = indexed is null ? NameOnDisk(ddb.GetLocalPath(current), segments[i]) : NameOf(indexed.Path);
+            if (name is null)
+                return (false, Join(current, string.Join('/', segments[i..])), null);
 
-            match = children.FirstOrDefault(c => string.Equals(NameOf(c.Path), segments[i], StringComparison.Ordinal))
-                    ?? children.FirstOrDefault(c =>
-                        string.Equals(NameOf(c.Path), segments[i], StringComparison.OrdinalIgnoreCase));
-            if (match is null)
-            {
-                var rest = string.Join('/', segments[i..]);
-                return (null, parent.Length == 0 ? rest : parent + "/" + rest);
-            }
-
-            current = match.Path;
+            indexedType = indexed?.Type;
+            current = Join(current, name);
         }
 
-        return match is null ? (null, path) : (new ExistingEntry(match.Path, match.Type == EntryType.Directory), match.Path);
+        return (segments.Length > 0, segments.Length > 0 ? current : path, indexedType);
     }
+
+    // The indexed child of `folder` called `name` without regard to case (the exact name first), or null. libddb's
+    // pattern matches '*' and '?' as wildcards and ASCII letters in any case: the names are compared here again
+    private static EntrySummary? IndexedChild(IDDB ddb, string folder, string name)
+    {
+        var children = (ddb.FindSummaries(new EntryQuery(folder, Recursive: false, NamePattern: name)) ?? [])
+            .Where(c => c.Path is { Length: > 0 } && string.Equals(ParentOf(c.Path), folder, StringComparison.Ordinal))
+            .ToList();
+
+        return children.FirstOrDefault(c => string.Equals(NameOf(c.Path), name, StringComparison.Ordinal))
+               ?? children.FirstOrDefault(c => string.Equals(NameOf(c.Path), name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // The name of the entry of `folder` called `name` without regard to letter case (the exact name first), or null
+    private static string? NameOnDisk(string? folder, string name)
+    {
+        if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
+            return null;
+
+        // A wildcard in the name would match other names too: the filter below then does all the matching
+        var pattern = name.IndexOfAny(['*', '?']) >= 0 ? "*" : name;
+        string? match = null;
+        foreach (var entry in Directory.EnumerateFileSystemEntries(folder, pattern, OneNameIgnoringCase))
+        {
+            var candidate = Path.GetFileName(entry);
+            if (string.Equals(candidate, name, StringComparison.Ordinal))
+                return candidate;
+            if (match is null && string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase))
+                match = candidate;
+        }
+
+        return match;
+    }
+
+    private static string Join(string folder, string name) => folder.Length == 0 ? name : folder + "/" + name;
 
     private static string ParentOf(string path)
     {

@@ -51,16 +51,27 @@ public sealed class UploadCommitter
             await _receipts.SetStateAsync(ctx, UploadReceiptState.Committing, null);
 
             // Validation first: a refused file is never moved into the dataset; a valid one is moved
-            // to its normalized path
+            // to its normalized path, in the letter case of the entry it replaces (D-040). The name is checked
+            // again here, so a file written since the part's first byte still refuses it
             var valid = new List<int>();
             var sizes = new long[parts.Count];
             var targets = new string[parts.Count];
+            var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (var i = 0; i < parts.Count; i++)
             {
+                if (parts[i].Refusal is { } refusal)
+                {
+                    outcomes[i] = new UploadPartOutcome(parts[i].Path, null, refusal);
+                    continue;
+                }
+
                 try
                 {
                     _files.ValidateTempFile(ctx, parts[i].File.TempPath);
-                    targets[i] = _files.ValidatePath(parts[i].Path);
+                    targets[i] = _files.ResolveTarget(ctx, parts[i].Path, parts[i].Overwrite);
+                    // Two parts of one request with one name: the second one clashes unless it overwrites
+                    if (!claimed.Add(targets[i]) && !parts[i].Overwrite)
+                        throw new NameClashException(targets[i]);
                     sizes[i] = _files.ActualSize(parts[i].File);
                     valid.Add(i);
                 }
@@ -77,7 +88,15 @@ public sealed class UploadCommitter
             foreach (var i in valid)
             {
                 var part = parts[i] with { Path = targets[i] };
-                moved.Add((i, new MovedUploadPart(part, _files.MoveIntoDataset(ctx, part))));
+                try
+                {
+                    moved.Add((i, new MovedUploadPart(part, _files.MoveIntoDataset(ctx, part))));
+                }
+                catch (NameClashException clash)
+                {
+                    // Lost the name to another writer after the check: this part only
+                    outcomes[i] = new UploadPartOutcome(parts[i].Path, null, clash);
+                }
             }
 
             await _indexer.IndexAsync(ctx, moved.Select(m => m.Part).ToArray());

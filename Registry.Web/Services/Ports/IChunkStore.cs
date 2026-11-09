@@ -9,7 +9,10 @@ namespace Registry.Web.Services.Ports;
 /// <param name="TotalChunks">Number of chunks.</param>
 /// <param name="ChunkSize">Size of every chunk but the last.</param>
 /// <param name="UserId">Who started it.</param>
-public sealed record ChunkManifest(string Path, long TotalSize, int TotalChunks, long ChunkSize, string? UserId)
+/// <param name="Overwrite">Whether the upload may replace a file that holds its name (the <c>overwrite</c> field of
+/// its first chunk). A manifest written before the field existed reads as true: those uploads replaced.</param>
+public sealed record ChunkManifest(string Path, long TotalSize, int TotalChunks, long ChunkSize, string? UserId,
+    bool Overwrite = true)
 {
     /// <summary>Byte offset of chunk <paramref name="index"/>.</summary>
     public long OffsetOf(int index) => index * ChunkSize;

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.IO;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -9,6 +11,7 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Ports.DroneDB;
 using Registry.Web.Attributes;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
@@ -63,6 +66,10 @@ public class ObjectUploadsController : ControllerBaseEx
     /// first byte is stored.
     /// </summary>
     /// <remarks>
+    /// A file whose name exists in its folder (without regard to letter case) is refused with <c>409</c>, the
+    /// "already exists" message and <c>conflictPath</c>, unless the form field <c>overwrite=true</c> comes
+    /// before its file part; then it replaces that entry, in the entry's letter case. The name is checked before
+    /// the first byte is stored and again at the commit.
     /// One file part: <c>201</c> with the entry. Several file parts (a bundle): <c>200</c> with one
     /// result per file; a file that fails does not fail the others. With an <c>X-Upload-Id</c>
     /// header the outcome can be asked for later (<c>GET obj/uploads/{uploadId}</c>), and a request
@@ -96,17 +103,36 @@ public class ObjectUploadsController : ControllerBaseEx
         if (ctx.Receipt?.Results is { Count: > 0 } done)
             return Respond(orgSlug, dsSlug, done, done.Count > 1);
 
-        StreamedMultipartFiles<StreamedFile> form;
+        StreamedMultipartFiles<ReceivedPart> form;
         try
         {
             form = await MultipartRequestHelper.ReadFilesFormAsync(Request,
                 _formOptions.MultipartBoundaryLengthLimit, _uploadSettings.MaxPartsPerRequest,
                 async part =>
                 {
-                    // Refuse a destination before its first byte is written
-                    if (part.Path != null) _uploads.ValidatePath(part.Path);
-                    return await _uploads.StreamAsync(ctx, part.Body, ct);
-                }, _uploads.Discard);
+                    // The overwrite field sent before this file part, after the previous one, is the part's (D-040)
+                    var overwrite = ChunkFields.Overwrite(part.Overwrite);
+                    if (part.Path != null)
+                    {
+                        // Refuse a destination before its first byte is written
+                        _uploads.ValidatePath(part.Path);
+                        try
+                        {
+                            _uploads.ResolveTarget(ctx, part.Path, overwrite);
+                        }
+                        catch (NameClashException clash)
+                        {
+                            // Nothing of it is stored: its bytes are read past, so the other files of a bundle go on
+                            await part.Body.CopyToAsync(Stream.Null, ct);
+                            return new ReceivedPart(null, overwrite, clash);
+                        }
+                    }
+
+                    return new ReceivedPart(await _uploads.StreamAsync(ctx, part.Body, ct), overwrite, null);
+                }, received =>
+                {
+                    if (received.File != null) _uploads.Discard(received.File);
+                });
         }
         catch (Exception ex)
         {
@@ -125,14 +151,29 @@ public class ObjectUploadsController : ControllerBaseEx
 
         if (form.Files.Count == 1)
         {
-            var (path, file) = form.Files[0];
-            var entry = await _uploads.CommitAsync(ctx, path ?? form.GetField("path") ?? string.Empty, file);
+            var (path, received) = form.Files[0];
+            if (received.Refusal != null)
+            {
+                await _uploads.FailAsync(ctx, received.Refusal);
+                ExceptionDispatchInfo.Throw(received.Refusal);
+            }
+
+            var entry = await _uploads.CommitAsync(ctx, path ?? form.GetField("path") ?? string.Empty, received.File!,
+                received.Overwrite);
             return Created(orgSlug, dsSlug, entry);
         }
 
-        var parts = form.Files.Select(f => new StreamedPart(f.Path ?? string.Empty, f.File)).ToArray();
+        var parts = form.Files.Select(f => new StreamedPart(f.Path ?? string.Empty,
+            f.File.File ?? NotStored, f.File.Overwrite, f.File.Refusal)).ToArray();
         return Respond(orgSlug, dsSlug, await _uploads.CommitAsync(ctx, parts), bundle: true);
     }
+
+    // The file of a part refused before its first byte: nothing on disk (the commit deletes no temp file of it)
+    private static readonly StreamedFile NotStored =
+        new(string.Empty, 0, new FileHashHint(string.Empty, 0, DateTime.MinValue));
+
+    /// <summary>A file part of an upload request: its temp file, or why it was refused before its first byte.</summary>
+    private sealed record ReceivedPart(StreamedFile? File, bool Overwrite, Exception? Refusal);
 
     /// <summary>
     /// The state of an upload by the <c>X-Upload-Id</c> it was sent with. A client whose request
@@ -164,8 +205,13 @@ public class ObjectUploadsController : ControllerBaseEx
     /// The form fields <c>fileId</c>, <c>chunkIndex</c>, <c>totalChunks</c>, <c>totalFileSize</c>,
     /// <c>chunkSize</c> and <c>path</c> come before the <c>chunk</c> file part, which is streamed
     /// straight into the file at its offset. Chunks can be sent in any order and again; the first
-    /// one checks access, path and quota. Commit with <c>POST obj/chunk/{fileId}/commit</c>.
+    /// one checks access, path, name and quota. Commit with <c>POST obj/chunk/{fileId}/commit</c>.
     /// </summary>
+    /// <remarks>
+    /// The <c>overwrite</c> field of the first chunk is the upload's: without <c>overwrite=true</c> a file whose name
+    /// exists is refused with <c>409</c> and <c>conflictPath</c> before its first byte is stored, and again at the
+    /// commit when another upload wrote the name in the meantime.
+    /// </remarks>
     [HttpPost(RoutesHelper.ObjectsRadix + "/chunk", Name = nameof(ObjectUploadsController) + "." + nameof(PostChunk))]
     [TypeFilter(typeof(UploadAnswerFilter))]
     [DisableFormValueModelBinding]
@@ -206,15 +252,37 @@ public class ObjectUploadsController : ControllerBaseEx
 
     /// <summary>
     /// Adds a resumable upload whose chunks are all stored to the dataset. Idempotent: committing a
-    /// committed upload again returns its entry. 409 lists the missing chunks.
+    /// committed upload again returns its entry. 409 lists the missing chunks, or (with
+    /// <c>conflictPath</c>) refuses a name that exists; the chunks stay, and the same commit with the form
+    /// field <c>overwrite=true</c> replaces the file without sending them again.
     /// </summary>
     [HttpPost(RoutesHelper.ObjectsRadix + "/chunk/{fileId}/commit", Name = nameof(ObjectUploadsController) + "." + nameof(CommitChunks))]
     [TypeFilter(typeof(UploadAnswerFilter))]
+    [DisableFormValueModelBinding]
     [ProducesResponseType(typeof(EntryDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<EntryDto>> CommitChunks([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
-        [FromRoute, Required] string fileId, CancellationToken ct) =>
-        Created(orgSlug, dsSlug, await _chunks.CommitAsync(orgSlug, dsSlug, fileId, ct: ct));
+        [FromRoute, Required] string fileId, CancellationToken ct)
+    {
+        return Created(orgSlug, dsSlug,
+            await _chunks.CommitAsync(orgSlug, dsSlug, fileId, await CommitOverwriteAsync(ct), ct));
+    }
+
+    // The body of a commit is optional: a form with overwrite, an empty form (a browser's empty FormData), or nothing
+    private async Task<bool> CommitOverwriteAsync(CancellationToken ct)
+    {
+        if (!Request.HasFormContentType || Request.ContentLength == 0)
+            return false;
+        try
+        {
+            return ChunkFields.Overwrite((await Request.ReadFormAsync(ct))["overwrite"].FirstOrDefault());
+        }
+        catch (InvalidDataException)
+        {
+            // A multipart body without any part: no field, no flag
+            return false;
+        }
+    }
 
     private IActionResult Respond(string orgSlug, string dsSlug, IReadOnlyList<UploadPartResultDto> results, bool bundle)
     {
@@ -222,10 +290,14 @@ public class ObjectUploadsController : ControllerBaseEx
             return Ok(results);
 
         var single = results[0];
-        return single.Entry != null
-            ? Created(orgSlug, dsSlug, single.Entry)
-            : ApiErrorResponder.ToActionResult(_errors.Create(HttpContext, single.Status, single.Error ?? "Upload failed",
-                noRetry: UploadRetryRule.IsFinalStatus(single.Status)));
+        if (single.Entry != null)
+            return Created(orgSlug, dsSlug, single.Entry);
+
+        var problem = _errors.Create(HttpContext, single.Status, single.Error ?? "Upload failed",
+            noRetry: UploadRetryRule.IsFinalStatus(single.Status));
+        if (single.ConflictPath != null)
+            problem.Extensions[ApiErrorResponder.ConflictPathMember] = single.ConflictPath;
+        return ApiErrorResponder.ToActionResult(problem);
     }
 
     private CreatedAtRouteResult Created(string orgSlug, string dsSlug, EntryDto entry) =>

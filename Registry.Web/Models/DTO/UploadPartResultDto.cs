@@ -15,6 +15,12 @@ public class UploadPartResultDto
     /// <summary>Why the file was not added.</summary>
     public string? Error { get; set; }
 
+    /// <summary>
+    /// When the file was refused because its name exists (409, D-040): the dataset path of the entry that holds
+    /// the name. Send it again with <c>overwrite=true</c> to replace that entry.
+    /// </summary>
+    public string? ConflictPath { get; set; }
+
     /// <summary>Whether sending the file again can succeed (the error is transient).</summary>
     public bool Retryable { get; set; }
 }

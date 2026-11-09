@@ -55,6 +55,18 @@ public sealed class UploadFiles
         return normalized;
     }
 
+    /// <summary>
+    /// The dataset path a file uploaded to <paramref name="path"/> is written at (D-040): the path rule of
+    /// <see cref="ValidatePath"/>, then the name rule of <see cref="DatasetEntryLookup.ResolveOutput"/>, so a name that
+    /// exists (without regard to letter case) is refused unless <paramref name="overwrite"/>, and replaced in the
+    /// letter case of the existing entry when it is.
+    /// </summary>
+    /// <exception cref="InvalidDatasetPathException">Not a dataset path.</exception>
+    /// <exception cref="ExtensionBlockedException">The import policy blocks the extension.</exception>
+    /// <exception cref="NameClashException">The name exists and <paramref name="overwrite"/> is false, or it is a folder.</exception>
+    public string ResolveTarget(UploadRequestContext ctx, string path, bool overwrite) =>
+        DatasetEntryLookup.ResolveOutput(ctx.Ddb, ValidatePath(path), overwrite);
+
     /// <summary>Streams one file part to a temp file in the dataset, hashing it on the way.</summary>
     public async Task<StreamedFile> StreamAsync(UploadRequestContext ctx, Stream body, CancellationToken ct = default)
     {
@@ -90,14 +102,31 @@ public sealed class UploadFiles
         return actual;
     }
 
-    /// <summary>Moves the temp file of <paramref name="part"/> to its dataset path (same-volume atomic move, no extra full-file copy); the local path.</summary>
+    /// <summary>
+    /// Moves the temp file of <paramref name="part"/> to its dataset path (same-volume atomic move, no extra full-file
+    /// copy); the local path. A part without <see cref="StreamedPart.Overwrite"/> never replaces a file, also one
+    /// written since its name was checked.
+    /// </summary>
+    /// <exception cref="NameClashException">The part does not overwrite and a file holds its path.</exception>
     public string MoveIntoDataset(UploadRequestContext ctx, StreamedPart part)
     {
         var localFilePath = ctx.Ddb.GetLocalPath(part.Path);
         _fs.EnsureParentFolderExists(localFilePath);
 
-        // Same-volume atomic move: no extra full-file copy (keeps the write time the hash hint carries)
-        _fs.Move(part.File.TempPath, localFilePath, overwrite: true);
+        if (!part.Overwrite && _fs.Exists(localFilePath))
+            throw new NameClashException(part.Path);
+
+        try
+        {
+            // Same-volume atomic move: no extra full-file copy (keeps the write time the hash hint carries)
+            _fs.Move(part.File.TempPath, localFilePath, overwrite: part.Overwrite);
+        }
+        catch (IOException) when (!part.Overwrite && _fs.Exists(localFilePath))
+        {
+            // Another writer took the name between the check and the move
+            throw new NameClashException(part.Path);
+        }
+
         return localFilePath;
     }
 

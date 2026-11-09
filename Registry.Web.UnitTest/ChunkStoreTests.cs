@@ -51,6 +51,19 @@ public class ChunkStoreTests
         return (await File.ReadAllBytesAsync(destination), hint.Sha256);
     }
 
+    // FR-UPL-03: an upload started before the overwrite field existed replaced; it still does after an update
+    [Test]
+    public void Manifest_WrittenWithoutOverwrite_ReadsAsOverwrite()
+    {
+        new ChunkStore().Open(_root, "file-0001", _manifest with { Overwrite = false });
+        var path = Path.Combine(_root, "file-0001", ChunkStore.ManifestFileName);
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        json.Remove("overwrite").ShouldBeTrue();
+        File.WriteAllText(path, json.ToJsonString());
+
+        new ChunkStore().GetStatus(_root, "file-0001")!.Manifest.Overwrite.ShouldBeTrue();
+    }
+
     [Test]
     public async Task ChunksInOrder_FromDifferentRequests_MakeTheFile_AndItsHash()
     {

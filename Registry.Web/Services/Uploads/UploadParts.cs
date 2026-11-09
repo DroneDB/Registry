@@ -1,6 +1,7 @@
 using System;
 using Microsoft.AspNetCore.Http;
 using Registry.Ports.DroneDB;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -21,6 +22,7 @@ public sealed record UploadPartOutcome(string Path, EntryDto? Entry, Exception? 
             Path = Path,
             Status = d.StatusCode,
             Error = d.Message,
+            ConflictPath = (Error as NameClashException)?.ConflictPath,
             // Only a transient error is worth sending again; a final upload status never is (UploadRetryRule)
             Retryable = !UploadRetryRule.NoRetry(d, Error) && d.StatusCode is StatusCodes.Status503ServiceUnavailable
                 or StatusCodes.Status429TooManyRequests
