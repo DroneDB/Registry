@@ -1,6 +1,9 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -14,7 +17,7 @@ namespace Registry.Web.Services.Processing;
 /// The processing nodes (NodeODX) a user can pick for photogrammetry: their list, their options and their status.
 /// Never exposes a node's URL or token.
 /// </summary>
-public sealed class ProcessingNodeCatalog
+public sealed partial class ProcessingNodeCatalog
 {
     private readonly NodeOdxNodeRegistry _nodes;
     private readonly INodeOdxClient _client;
@@ -32,11 +35,15 @@ public sealed class ProcessingNodeCatalog
     public IReadOnlyList<ProcessingNodeDto> List() =>
         [.. _nodes.All.Select(n => new ProcessingNodeDto(n.Id, n.Title ?? n.Id))];
 
-    /// <summary>The processing options of the node, read live from it; <see cref="NotFoundException"/> for an unknown node.</summary>
+    /// <summary>
+    /// The processing options of the node, read live from it, each with its help written out: NodeODX's help text has
+    /// <c>%(choices)s</c> and <c>%(default)s</c> (and <c>{choices}</c>, <c>{default}</c>) where it means the choices and the node's
+    /// default, and a client shows the text as it is (FR-DEV-10). <see cref="NotFoundException"/> for an unknown node.
+    /// </summary>
     public async Task<IReadOnlyList<NodeOdxOptionDto>> GetOptionsAsync(string nodeId, CancellationToken ct)
     {
         var options = await _client.GetOptionsAsync(Resolve(nodeId), ct);
-        return [.. options.Select(o => new NodeOdxOptionDto(o.Name, o.Type, o.Domain, o.Help, o.Value))];
+        return [.. options.Select(o => new NodeOdxOptionDto(o.Name, o.Type, o.Domain, FillHelp(o), o.Value))];
     }
 
     /// <summary>
@@ -59,6 +66,38 @@ public sealed class ProcessingNodeCatalog
                 ErrorMessage: ex.Message);
         }
     }
+
+    /// <summary>The help of <paramref name="option"/> with its choices and its default in place of the placeholders.</summary>
+    internal static string? FillHelp(NodeOdxOption option)
+    {
+        if (string.IsNullOrEmpty(option.Help)) return option.Help;
+
+        var choices = option.Domain switch
+        {
+            null => "",
+            string text => text,
+            IEnumerable items => string.Join(", ", items.Cast<object?>().Select(i => i?.ToString())),
+            var other => other.ToString() ?? ""
+        };
+        var value = option.Value switch
+        {
+            null => "",
+            bool flag => flag ? "true" : "false",
+            IFormattable number => number.ToString(null, CultureInfo.InvariantCulture),
+            var other => other.ToString() ?? ""
+        };
+        // One pass, so that a "%%" of Python's format (a literal "%": "50%%") is a "%" and never starts a placeholder,
+        // and a choice or default that holds a placeholder's text stays as it is
+        return HelpPlaceholder().Replace(option.Help, m => m.Value switch
+        {
+            "%%" => "%",
+            "%(choices)s" or "{choices}" => choices,
+            _ => value
+        });
+    }
+
+    [GeneratedRegex(@"%%|%\(choices\)s|%\(default\)s|\{choices\}|\{default\}", RegexOptions.CultureInvariant)]
+    private static partial Regex HelpPlaceholder();
 
     private NodeOdxEndpoint Resolve(string nodeId) =>
         (string.IsNullOrWhiteSpace(nodeId) ? null : _nodes.Resolve(nodeId))

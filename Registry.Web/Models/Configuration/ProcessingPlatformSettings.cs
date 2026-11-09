@@ -76,6 +76,12 @@ public class ProcessingPlatformSettings
     public int RemoteNodeRequestTimeoutSeconds { get; set; } = 30;
 
     /// <summary>
+    /// Keeps a failed or cancelled NodeODX task on its node, for an operator who debugs it there. Default false: the
+    /// Registry removes the task from the node, as it does for a succeeded one, after it copied the output to the task log.
+    /// </summary>
+    public bool KeepFailedNodeTasks { get; set; }
+
+    /// <summary>
     /// NodeODX processing nodes available for the <c>photogrammetry</c> tool.
     /// Config-based registry (no DB table) for the reduced-scope integration.
     /// </summary>

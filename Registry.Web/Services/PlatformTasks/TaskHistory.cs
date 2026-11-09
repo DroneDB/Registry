@@ -209,9 +209,24 @@ public sealed class TaskHistory
     {
         var waits = _waits.Find(rows, () => dataset.Ddb);
         var names = await NamesOfAsync(rows.Select(j => j.CancelledBy), ct);
-        return [.. rows.Select(j => new ListedTask(j.UserId, ToSummary(j, waits.MissingFilesOf(j.JobId), names),
+        // A build that waits its turn says which build of the dataset it waits behind (FR-PRC-42); the Hub shows the
+        // text and does not compute the position
+        var running = rows.Where(j => j is { ToolId: "build", CurrentState: "Processing", Path: not null })
+            .OrderBy(j => j.ProcessingAtUtc).FirstOrDefault();
+        return [.. rows.Select(j => new ListedTask(j.UserId,
+            WaitingBehind(ToSummary(j, waits.MissingFilesOf(j.JobId), names), running),
             TaskWriteRecord.IsCommitted(j.WriteRecordJson)))];
     }
+
+    /// <summary>
+    /// The row of a build that is enqueued while a build of the same dataset runs, with the phase message
+    /// "Waiting behind &lt;path&gt;" (the message of another phase is kept); the other rows as they are.
+    /// </summary>
+    internal static TaskSummaryDto WaitingBehind(TaskSummaryDto row, JobIndex? running) =>
+        row is { ToolId: "build", State: "Enqueued", PhaseMessage: null or "" } && running is { Path: { } path }
+        && running.JobId != row.TaskId
+            ? row with { PhaseMessage = $"Waiting behind {path}" }
+            : row;
 
     private TaskSummaryDto ToSummary(JobIndex j, IReadOnlyList<string>? missingFiles,
         IReadOnlyDictionary<string, string> names) => new(

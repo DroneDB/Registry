@@ -132,6 +132,11 @@ public sealed class ProcessingSections : IConfigurationSectionBuilder
                     pp?.RemoteNodeRequestTimeoutSeconds ?? dp?.RemoteNodeRequestTimeoutSeconds ?? 0,
                     dp?.RemoteNodeRequestTimeoutSeconds ?? 0, unit: "seconds"),
 
+                BoolField("KeepFailedNodeTasks", "Keep Failed Node Tasks",
+                    "Keep a failed or cancelled NodeODX task on its node, for debugging. Off: the Registry removes it from the node (its log stays in the task).",
+                    pp?.KeepFailedNodeTasks ?? dp?.KeepFailedNodeTasks ?? false,
+                    dp?.KeepFailedNodeTasks ?? false),
+
                 NumberField("MaxConcurrentUrlImportsPerUser", "Max Concurrent URL Imports / User",
                     "Maximum active import-file (single-file URL import) tasks per user.",
                     pp?.MaxConcurrentUrlImportsPerUser ?? dp?.MaxConcurrentUrlImportsPerUser ?? 0,

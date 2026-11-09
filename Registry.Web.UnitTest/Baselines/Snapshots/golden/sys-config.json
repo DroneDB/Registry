@@ -1814,6 +1814,20 @@
             "unit": "seconds"
           },
           {
+            "key": "KeepFailedNodeTasks",
+            "displayName": "Keep Failed Node Tasks",
+            "currentValue": "False",
+            "defaultValue": "False",
+            "isSet": false,
+            "description": "Keep a failed or cancelled NodeODX task on its node, for debugging. Off: the Registry removes it from the node (its log stays in the task).",
+            "fieldType": "bool",
+            "enumOptions": null,
+            "sensitive": false,
+            "minValue": null,
+            "maxValue": null,
+            "unit": null
+          },
+          {
             "key": "MaxConcurrentUrlImportsPerUser",
             "displayName": "Max Concurrent URL Imports / User",
             "currentValue": "0",
