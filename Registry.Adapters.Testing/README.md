@@ -153,4 +153,14 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   `EntryPathRule` follows `isReservedSegment`, and `DatasetPathPolicy` takes the rule from libddb as before. New
   fixtures `gdal-util-probe` (with its schema; the response of the helper program, which Registry does not read) and
   `info-pointcloud-no-footprint`; `entry.schema.json` describes the `warning` property, which the entry properties
-  carry as they are. No adapter change.
+  carry as they are. No adapter change.* 2026-11-09: DroneDB `b01ddf02701fcb8c84b44219d41c1a8a7d181b2c` (DroneDB 2.2.0, libddb ABI 2.2; the release candidate of
+  `rel/2.2`, not tagged yet). Since `f878cef`: `capabilities` has `abi.minor` 2 and lists the 2.1 exports with an
+  `overwrite` option (`DDBAlignRasterEx`, `DDBMaskBordersEx`, `DDBMergeMultispectralEx`) and the ten 2.2 raster value
+  exports that take `DDBRasterOptions` (`DDBGetRasterValueInfoEx`, `DDBGetRasterPointValueEx`,
+  `DDBGetRasterPointValuePixelEx`, `DDBGetRasterAreaStatsEx`, `DDBGetRasterAreaStatsPixelEx`, `DDBGetRasterProfileEx`,
+  `DDBGenerateContoursEx`, `DDBGenerateMemoryThumbnailEx2`, `DDBMemoryTileEx2`, `DDBExportRaster3`) in `symbols`, and the
+  cancellable ones in `cancellable`; the build object (`build-artifacts`, `build-artifacts-pending`, `list-entries-ex`),
+  `pending-build-info` and `copy-build-artifacts` gain `key`, the build key (required in the schemas; null in the build
+  object of an entry that is not buildable), which `EntryBuild.Key`, `PendingBuildInfo.Key` and
+  `CopiedBuildArtifacts.Key` read (U-210); the `raster-metadata-formula` histogram bins the range a viewer shows and gains
+  `below` and `above` (additive). `DdbAbi.Minor` is 2. No vector changed.

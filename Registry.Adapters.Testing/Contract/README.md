@@ -493,3 +493,61 @@ Registry has to adopt first.
   `DDB~1` opens the `.ddb` folder of the dataset. `ddb`, `ddb~`, `ddb~x`, `ddb~1x` and
   `ddb~1.txt` stay ordinary. Registry's copy of the vectors takes the same change when it moves
   to a libddb build that has it.
+
+* 2026-10-30: `raster-metadata-formula`: the histogram of a formula bins the range a viewer shows
+  instead of the values' `[min, max]`: that range narrowed to the formula's range (`range` of its
+  `algorithms` entry) and to one 2%-98% spread around the percentiles (`[p2 - (p98 - p2), p98 +
+  (p98 - p2)]`), the whole `[min, max]` when that is empty. A few outliers (an NDVI of -191) no
+  longer put almost every value in one bar. A value is counted in the bin whose edges hold it
+  (it was binned with 254 steps over the edges of 255 bins, up to one bin low), and the histogram
+  gains `below` and `above` (additive, integers): the values outside its edges. `min`, `max`,
+  `mean`, `std` and the percentiles are those of all the values, as before. The fixture and the
+  schema changed; no other fixture did.
+
+* 2026-10-30: a raster query of a place without data is `DDBERR_INVALIDARGS` (it was
+  `DDBERR_EXCEPTION`), in these exports of 1.x too, like a refused entry path: `DDBGetRasterPointValue`
+  for a pixel outside the raster (message `No valid data at the point: pixel (x, y) is outside the
+  WxH raster`), `DDBGetRasterAreaStats` for a rectangle with no pixel in the raster (`No valid
+  data in the area: (x0, y0) - (x1, y1) is outside the WxH raster`; it used to be clamped onto the
+  nearest edge, whose pixels it measured) or with no-data pixels only (`No valid data in the
+  area: its pixels are all no data`), `DDBDetectStockpile` when the click is outside the raster,
+  the search region has no data, the search window is too small or no pile is found (`No
+  stockpile detected at this location`), and `DDBDetectAllStockpiles` for a raster without valid
+  elevation (no pile found is an empty list, as before). The reason is empty. No fixture changed.
+
+* 2026-11-08: 2.1.0 (ABI 2.1): `capabilities` has `abi.minor` 1 and lists the new exports
+  `DDBAlignRasterEx`, `DDBMaskBordersEx` and `DDBMergeMultispectralEx` (the old exports with an
+  options struct whose `overwrite` replaces an output that exists); `DDBMaskBordersEx` is in
+  `cancellable` too. Additive: no other member and no other fixture changed. The old
+  `DDBAlignRaster`, `DDBMaskBorders` and `DDBMergeMultispectral` now refuse an output that
+  exists (`DDBERR_EXCEPTION`).
+
+* 2026-11-09: one build key (FR-XC-28, D-020). The build folder of an entry is named by its build key: the
+  hash for a type whose build depends on the content only, and `<hash>-<16 hex characters of the SHA-256 of
+  the georef property>` for a model or a splat that has a georeference (the same file in two folders builds
+  once for each georeference). The pending marker is the entry's own (`<key>.<pathId>.pending`), so two
+  entries with the same content have two markers; the markers of the earlier layout (`<hash>.pending`) are
+  moved by the rescan and by `DDBBuild` with `pendingOnly`. Additive, required members: `key` in the build
+  object (`build-artifacts`, `build-artifacts-pending`, `list-entries-ex`; null when the entry is not
+  buildable), in `pending-build-info` and in `copy-build-artifacts`; `hash` is still the content hash.
+  `DDBResolveBuildFile` and `DDBCopyBuildArtifacts` take the key (`hash` argument): a hash alone names the
+  build of a place-independent type. `DDBRescan` and `DDBRescanEx` add `buildKey` and `buildKeyChanged` to the
+  element of an entry they re-read (no fixture lists a rescan): `buildKeyChanged` is true when the entry's
+  build is not in the folder of its key, which a host rebuilds. The schemas and the five fixtures above
+  changed (the three schemas gain `key`); no other fixture did. Registry's exact-JSON adapter tests of
+  these outputs need the member before Registry moves to a libddb build that has it. No version bump is
+  made here: the members are additive and the ABI minor goes up with the release that ships them.
+
+* 2026-11-09: `capabilities` lists the raster value exports of 2.2 (U-201: `DDBGetRasterValueInfoEx`,
+  `DDBGetRasterPointValueEx`, `DDBGetRasterAreaStatsEx`, `DDBGetRasterProfileEx`,
+  `DDBGenerateContoursEx`, `DDBGenerateMemoryThumbnailEx2`, `DDBMemoryTileEx2`, `DDBExportRaster3`, and the
+  pixel exports for a raster without a map, an R-JPEG: `DDBGetRasterPointValuePixelEx`,
+  `DDBGetRasterAreaStatsPixelEx`), which take a `DDBRasterOptions` (NoData override, formula, WGS84 window).
+  The point result adds `unit` (of the band, or of the thermal formula). The value info JSON grows
+  (`nodata`, `nodataOverridden`, `nodataInvalid`, `pixelCount`, `validPixelCount`, `windowPixelCount`,
+  `stretch`, `scale`, `offset`); the point result of a map coordinate adds `lon` and `lat`.
+
+* 2026-11-09: 2.2.0 (ABI 2.2): `capabilities` has `abi.minor` 2. 2.2 ships the raster value exports and
+  `DDBRasterOptions` of U-201 (above; all ten are in `cancellable` too) and the build key members of U-210
+  (`key`, `buildKey`, `buildKeyChanged`). Additive: no export was removed or changed its signature. A host
+  that reads `key` or calls one of the new exports checks `DDBGetAbiVersion()` for 2.2 or later.

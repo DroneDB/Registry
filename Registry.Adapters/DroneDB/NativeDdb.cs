@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace Registry.Adapters.DroneDB;
 
 /// <summary>
-/// The libddb C ABI as Registry calls it (ddb.h of DroneDB 2.1.0, ABI 2.1): the only place an export
+/// The libddb C ABI as Registry calls it (ddb.h of DroneDB 2.2.0, ABI 2.2): the only place an export
 /// is declared. Every declaration is a source-generated
 /// <see cref="LibraryImportAttribute"/> stub named exactly like its export, so
 /// <see cref="DdbAbi.RequiredSymbols"/> (the startup check) is derived from this class.
