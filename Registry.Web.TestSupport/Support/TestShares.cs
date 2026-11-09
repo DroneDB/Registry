@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
@@ -23,16 +24,27 @@ public static class TestShares
         IFileSystem fileSystem, ScratchFileProvider scratch, TimeProvider time, IEntryCommandService entries,
         ChunkStore? chunks = null, IDdbManager? ddbManager = null)
     {
+        ddbManager ??= EmptyDatasets();
         var store = new ShareBatchStore(context, authManager, access, tokens, time, NullLogger<ShareBatchStore>.Instance);
-        var rollback = new ShareBatchRollback(context, access, store, datasetsManager, entries,
+        var rollback = new ShareBatchRollback(context, access, store, datasetsManager, entries, ddbManager,
             NullLogger<ShareBatchRollback>.Instance);
         var targets = new ShareTargets(context, datasets, organizations, datasetsManager, rollback, names,
             NullLogger<ShareTargets>.Instance);
         return new ShareManager(store,
             new ShareBatches(store, rollback, targets, authManager, quota, NullLogger<ShareBatches>.Instance),
-            new ShareUploads(store, objects, fileSystem, NullLogger<ShareUploads>.Instance),
-            new ShareChunkedUploads(store, quota, chunks ?? new ChunkStore(), scratch, ddbManager ?? Mock.Of<IDdbManager>(),
-                objects, NullLogger<ShareChunkedUploads>.Instance));
+            new ShareUploads(store, objects, fileSystem, ddbManager, TestPaths.Policy, NullLogger<ShareUploads>.Instance),
+            new ShareChunkedUploads(store, quota, chunks ?? new ChunkStore(), scratch, ddbManager,
+                objects, TestPaths.Policy, NullLogger<ShareChunkedUploads>.Instance));
+    }
+
+    // Every dataset is empty and holds no file: nothing is replaced, a dataset that a batch created holds only its files
+    private static IDdbManager EmptyDatasets()
+    {
+        var ddb = new Mock<IDDB>();
+        ddb.Setup(d => d.FindSummaries(It.IsAny<EntryQuery>())).Returns([]);
+        var manager = new Mock<IDdbManager>();
+        manager.Setup(m => m.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
+        return manager.Object;
     }
 
     /// <summary>

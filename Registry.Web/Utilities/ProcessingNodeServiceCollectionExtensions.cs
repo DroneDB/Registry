@@ -84,6 +84,7 @@ public static class ProcessingNodeServiceCollectionExtensions
         services.AddScoped<ArtifactCompletenessCheckerService>();
         services.AddScoped<IndexRescanService>();
         services.AddScoped<IndexReconciliationService>();
+        services.AddScoped<AbandonedShareBatchesService>();
 
         // The job classes (Hangfire's DI activator creates them; registered so a missing dependency
         // fails the container validation, not the first run) and what they share

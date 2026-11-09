@@ -139,6 +139,19 @@ public class ProcessingNodeDiCompletenessTests
     }
 
     [Test]
+    public void ProcessingNode_ActivatesAbandonedShareBatchesService()
+    {
+        // The recurring job that rolls back an abandoned /upload batch (FR-UPL-01, D-049) runs on every job host; its
+        // dataset removal enqueues the cleanup job through the Hangfire client of the job storage
+        using var provider = BuildNodeProvider(s => s.AddSingleton(Mock.Of<IBackgroundJobClient>()));
+        using var scope = provider.CreateScope();
+
+        var service = scope.ServiceProvider.GetService<Registry.Web.Services.Adapters.AbandonedShareBatchesService>();
+
+        service.ShouldNotBeNull();
+    }
+
+    [Test]
     public void ProcessingNode_ActivatesTheUpdateCheck_AndHasTheInstanceIdentityTask()
     {
         // The update e-mail sends through IEmailService, whose queue is the Hangfire client of the job storage

@@ -27,10 +27,16 @@ namespace Registry.Web.Data.Mysql.Migrations
                     b.Property<string>("Token")
                         .HasColumnType("varchar(255)");
 
+                    b.Property<bool>("CreatedDataset")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<int>("DatasetId")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("End")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("LastActivity")
                         .HasColumnType("datetime(6)");
 
                     b.Property<DateTime>("Start")
@@ -196,6 +202,9 @@ namespace Registry.Web.Data.Mysql.Migrations
                     b.Property<string>("Path")
                         .IsRequired()
                         .HasColumnType("longtext");
+
+                    b.Property<bool>("Replaced")
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<long>("Size")
                         .HasColumnType("bigint");

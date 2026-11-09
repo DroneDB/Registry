@@ -25,9 +25,10 @@ public sealed class ShareChunkedUploads
     private readonly ScratchFileProvider _scratch;
     private readonly IDdbManager _ddbManager;
     private readonly IObjectsManager _objectsManager;
+    private readonly DatasetPathPolicy _paths;
     private readonly ILogger<ShareChunkedUploads> _logger;
 
-    public ShareChunkedUploads(ShareBatchStore batches, IStorageQuota quota, ChunkStore chunks, ScratchFileProvider scratch, IDdbManager ddbManager, IObjectsManager objectsManager, ILogger<ShareChunkedUploads> logger)
+    public ShareChunkedUploads(ShareBatchStore batches, IStorageQuota quota, ChunkStore chunks, ScratchFileProvider scratch, IDdbManager ddbManager, IObjectsManager objectsManager, DatasetPathPolicy paths, ILogger<ShareChunkedUploads> logger)
     {
         _batches = batches;
         _quota = quota;
@@ -35,6 +36,7 @@ public sealed class ShareChunkedUploads
         _scratch = scratch;
         _ddbManager = ddbManager;
         _objectsManager = objectsManager;
+        _paths = paths;
         _logger = logger;
     }
 
@@ -60,8 +62,8 @@ public sealed class ShareChunkedUploads
         // Verify the batch is valid and running
         var batch = await _batches.GetRunningAsync(token, ct);
 
-        // Check if path is allowed for this batch
-        if (!await _batches.IsPathAllowedAsync(token, chunkInfo.Path, ct))
+        // Check if path is allowed for this batch (the batch records the paths normalized, D-040)
+        if (!await _batches.IsPathAllowedAsync(token, _paths.Normalize(chunkInfo.Path), ct))
             throw new BadRequestException($"Path '{chunkInfo.Path}' is not allowed in this batch");
 
         var root = ChunksRoot(batch);
@@ -82,6 +84,9 @@ public sealed class ShareChunkedUploads
         _chunks.Open(root, chunkInfo.FileId, new ChunkManifest(chunkInfo.Path, chunkInfo.TotalFileSize,
             chunkInfo.TotalChunks, chunkSize, null));
         var status = await _chunks.WriteAsync(root, chunkInfo.FileId, chunkInfo.ChunkIndex, chunkStream, ct);
+
+        // A large file is uploading: the batch is not abandoned while its chunks arrive (D-049)
+        await _batches.TouchAsync(token, ct);
 
         return new ChunkUploadResultDto
         {
@@ -108,26 +113,30 @@ public sealed class ShareChunkedUploads
         // Verify the batch is valid and running
         var batch = await _batches.GetRunningAsync(token, ct);
 
-        // Verify the path is not already used
-        if (batch.Entries.Any(item => item.Path == path))
-            throw new BadRequestException($"Entry with path '{path}' already exists in this batch");
-
-        _logger.LogInformation("Finalizing chunked upload for file ID {FileId} to path {Path}", fileId, path);
-
         var orgSlug = batch.Dataset.Organization.Slug;
         var dsSlug = batch.Dataset.Slug;
+        var ddb = DatasetOf(batch);
+
+        // The path as the index stores it (D-040), and whether a file was there before the batch: it is replaced,
+        // and a rollback keeps it (FR-XC-27)
+        var target = ShareUploads.Target(_paths, ddb, path);
+
+        // Verify the path is not already used
+        if (batch.Entries.Any(item => item.Path == target.Path))
+            throw new BadRequestException($"Entry with path '{target.Path}' already exists in this batch");
+
+        _logger.LogInformation("Finalizing chunked upload for file ID {FileId} to path {Path}", fileId, target.Path);
 
         // The chunks were written into one file at their offsets: taking it is a rename, and its
         // hash was computed as the chunks arrived
-        var ddb = DatasetOf(batch);
         var root = ChunkedUploadManager.ChunksRoot(ddb);
         using var temp = _scratch.CreateForDataset(ddb.DatasetFolderPath, DatasetUploads.TempFileExtension);
         var hint = await _chunks.TakeAsync(root, fileId, temp.Path);
         temp.Release(); // the commit moves it into place or deletes it
 
-        var added = await _objectsManager.CommitStreamedAsync(orgSlug, dsSlug, path,
+        var added = await _objectsManager.CommitStreamedAsync(orgSlug, dsSlug, target.Path,
             new StreamedFile(temp.Path, hint.Size, hint));
-        return await _batches.AddEntryAsync(batch, path, added);
+        return await _batches.AddEntryAsync(batch, path, added, target.Replaced);
     }
 
     private string ChunksRoot(Batch batch) => ChunkedUploadManager.ChunksRoot(DatasetOf(batch));

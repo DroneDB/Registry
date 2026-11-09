@@ -145,10 +145,12 @@ public class ShareAccessTests
     private Batch BatchOf(string token) =>
         _context.Batches.AsNoTracking().Include(b => b.Dataset.Organization).Single(b => b.Token == token);
 
+    // The batch that Bob started on a dataset it created: its rollback drops the dataset (FR-UPL-01)
     private void BobOwnsTheRunningBatch()
     {
         var batch = _context.Batches.Single(b => b.Token == AliceToken);
         batch.UserName = "bob";
+        batch.CreatedDataset = true;
         _context.SaveChanges();
     }
 

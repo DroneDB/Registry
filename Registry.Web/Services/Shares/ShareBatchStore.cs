@@ -169,16 +169,23 @@ public sealed class ShareBatchStore
         return batches;
     }
 
-    /// <summary>Starts a running batch on <paramref name="dataset"/> for the current user.</summary>
-    public async Task<Batch> StartAsync(Dataset dataset)
+    /// <summary>
+    /// Starts a running batch on <paramref name="dataset"/> for the current user; <paramref name="createdDataset"/> when
+    /// the request created the dataset (the rollback of the batch then deletes it). Its last activity is its start: a
+    /// batch without one started before the upgrade that records replaced files (<see cref="Entry.Replaced"/>).
+    /// </summary>
+    public async Task<Batch> StartAsync(Dataset dataset, bool createdDataset = false)
     {
+        var start = UtcNow();
         var batch = new Batch
         {
             Dataset = dataset,
-            Start = UtcNow(),
+            Start = start,
+            LastActivity = start,
             Token = _batchTokenGenerator.GenerateToken(),
             UserName = await _authManager.SafeGetCurrentUserName(),
-            Status = BatchStatus.Running
+            Status = BatchStatus.Running,
+            CreatedDataset = createdDataset
         };
 
         _logger.LogInformation("Adding new batch for user '{BatchUserName}' with token '{BatchToken}'",
@@ -191,22 +198,54 @@ public sealed class ShareBatchStore
         return batch;
     }
 
-    /// <summary>Ends <paramref name="batch"/> with <paramref name="status"/> now, then loads its entries.</summary>
+    /// <summary>
+    /// Ends <paramref name="batch"/> with <paramref name="status"/> now, then loads its entries. Only a batch that is
+    /// still running ends: the first close wins (a commit, a rollback of the user, the rollback of an abandoned batch).
+    /// </summary>
+    /// <exception cref="BadRequestException">The batch ended meanwhile.</exception>
     public async Task CloseAsync(Batch batch, BatchStatus status)
     {
         ArgumentNullException.ThrowIfNull(batch);
-        batch.Status = status;
-        batch.End = UtcNow();
-        await _context.SaveChangesAsync();
+        var end = UtcNow();
+        var closed = await _context.Batches
+            .Where(b => b.Token == batch.Token && b.Status == BatchStatus.Running)
+            .ExecuteUpdateAsync(set => set.SetProperty(b => b.Status, status).SetProperty(b => b.End, end));
+        if (closed == 0)
+            throw new BadRequestException("The batch is no longer running");
 
-        await _context.Entry(batch).Collection(item => item.Entries).LoadAsync();
+        // Written above: the tracked batch takes the stored values (a later save does not write them again)
+        var tracked = _context.Entry(batch);
+        await tracked.ReloadAsync();
+        await tracked.Collection(item => item.Entries).LoadAsync();
     }
 
     /// <summary>
-    /// Shared tail of the share upload flow: records the entry the add just indexed on the batch
-    /// (no second lookup: the add returns the indexed type, hash and size).
+    /// Records upload activity on the running batch <paramref name="token"/> (a chunk arrived), so that a large file
+    /// that is still being sent does not make the batch look abandoned (D-049). Written at most once a minute. A batch
+    /// from before the upgrade keeps no last activity (its start and its entries count): that marks it as a batch whose
+    /// replaced files are unknown (<see cref="ShareBatchRollback.ReplacedUnknown"/>).
     /// </summary>
-    public async Task<UploadResultDto> AddEntryAsync(Batch batch, string path, EntryDto info)
+    public Task TouchAsync(string token, CancellationToken ct = default)
+    {
+        var now = UtcNow();
+        var stale = now - ActivityResolution;
+        return _context.Batches
+            .Where(b => b.Token == token && b.Status == BatchStatus.Running && b.LastActivity != null &&
+                        b.LastActivity < stale)
+            .ExecuteUpdateAsync(set => set.SetProperty(b => b.LastActivity, now), ct);
+    }
+
+    /// <summary>How often <see cref="TouchAsync"/> writes: far below the 24 hours of an abandoned batch.</summary>
+    internal static readonly TimeSpan ActivityResolution = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Shared tail of the share upload flow: records the entry the add just indexed on the batch
+    /// (no second lookup: the add returns the indexed path, type, hash and size). The entry keeps the path as the index
+    /// stores it (D-040), so the rollback compares it with the index like with like.
+    /// </summary>
+    /// <param name="path">The path the upload was sent to (for the error message).</param>
+    /// <param name="replaced">The path existed before this upload wrote it: a rollback keeps it (FR-XC-27).</param>
+    public async Task<UploadResultDto> AddEntryAsync(Batch batch, string path, EntryDto info, bool replaced = false)
     {
         if (info == null)
             throw new BadRequestException(
@@ -218,12 +257,16 @@ public sealed class ShareBatchStore
             // An added file is indexed with its hash (only a folder has none)
             Hash = info.Hash ?? throw new InvalidOperationException($"The entry '{path}' was indexed without a hash"),
             AddedOn = UtcNow(),
-            Path = path,
+            Path = info.Path ?? throw new InvalidOperationException($"The entry '{path}' was indexed without a path"),
             Size = info.Size,
+            Replaced = replaced,
             Batch = batch
         };
 
         await _context.AddAsync(entry);
+        // A batch from before the upgrade keeps its marker (see TouchAsync)
+        if (batch.LastActivity != null)
+            batch.LastActivity = entry.AddedOn;
 
         _logger.LogInformation("Entry added");
 

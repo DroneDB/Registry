@@ -131,6 +131,14 @@ internal sealed class HangfireJobsInitializer : IStartupTask
                 service => service.ReconcileAllDatasetsAsync(null, CancellationToken.None),
                 cron));
 
+        // FR-UPL-01, D-049 (§8.3): its 24 hours are a constant of the job, not a setting, and so is its schedule
+        ScheduleJob(recurringJobManager, RecurringJobIds.RollbackAbandonedShareBatches,
+            AbandonedShareBatchesService.Cron,
+            cron => recurringJobManager.AddOrUpdate<AbandonedShareBatchesService>(
+                RecurringJobIds.RollbackAbandonedShareBatches,
+                service => service.RollbackAbandonedAsync(null, CancellationToken.None),
+                cron));
+
         // The identity exists before the jobs are defined (StartupTaskOrder.InstanceIdentity)
         ScheduleJob(recurringJobManager, RecurringJobIds.CheckUpdates,
             CronSetting.Resolve(_updateCheck.UpdateCheckCron, InstanceDailyCron(_identity.Current.Id)),

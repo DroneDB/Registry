@@ -15,7 +15,16 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Shares;
 
-/// <summary>The dataset a share goes to: the tagged one (created when missing; its running batches rolled back), a new one in the tagged organization, or a new one in the user's default organization (created when missing).</summary>
+/// <summary>The dataset a share goes to, and whether the request created it (a rollback of the batch then deletes it).</summary>
+public sealed record ShareTarget(Dataset Dataset, bool Created);
+
+/// <summary>
+/// The dataset a share goes to: the tagged one (created when missing; its running batches rolled back), a new one in the
+/// tagged organization, or a new one in the user's default organization (created when missing). A dataset the request
+/// creates has the visibility of <see cref="ShareInitDto.Visibility"/> (Public when the request has none: <c>ddb share</c>
+/// and older clients, D-009) and, when the request has no dataset slug, a slug made from <see cref="ShareInitDto.DatasetName"/>
+/// (§7.1: <see cref="SlugSuffix"/>) or a random one when it has no name.
+/// </summary>
 public sealed class ShareTargets
 {
     private readonly RegistryContext _context;
@@ -37,12 +46,14 @@ public sealed class ShareTargets
         _logger = logger;
     }
 
-    public async Task<Dataset> ResolveAsync(ShareInitDto parameters, User currentUser)
+    public async Task<ShareTarget> ResolveAsync(ShareInitDto parameters, User currentUser)
     {
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(currentUser);
 
         Dataset dataset;
+        var created = true;
+        var visibility = parameters.Visibility ?? Visibility.Public;
         var tag = parameters.Tag.ToTag();
 
         // If no tag is specified but OrgSlug is, treat it as "create new dataset in that org"
@@ -85,20 +96,9 @@ public sealed class ShareTargets
 
             _logger.LogInformation("Using default user organization '{OrgSlug}'", orgSlug);
 
-            var dsSlug = await GetUniqueDatasetSlugAsync();
+            dataset = await CreateNewDatasetAsync(orgSlug, parameters.DatasetName, visibility);
 
-            _logger.LogInformation("Generated unique dataset slug '{DsSlug}'", dsSlug);
-
-            await _datasetsManager.AddNew(orgSlug, new DatasetNewDto
-            {
-                Slug = dsSlug,
-                Name = parameters.DatasetName,
-                Visibility = Visibility.Public
-            });
-
-            dataset = await GetTrackedDatasetAsync(orgSlug, dsSlug);
-
-            _logger.LogInformation("Created new dataset '{DsSlug}', creating batch", dsSlug);
+            _logger.LogInformation("Created new dataset '{DsSlug}', creating batch", dataset.Slug);
         }
         else
         {
@@ -113,18 +113,7 @@ public sealed class ShareTargets
             // If no dataset is specified, we create a new one with a random slug
             if (tag.DatasetSlug == null)
             {
-                var dsSlug = await GetUniqueDatasetSlugAsync();
-
-                _logger.LogInformation("Generated unique dataset slug '{DsSlug}'", dsSlug);
-
-                await _datasetsManager.AddNew(tag.OrganizationSlug, new DatasetNewDto
-                {
-                    Slug = dsSlug,
-                    Name = parameters.DatasetName,
-                    Visibility = Visibility.Public
-                });
-
-                dataset = await GetTrackedDatasetAsync(tag.OrganizationSlug, dsSlug);
+                dataset = await CreateNewDatasetAsync(tag.OrganizationSlug, parameters.DatasetName, visibility);
 
                 _logger.LogInformation("Dataset created");
             }
@@ -142,7 +131,7 @@ public sealed class ShareTargets
                     {
                         Slug = tag.DatasetSlug,
                         Name = parameters.DatasetName,
-                        Visibility = Visibility.Public
+                        Visibility = visibility
                     });
 
                     _logger.LogInformation("Dataset created");
@@ -154,12 +143,57 @@ public sealed class ShareTargets
                     // A new batch replaces the running ones (who may write to the dataset only)
                     await _rollback.RollbackRunningAsync(existing);
                     dataset = existing;
+                    created = false;
                 }
             }
         }
 
-        return dataset;
+        return new ShareTarget(dataset, created);
     }
+
+    /// <summary>
+    /// Creates a dataset in <paramref name="orgSlug"/> with a slug that <paramref name="name"/> gives (§7.1), or a random
+    /// one without a name. The check for a free slug is not enough: a request that creates the same slug in between is
+    /// answered by the unique index, and this one goes on with the next suffix.
+    /// </summary>
+    private async Task<Dataset> CreateNewDatasetAsync(string orgSlug, string? name, Visibility visibility)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            var random = await GetUniqueDatasetSlugAsync();
+            _logger.LogInformation("Generated unique dataset slug '{DsSlug}'", random);
+
+            await _datasetsManager.AddNew(orgSlug, new DatasetNewDto { Slug = random, Name = name, Visibility = visibility });
+            return await GetTrackedDatasetAsync(orgSlug, random);
+        }
+
+        var baseSlug = SlugSuffix.FromName(name);
+        for (var n = 1; ; n++)
+        {
+            var slug = SlugSuffix.Candidate(baseSlug, n);
+            if (await SlugIsTakenAsync(orgSlug, slug))
+                continue;
+
+            try
+            {
+                await _datasetsManager.AddNew(orgSlug, new DatasetNewDto { Slug = slug, Name = name, Visibility = visibility });
+            }
+            catch (BadRequestException)
+            {
+                // Taken since the check: the next one. A refusal with the slug still free is not a lost race
+                if (await SlugIsTakenAsync(orgSlug, slug))
+                    continue;
+
+                throw;
+            }
+
+            _logger.LogInformation("Created dataset '{DsSlug}' from the name '{DatasetName}'", slug, name);
+            return await GetTrackedDatasetAsync(orgSlug, slug);
+        }
+    }
+
+    private Task<bool> SlugIsTakenAsync(string orgSlug, string slug) =>
+        _context.Datasets.AsNoTracking().AnyAsync(item => item.Slug == slug && item.Organization.Slug == orgSlug);
 
     // Datasets are identified by organization and slug: the slug alone may match another organization's
     private Task<Dataset> GetTrackedDatasetAsync(string orgSlug, string dsSlug) =>

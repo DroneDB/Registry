@@ -44,8 +44,8 @@ public sealed class ShareBatches
 
         // Honoured until the target (which may be a new dataset) and the batch are written
         ct.ThrowIfCancellationRequested();
-        var dataset = await _targets.ResolveAsync(parameters, currentUser);
-        var batch = await _batches.StartAsync(dataset);
+        var target = await _targets.ResolveAsync(parameters, currentUser);
+        var batch = await _batches.StartAsync(target.Dataset, target.Created);
 
         return new ShareInitResultDto
         {
@@ -77,6 +77,7 @@ public sealed class ShareBatches
 
         _logger.LogInformation("Rolling back  batch '{Token}'", token);
 
-        await _rollback.RollbackAsync(batch, true);
+        // The dataset goes with a batch that created it (FR-UPL-01); a batch on an existing dataset removes only its own files
+        await _rollback.RollbackAsync(batch, deleteDataset: batch.CreatedDataset);
     }
 }

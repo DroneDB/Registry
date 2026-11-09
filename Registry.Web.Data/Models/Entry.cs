@@ -33,6 +33,12 @@ public class Entry
     [Required]
     public DateTime AddedOn { get; set; }
 
+    /// <summary>
+    /// The path was indexed in the dataset before the batch wrote it (the batch replaced a file): a rollback of the
+    /// batch keeps it (FR-XC-27). False for an entry recorded before the column existed.
+    /// </summary>
+    public bool Replaced { get; set; }
+
     /// <summary>Parent batch this entry belongs to.</summary>
     [Required]
     public Batch Batch { get; set; } = null!;

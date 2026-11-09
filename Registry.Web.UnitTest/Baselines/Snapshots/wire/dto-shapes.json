@@ -3556,12 +3556,14 @@
     "full": {
       "tag": "Tag-text",
       "orgSlug": "OrgSlug-text",
-      "datasetName": "DatasetName-text"
+      "datasetName": "DatasetName-text",
+      "visibility": 1
     },
     "sparse": {
       "tag": null,
       "orgSlug": null,
-      "datasetName": null
+      "datasetName": null,
+      "visibility": null
     }
   },
   "Registry.Web.Models.DTO.ShareInitResultDto": {

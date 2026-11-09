@@ -22,10 +22,16 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                     b.Property<string>("Token")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("CreatedDataset")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("DatasetId")
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime?>("End")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastActivity")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("Start")
@@ -185,6 +191,9 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                     b.Property<string>("Path")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("Replaced")
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("Size")
                         .HasColumnType("INTEGER");
