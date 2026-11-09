@@ -10,12 +10,20 @@ using System.Threading.Tasks;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Hangfire;
+using Hangfire.Common;
+using Hangfire.States;
+using Hangfire.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using NUnit.Framework;
 using Registry.Test.Common;
+using Registry.Web.Data;
+using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
+using Registry.Web.Filters;
+using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.HealthChecks;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
@@ -319,5 +327,69 @@ public class EmailIntegrationTest : IDisposable
         var html = received.GetProperty("HTML").GetString().ShouldNotBeNull();
         html.ShouldContain("href=\"https://hub.example.org/r?preferences=notifications\"");
         html.ShouldNotContain("<broken.tif>");
+    }
+    [Test]
+    public async Task TaskNotifications_AFailedPhotogrammetryTask_WithTheFailedPreference_SendsOneEmail_AndASucceededOneSendsNone()
+    {
+        using var factory = new RegistryWebFactory(HostSettings());
+        // The read-access check resolves the dataset visibility from its ddb metadata (native ddb is mocked)
+        factory.DdbWrapper.Setup(d => d.MetaGet(It.IsAny<string>(), "visibility", It.IsAny<string?>()))
+            .Returns("{\"id\":\"visibility\",\"data\":2,\"mtime\":0}");
+        var jane = await factory.CreateUserAsync("jane");
+        using var client = factory.CreateClient();
+        var patch = new HttpRequestMessage(HttpMethod.Patch, "/users/preferences")
+        {
+            Content = JsonContent.Create(new { notifications = new { tasks = "failed" } })
+        };
+        patch.AsUser("jane");
+        (await client.SendAsync(patch)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        using var scope = factory.Services.CreateScope();
+        var started = DateTime.UtcNow.AddMinutes(-17);
+        var db = scope.ServiceProvider.GetRequiredService<RegistryContext>();
+        db.JobIndices.AddRange(
+            new JobIndex
+            {
+                JobId = "odm-1", OrgSlug = "public", DsSlug = "default", UserId = jane.Id, ToolId = "photogrammetry",
+                CurrentState = "Failed", CreatedAtUtc = started, ProcessingAtUtc = started, FailedAtUtc = started.AddSeconds(1024),
+                TargetLabel = "flight-1 (126 images)", ErrorType = "NodeOdxException",
+                ErrorMessage = "The processing node ran out of memory"
+            },
+            new JobIndex
+            {
+                JobId = "extract-1", OrgSlug = "public", DsSlug = "default", UserId = jane.Id, ToolId = "archive-extract",
+                CurrentState = "Succeeded", CreatedAtUtc = started, ProcessingAtUtc = started, SucceededAtUtc = started.AddSeconds(30)
+            });
+        await db.SaveChangesAsync();
+
+        // The state filter of the host reports the final states, as Hangfire applies them
+        var filter = factory.Services.GetRequiredService<TaskNotificationFilter>();
+        void Apply(string jobId, string toolId, IState state)
+        {
+            var job = Job.FromExpression<HeavyTaskJobWrapper>(w => w.Run(toolId, "1", "{}", null!, CancellationToken.None));
+            using var connection = scope.ServiceProvider.GetRequiredService<JobStorage>().GetConnection();
+            using var transaction = connection.CreateWriteTransaction();
+            filter.OnStateApplied(new ApplyStateContext(scope.ServiceProvider.GetRequiredService<JobStorage>(), connection,
+                transaction, new BackgroundJob(jobId, job, DateTime.UtcNow), state, ProcessingState.StateName), transaction);
+        }
+
+        Apply("extract-1", "archive-extract", new SucceededState(null, 0, 0));
+        Apply("odm-1", "photogrammetry", new FailedState(new InvalidOperationException("node failed")));
+
+        var storage = scope.ServiceProvider.GetRequiredService<JobStorage>();
+        var send = storage.GetMonitoringApi().EnqueuedJobs("default", 0, 10).Select(j => j.Value.Job)
+            .Where(j => j.Type == typeof(SendEmailJob)).ShouldHaveSingleItem();
+        await (Task)send.Method.Invoke(scope.ServiceProvider.GetRequiredService<SendEmailJob>(),
+            [send.Args[0], CancellationToken.None])!;
+
+        var received = await ReceivedMessage();
+        Addresses(received, "To").ShouldBe(["jane@example.com"]);
+        received.GetProperty("Subject").GetString().ShouldNotBeNull().ShouldContain("failed");
+        received.GetProperty("Text").GetString().ShouldNotBeNull().ShouldSatisfyAllConditions(
+            t => t.ShouldContain("Photogrammetry"),
+            t => t.ShouldContain("Files: flight-1 (126 images)"),
+            t => t.ShouldContain("Reason: The processing node ran out of memory"),
+            t => t.ShouldContain("Duration: 17 min 4 s"),
+            t => t.ShouldContain("https://hub.example.org/r/public/default?tab=tasks"));
     }
 }

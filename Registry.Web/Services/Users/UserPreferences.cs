@@ -49,7 +49,8 @@ public sealed partial class UserPreferences
     public async Task<Dictionary<string, object>> Get() => (await CurrentUser()).Preferences;
 
     /// <summary>
-    /// Sets the sections in <paramref name="patch"/> (null deletes one) and keeps the others; returns all the sections
+    /// Sets the sections in <paramref name="patch"/> (null deletes one) and keeps the others (the <c>notifications</c> section
+    /// is merged field by field, see <see cref="BuildNotificationPreference.Merge"/>; every other section is replaced whole); returns all the sections
     /// after the change. A violated limit throws before anything is written.
     /// </summary>
     public async Task<Dictionary<string, object>> Patch(Dictionary<string, JsonElement>? patch, CancellationToken ct)
@@ -69,6 +70,9 @@ public sealed partial class UserPreferences
         {
             if (value.ValueKind == JsonValueKind.Null)
                 merged.Remove(section);
+            else if (section == BuildNotificationPreference.Section)
+                // Field by field: a patch that has one field (or a stale null) must not erase the other
+                merged[section] = BuildNotificationPreference.Merge(merged.GetValueOrDefault(section), value);
             else
                 merged[section] = PlainValue.From(value)!;
         }

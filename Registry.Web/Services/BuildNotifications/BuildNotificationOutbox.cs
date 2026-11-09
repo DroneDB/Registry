@@ -23,6 +23,12 @@ public sealed class BuildNotificationOutbox
     // The outcome of the lines that record a wait for files, as stored
     private const string Waiting = nameof(BuildOutcome.WaitingForFiles);
 
+    /// <summary>The outcome of the record of a task that succeeded (FR-PRC-40, <see cref="AddTaskEndAsync"/>).</summary>
+    public const string TaskSucceeded = "TaskSucceeded";
+
+    /// <summary>The outcome of the record of a task that failed (FR-PRC-40, <see cref="AddTaskEndAsync"/>).</summary>
+    public const string TaskFailed = "TaskFailed";
+
     private readonly RegistryContext _db;
     private readonly TimeProvider _time;
 
@@ -59,6 +65,56 @@ public sealed class BuildNotificationOutbox
             throw new ArgumentException($"Only a {nameof(BuildOutcome.WaitingForFiles)} report is kept unsent", nameof(report));
 
         return InsertAsync(LineOf(report, requester, wanted: false), ct);
+    }
+
+    /// <summary>
+    /// Records that the end of the task run <paramref name="taskId"/> is told to <paramref name="userId"/> (FR-PRC-40): a line
+    /// of the outcome <see cref="TaskSucceeded"/> or <see cref="TaskFailed"/>, written already sent (a task e-mail is not
+    /// held for a digest, so the build digest never claims it). The unique key of the request and the outcome makes it
+    /// once per run, however many hosts apply the state: only the caller that adds the line sends the e-mail. The line
+    /// stays as the record until the daily cleanup of the sent lines (<see cref="DeleteSentBeforeAsync"/>); a task run
+    /// again from its failure starts a new request (<see cref="RenewRequestAsync"/>).
+    /// </summary>
+    /// <param name="userId">The user who asked for the task.</param>
+    /// <param name="orgSlug">The organization of the task's dataset.</param>
+    /// <param name="dsSlug">The dataset.</param>
+    /// <param name="taskId">The job of the task run.</param>
+    /// <param name="toolId">The tool of the task (kept in the hash column, which a task has no use for).</param>
+    /// <param name="label">The label of the task's files, or null (kept in the path column).</param>
+    /// <param name="succeeded">Whether it succeeded.</param>
+    /// <param name="error">Why it failed, scrubbed of server paths; null for a task that succeeded.</param>
+    /// <returns>The line added, or null when this run of the task is already recorded.</returns>
+    public Task<BuildNotification?> AddTaskEndAsync(string userId, string orgSlug, string dsSlug, string taskId,
+        string toolId, string? label, bool succeeded, string? error, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(userId);
+        ArgumentException.ThrowIfNullOrEmpty(taskId);
+
+        var now = UtcNow;
+        return InsertAsync(new BuildNotification
+        {
+            UserId = userId,
+            OrgSlug = orgSlug,
+            DsSlug = dsSlug,
+            Path = label ?? string.Empty,
+            Hash = toolId,
+            Outcome = succeeded ? TaskSucceeded : TaskFailed,
+            Error = succeeded ? null : error,
+            RequestJobId = taskId,
+            FinishedAtUtc = now,
+            PendingKey = null,
+            SentAtUtc = now
+        }, ct);
+    }
+
+    /// <summary>
+    /// Takes back <paramref name="line"/>, the record of a task end whose e-mail could not be queued, so a later report
+    /// of that end (the state applied again) can still send it.
+    /// </summary>
+    public Task RemoveAsync(BuildNotification line, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        return _db.BuildNotifications.Where(n => n.Id == line.Id).ExecuteDeleteAsync(ct);
     }
 
     private BuildNotification LineOf(BuildReport report, BuildRequester requester, bool wanted)

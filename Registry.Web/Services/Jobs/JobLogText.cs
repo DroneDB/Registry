@@ -99,6 +99,9 @@ public static class JobLogText
     /// <summary>What replaces a path in the internal build folder of a dataset (<c>.ddb/build/&lt;hash&gt;/…</c>).</summary>
     public const string BuildFolderPlaceholder = "[build folder]";
 
+    /// <summary>What replaces a token, a password or another secret in a message.</summary>
+    public const string SecretPlaceholder = "[hidden]";
+
     /// <summary>What replaces any other absolute path of the server.</summary>
     public const string ServerPathPlaceholder = "[server path]";
 
@@ -132,7 +135,9 @@ public static class JobLogText
     /// text, and no server path. The dataset folder (as given, as <see cref="Path.GetFullPath(string)"/> makes it, and
     /// with its links resolved) becomes <see cref="DatasetPlaceholder"/>; a path in the internal build folder of a
     /// dataset becomes <see cref="BuildFolderPlaceholder"/>; any other absolute path (Unix, Windows drive or UNC) of at
-    /// least two segments becomes <see cref="ServerPathPlaceholder"/>. At most <see cref="UserMessageMaxLength"/>
+    /// least two segments becomes <see cref="ServerPathPlaceholder"/>. A URL loses its credentials, query string and
+    /// fragment (a processing node's address carries its token in the query), and a <c>token=…</c>, <c>password=…</c> or
+    /// <c>Bearer …</c> secret becomes <see cref="SecretPlaceholder"/>. At most <see cref="UserMessageMaxLength"/>
     /// characters; "Unknown error" for a blank text.
     /// </summary>
     public static string UserMessage(string? message, string? datasetFolderPath)
@@ -145,12 +150,37 @@ public static class JobLogText
             if (text.Contains(known, StringComparison.OrdinalIgnoreCase))
                 return DamagedRasterMessage;
 
+        text = ScrubSecrets(text);
+
         foreach (var folder in FolderForms(datasetFolderPath))
             text = ScrubDatasetPath(text, folder);
 
         text = DatasetBuildPath.Replace(text, BuildFolderPlaceholder);
         text = AbsolutePath.Replace(text, ScrubAbsolutePath);
         return Truncate(text, UserMessageMaxLength - Ellipsis.Length);
+    }
+
+    // A URL of another scheme than file: (a file URI is a server path, ScrubAbsolutePath): its credentials, query and
+    // fragment go; host and path stay. The query ends at a space, a quote or a closing bracket.
+    private static readonly Regex Url = new(
+        @"(?<scheme>\b(?!file:)[A-Za-z][A-Za-z0-9+.-]*://)(?:[^\s/?#@'""`<>]*@)?(?<rest>[^\s?#'""`<>)\]]*)(?:[?#][^\s'""`<>)\]]*)?",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    // name=value of a secret (query string, form, header line) and "name":"value" (JSON); the value runs to a separator
+    private static readonly Regex SecretValue = new(
+        @"(?<![\w-])(?<name>(?:access[_-]?|refresh[_-]?|id[_-]?|auth[_-]?|api[_-]?|client[_-]?)?(?:token|secret|key)|pass(?:word|wd)|pwd|authorization)" +
+        @"(?<sep>[""']?\s*=\s*[""']?|[""']\s*:\s*[""'])[^\s&'""`,;)}\]]+",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    // An Authorization value: "Bearer abc…" / "Basic abc…"
+    private static readonly Regex AuthScheme = new(
+        @"\b(?<scheme>Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    private static string ScrubSecrets(string text)
+    {
+        text = Url.Replace(text, m => m.Groups["scheme"].Value + m.Groups["rest"].Value);
+        text = SecretValue.Replace(text, m => m.Groups["name"].Value + m.Groups["sep"].Value + SecretPlaceholder);
+        return AuthScheme.Replace(text, m => m.Groups["scheme"].Value + " " + SecretPlaceholder);
     }
 
     // The subject of InvalidDatasetPathException that DatasetArchiveExtractor throws for an archive entry

@@ -123,7 +123,8 @@ public static class RegistryJobsServiceCollectionExtensions
     internal static readonly Type[] JobFilterTypes =
     [
         typeof(JobIndexStateFilter), typeof(BuildJobFailureFilter), typeof(BuildLogCaptureFilter),
-        typeof(BuildRetrySchedulerFilter), typeof(BuildNotificationFilter), typeof(BuildOgcCacheFilter),
+        typeof(BuildRetrySchedulerFilter), typeof(BuildNotificationFilter), typeof(TaskNotificationFilter),
+        typeof(BuildOgcCacheFilter),
         typeof(BuildQueueRoutingFilter), typeof(JobOperationFilter)
     ];
 

@@ -27,6 +27,21 @@ public static class HubLinks
     /// <summary>The dataset page under <paramref name="baseUrl"/>; null without a public URL.</summary>
     public static Uri? Dataset(Uri? baseUrl, string orgSlug, string dsSlug) => Under(baseUrl, DatasetPath(orgSlug, dsSlug));
 
+    /// <summary>The page of the datasets of an organization under <paramref name="baseUrl"/> (<c>/r/{org}</c>); null without a public URL.</summary>
+    public static Uri? Organization(Uri? baseUrl, string orgSlug)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(orgSlug);
+
+        return Under(baseUrl, $"/r/{Uri.EscapeDataString(orgSlug)}");
+    }
+
+    /// <summary>The query that makes the dataset page open its Tasks tab.</summary>
+    public const string TasksTabQuery = "?tab=tasks";
+
+    /// <summary>The Tasks tab of the dataset page under <paramref name="baseUrl"/>; null without a public URL.</summary>
+    public static Uri? DatasetTasks(Uri? baseUrl, string orgSlug, string dsSlug) =>
+        Under(baseUrl, DatasetPath(orgSlug, dsSlug) + TasksTabQuery);
+
     /// <summary>The Notifications tab of the Preferences window under <paramref name="baseUrl"/>; null without a public URL.</summary>
     public static Uri? NotificationPreferences(Uri? baseUrl) => Under(baseUrl, NotificationPreferencesPath);
 

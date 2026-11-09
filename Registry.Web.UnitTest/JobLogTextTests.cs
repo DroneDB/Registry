@@ -156,4 +156,26 @@ public class JobLogTextTests
     [Test]
     public void AMultiLineMessage_IsOneLine() =>
         JobLogText.UserMessage("first\r\nsecond\nthird", null).ShouldBe("first second third");
+
+
+    [TestCase("failed: https://node.internal:3000/task/new?token=abc123&x=1", "failed: https://node.internal:3000/task/new")]
+    [TestCase("GET 'https://node.internal/info?token=abc123' returned 500", "GET 'https://node.internal/info' returned 500")]
+    [TestCase("(see http://node/x?a=b#frag) now", "(see http://node/x) now")]
+    [TestCase("Cannot reach https://user:pass@node.internal/x", "Cannot reach https://node.internal/x")]
+    [TestCase("rejected token=abc123 for the node", "rejected token=[hidden] for the node")]
+    [TestCase("{\"error\":\"x\",\"token\":\"abc123\"}", "{\"error\":\"x\",\"token\":\"[hidden]\"}")]
+    [TestCase("Authorization: Bearer abcdef0123456789", "Authorization: Bearer [hidden]")]
+    [TestCase("password=hunter2&user=a", "password=[hidden]&user=a")]
+    public void ATokenOrACredential_NeverLeavesTheServer(string native, string expected) =>
+        JobLogText.UserMessage(native, null).ShouldBe(expected);
+
+    [Test]
+    public void TheMessageOfANodeError_HasNoTokenInIt() =>
+        JobLogText.UserMessage(
+            new InvalidOperationException("NodeODX task/new failed (401): unauthorized https://node.internal:3000/task/new?token=s3cr3t"),
+            UnixFolder).ShouldBe("NodeODX task/new failed (401): unauthorized https://node.internal:3000/task/new");
+
+    [Test]
+    public void AMessageThatTalksAboutAToken_WithoutOneInIt_IsKept() =>
+        JobLogText.UserMessage("The token: expired, a key is missing", null).ShouldBe("The token: expired, a key is missing");
 }

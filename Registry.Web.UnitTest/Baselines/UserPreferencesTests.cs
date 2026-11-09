@@ -727,7 +727,6 @@ public sealed class UserPreferencesTests
     [TestCase("""{"notifications":{"builds":"weekly"}}""", "\"weekly\"")]
     [TestCase("""{"notifications":{"builds":"ALL"}}""", "\"ALL\"")]
     [TestCase("""{"notifications":{"builds":true}}""", "true")]
-    [TestCase("""{"notifications":{"builds":null}}""", "null")]
     [TestCase("""{"notifications":{"builds":"all","digest":5}}""", "'digest'")]
     [TestCase("""{"notifications":"all"}""", "is an object")]
     [TestCase("""{"notifications":["all"]}""", "is an object")]
@@ -736,6 +735,22 @@ public sealed class UserPreferencesTests
         var userId = await CreateUser();
 
         await ShouldBeRefused(userId, Body(json), messagePart);
+    }
+
+    [TestCase("""{"notifications":{"builds":"failed","tasks":null}}""", BuildNotificationLevel.Failed, BuildNotificationLevel.None)]
+    [TestCase("""{"notifications":{"builds":null,"tasks":"all"}}""", BuildNotificationLevel.None, BuildNotificationLevel.All)]
+    [TestCase("""{"notifications":{"builds":null,"tasks":null}}""", BuildNotificationLevel.None, BuildNotificationLevel.None)]
+    public async Task Patch_ANullField_IsAccepted_AsNoChoice_BecauseTheHubSendsEveryFieldOfASection(string json,
+        BuildNotificationLevel builds, BuildNotificationLevel tasks)
+    {
+        var userId = await CreateUser();
+        using (var request = Open(userId))
+            await request.Service.Patch(Body(json), default);
+
+        using var fresh = Open(userId);
+        var user = new User { Preferences = await fresh.Service.Get() };
+        BuildNotificationPreference.Of(user).ShouldBe(builds);
+        BuildNotificationPreference.TasksOf(user).ShouldBe(tasks);
     }
 
     [Test]
@@ -747,6 +762,82 @@ public sealed class UserPreferencesTests
 
         using var fresh = Open(userId);
         BuildNotificationPreference.Of(new User { Preferences = await fresh.Service.Get() }).ShouldBe(BuildNotificationLevel.None);
+    }
+
+    private async Task<(BuildNotificationLevel Builds, BuildNotificationLevel Tasks)> NotificationsOf(string userId)
+    {
+        using var fresh = Open(userId);
+        var user = new User { Preferences = await fresh.Service.Get() };
+        return (BuildNotificationPreference.Of(user), BuildNotificationPreference.TasksOf(user));
+    }
+
+    private async Task Patched(string userId, string json)
+    {
+        using var request = Open(userId);
+        await request.Service.Patch(Body(json), default);
+    }
+
+    [Test]
+    public async Task Patch_TheNotificationsSection_IsMergedFieldByField_AFieldAloneKeepsTheOther()
+    {
+        var userId = await CreateUser();
+        await Patched(userId, """{"notifications":{"builds":"failed","tasks":"all"}}""");
+
+        // An old cached Hub sends builds alone
+        await Patched(userId, """{"notifications":{"builds":"none"}}""");
+        (await NotificationsOf(userId)).ShouldBe((BuildNotificationLevel.None, BuildNotificationLevel.All));
+
+        // A device with a stale copy sends only the field it changed
+        await Patched(userId, """{"notifications":{"tasks":"failed"}}""");
+        (await NotificationsOf(userId)).ShouldBe((BuildNotificationLevel.None, BuildNotificationLevel.Failed));
+    }
+
+    [TestCase("""{"notifications":{"tasks":null}}""", BuildNotificationLevel.None)]
+    [TestCase("""{"notifications":{"builds":"all","tasks":null}}""", BuildNotificationLevel.All)]
+    public async Task Patch_ANullTaskField_KeepsTheStoredTaskChoice(string json, BuildNotificationLevel builds)
+    {
+        var userId = await CreateUser();
+        await Patched(userId, """{"notifications":{"builds":"none","tasks":"all"}}""");
+
+        await Patched(userId, json);
+
+        (await NotificationsOf(userId)).ShouldBe((builds, BuildNotificationLevel.All));
+    }
+
+    [Test]
+    public async Task Patch_ANullBuildField_KeepsTheStoredBuildChoice_AnEmptySectionChangesNothing()
+    {
+        var userId = await CreateUser();
+        await Patched(userId, """{"notifications":{"builds":"failed","tasks":"failed"}}""");
+
+        await Patched(userId, """{"notifications":{"builds":null,"tasks":"all"}}""");
+        (await NotificationsOf(userId)).ShouldBe((BuildNotificationLevel.Failed, BuildNotificationLevel.All));
+
+        await Patched(userId, """{"notifications":{}}""");
+        (await NotificationsOf(userId)).ShouldBe((BuildNotificationLevel.Failed, BuildNotificationLevel.All));
+    }
+
+    [Test]
+    public async Task Patch_ANullNotificationsSection_StillDeletesBoth_AndNothingStaleSurvivesIt()
+    {
+        var userId = await CreateUser();
+        await Patched(userId, """{"notifications":{"builds":"all","tasks":"all"}}""");
+        await Patched(userId, """{"notifications":null}""");
+        await Patched(userId, """{"notifications":{"builds":"failed"}}""");
+
+        (await NotificationsOf(userId)).ShouldBe((BuildNotificationLevel.Failed, BuildNotificationLevel.None));
+    }
+
+    [Test]
+    public async Task Patch_OtherSections_AreStillReplacedWhole()
+    {
+        var userId = await CreateUser();
+        await Patched(userId, """{"units":{"measurement":"metric","angle":"deg"}}""");
+        await Patched(userId, """{"units":{"measurement":"imperial"}}""");
+
+        using var fresh = Open(userId);
+        var units = (IDictionary<string, object?>)(await fresh.Service.Get())["units"];
+        units.Keys.ShouldBe(["measurement"]);
     }
 
     [Test]
@@ -775,6 +866,83 @@ public sealed class UserPreferencesTests
     [TestCase(BuildNotificationLevel.All, BuildOutcome.Failed, true)]
     public void TheBuildNotificationSetting_SaysWhichOutcomesAreSent(BuildNotificationLevel level, BuildOutcome outcome, bool sent) =>
         level.Wants(outcome).ShouldBe(sent);
+
+    // ---- the task choice of the same section (FR-PRC-40) ----
+
+    [TestCase("none", BuildNotificationLevel.None)]
+    [TestCase("all", BuildNotificationLevel.All)]
+    [TestCase("failed", BuildNotificationLevel.Failed)]
+    public async Task Patch_TheTaskNotificationSetting_IsStored_AndReadBackFromTheColumn_ApartFromTheBuildSetting(
+        string value, BuildNotificationLevel expected)
+    {
+        var userId = await CreateUser();
+        using (var request = Open(userId))
+            await request.Service.Patch(Body($$$"""{"notifications":{"builds":"all","tasks":"{{{value}}}"}}"""), default);
+
+        using var fresh = Open(userId);
+        var user = new User { Preferences = await fresh.Service.Get() };
+        BuildNotificationPreference.TasksOf(user).ShouldBe(expected);
+        BuildNotificationPreference.Of(user).ShouldBe(BuildNotificationLevel.All);
+    }
+
+    [Test]
+    public async Task TheTaskNotificationSetting_IsNone_WhenOnlyTheBuildSettingIsStored_AndAFieldAloneKeepsTheOther()
+    {
+        var userId = await CreateUser();
+        using (var request = Open(userId))
+            await request.Service.Patch(Body("""{"notifications":{"builds":"failed"}}"""), default);
+        using (var fresh = Open(userId))
+        {
+            var user = new User { Preferences = await fresh.Service.Get() };
+            BuildNotificationPreference.TasksOf(user).ShouldBe(BuildNotificationLevel.None);
+            BuildNotificationPreference.Of(user).ShouldBe(BuildNotificationLevel.Failed);
+        }
+
+        using (var request = Open(userId))
+            await request.Service.Patch(Body("""{"notifications":{"tasks":"all"}}"""), default);
+        using (var fresh = Open(userId))
+        {
+            var user = new User { Preferences = await fresh.Service.Get() };
+            BuildNotificationPreference.TasksOf(user).ShouldBe(BuildNotificationLevel.All);
+            // The section is merged field by field: the task choice does not erase the build choice
+            BuildNotificationPreference.Of(user).ShouldBe(BuildNotificationLevel.Failed);
+        }
+    }
+
+    [TestCase("""{"notifications":{"tasks":"weekly"}}""", "'notifications.tasks' is one of")]
+    [TestCase("""{"notifications":{"tasks":true}}""", "true")]
+    [TestCase("""{"notifications":{"builds":"all","tasks":"ALL"}}""", "\"ALL\"")]
+    [TestCase("""{"notifications":{"digest":5}}""", "its fields are 'builds' and 'tasks'")]
+    public async Task Patch_ABadTaskNotificationSetting_IsRefused_AndWritesNothing(string json, string messagePart)
+    {
+        var userId = await CreateUser();
+
+        await ShouldBeRefused(userId, Body(json), messagePart);
+    }
+
+    [Test]
+    public async Task TheIdentityLevels_ReadTheTwoChoicesApart_FromTheIdentityDatabase()
+    {
+        var userId = await CreateUser();
+        using (var request = Open(userId))
+            await request.Service.Patch(Body("""{"notifications":{"builds":"none","tasks":"failed"}}"""), default);
+
+        using var identity = _db.NewContext();
+        var levels = new IdentityBuildNotificationLevels(identity);
+
+        (await levels.OfAsync(userId, default)).ShouldBe(BuildNotificationLevel.None);
+        (await levels.TasksOfAsync(userId, default)).ShouldBe(BuildNotificationLevel.Failed);
+        (await levels.TasksOfAsync("nobody", default)).ShouldBe(BuildNotificationLevel.None);
+    }
+
+    [TestCase(BuildNotificationLevel.None, false, false)]
+    [TestCase(BuildNotificationLevel.None, true, false)]
+    [TestCase(BuildNotificationLevel.Failed, true, false)]
+    [TestCase(BuildNotificationLevel.Failed, false, true)]
+    [TestCase(BuildNotificationLevel.All, true, true)]
+    [TestCase(BuildNotificationLevel.All, false, true)]
+    public void TheTaskNotificationSetting_SaysWhichEndsAreSent(BuildNotificationLevel level, bool succeeded, bool sent) =>
+        level.WantsTask(succeeded).ShouldBe(sent);
 
     private async Task ShouldBeRefused(string userId, Dictionary<string, JsonElement> patch, string messagePart,
         string[]? expectStored = null)

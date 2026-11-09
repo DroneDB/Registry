@@ -100,10 +100,38 @@ public class EmailTemplatesEndpointTests : IDisposable
         var (status, body) = await Send(HttpMethod.Get, Url);
 
         status.ShouldBe(HttpStatusCode.OK);
-        var item = body.ShouldBeOfType<JsonArray>().ShouldHaveSingleItem()!;
-        item["name"]!.GetValue<string>().ShouldBe(Name);
+        var items = body.ShouldBeOfType<JsonArray>();
+        items.Select(i => i!["name"]!.GetValue<string>()).ShouldBe([Name, TaskNotificationEmailTemplate.TemplateName], ignoreOrder: true);
+        var item = items.Single(i => i!["name"]!.GetValue<string>() == Name)!;
         item["title"]!.GetValue<string>().ShouldBe("Build notifications");
         item["isDefault"]!.GetValue<bool>().ShouldBeTrue();
+        var task = items.Single(i => i!["name"]!.GetValue<string>() == "task-notification")!;
+        task["title"]!.GetValue<string>().ShouldBe("Task notifications");
+        task["isDefault"]!.GetValue<bool>().ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task TheTaskNotificationTemplate_HasItsPlaceholders_AndItsPreviewShowsAFailedTask()
+    {
+        Start(Enabled);
+
+        var (status, body) = await Send(HttpMethod.Get, $"{Url}/task-notification");
+
+        status.ShouldBe(HttpStatusCode.OK);
+        body!["placeholders"].ShouldBeOfType<JsonArray>()
+            .ToDictionary(p => p!["name"]!.GetValue<string>(), p => p!["inSubject"]!.GetValue<bool>())
+            .ShouldBe(new Dictionary<string, bool>
+            {
+                ["appName"] = true, ["user"] = true, ["task"] = true, ["label"] = true, ["dataset"] = true, ["result"] = true,
+                ["error"] = false, ["duration"] = true, ["datasetNote"] = false, ["link"] = false, ["preferencesLink"] = false
+            }, ignoreOrder: true);
+
+        var (previewStatus, preview) = await Send(HttpMethod.Post, $"{Url}/task-notification/preview",
+            new { subject = "{{task}} {{result}} after {{duration}}", body = "Why: {{error}}" });
+
+        previewStatus.ShouldBe(HttpStatusCode.OK);
+        preview!["subject"]!.GetValue<string>().ShouldBe("Photogrammetry (NodeODX) failed after 17 min 4 s");
+        preview["text"]!.GetValue<string>().ShouldContain("Why: The processing node ran out of memory");
     }
 
     [Test]

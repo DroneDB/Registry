@@ -42,9 +42,11 @@ public static class EmailServiceCollectionExtensions
 
         // The e-mails an administrator can edit: their texts live in the storage folder, so every node sends the saved one
         services.AddSingleton<IEditableEmailTemplate>(BuildNotificationEmailTemplate.Instance);
+        services.AddSingleton<IEditableEmailTemplate>(TaskNotificationEmailTemplate.Instance);
         services.AddSingleton<EditableEmailTemplateStore>();
         services.AddSingleton<EditableEmailTemplates>();
         services.AddSingleton<IBuildNotificationComposer, BuildNotificationComposer>();
+        services.AddSingleton<ITaskNotificationComposer, TaskNotificationComposer>();
 
         // Scoped: it enqueues through the scoped IBackgroundJobsProcessor
         services.AddScoped<IEmailService, EmailService>();

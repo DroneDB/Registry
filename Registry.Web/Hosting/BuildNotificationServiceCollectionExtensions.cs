@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.BuildNotifications;
 using Registry.Web.Services.Ports;
+using Registry.Web.Services.TaskNotifications;
 
 namespace Registry.Web.Hosting;
 
@@ -21,7 +22,9 @@ public static class BuildNotificationServiceCollectionExtensions
         services.AddSingleton<IBuildOutcomeClassifier, BuildOutcomeClassifier>();
         services.AddScoped<IBuildRequesterResolver, BuildRequesterResolver>();
         // From the identity database every host that runs jobs shares (no UserManager needed)
-        services.AddScoped<IBuildNotificationLevels, IdentityBuildNotificationLevels>();
+        services.AddScoped<IdentityBuildNotificationLevels>();
+        services.AddScoped<IBuildNotificationLevels>(sp => sp.GetRequiredService<IdentityBuildNotificationLevels>());
+        services.AddScoped<ITaskNotificationLevels>(sp => sp.GetRequiredService<IdentityBuildNotificationLevels>());
         // Which datasets a user may still read when the digest is sent, by the API's rules (no request needed)
         services.AddScoped<IUserDatasetAccess, IdentityUserDatasetAccess>();
         services.AddScoped<BuildNotificationAudience>();
@@ -30,6 +33,9 @@ public static class BuildNotificationServiceCollectionExtensions
         services.AddScoped<IBuildNotificationRecorder, BuildNotificationRecorder>();
         services.AddScoped<FinishedBuildReporter>();
         services.AddScoped<BuildNotificationCleanup>();
+
+        // The e-mail about a heavy task that ended (FR-PRC-40)
+        services.AddScoped<TaskNotifier>();
 
         // The job class, registered like the others so a missing dependency fails the container validation
         services.AddScoped<BuildNotificationDigestJob>();
