@@ -28,19 +28,19 @@ public interface IImportSource
     Task<ImportSourceProbe> ProbeAsync(JsonElement parameters, CancellationToken ct);
 
     /// <summary>
-    /// Downloads source files directly into <paramref name="destFolder"/> (the dataset folder),
-    /// skipping any file already present at the expected size (resumable re-import). Downloads
-    /// stream directly to the final destination path; partial files are possible on failure and
-    /// must be cleaned up by the caller. Reports incremental progress
-    /// (including <see cref="ImportProgress.BytesSoFar"/>). Must honour cancellation promptly; the
-    /// tool enforces the size/quota budget by cancelling when the reported bytes exceed it.
-    /// Receives decrypted params.
+    /// Fetches the source files into <paramref name="destFolder"/> (the dataset folder) through the task's write
+    /// record (<paramref name="writes"/>): each file and folder is recorded before it is created, a file is never
+    /// written over one that is not the task's (it is skipped), and a cancelled or failed import is rolled back from
+    /// the record by the task. Reports incremental progress (including <see cref="ImportProgress.BytesSoFar"/>). Must
+    /// honour cancellation promptly; the tool enforces the size/quota budget by cancelling when the reported bytes
+    /// exceed it. Receives decrypted params.
     /// </summary>
     /// <param name="parameters">Source-specific parameters (decrypted).</param>
     /// <param name="destFolder">Absolute path of the dataset folder to write files into.</param>
+    /// <param name="writes">The task's write record, for every file and folder the source creates.</param>
     /// <param name="progress">Progress sink.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A task that completes when all files have been fetched.</returns>
-    Task FetchAsync(JsonElement parameters, string destFolder,
+    Task FetchAsync(JsonElement parameters, string destFolder, IImportWriteRecord writes,
         IProgress<ImportProgress> progress, CancellationToken ct);
 }

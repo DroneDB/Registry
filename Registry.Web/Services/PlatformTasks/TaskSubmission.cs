@@ -68,7 +68,7 @@ public sealed class TaskSubmission
         var paramsElement = body.Params ?? JsonSerializer.SerializeToElement(new { });
 
         var result = await _submitter.SubmitAsync(orgSlug, dsSlug, tool.Id, tool.Version, body.Path, paramsElement,
-            body.Force, ct);
+            body.Force, ct: ct);
 
         var baseUrl = $"/orgs/{orgSlug}/ds/{dsSlug}/tasks/{result.TaskId}";
         return new SubmitTaskResponseDto(

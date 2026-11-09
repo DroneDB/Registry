@@ -22,6 +22,9 @@ namespace Registry.Web.Services.HeavyTasks;
 /// <param name="KeepExisting">True when the file at this dataset path must be kept (the entry is skipped).</param>
 /// <param name="MaxBytes">The uncompressed-size cap; 0 (or less) disables it.</param>
 /// <param name="SafetyMarginBytes">The disk head-room to keep (<see cref="VolumeHeadroom.MarginBytes"/>).</param>
+/// <param name="Writes">The write record of the task that extracts (FR-XC-27): every file and folder the extraction
+/// creates is recorded before it is created; a file it replaces (<paramref name="KeepExisting"/> false for an existing
+/// file) is not. Null: nothing is recorded.</param>
 public sealed record ArchiveExtractionRequest(
     string ArchivePath,
     string DatasetFolder,
@@ -29,7 +32,8 @@ public sealed record ArchiveExtractionRequest(
     Func<string, bool> IsExtensionAllowed,
     Func<string, bool> KeepExisting,
     long MaxBytes,
-    long SafetyMarginBytes);
+    long SafetyMarginBytes,
+    Registry.Ports.Import.IImportWriteRecord? Writes = null);
 
 /// <summary>Progress of an extraction, after each entry (and once before the first, with <see cref="Done"/> 0).</summary>
 /// <param name="Done">Entries handled (extracted or skipped).</param>
@@ -104,7 +108,7 @@ public sealed class DatasetArchiveExtractor
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var journal = new Journal(this, request.DatasetFolder);
+        var journal = new Journal(this, request.DatasetFolder, request.Writes);
         var committed = false;
         try
         {
@@ -149,14 +153,41 @@ public sealed class DatasetArchiveExtractor
             else
             {
                 var local = DatasetPathPolicy.ToLocalPath(request.DatasetFolder, target);
-                if (journal.BeforeWrite(local))
+                var first = journal.BeforeWrite(local, target);
+
+                Stream file;
+                try
+                {
+                    file = _fs.OpenWrite(local, FileMode.CreateNew);
+                }
+                catch (IOException) when (journal.AppearedMeanwhile(local))
+                {
+                    // Another writer created the file between the check and the write: it is kept, never replaced,
+                    // and it is not the extraction's (its record drops it)
+                    _logger.LogWarning("Skipping archive entry '{Key}': '{Path}' was created meanwhile", entry.Key,
+                        target);
+                    if (request.Writes != null)
+                        await request.Writes.ForgetAsync(target, ct);
+                    if (!first)
+                        extracted.Remove(target);
+                    skipped++;
+                    done++;
+                    progress?.Report(new ArchiveExtractionProgress(done, total, entry.Key, budget.BytesWritten));
+                    continue;
+                }
+
+                if (first)
                     extracted.Add(target);
 
                 // The cap and the head-room are checked before each chunk, so an entry whose header
                 // under-reports its size cannot fill the volume
                 await using (var source = entry.OpenStream())
-                await using (var file = _fs.OpenWrite(local, FileMode.CreateNew))
+                await using (file)
                     await budget.CopyGuardedAsync(source, file, ct);
+
+                request.Writes?.Written(target);
+                if (request.Writes != null)
+                    await request.Writes.FlushIfDueAsync(ct);
             }
 
             done++;
@@ -200,23 +231,31 @@ public sealed class DatasetArchiveExtractor
     /// and the folders created. Never throws from <see cref="Commit"/> or <see cref="Rollback"/>:
     /// they run in a finally block.
     /// </summary>
-    private sealed class Journal(DatasetArchiveExtractor owner, string datasetFolder)
+    private sealed class Journal(DatasetArchiveExtractor owner, string datasetFolder,
+        Registry.Ports.Import.IImportWriteRecord? writes)
     {
         private readonly List<string> _written = [];
         private readonly HashSet<string> _writtenSet = new(Common.PathComparison.Comparer);
         private readonly List<(string Target, ScratchFile Backup)> _replaced = [];
         private readonly List<string> _createdFolders = [];
+        private string? _newFile;
 
-        /// <summary>Prepares <paramref name="local"/> for a new file; false when this extraction already wrote it.</summary>
-        public bool BeforeWrite(string local)
+        /// <summary>
+        /// Prepares <paramref name="local"/> (the dataset path <paramref name="target"/>) for a new file; false when this
+        /// extraction already wrote it. A file that is not there yet is recorded in the task's write record first; a file
+        /// it replaces is not (FR-XC-27).
+        /// </summary>
+        public bool BeforeWrite(string local, string target)
         {
             var fs = owner._fs;
             CreateFolders(Path.GetDirectoryName(local)!);
+            _newFile = null;
 
             if (_writtenSet.Contains(local))
             {
                 // Two entries with the same normalized path: the last one wins, as in the archive tools
                 fs.Delete(local);
+                _newFile = local;
                 return false;
             }
 
@@ -226,9 +265,28 @@ public sealed class DatasetArchiveExtractor
                 fs.Move(local, backup.Path);
                 _replaced.Add((local, backup));
             }
+            else
+            {
+                writes?.Record(target);
+                _newFile = local;
+            }
 
             _written.Add(local);
             _writtenSet.Add(local);
+            return true;
+        }
+
+        /// <summary>
+        /// Whether the new file the extraction was about to create at <paramref name="local"/> was created meanwhile by
+        /// someone else: it is then no longer the extraction's (never deleted by its rollback).
+        /// </summary>
+        public bool AppearedMeanwhile(string local)
+        {
+            if (_newFile != local || !owner._fs.Exists(local))
+                return false;
+
+            _written.Remove(local);
+            _writtenSet.Remove(local);
             return true;
         }
 
@@ -291,6 +349,7 @@ public sealed class DatasetArchiveExtractor
             while (missing.Count > 0)
             {
                 var f = missing.Pop();
+                writes?.RecordFolder(Path.GetRelativePath(datasetFolder, f).Replace('\\', '/'));
                 fs.FolderCreate(f);
                 _createdFolders.Add(f);
             }

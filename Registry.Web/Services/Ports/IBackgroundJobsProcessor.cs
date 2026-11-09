@@ -15,6 +15,13 @@ public interface IBackgroundJobsProcessor
     public string Schedule<T>(Expression<Func<T, Task>> methodCall, TimeSpan delay);
 
     public bool Delete(string jobId);
+
+    /// <summary>
+    /// Deletes the job only while it is in the state <paramref name="fromState"/>: the check and the change are one
+    /// atomic state change of the storage, so a job deleted from a waiting state was never started by a worker.
+    /// </summary>
+    /// <returns>True when the job was in <paramref name="fromState"/> and is deleted.</returns>
+    public bool Delete(string jobId, string fromState);
     public bool Requeue(string jobId);
 
     public JobStatus GetJobStatus(string jobId);

@@ -3985,7 +3985,8 @@
       "waitingForFiles": true,
       "missingFiles": [
         "MissingFiles-text"
-      ]
+      ],
+      "cancellable": true
     },
     "sparse": {
       "taskId": null,
@@ -4005,7 +4006,8 @@
       "artifactExpiresAt": null,
       "background": false,
       "waitingForFiles": false,
-      "missingFiles": null
+      "missingFiles": null,
+      "cancellable": false
     }
   },
   "Registry.Web.Models.DTO.TaskToolDto": {

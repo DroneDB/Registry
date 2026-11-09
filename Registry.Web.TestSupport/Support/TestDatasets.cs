@@ -21,7 +21,8 @@ public static class TestDatasets
         IBackgroundJobsProcessor jobs, IOptions<ThumbnailOptions> thumbnails)
     {
         var access = new DatasetAccessResolver(ports.Datasets, authManager, ddbManager, TestPaths.Policy);
-        var commands = new DatasetCommands(context, ports.Datasets, access, ddbManager, listings, jobs,
+        var commands = new DatasetCommands(context, ports.Datasets, access, ddbManager, listings,
+            new DatasetRemoval(context, listings, jobs, NullLogger<DatasetRemoval>.Instance),
             NullLogger<DatasetCommands>.Instance);
         return new DatasetsManager(
             new DatasetQueries(access, authManager, context, TestCaches.Summaries(ddbManager), ddbManager, ports.Urls,

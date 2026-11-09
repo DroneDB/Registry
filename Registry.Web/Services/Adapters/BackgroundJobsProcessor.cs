@@ -32,6 +32,8 @@ public class BackgroundJobsProcessor : IBackgroundJobsProcessor
 
     public bool Delete(string jobId) => _client.Delete(jobId);
 
+    public bool Delete(string jobId, string fromState) => _client.Delete(jobId, fromState);
+
     /// <summary>
     /// Re-runs jobId under the same id by transitioning it back to <c>EnqueuedState</c>
     /// (same-id state transition, not delete). Failed-only by design: jobs in any other

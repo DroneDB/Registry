@@ -135,8 +135,11 @@ public class ImportManager
         {
             var toolParams = BuildToolParams(request.SourceType, request.Params, budgetBytes);
 
+            // The task's write record holds the dataset from the start: a cancelled, failed or lost import deletes it
+            // (FR-UPL-05, D-004); never a parameter of the request, which a caller of the task API could set
+            var created = await _targets.CreatedDatasetAsync(orgSlug, ds.Slug, ct);
             var result = await _submitter.SubmitAsync(orgSlug, ds.Slug, "import-dataset", "1", null, toolParams,
-                force: false, ct);
+                force: false, created, ct);
 
             return new ImportCreateResultDto
             {

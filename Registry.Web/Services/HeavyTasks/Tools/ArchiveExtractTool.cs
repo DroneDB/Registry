@@ -85,6 +85,9 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
     public override string Title => "Extract archive";
     public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
     public override bool ProducesArtifact => false;
+
+    /// <inheritdoc />
+    public override bool AddsDatasetFiles => true;
     public override JsonDocument InputSchema => Schema;
 
     protected override async Task ValidateAsync(HeavyToolRequest request, Parameters args,
@@ -209,6 +212,10 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
 
         var localArchive = ctx.Ddb.GetLocalPath(sourcePath);
 
+        // What the extraction creates is recorded before it is written (FR-XC-27): a cancelled or failed task deletes it,
+        // and only it; a file it replaces (overwrite) is not recorded
+        var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, ctx.Ddb.DatasetFolderPath, ct);
+
         // One streaming pass through the shared extractor: the path rule decides every entry, the
         // budget (cap, then disk head-room with libddb's floor) every chunk - compressed tarballs have
         // no cheap uncompressed size, so the submit-time guard cannot cover them - and any failure
@@ -218,7 +225,7 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
             new ArchiveExtractionRequest(localArchive, ctx.Ddb.DatasetFolderPath, destPath,
                 _importSettings.IsExtensionAllowed,
                 target => !overwrite && ctx.Ddb.EntryExists(target),
-                _settings.MaxArchiveExtractSizeBytes, _settings.DiskSafetyMarginBytes),
+                _settings.MaxArchiveExtractSizeBytes, _settings.DiskSafetyMarginBytes, writes),
             new CallbackProgress<ArchiveExtractionProgress>(p => ReportProgress(progress, p, sourcePath)), ct);
         var extractedPaths = extraction.Extracted.ToList();
 
@@ -228,14 +235,18 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
         await _indexer.IndexAsync(new TaskFiles(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug,
             extractedPaths, ctx.BuildQueue, ctx.TaskId, "extracted files"), progress, ct);
 
-        // Optionally remove the source archive (index entry + physical file).
+        // Optionally remove the source archive (index entry + physical file). The task commits first (FR-XC-27): from
+        // here it is never cancelled nor rolled back, and a cancel that came first refuses the commit (it throws: the
+        // archive stays and the extraction is rolled back)
         if (deleteArchive)
         {
+            await ctx.WriteRecord.MarkCommittedAsync(ct);
             try
             {
                 ctx.Ddb.Remove(sourcePath);
                 if (File.Exists(localArchive))
                     File.Delete(localArchive);
+                await ctx.WriteRecord.EntriesLeftAsync(ctx.Dataset, [sourcePath]);
                 progress.Report(new HeavyToolProgress(1, "cleanup",
                     LogChunk: $"Deleted source archive '{sourcePath}'"));
             }

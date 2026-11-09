@@ -54,7 +54,7 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
     public Task<HeavyTaskSubmitResult> SubmitAsync(HeavyTaskSubmitRequest request, CancellationToken ct = default) =>
         CheckSubmitAsync(request, (admission, _) => Task.FromResult(_processor.EnqueueHeavyTask(admission.Request,
             request.UserId, request.Hash, admission.RequestHash, request.ParentJobId, request.WorkflowExecutionId,
-            admission.OutputPaths, admission.Label)), ct: ct);
+            admission.OutputPaths, admission.Label, request.CreatedDataset)), ct: ct);
 
     /// <inheritdoc />
     public async Task<HeavyTaskSubmitResult> CheckSubmitAsync(HeavyTaskSubmitRequest request,

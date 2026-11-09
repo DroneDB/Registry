@@ -71,7 +71,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<StacManager>();
         services.AddScoped<Services.Stac.StacCatalog>();
         services.AddScoped<Services.Stac.StacUrls>();
-        services.AddScoped<Services.Caching.IDatasetListingInvalidator, Services.Caching.DatasetListingInvalidator>();
+        // IDatasetListingInvalidator: every job host (AddProcessingPlatform), for the system delete of DatasetRemoval
         services.AddObjectsSlice();
         services.AddScoped<CadCrsManager>();
         services.AddScoped<ShareManager>();

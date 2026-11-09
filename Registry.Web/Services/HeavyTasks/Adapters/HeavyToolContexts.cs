@@ -43,9 +43,11 @@ public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
 
     public HeavyToolExecutionContext(
         IDDB ddb, DatasetKey dataset, ILogger logger, TaskRun run, PerformContext hangfire,
-        BuildScheduler buildQueue, DdbJobs builds, bool queuedBeforeOverwriteRule = false)
+        BuildScheduler buildQueue, DdbJobs builds, bool queuedBeforeOverwriteRule = false,
+        ITaskWriteRecorder? writeRecord = null)
     {
         QueuedBeforeOverwriteRule = queuedBeforeOverwriteRule;
+        WriteRecord = writeRecord ?? TaskWriteRecorder.Disabled(run.TaskId, dataset, "unknown");
         Ddb = ddb;
         Dataset = dataset;
         Logger = logger;
@@ -74,4 +76,7 @@ public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
 
     /// <inheritdoc />
     public void MarkOutputPublished(string path) => PublishedOutputMarker.Set(Hangfire, path);
+
+    /// <inheritdoc />
+    public ITaskWriteRecorder WriteRecord { get; }
 }

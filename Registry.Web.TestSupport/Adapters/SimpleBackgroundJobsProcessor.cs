@@ -55,6 +55,16 @@ public class SimpleBackgroundJobsProcessor : IBackgroundJobsProcessor
         return true;
     }
 
+    public bool Delete(string jobId, string fromState)
+    {
+        var id = int.Parse(jobId, CultureInfo.InvariantCulture);
+        if (!_jobs.TryGetValue(id, out var status) || status.ToString() != fromState)
+            return false;
+
+        _jobs[id] = JobStatus.Deleted;
+        return true;
+    }
+
     // Mirrors the production contract: flipped to Enqueued only from Failed (Failed-only guard).
     public bool Requeue(string jobId)
     {

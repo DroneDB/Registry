@@ -164,6 +164,19 @@ public class IndexedJobPublicationRecordTests
     }
 
     [Test]
+    public void TheWriteRecord_RoundTrips_AndIsAbsentFromARecordWithout()
+    {
+        var created = "{\"state\":\"open\",\"attempt\":0,\"createdDataset\":{\"org\":\"o\"}}";
+        var record = IndexedJobPublicationRecord.ForImmediate(FullPayload() with { WriteRecordJson = created }, Created,
+            "critical");
+
+        IndexedJobPublicationRecord.TryParse(record.ToStateData()).Record!.Payload.WriteRecordJson.ShouldBe(created);
+        // A task without one is stored as before, and a record written before reads none
+        Immediate().ToStateData()[IndexedJobPublicationRecord.RecordKey].ShouldNotContain("writeRecordJson");
+        IndexedJobPublicationRecord.TryParse(Data(Json())).Record!.Payload.WriteRecordJson.ShouldBeNull();
+    }
+
+    [Test]
     public void UnknownMembers_AreTolerated() =>
         IndexedJobPublicationRecord.TryParse(Data(Json().Replace("\"queue\"", "\"extra\":{\"a\":[1]},\"queue\"")))
             .Status.ShouldBe(IndexedJobRecordParseStatus.Valid);

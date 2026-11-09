@@ -20,6 +20,9 @@ public abstract class HeavyToolBase<TParams> : IHeavyTool where TParams : class
     public abstract HeavyToolPermission RequiredAccess { get; }
     public abstract bool ProducesArtifact { get; }
     public virtual bool RunsNativeBuild => false;
+
+    /// <inheritdoc cref="IHeavyTool.AddsDatasetFiles"/>
+    public virtual bool AddsDatasetFiles => false;
     public virtual string? ResultExtension => null;
     public abstract JsonDocument InputSchema { get; }
 

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Import;
@@ -29,6 +30,16 @@ public sealed class ImportTargetDatasets
     public Task<DatasetDto> CreateAsync(string orgSlug, string slug, string name, Visibility visibility,
         CancellationToken ct) =>
         _datasetsManager.AddNew(orgSlug, new DatasetNewDto { Slug = slug, Name = name, Visibility = visibility }, ct);
+
+    /// <summary>
+    /// The dataset created for an import, as its task's write record names it (by folder id, FR-XC-27): a rollback of
+    /// the task deletes it.
+    /// </summary>
+    public async Task<TaskCreatedDataset> CreatedDatasetAsync(string orgSlug, string dsSlug, CancellationToken ct)
+    {
+        var ds = await _datasets.GetRequiredDatasetAsync(orgSlug, dsSlug, ct: ct);
+        return new TaskCreatedDataset(orgSlug, ds.InternalRef, ds.Slug);
+    }
 
     /// <summary>The URL of the dataset, or null when it cannot be built (logged: the import was queued anyway).</summary>
     public async Task<string?> UrlOfAsync(string orgSlug, string dsSlug, CancellationToken ct)

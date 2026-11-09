@@ -37,6 +37,14 @@ public interface IHeavyTool
     bool RunsNativeBuild => false;
 
     /// <summary>
+    /// Whether the tool adds files to a dataset (FR-XC-26): photogrammetry, the imports, archive extract, Merge, Align and
+    /// Mask. Such a tool records what it creates in the task's write record
+    /// (<see cref="Models.IHeavyToolExecutionContext.WriteRecord"/>), and a cancelled, failed or lost task deletes it
+    /// (FR-XC-27, D-045). False by default.
+    /// </summary>
+    bool AddsDatasetFiles => false;
+
+    /// <summary>
     /// Default file extension (without the leading dot) of the produced artifact, or
     /// null when the tool produces none. Authoritative source for client result naming.
     /// </summary>

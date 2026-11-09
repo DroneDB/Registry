@@ -1,5 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
+using Registry.Web.Hosting;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Caching;
+using Registry.Web.Services.Datasets;
+using Registry.Web.Services.Initialization;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.NodeOdx;
@@ -71,6 +75,17 @@ public static class ProcessingPlatformServiceCollectionExtensions
 
         // Hangfire activates the wrapper from DI on the worker host.
         services.AddScoped<HeavyTaskJobWrapper>();
+
+        // The write record of a task and its one rollback (FR-XC-27, D-045), wherever a task runs or is cancelled: the
+        // delayed system delete of a dataset a rolled-back task created, the removal it shares with the user delete,
+        // and the startup sweep that finishes the rollbacks a stop interrupted (before the job servers start)
+        services.AddScoped<ITaskWriteRecordStore, TaskWriteRecordStore>();
+        services.AddScoped<ITaskRollback, TaskRollback>();
+        services.AddScoped<TaskEntryChanges>();
+        services.AddScoped<CreatedDatasetRollbackJob>();
+        services.AddScoped<DatasetRemoval>();
+        services.AddScoped<IDatasetListingInvalidator, DatasetListingInvalidator>();
+        services.AddStartupTask<TaskRollbackStartupTask>();
 
         return services;
     }

@@ -95,6 +95,9 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
     public override string Title => "Photogrammetry (NodeODX)";
     public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
     public override bool ProducesArtifact => false;
+
+    /// <inheritdoc />
+    public override bool AddsDatasetFiles => true;
     public override JsonDocument InputSchema => Schema;
 
     protected override async Task ValidateAsync(HeavyToolRequest request, Parameters args,
@@ -255,6 +258,10 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
                 targetDdb = ddbManager.Get(newDatasetOrgSlug, internalRef);
                 targetDataset = new DatasetKey(newDatasetOrgSlug, internalRef);
                 targetRoot = targetDdb.DatasetFolderPath;
+
+                // Right after it exists: a cancelled or failed task deletes the dataset it created (FR-XC-27, D-031)
+                await ctx.WriteRecord.CreatedDatasetAsync(
+                    new TaskCreatedDataset(newDatasetOrgSlug, internalRef, newDs.Slug), CancellationToken.None);
             }
 
             // For a new dataset, extract to root (no subfolder).
@@ -283,11 +290,14 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         IProgress<HeavyToolProgress> progress, CancellationToken ct)
     {
         // The shared extractor: the path rule decides every entry, the budget every chunk, existing
-        // entries are kept (no overwrite for photogrammetry output) and any failure leaves the
-        // dataset as it was
+        // files are kept (no overwrite for photogrammetry output), any failure leaves the dataset as it
+        // was, and every result is recorded in the task's write record of the target dataset before it is
+        // written (FR-XC-27)
+        var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, dataset, root, ct);
         var extraction = await _archives.ExtractAsync(
             new ArchiveExtractionRequest(archivePath, root, destPath, _importSettings.IsExtensionAllowed,
-                ddb.EntryExists, _settings.MaxArchiveExtractSizeBytes, _settings.DiskSafetyMarginBytes),
+                target => !writes.MayWrite(target), _settings.MaxArchiveExtractSizeBytes,
+                _settings.DiskSafetyMarginBytes, writes),
             new CallbackProgress<ArchiveExtractionProgress>(p => ReportProgress(progress, p)), ct);
         var extractedPaths = extraction.Extracted.ToList();
 

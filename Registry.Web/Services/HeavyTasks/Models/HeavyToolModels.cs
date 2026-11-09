@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using Hangfire.Server;
 using Registry.Ports.DroneDB;
 using Registry.Web.Services.Jobs;
@@ -96,4 +98,83 @@ public interface IHeavyToolExecutionContext : IHeavyToolValidationContext
     /// a later attempt skips the write and indexes it. Called right after the write returns.
     /// </summary>
     void MarkOutputPublished(string path);
+
+    /// <summary>
+    /// The write record of the task (FR-XC-27, D-045), for a tool with <see cref="Ports.IHeavyTool.AddsDatasetFiles"/>:
+    /// a cancelled, failed or lost task deletes what it recorded, and only that. A tool without it gets a record that
+    /// refuses every write.
+    /// </summary>
+    ITaskWriteRecorder WriteRecord { get; }
+}
+
+/// <summary>
+/// The write record of a running task (FR-XC-27, D-045). The contract of a tool: it records a path BEFORE it writes it,
+/// and only a path that does not exist yet, which it then creates with <c>FileMode.CreateNew</c> (so a file that appeared
+/// meanwhile is never taken over); a file it replaces (<c>overwrite</c>, FR-XC-07) is never recorded. The same for a
+/// folder it creates. Paths are dataset-relative ('/'-separated). Records are buffered and written in batches
+/// (<see cref="FlushIfDueAsync"/>), before <see cref="MarkCommittedAsync"/> and at the end of the task; a failed or
+/// cancelled task also deletes the records not written yet.
+/// </summary>
+public interface ITaskWriteRecorder
+{
+    /// <summary>Whether the tool may record (it declares <see cref="Ports.IHeavyTool.AddsDatasetFiles"/>).</summary>
+    bool Enabled { get; }
+
+    /// <summary>The file <paramref name="path"/> of the task's dataset, about to be created.</summary>
+    void Record(string path);
+
+    /// <summary>The file <paramref name="path"/> of <paramref name="dataset"/> (another dataset than the task's), about to be created.</summary>
+    void Record(DatasetKey dataset, string path);
+
+    /// <summary>The folder <paramref name="path"/> of the task's dataset, about to be created (deleted by a rollback when empty).</summary>
+    void RecordFolder(string path);
+
+    /// <summary>The folder <paramref name="path"/> of <paramref name="dataset"/>, about to be created.</summary>
+    void RecordFolder(DatasetKey dataset, string path);
+
+    /// <summary>
+    /// The recorded file <paramref name="path"/> of <paramref name="dataset"/> is complete at
+    /// <paramref name="localPath"/>: its size and time are recorded, so a rollback keeps it once somebody else
+    /// replaced it (an upload with overwrite).
+    /// </summary>
+    void Written(DatasetKey dataset, string path, string localPath);
+
+    /// <summary>Writes the buffered records when the batch is full or old enough; call it between files.</summary>
+    /// <exception cref="Registry.Web.Services.Ports.TaskWriteRecordClosedException">A rollback claimed the record.</exception>
+    ValueTask FlushIfDueAsync(CancellationToken ct = default);
+
+    /// <summary>Writes the buffered records; call it before any step that deletes or replaces a file.</summary>
+    /// <exception cref="Registry.Web.Services.Ports.TaskWriteRecordClosedException">A rollback claimed the record.</exception>
+    Task FlushAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Marks the record committed (the task published its output and is about to delete its inputs, FR-PRC-02): from
+    /// now on it is never cancelled nor rolled back.
+    /// </summary>
+    /// <exception cref="Registry.Web.Services.Ports.TaskWriteRecordClosedException">
+    /// A cancel was requested or a rollback claimed the record: the task must stop without deleting anything.
+    /// </exception>
+    Task MarkCommittedAsync(CancellationToken ct = default);
+
+    /// <summary>Records the dataset the task created in the worker (photogrammetry), right after it was created.</summary>
+    Task CreatedDatasetAsync(TaskCreatedDataset dataset, CancellationToken ct = default);
+
+    /// <summary>
+    /// Drops <paramref name="path"/> of <paramref name="dataset"/> from the record: the tool recorded it but could not
+    /// create it (<c>FileMode.CreateNew</c> found a file another writer created meanwhile), so a rollback must not
+    /// delete it.
+    /// </summary>
+    Task ForgetAsync(DatasetKey dataset, string path, CancellationToken ct = default);
+
+    /// <summary>
+    /// The paths of <paramref name="dataset"/> the task recorded so far (earlier attempts included): a file at one of
+    /// them is the task's own, which a retry may write again.
+    /// </summary>
+    Task<IReadOnlySet<string>> RecordedPathsAsync(DatasetKey dataset, CancellationToken ct = default);
+
+    /// <summary>
+    /// Tells the dataset that entries left it (deleted by the task, e.g. the sources Merge deletes): the same
+    /// notification as a rollback (<see cref="TaskEntryChanges"/>).
+    /// </summary>
+    Task EntriesLeftAsync(DatasetKey dataset, IReadOnlyCollection<string> paths);
 }
