@@ -499,6 +499,51 @@ public class UsersManagerTest : TestBase
         users["role-user"].Roles.ShouldBe(["admin"]);
     }
 
+    // FR-ADM-19: the user list showed the time of the request as the creation date of every user
+
+    [Test]
+    public async Task GetAllDetailed_ReturnsTheStoredCreatedDate_AndNullForAUserCreatedBeforeIt()
+    {
+        SetupAdminUser();
+        var created = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc);
+        var recent = await CreateTestUser("recent-user");
+        recent.CreatedDate = created;
+        await _appContext.SaveChangesAsync();
+        await CreateTestUser("legacy-user");
+        _appContext.ChangeTracker.Clear();
+        _userManagerMock.Setup(x => x.FindByNameAsync(It.IsAny<string>()))
+            .ReturnsAsync((string name) => _appContext.Users.Single(u => u.UserName == name));
+
+        var users = (await _usersManager.GetAllDetailed()).ToDictionary(u => u.UserName.ShouldNotBeNull());
+
+        users["recent-user"].CreatedDate.ShouldBe(created);
+        users["recent-user"].CreatedDate!.Value.Kind.ShouldBe(DateTimeKind.Utc, "read back as UTC, so it is written with its Z");
+        users["legacy-user"].CreatedDate.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task CreateUser_StoresWhenTheUserWasCreated_InUtc()
+    {
+        SetupAdminUser();
+        User? stored = null;
+        _userManagerMock.Setup(x => x.FindByNameAsync("dateduser")).ReturnsAsync((User?)null);
+        _userManagerMock.Setup(x => x.CreateAsync(It.IsAny<User>(), It.IsAny<string>()))
+            .ReturnsAsync(IdentityResult.Success)
+            .Callback<User, string>((u, _) =>
+            {
+                u.Id = "dateduser-id";
+                stored = u;
+            });
+        var before = DateTime.UtcNow;
+
+        await _usersManager.CreateUser("dateduser", "dated@example.com", "Str0ngP@ss", null);
+
+        stored.ShouldNotBeNull();
+        stored.CreatedDate.ShouldNotBeNull();
+        stored.CreatedDate.Value.Kind.ShouldBe(DateTimeKind.Utc);
+        stored.CreatedDate.Value.ShouldBeInRange(before, DateTime.UtcNow);
+    }
+
     private async Task CreateAdminRoleUser(string userName)
     {
         var user = await CreateTestUser(userName);

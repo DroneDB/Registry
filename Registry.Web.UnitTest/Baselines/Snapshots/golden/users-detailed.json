@@ -33,7 +33,7 @@
       "storageUsed": 5729,
       "organizationCount": 1,
       "datasetCount": 1,
-      "createdDate": "<datetime:Z>"
+      "createdDate": null
     },
     {
       "id": "<guid>",
@@ -45,7 +45,7 @@
       "storageUsed": 0,
       "organizationCount": 0,
       "datasetCount": 0,
-      "createdDate": "<datetime:Z>"
+      "createdDate": null
     },
     {
       "id": "<guid>",
@@ -59,7 +59,7 @@
       "storageUsed": 0,
       "organizationCount": 1,
       "datasetCount": 0,
-      "createdDate": "<datetime:Z>"
+      "createdDate": null
     }
   ]
 }

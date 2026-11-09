@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -26,9 +27,12 @@ public sealed class UserProvisioning
     private readonly AccountOptions _accounts;
     private readonly IOrganizationsManager _organizations;
     private readonly ILogger<UserProvisioning> _logger;
+    private readonly TimeProvider _time;
 
-    public UserProvisioning(UserManager<User> userManager, RoleManager<IdentityRole> roleManager, ApplicationDbContext applicationDbContext, IPasswordPolicyValidator passwordPolicyValidator, IOptions<AccountOptions> accounts, IOrganizationsManager organizations, ILogger<UserProvisioning> logger)
+    /// <param name="time">The clock of <see cref="User.CreatedDate"/>; <see cref="TimeProvider.System"/> when null.</param>
+    public UserProvisioning(UserManager<User> userManager, RoleManager<IdentityRole> roleManager, ApplicationDbContext applicationDbContext, IPasswordPolicyValidator passwordPolicyValidator, IOptions<AccountOptions> accounts, IOrganizationsManager organizations, ILogger<UserProvisioning> logger, TimeProvider? time = null)
     {
+        _time = time ?? TimeProvider.System;
         _userManager = userManager;
         _roleManager = roleManager;
         _applicationDbContext = applicationDbContext;
@@ -146,7 +150,10 @@ public sealed class UserProvisioning
         throw new BadRequestException(SystemRoles.DeactivatedInRoleListMessage);
     }
 
-    /// <summary>Creates <paramref name="user"/> (password policy, roles that must exist, the default organization when enabled).</summary>
+    /// <summary>
+    /// Creates <paramref name="user"/> (password policy, roles that must exist, the default organization when enabled),
+    /// with the time of its creation (<see cref="User.CreatedDate"/>, now in UTC unless the caller gave one).
+    /// </summary>
     public async Task<User> CreateAsync(User user, string password, string[]? roles = null)
     {
         await RefuseDeactivatedAsync(null, roles);
@@ -158,6 +165,7 @@ public sealed class UserProvisioning
             throw new BadRequestException("Password does not meet the requirements: " +
                                           string.Join("; ", policyResult.Errors));
 
+        user.CreatedDate ??= _time.GetUtcNow().UtcDateTime;
         var res = await _userManager.CreateAsync(user, password);
 
         if (!res.Succeeded)

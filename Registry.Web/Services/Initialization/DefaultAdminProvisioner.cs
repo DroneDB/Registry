@@ -29,11 +29,15 @@ internal sealed class DefaultAdminProvisioner
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly IdentityProviderOptions _identityProvider;
     private readonly ILogger<DefaultAdminProvisioner> _logger;
+    private readonly TimeProvider _time;
 
+    /// <param name="time">The clock of the admin's <see cref="User.CreatedDate"/>; <see cref="TimeProvider.System"/> when null.</param>
     public DefaultAdminProvisioner(RegistryContext registry, ILoginManager loginManager,
         UserManager<User> userManager, RoleManager<IdentityRole> roleManager,
-        IOptions<IdentityProviderOptions> identityProvider, ILogger<DefaultAdminProvisioner> logger)
+        IOptions<IdentityProviderOptions> identityProvider, ILogger<DefaultAdminProvisioner> logger,
+        TimeProvider? time = null)
     {
+        _time = time ?? TimeProvider.System;
         _registry = registry;
         _loginManager = loginManager;
         _userManager = userManager;
@@ -108,7 +112,8 @@ internal sealed class DefaultAdminProvisioner
         var adminUser = new User
         {
             Email = defaultAdmin.Email,
-            UserName = defaultAdmin.UserName
+            UserName = defaultAdmin.UserName,
+            CreatedDate = _time.GetUtcNow().UtcDateTime
         };
 
         // The options validation refuses to start without the admin's user name, e-mail and password
