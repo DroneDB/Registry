@@ -475,6 +475,35 @@ public class NativeDdbWrapper : IDdbWrapper
                 out buffer, out length));
     }
 
+    public unsafe byte[] GenerateThumbnailEx(string filePath, int size, string? preset, string? bands, string? formula,
+        string? bandFilter, string? colormap, string? rescale, double? nodata)
+    {
+        ArgumentNullException.ThrowIfNull(filePath);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(size);
+        RequireFile(filePath);
+
+        using var options = NativeRasterOptionsHandle.Create(nodata);
+        var native = options.Pointer;
+        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBGenerateMemoryThumbnailEx2),
+            (out IntPtr buffer, out int length) => NativeDdb.DDBGenerateMemoryThumbnailEx2(filePath, size, preset,
+                bands, formula, bandFilter, colormap, rescale, native, out buffer, out length),
+            $"file: '{filePath}', size: {size}");
+    }
+
+    public unsafe byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
+        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
+        string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
+        double? nodata)
+    {
+        ArgumentNullException.ThrowIfNull(inputPath);
+        using var options = NativeRasterOptionsHandle.Create(nodata);
+        var native = options.Pointer;
+        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBMemoryTileEx2),
+            (out IntPtr buffer, out int length) => NativeDdb.DDBMemoryTileEx2(inputPath, tz, tx, ty, tileSize, tms,
+                forceRecreate, inputPathHash ?? string.Empty, preset, bands, formula, bandFilter, colormap, rescale,
+                native, out buffer, out length));
+    }
+
     // ---------------------------------------------------------------- rasters
 
     public string GetRasterInfo(string path)
@@ -576,6 +605,26 @@ public class NativeDdbWrapper : IDdbWrapper
                 callback?.UserData ?? IntPtr.Zero)));
     }
 
+    public unsafe void ExportRaster(string inputPath, string outputPath,
+        string? preset, string? bands, string? formula, string? bandFilter,
+        string? colormap, string? rescale, int tileSize, double? nodata,
+        Action<double, string?>? progress, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(inputPath);
+        ArgumentNullException.ThrowIfNull(outputPath);
+
+        // As the export without options: the callback reports and stops the call, the token stops it at its next checkpoint
+        using var callback = NativeProgressCallback.Create(progress, cancellationToken);
+        using var cancellation = DdbCancellation.Enter(cancellationToken);
+        using var options = NativeRasterOptionsHandle.Create(nodata);
+        var native = options.Pointer;
+
+        NativeCall.Invoke(nameof(NativeDdb.DDBExportRaster3), () => NativeProgressCallback.Completed(callback,
+            NativeDdb.DDBExportRaster3(inputPath, outputPath, preset, bands, formula, bandFilter, colormap,
+                rescale, tileSize, callback == null ? null : NativeProgressCallback.FunctionPointer,
+                callback?.UserData ?? IntPtr.Zero, native)));
+    }
+
     public unsafe SplatTrainingExport ExportSplatTrainingData(string ddbPath, string folder, string outFolder,
         SplatTrainingOptions? options, Action<double, string?>? progress, CancellationToken cancellationToken)
     {
@@ -626,6 +675,47 @@ public class NativeDdbWrapper : IDdbWrapper
             (out IntPtr output) => NativeDdb.DDBGetRasterValueInfo(path, out output));
     }
 
+    public unsafe string GetRasterValueInfo(string path, RasterAnalysisOptions? options)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        using var native = NativeRasterOptionsHandle.Create(options);
+        var pointer = native.Pointer;
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGetRasterValueInfoEx),
+            (out IntPtr output) => NativeDdb.DDBGetRasterValueInfoEx(path, pointer, out output));
+    }
+
+    public unsafe string GetRasterPointValue(string path, double lon, double lat, RasterAnalysisOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        using var native = NativeRasterOptionsHandle.Create(options);
+        var pointer = native.Pointer;
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGetRasterPointValueEx),
+            (out IntPtr output) => NativeDdb.DDBGetRasterPointValueEx(path, lon, lat, pointer, out output));
+    }
+
+    public unsafe string GetRasterAreaStats(string path, double minLon, double minLat, double maxLon, double maxLat,
+        RasterAnalysisOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        using var native = NativeRasterOptionsHandle.Create(options);
+        var pointer = native.Pointer;
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGetRasterAreaStatsEx),
+            (out IntPtr output) => NativeDdb.DDBGetRasterAreaStatsEx(path, minLon, minLat, maxLon, maxLat, pointer,
+                out output));
+    }
+
+    public unsafe string GetRasterProfile(string path, string geoJsonLineString, int samples,
+        RasterAnalysisOptions? options)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(geoJsonLineString);
+        using var native = NativeRasterOptionsHandle.Create(options);
+        var pointer = native.Pointer;
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGetRasterProfileEx),
+            (out IntPtr output) => NativeDdb.DDBGetRasterProfileEx(path, geoJsonLineString, samples, pointer,
+                out output));
+    }
+
     public string GetRasterPointValue(string path, int x, int y)
     {
         ArgumentNullException.ThrowIfNull(path);
@@ -638,6 +728,26 @@ public class NativeDdbWrapper : IDdbWrapper
         ArgumentNullException.ThrowIfNull(path);
         return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGetRasterAreaStats),
             (out IntPtr output) => NativeDdb.DDBGetRasterAreaStats(path, x0, y0, x1, y1, out output));
+    }
+
+    // The pixel of an R-JPEG's raw thermal grid with the NoData value and the thermal formula of the options (ABI 2.2):
+    // libddb applies them, or refuses them (DDBERR_INVALIDARGS); no options is the plain pixel value plus its "unit"
+    public unsafe string GetRasterPointValue(string path, int x, int y, RasterAnalysisOptions? options)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        using var native = NativeRasterOptionsHandle.Create(options);
+        var pointer = native.Pointer;
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGetRasterPointValuePixelEx),
+            (out IntPtr output) => NativeDdb.DDBGetRasterPointValuePixelEx(path, x, y, pointer, out output));
+    }
+
+    public unsafe string GetRasterAreaStats(string path, int x0, int y0, int x1, int y1, RasterAnalysisOptions? options)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        using var native = NativeRasterOptionsHandle.Create(options);
+        var pointer = native.Pointer;
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGetRasterAreaStatsPixelEx),
+            (out IntPtr output) => NativeDdb.DDBGetRasterAreaStatsPixelEx(path, x0, y0, x1, y1, pointer, out output));
     }
 
     public string GetRasterProfile(string path, string geoJsonLineString, int samples)
@@ -713,6 +823,33 @@ public class NativeDdbWrapper : IDdbWrapper
         return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGenerateContours),
             (out IntPtr output) => NativeDdb.DDBGenerateContours(path, iv, cnt, baseOffset, lo, hi, simplifyTolerance,
                 bandIndex, out output));
+    }
+
+    public unsafe string GenerateContours(string path, double? interval, int? count, double baseOffset,
+        double? minElev, double? maxElev, double simplifyTolerance, int bandIndex, RasterAnalysisOptions? options)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        if (!interval.HasValue && !count.HasValue)
+            throw new ArgumentException("Either interval or count must be specified");
+        if (interval is <= 0.0)
+            throw new ArgumentException("interval must be > 0", nameof(interval));
+        if (count is <= 0)
+            throw new ArgumentException("count must be > 0", nameof(count));
+        if (simplifyTolerance < 0.0)
+            throw new ArgumentException("simplifyTolerance must be >= 0", nameof(simplifyTolerance));
+        if (bandIndex <= 0)
+            throw new ArgumentException("bandIndex must be > 0", nameof(bandIndex));
+
+        var iv = interval ?? 0.0;
+        var cnt = count ?? 0;
+        var lo = minElev ?? double.NaN;
+        var hi = maxElev ?? double.NaN;
+
+        using var native = NativeRasterOptionsHandle.Create(options);
+        var pointer = native.Pointer;
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGenerateContoursEx),
+            (out IntPtr output) => NativeDdb.DDBGenerateContoursEx(path, iv, cnt, baseOffset, lo, hi,
+                simplifyTolerance, bandIndex, pointer, out output));
     }
 
     public void MaskBorders(string input, string output, int nearDist = 15, bool white = false, bool overwrite = false)

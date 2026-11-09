@@ -78,6 +78,30 @@ public sealed class RenderSources
     }
 
     /// <summary>
+    /// The entry at <paramref name="path"/> and its own file: the source of the raster values (value info, points, areas,
+    /// profiles and contours read the file the user uploaded, with its own pixel grid, never the resampled COG of its
+    /// build, D-021). Same access and path rules as <see cref="ResolveAsync(string, string, string?, CancellationToken)"/>;
+    /// there is no build to wait for.
+    /// </summary>
+    /// <exception cref="InvalidDatasetPathException">The path is not a dataset path (a missing one is empty).</exception>
+    /// <exception cref="BadRequestException">A wildcard, no such entry, or a folder.</exception>
+    public async Task<RenderSource> ResolveSourceFileAsync(string orgSlug, string dsSlug, string? path,
+        CancellationToken ct = default)
+    {
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, path ?? string.Empty, ct);
+        var normalized = access.Path!;
+
+        if (normalized.Contains('*') || normalized.Contains('?'))
+            throw new BadRequestException("Wildcards or empty paths are not supported");
+
+        var entry = access.Entry ?? throw new BadRequestException($"Invalid path: '{normalized}'");
+        if (entry.Type == EntryType.Directory)
+            throw new BadRequestException($"'{normalized}' is a folder");
+
+        return new RenderSource(entry, access.Ddb, normalized, entry.Path);
+    }
+
+    /// <summary>
     /// <see cref="ResolveAsync(string, string, string?, CancellationToken)"/> with the version of the rendered file: a rebuild rewrites the artifact
     /// but keeps the entry hash, its write time tells them apart.
     /// </summary>

@@ -85,6 +85,9 @@ public class NativeDdbDeclarationTests
         DdbAbi.RequiredSymbols.ShouldNotContain("DDBAlignRaster");
         DdbAbi.RequiredSymbols.ShouldNotContain("DDBMergeMultispectral");
         DdbAbi.RequiredSymbols.ShouldNotContain("DDBMaskBorders");
+        // The pixel values of an R-JPEG with the options of the values (ABI 2.2)
+        DdbAbi.RequiredSymbols.ShouldContain("DDBGetRasterPointValuePixelEx");
+        DdbAbi.RequiredSymbols.ShouldContain("DDBGetRasterAreaStatsPixelEx");
         DdbAbi.RequiredSymbols.ShouldAllBe(s => s.StartsWith("DDB"));
         Imports.ShouldAllBe(m => m.GetCustomAttribute<LibraryImportAttribute>()!.EntryPoint == null);
     }

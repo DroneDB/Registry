@@ -85,10 +85,11 @@ public class RasterAnalysisController : ControllerBaseEx
         [FromQuery] string? formula,
         [FromQuery] string? bandFilter,
         [FromQuery] string? colormap,
-        [FromQuery] string? rescale, CancellationToken ct)
+        [FromQuery] string? rescale,
+        [FromQuery] double? nodata, CancellationToken ct)
     {
         var res = await _renders.GenerateThumbnailDataExAsync(orgSlug, dsSlug, path.ToString(), size,
-            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale), ct: ct);
+            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale, nodata), ct: ct);
 
         if (res == null) return NotFound();
         return File(res.Data, res.ContentType, res.Name);
@@ -113,14 +114,15 @@ public class RasterAnalysisController : ControllerBaseEx
         [FromQuery] string? formula,
         [FromQuery] string? bandFilter,
         [FromQuery] string? colormap,
-        [FromQuery] string? rescale, CancellationToken ct)
+        [FromQuery] string? rescale,
+        [FromQuery] double? nodata, CancellationToken ct)
     {
         var retina = tyRaw.EndsWith("@2x", StringComparison.Ordinal);
         if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
             throw new BadRequestException("Invalid input parameters (retina indicator should be '@2x')");
 
         var res = await _renders.GenerateTileDataExAsync(orgSlug, dsSlug, path.ToString(), tz, tx, ty, retina,
-            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale),
+            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale, nodata),
             TileFormat.FromExtension(ext), ct: ct);
 
         return File(res.Data, res.ContentType, res.Name);
@@ -140,10 +142,11 @@ public class RasterAnalysisController : ControllerBaseEx
         [FromQuery] string? formula = null,
         [FromQuery] string? bandFilter = null,
         [FromQuery] string? colormap = null,
-        [FromQuery] string? rescale = null, CancellationToken ct = default)
+        [FromQuery] string? rescale = null,
+        [FromQuery] double? nodata = null, CancellationToken ct = default)
     {
         var res = await _raster.ExportRasterAsync(orgSlug, dsSlug, path.ToString(),
-            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale), ct: ct);
+            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale, nodata), ct: ct);
 
         return File(res.Data, res.ContentType, res.Name);
     }
@@ -211,7 +214,15 @@ public class RasterAnalysisController : ControllerBaseEx
 
     #region Raster Analysis
 
-    /// <summary>Get raster value info (min/max/unit/dimensions), including thermal calibration if applicable.</summary>
+    /// <summary>Get the value info of a raster file: range, unit, NoData, default stretch and export size.</summary>
+    /// <remarks>
+    /// The range is exact, in the units of the band, with the thermal calibration if applicable. The info also has the
+    /// NoData value that applies, the default colour stretch (<c>stretch</c>, D-041) and the size of an export with its limit
+    /// (<c>estimatedExportBytes</c>, <c>exportLimitBytes</c>, D-023).
+    /// </remarks>
+    /// <param name="nodata">A NoData value that replaces the one of the band (FR-RAS-31).</param>
+    /// <param name="formula">A vegetation index: the stretch is that of the index (D-041).</param>
+    /// <param name="bbox">A WGS 84 window <c>minLon,minLat,maxLon,maxLat</c>: the estimate is that of the window.</param>
     [HttpGet("raster-value-info", Name = nameof(ObjectsController) + "." + nameof(GetRasterValueInfo))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -219,13 +230,22 @@ public class RasterAnalysisController : ControllerBaseEx
     public async Task<IActionResult> GetRasterValueInfo(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
-        [FromQuery, Required] DatasetPath path, CancellationToken ct)
+        [FromQuery, Required] DatasetPath path,
+        [FromQuery] double? nodata,
+        [FromQuery] string? formula,
+        [FromQuery] string? bbox, CancellationToken ct)
     {
-        var json = await _raster.GetRasterValueInfoAsync(orgSlug, dsSlug, path.ToString(), ct: ct);
+        var options = RasterOptionRules.Options(nodata, formula, RasterOptionRules.ParseBbox(bbox));
+        var json = await _raster.GetRasterValueInfoAsync(orgSlug, dsSlug, path.ToString(), options, ct: ct);
         return Content(json, "application/json");
     }
 
-    /// <summary>Get raster value (temperature/elevation/etc.) at a specific pixel location.</summary>
+    /// <summary>Get the raster value (temperature, elevation, ...) at a point: map coordinates or a pixel.</summary>
+    /// <remarks>
+    /// Map coordinates (<c>lon</c>, <c>lat</c>, WGS 84) are converted to the pixel of the file by libddb. An R-JPEG, which has
+    /// no geotransform, takes the pixel (<c>x</c>, <c>y</c>) of its raw thermal grid. Both at once is a 400, and so are pixel
+    /// coordinates on a georeferenced raster (<c>errors.x</c>).
+    /// </remarks>
     [HttpGet("raster-point-value", Name = nameof(ObjectsController) + "." + nameof(GetRasterPointValue))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -234,14 +254,43 @@ public class RasterAnalysisController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery, Required] DatasetPath path,
-        [FromQuery, Required] int x,
-        [FromQuery, Required] int y, CancellationToken ct)
+        [FromQuery] double? lon,
+        [FromQuery] double? lat,
+        [FromQuery] int? x,
+        [FromQuery] int? y,
+        [FromQuery] double? nodata,
+        [FromQuery] string? formula, CancellationToken ct)
     {
-        var json = await _raster.GetRasterPointValueAsync(orgSlug, dsSlug, path.ToString(), x, y, ct: ct);
+        var hasMap = lon.HasValue || lat.HasValue;
+        var hasPixel = x.HasValue || y.HasValue;
+        if (hasMap && hasPixel)
+            throw new BadRequestException("Send map coordinates (lon, lat) or pixel coordinates (x, y), not both");
+
+        string json;
+        if (hasMap)
+        {
+            if (!lon.HasValue || !lat.HasValue)
+                throw new BadRequestException("Both 'lon' and 'lat' are required");
+            json = await _raster.GetRasterPointValueAsync(orgSlug, dsSlug, path.ToString(), lon.Value, lat.Value,
+                RasterOptionRules.Options(nodata, formula), ct: ct);
+        }
+        else
+        {
+            if (!x.HasValue || !y.HasValue)
+                throw new BadRequestException("Either 'lon' and 'lat' (WGS 84) or 'x' and 'y' (pixels) are required");
+            json = await _raster.GetRasterPointValueAsync(orgSlug, dsSlug, path.ToString(), x.Value, y.Value,
+                RasterOptionRules.Options(nodata, formula), ct: ct);
+        }
+
         return Content(json, "application/json");
     }
 
-    /// <summary>Get raster value statistics for a rectangular area.</summary>
+    /// <summary>Get raster value statistics for an area: a WGS 84 window or a rectangle of pixels.</summary>
+    /// <remarks>
+    /// A WGS 84 window (<c>bbox</c> = <c>minLon,minLat,maxLon,maxLat</c>) gives the pixels of the file under it. An R-JPEG,
+    /// which has no geotransform, takes a rectangle of pixels (<c>x0</c>, <c>y0</c>, <c>x1</c>, <c>y1</c>) of its raw thermal
+    /// grid. Both at once is a 400, and so are pixel coordinates on a georeferenced raster (<c>errors.x0</c>).
+    /// </remarks>
     [HttpGet("raster-area-stats", Name = nameof(ObjectsController) + "." + nameof(GetRasterAreaStats))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -250,12 +299,33 @@ public class RasterAnalysisController : ControllerBaseEx
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery, Required] DatasetPath path,
-        [FromQuery, Required] int x0,
-        [FromQuery, Required] int y0,
-        [FromQuery, Required] int x1,
-        [FromQuery, Required] int y1, CancellationToken ct)
+        [FromQuery] string? bbox,
+        [FromQuery] int? x0,
+        [FromQuery] int? y0,
+        [FromQuery] int? x1,
+        [FromQuery] int? y1,
+        [FromQuery] double? nodata,
+        [FromQuery] string? formula, CancellationToken ct)
     {
-        var json = await _raster.GetRasterAreaStatsAsync(orgSlug, dsSlug, path.ToString(), x0, y0, x1, y1, ct: ct);
+        var hasMap = !string.IsNullOrWhiteSpace(bbox);
+        var hasPixel = x0.HasValue || y0.HasValue || x1.HasValue || y1.HasValue;
+        if (hasMap && hasPixel)
+            throw new BadRequestException("Send a map window (bbox) or pixel coordinates (x0, y0, x1, y1), not both");
+
+        string json;
+        if (hasMap)
+        {
+            json = await _raster.GetRasterAreaStatsAsync(orgSlug, dsSlug, path.ToString(),
+                RasterOptionRules.ParseBbox(bbox)!, RasterOptionRules.Options(nodata, formula), ct: ct);
+        }
+        else
+        {
+            if (!(x0.HasValue && y0.HasValue && x1.HasValue && y1.HasValue))
+                throw new BadRequestException("Either 'bbox' (WGS 84) or 'x0', 'y0', 'x1' and 'y1' (pixels) are required");
+            json = await _raster.GetRasterAreaStatsAsync(orgSlug, dsSlug, path.ToString(), x0.Value, y0.Value, x1.Value,
+                y1.Value, RasterOptionRules.Options(nodata, formula), ct: ct);
+        }
+
         return Content(json, "application/json");
     }
 
@@ -277,7 +347,7 @@ public class RasterAnalysisController : ControllerBaseEx
             throw new BadRequestException("Request body is required");
 
         var json = await _raster.GetRasterProfileAsync(orgSlug, dsSlug, request.Path.ToString(),
-            request.LineString, request.Samples ?? 256, ct: ct);
+            request.LineString, request.Samples ?? 256, RasterOptionRules.Options(request.Nodata, request.Formula), ct: ct);
         return Content(json, "application/json");
     }
 
@@ -305,7 +375,7 @@ public class RasterAnalysisController : ControllerBaseEx
 
         var json = await _raster.GenerateContoursAsync(orgSlug, dsSlug, request.Path.ToString(),
             new ContourOptions(request.Interval, request.Count, request.BaseOffset, request.MinElev, request.MaxElev,
-                request.SimplifyTolerance, request.BandIndex), ct: ct);
+                request.SimplifyTolerance, request.BandIndex, request.Nodata), ct: ct);
         return Content(json, "application/json");
     }
 

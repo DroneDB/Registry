@@ -395,6 +395,14 @@ public class FakeDdbWrapper : IDdbWrapper
         string? bands = null, string? formula = null, string? bandFilter = null,
         string? colormap = null, string? rescale = null) => throw Unsupported();
 
+    public virtual byte[] GenerateThumbnailEx(string filePath, int size, string? preset, string? bands, string? formula,
+        string? bandFilter, string? colormap, string? rescale, double? nodata) => throw Unsupported();
+
+    public virtual byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
+        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
+        string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
+        double? nodata) => throw Unsupported();
+
     public virtual byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
         int tileSize, bool tms, bool forceRecreate, string inputPathHash,
         string? preset = null, string? bands = null, string? formula = null,
@@ -421,6 +429,12 @@ public class FakeDdbWrapper : IDdbWrapper
         int tileSize, Action<double, string?>? progress,
         CancellationToken cancellationToken) => throw Unsupported();
 
+    public virtual void ExportRaster(string inputPath, string outputPath,
+        string? preset, string? bands, string? formula, string? bandFilter,
+        string? colormap, string? rescale,
+        int tileSize, double? nodata, Action<double, string?>? progress,
+        CancellationToken cancellationToken) => throw Unsupported();
+
     public virtual SplatTrainingExport ExportSplatTrainingData(string ddbPath, string folder, string outFolder,
         SplatTrainingOptions? options, Action<double, string?>? progress, CancellationToken cancellationToken) =>
         throw Unsupported();
@@ -429,8 +443,26 @@ public class FakeDdbWrapper : IDdbWrapper
         CancellationToken cancellationToken) => throw Unsupported();
 
     public virtual string GetRasterValueInfo(string path) => throw Unsupported();
+    public virtual string GetRasterValueInfo(string path, RasterAnalysisOptions? options) => throw Unsupported();
+
+    public virtual string GetRasterPointValue(string path, double lon, double lat,
+        RasterAnalysisOptions? options = null) => throw Unsupported();
+
+    public virtual string GetRasterAreaStats(string path, double minLon, double minLat, double maxLon, double maxLat,
+        RasterAnalysisOptions? options = null) => throw Unsupported();
+
+    public virtual string GetRasterProfile(string path, string geoJsonLineString, int samples,
+        RasterAnalysisOptions? options) => throw Unsupported();
+
+    public virtual string GenerateContours(string path, double? interval, int? count, double baseOffset,
+        double? minElev, double? maxElev, double simplifyTolerance, int bandIndex,
+        RasterAnalysisOptions? options) => throw Unsupported();
     public virtual string GetRasterPointValue(string path, int x, int y) => throw Unsupported();
     public virtual string GetRasterAreaStats(string path, int x0, int y0, int x1, int y1) => throw Unsupported();
+    public virtual string GetRasterPointValue(string path, int x, int y, RasterAnalysisOptions? options) =>
+        throw Unsupported();
+    public virtual string GetRasterAreaStats(string path, int x0, int y0, int x1, int y1,
+        RasterAnalysisOptions? options) => throw Unsupported();
     public virtual string GetRasterProfile(string path, string geoJsonLineString, int samples) => throw Unsupported();
 
     public virtual string CalculateVolume(string path, string polygonGeoJson, string baseMethod, double flatElevation) =>

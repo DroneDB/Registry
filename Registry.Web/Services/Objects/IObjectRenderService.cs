@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Models;
@@ -47,12 +48,15 @@ public interface IObjectRenderService
 
 /// <summary>
 /// How a raster is shown: a sensor preset or explicit bands, a band formula with its band filter, a
-/// colormap and a rescale range (null: the default of each).
+/// colormap and a rescale range (null: the default of each), and a NoData value that replaces the one of
+/// the bands (FR-RAS-31: a pixel equal to it is transparent and out of the stretch).
 /// </summary>
 public sealed record RasterVisualization(
     string? Preset = null, string? Bands = null, string? Formula = null, string? BandFilter = null,
-    string? Colormap = null, string? Rescale = null)
+    string? Colormap = null, string? Rescale = null, double? Nodata = null)
 {
     /// <summary>The cache key part of these parameters.</summary>
-    public string CacheKey => $"{Preset}|{Bands}|{Formula}|{BandFilter}|{Colormap}|{Rescale}";
+    public string CacheKey => $"{Preset}|{Bands}|{Formula}|{BandFilter}|{Colormap}|{Rescale}|{NodataKey}";
+
+    private string NodataKey => Nodata is { } nodata ? nodata.ToString("R", CultureInfo.InvariantCulture) : string.Empty;
 }

@@ -9,6 +9,7 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.HeavyTasks.Tools;
@@ -49,11 +50,13 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
         """);
 
     private readonly int _defaultTileSize;
+    private readonly IRasterExportSizeCheck _sizeCheck;
 
-    public RasterExportTool(IOptions<ProcessingPlatformSettings> platformSettings)
+    public RasterExportTool(IOptions<ProcessingPlatformSettings> platformSettings, IRasterExportSizeCheck sizeCheck)
     {
         _defaultTileSize = platformSettings.Value.DefaultRasterTileSize;
         if (_defaultTileSize < 1) _defaultTileSize = 512;
+        _sizeCheck = sizeCheck;
     }
 
     public override string Id => "raster-export";
@@ -65,7 +68,7 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
     public override string? ResultExtension => "tif";
     public override JsonDocument InputSchema => Schema;
 
-    protected override Task ValidateAsync(HeavyToolRequest request, Parameters p, IHeavyToolValidationContext ctx,
+    protected override async Task ValidateAsync(HeavyToolRequest request, Parameters p, IHeavyToolValidationContext ctx,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Path))
@@ -77,7 +80,10 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
         if (!string.IsNullOrWhiteSpace(p.Formula))
             ValidateFormula(ctx.Ddb, request.Path!, p.Formula!, p.BandFilter, ct);
 
-        return Task.CompletedTask;
+        // At the submit (and the retry of a task), not on the worker: an export over the export limit is a 400, with the
+        // estimate of the value info the Hub shows (FR-RAS-16, D-023)
+        if (ctx is not IHeavyToolExecutionContext)
+            await _sizeCheck.EnsureWithinLimitAsync(request.OrgSlug, request.DsSlug, request.Path!, null, ct);
     }
 
     /// <summary>

@@ -26,6 +26,7 @@ public static class DdbAbi
     /// <summary>
     /// <c>DDB_ABI_MINOR</c> Registry needs at least: 1 (DroneDB 2.1.0) for the output options of align, merge
     /// multispectral and mask borders (<c>DDBAlignRasterEx</c>, <c>DDBMergeMultispectralEx</c>, <c>DDBMaskBordersEx</c>).
+    /// The raster value exports with a <c>DDBRasterOptions</c> (DroneDB 2.2.0) are checked by <see cref="RequiredSymbols"/>.
     /// </summary>
     public const int Minor = 1;
 

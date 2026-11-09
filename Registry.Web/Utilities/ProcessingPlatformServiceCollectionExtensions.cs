@@ -52,6 +52,9 @@ public static class ProcessingPlatformServiceCollectionExtensions
         // What a rescan rebuilds, shared by the rescan-index tool and the rescan endpoint.
         services.AddScoped<RescanRebuild>();
 
+        // The export size limit of the raster-export submit: the check of the direct export (FR-RAS-16, D-023)
+        services.AddSingleton<IRasterExportSizeCheck, Services.Objects.RasterExportSizeCheck>();
+
         // Native tools (Sprint 1). Adding a new native tool = one line here.
         services.AddSingleton<IHeavyTool, BuildTool>();
         services.AddSingleton<IHeavyTool, RasterExportTool>();

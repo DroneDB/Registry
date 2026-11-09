@@ -629,6 +629,22 @@
       "awaitingFiles": false
     }
   },
+  "Registry.Ports.DroneDB.RasterAnalysisOptions": {
+    "full": {
+      "nodata": 1.0,
+      "formula": "Formula-text",
+      "bbox": [
+        2.5
+      ],
+      "isEmpty": false
+    },
+    "sparse": {
+      "nodata": null,
+      "formula": null,
+      "bbox": null,
+      "isEmpty": true
+    }
+  },
   "Registry.Ports.DroneDB.RemoveAction": {
     "full": {
       "path": "path-text",
@@ -1384,7 +1400,8 @@
       "minElev": 1E-05,
       "maxElev": 123456789.125,
       "simplifyTolerance": 1.0,
-      "bandIndex": 42
+      "bandIndex": 42,
+      "nodata": 2.5
     },
     "sparse": {
       "path": null,
@@ -1394,7 +1411,8 @@
       "minElev": null,
       "maxElev": null,
       "simplifyTolerance": 0.0,
-      "bandIndex": 0
+      "bandIndex": 0,
+      "nodata": null
     }
   },
   "Registry.Web.Models.DTO.CreateImportRequestDto": {
@@ -3389,12 +3407,16 @@
     "full": {
       "path": null,
       "lineString": "LineString-text",
-      "samples": 42
+      "samples": 42,
+      "nodata": 1.0,
+      "formula": "Formula-text"
     },
     "sparse": {
       "path": null,
       "lineString": null,
-      "samples": null
+      "samples": null,
+      "nodata": null,
+      "formula": null
     }
   },
   "Registry.Web.Models.DTO.RemoteImportJobDto": {

@@ -37,4 +37,7 @@ public class ContourRequestDto
 
     /// <summary>1-based raster band index (default 1).</summary>
     public int BandIndex { get; set; } = 1;
+
+    /// <summary>A NoData value that replaces the one of the band (finite; FR-RAS-31).</summary>
+    public double? Nodata { get; set; }
 }

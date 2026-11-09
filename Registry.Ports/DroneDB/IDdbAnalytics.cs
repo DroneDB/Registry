@@ -36,4 +36,18 @@ public interface IDdbAnalytics
                             double? maxElev = null,
                             double simplifyTolerance = 0.0,
                             int bandIndex = 1);
+
+    /// <summary>
+    /// <see cref="GenerateContours(string, double?, int?, double, double?, double?, double, int)"/> with the options of the
+    /// values (the NoData override). The levels, the range and the elevations are in the units of the band.
+    /// </summary>
+    string GenerateContours(string path,
+                            double? interval,
+                            int? count,
+                            double baseOffset,
+                            double? minElev,
+                            double? maxElev,
+                            double simplifyTolerance,
+                            int bandIndex,
+                            RasterAnalysisOptions? options);
 }

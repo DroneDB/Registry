@@ -9,7 +9,9 @@ using NUnit.Framework;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
+using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks.Tools;
+using Registry.Web.Services.Ports;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -36,8 +38,8 @@ public class RasterExportToolTests
         }
     });
 
-    private readonly RasterExportTool _tool =
-        new(Microsoft.Extensions.Options.Options.Create(new ProcessingPlatformSettings()));
+    private RasterExportTool _tool = null!;
+    private Mock<IRasterExportSizeCheck> _sizeCheck = null!;
 
     private Mock<IDDB> _ddb = null!;
     private Mock<IHeavyToolValidationContext> _ctx = null!;
@@ -45,6 +47,9 @@ public class RasterExportToolTests
     [SetUp]
     public void SetUp()
     {
+        _sizeCheck = new Mock<IRasterExportSizeCheck>();
+        _tool = new RasterExportTool(Microsoft.Extensions.Options.Options.Create(new ProcessingPlatformSettings()),
+            _sizeCheck.Object);
         _ddb = new Mock<IDDB>(MockBehavior.Strict);
         _ddb.Setup(d => d.EntryExists(Ortho)).Returns(true);
         _ctx = new Mock<IHeavyToolValidationContext>();
@@ -160,5 +165,38 @@ public class RasterExportToolTests
         _ddb.Setup(d => d.GetRasterMetadata(Ortho, null, null)).Throws(new InvalidOperationException("busy"));
 
         await Validate(Request("VARI"));
+    }
+
+    // FR-RAS-16, D-023: the submit checks the export limit with the estimate of the value info (the check of the direct
+    // export), for the entry of the request
+    [Test]
+    public async Task TheSubmit_ChecksTheExportLimitOfTheRaster()
+    {
+        await Validate(Request(null));
+
+        _sizeCheck.Verify(c => c.EnsureWithinLimitAsync("org", "ds", Ortho, null, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task AnExportOverTheLimit_Is400AtTheSubmit()
+    {
+        _sizeCheck.Setup(c => c.EnsureWithinLimitAsync("org", "ds", Ortho, null, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new BadRequestException("Export output exceeds maximum allowed size (1.1 GB > 1 GB)."));
+
+        (await Should.ThrowAsync<BadRequestException>(() => Validate(Request(null))))
+            .Message.ShouldBe("Export output exceeds maximum allowed size (1.1 GB > 1 GB).");
+    }
+
+    [Test]
+    public async Task TheWorker_DoesNotCheckTheLimitAgain()
+    {
+        var worker = new Mock<IHeavyToolExecutionContext>();
+        worker.SetupGet(c => c.Ddb).Returns(_ddb.Object);
+
+        await _tool.ValidateAsync(Request(null), worker.Object, CancellationToken.None);
+
+        _sizeCheck.Verify(c => c.EnsureWithinLimitAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<RasterAnalysisOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

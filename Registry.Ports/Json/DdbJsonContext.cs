@@ -32,6 +32,7 @@ namespace Registry.Ports.Json;
 [JsonSerializable(typeof(MetaListItem))]
 [JsonSerializable(typeof(NormalizedEntryPath))]
 [JsonSerializable(typeof(PendingBuildInfo))]
+[JsonSerializable(typeof(RasterAnalysisOptions))]
 [JsonSerializable(typeof(RescanResult))]
 [JsonSerializable(typeof(SplatSpzExport))]
 [JsonSerializable(typeof(SplatTrainingExport))]

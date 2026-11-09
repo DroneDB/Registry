@@ -256,6 +256,19 @@ internal static unsafe partial class NativeDdb
         string inputPathHash, string? preset, string? bands, string? formula, string? bandFilter, string? colormap,
         string? rescale, out IntPtr outBuffer, out int outBufferSize);
 
+    /// <summary>DDBGenerateMemoryThumbnailEx with a <c>DDBRasterOptions</c> (ABI 2.2).</summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBGenerateMemoryThumbnailEx2(string filePath, int size, string? preset,
+        string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
+        NativeRasterOptions* options, out IntPtr outBuffer, out int outBufferSize);
+
+    /// <summary>DDBMemoryTileEx with a <c>DDBRasterOptions</c> (ABI 2.2).</summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBMemoryTileEx2(string inputPath, int tz, int tx, int ty, int tileSize,
+        [MarshalAs(UnmanagedType.U1)] bool tms, [MarshalAs(UnmanagedType.U1)] bool forceRecreate,
+        string inputPathHash, string? preset, string? bands, string? formula, string? bandFilter, string? colormap,
+        string? rescale, NativeRasterOptions* options, out IntPtr outBuffer, out int outBufferSize);
+
     // ------------------------------------------------------------------ rasters
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
@@ -302,6 +315,13 @@ internal static unsafe partial class NativeDdb
         string? bands, string? formula, string? bandFilter, string? colormap, string? rescale, int tileSize,
         delegate* unmanaged[Cdecl]<double, byte*, IntPtr, int> progress, IntPtr progressUserData);
 
+    /// <summary>DDBExportRaster2 with a <c>DDBRasterOptions</c> (ABI 2.2).</summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBExportRaster3(string inputPath, string outputPath, string? preset,
+        string? bands, string? formula, string? bandFilter, string? colormap, string? rescale, int tileSize,
+        delegate* unmanaged[Cdecl]<double, byte*, IntPtr, int> progress, IntPtr progressUserData,
+        NativeRasterOptions* options);
+
     /// <summary>
     /// The training data of an ODM project. <paramref name="optionsJson"/> is null for the defaults, else
     /// <c>{"maxImageSize": N, "maxPoints": N}</c>; the progress callback is the one of <see cref="DDBExportRaster2"/>.
@@ -320,6 +340,39 @@ internal static unsafe partial class NativeDdb
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBGetRasterPointValue(string filePath, int x, int y, out IntPtr output);
+
+    // The raster value calls of ABI 2.2: map coordinates (WGS 84) or pixels, and a DDBRasterOptions (null: no option)
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBGetRasterValueInfoEx(string filePath, NativeRasterOptions* options,
+        out IntPtr output);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBGetRasterPointValueEx(string filePath, double lon, double lat,
+        NativeRasterOptions* options, out IntPtr output);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBGetRasterAreaStatsEx(string filePath, double minLon, double minLat,
+        double maxLon, double maxLat, NativeRasterOptions* options, out IntPtr output);
+
+    /// <summary>The value at a pixel (an R-JPEG's raw thermal grid) with the NoData value and the thermal formula of the options.</summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBGetRasterPointValuePixelEx(string filePath, int x, int y,
+        NativeRasterOptions* options, out IntPtr output);
+
+    /// <summary>The statistics of a pixel rectangle (inclusive) with the NoData value and the thermal formula of the options.</summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBGetRasterAreaStatsPixelEx(string filePath, int x0, int y0, int x1, int y1,
+        NativeRasterOptions* options, out IntPtr output);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBGetRasterProfileEx(string filePath, string geoJsonLineString, int samples,
+        NativeRasterOptions* options, out IntPtr output);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBGenerateContoursEx(string rasterPath, double interval, int count,
+        double baseOffset, double minElev, double maxElev, double simplifyTolerance, int bandIndex,
+        NativeRasterOptions* options, out IntPtr output);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBGetRasterAreaStats(string filePath, int x0, int y0, int x1, int y1,
@@ -435,4 +488,21 @@ internal struct DdbAddHint
     internal IntPtr Sha256;
     internal long Size;
     internal double Mtime;
+}
+
+/// <summary>
+/// <c>DDBRasterOptions</c> (64-bit layout): 56 bytes, <c>structSize</c> at 0, <c>flags</c> at 4, <c>nodata</c> at 8,
+/// <c>bbox</c> (4 doubles) at 16, <c>formula</c> (a UTF-8 pointer owned by the caller) at 48. Blittable.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct NativeRasterOptions
+{
+    internal const uint FlagNodata = 0x1;
+    internal const uint FlagBbox = 0x2;
+
+    internal uint StructSize;
+    internal uint Flags;
+    internal double Nodata;
+    internal fixed double Bbox[4];
+    internal IntPtr Formula;
 }

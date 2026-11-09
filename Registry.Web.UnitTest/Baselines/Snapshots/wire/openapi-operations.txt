@@ -1206,7 +1206,7 @@ schema ConfigurationDataDto { sections:array<ConfigurationSectionDataDto> }
 schema ConfigurationFieldDataDto { key:string, displayName:string, currentValue:string, defaultValue:string, isSet:boolean, description:string, fieldType:string, enumOptions:array<string>, sensitive:boolean, minValue:integer(int32), maxValue:integer(int32), unit:string }
 schema ConfigurationSectionDataDto { name:string, title:string, description:string, isActive:boolean, fields:array<ConfigurationFieldDataDto> }
 schema ConflictResolutionStrategy {  }
-schema ContourRequestDto { path:string, interval:number(double), count:integer(int32), baseOffset:number(double), minElev:number(double), maxElev:number(double), simplifyTolerance:number(double), bandIndex:integer(int32) }
+schema ContourRequestDto { path:string, interval:number(double), count:integer(int32), baseOffset:number(double), minElev:number(double), maxElev:number(double), simplifyTolerance:number(double), bandIndex:integer(int32), nodata:number(double) }
 schema CreateImportRequestDto { sourceType:string, params:map<string>, slug:string, name:string, visibility:Visibility }
 schema CreateRoleRequestDto { roleName:string }
 schema CreateUserRequest { userName:string, password:string, email:string, roles:array<string> }
@@ -1285,7 +1285,7 @@ schema ProblemDetails { type:string, title:string, status:integer(int32), detail
 schema ProcessingNodeDto { id:string, title:string }
 schema ProcessingNodeStatusDto { id:string, reachable:boolean, version:string, engine:string, engineVersion:string, taskQueueCount:integer(int32), maxParallelTasks:integer(int32), errorMessage:string }
 schema PushInitResultDto { neededFiles:array<string>, neededMeta:array<string>, pullRequired:boolean, token:string }
-schema RasterProfileRequestDto { path:string, lineString:string, samples:integer(int32) }
+schema RasterProfileRequestDto { path:string, lineString:string, samples:integer(int32), nodata:number(double), formula:string }
 schema RemoteImportJobDto { jobId:string, statusUrl:string }
 schema RemoteImportStatusDto { jobId:string, state:string, result:ImportResultDto, error:string }
 schema RemoveBatchErrorDto { token:string, organization:string, dataset:string, message:string }

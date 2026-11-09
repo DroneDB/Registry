@@ -63,6 +63,9 @@ public sealed class NativeGateHeavyLaneTests : IDisposable
         _ddb.Setup(d => d.GetLocalPath(It.IsAny<string>())).Returns<string>(p => Path.Combine(Folder, p));
         foreach (var path in new[] { "ortho.tif", "b1.tif", "b2.tif" })
             _ddb.Setup(d => d.GetEntry(path)).Returns(new Entry { Path = path, Type = EntryType.GeoRaster, Hash = Hash, Size = 1 });
+        // An R-JPEG: pixel coordinates of its raw thermal grid
+        _ddb.Setup(d => d.GetEntry("thermal.jpg"))
+            .Returns(new Entry { Path = "thermal.jpg", Type = EntryType.GeoImage, Hash = Hash, Size = 1 });
         _ddb.SetupBuilds(TestBuilds.Build(Folder, "ortho.tif", EntryType.GeoRaster, Hash, BuildState.Complete,
             TestBuilds.File(ArtifactRoles.RasterCog, "cog/cog.tif")));
         var ddbManager = new Mock<IDdbManager>();
@@ -109,13 +112,22 @@ public sealed class NativeGateHeavyLaneTests : IDisposable
             (r, ct) => r.GetRasterInfoAsync(OrgSlug, DsSlug, "ortho.tif", ct: ct));
         yield return Case("GetRasterMetadata", d => d.GetRasterMetadata(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>()),
             (r, ct) => r.GetRasterMetadataAsync(OrgSlug, DsSlug, "ortho.tif", ct: ct));
-        yield return Case("GetRasterValueInfo", d => d.GetRasterValueInfo(It.IsAny<string>()),
+        yield return Case("GetRasterValueInfo", d => d.GetRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>()),
             (r, ct) => r.GetRasterValueInfoAsync(OrgSlug, DsSlug, "ortho.tif", ct: ct));
-        yield return Case("GetRasterPointValue", d => d.GetRasterPointValue(It.IsAny<string>(), 1, 2),
-            (r, ct) => r.GetRasterPointValueAsync(OrgSlug, DsSlug, "ortho.tif", 1, 2, ct: ct));
-        yield return Case("GetRasterAreaStats", d => d.GetRasterAreaStats(It.IsAny<string>(), 0, 0, 5, 5),
-            (r, ct) => r.GetRasterAreaStatsAsync(OrgSlug, DsSlug, "ortho.tif", 0, 0, 5, 5, ct: ct));
-        yield return Case("GetRasterProfile", d => d.GetRasterProfile(It.IsAny<string>(), It.IsAny<string>(), 10),
+        yield return Case("GetRasterPointValue",
+            d => d.GetRasterPointValue(It.IsAny<string>(), 1, 2, It.IsAny<RasterAnalysisOptions?>()),
+            (r, ct) => r.GetRasterPointValueAsync(OrgSlug, DsSlug, "thermal.jpg", 1, 2, ct: ct));
+        yield return Case("GetRasterPointValueAtAPoint",
+            d => d.GetRasterPointValue(It.IsAny<string>(), 12.5, 45.5, It.IsAny<RasterAnalysisOptions?>()),
+            (r, ct) => r.GetRasterPointValueAsync(OrgSlug, DsSlug, "ortho.tif", 12.5, 45.5, ct: ct));
+        yield return Case("GetRasterAreaStats",
+            d => d.GetRasterAreaStats(It.IsAny<string>(), 0, 0, 5, 5, It.IsAny<RasterAnalysisOptions?>()),
+            (r, ct) => r.GetRasterAreaStatsAsync(OrgSlug, DsSlug, "thermal.jpg", 0, 0, 5, 5, ct: ct));
+        yield return Case("GetRasterAreaStatsOfAWindow",
+            d => d.GetRasterAreaStats(It.IsAny<string>(), 12.0, 45.0, 13.0, 46.0, It.IsAny<RasterAnalysisOptions?>()),
+            (r, ct) => r.GetRasterAreaStatsAsync(OrgSlug, DsSlug, "ortho.tif", [12.0, 45.0, 13.0, 46.0], ct: ct));
+        yield return Case("GetRasterProfile",
+            d => d.GetRasterProfile(It.IsAny<string>(), It.IsAny<string>(), 10, It.IsAny<RasterAnalysisOptions?>()),
             (r, ct) => r.GetRasterProfileAsync(OrgSlug, DsSlug, "ortho.tif", "{}", 10, ct: ct));
         yield return Case("CalculateVolume", d => d.CalculateVolume(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), 0),
             (r, ct) => r.CalculateVolumeAsync(OrgSlug, DsSlug, "ortho.tif", "{}", null, 0, ct: ct));
@@ -123,7 +135,8 @@ public sealed class NativeGateHeavyLaneTests : IDisposable
             (r, ct) => r.DetectStockpileAsync(OrgSlug, DsSlug, "ortho.tif", 1, 2, 5, 0.5f, ct: ct));
         yield return Case("DetectAllStockpiles", d => d.DetectAllStockpiles(It.IsAny<string>(), 0.5f, 5, 50),
             (r, ct) => r.DetectAllStockpilesAsync(OrgSlug, DsSlug, "ortho.tif", 0.5f, 5, 50, ct: ct));
-        yield return Case("GenerateContours", d => d.GenerateContours(It.IsAny<string>(), 1.0, null, 0, null, null, 0, 1),
+        yield return Case("GenerateContours",
+            d => d.GenerateContours(It.IsAny<string>(), 1.0, null, 0, null, null, 0, 1, It.IsAny<RasterAnalysisOptions?>()),
             (r, ct) => r.GenerateContoursAsync(OrgSlug, DsSlug, "ortho.tif", new ContourOptions(1.0, null, 0, null, null, 0, 1), ct: ct));
     }
 
@@ -164,7 +177,7 @@ public sealed class NativeGateHeavyLaneTests : IDisposable
     [Test]
     public async Task Export_RunsTheSizeEstimateAndTheExportInTheHeavyLane()
     {
-        Native(d => d.GetRasterInfo(It.IsAny<string>()), Info);
+        Native(d => d.GetRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>()), Info);
         NativeVoid(d => d.ExportRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(),
             It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()));
 

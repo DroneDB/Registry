@@ -219,6 +219,22 @@ public interface IDdbWrapper
         string? colormap = null, string? rescale = null);
 
     /// <summary>
+    /// Generate thumbnail with extended visualization params and a NoData value that replaces the one of the bands
+    /// (FR-RAS-31)
+    /// </summary>
+    public byte[] GenerateThumbnailEx(string filePath, int size, string? preset, string? bands, string? formula,
+        string? bandFilter, string? colormap, string? rescale, double? nodata);
+
+    /// <summary>
+    /// Generate tile with extended visualization params and a NoData value that replaces the one of the bands
+    /// (FR-RAS-31)
+    /// </summary>
+    public byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
+        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
+        string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
+        double? nodata);
+
+    /// <summary>
     /// Generate tile with extended visualization params
     /// </summary>
     public byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
@@ -299,14 +315,44 @@ public interface IDdbWrapper
     public string GetRasterValueInfo(string path);
 
     /// <summary>
+    /// Get raster value info with the options of the values (libddb 2.1)
+    /// </summary>
+    public string GetRasterValueInfo(string path, Registry.Ports.DroneDB.RasterAnalysisOptions? options);
+
+    /// <summary>
     /// Get raster value (temperature/elevation/etc.) at a specific pixel location
     /// </summary>
     public string GetRasterPointValue(string path, int x, int y);
 
     /// <summary>
+    /// Get the raster value at a pixel with the options of the values; options that cannot be applied to pixel
+    /// coordinates are refused (<see cref="Registry.Ports.DroneDB.DdbInvalidArgumentsException"/>), never dropped
+    /// </summary>
+    public string GetRasterPointValue(string path, int x, int y, Registry.Ports.DroneDB.RasterAnalysisOptions? options);
+
+    /// <summary>
+    /// Get the raster value at a WGS 84 point (the pixel of the file under it)
+    /// </summary>
+    public string GetRasterPointValue(string path, double lon, double lat,
+        Registry.Ports.DroneDB.RasterAnalysisOptions? options = null);
+
+    /// <summary>
+    /// Get value statistics of the pixels whose centre is inside a WGS 84 rectangle
+    /// </summary>
+    public string GetRasterAreaStats(string path, double minLon, double minLat, double maxLon, double maxLat,
+        Registry.Ports.DroneDB.RasterAnalysisOptions? options = null);
+
+    /// <summary>
     /// Get raster value statistics for a rectangular area
     /// </summary>
     public string GetRasterAreaStats(string path, int x0, int y0, int x1, int y1);
+
+    /// <summary>
+    /// Get raster value statistics for a rectangular area with the options of the values; options that cannot be applied
+    /// to pixel coordinates are refused (<see cref="Registry.Ports.DroneDB.DdbInvalidArgumentsException"/>), never dropped
+    /// </summary>
+    public string GetRasterAreaStats(string path, int x0, int y0, int x1, int y1,
+        Registry.Ports.DroneDB.RasterAnalysisOptions? options);
 
     /// <summary>
     /// Sample raster values along a GeoJSON LineString (WGS84). Returns a JSON
@@ -316,6 +362,21 @@ public interface IDdbWrapper
     /// <param name="geoJsonLineString">GeoJSON LineString geometry (WGS84)</param>
     /// <param name="samples">Requested number of equispaced samples (clamped 2..4096)</param>
     public string GetRasterProfile(string path, string geoJsonLineString, int samples);
+
+    /// <summary>
+    /// <see cref="GetRasterProfile(string, string, int)"/> with the options of the values (the NoData override)
+    /// </summary>
+    public string GetRasterProfile(string path, string geoJsonLineString, int samples,
+        Registry.Ports.DroneDB.RasterAnalysisOptions? options);
+
+    /// <summary>
+    /// Export a raster with visualization params and a NoData value that replaces the one of the bands (FR-RAS-31)
+    /// </summary>
+    public void ExportRaster(string inputPath, string outputPath,
+        string? preset, string? bands, string? formula, string? bandFilter,
+        string? colormap, string? rescale, int tileSize, double? nodata,
+        System.Action<double, string?>? progress,
+        System.Threading.CancellationToken cancellationToken);
 
     /// <summary>
     /// Calculate stockpile volume (cut/fill/net) over a polygon on a DEM raster.
@@ -366,6 +427,14 @@ public interface IDdbWrapper
                                    double? maxElev = null,
                                    double simplifyTolerance = 0.0,
                                    int bandIndex = 1);
+
+    /// <summary>
+    /// <see cref="GenerateContours(string, double?, int?, double, double?, double?, double, int)"/> with the options of the
+    /// values (the NoData override)
+    /// </summary>
+    public string GenerateContours(string path, double? interval, int? count, double baseOffset, double? minElev,
+        double? maxElev, double simplifyTolerance, int bandIndex,
+        Registry.Ports.DroneDB.RasterAnalysisOptions? options);
 
     /// <summary>
     /// Mask orthophoto borders making them transparent. An output that exists is replaced only with

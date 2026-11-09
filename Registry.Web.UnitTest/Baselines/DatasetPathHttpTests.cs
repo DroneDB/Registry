@@ -90,6 +90,24 @@ public sealed class DatasetPathHttpTests : IDisposable
         problem["detail"]!.GetValue<string>().ShouldBe($"The {field} field is required.");
     }
 
+    // U-201 (D-021, FR-RAS-02): a request names a point or an area by map coordinates or, for an R-JPEG, by pixels: never both
+    [TestCase("raster-point-value", "&lon=12.5&lat=45.5&x=1&y=2", "Send map coordinates (lon, lat) or pixel coordinates (x, y), not both")]
+    [TestCase("raster-point-value", "&lon=12.5", "Both 'lon' and 'lat' are required")]
+    [TestCase("raster-point-value", "", "Either 'lon' and 'lat' (WGS 84) or 'x' and 'y' (pixels) are required")]
+    [TestCase("raster-point-value", "&x=1", "Either 'lon' and 'lat' (WGS 84) or 'x' and 'y' (pixels) are required")]
+    [TestCase("raster-area-stats", "&bbox=12,45,13,46&x0=0&y0=0&x1=1&y1=1", "Send a map window (bbox) or pixel coordinates (x0, y0, x1, y1), not both")]
+    [TestCase("raster-area-stats", "", "Either 'bbox' (WGS 84) or 'x0', 'y0', 'x1' and 'y1' (pixels) are required")]
+    [TestCase("raster-area-stats", "&bbox=12,45,13", "'bbox' must be minLon,minLat,maxLon,maxLat (WGS 84)")]
+    [TestCase("raster-value-info", "&bbox=a,b,c,d", "'bbox' must be four finite numbers: minLon,minLat,maxLon,maxLat (WGS 84)")]
+    [TestCase("raster-value-info", "&nodata=NaN", "'nodata' must be a finite number")]
+    public async Task RasterValues_WithBadCoordinatesOrOptions_Is400WithTheRule(string action, string extra, string detail)
+    {
+        var (status, problem) = await SendAsync(HttpMethod.Get, $"{Api}/{action}?path=a.tif{extra}");
+
+        status.ShouldBe(StatusCodes.Status400BadRequest);
+        problem["detail"]!.GetValue<string>().ShouldBe(detail);
+    }
+
     [TestCase("raster-info")]
     [TestCase("raster-metadata")]
     [TestCase("raster-value-info")]

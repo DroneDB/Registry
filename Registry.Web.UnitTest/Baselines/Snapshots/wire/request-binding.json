@@ -247,7 +247,9 @@
     "model": {
       "path": "dem.tif",
       "lineString": "{\"type\":\"LineString\",\"coordinates\":[[0,0],[1,1]]}",
-      "samples": 256
+      "samples": 256,
+      "nodata": null,
+      "formula": null
     }
   },
   "hub-stockpile-calculate": {
@@ -285,7 +287,8 @@
       "minElev": null,
       "maxElev": null,
       "simplifyTolerance": 0.0,
-      "bandIndex": 1
+      "bandIndex": 1,
+      "nodata": null
     }
   },
   "hub-mask-borders": {

@@ -470,6 +470,29 @@ public class DDB : IDDB
         }, ex => $"Cannot generate thumbnail ex of '{imagePath}' with size '{size}'");
     }
 
+    public byte[] GenerateThumbnailEx(string imagePath, int size, string? preset, string? bands, string? formula,
+        string? bandFilter, string? colormap, string? rescale, double? nodata)
+    {
+        return Wrap(() =>
+        {
+            var fullPath = GetLocalPath(imagePath);
+            return Wrapper.GenerateThumbnailEx(fullPath, size, preset, bands, formula, bandFilter,
+                colormap, rescale, nodata);
+        }, ex => $"Cannot generate thumbnail ex of '{imagePath}' with size '{size}'");
+    }
+
+    public byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
+        string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
+        double? nodata)
+    {
+        return Wrap(() =>
+        {
+            var fullPath = GetLocalPath(inputPath);
+            return Wrapper.GenerateMemoryTileEx(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
+                inputPathHash, preset, bands, formula, bandFilter, colormap, rescale, nodata);
+        }, ex => $"Cannot generate tile ex of '{inputPath}'");
+    }
+
     public byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
         string? preset = null, string? bands = null, string? formula = null,
         string? bandFilter = null, string? colormap = null, string? rescale = null)
@@ -548,6 +571,16 @@ public class DDB : IDDB
             ex => $"Cannot export raster '{inputPath}'");
     }
 
+    public void ExportRaster(string inputPath, string outputPath,
+        string? preset, string? bands, string? formula, string? bandFilter,
+        string? colormap, string? rescale, int tileSize, double? nodata,
+        Action<double, string?>? progress, CancellationToken cancellationToken)
+    {
+        Wrap(() => Wrapper.ExportRaster(GetLocalPath(inputPath), outputPath, preset, bands, formula, bandFilter,
+                colormap, rescale, tileSize, nodata, progress, cancellationToken),
+            ex => $"Cannot export raster '{inputPath}'");
+    }
+
     public SplatTrainingExport ExportSplatTrainingData(string folder, string outFolder, SplatTrainingOptions? options,
         Action<double, string?>? progress, CancellationToken cancellationToken)
     {
@@ -573,6 +606,39 @@ public class DDB : IDDB
         }, ex => "Could not read raster value info.");
     }
 
+    public string GetRasterValueInfo(string path, RasterAnalysisOptions? options)
+    {
+        return Wrap(() => Wrapper.GetRasterValueInfo(GetLocalPath(path), options),
+            ex => "Could not read raster value info.");
+    }
+
+    public string GetRasterPointValue(string path, double lon, double lat, RasterAnalysisOptions? options = null)
+    {
+        return Wrap(() => Wrapper.GetRasterPointValue(GetLocalPath(path), lon, lat, options),
+            ex => "Could not read the raster value at the requested point.");
+    }
+
+    public string GetRasterAreaStats(string path, double minLon, double minLat, double maxLon, double maxLat,
+        RasterAnalysisOptions? options = null)
+    {
+        return Wrap(() => Wrapper.GetRasterAreaStats(GetLocalPath(path), minLon, minLat, maxLon, maxLat, options),
+            ex => "Could not compute raster area statistics.");
+    }
+
+    public string GetRasterProfile(string path, string geoJsonLineString, int samples, RasterAnalysisOptions? options)
+    {
+        return Wrap(() => Wrapper.GetRasterProfile(GetLocalPath(path), geoJsonLineString, samples, options),
+            ex => "Could not compute raster profile for the requested line.");
+    }
+
+    public string GenerateContours(string path, double? interval, int? count, double baseOffset, double? minElev,
+        double? maxElev, double simplifyTolerance, int bandIndex, RasterAnalysisOptions? options)
+    {
+        return Wrap(() => Wrapper.GenerateContours(GetLocalPath(path), interval, count, baseOffset, minElev, maxElev,
+                simplifyTolerance, bandIndex, options),
+            ex => "Could not generate contour lines for this raster.");
+    }
+
     public string GetRasterPointValue(string path, int x, int y)
     {
         return Wrap(() =>
@@ -589,6 +655,18 @@ public class DDB : IDDB
             var fullPath = GetLocalPath(path);
             return Wrapper.GetRasterAreaStats(fullPath, x0, y0, x1, y1);
         }, ex => "Could not compute raster area statistics.");
+    }
+
+    public string GetRasterPointValue(string path, int x, int y, RasterAnalysisOptions? options)
+    {
+        return Wrap(() => Wrapper.GetRasterPointValue(GetLocalPath(path), x, y, options),
+            ex => "Could not read raster value at the requested pixel.");
+    }
+
+    public string GetRasterAreaStats(string path, int x0, int y0, int x1, int y1, RasterAnalysisOptions? options)
+    {
+        return Wrap(() => Wrapper.GetRasterAreaStats(GetLocalPath(path), x0, y0, x1, y1, options),
+            ex => "Could not compute raster area statistics.");
     }
 
     public string GetRasterProfile(string path, string geoJsonLineString, int samples)
