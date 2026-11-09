@@ -321,6 +321,50 @@ public class BuildArtifactResolverTests
         _ddb.Verify(d => d.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()), Times.Once);
     }
 
+    // FR-VWR-17 (D-020): the same splat at the root and in a folder with a georeference are two builds, named by their keys
+    [Test]
+    public void CopyBuilds_CopiesTheBuildOfEachKey_NotOfEachHash()
+    {
+        var destination = new Mock<IDDB>();
+        destination.SetupGet(d => d.DatasetFolderPath).Returns("/datasets/destination");
+        var geoKey = Hash + "-0123456789abcdef";
+        _ddb.SetupBuilds(
+            TestBuilds.Keyed(Folder, "train.ply", EntryType.GaussianSplat, Hash, Hash, BuildState.Complete,
+                TestBuilds.File(ArtifactRoles.GsplatLod, "gsplat/model.rad")),
+            TestBuilds.Keyed(Folder, "geo1/train.ply", EntryType.GaussianSplat, Hash, geoKey, BuildState.Complete,
+                TestBuilds.File(ArtifactRoles.GsplatLod, "gsplat/model.rad")));
+
+        _resolver.CopyBuilds(_ddb.Object, ["train.ply", "geo1/train.ply"], destination.Object).ShouldBe(2);
+
+        _ddb.Verify(d => d.CopyBuildArtifactsTo("/datasets/destination", Hash), Times.Once);
+        _ddb.Verify(d => d.CopyBuildArtifactsTo("/datasets/destination", geoKey), Times.Once);
+    }
+
+    [Test]
+    public void CopyBuilds_FromALibddbWithoutTheKey_CopiesTheBuildOfTheHash()
+    {
+        var destination = new Mock<IDDB>();
+        destination.SetupGet(d => d.DatasetFolderPath).Returns("/datasets/destination");
+        var build = Built("ortho.tif", EntryType.GeoRaster, Cog);
+        build.Build!.Key = null;
+        _ddb.SetupBuilds(build);
+
+        _resolver.CopyBuilds(_ddb.Object, ["ortho.tif"], destination.Object).ShouldBe(1);
+
+        _ddb.Verify(d => d.CopyBuildArtifactsTo("/datasets/destination", Hash), Times.Once);
+    }
+
+    [Test]
+    public void ResolveFile_AsksLibddbForTheFileOfTheBuildKey()
+    {
+        var geoKey = Hash + "-0123456789abcdef";
+        _ddb.Setup(d => d.ResolveBuildFile(geoKey, "gsplat/model.rad"))
+            .Returns(new ResolvedBuildFile("/x/model.rad"));
+
+        _resolver.ResolveFile(_ddb.Object, geoKey, "gsplat/model.rad")!.Path.ShouldBe("/x/model.rad");
+        _resolver.ResolveFile(_ddb.Object, Hash, "gsplat/model.rad").ShouldBeNull();
+    }
+
     [Test]
     public void GetBuilds_AnswerOfAnotherLength_IsAnError()
     {

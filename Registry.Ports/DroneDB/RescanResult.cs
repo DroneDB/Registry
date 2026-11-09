@@ -20,6 +20,21 @@ public class RescanResult
     public string? Hash { get; set; }
 
     /// <summary>
+    /// The build key of the entry after the rescan (<see cref="EntryBuild.Key"/>); absent from a libddb that
+    /// predates the build key, and from a failed entry.
+    /// </summary>
+    [JsonPropertyName("buildKey")]
+    public string? BuildKey { get; set; }
+
+    /// <summary>
+    /// The key is not the one of the build the entry had before the rescan, so its build must be made again (D-020):
+    /// its content or its georeference changed, or its build is still in the folder named by the hash alone, from
+    /// before the build key. Absent from an older libddb, which has no such builds to move: false.
+    /// </summary>
+    [JsonPropertyName("buildKeyChanged")]
+    public bool BuildKeyChanged { get; set; }
+
+    /// <summary>
     /// Whether the rescan was successful for this entry
     /// </summary>
     [JsonPropertyName("success")]

@@ -9,9 +9,21 @@ namespace Registry.Ports.DroneDB;
 /// </summary>
 public class PendingBuildInfo
 {
-    /// <summary>Entry hash (matches the ".pending" marker file on disk).</summary>
+    /// <summary>Hash of the entry's content.</summary>
     [JsonPropertyName("hash")]
     public string Hash { get; set; } = "";
+
+    /// <summary>
+    /// The build key of the entry (<see cref="EntryBuild.Key"/>): the marker is the entry's own (libddb names it by
+    /// this key and the entry's path), so two entries with the same content have two markers. Absent from a libddb
+    /// that predates the build key: <see cref="BuildKey"/> then reads the hash.
+    /// </summary>
+    [JsonPropertyName("key")]
+    public string? Key { get; set; }
+
+    /// <summary>The key of the build the marker is for: <see cref="Key"/>, else <see cref="Hash"/> (an older libddb).</summary>
+    [JsonIgnore]
+    public string BuildKey => Key ?? Hash;
 
     /// <summary>Dataset-relative path of the entry whose build is pending.</summary>
     [JsonPropertyName("path")]

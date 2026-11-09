@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.HealthChecks;
@@ -295,7 +296,8 @@ public static class RegistryFeaturesServiceCollectionExtensions
 
     /// <summary>
     /// The web host's startup work: the thread pool minimum, the database (migrations, initial data,
-    /// default admin; the nodes never migrate) and, after the start, the dataset visibility preload.
+    /// default admin; the nodes never migrate) and, after the start, the dataset visibility preload and the
+    /// upgrade rescans.
     /// </summary>
     public static IServiceCollection AddRegistryWebStartup(this IServiceCollection services)
     {
@@ -304,6 +306,11 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<DefaultAdminProvisioner>();
         services.AddStartupTask<DatabaseInitializer>();
         services.AddBackgroundStartupTask<DatasetVisibilityCacheInitializer>();
+
+        // The upgrade rescans (§8.3): one job after the start, which reads the datasets one at a time. A later
+        // part of a release adds its rescan as one more step; the job reads each dataset once for all of them
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IUpgradeRescanStep, BuildKeyRescanStep>());
+        services.AddBackgroundStartupTask<UpgradeRescanStartupTask>();
         return services;
     }
 }

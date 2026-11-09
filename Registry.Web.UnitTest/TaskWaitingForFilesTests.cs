@@ -137,6 +137,52 @@ public class TaskWaitingForFilesTests
         _ddb.Verify(d => d.GetPendingBuildInfo(), Times.Once);
     }
 
+    // FR-PRC-23 (D-020): the same .obj in two folders has two markers; each task waits for the .mtl of its own folder
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task List_TwoIdenticalModelsInTwoFolders_EachWaitsForItsOwnMtl(bool canonical)
+    {
+        _entries["mixA/model.obj"] = TestBuilds.Pending(Folder, "mixA/model.obj", EntryType.Model, ModelHash, "mixA/brighton.mtl");
+        _entries["mixB/model.obj"] = TestBuilds.Pending(Folder, "mixB/model.obj", EntryType.Model, ModelHash, "mixB/brighton.mtl");
+        _ddb.Setup(d => d.GetPendingBuildInfo()).Returns(
+        [
+            new PendingBuildInfo { Path = "mixA/model.obj", Hash = ModelHash, Key = ModelHash, MissingDependencies = ["mixA/brighton.mtl"], AwaitingFiles = true },
+            new PendingBuildInfo { Path = "mixB/model.obj", Hash = ModelHash, Key = ModelHash, MissingDependencies = ["mixB/brighton.mtl"], AwaitingFiles = true }
+        ]);
+        AddTask("a", "mixA/model.obj");
+        AddTask("b", "mixB/model.obj", minutesAgo: 5);
+
+        var page = await ListAsync(canonical);
+
+        page.Single(t => t.TaskId == "a").MissingFiles.ShouldBe(["mixA/brighton.mtl"]);
+        page.Single(t => t.TaskId == "b").MissingFiles.ShouldBe(["mixB/brighton.mtl"]);
+        page.ShouldAllBe(t => t.WaitingForFiles);
+    }
+
+    // The marker that waits is the one of the key libddb names now: a marker of the same path and content under another
+    // key (the model had another georeference when its build was deferred) is not the news of this entry
+    [Test]
+    public async Task List_AMarkerOfAnotherBuildKeyOfTheSamePathAndContent_IsNotTheEntrys()
+    {
+        var key = ModelHash + "-0123456789abcdef";
+        _entries[Model] = TestBuilds.Keyed(Folder, Model, EntryType.Model, ModelHash, key, BuildState.None);
+        _ddb.Setup(d => d.GetPendingBuildInfo()).Returns(
+        [
+            new PendingBuildInfo { Path = Model, Hash = ModelHash, Key = ModelHash + "-fedcba9876543210", MissingDependencies = [Mtl], AwaitingFiles = true }
+        ]);
+        AddTask("a", Model);
+
+        (await ListAsync(canonical: false)).ShouldHaveSingleItem().WaitingForFiles.ShouldBeFalse();
+
+        // The marker of its own key waits
+        _ddb.Setup(d => d.GetPendingBuildInfo()).Returns(
+        [
+            new PendingBuildInfo { Path = Model, Hash = ModelHash, Key = key, MissingDependencies = [Mtl], AwaitingFiles = true }
+        ]);
+        _entries[Model] = TestBuilds.Keyed(Folder, Model, EntryType.Model, ModelHash, key, BuildState.Pending);
+        (await ListAsync(canonical: false)).ShouldHaveSingleItem().MissingFiles.ShouldBe([Mtl]);
+    }
+
     [Test]
     public async Task List_TheFileArrivedAndTheEntryIsBuilt_TheTaskNoLongerWaits()
     {

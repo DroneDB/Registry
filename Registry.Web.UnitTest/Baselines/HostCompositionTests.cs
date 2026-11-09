@@ -166,7 +166,7 @@ public class HostCompositionTests
             [typeof(ThreadPoolInitializer), typeof(DatabaseInitializer), typeof(CacheInitializer), typeof(InstanceIdInitializer), typeof(TaskRollbackStartupTask), typeof(HangfireJobsInitializer)],
             ignoreOrder: true);
         services.Where(d => d.ServiceType == typeof(IBackgroundStartupTask)).Select(d => d.ImplementationType)
-            .ShouldBe([typeof(DatasetVisibilityCacheInitializer)]);
+            .ShouldBe([typeof(DatasetVisibilityCacheInitializer), typeof(UpgradeRescanStartupTask)]);
     }
 
     [Test]

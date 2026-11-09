@@ -28,7 +28,7 @@ namespace Registry.Web.Test;
 /// type switch composed (cache keys and native calls unchanged).</item>
 /// <item>The build-artifact download keeps today's media type (the pending decision, one table).</item>
 /// <item>A transfer copies the build with <c>DDBCopyBuildArtifacts</c>: a deferred build stays deferred
-/// in the destination (the hand-written folder copy lost the <c>&lt;hash&gt;.pending</c> marker).</item>
+/// in the destination (the hand-written folder copy lost the pending marker of the entry).</item>
 /// </list>
 /// Run: dotnet test Registry.Web.IntegrationTest --filter "FullyQualifiedName~BuildManifestTests"
 /// </summary>

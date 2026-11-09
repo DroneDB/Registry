@@ -252,6 +252,7 @@
   "Registry.Ports.DroneDB.CopiedBuildArtifacts": {
     "full": {
       "hash": "Hash-text",
+      "key": "Key-text",
       "artifacts": [
         {
           "role": "Role-text",
@@ -269,6 +270,7 @@
     },
     "sparse": {
       "hash": null,
+      "key": null,
       "artifacts": null,
       "pending": false
     }
@@ -423,6 +425,7 @@
       "buildable": true,
       "source": "Source-text",
       "hash": "Hash-text",
+      "key": "Key-text",
       "root": "Root-text",
       "state": "pending",
       "missingDependencies": [
@@ -449,6 +452,7 @@
       "buildable": false,
       "source": null,
       "hash": null,
+      "key": null,
       "root": null,
       "state": "none",
       "missingDependencies": null,
@@ -468,6 +472,7 @@
         "buildable": true,
         "source": "Source-text",
         "hash": "Hash-text",
+        "key": "Key-text",
         "root": "Root-text",
         "state": "pending",
         "missingDependencies": [
@@ -612,6 +617,7 @@
   "Registry.Ports.DroneDB.PendingBuildInfo": {
     "full": {
       "hash": "Hash-text",
+      "key": "Key-text",
       "path": "Path-text",
       "missingDependencies": [
         "MissingDependencies-text"
@@ -622,6 +628,7 @@
     },
     "sparse": {
       "hash": null,
+      "key": null,
       "path": null,
       "missingDependencies": null,
       "lastAttempt": 0,
@@ -659,12 +666,16 @@
     "full": {
       "path": "Path-text",
       "hash": "Hash-text",
+      "buildKey": "BuildKey-text",
+      "buildKeyChanged": true,
       "success": true,
       "error": "Error-text"
     },
     "sparse": {
       "path": null,
       "hash": null,
+      "buildKey": null,
+      "buildKeyChanged": false,
       "success": false,
       "error": null
     }

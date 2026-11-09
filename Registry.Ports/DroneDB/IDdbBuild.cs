@@ -47,7 +47,7 @@ public interface IDdbBuild
     /// A file of a build (<c>DDBResolveBuildFile</c>): an artifact or a file below a directory artifact,
     /// containment-checked by libddb, with its absolute path and the manifest's media type when libddb gives one.
     /// </summary>
-    /// <param name="hash">The hash that names the build (<see cref="EntryBuild.Hash"/>).</param>
+    /// <param name="hash">The key that names the build (<see cref="EntryBuild.BuildKey"/>).</param>
     /// <param name="path">The file, relative to the build root.</param>
     /// <returns>The file, or null when no build has this hash or the file is not one of its files.</returns>
     /// <exception cref="DdbInvalidArgumentsException">The hash is malformed or the path breaks the path rules.</exception>

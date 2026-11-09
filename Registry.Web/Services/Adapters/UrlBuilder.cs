@@ -24,10 +24,10 @@ public class UrlBuilder : IUrlBuilder
         _accessor = accessor;
     }
 
-    // build/{hash}/{path}, or build/{hash}@{version}/{path} when libddb gives the artifact's version
-    // (RoutesHelper.BuildFile, RoutesHelper.VersionedBuildFile)
-    private string BuildFileUrl(string orgSlug, string dsSlug, string hash, string? version, string path) =>
-        $"{GetLocalHost()}/orgs/{orgSlug}/ds/{dsSlug}/build/{hash}" +
+    // build/{key}/{path}, or build/{key}@{version}/{path} when libddb gives the artifact's version
+    // (RoutesHelper.BuildFile, RoutesHelper.VersionedBuildFile); the key is libddb's build key, not the entry's hash
+    private string BuildFileUrl(string orgSlug, string dsSlug, string buildKey, string? version, string path) =>
+        $"{GetLocalHost()}/orgs/{orgSlug}/ds/{dsSlug}/build/{buildKey}" +
         (string.IsNullOrEmpty(version) ? "" : RoutesHelper.BuildVersionSeparator + Uri.EscapeDataString(version)) + "/" +
         string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
 
@@ -43,7 +43,7 @@ public class UrlBuilder : IUrlBuilder
             .. own.Artifacts.Select(a => new ArtifactLinkDto
             {
                 Role = a.Role,
-                Url = BuildFileUrl(orgSlug, dsSlug, own.Hash!, a.Version,
+                Url = BuildFileUrl(orgSlug, dsSlug, own.BuildKey!, a.Version,
                     a.Index is { Length: > 0 } index ? $"{a.Path}/{index}" : a.Path),
                 MediaType = a.MediaType,
                 DownloadName = a.DownloadName

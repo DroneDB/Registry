@@ -21,7 +21,8 @@ public sealed record RescanRebuildResult(bool WholeDataset, int Built, int Faile
 /// entry, so it clears the build cache and rebuilds the dataset. A filtered rescan
 /// rebuilds only the rescanned entries that are buildable: the rest of the dataset keeps
 /// its artifacts. A failed entry rebuild does not stop the others; the artifact
-/// completeness check enqueues it again.
+/// completeness check enqueues it again. The upgrade rescans (<see cref="Initialization.UpgradeRescanStartupTask"/>) rebuild only
+/// the entries whose build key changed (<see cref="RescanResult.BuildKeyChanged"/>, D-020): the rest keep their builds.
 /// </summary>
 public sealed class RescanRebuild
 {
@@ -35,9 +36,13 @@ public sealed class RescanRebuild
     }
 
     /// <param name="onProgress">Called with the fraction of the entry rebuilds done (filtered rescan only).</param>
+    /// <param name="onlyChangedKeys">
+    /// Rebuild only the rescanned entries whose build key changed (the rescan of a filtered scope only: an
+    /// unfiltered rescan rebuilds the dataset).
+    /// </param>
     public async Task<RescanRebuildResult> RunAsync(string orgSlug, string dsSlug, IDDB ddb, RescanFilter filter,
         IReadOnlyCollection<RescanResult> results, IRescanBuildRunner builds, Action<double>? onProgress = null,
-        CancellationToken ct = default)
+        bool onlyChangedKeys = false, CancellationToken ct = default)
     {
         if (filter.IsEmpty)
         {
@@ -52,7 +57,7 @@ public sealed class RescanRebuild
         if (results.Count > 0)
             await _caches.InvalidateAllDatasetCachesAsync(orgSlug, dsSlug);
 
-        var entries = BuildableEntries(ddb, results);
+        var entries = BuildableEntries(ddb, onlyChangedKeys ? results.Where(r => r.BuildKeyChanged) : results);
         _logger.LogInformation("Rebuilding {Count} rescanned entries of {OrgSlug}/{DsSlug}",
             entries.Count, orgSlug, dsSlug);
 

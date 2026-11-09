@@ -168,7 +168,8 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(hash);
         ArgumentException.ThrowIfNullOrWhiteSpace(role);
 
-        var key = (Path.GetFullPath(ddb.DatasetFolderPath), hash, role);
+        // The path is part of the key: two entries of one content may have builds in two folders (build keys)
+        var key = (Path.GetFullPath(ddb.DatasetFolderPath), hash, role, entryPath);
         if (_locations.TryGetValue(key, out LocatedArtifact? known) && known != null)
         {
             if (Exists(known))
@@ -221,10 +222,10 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
         public string Under(string relativePath) => Path.Combine(LocalPath, relativePath.ToLocalSeparators());
     }
 
-    public ResolvedBuildFile? ResolveFile(IDDB ddb, string hash, string path)
+    public ResolvedBuildFile? ResolveFile(IDDB ddb, string buildKey, string path)
     {
         ArgumentNullException.ThrowIfNull(ddb);
-        return ddb.ResolveBuildFile(hash, path);
+        return ddb.ResolveBuildFile(buildKey, path);
     }
 
     public int CopyBuilds(IDDB source, IReadOnlyList<string> entryPaths, IDDB destination)
@@ -235,12 +236,13 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
 
         var hashes = GetBuilds(source, entryPaths)
             .Where(b => b.IsOwnBuild() && (b.Build!.Artifacts.Count > 0 || b.Build.State == BuildState.Pending))
-            .Select(b => b.Build!.Hash!)
+            // The key names the build folder: the hash, or the hash and the digest of the georeference of a model or a splat
+            .Select(b => b.Build!.BuildKey!)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
-        foreach (var hash in hashes)
-            source.CopyBuildArtifactsTo(destination.DatasetFolderPath, hash);
+        foreach (var buildKey in hashes)
+            source.CopyBuildArtifactsTo(destination.DatasetFolderPath, buildKey);
 
         return hashes.Length;
     }

@@ -80,8 +80,11 @@ public interface IBuildArtifactResolver
     /// absolute path and the manifest's media type when libddb gives one; null when the file is not one of the
     /// build's files.
     /// </summary>
-    /// <exception cref="DdbInvalidArgumentsException">The hash is malformed or the path breaks the path rules.</exception>
-    ResolvedBuildFile? ResolveFile(IDDB ddb, string hash, string path);
+    /// <param name="ddb">The dataset.</param>
+    /// <param name="buildKey">The key that names the build (<see cref="EntryBuild.BuildKey"/>: the hash, or the hash and the digest of the georeference).</param>
+    /// <param name="path">The file, relative to the build root.</param>
+    /// <exception cref="DdbInvalidArgumentsException">The key is malformed or the path breaks the path rules.</exception>
+    ResolvedBuildFile? ResolveFile(IDDB ddb, string buildKey, string path);
 
     /// <summary>
     /// Copies the builds of <paramref name="entryPaths"/> (artifacts and pending markers) from

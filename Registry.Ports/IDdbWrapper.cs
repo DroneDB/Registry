@@ -108,7 +108,7 @@ public interface IDdbWrapper
     /// the media type of the manifest. It serves <c>.../build/{hash}/{path}</c>, tiles included.
     /// </summary>
     /// <param name="ddbPath">Dataset folder (parent of .ddb)</param>
-    /// <param name="hash">The hash of the build (<see cref="EntryBuild.Hash"/>)</param>
+    /// <param name="hash">The key of the build (<see cref="EntryBuild.BuildKey"/>: the hash, or the hash and the digest of the georeference)</param>
     /// <param name="path">The file, relative to the build root (an artifact path or a file below a directory artifact)</param>
     /// <returns>The file, or null when no build has this hash or the file is not one of its artifacts</returns>
     /// <exception cref="DdbInvalidArgumentsException">The hash is malformed or the path breaks the dataset path rules.</exception>

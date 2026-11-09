@@ -84,7 +84,7 @@ public sealed class BuildOutcomeClassifier : IBuildOutcomeClassifier
             // missing. A success that skipped the entry (another process holds the lock and builds it: that build
             // reports), or whose marker a file that arrived meanwhile already released (it builds now), tells nothing
             if (build.State == BuildState.Building ||
-                PendingOf(markers(), path, hash) is not { AwaitingFiles: true } waiting)
+                PendingOf(markers(), path, build.BuildKey, hash) is not { AwaitingFiles: true } waiting)
                 return null;
             return new ClassifiedBuild(BuildOutcome.WaitingForFiles, hash, waiting.MissingDependencies ?? []);
         }
@@ -94,10 +94,13 @@ public sealed class BuildOutcomeClassifier : IBuildOutcomeClassifier
             return null;
 
         // libddb keeps the marker of a failure it retries (low disk, a tool timeout): the retries decide
-        return PendingOf(markers(), path, hash) == null ? new ClassifiedBuild(BuildOutcome.Failed, hash) : null;
+        return PendingOf(markers(), path, build.BuildKey, hash) == null ? new ClassifiedBuild(BuildOutcome.Failed, hash) : null;
     }
 
-    // libddb's pending marker of this content of the entry; null when it has none
-    private static PendingBuildInfo? PendingOf(PendingBuildInfo[]? markers, string path, string hash) =>
-        (markers ?? []).FirstOrDefault(p => p.Path == path && p.Hash == hash);
+    // libddb's pending marker of this entry: the one of its path, for the build key libddb names now (the same key
+    // that names the build folder and the artifact URLs), and for the content the job built (a marker of the content
+    // the entry had before is not the news). Two entries with the same content have two markers, so the path matters
+    private static PendingBuildInfo? PendingOf(PendingBuildInfo[]? markers, string path, string? buildKey, string hash) =>
+        (markers ?? []).FirstOrDefault(p => p.Path == path && p.Hash == hash &&
+                                            (buildKey == null || p.BuildKey == buildKey));
 }

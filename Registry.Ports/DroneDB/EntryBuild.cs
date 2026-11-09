@@ -18,9 +18,22 @@ public sealed class EntryBuild
     [JsonPropertyName("source")]
     public string? Source { get; set; }
 
-    /// <summary>The hash of <see cref="Source"/>, which names its build (<c>.../build/{hash}/{path}</c>).</summary>
+    /// <summary>The content hash of <see cref="Source"/>.</summary>
     [JsonPropertyName("hash")]
     public string? Hash { get; set; }
+
+    /// <summary>
+    /// The build key of <see cref="Source"/> (libddb's <c>build_layout.h</c> <c>buildKey</c>), which names its build
+    /// folder and its URLs (<c>.../build/{key}/{path}</c>): the hash, or the hash and the digest of the georeference
+    /// (<c>{hash}-{digest}</c>) for a model or a splat that has one, so the same file in two places has a build
+    /// for each. Absent from a libddb that predates the build key: <see cref="BuildKey"/> then reads the hash.
+    /// </summary>
+    [JsonPropertyName("key")]
+    public string? Key { get; set; }
+
+    /// <summary>The key that names the build of <see cref="Source"/>: <see cref="Key"/>, else <see cref="Hash"/> (an older libddb).</summary>
+    [JsonIgnore]
+    public string? BuildKey => Key ?? Hash;
 
     /// <summary>The absolute build root of <see cref="Source"/>; it may not exist yet.</summary>
     [JsonPropertyName("root")]

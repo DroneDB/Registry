@@ -81,6 +81,7 @@ public unsafe class LibddbContractTests : TestBase
           "awaitingFiles": false,
           "buildable": false,
           "hash": null,
+          "key": null,
           "lastAttempt": null,
           "missingDependencies": [],
           "retryAfter": null,
@@ -359,6 +360,7 @@ public unsafe class LibddbContractTests : TestBase
                 "awaitingFiles": false,
                 "buildable": true,
                 "hash": "{{hash}}",
+                "key": "{{hash}}",
                 "lastAttempt": null,
                 "missingDependencies": [],
                 "retryAfter": null,
@@ -421,6 +423,7 @@ public unsafe class LibddbContractTests : TestBase
                 "awaitingFiles": true,
                 "buildable": true,
                 "hash": "{{ShapefileHash}}",
+                "key": "{{ShapefileHash}}",
                 "lastAttempt": 0,
                 "missingDependencies": ["roads.shx"],
                 "retryAfter": 0,
@@ -459,6 +462,7 @@ public unsafe class LibddbContractTests : TestBase
             [{
               "awaitingFiles": true,
               "hash": "{{ShapefileHash}}",
+              "key": "{{ShapefileHash}}",
               "lastAttempt": 0,
               "missingDependencies": ["roads.shx"],
               "path": "roads.shp",
@@ -475,6 +479,7 @@ public unsafe class LibddbContractTests : TestBase
             [{
               "awaitingFiles": false,
               "hash": "{{ShapefileHash}}",
+              "key": "{{ShapefileHash}}",
               "lastAttempt": 0,
               "missingDependencies": [],
               "path": "roads.shp",
@@ -489,6 +494,69 @@ public unsafe class LibddbContractTests : TestBase
     }
 
     // fixtures/resolve-build-file.json
+    // FR-PRC-23 (D-020): the same OBJ in two folders, without its .mtl, has one marker for each. The pending info
+    // names the key and the path of each, and each waits for the .mtl of its own folder
+    [Test]
+    public void GetPendingBuildInfo_TwoIdenticalModelsInTwoFolders_HaveOneMarkerEach()
+    {
+        using var area = new TestArea(nameof(GetPendingBuildInfo_TwoIdenticalModelsInTwoFolders_HaveOneMarkerEach));
+        var root = Path.Combine(area.TestFolder, "dataset");
+        Directory.CreateDirectory(root);
+        DdbWrapper.Init(root);
+        const string obj = "mtllib brighton.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nvt 0 0\nvt 1 0\nvt 1 1\nusemtl mat\nf 1/1 2/2 3/3\n";
+        Directory.CreateDirectory(Path.Combine(root, "mixA"));
+        Directory.CreateDirectory(Path.Combine(root, "mixB"));
+        DdbWrapper.Add(root, WriteContractFile(root, "mixA/model.obj", obj));
+        DdbWrapper.Add(root, WriteContractFile(root, "mixB/model.obj", obj));
+        DdbWrapper.Build(root, "mixA/model.obj"); // deferred: the .mtl is missing
+        DdbWrapper.Build(root, "mixB/model.obj");
+
+        var pending = DdbWrapper.GetPendingBuildInfo(root).OrderBy(p => p.Path, StringComparer.Ordinal).ToArray();
+
+        pending.Select(p => p.Path).ShouldBe(["mixA/model.obj", "mixB/model.obj"]);
+        pending[0].Hash.ShouldBe(pending[1].Hash);
+        pending.ShouldAllBe(p => p.Key == p.Hash && p.AwaitingFiles);
+        pending[0].MissingDependencies.ShouldBe(["mixA/brighton.mtl"]);
+        pending[1].MissingDependencies.ShouldBe(["mixB/brighton.mtl"]);
+
+        // The build object of each reads the marker of its own path
+        var builds = DdbWrapper.GetBuildArtifacts(root, ["mixA/model.obj", "mixB/model.obj"]);
+        builds.Select(b => b.Build!.MissingDependencies.Single()).ShouldBe(["mixA/brighton.mtl", "mixB/brighton.mtl"]);
+        builds.ShouldAllBe(b => b.Build!.State == BuildState.Pending && b.Build.Key == b.Build.Hash);
+
+        // The .mtl of mixA releases the marker of mixA, not the one of mixB
+        DdbWrapper.Add(root, WriteContractFile(root, "mixA/brighton.mtl", "newmtl mat\nKd 1 1 1\n"));
+        var after = DdbWrapper.GetPendingBuildInfo(root).OrderBy(p => p.Path, StringComparer.Ordinal).ToArray();
+        after.Select(p => p.AwaitingFiles).ShouldBe([false, true]);
+    }
+
+    // D-020: a rescan tells which entries moved to another build key, so that a host rebuilds only those
+    [Test]
+    public void RescanIndex_ReportsTheBuildKeyOfEachEntry_AndWhetherItChanged()
+    {
+        using var area = new TestArea(nameof(RescanIndex_ReportsTheBuildKeyOfEachEntry_AndWhetherItChanged));
+        var root = Path.Combine(area.TestFolder, "dataset");
+        Directory.CreateDirectory(root);
+        DdbWrapper.Init(root);
+        const string obj = "v 0 0 0\nv 1 0 0\nv 1 1 0\nf 1 2 3\n";
+        Directory.CreateDirectory(Path.Combine(root, "sub"));
+        DdbWrapper.Add(root, [WriteContractFile(root, "plain.obj", obj), WriteContractFile(root, "sub/model.obj", obj)]);
+
+        var first = DdbWrapper.RescanIndex(root, new RescanOptions("model", StopOnError: false));
+        first.ShouldAllBe(r => r.Success && !r.BuildKeyChanged && r.BuildKey == r.Hash);
+
+        // A georef.json next to sub/model.obj: its key is the hash and the digest of the georeference
+        WriteContractFile(root, "sub/georef.json", """{"latitude": 45.0, "longitude": 9.0}""");
+        var second = DdbWrapper.RescanIndex(root, new RescanOptions("model", StopOnError: false)).ToDictionary(r => r.Path);
+
+        second["plain.obj"].BuildKeyChanged.ShouldBeFalse();
+        second["sub/model.obj"].BuildKeyChanged.ShouldBeTrue();
+        second["sub/model.obj"].BuildKey.ShouldNotBeNull().ShouldStartWith(second["sub/model.obj"].Hash + "-");
+        second["sub/model.obj"].BuildKey!.Length.ShouldBe(64 + 1 + 16);
+        // The build object names the same key, and its folder
+        DdbWrapper.GetBuildArtifacts(root, ["sub/model.obj"]).Single().Build!.Key.ShouldBe(second["sub/model.obj"].BuildKey);
+    }
+
     [Test]
     public void ResolveBuildFile_ReturnsTheArtifactPath_AndRejectsPathsOutsideTheBuild()
     {
@@ -562,7 +630,7 @@ public unsafe class LibddbContractTests : TestBase
 
         Ok(NativeDdb.DDBCopyBuildArtifacts(source, destination, hash, out var output), "DDBCopyBuildArtifacts");
         ShouldEqualJson(WithVolatileVersions(TakeJson(output)), ParseJson($$"""
-            {"artifacts": [{{CogArtifactJson}}], "hash": "{{hash}}", "pending": false}
+            {"artifacts": [{{CogArtifactJson}}], "hash": "{{hash}}", "key": "{{hash}}", "pending": false}
             """));
         File.Exists(Path.Combine(destination, ".ddb", "build", hash, "cog", "cog.tif")).ShouldBeTrue();
         ((string?)GetBuildArtifacts(destination, GeoRasterName)[0]["build"]!["state"]).ShouldBe("complete");

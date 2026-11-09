@@ -927,7 +927,9 @@ public class PendingRecoveryIntegrationTests
 
     private static void MakeDue(IDDB ddb, string path)
     {
-        var marker = Path.Combine(ddb.DerivedFolderPaths.Single(), ddb.GetEntry(path)!.Hash + ".pending");
+        // The marker is the entry's own ("<key>.<pathId>.pending": libddb names it, a libddb of the layout before the
+        // build key "<hash>.pending"): the only one of this content in the build folder
+        var marker = Directory.GetFiles(ddb.DerivedFolderPaths.Single(), ddb.GetEntry(path)!.Hash + "*.pending").Single();
         var lines = File.ReadAllLines(marker);
         lines[0] = (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - PendingMarkers.LibddbRetryBackoffSeconds - 1)
             .ToString(System.Globalization.CultureInfo.InvariantCulture);

@@ -55,6 +55,18 @@ public static class MagicStrings
     /// <summary>The last update check result, the time of the last failure and the last version e-mailed about.</summary>
     public const string UpdateCheckCacheFileName = ".update-check-cache.json";
 
+    /// <summary>
+    /// The datasets the upgrade rescans have rescanned (JSON, in the storage folder all nodes share), so that a
+    /// dataset is rescanned once (<see cref="Services.Initialization.UpgradeRescanStartupTask"/>).
+    /// </summary>
+    public const string UpgradeRescansFileName = ".upgrade-rescans.json";
+
+    /// <summary>
+    /// The lock file of the upgrade rescans, next to <see cref="UpgradeRescansFileName"/>: the instance that holds it
+    /// open runs them; another instance on the same storage skips them and tries again at its next start.
+    /// </summary>
+    public const string UpgradeRescansLockFileName = ".upgrade-rescans.lock";
+
     /// <summary>The texts administrators gave to the editable e-mails, by template name (JSON, in the storage folder all nodes share).</summary>
     public const string EmailTemplatesFileName = ".email-templates.json";
 

@@ -106,7 +106,7 @@ public sealed class RescanIndexTool : HeavyToolBase<RescanIndexTool.Parameters>
         using var scope = _scopeFactory.CreateScope();
         var rebuild = await scope.ServiceProvider.GetRequiredService<RescanRebuild>().RunAsync(
             request.OrgSlug, request.DsSlug, ctx.Ddb, filter, results, new InlineBuilds(ctx),
-            f => progress.Report(new HeavyToolProgress(f, "rebuilding")), ct);
+            f => progress.Report(new HeavyToolProgress(f, "rebuilding")), ct: ct);
 
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: rebuild.WholeDataset
             ? $"Rescan complete: {summary}"

@@ -30,17 +30,26 @@ public static class TestBuilds
 
     /// <summary>
     /// A buildable entry with its own build in <paramref name="state"/> and these artifacts (paths relative
-    /// to the build root <c>&lt;datasetFolder&gt;/.ddb/build/&lt;hash&gt;</c>, as libddb reports them).
+    /// to the build root <c>&lt;datasetFolder&gt;/.ddb/build/&lt;key&gt;</c>, as libddb reports them). The key of
+    /// the build is the hash, as libddb names the build of a place-independent entry.
     /// </summary>
     public static EntryBuildArtifacts Build(string datasetFolder, string path, EntryType type, string hash,
         BuildState state, params BuildArtifact[] artifacts) =>
+        Keyed(datasetFolder, path, type, hash, hash, state, artifacts);
+
+    /// <summary>
+    /// <see cref="Build"/> of an entry whose build key is <paramref name="key"/> (the hash and the digest of the
+    /// georeference of a model or a splat that has one): the build root and the key of the build object are named by it.
+    /// </summary>
+    public static EntryBuildArtifacts Keyed(string datasetFolder, string path, EntryType type, string hash,
+        string key, BuildState state, params BuildArtifact[] artifacts) =>
         new()
         {
             Path = path, Exists = true, Hash = hash, Type = type,
             Build = new EntryBuild
             {
-                Buildable = true, Source = path, Hash = hash, State = state,
-                Root = Path.Combine(datasetFolder, ".ddb", "build", hash),
+                Buildable = true, Source = path, Hash = hash, Key = key, State = state,
+                Root = Path.Combine(datasetFolder, ".ddb", "build", key),
                 Artifacts = artifacts
             }
         };

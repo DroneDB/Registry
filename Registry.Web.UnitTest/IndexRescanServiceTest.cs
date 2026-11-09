@@ -16,6 +16,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.Ports;
 using Shouldly;
 using DdbEntry = Registry.Ports.DroneDB.Entry;
 using Registry.Web.Test.Support;
@@ -114,7 +115,9 @@ public class IndexRescanServiceTest : TestBase
     }
 
     private IndexRescanService CreateService(RegistryContext context) =>
-        new(context, _ddbManagerMock.Object, _taskSubmitterMock.Object, CreateTestLogger<IndexRescanService>());
+        new(context, _ddbManagerMock.Object, _taskSubmitterMock.Object,
+            new RescanRebuild(Mock.Of<IDatasetCacheInvalidator>(), CreateTestLogger<RescanRebuild>()),
+            CreateTestLogger<IndexRescanService>());
 
     private static DdbEntry Entry(string path, EntryType type) => new() { Path = path, Type = type, Hash = path };
 
