@@ -15,6 +15,7 @@ using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Ports.DroneDB;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Managers;
 using Registry.Web.Test.Support;
 using Shouldly;
 
@@ -53,6 +54,7 @@ public class IdentityUserDatasetAccessTests : IDisposable
             organization.Users =
             [
                 new OrganizationUser { UserId = "member", OrganizationSlug = Org, Permissions = OrganizationPermissions.ReadOnly },
+                new OrganizationUser { UserId = "writer", OrganizationSlug = Org, Permissions = OrganizationPermissions.ReadWrite },
                 new OrganizationUser { UserId = "deactivated", OrganizationSlug = Org }
             ];
             db.Organizations.Add(organization);
@@ -72,7 +74,7 @@ public class IdentityUserDatasetAccessTests : IDisposable
         await identity.Database.EnsureCreatedAsync();
         identity.Roles.AddRange(new IdentityRole("admin") { Id = "r-admin", NormalizedName = "ADMIN" },
             new IdentityRole("deactivated") { Id = "r-deactivated", NormalizedName = "DEACTIVATED" });
-        foreach (var name in new[] { "owner", "member", "removed", "admin", "deactivated" })
+        foreach (var name in new[] { "owner", "member", "writer", "removed", "admin", "deactivated" })
             identity.Users.Add(new User { Id = name, UserName = name, NormalizedUserName = name.ToUpperInvariant() });
         identity.UserRoles.Add(new IdentityUserRole<string> { UserId = "admin", RoleId = "r-admin" });
         identity.UserRoles.Add(new IdentityUserRole<string> { UserId = "deactivated", RoleId = "r-deactivated" });
@@ -123,5 +125,36 @@ public class IdentityUserDatasetAccessTests : IDisposable
     public async Task AHostWithoutTheIdentityDatabase_CannotTell_AndAnswersNo()
     {
         (await CanRead("member", Private, withIdentity: false)).ShouldBeFalse();
+    }
+
+    // The write access to an organization of the user a task runs for (photogrammetry creating its dataset in the
+    // worker, D-031): the organization rules of the API, without a request
+    private Task<bool> CanWriteOrganization(string userId, string orgSlug = Org, bool withIdentity = true) =>
+        new IdentityUserDatasetAccess(_registry.NewContext(), Mock.Of<IDdbManager>(), _cache.Object,
+                NullLogger<IdentityUserDatasetAccess>.Instance, withIdentity ? Identity() : null)
+            .CanAccessOrganizationAsync(userId, orgSlug, AccessType.Write, CancellationToken.None);
+
+    [TestCase("writer", true, TestName = "A member with write permission writes to the organization")]
+    [TestCase("owner", true, TestName = "The owner writes to the organization")]
+    [TestCase("admin", true, TestName = "An administrator writes to any organization")]
+    [TestCase("member", false, TestName = "A read-only member does not write to the organization")]
+    [TestCase("removed", false, TestName = "A user removed from the organization does not write to it")]
+    [TestCase("deactivated", false, TestName = "A deactivated member does not write to the organization")]
+    [TestCase("unknown", false, TestName = "An unknown user does not write to the organization")]
+    public async Task TheOrganizationWriteRulesOfTheApi_Apply(string userId, bool canWrite)
+    {
+        (await CanWriteOrganization(userId)).ShouldBe(canWrite);
+    }
+
+    [Test]
+    public async Task AnOrganizationDeletedSince_IsWrittenByNobody()
+    {
+        (await CanWriteOrganization("admin", "gone")).ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task OrganizationWrite_OnAHostWithoutTheIdentityDatabase_CannotTell_AndAnswersNo()
+    {
+        (await CanWriteOrganization("owner", withIdentity: false)).ShouldBeFalse();
     }
 }

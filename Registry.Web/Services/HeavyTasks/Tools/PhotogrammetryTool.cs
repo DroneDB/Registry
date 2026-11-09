@@ -2,18 +2,20 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Datasets;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.NodeOdx;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -134,22 +136,33 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
 
         if (createNewDataset)
         {
-            // Validate new dataset name when explicitly provided; omit to auto-generate a timestamped slug.
+            // The slug rule is the Registry's one (SlugRules, FR-XC-12): an omitted name gets a generated slug
             var newDatasetName = args.NewDatasetName;
-            if (!string.IsNullOrWhiteSpace(newDatasetName))
-            {
-                if (newDatasetName.Length > 128)
-                    throw new ArgumentException("The new dataset name must be 128 characters or less.");
+            var hasName = !string.IsNullOrWhiteSpace(newDatasetName);
+            if (hasName && !SlugRules.IsValid(newDatasetName))
+                throw new ArgumentException(SlugRules.InvalidMessage("Dataset"));
 
-                // Basic kebab-case validation.
-                if (!Regex.IsMatch(newDatasetName, @"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"))
-                    throw new ArgumentException("The new dataset name must be kebab-case (lowercase letters, digits, and hyphens).");
-            }
+            var newOrgSlug = args.NewDatasetOrgSlug ?? request.OrgSlug;
+            if (!SlugRules.IsValid(newOrgSlug))
+                throw new ArgumentException(SlugRules.InvalidMessage("Organization"));
 
             // Validate visibility.
             var visibilityStr = args.NewDatasetVisibility ?? "PRIVATE";
             if (!Enum.TryParse<Visibility>(visibilityStr, true, out _))
                 throw new ArgumentException($"Invalid visibility '{visibilityStr}'. Must be PRIVATE, UNLISTED, or PUBLIC.");
+
+            // The requesting user may create a dataset in that organization: checked at submit (the caller), and again
+            // by the worker before it creates the dataset, for the user the task runs for (D-031)
+            using var scope = _scopeFactory.CreateScope();
+            if (ctx.Caller is not null)
+                await scope.ServiceProvider.GetRequiredService<IDatasetAccessResolver>()
+                    .ResolveOrganizationAsync(newOrgSlug, AccessType.Write, ct: ct);
+
+            // Fails fast on a slug that is taken (the worker checks again before it creates the dataset, at submit
+            // and when the task starts); nothing is created here
+            if (hasName && await scope.ServiceProvider.GetRequiredService<DatasetCreation>()
+                    .SlugIsTakenAsync(newOrgSlug, newDatasetName!, ct))
+                throw new ConflictException(SlugTakenMessage(newDatasetName!, newOrgSlug));
         }
         else
         {
@@ -165,6 +178,39 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
                 throw new ArgumentException($"The destination '{destPath}' is not a folder.");
         }
     }
+
+    /// <summary>The text of a task whose requester may not create a dataset in <paramref name="orgSlug"/> (D-031).</summary>
+    internal static string NoWriteAccessMessage(string orgSlug) =>
+        $"The user who started this task cannot write to the organization \"{orgSlug}\": the results were not imported";
+
+    // The worker's check of the access of the user the task runs for (D-031): the rules of the API for that user, read
+    // without a request (IUserDatasetAccess). A task with no requesting user has nobody whose access holds
+    private static async Task EnsureRequesterMayCreateAsync(IServiceProvider services, string? requestedBy,
+        string orgSlug, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(requestedBy) ||
+            !await services.GetRequiredService<IUserDatasetAccess>()
+                .CanAccessOrganizationAsync(requestedBy, orgSlug, AccessType.Write, ct))
+            throw new ForbiddenException(NoWriteAccessMessage(orgSlug));
+    }
+
+    // The dataset an earlier run of the task created and recorded, when it is still there in the target organization
+    // (by its folder id; its slug may have changed since): null otherwise
+    private static async Task<(Guid InternalRef, string Slug)?> ReusableCreatedDatasetAsync(DatasetCreation creation,
+        ITaskWriteRecorder record, string orgSlug, CancellationToken ct)
+    {
+        if (await record.RecordedCreatedDatasetAsync(ct) is not { } recorded ||
+            !string.Equals(recorded.Org, orgSlug, StringComparison.Ordinal))
+            return null;
+
+        return await creation.ExistingSlugAsync(orgSlug, recorded.InternalRef, ct) is { } slug
+            ? (recorded.InternalRef, slug)
+            : null;
+    }
+
+    // The one text of a slug that is taken, at submit and in the worker (§7.1)
+    private static string SlugTakenMessage(string slug, string orgSlug) =>
+        $"A dataset named \"{slug}\" already exists in \"{orgSlug}\"";
 
     protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
     {
@@ -225,43 +271,73 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
             progress.Report(new HeavyToolProgress(0.96, "creating-dataset",
                 LogChunk: "Creating new dataset for photogrammetry results"));
 
-            var newDatasetName = args.NewDatasetName
-                ?? $"photogrammetry-{DateTime.UtcNow:yyyyMMddHHmmss}";
+            var newDatasetName = string.IsNullOrWhiteSpace(args.NewDatasetName)
+                ? $"photogrammetry-{DateTime.UtcNow:yyyyMMddHHmmss}"
+                : args.NewDatasetName;
             var newDatasetOrgSlug = args.NewDatasetOrgSlug ?? request.OrgSlug;
             var visibilityStr = args.NewDatasetVisibility ?? "PRIVATE";
             var visibility = Enum.Parse<Visibility>(visibilityStr, true);
 
             targetOrgSlug = newDatasetOrgSlug;
 
-            // This tool is a singleton; resolve the scoped IDatasetsManager and IDdbManager
-            // from a child scope at the point of use.
+            // This tool is a singleton; resolve the scoped services from a child scope at the point of use. The
+            // worker has no caller: the dataset is created by the system path, for the user who requested the task,
+            // whose access is checked again here (D-031). Nothing was created before this point
             using (var scope = _scopeFactory.CreateScope())
             {
-                var datasetsManager = scope.ServiceProvider.GetRequiredService<IDatasetsManager>();
-                var newDs = await datasetsManager.AddNew(newDatasetOrgSlug, new DatasetNewDto
-                {
-                    Slug = newDatasetName,
-                    Name = newDatasetName.Replace("-", " "),
-                    Visibility = visibility,
-                    Tagline = "Photogrammetry results"
-                }, ct);
+                var creation = scope.ServiceProvider.GetRequiredService<DatasetCreation>();
 
-                targetDsSlug = newDs.Slug;
-                progress.Report(new HeavyToolProgress(0.96, "creating-dataset",
-                    LogChunk: $"Created new dataset '{newDs.Slug}' in organization '{newDatasetOrgSlug}'"));
+                // The requester may have lost the write access to the organization during the run: the task fails and
+                // creates nothing. Checked with the rules of the API for that user, also when the dataset exists
+                // already (a re-run writes into it on the user's behalf)
+                await EnsureRequesterMayCreateAsync(scope.ServiceProvider, ctx.RequestedBy, newDatasetOrgSlug, ct);
+
+                // A re-run of this task (a Retry, a lost run run again) finds the dataset an earlier run created in
+                // the record: it imports into it again (the attempt rule deleted what that run wrote), instead of
+                // finding its own slug taken, or creating a second dataset next to it
+                var reused = await ReusableCreatedDatasetAsync(creation, ctx.WriteRecord, newDatasetOrgSlug, ct);
+
+                Guid internalRef;
+                if (reused is { } earlier)
+                {
+                    internalRef = earlier.InternalRef;
+                    targetDsSlug = earlier.Slug;
+                    progress.Report(new HeavyToolProgress(0.96, "creating-dataset",
+                        LogChunk: $"Reusing dataset '{earlier.Slug}' in organization '{newDatasetOrgSlug}', " +
+                                  "created by an earlier run of this task"));
+                }
+                else
+                {
+                    // The slug may have been taken during the run: the task fails and creates nothing
+                    if (await creation.SlugIsTakenAsync(newDatasetOrgSlug, newDatasetName, ct))
+                        throw new ConflictException(SlugTakenMessage(newDatasetName, newDatasetOrgSlug));
+
+                    var created = await creation.CreateAsSystemAsync(newDatasetOrgSlug, new DatasetNewDto
+                        {
+                            Slug = newDatasetName,
+                            Name = newDatasetName.Replace("-", " "),
+                            Visibility = visibility,
+                            Tagline = "Photogrammetry results"
+                        },
+                        inner => new BadRequestException(SlugTakenMessage(newDatasetName, newDatasetOrgSlug),
+                            innerException: inner),
+                        ct);
+
+                    internalRef = created.InternalRef;
+                    targetDsSlug = created.Dataset.Slug;
+                    progress.Report(new HeavyToolProgress(0.96, "creating-dataset",
+                        LogChunk: $"Created new dataset '{targetDsSlug}' in organization '{newDatasetOrgSlug}'"));
+
+                    // Right after it exists: a cancelled or failed task deletes the dataset it created (FR-XC-27, D-031)
+                    await ctx.WriteRecord.CreatedDatasetAsync(
+                        new TaskCreatedDataset(newDatasetOrgSlug, internalRef, targetDsSlug), CancellationToken.None);
+                }
 
                 // Resolve the DDB for the new dataset.
                 var ddbManager = scope.ServiceProvider.GetRequiredService<IDdbManager>();
-                var internalRef = newDs.Properties is { } props && props.TryGetValue("internalRef", out var refVal)
-                    ? Guid.Parse(refVal.ToString()!)
-                    : throw new InvalidOperationException("New dataset is missing internalRef.");
                 targetDdb = ddbManager.Get(newDatasetOrgSlug, internalRef);
                 targetDataset = new DatasetKey(newDatasetOrgSlug, internalRef);
                 targetRoot = targetDdb.DatasetFolderPath;
-
-                // Right after it exists: a cancelled or failed task deletes the dataset it created (FR-XC-27, D-031)
-                await ctx.WriteRecord.CreatedDatasetAsync(
-                    new TaskCreatedDataset(newDatasetOrgSlug, internalRef, newDs.Slug), CancellationToken.None);
             }
 
             // For a new dataset, extract to root (no subfolder).

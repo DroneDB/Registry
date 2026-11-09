@@ -28,6 +28,7 @@ public sealed class DatasetCommands
     private readonly IDdbManager _ddbManager;
     private readonly IDatasetListingInvalidator _listings;
     private readonly DatasetRemoval _removal;
+    private readonly DatasetCreation _creation;
     private readonly ILogger<DatasetCommands> _logger;
 
     public DatasetCommands(RegistryContext context, IDatasetResolver datasets, IDatasetAccessResolver access, IDdbManager ddbManager, IDatasetListingInvalidator listings, DatasetRemoval removal, ILogger<DatasetCommands> logger)
@@ -38,6 +39,8 @@ public sealed class DatasetCommands
         _ddbManager = ddbManager;
         _listings = listings;
         _removal = removal;
+        // What the creation needs is what this class holds: the system creation of a task (DatasetCreation) is the same code
+        _creation = new DatasetCreation(context, ddbManager, (ILogger)logger);
         _logger = logger;
     }
 
@@ -46,42 +49,7 @@ public sealed class DatasetCommands
         var org = await _access.ResolveOrganizationAsync(orgSlug, AccessType.Write, withTracking: true,
             withDatasets: true, ct: ct);
 
-        if (dataset == null)
-            throw new BadRequestException("Dataset is null");
-
-        if (dataset.Slug == null)
-            throw new BadRequestException("Dataset slug is null");
-
-        if (!dataset.Slug.IsValidSlug())
-            throw new BadRequestException(SlugRules.InvalidMessage("Dataset"));
-
-        if (await SlugIsTakenAsync(orgSlug, dataset.Slug, ct))
-            throw SlugTakenOnCreate();
-
-        var ds = new Dataset
-        {
-            Slug = dataset.Slug,
-            Organization = org,
-            InternalRef = Guid.NewGuid(),
-            CreationDate = DateTime.UtcNow
-        };
-
-        var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-        var meta = ddb.Meta.GetSafe();
-
-        meta.Name = string.IsNullOrWhiteSpace(dataset.Name) ? dataset.Slug : dataset.Name;
-
-        if (dataset.Visibility.HasValue)
-            meta.Visibility = dataset.Visibility.Value;
-
-        if (!string.IsNullOrWhiteSpace(dataset.Tagline))
-            meta.Tagline = dataset.Tagline;
-
-        org.Datasets.Add(ds);
-
-        await SaveUniqueSlugAsync(orgSlug, ds.Slug, SlugTakenOnCreate);
-
-        return ds.ToDto(ddb.GetInfo());
+        return (await _creation.CreateAsync(org, dataset, ct: ct)).Dataset;
     }
 
     public async Task Edit(string orgSlug, string dsSlug, DatasetEditDto dataset, CancellationToken ct = default)
@@ -175,35 +143,9 @@ public sealed class DatasetCommands
         };
     }
 
-    private Task<bool> SlugIsTakenAsync(string orgSlug, string slug, CancellationToken ct) =>
-        _context.Datasets.AsNoTracking().AnyAsync(item => item.Slug == slug && item.Organization.Slug == orgSlug, ct);
-
-    private static BadRequestException SlugTakenOnCreate(Exception? inner = null) =>
-        new("Dataset with this slug already exists", innerException: inner);
-
     private static BadRequestException SlugTakenOnRename(string slug, Exception? inner = null) =>
         new($"Dataset '{slug}' already exists", innerException: inner);
 
-    /// <summary>
-    /// Saves a dataset that takes <paramref name="slug"/> in <paramref name="orgSlug"/>. The check made before is not
-    /// enough: another request may save the same slug in between, and the unique index of the database refuses the
-    /// second. That request is answered as the one that found the slug taken in the check (<paramref name="taken"/>); a
-    /// failure with the slug still free is not a lost race and propagates.
-    /// </summary>
-    private async Task SaveUniqueSlugAsync(string orgSlug, string slug, Func<Exception, BadRequestException> taken)
-    {
-        try
-        {
-            await _context.SaveChangesAsync(CancellationToken.None);
-        }
-        catch (DbUpdateException ex)
-        {
-            // What the context tracked did not reach the database: ask it fresh whether the slug is the reason
-            _context.ChangeTracker.Clear();
-            if (await SlugIsTakenAsync(orgSlug, slug, CancellationToken.None))
-                throw taken(ex);
-
-            throw;
-        }
-    }
+    private Task SaveUniqueSlugAsync(string orgSlug, string slug, Func<Exception, BadRequestException> taken) =>
+        _creation.SaveUniqueSlugAsync(orgSlug, slug, taken);
 }

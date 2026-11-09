@@ -246,6 +246,25 @@ public class RetryEndpointTest : IDisposable
         RecordJson(jobId).ShouldBe(TaskWriteRecord.ForCreatedDataset(created).ToJson());
     }
 
+    // D-031: the worker checks the write access of the user who requested the task (HeavyTaskJobWrapper.RequestedByAsync
+    // reads the task's row into the execution context). A Retry by somebody else (here a caller who is not the
+    // requester: an administrator, the dataset owner) keeps the requester, and the dataset the task created
+    [Test]
+    public async System.Threading.Tasks.Task Retry_ByAnotherUser_KeepsTheRequesterThatTheWorkerChecks()
+    {
+        var jobId = SeedFailedJob("photogrammetry");
+        _db.JobIndices.Single(r => r.JobId == jobId).UserId = "requester";
+        var created = new TaskCreatedDataset(Org, Guid.NewGuid(), "brighton-fast");
+        var rolledBack = TaskWriteRecord.ForCreatedDataset(created);
+        rolledBack.State = TaskWriteState.RolledBack;
+        SetRecord(jobId, rolledBack);
+
+        Retry(jobId).ShouldBe(200);
+
+        (await HeavyTaskJobWrapper.RequestedByAsync(_db, jobId, CancellationToken.None)).ShouldBe("requester");
+        TaskWriteRecord.Parse(RecordJson(jobId))!.CreatedDataset.ShouldBe(created);
+    }
+
     [Test]
     public void Retry_Rejected_PutsTheWriteRecordBack()
     {

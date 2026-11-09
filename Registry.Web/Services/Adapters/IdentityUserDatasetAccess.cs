@@ -13,8 +13,8 @@ using Registry.Web.Utilities.Auth;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// <see cref="IUserDatasetAccess"/> through the access rules of the API (<see cref="DatasetAccessControl"/>, which
-/// <see cref="AuthManager"/> applies to the caller of a request), with the user's roles read straight from the identity
+/// <see cref="IUserDatasetAccess"/> through the access rules of the API (<see cref="DatasetAccessControl"/> and
+/// <see cref="OrganizationAccessControl"/>, which <see cref="AuthManager"/> applies to the caller of a request), with the user's roles read straight from the identity
 /// database (<see cref="IdentityUserAuthSnapshots"/>), so every host that runs jobs can ask. A host with no identity
 /// database can tell nothing and answers no.
 /// </summary>
@@ -22,6 +22,7 @@ public sealed class IdentityUserDatasetAccess : IUserDatasetAccess
 {
     private readonly RegistryContext _registry;
     private readonly DatasetAccessControl? _access;
+    private readonly OrganizationAccessControl? _organizations;
 
     /// <param name="registry">The Registry database (datasets, organizations, members).</param>
     /// <param name="ddbManager">The indexes, for the visibility of a dataset not in the cache.</param>
@@ -32,9 +33,12 @@ public sealed class IdentityUserDatasetAccess : IUserDatasetAccess
         ILogger<IdentityUserDatasetAccess> logger, ApplicationDbContext? identity = null)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
-        _access = identity == null
-            ? null
-            : new DatasetAccessControl(new IdentityUserAuthSnapshots(identity), registry, logger, ddbManager, cache);
+        if (identity == null)
+            return;
+
+        var snapshots = new IdentityUserAuthSnapshots(identity);
+        _access = new DatasetAccessControl(snapshots, registry, logger, ddbManager, cache);
+        _organizations = new OrganizationAccessControl(snapshots, registry, logger);
     }
 
     /// <inheritdoc />
@@ -50,5 +54,21 @@ public sealed class IdentityUserDatasetAccess : IUserDatasetAccess
             .ConfigureAwait(false);
 
         return dataset != null && await _access.CanAccessDataset(dataset, AccessType.Read, userId).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> CanAccessOrganizationAsync(string userId, string orgSlug, AccessType access,
+        CancellationToken ct)
+    {
+        if (_organizations == null || string.IsNullOrEmpty(userId))
+            return false;
+
+        // The members come along: the rules read them
+        var organization = await _registry.Organizations.AsNoTracking().Include(o => o.Users)
+            .FirstOrDefaultAsync(o => o.Slug == orgSlug, ct)
+            .ConfigureAwait(false);
+
+        return organization != null &&
+               await _organizations.CanAccessOrganization(organization, access, userId).ConfigureAwait(false);
     }
 }

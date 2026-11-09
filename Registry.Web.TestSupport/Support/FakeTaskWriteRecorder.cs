@@ -128,7 +128,24 @@ public sealed class FakeTaskWriteRecorder : ITaskWriteRecorder
         return Task.CompletedTask;
     }
 
-    public Task CreatedDatasetAsync(TaskCreatedDataset dataset, CancellationToken ct = default) => Task.CompletedTask;
+    /// <summary>
+    /// The dataset the task recorded as created in the worker (photogrammetry), or null; set it to stand for the record of
+    /// an earlier run of the task (a Retry, a lost run run again).
+    /// </summary>
+    public TaskCreatedDataset? Created { get; set; }
+
+    /// <summary>How many times the task recorded a created dataset.</summary>
+    public int CreatedCalls { get; private set; }
+
+    public Task CreatedDatasetAsync(TaskCreatedDataset dataset, CancellationToken ct = default)
+    {
+        Created = dataset;
+        CreatedCalls++;
+        return Task.CompletedTask;
+    }
+
+    public Task<TaskCreatedDataset?> RecordedCreatedDatasetAsync(CancellationToken ct = default) =>
+        Task.FromResult(Created);
 
     public Task ForgetAsync(DatasetKey dataset, string path, CancellationToken ct = default)
     {

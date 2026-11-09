@@ -84,6 +84,8 @@ public static class ProcessingPlatformServiceCollectionExtensions
         services.AddScoped<TaskEntryChanges>();
         services.AddScoped<CreatedDatasetRollbackJob>();
         services.AddScoped<DatasetRemoval>();
+        // The system creation of the dataset a task makes for its results (photogrammetry, D-031)
+        services.AddScoped<DatasetCreation>();
         services.AddScoped<IDatasetListingInvalidator, DatasetListingInvalidator>();
         services.AddStartupTask<TaskRollbackStartupTask>();
 

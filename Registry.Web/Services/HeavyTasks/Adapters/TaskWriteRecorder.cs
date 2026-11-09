@@ -164,6 +164,9 @@ public sealed class TaskWriteRecorder : ITaskWriteRecorder, IDisposable
     public Task CreatedDatasetAsync(TaskCreatedDataset dataset, CancellationToken ct = default) =>
         Store().SetCreatedDatasetAsync(_taskId, dataset, ct);
 
+    public async Task<TaskCreatedDataset?> RecordedCreatedDatasetAsync(CancellationToken ct = default) =>
+        (await Store().ReadAsync(_taskId, ct))?.CreatedDataset;
+
     public async Task ForgetAsync(DatasetKey dataset, string path, CancellationToken ct = default)
     {
         var store = Store();

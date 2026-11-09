@@ -35,7 +35,7 @@ public sealed record TaskRun(string TaskId, string? WorkDir);
 
 /// <summary>
 /// Concrete execution context handed to a tool during <c>ExecuteAsync</c>. A job host has no HTTP caller:
-/// <see cref="Caller"/> is always null.
+/// <see cref="Caller"/> is always null; <see cref="RequestedBy"/> names the user the task runs for.
 /// </summary>
 public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
 {
@@ -44,8 +44,9 @@ public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
     public HeavyToolExecutionContext(
         IDDB ddb, DatasetKey dataset, ILogger logger, TaskRun run, PerformContext hangfire,
         BuildScheduler buildQueue, DdbJobs builds, bool queuedBeforeOverwriteRule = false,
-        ITaskWriteRecorder? writeRecord = null)
+        ITaskWriteRecorder? writeRecord = null, string? requestedBy = null)
     {
+        RequestedBy = requestedBy;
         QueuedBeforeOverwriteRule = queuedBeforeOverwriteRule;
         WriteRecord = writeRecord ?? TaskWriteRecorder.Disabled(run.TaskId, dataset, "unknown");
         Ddb = ddb;
@@ -63,6 +64,10 @@ public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
 
     public IDDB Ddb { get; }
     public ClaimsPrincipal? Caller => null;
+
+    /// <inheritdoc />
+    public string? RequestedBy { get; }
+
     public ILogger Logger { get; }
     public string TaskId => _run.TaskId;
     public string? WorkDir => _run.WorkDir;

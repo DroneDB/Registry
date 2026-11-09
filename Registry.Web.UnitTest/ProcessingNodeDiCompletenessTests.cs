@@ -75,6 +75,16 @@ public class ProcessingNodeDiCompletenessTests
     }
 
     [Test]
+    public void ProcessingNode_RegistersTheSystemDatasetCreation()
+    {
+        using var provider = BuildNodeProvider();
+        using var scope = provider.CreateScope();
+
+        // Resolved at runtime by PhotogrammetryTool, which creates the dataset for its results in the worker (D-031)
+        scope.ServiceProvider.GetService<Registry.Web.Services.Datasets.DatasetCreation>().ShouldNotBeNull();
+    }
+
+    [Test]
     public void ProcessingNode_AllHeavyToolsActivate()
     {
         using var provider = BuildNodeProvider();

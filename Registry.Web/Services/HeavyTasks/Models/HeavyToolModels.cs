@@ -88,6 +88,13 @@ public interface IHeavyToolExecutionContext : IHeavyToolValidationContext
     /// <summary>The task's dataset, as a background job names it.</summary>
     DatasetKey Dataset { get; }
 
+    /// <summary>
+    /// The id of the user who requested the task (its record, <c>JobIndex.UserId</c>; a Retry keeps it), or null for a
+    /// task of the system. The worker has no <see cref="IHeavyToolValidationContext.Caller"/>: a tool that checks the
+    /// requester's access again before it acts on it (photogrammetry creating a dataset, D-031) checks this user.
+    /// </summary>
+    string? RequestedBy { get; }
+
     /// <summary>Queues the builds of what the tool added (as children of the task), in the task's scope.</summary>
     BuildScheduler BuildQueue { get; }
 
@@ -163,6 +170,13 @@ public interface ITaskWriteRecorder
 
     /// <summary>Records the dataset the task created in the worker (photogrammetry), right after it was created.</summary>
     Task CreatedDatasetAsync(TaskCreatedDataset dataset, CancellationToken ct = default);
+
+    /// <summary>
+    /// The dataset the task recorded as created (<see cref="CreatedDatasetAsync"/>, by this run or an earlier one of the
+    /// same task: a Retry and the re-run of a lost run keep it), or null. A run that finds one reuses it instead of
+    /// creating a second one (the attempt rule deleted what the earlier run wrote into it).
+    /// </summary>
+    Task<TaskCreatedDataset?> RecordedCreatedDatasetAsync(CancellationToken ct = default);
 
     /// <summary>
     /// Drops <paramref name="path"/> of <paramref name="dataset"/> from the record: the tool recorded it but could not

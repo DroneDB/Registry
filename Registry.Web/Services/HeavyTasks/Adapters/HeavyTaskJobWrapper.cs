@@ -364,7 +364,8 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
 
         var execCtx = new HeavyToolExecutionContext(ddb, dataset, _log,
             new TaskRun(taskId, workDir), ctx, sp.GetRequiredService<BuildScheduler>(), builds,
-            await QueuedBeforeOverwriteRuleAsync(db, taskId, cancellationToken), recorder);
+            await QueuedBeforeOverwriteRuleAsync(db, taskId, cancellationToken), recorder,
+            await RequestedByAsync(db, taskId, cancellationToken));
         return new Prepared(tool, request, workDir, ddb, execCtx, recorder);
     }
 
@@ -393,6 +394,10 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
             .FirstOrDefaultAsync(ct);
         return row is { OutputPathsJson: null };
     }
+
+    // The user the task runs for, as its record holds it (a Retry keeps it): null for a task of the system
+    internal static Task<string?> RequestedByAsync(RegistryContext db, string taskId, CancellationToken ct) =>
+        db.JobIndices.AsNoTracking().Where(j => j.JobId == taskId).Select(j => j.UserId).FirstOrDefaultAsync(ct);
 
     /// <summary>
     /// Whether Hangfire runs this job again after <paramref name="error"/>: the job's retry policy (the

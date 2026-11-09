@@ -409,6 +409,31 @@ public class TaskWriteRecordStoreTests
         env.RecordJson("1").ShouldBe(record.ToJson());
     }
 
+    // A re-run of the task (a Retry, a lost run run again) reads the dataset an earlier run created from the record, and
+    // reuses it instead of creating a second one (PhotogrammetryTool, D-031)
+    [Test]
+    public async Task TheRecorder_ReadsTheCreatedDatasetOfAnEarlierRun_AfterARetry()
+    {
+        using var env = new WriteRecordEnv();
+        var created = new TaskCreatedDataset(WriteRecordEnv.Org, Guid.NewGuid(), "brighton-fast");
+        var failed = TaskWriteRecord.ForCreatedDataset(created);
+        failed.State = TaskWriteState.RolledBack;
+        failed.Add(Dataset, ["odm_orthophoto/odm_orthophoto.tif"], []);
+        env.SeedTask("1", "Failed", failed.ToJson());
+        env.SeedTask("2", "Processing");
+
+        // What TaskRetry writes before the re-queue
+        await env.Store.ChangeAsync("1", TaskWriteRecord.ForRequeue);
+
+        using var recorder = Registry.Web.Services.HeavyTasks.Adapters.TaskWriteRecorder.For(env.Store, "1", Dataset,
+            "photogrammetry");
+        (await recorder.RecordedCreatedDatasetAsync()).ShouldBe(created);
+
+        using var fresh = Registry.Web.Services.HeavyTasks.Adapters.TaskWriteRecorder.For(env.Store, "2", Dataset,
+            "photogrammetry");
+        (await fresh.RecordedCreatedDatasetAsync()).ShouldBeNull("a first run has created nothing");
+    }
+
     [Test]
     public async Task TheEndedTasksWhoseCreatedDatasetDeleteWaits_AreFound()
     {
