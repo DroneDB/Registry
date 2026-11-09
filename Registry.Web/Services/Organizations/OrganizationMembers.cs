@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -81,7 +82,9 @@ public sealed class OrganizationMembers
             });
         }
 
-        return members;
+        // By user name, as the Hub shows them: the table has no order of its own, so without this a page
+        // of members changes order between two calls (FR-ORG-26)
+        return members.OrderBy(m => m.UserName, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     // The organization (with its members) whose members the current user is about to change: it must

@@ -188,6 +188,38 @@ public class OrganizationMemberPermissionsTest : TestBase
         members.Count.ShouldBe(2);
     }
 
+    private static readonly string[] AddedOutOfOrder = ["Zed", "Bob", "alice"];
+    private static readonly string[] MembersByName = ["alice", "Bob", "member", "readonly", "Zed"];
+
+    // The table has no order of its own: the members come back by user name, upper and lower case alike (FR-ORG-26)
+    [Test]
+    public async Task GetMembers_ReturnsTheMembersByUserNameIgnoringCase()
+    {
+        // Added in the reverse of the expected order, with mixed case: an ordinal sort would put Zed and Bob first
+        foreach (var name in AddedOutOfOrder)
+        {
+            var user = new User { Id = $"{name}-id", UserName = name, NormalizedUserName = name.ToUpperInvariant(), Email = $"{name}@test.com" };
+            _appContext.Users.Add(user);
+            _context.Set<OrganizationUser>().Add(new OrganizationUser
+            {
+                OrganizationSlug = _testOrg.Slug,
+                UserId = user.Id,
+                Permissions = OrganizationPermissions.ReadOnly,
+                GrantedAt = DateTime.UtcNow,
+                GrantedBy = _ownerUser.Id
+            });
+        }
+        await _appContext.SaveChangesAsync();
+        await _context.SaveChangesAsync();
+
+        SetupAsUser(_ownerUser);
+        var manager = CreateManager();
+
+        var members = (await manager.GetMembers(_testOrg.Slug)).Select(m => m.UserName).ToList();
+
+        members.ShouldBe(MembersByName);
+    }
+
     [Test]
     public async Task GetMembers_AsMember_ReturnsAllMembers()
     {
