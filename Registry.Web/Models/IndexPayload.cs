@@ -14,7 +14,10 @@ public record IndexPayload(
     string ToolVersion = "1",
     string? RequestHash = null,
     string? ParentJobId = null,
-    string? WorkflowExecutionId = null)
+    string? WorkflowExecutionId = null,
+    // Heavy tasks (FR-XC-25, D-013): the files the task writes (a JSON array) and the label of its target files
+    string? OutputPathsJson = null,
+    string? TargetLabel = null)
 {
     public void EnsureValid()
     {

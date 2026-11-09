@@ -58,6 +58,19 @@ public interface IHeavyToolValidationContext
 {
     IDDB Ddb { get; }
     ClaimsPrincipal? Caller { get; }
+
+    /// <summary>
+    /// The output file an earlier attempt of this task already wrote (<see cref="PublishedOutputMarker"/>), or null
+    /// (at submit, and on the first attempt). A tool that refuses an existing output does not refuse this one.
+    /// </summary>
+    string? PublishedOutput { get; }
+
+    /// <summary>
+    /// Whether the task was queued before tools refused an existing output without <c>overwrite</c> (its record
+    /// declares no output paths): a request of then without the <c>overwrite</c> field replaced its output, and still
+    /// does when it runs. Always false at submit.
+    /// </summary>
+    bool QueuedBeforeOverwriteRule { get; }
 }
 
 /// <summary>
@@ -77,4 +90,10 @@ public interface IHeavyToolExecutionContext : IHeavyToolValidationContext
 
     /// <summary>Runs builds inline, in the task's own job (the build and rescan tools).</summary>
     DdbJobs Builds { get; }
+
+    /// <summary>
+    /// Records that the task wrote its output file <paramref name="path"/> (<see cref="PublishedOutputMarker"/>):
+    /// a later attempt skips the write and indexes it. Called right after the write returns.
+    /// </summary>
+    void MarkOutputPublished(string path);
 }

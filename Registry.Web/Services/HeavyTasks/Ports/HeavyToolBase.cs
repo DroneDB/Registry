@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -38,6 +39,27 @@ public abstract class HeavyToolBase<TParams> : IHeavyTool where TParams : class
     public Task<HeavyToolArtifact?> ExecuteAsync(HeavyToolRequest request, IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress, CancellationToken ct) =>
         ExecuteAsync(request, Params(request), ctx, progress, ct);
+
+    /// <inheritdoc cref="IHeavyTool.InputPaths"/>
+    public IReadOnlyList<string> InputPaths(HeavyToolRequest request) => InputPaths(Params(request));
+
+    /// <inheritdoc cref="IHeavyTool.OutputPaths"/>
+    public IReadOnlyList<string> OutputPaths(HeavyToolRequest request) => OutputPaths(Params(request));
+
+    /// <inheritdoc cref="IHeavyTool.Label"/>
+    public string? Label(HeavyToolRequest request) => Label(Params(request));
+
+    /// <summary>The files the task reads (normalized); none unless the tool overrides it.</summary>
+    /// <returns>The input paths.</returns>
+    protected virtual IReadOnlyList<string> InputPaths(TParams p) => [];
+
+    /// <summary>The files the task writes (normalized); none unless the tool overrides it.</summary>
+    /// <returns>The output paths.</returns>
+    protected virtual IReadOnlyList<string> OutputPaths(TParams p) => [];
+
+    /// <summary>The label of the task's target files; none unless the tool overrides it.</summary>
+    /// <returns>The label, or null.</returns>
+    protected virtual string? Label(TParams p) => null;
 
     /// <summary>Reads the tool's parameters (absent or ill-typed values are null; see <see cref="ToolParameters"/>).</summary>
     protected abstract TParams ReadParams(ToolParameters p);

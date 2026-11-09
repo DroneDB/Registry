@@ -4,6 +4,7 @@ using Hangfire.Server;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
+using Registry.Web.Exceptions;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Jobs;
@@ -87,17 +88,42 @@ public class DdbJobs : DdbRetriedJob
             result.Entries?.Length ?? 0, result.Builds?.Length ?? 0);
     }
 
-    /// <summary>Masks the borders of <paramref name="inputPath"/> into <paramref name="outputPath"/>, indexes and builds it.</summary>
+    /// <summary>
+    /// The mask-borders job stored before the <c>overwrite</c> parameter: its request had already removed the
+    /// existing output, so it runs as one that may replace it.
+    /// </summary>
     public void MaskBorders(string orgSlug, Guid internalRef, string inputPath, string outputPath, int nearDist,
-        bool white, PerformContext? context)
+        bool white, PerformContext? context) =>
+        MaskBorders(orgSlug, internalRef, inputPath, outputPath, nearDist, white, true, context);
+
+    /// <summary>
+    /// Masks the borders of <paramref name="inputPath"/> into <paramref name="outputPath"/>, indexes and builds it.
+    /// Without <paramref name="overwrite"/>, an output that exists when the job runs is refused (D-040). An attempt
+    /// after one that wrote the output (<see cref="PublishedOutputMarker"/>) only indexes and builds it.
+    /// </summary>
+    /// <exception cref="NameClashException">The output exists and <paramref name="overwrite"/> is false.</exception>
+    public void MaskBorders(string orgSlug, Guid internalRef, string inputPath, string outputPath, int nearDist,
+        bool white, bool overwrite, PerformContext? context)
     {
         var ddb = _ddbManager.Open(orgSlug, internalRef);
         var console = JobConsole.For(_logger, context, ddb.DatasetFolderPath);
 
         console.Debug("In MaskBorders({Dataset}, {Path})", ddb.DatasetFolderPath, inputPath);
 
-        console.Debug("Running mask borders");
-        ddb.MaskBorders(inputPath, outputPath, nearDist, white);
+        if (PublishedOutputMarker.Covers(ddb, PublishedOutputMarker.Get(context), outputPath))
+            console.Debug("The masked file was written by an earlier attempt");
+        else
+        {
+            if (!overwrite && DatasetEntryLookup.FindExisting(ddb, outputPath) is { } existing)
+                throw new NameClashException(existing.Path);
+
+            console.Debug("Running mask borders");
+            ddb.MaskBorders(inputPath, outputPath, nearDist, white);
+
+            // The very next step after the write: from here a later attempt indexes and builds the output.
+            // NOTE: a process crash between the write and this line leaves the file without the marker
+            PublishedOutputMarker.Set(context, outputPath);
+        }
 
         console.Debug("Adding masked file to index");
         ddb.AddRaw(outputPath);

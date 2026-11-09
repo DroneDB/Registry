@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Registry.Common;
 using Registry.Ports.DroneDB;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
@@ -104,13 +105,9 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
         if (!_archives.IsSupported(sourcePath))
             throw new ArgumentException($"'{sourcePath}' is not a supported archive format.");
 
-        // The destination may not be an existing non-folder entry
-        if (destPath.Length > 0)
-        {
-            var destEntry = ctx.Ddb.GetEntry(destPath);
-            if (destEntry != null && destEntry.Type != EntryType.Directory)
-                throw new ArgumentException($"The destination '{destPath}' is not a folder.");
-        }
+        // The destination may not be an existing file (in any letter case, D-040): a name clash (409), whatever
+        // overwrite says, since overwrite replaces the extracted files, never a file with a folder
+        DestinationFolder(ctx.Ddb, destPath);
 
         // --- Size / quota / disk-space guards ---
         var localArchive = ctx.Ddb.GetLocalPath(sourcePath);
@@ -154,6 +151,29 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
         }
     }
 
+    // The extraction writes many files into a folder: no exact output path to declare (two extractions into one
+    // folder are not refused), only the label of the target
+    protected override string? Label(Parameters p)
+    {
+        if (string.IsNullOrWhiteSpace(p.SourcePath))
+            return null;
+        var dest = _paths.NormalizeFolder(p.DestPath);
+        return $"{_paths.Normalize(p.SourcePath, "archive path")} \u2192 {(dest.Length == 0 ? "/" : dest + "/")}";
+    }
+
+    // The folder the archive is extracted into, in the letter case of the existing folders (D-040): the existing
+    // folder of that name, or a new one in them. An existing file of that name is a name clash.
+    private static string DestinationFolder(IDDB ddb, string destPath)
+    {
+        if (destPath.Length == 0)
+            return destPath;
+
+        var location = DatasetEntryLookup.Locate(ddb, destPath);
+        if (location.Existing is { IsFolder: false } file)
+            throw new NameClashException(file.Path);
+        return location.Path;
+    }
+
     protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
     {
         long? estimate = null;
@@ -182,7 +202,7 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
         CancellationToken ct)
     {
         var sourcePath = _paths.Normalize(args.SourcePath, "archive path");
-        var destPath = _paths.NormalizeFolder(args.DestPath);
+        var destPath = DestinationFolder(ctx.Ddb, _paths.NormalizeFolder(args.DestPath));
         var deleteArchive = args.DeleteArchive ?? false;
         var overwrite = args.Overwrite ?? false;
 

@@ -226,23 +226,55 @@ public class ArchiveExtractToolTests
                 Ctx(ddb.Object), CancellationToken.None));
     }
 
-    [Test]
-    public void ValidateAsync_DestPathIsFile_Throws()
+    [TestCase(false)]
+    [TestCase(true)]
+    public void ValidateAsync_DestPathIsFile_Is409WithItsPath_WhateverOverwriteSays(bool overwrite)
     {
         var local = Path.Combine(_dir, "flight.zip");
         CreateZip(local, "a.txt", "hello");
         var ddb = MockDdb("flight.zip", local);
         // The destination resolves to an existing non-folder entry.
+        ddb.Setup(d => d.EntryExists("existing.txt")).Returns(true);
         ddb.Setup(d => d.GetEntry("existing.txt"))
             .Returns(new Entry { Path = "existing.txt", Type = EntryType.Generic });
 
         var (tool, _) = CreateTool();
 
-        var ex = Should.Throw<ArgumentException>(async () =>
+        var ex = Should.Throw<NameClashException>(async () =>
+            await tool.ValidateAsync(
+                Request(new { sourcePath = "flight.zip", destPath = "existing.txt", overwrite }),
+                Ctx(ddb.Object), CancellationToken.None));
+        ex.StatusCode.ShouldBe(409);
+        ex.Message.ShouldBe("A file or folder named 'existing.txt' already exists in this folder");
+        ex.ConflictPath.ShouldBe("existing.txt");
+    }
+
+    [Test]
+    public void ValidateAsync_DestPathIsAFileInAnotherLetterCase_Is409WithTheExistingPath()
+    {
+        var local = Path.Combine(_dir, "flight.zip");
+        CreateZip(local, "a.txt", "hello");
+        var ddb = MockDdb("flight.zip", local);
+        ddb.Setup(d => d.FindSummaries(It.IsAny<EntryQuery>())).Returns<EntryQuery>(q =>
+            string.IsNullOrEmpty(q.Path) ? [new EntrySummary { Path = "Existing.TXT", Type = EntryType.Generic }] : []);
+
+        var (tool, _) = CreateTool();
+
+        Should.Throw<NameClashException>(async () =>
             await tool.ValidateAsync(
                 Request(new { sourcePath = "flight.zip", destPath = "existing.txt" }),
-                Ctx(ddb.Object), CancellationToken.None));
-        ex.Message.ShouldContain("not a folder");
+                Ctx(ddb.Object), CancellationToken.None)).ConflictPath.ShouldBe("Existing.TXT");
+    }
+
+    [Test]
+    public void Label_NamesTheArchiveAndTheFolder_AndNoOutputIsDeclared()
+    {
+        var (tool, _) = CreateTool();
+
+        tool.Label(Request(new { sourcePath = "drops/flight.zip", destPath = "photos" }))
+            .ShouldBe("drops/flight.zip \u2192 photos/");
+        tool.Label(Request(new { sourcePath = "flight.zip" })).ShouldBe("flight.zip \u2192 /");
+        tool.OutputPaths(Request(new { sourcePath = "flight.zip", destPath = "photos" })).ShouldBeEmpty();
     }
 
     [Test]

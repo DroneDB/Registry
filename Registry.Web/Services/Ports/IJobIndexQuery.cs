@@ -63,7 +63,17 @@ public interface IJobIndexQuery
     /// </summary>
     Task<long> CountActiveUserTasksAsync(string? orgSlug = null, string? userId = null,
         string? toolId = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// The output paths of the tasks of the dataset that have not finished (<see cref="HeavyTasks.TaskStateCatalog.Active"/>,
+    /// including <c>Indexing</c>), from their <c>OutputPathsJson</c>. Reads only the active rows that declare outputs.
+    /// </summary>
+    Task<IReadOnlyList<ActiveTaskOutputs>> GetActiveOutputsAsync(string orgSlug, string dsSlug,
+        CancellationToken ct = default);
 }
+
+/// <summary>The files an unfinished task writes: its id, its tool and its declared output paths.</summary>
+public sealed record ActiveTaskOutputs(string JobId, string ToolId, IReadOnlyList<string> Paths);
 
 /// <summary>A job of an entry that has not finished: its Hangfire state and the method text of its row.</summary>
 public readonly record struct ActiveJob(string Path, string State, string? MethodDisplay);

@@ -65,6 +65,7 @@ public class DatasetImportController : ControllerBaseEx
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<UrlImportResultDto>> ImportUrl(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,

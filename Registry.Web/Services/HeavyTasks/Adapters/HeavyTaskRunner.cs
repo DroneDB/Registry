@@ -1,7 +1,11 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
+using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Ports;
@@ -9,9 +13,8 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.HeavyTasks.Adapters;
 
 /// <summary>
-/// Default <see cref="IHeavyTaskRunner"/>: resolves a native tool, validates and
-/// plans the request, deduplicates, enforces quota and enqueues the
-/// <see cref="HeavyTaskJobWrapper"/> on the <c>tasks</c> queue.
+/// Default <see cref="IHeavyTaskRunner"/>: resolves a native tool, runs the submit checks of every tool
+/// (<see cref="CheckSubmitAsync"/>) and enqueues the <see cref="HeavyTaskJobWrapper"/> on the <c>tasks</c> queue.
 /// </summary>
 public sealed class HeavyTaskRunner : IHeavyTaskRunner
 {
@@ -20,6 +23,8 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
     private readonly IDdbManager _ddbManager;
     private readonly HeavyTaskQuota _quota;
     private readonly HeavyTaskDedup _dedup;
+    private readonly IJobIndexQuery _jobIndex;
+    private readonly HeavyTaskSubmitLock _submitLock;
     private readonly IBackgroundJobsProcessor _processor;
     private readonly ILogger<HeavyTaskRunner> _log;
 
@@ -29,6 +34,8 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         IDdbManager ddbManager,
         HeavyTaskQuota quota,
         HeavyTaskDedup dedup,
+        IJobIndexQuery jobIndex,
+        HeavyTaskSubmitLock submitLock,
         IBackgroundJobsProcessor processor,
         ILogger<HeavyTaskRunner> log)
     {
@@ -37,12 +44,26 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         _ddbManager = ddbManager;
         _quota = quota;
         _dedup = dedup;
+        _jobIndex = jobIndex;
+        _submitLock = submitLock;
         _processor = processor;
         _log = log;
     }
 
-    public async Task<HeavyTaskSubmitResult> SubmitAsync(HeavyTaskSubmitRequest request, CancellationToken ct = default)
+    /// <inheritdoc />
+    public Task<HeavyTaskSubmitResult> SubmitAsync(HeavyTaskSubmitRequest request, CancellationToken ct = default) =>
+        CheckSubmitAsync(request, (admission, _) => Task.FromResult(_processor.EnqueueHeavyTask(admission.Request,
+            request.UserId, request.Hash, admission.RequestHash, request.ParentJobId, request.WorkflowExecutionId,
+            admission.OutputPaths, admission.Label)), ct: ct);
+
+    /// <inheritdoc />
+    public async Task<HeavyTaskSubmitResult> CheckSubmitAsync(HeavyTaskSubmitRequest request,
+        Func<HeavyTaskAdmission, CancellationToken, Task<string>> enqueue, string? ownJobId = null,
+        CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(enqueue);
+
         var tool = _registry.Resolve(request.ToolId, request.Version)
                    ?? throw new HeavyToolNotFoundException($"Tool '{request.ToolId}' is not available.");
 
@@ -54,28 +75,72 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         var toolRequest = new HeavyToolRequest(
             tool.Id, tool.Version, request.OrgSlug, request.DsSlug, request.Path, request.Params);
 
+        // TODO: U-302 (M3): when ownJobId is set (a retry), this context must expose PublishedOutput from that
+        // job's PublishedOutputMarker parameter; without it a task that already wrote its output gets its own 409.
         var validationCtx = new HeavyToolValidationContext(ddb, request.Caller, _log);
 
-        await tool.ValidateAsync(toolRequest, validationCtx, ct);
-        var plan = tool.Plan(toolRequest, validationCtx);
+        // An output that is one of the inputs is a 400 (D-040). It is checked before the tool's validation,
+        // which would refuse it as an existing file (409) that no overwrite can make valid. Parameters that are
+        // not valid yet are reported by the validation.
+        var declared = HeavyToolPaths.TryDeclared(tool, toolRequest);
+        if (declared != null)
+            HeavyToolPaths.EnsureOutputsAreNotInputs(declared.Inputs, declared.Outputs);
 
+        await tool.ValidateAsync(toolRequest, validationCtx, ct);
+
+        if (declared == null)
+        {
+            declared = HeavyToolPaths.Declared(tool, toolRequest);
+            HeavyToolPaths.EnsureOutputsAreNotInputs(declared.Inputs, declared.Outputs);
+        }
+
+        var plan = tool.Plan(toolRequest, validationCtx);
         var requestHash = HeavyTaskRequestHash.Compute(tool.Id, tool.Version, request.Hash, request.Params);
 
-        // Dedup: workflow sub-tasks always force (never reuse a pre-existing terminal task).
+        // Check-then-enqueue is atomic per dataset: two submits (a double click, two hosts) cannot both pass
+        using var _ = _submitLock.Acquire(request.OrgSlug, request.DsSlug);
+
+        // Dedup first: an equivalent task is the one that writes these outputs, so a second click gets its id.
+        // Workflow sub-tasks always force (never reuse a pre-existing terminal task).
         if (!request.Force &&
-            await _dedup.FindAsync(request.OrgSlug, request.DsSlug, tool.Id, requestHash, ct) is { } candidateId)
+            await _dedup.FindAsync(request.OrgSlug, request.DsSlug, tool.Id, requestHash, ct) is { } candidateId &&
+            candidateId != ownJobId)
         {
             _log.LogInformation("Deduplicated task submit for tool {ToolId} -> {JobId}", tool.Id, candidateId);
             return new HeavyTaskSubmitResult(candidateId, tool.Id, tool.Version, true, plan.EstimatedOutputBytes);
         }
 
+        await EnsureOutputsNotWrittenAsync(request.OrgSlug, request.DsSlug, declared.Outputs, ownJobId, ct);
+
         var quotaResult = await _quota.EvaluateAsync(request, plan, ct);
         if (!quotaResult.IsAllowed)
             throw new HeavyTaskQuotaException(quotaResult.Code, quotaResult.Message ?? "Quota exceeded.");
 
-        var jobId = _processor.EnqueueHeavyTask(toolRequest, request.UserId, request.Hash, requestHash,
-            request.ParentJobId, request.WorkflowExecutionId);
+        var jobId = await enqueue(new HeavyTaskAdmission(tool, toolRequest, requestHash, declared.Outputs,
+            declared.Label), ct);
 
         return new HeavyTaskSubmitResult(jobId, tool.Id, tool.Version, false, plan.EstimatedOutputBytes);
+    }
+
+    // An output that an unfinished task of the dataset writes (its own record excluded): 409
+    private async Task EnsureOutputsNotWrittenAsync(string orgSlug, string dsSlug, IReadOnlyList<string> outputs,
+        string? ownJobId, CancellationToken ct)
+    {
+        if (outputs.Count == 0)
+            return;
+
+        foreach (var task in await _jobIndex.GetActiveOutputsAsync(orgSlug, dsSlug, ct))
+        {
+            if (task.JobId == ownJobId)
+                continue;
+
+            var written = task.Paths.ToHashSet(HeavyToolPaths.Comparer);
+            var clash = outputs.FirstOrDefault(written.Contains);
+            if (clash == null)
+                continue;
+
+            _log.LogInformation("Refused a {ToolId} submit: task {JobId} writes '{Path}'", task.ToolId, task.JobId, clash);
+            throw new ConflictException(HeavyToolPaths.OutputInUseMessage(clash));
+        }
     }
 }

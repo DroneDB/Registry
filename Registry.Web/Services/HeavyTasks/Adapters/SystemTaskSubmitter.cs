@@ -33,7 +33,10 @@ public sealed class SystemTaskSubmitter : ISystemTaskSubmitter
         var request = new HeavyToolRequest(tool.Id, tool.Version, orgSlug, dsSlug, path, prms);
         await tool.ValidateAsync(request, new HeavyToolValidationContext(ddb, null, _log), ct);
 
+        // The same task record as a user submit: what the tool writes and the label of its target
+        var declared = HeavyToolPaths.Declared(tool, request);
         return _processor.EnqueueHeavyTask(request, userId,
-            requestHash: HeavyTaskRequestHash.Compute(tool.Id, tool.Version, null, prms));
+            requestHash: HeavyTaskRequestHash.Compute(tool.Id, tool.Version, null, prms),
+            outputPaths: declared.Outputs, targetLabel: declared.Label);
     }
 }

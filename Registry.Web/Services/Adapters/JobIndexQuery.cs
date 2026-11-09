@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -153,6 +154,40 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
                         || (x.CurrentState == "Succeeded" && x.CreatedAtUtc >= cutoff))
             .OrderByDescending(x => x.CreatedAtUtc)
             .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<ActiveTaskOutputs>> GetActiveOutputsAsync(string orgSlug, string dsSlug,
+        CancellationToken ct = default)
+    {
+        var rows = await db.JobIndices.AsNoTracking()
+            .Where(x => x.OrgSlug == orgSlug && x.DsSlug == dsSlug && x.OutputPathsJson != null
+                        && ActiveStates.Contains(x.CurrentState))
+            .Select(x => new { x.JobId, x.ToolId, x.OutputPathsJson })
+            .ToListAsync(ct);
+
+        var result = new List<ActiveTaskOutputs>(rows.Count);
+        foreach (var row in rows)
+        {
+            var paths = ReadPaths(row.OutputPathsJson);
+            if (paths.Length > 0)
+                result.Add(new ActiveTaskOutputs(row.JobId, row.ToolId, paths));
+        }
+        return result;
+    }
+
+    // The JSON array of a row; a value that is not one (never written so) declares nothing
+    private static string[] ReadPaths(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return [];
+        try
+        {
+            return JsonSerializer.Deserialize<string[]>(json)?.Where(p => !string.IsNullOrWhiteSpace(p)).ToArray() ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
     }
 
     public async Task<long> CountActiveUserTasksAsync(string? orgSlug = null, string? userId = null,

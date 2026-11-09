@@ -206,6 +206,24 @@ public sealed class LegacyJobPayloadTests : IDisposable
         _wrapper.Verify(x => x.Build(_folder, "a_masked.tif", null, false, false), Times.Once);
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public void StoredMaskBordersJob_WithoutTheOverwriteParameter_StillReplacesItsOutput(bool split)
+    {
+        // A DdbJobs.MaskBorders job queued before the overwrite parameter (seven parameters): its request had
+        // removed the output, so it still replaces one that exists when it runs
+        var payload = InvocationData.SerializeJob(Job.FromExpression<DdbJobs>(
+            j => j.MaskBorders(Org, Ref, "a.tif", "a_masked.tif", 15, true, null))).SerializePayload();
+        File.WriteAllText(Path.Combine(_folder, "a_masked.tif"), "old");
+
+        var job = Deserialize(payload, split);
+        job.Method.GetParameters().Length.ShouldBe(7);
+        Perform(job);
+
+        _wrapper.Verify(x => x.MaskBorders(Path.Combine(_folder, "a.tif").ToDdbPath(),
+            Path.Combine(_folder, "a_masked.tif").ToDdbPath(), 15, true), Times.Once);
+    }
+
     [TestCase("SafeDelete", "/tmp/x")]
     [TestCase("DeleteWorkDirJob", "/tmp/w")]
     public void StoredDeletes_ReachFileJobsDelete(string name, string capturedPath)

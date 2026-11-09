@@ -73,7 +73,7 @@ public sealed class HangfireUtils : DdbRetriedJob
         _ddbJobs.GenerateThumbnail(orgSlug, internalRef, path, size, dest, context);
     }
 
-    /// <summary>Stored <see cref="DdbJobs.MaskBorders"/>.</summary>
+    /// <summary>Stored <see cref="DdbJobs.MaskBorders(string, Guid, string, string, int, bool, PerformContext)"/>.</summary>
     public void MaskBordersWrapper(IDDB ddb, string inputPath, string outputPath, int nearDist, bool white,
         PerformContext context)
     {

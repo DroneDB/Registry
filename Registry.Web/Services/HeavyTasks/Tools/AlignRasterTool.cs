@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Services.HeavyTasks.Models;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Utilities;
 
@@ -20,13 +22,18 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<AlignRasterTool.Parameters>
 {
     /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
-    public sealed record Parameters(string? SourcePath, string? ReferencePath, string? OutputPath, string? Mode);
+    public sealed record Parameters(string? SourcePath, string? ReferencePath, string? OutputPath, string? Mode,
+        bool? Overwrite);
+
+    /// <summary>Job parameter that keeps the alignment report of the attempt that wrote the output (<see cref="PublishedOutputMarker"/>).</summary>
+    public const string ResultParameter = "alignResult";
 
     protected override Parameters ReadParams(ToolParameters p) => new(
         p.Text("sourcePath"),
         p.Text("referencePath"),
         p.Text("outputPath"),
-        p.Text("mode"));
+        p.Text("mode"),
+        p.Flag("overwrite"));
 
 
     private static readonly JsonDocument Schema = JsonDocument.Parse(
@@ -40,7 +47,9 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
             "referencePath": { "type": "string", "description": "Dataset-relative path of the reference GeoTIFF." },
             "outputPath":    { "type": "string", "description": "Dataset-relative path for the aligned output COG." },
             "mode":          { "type": "string", "enum": ["similarity", "translation"], "default": "similarity",
-                               "description": "Alignment mode: similarity (4-DOF) or translation (2-DOF, fast)." }
+                               "description": "Alignment mode: similarity (4-DOF) or translation (2-DOF, fast)." },
+            "overwrite":     { "type": "boolean", "default": false,
+                               "description": "Replace the output file when it exists (without it, an existing output is refused with 409)." }
           },
           "additionalProperties": false
         }
@@ -70,11 +79,27 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
 
         sourcePath = paths.Normalize(sourcePath, "source path");
         referencePath = paths.Normalize(referencePath, "reference path");
-        _ = paths.Normalize(outputPath, "output path");
+        outputPath = paths.Normalize(outputPath, "output path");
 
         // Native validation (CRS, overlap, type compatibility)
+        ValidateNative(ctx, sourcePath, referencePath);
+
+        // An existing output is replaced only when the request says so (409 otherwise, D-040); the output an
+        // earlier attempt of this task wrote is its own
+        if (!PublishedOutputMarker.Covers(ctx.Ddb, ctx.PublishedOutput, outputPath))
+            DatasetEntryLookup.ResolveOutput(ctx.Ddb, outputPath, Overwrite(args, ctx));
+
+        return Task.CompletedTask;
+    }
+
+    // An absent overwrite is false, except in a task queued before the overwrite rule, which replaced its output
+    private static bool Overwrite(Parameters args, IHeavyToolValidationContext ctx) =>
+        args.Overwrite ?? ctx.QueuedBeforeOverwriteRule;
+
+    private static void ValidateNative(IHeavyToolValidationContext ctx, string sourcePath, string referencePath)
+    {
         var validationJson = ctx.Ddb.ValidateAlignRaster(sourcePath, referencePath);
-        if (string.IsNullOrWhiteSpace(validationJson)) return Task.CompletedTask;
+        if (string.IsNullOrWhiteSpace(validationJson)) return;
 
         try
         {
@@ -93,9 +118,20 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
         {
             // If native output is not parseable, defer to execution phase.
         }
-
-        return Task.CompletedTask;
     }
+
+    protected override IReadOnlyList<string> InputPaths(Parameters p) =>
+    [
+        .. new[] { (Path: p.SourcePath, Subject: "source path"), (Path: p.ReferencePath, Subject: "reference path") }
+            .Where(x => !string.IsNullOrWhiteSpace(x.Path))
+            .Select(x => paths.Normalize(x.Path, x.Subject))
+    ];
+
+    protected override IReadOnlyList<string> OutputPaths(Parameters p) =>
+        string.IsNullOrWhiteSpace(p.OutputPath) ? [] : [paths.Normalize(p.OutputPath, "output path")];
+
+    protected override string? Label(Parameters p) =>
+        string.IsNullOrWhiteSpace(p.OutputPath) ? null : "\u2192 " + paths.Normalize(p.OutputPath, "output path");
 
     protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
     {
@@ -131,28 +167,50 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
         var outputPath = paths.Normalize(args.OutputPath, "output path");
         var mode = args.Mode ?? "similarity";
 
-        progress.Report(new HeavyToolProgress(-1, "aligning",
-            LogChunk: $"Aligning '{sourcePath}' → '{outputPath}' (mode: {mode})"));
+        string compact;
+        var published = ctx.PublishedOutput;
+        if (PublishedOutputMarker.Covers(ctx.Ddb, published, outputPath))
+        {
+            // An earlier attempt wrote the output and failed after it (the index was busy): index it, never write again
+            outputPath = published!;
+            compact = ctx.Hangfire?.Connection?.GetJobParameter(ctx.TaskId, ResultParameter) ?? "{}";
+            progress.Report(new HeavyToolProgress(-1, "indexing",
+                LogChunk: $"'{outputPath}' was written by an earlier attempt"));
+        }
+        else
+        {
+            // Checked again on the worker: a file may have appeared since the submit. A name that differs only in
+            // letter case is the existing file (D-040)
+            outputPath = DatasetEntryLookup.ResolveOutput(ctx.Ddb, outputPath, Overwrite(args, ctx));
 
-        // Overwrite an existing output (parity with ObjectsManager.AlignRaster).
-        var outputFullPath = ctx.Ddb.GetLocalPath(outputPath);
-        if (File.Exists(outputFullPath))
-            File.Delete(outputFullPath);
+            progress.Report(new HeavyToolProgress(-1, "aligning",
+                LogChunk: $"Aligning '{sourcePath}' → '{outputPath}' (mode: {mode})"));
 
-        ct.ThrowIfCancellationRequested();
+            // NOTE: libddb 2.0 writes the output in place and needs it gone: the request asked for the replace
+            var outputFullPath = ctx.Ddb.GetLocalPath(outputPath);
+            if (File.Exists(outputFullPath))
+                File.Delete(outputFullPath);
 
-        var resultJson = await Task.Run(
-            () => ctx.Ddb.AlignRaster(sourcePath, referencePath, outputPath, mode), ct);
+            ct.ThrowIfCancellationRequested();
 
-        ct.ThrowIfCancellationRequested();
+            var resultJson = await Task.Run(
+                () => ctx.Ddb.AlignRaster(sourcePath, referencePath, outputPath, mode), ct);
+
+            // The very next step after the write: from here a later attempt indexes the output, and no
+            // cancellation check stands between the write and the index. NOTE: a process crash between the
+            // write and this line leaves the file without the marker (the retry then refuses it as existing)
+            ctx.MarkOutputPublished(outputPath);
+
+            // Emit compact (single-line) JSON so the log tail delivers it as a single
+            // entry that the frontend can JSON.parse after stripping the timestamp prefix.
+            using (var doc = JsonDocument.Parse(resultJson))
+                compact = JsonSerializer.Serialize(doc);
+            ctx.Hangfire?.Connection?.SetJobParameter(ctx.TaskId, ResultParameter, compact);
+        }
 
         progress.Report(new HeavyToolProgress(-1, "indexing", LogChunk: "Indexing aligned output"));
         ctx.Ddb.AddRaw(outputPath);
 
-        // Emit compact (single-line) JSON so the log tail delivers it as a single
-        // entry that the frontend can JSON.parse after stripping the timestamp prefix.
-        using var doc = JsonDocument.Parse(resultJson);
-        var compact = JsonSerializer.Serialize(doc);
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: compact));
         return null;
     }

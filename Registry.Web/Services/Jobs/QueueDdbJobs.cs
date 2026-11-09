@@ -53,13 +53,13 @@ public static class QueueDdbJobs
         return jobs.EnqueueIndexed<DdbJobs>(j => j.Cleanup(orgSlug, internalRef, null), meta);
     }
 
-    /// <summary>Queues the mask-borders job of <paramref name="inputPath"/>.</summary>
+    /// <summary>Queues the mask-borders job of <paramref name="inputPath"/> (an existing output is replaced only with <paramref name="overwrite"/>).</summary>
     public static string EnqueueMaskBorders(this IBackgroundJobsProcessor jobs, DatasetKey dataset, string inputPath,
-        string outputPath, int nearDist, bool white, IndexPayload meta)
+        string outputPath, int nearDist, bool white, bool overwrite, IndexPayload meta)
     {
         var (orgSlug, internalRef) = Target(dataset);
         return jobs.EnqueueIndexed<DdbJobs>(
-            j => j.MaskBorders(orgSlug, internalRef, inputPath, outputPath, nearDist, white, null), meta);
+            j => j.MaskBorders(orgSlug, internalRef, inputPath, outputPath, nearDist, white, overwrite, null), meta);
     }
 
     private static (string OrgSlug, Guid InternalRef) Target(DatasetKey dataset)

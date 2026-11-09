@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Services.HeavyTasks.Models;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Utilities;
 
@@ -19,11 +20,12 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : HeavyToolBase<MergeMultispectralTool.Parameters>
 {
     /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
-    public sealed record Parameters(string[]? Paths, string? OutputPath);
+    public sealed record Parameters(string[]? Paths, string? OutputPath, bool? Overwrite);
 
     protected override Parameters ReadParams(ToolParameters p) => new(
         p.NonBlankStrings("paths"),
-        p.Text("outputPath"));
+        p.Text("outputPath"),
+        p.Flag("overwrite"));
 
 
     private static readonly JsonDocument Schema = JsonDocument.Parse(
@@ -34,7 +36,8 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
           "required": ["paths", "outputPath"],
           "properties": {
             "paths": { "type": "array", "items": { "type": "string" }, "description": "Single-band raster entry paths to merge, in band order." },
-            "outputPath": { "type": "string", "description": "Output multi-band COG file name (dataset-relative)." }
+            "outputPath": { "type": "string", "description": "Output multi-band COG file name (dataset-relative)." },
+            "overwrite": { "type": "boolean", "default": false, "description": "Replace the output file when it exists (without it, an existing output is refused with 409)." }
           },
           "additionalProperties": false
         }
@@ -86,8 +89,22 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
             }
         }
 
+        // An existing output is replaced only when the request says so (409 otherwise, D-040); the output an
+        // earlier attempt of this task wrote is its own
+        if (!PublishedOutputMarker.Covers(ctx.Ddb, ctx.PublishedOutput, outputPath))
+            DatasetEntryLookup.ResolveOutput(ctx.Ddb, outputPath, args.Overwrite ?? ctx.QueuedBeforeOverwriteRule);
+
         return Task.CompletedTask;
     }
+
+    protected override IReadOnlyList<string> InputPaths(Parameters p) =>
+        p.Paths is null ? [] : Array.ConvertAll(p.Paths, x => pathPolicy.Normalize(x));
+
+    protected override IReadOnlyList<string> OutputPaths(Parameters p) =>
+        string.IsNullOrWhiteSpace(p.OutputPath) ? [] : [pathPolicy.Normalize(p.OutputPath, "output path")];
+
+    protected override string? Label(Parameters p) =>
+        string.IsNullOrWhiteSpace(p.OutputPath) ? null : "\u2192 " + pathPolicy.Normalize(p.OutputPath, "output path");
 
     protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
     {
@@ -124,17 +141,35 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
                     ?? throw new InvalidOperationException("Band paths are required."), p => pathPolicy.Normalize(p));
         var outputPath = pathPolicy.Normalize(args.OutputPath, "output path");
 
-        progress.Report(new HeavyToolProgress(-1, "merging",
-            LogChunk: $"Merging {paths.Length} bands → {outputPath}"));
+        var published = ctx.PublishedOutput;
+        if (PublishedOutputMarker.Covers(ctx.Ddb, published, outputPath))
+        {
+            // An earlier attempt wrote the output and failed after it (the index was busy): index it, never write again
+            outputPath = published!;
+            progress.Report(new HeavyToolProgress(-1, "indexing",
+                LogChunk: $"'{outputPath}' was written by an earlier attempt"));
+        }
+        else
+        {
+            // Checked again on the worker: a file may have appeared since the submit. A name that differs only in
+            // letter case is the existing file (D-040)
+            outputPath = DatasetEntryLookup.ResolveOutput(ctx.Ddb, outputPath, args.Overwrite ?? ctx.QueuedBeforeOverwriteRule);
 
-        // Overwrite an existing output (parity with the legacy manager).
-        var outputFullPath = ctx.Ddb.GetLocalPath(outputPath);
-        if (File.Exists(outputFullPath))
-            File.Delete(outputFullPath);
+            progress.Report(new HeavyToolProgress(-1, "merging",
+                LogChunk: $"Merging {paths.Length} bands → {outputPath}"));
 
-        await Task.Run(() => ctx.Ddb.MergeMultispectral(paths, outputPath), ct);
+            // NOTE: libddb 2.0 refuses an existing output: the request asked for the replace
+            var outputFullPath = ctx.Ddb.GetLocalPath(outputPath);
+            if (File.Exists(outputFullPath))
+                File.Delete(outputFullPath);
 
-        ct.ThrowIfCancellationRequested();
+            await Task.Run(() => ctx.Ddb.MergeMultispectral(paths, outputPath), ct);
+
+            // The very next step after the write: from here a later attempt indexes the output, and no
+            // cancellation check stands between the write and the index. NOTE: a process crash between the
+            // write and this line leaves the file without the marker (the retry then refuses it as existing)
+            ctx.MarkOutputPublished(outputPath);
+        }
 
         progress.Report(new HeavyToolProgress(-1, "indexing", LogChunk: "Indexing merged output"));
         ctx.Ddb.AddRaw(outputPath);

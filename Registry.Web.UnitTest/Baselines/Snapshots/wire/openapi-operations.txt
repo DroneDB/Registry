@@ -160,6 +160,7 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/import/url
   200 application/json UrlImportResultDto
   400 application/json ProblemDetails
   401 application/json ProblemDetails
+  409 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/import/verify-url
   body application/*+json UrlImportVerifyRequestDto; application/json UrlImportVerifyRequestDto; text/json UrlImportVerifyRequestDto
   200 application/json UrlImportVerifyResultDto
@@ -180,6 +181,7 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/mask-borders
   body application/*+json MaskBordersRequestDto; application/json MaskBordersRequestDto; text/json MaskBordersRequestDto
   200 application/json OkDto
   400 application/json ProblemDetails
+  409 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/mask-borders/check
   body application/*+json MaskBordersRequestDto; application/json MaskBordersRequestDto; text/json MaskBordersRequestDto
   200 application/json MaskBordersCheckResponseDto
@@ -188,6 +190,7 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/merge-multispectral
   body application/*+json MergeMultispectralRequestDto; application/json MergeMultispectralRequestDto; text/json MergeMultispectralRequestDto
   200 application/json OkDto
   400 application/json ProblemDetails
+  409 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/merge-multispectral/preview
   body application/*+json MergeMultispectralRequestDto; application/json MergeMultispectralRequestDto; text/json MergeMultispectralRequestDto
   200 application/json string(binary)
@@ -477,6 +480,7 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/tasks
   200 application/json SubmitTaskResponseDto
   202
   400 application/json ProblemDetails
+  409 application/json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/tasks/clear
   200 application/json TasksClearedDto
 GET /orgs/{orgSlug}/ds/{dsSlug}/tasks/events
@@ -1075,8 +1079,8 @@ schema InputRuleDto { pattern:string, minLength:integer(int32), maxLength:intege
 schema InputRulesDto { slug:InputRuleDto, email:InputRuleDto, entryName:EntryNameRuleDto, nameClash:NameClashRuleDto, cron:CronRuleDto, latinName:LatinNameRuleDto }
 schema LatinNameRuleDto { pattern:string, normalization:string, description:string, message:string, messageWithoutSlug:string }
 schema MaskBordersCheckResponseDto { exists:boolean, outputPath:string }
-schema MaskBordersRequestDto { path:string, near:integer(int32), white:boolean }
-schema MergeMultispectralRequestDto { paths:array<string>, previewBands:string, thumbSize:integer(int32), outputPath:string }
+schema MaskBordersRequestDto { path:string, near:integer(int32), white:boolean, overwrite:boolean }
+schema MergeMultispectralRequestDto { paths:array<string>, previewBands:string, thumbSize:integer(int32), outputPath:string, overwrite:boolean }
 schema MergeOrganizationDto { sourceOrgSlug:string, destinationOrgSlug:string, conflictResolution:ConflictResolutionStrategy, deleteSourceOrganization:boolean }
 schema MergeOrganizationResultDto { sourceOrgSlug:string, destinationOrgSlug:string, datasetResults:array<MoveDatasetResultDto>, sourceOrganizationDeleted:boolean, datasetsMovedCount:integer(int32), datasetsFailedCount:integer(int32) }
 schema MetaDto { id:string, data:any, mtime:string(date-time) }

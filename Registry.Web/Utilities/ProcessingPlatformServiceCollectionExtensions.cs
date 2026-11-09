@@ -89,6 +89,7 @@ public static class ProcessingPlatformServiceCollectionExtensions
         services.AddScoped<HeavyTaskQuota>();
         services.AddScoped<IHeavyTaskRunner, HeavyTaskRunner>();
         services.AddScoped<HeavyTaskDedup>();
+        services.AddScoped<HeavyTaskSubmitLock>();
         services.AddScoped<CurrentUserTaskSubmitter>();
 
         return services;

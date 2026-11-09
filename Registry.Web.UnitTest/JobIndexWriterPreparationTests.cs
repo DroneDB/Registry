@@ -202,6 +202,64 @@ public class JobIndexWriterPreparationTests
             .ShouldBe(JobIndexPreparationResult.Incompatible);
     }
 
+    // ---------------------------------------------------------------- Output paths and label (D-013)
+
+    private static IndexPayload HeavyTaskPayload() =>
+        Payload(tool: "merge-multispectral") with
+        {
+            OutputPathsJson = "[\"bands/merged.tif\"]", TargetLabel = "→ bands/merged.tif"
+        };
+
+    [Test]
+    public async Task Prepare_MissingRow_StoresTheOutputPathsAndTheLabel()
+    {
+        using var t = new Sqlite();
+
+        await t.Writer.PrepareForPublicationAsync("1", HeavyTaskPayload(), Created, null);
+
+        var row = t.Row("1")!;
+        row.OutputPathsJson.ShouldBe("[\"bands/merged.tif\"]");
+        row.TargetLabel.ShouldBe("→ bands/merged.tif");
+    }
+
+    [Test]
+    public async Task Prepare_DifferentCreationTime_ReplacesTheOutputPathsAndTheLabel_NullIncluded()
+    {
+        using var t = new Sqlite();
+        var old = Telemetry("1", "Succeeded", Created.AddDays(-10));
+        old.OutputPathsJson = "[\"old.tif\"]";
+        old.TargetLabel = "→ old.tif";
+        t.Seed(old);
+
+        (await t.Writer.PrepareForPublicationAsync("1", Payload(), Created, null))
+            .ShouldBe(JobIndexPreparationResult.Replaced);
+        t.Row("1")!.OutputPathsJson.ShouldBeNull();
+        t.Row("1")!.TargetLabel.ShouldBeNull();
+
+        var again = Telemetry("2", "Failed", Created.AddDays(-10));
+        t.Seed(again);
+        await t.Writer.PrepareForPublicationAsync("2", HeavyTaskPayload(), Created, null);
+        t.Row("2")!.OutputPathsJson.ShouldBe("[\"bands/merged.tif\"]");
+        t.Row("2")!.TargetLabel.ShouldBe("→ bands/merged.tif");
+    }
+
+    [Test]
+    public async Task ResetForRequeue_KeepsTheOutputPathsAndTheLabel()
+    {
+        using var t = new Sqlite();
+        var failed = Telemetry("1", "Failed", Created);
+        failed.OutputPathsJson = "[\"bands/merged.tif\"]";
+        failed.TargetLabel = "→ bands/merged.tif";
+        t.Seed(failed);
+
+        await t.Writer.ResetForRequeueAsync("1");
+
+        var row = t.Row("1")!;
+        row.ErrorType.ShouldBeNull();
+        row.OutputPathsJson.ShouldBe("[\"bands/merged.tif\"]");
+        row.TargetLabel.ShouldBe("→ bands/merged.tif");
+    }
+
     // ---------------------------------------------------------------- Replaced (job id reuse)
 
     [TestCase("Succeeded")]

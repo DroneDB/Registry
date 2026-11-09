@@ -19,7 +19,8 @@ public class IndexedJobPublicationRecordTests
     private static readonly DateTime Created = new(2026, 5, 6, 7, 8, 9, 123, DateTimeKind.Utc);
 
     private static IndexPayload FullPayload() =>
-        new("org", "ds", "hash", "user", "pq", "a/b.obj", "tool-x", "3", "req-hash", "parent", "wf");
+        new("org", "ds", "hash", "user", "pq", "a/b.obj", "tool-x", "3", "req-hash", "parent", "wf",
+            "[\"a/b.tif\"]", "→ a/b.tif");
 
     private static IndexedJobPublicationRecord Immediate() =>
         IndexedJobPublicationRecord.ForImmediate(FullPayload(), Created, "critical");
@@ -133,6 +134,34 @@ public class IndexedJobPublicationRecordTests
     [Test]
     public void ReferenceJson_IsValid() =>
         IndexedJobPublicationRecord.TryParse(Data(Json())).Status.ShouldBe(IndexedJobRecordParseStatus.Valid);
+
+    [Test]
+    public void RecordWrittenBeforeTheOutputPaths_ReadsThemAsNull()
+    {
+        var parsed = IndexedJobPublicationRecord.TryParse(Data(Json()));
+
+        parsed.Status.ShouldBe(IndexedJobRecordParseStatus.Valid);
+        parsed.Record!.Payload.OutputPathsJson.ShouldBeNull();
+        parsed.Record.Payload.TargetLabel.ShouldBeNull();
+    }
+
+    [Test]
+    public void OutputPathsAndLabel_AreWrittenUnderTheirOwnMembers()
+    {
+        var json = Immediate().ToStateData()[IndexedJobPublicationRecord.RecordKey];
+
+        using (var doc = System.Text.Json.JsonDocument.Parse(json))
+        {
+            var payload = doc.RootElement.GetProperty("payload");
+            payload.GetProperty("outputPathsJson").GetString().ShouldBe("[\"a/b.tif\"]");
+            payload.GetProperty("targetLabel").GetString().ShouldBe("→ a/b.tif");
+        }
+        IndexedJobPublicationRecord.TryParse(Data(Json(payload:
+                "{\"orgSlug\":\"o\",\"dsSlug\":\"d\",\"toolId\":\"t\",\"toolVersion\":\"1\"," +
+                "\"outputPathsJson\":\"[\\\"x.tif\\\"]\",\"targetLabel\":\"x\"}")))
+            .Record!.Payload.ShouldBe(new IndexPayload("o", "d", null, null, ToolId: "t", ToolVersion: "1",
+                OutputPathsJson: "[\"x.tif\"]", TargetLabel: "x"));
+    }
 
     [Test]
     public void UnknownMembers_AreTolerated() =>

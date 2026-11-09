@@ -2488,12 +2488,14 @@
     "full": {
       "path": null,
       "near": 42,
-      "white": true
+      "white": true,
+      "overwrite": true
     },
     "sparse": {
       "path": null,
       "near": 0,
-      "white": false
+      "white": false,
+      "overwrite": false
     }
   },
   "Registry.Web.Models.DTO.MergeMultispectralRequestDto": {
@@ -2503,13 +2505,15 @@
       ],
       "previewBands": "PreviewBands-text",
       "thumbSize": 42,
-      "outputPath": null
+      "outputPath": null,
+      "overwrite": true
     },
     "sparse": {
       "paths": null,
       "previewBands": null,
       "thumbSize": null,
-      "outputPath": null
+      "outputPath": null,
+      "overwrite": false
     }
   },
   "Registry.Web.Models.DTO.MergeOrganizationDto": {

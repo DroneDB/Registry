@@ -1,5 +1,7 @@
 using Registry.Web.Test.Support;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
@@ -25,13 +27,13 @@ namespace Registry.Web.Test;
 [TestFixture]
 public class FileUrlImportToolTests
 {
-    private static FileUrlImportTool CreateTool(ImportSettings? settings = null)
+    private static FileUrlImportTool CreateTool(ImportSettings? settings = null, IHttpClientFactory? http = null)
     {
         settings ??= new ImportSettings { SsrfAllowPrivateNetworks = true };
         settings.SsrfAllowPrivateNetworks = true; // keep SSRF checks hermetic (no DNS)
 
         var guard = new SsrfGuard(settings);
-        var downloader = new GuardedHttpDownloader(guard, new SimpleFactory(),
+        var downloader = new GuardedHttpDownloader(guard, http ?? new SimpleFactory(),
             TestHeadroom.Default);
         var options = Microsoft.Extensions.Options.Options.Create(new AppSettings
         {
@@ -133,13 +135,94 @@ public class FileUrlImportToolTests
     }
 
     [Test]
-    public async Task ValidateAsync_ExistingFileWithoutOverwrite_Throws()
+    public async Task ValidateAsync_ExistingFileWithoutOverwrite_Is409WithItsPath()
     {
         var tool = CreateTool();
+        var req = Req(new { url = "http://download.test/cloud.laz", fileName = "cloud.laz", folder = "scans", overwrite = false });
+
+        var ex = await Should.ThrowAsync<NameClashException>(async () =>
+            await tool.ValidateAsync(req, Ctx(entryExists: true), CancellationToken.None));
+
+        ex.StatusCode.ShouldBe(409);
+        ex.Message.ShouldBe("A file or folder named 'cloud.laz' already exists in this folder");
+        ex.ConflictPath.ShouldBe("scans/cloud.laz");
+    }
+
+    [Test]
+    public async Task ValidateAsync_ExistingFileInAnotherLetterCase_Is409WithTheExistingPath()
+    {
+        var ddb = new Mock<IDDB>();
+        ddb.Setup(d => d.FindSummaries(It.IsAny<EntryQuery>())).Returns<EntryQuery>(q =>
+            string.IsNullOrEmpty(q.Path)
+                ? [new EntrySummary { Path = "Cloud.LAZ", Type = EntryType.PointCloud }]
+                : []);
+        var ctx = new Mock<IHeavyToolValidationContext>();
+        ctx.Setup(c => c.Ddb).Returns(ddb.Object);
         var req = Req(new { url = "http://download.test/cloud.laz", fileName = "cloud.laz", folder = "", overwrite = false });
 
-        await Should.ThrowAsync<ArgumentException>(async () =>
-            await tool.ValidateAsync(req, Ctx(entryExists: true), CancellationToken.None));
+        var ex = await Should.ThrowAsync<NameClashException>(async () =>
+            await CreateTool().ValidateAsync(req, ctx.Object, CancellationToken.None));
+
+        ex.ConflictPath.ShouldBe("Cloud.LAZ");
+    }
+
+    [Test]
+    public void DeclaresItsTargetAsOutputAndLabel()
+    {
+        var tool = CreateTool();
+        var req = Req(new { url = "http://download.test/x", fileName = "cloud.laz", folder = "scans/" });
+
+        tool.InputPaths(req).ShouldBeEmpty();
+        tool.OutputPaths(req).ShouldBe(["scans/cloud.laz"]);
+        tool.Label(req).ShouldBe("\u2192 scans/cloud.laz");
+    }
+
+    [Test]
+    public async Task LaterAttempt_AfterTheMove_SkipsTheCheckAndTheDownload_AndIndexes()
+    {
+        // The first attempt moved the file into place, then failed to index it: the file exists, no overwrite
+        var tool = CreateTool(http: new RefusingFactory());
+        var written = System.IO.Path.GetTempFileName();
+        try
+        {
+            var ddb = new Mock<IDDB>();
+            ddb.Setup(d => d.EntryExists("cloud.laz")).Returns(true);
+            ddb.Setup(d => d.GetLocalPath("cloud.laz")).Returns(written);
+            ddb.Setup(d => d.AddRawBatch(It.IsAny<IReadOnlyList<string>>()))
+                .Returns((IReadOnlyList<string> paths) => [.. paths.Select(p => new Entry { Path = p, Type = EntryType.Generic })]);
+            TestBuilds.SetupBuilds(ddb);
+            var ctx = new Mock<IHeavyToolExecutionContext>();
+            ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
+            ctx.SetupGet(c => c.TaskId).Returns("task-1");
+            ctx.SetupGet(c => c.BuildQueue).Returns(TestJobs.Scheduler());
+            ctx.SetupGet(c => c.PublishedOutput).Returns("cloud.laz");
+            var req = Req(new { url = "http://download.test/cloud.laz", fileName = "cloud.laz", folder = "", overwrite = false });
+
+            await tool.ValidateAsync(req, ctx.Object, CancellationToken.None);
+            await tool.ExecuteAsync(req, ctx.Object, new Progress<HeavyToolProgress>(), CancellationToken.None);
+
+            ddb.Verify(d => d.AddRawBatch(It.Is<IReadOnlyList<string>>(p => p.SequenceEqual(new[] { "cloud.laz" }))), Times.Once);
+            ctx.Verify(c => c.MarkOutputPublished(It.IsAny<string>()), Times.Never);
+        }
+        finally
+        {
+            System.IO.File.Delete(written);
+        }
+    }
+
+    [Test]
+    public async Task MarkerWhoseFileIsGone_DoesNotExcuseAnExistingName()
+    {
+        // The marker names the target, but its file is gone: the existing index entry is refused again
+        var ddb = new Mock<IDDB>();
+        ddb.Setup(d => d.EntryExists("cloud.laz")).Returns(true);
+        var ctx = new Mock<IHeavyToolExecutionContext>();
+        ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
+        ctx.SetupGet(c => c.PublishedOutput).Returns("cloud.laz");
+        var req = Req(new { url = "http://download.test/cloud.laz", fileName = "cloud.laz", folder = "", overwrite = false });
+
+        await Should.ThrowAsync<NameClashException>(() =>
+            CreateTool().ValidateAsync(req, ctx.Object, CancellationToken.None));
     }
 
     [Test]
@@ -176,5 +259,11 @@ public class FileUrlImportToolTests
     private sealed class SimpleFactory : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new();
+    }
+
+    // Fails the test when the tool downloads anything
+    private sealed class RefusingFactory : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => throw new AssertionException("the file was downloaded again");
     }
 }

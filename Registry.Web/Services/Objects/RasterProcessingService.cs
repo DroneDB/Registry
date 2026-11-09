@@ -7,6 +7,7 @@ using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -62,9 +63,14 @@ public sealed class RasterProcessingService
             ct);
     }
 
-    /// <summary>Merges the single-band <paramref name="paths"/> into <paramref name="outputPath"/> (replaced) and indexes it.</summary>
+    /// <summary>
+    /// Merges the single-band <paramref name="paths"/> into <paramref name="outputPath"/> and indexes it. An existing
+    /// output is replaced only with <paramref name="overwrite"/> (D-040); an output that is one of the bands never is.
+    /// </summary>
+    /// <exception cref="BadRequestException">A path is missing, or the output is one of the bands.</exception>
+    /// <exception cref="NameClashException">The output exists and <paramref name="overwrite"/> is false.</exception>
     public async Task MergeMultispectralAsync(string orgSlug, string dsSlug, string[] paths, string? outputPath,
-        CancellationToken ct = default)
+        bool overwrite = false, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(outputPath))
             throw new BadRequestException("outputPath is required");
@@ -75,8 +81,13 @@ public sealed class RasterProcessingService
         outputPath = _paths.Normalize(outputPath, "output path");
         paths = NormalizeAll(paths);
 
+        // The rules of every tool output: not one of the inputs (400), an existing file only when asked (409)
+        HeavyToolPaths.EnsureOutputsAreNotInputs(paths, [outputPath]);
+        outputPath = DatasetEntryLookup.ResolveOutput(ddb, outputPath, overwrite);
+
+        // NOTE: libddb 2.0 refuses an existing output: the request asked for the replace
         var outputFullPath = ddb.GetLocalPath(outputPath);
-        if (_fs.RemoveEntry(outputFullPath, isFolder: false))
+        if (overwrite && _fs.RemoveEntry(outputFullPath, isFolder: false))
             _logger.LogInformation("Output file already existed, deleted: '{OutputPath}'", outputFullPath);
 
         _logger.LogInformation("Merging multispectral for '{OutputPath}'", outputFullPath);
@@ -103,19 +114,24 @@ public sealed class RasterProcessingService
         return await _gate.RunAsync(NativeLane.Heavy, () => ddb.ValidateAlignRaster(sourcePath, referencePath), ct);
     }
 
-    /// <summary>Whether the masked copy of <paramref name="path"/> (next to it) exists.</summary>
+    /// <summary>Whether the masked copy of <paramref name="path"/> (next to it) exists, in any letter case (D-040).</summary>
     public async Task<MaskBordersCheckResponseDto> CheckMaskedFileExistsAsync(string orgSlug, string dsSlug,
         string path, CancellationToken ct = default)
     {
         var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct)).Ddb;
 
         var outputPath = MaskedOutputPath(_paths.Normalize(path));
-        return new MaskBordersCheckResponseDto { Exists = ddb.GetEntry(outputPath) != null, OutputPath = outputPath };
+        var existing = DatasetEntryLookup.FindExisting(ddb, outputPath);
+        return new MaskBordersCheckResponseDto { Exists = existing != null, OutputPath = existing?.Path ?? outputPath };
     }
 
-    /// <summary>Starts the job that writes the masked copy of the georaster <paramref name="path"/> (replaced).</summary>
+    /// <summary>
+    /// Starts the job that writes the masked copy of the georaster <paramref name="path"/>. An existing copy is
+    /// replaced only with <paramref name="overwrite"/> (D-040).
+    /// </summary>
+    /// <exception cref="NameClashException">The copy exists and <paramref name="overwrite"/> is false.</exception>
     public async Task MaskBordersAsync(string orgSlug, string dsSlug, string path, int nearDist, bool white,
-        CancellationToken ct = default)
+        bool overwrite = false, CancellationToken ct = default)
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
 
@@ -128,12 +144,16 @@ public sealed class RasterProcessingService
         if (entry.Type != EntryType.GeoRaster)
             throw new BadRequestException($"Entry '{path}' is not a georaster");
 
-        var outputPath = MaskedOutputPath(path);
+        // A name that differs only in letter case is the existing copy (D-040)
+        var outputPath = DatasetEntryLookup.ResolveOutput(ddb, MaskedOutputPath(path), overwrite);
+
+        // NOTE: libddb 2.0 writes the output in place and needs it gone: the request asked for the replace
         var outputFullPath = ddb.GetLocalPath(outputPath);
-        if (_fs.RemoveEntry(outputFullPath, isFolder: false))
+        if (overwrite && _fs.RemoveEntry(outputFullPath, isFolder: false))
             _logger.LogInformation("Output file already existed, deleted: '{OutputPath}'", outputFullPath);
 
-        var jobId = await _jobs.EnqueueMaskBordersAsync(access, orgSlug, dsSlug, entry, outputPath, nearDist, white);
+        var jobId = await _jobs.EnqueueMaskBordersAsync(access, orgSlug, dsSlug, entry, outputPath, nearDist, white,
+            overwrite);
         _logger.LogInformation("Masking borders for '{Path}' asynchronously, background job id is {JobId}", path, jobId);
     }
 

@@ -53,6 +53,9 @@ public class MergeMultispectralRequestDto
 
     /// <summary>The merged raster, a dataset path (libddb's rule, checked when the body is read).</summary>
     public DatasetPath? OutputPath { get; set; }
+
+    /// <summary>Replace the output when it exists; without it an existing output is refused with 409 (D-040).</summary>
+    public bool Overwrite { get; set; }
 }
 
 /// <summary>

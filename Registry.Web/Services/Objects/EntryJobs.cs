@@ -114,14 +114,17 @@ public sealed class EntryJobs
         }
     }
 
-    /// <summary>Queues the mask-borders job of <paramref name="entry"/> into <paramref name="outputPath"/>.</summary>
+    /// <summary>
+    /// Queues the mask-borders job of <paramref name="entry"/> into <paramref name="outputPath"/>, which replaces an
+    /// existing file only with <paramref name="overwrite"/>.
+    /// </summary>
     /// <returns>The job id.</returns>
     public async Task<string> EnqueueMaskBordersAsync(DatasetAccess access, string orgSlug, string dsSlug,
-        Entry entry, string outputPath, int nearDist, bool white)
+        Entry entry, string outputPath, int nearDist, bool white, bool overwrite = false)
     {
         var user = await _authManager.GetCurrentUser();
         var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user?.Id, null, entry.Path);
-        return _jobs.EnqueueMaskBorders(access.Key, entry.Path, outputPath, nearDist, white, meta);
+        return _jobs.EnqueueMaskBorders(access.Key, entry.Path, outputPath, nearDist, white, overwrite, meta);
     }
 
     /// <summary>Refuses a second job of <paramref name="methodName"/> on <paramref name="path"/> while one waits or runs.</summary>

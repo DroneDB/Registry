@@ -88,7 +88,8 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         var ddb = ddbManager.Get(request.OrgSlug, ds.InternalRef);
 
         var execCtx = new HeavyToolExecutionContext(ddb, new DatasetKey(request.OrgSlug, ds.InternalRef), _log,
-            new TaskRun(taskId, workDir), ctx, sp.GetRequiredService<BuildScheduler>(), builds);
+            new TaskRun(taskId, workDir), ctx, sp.GetRequiredService<BuildScheduler>(), builds,
+            await QueuedBeforeOverwriteRuleAsync(db, taskId, cancellationToken));
         var logBuffer = new LogRingBuffer(_settings.LogTailMaxLines, _settings.LogTailMaxBytes);
         await using var progress = new HangfireProgressSink(ctx, _scopeFactory, logBuffer, taskId,
             _settings.ProgressUpdateThrottleSeconds, _sinkLog);
@@ -134,6 +135,18 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
             if (!keepWorkDir)
                 _workDirs.Delete(workDir);
         }
+    }
+
+    // A task record without output paths was written before the tools declared them (U-103): its request, without
+    // the overwrite field, replaced an existing output. A missing record is not one of them.
+    internal static async Task<bool> QueuedBeforeOverwriteRuleAsync(RegistryContext db, string taskId,
+        CancellationToken ct)
+    {
+        var row = await db.JobIndices.AsNoTracking()
+            .Where(j => j.JobId == taskId)
+            .Select(j => new { j.OutputPathsJson })
+            .FirstOrDefaultAsync(ct);
+        return row is { OutputPathsJson: null };
     }
 
     // Recorded with its own short token, not the job's: the failure must be recorded even when the

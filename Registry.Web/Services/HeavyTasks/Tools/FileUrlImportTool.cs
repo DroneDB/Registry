@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
@@ -10,6 +11,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Import;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.HeavyTasks.Tools;
@@ -125,11 +127,18 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
 
         var target = TargetPath(args.Folder, fileName);
 
-        var overwrite = args.Overwrite == true;
-        if (!overwrite && ctx.Ddb.EntryExists(target))
-            throw new ArgumentException(
-                $"'{target}' already exists. Enable overwrite to replace it.");
+        // An existing file is replaced only when the request says so (409 otherwise, D-040); the file an
+        // earlier attempt of this task moved into place is its own
+        if (!PublishedOutputMarker.Covers(ctx.Ddb, ctx.PublishedOutput, target))
+            DatasetEntryLookup.ResolveOutput(ctx.Ddb, target, args.Overwrite == true);
     }
+
+    /// <inheritdoc />
+    protected override IReadOnlyList<string> OutputPaths(Parameters p) => [TargetPath(p.Folder, FileImportPolicy.SanitizeFileName(p.FileName))];
+
+    /// <inheritdoc />
+    protected override string? Label(Parameters p) =>
+        "\u2192 " + TargetPath(p.Folder, FileImportPolicy.SanitizeFileName(p.FileName));
 
     /// <inheritdoc />
     protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
@@ -154,10 +163,36 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
 
         var target = TargetPath(args.Folder, fileName);
 
-        var overwrite = args.Overwrite == true;
-        if (!overwrite && ctx.Ddb.EntryExists(target))
-            throw new InvalidOperationException($"'{target}' already exists.");
+        var published = ctx.PublishedOutput;
+        if (PublishedOutputMarker.Covers(ctx.Ddb, published, target))
+        {
+            // An earlier attempt moved the file into place and failed after it: index it, never download it again
+            target = published!;
+            progress.Report(new HeavyToolProgress(-1, "indexing",
+                LogChunk: $"'{target}' was imported by an earlier attempt"));
+        }
+        else
+        {
+            // Checked again on the worker: a file may have appeared since the submit. A name that differs only in
+            // letter case is the existing file (D-040)
+            target = DatasetEntryLookup.ResolveOutput(ctx.Ddb, target, args.Overwrite == true);
+            await DownloadIntoPlaceAsync(uri, fileName, target, args, ctx, progress, ct);
+        }
 
+        // Index it, queue its build when libddb reports it buildable (a child of the task), invalidate the
+        // dataset's caches: what every task that wrote files does (TaskFileIndexer)
+        await _indexer.IndexAsync(new TaskFiles(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug, [target],
+            ctx.BuildQueue, ctx.TaskId, "imported file"), progress, ct);
+
+        progress.Report(new HeavyToolProgress(1, "done", LogChunk: $"Imported {target}"));
+        return null;
+    }
+
+    // Downloads the file to a scratch path on the dataset volume, then moves it to target (a rename) and marks it
+    // written: from the move on, a later attempt of the task only indexes it
+    private async Task DownloadIntoPlaceAsync(Uri uri, string fileName, string target, Parameters args,
+        IHeavyToolExecutionContext ctx, IProgress<HeavyToolProgress> progress, CancellationToken ct)
+    {
         var username = args.Username;
         var password = DecryptPassword(args.Password);
         var cap = _importSettings.EffectiveFileImportCapBytes();
@@ -203,18 +238,14 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
         progress.Report(new HeavyToolProgress(-1, "indexing",
             LogChunk: $"Adding {fileName} ({CommonUtils.GetBytesReadable(downloaded)}) to the dataset"));
 
-        // Overwrite was already validated above; move the scratch file into place (a rename on the
+        // Overwrite was already checked (ResolveOutput); move the scratch file into place (a rename on the
         // same volume, atomic over an existing file)
         File.Move(scratch.Path, localTarget, overwrite: true);
+
+        // The very next step after the move: from here a later attempt indexes the file. NOTE: a process crash
+        // between the move and this line leaves the file without the marker (the retry then refuses it as existing)
+        ctx.MarkOutputPublished(target);
         scratch.Release();
-
-        // Index it, queue its build when libddb reports it buildable (a child of the task), invalidate the
-        // dataset's caches: what every task that wrote files does (TaskFileIndexer)
-        await _indexer.IndexAsync(new TaskFiles(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug, [target],
-            ctx.BuildQueue, ctx.TaskId, "imported file"), progress, ct);
-
-        progress.Report(new HeavyToolProgress(1, "done", LogChunk: $"Imported {target}"));
-        return null;
     }
 
     // The dataset path of the (already sanitized) file name in the optional folder: libddb's path

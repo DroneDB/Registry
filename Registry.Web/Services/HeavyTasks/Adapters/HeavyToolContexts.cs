@@ -22,6 +22,12 @@ public sealed class HeavyToolValidationContext : IHeavyToolValidationContext
     public IDDB Ddb { get; }
     public ClaimsPrincipal? Caller { get; }
     public ILogger Logger { get; }
+
+    /// <summary>Always null: a submit has no earlier attempt.</summary>
+    public string? PublishedOutput => null;
+
+    /// <summary>Always false: a submit follows the overwrite rule.</summary>
+    public bool QueuedBeforeOverwriteRule => false;
 }
 
 /// <summary>The task being executed: its id and its work folder (null when the tool produces no artifact).</summary>
@@ -37,8 +43,9 @@ public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
 
     public HeavyToolExecutionContext(
         IDDB ddb, DatasetKey dataset, ILogger logger, TaskRun run, PerformContext hangfire,
-        BuildScheduler buildQueue, DdbJobs builds)
+        BuildScheduler buildQueue, DdbJobs builds, bool queuedBeforeOverwriteRule = false)
     {
+        QueuedBeforeOverwriteRule = queuedBeforeOverwriteRule;
         Ddb = ddb;
         Dataset = dataset;
         Logger = logger;
@@ -58,4 +65,13 @@ public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
     public string TaskId => _run.TaskId;
     public string? WorkDir => _run.WorkDir;
     public PerformContext Hangfire { get; }
+
+    /// <inheritdoc />
+    public string? PublishedOutput => PublishedOutputMarker.Get(Hangfire);
+
+    /// <inheritdoc />
+    public bool QueuedBeforeOverwriteRule { get; }
+
+    /// <inheritdoc />
+    public void MarkOutputPublished(string path) => PublishedOutputMarker.Set(Hangfire, path);
 }

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.Logging;
+using Registry.Web.Exceptions;
 
 namespace Registry.Web.Utilities;
 
@@ -24,6 +25,9 @@ public sealed class ApiErrorResponder
 {
     /// <summary>Extension member: true when the same request can never succeed.</summary>
     public const string NoRetryMember = "noRetry";
+
+    /// <summary>Extension member of a name clash (<see cref="NameClashException"/>): the dataset path of the existing entry.</summary>
+    public const string ConflictPathMember = "conflictPath";
 
     /// <summary>RFC 9457 media type of every error body.</summary>
     public const string ProblemJsonContentType = "application/problem+json";
@@ -56,6 +60,8 @@ public sealed class ApiErrorResponder
         var problem = ApiExceptionClassifier.IsClientGone(descriptor)
             ? null
             : Create(httpContext, descriptor.StatusCode, descriptor.Message, descriptor.NoRetry);
+        if (problem != null && exception is NameClashException clash)
+            problem.Extensions[ConflictPathMember] = clash.ConflictPath;
         return (descriptor, problem);
     }
 

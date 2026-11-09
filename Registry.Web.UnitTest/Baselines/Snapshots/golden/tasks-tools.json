@@ -245,6 +245,11 @@
           "outputPath": {
             "type": "string",
             "description": "Output multi-band COG file name (dataset-relative)."
+          },
+          "overwrite": {
+            "type": "boolean",
+            "default": false,
+            "description": "Replace the output file when it exists (without it, an existing output is refused with 409)."
           }
         },
         "additionalProperties": false
@@ -288,6 +293,11 @@
             ],
             "default": "similarity",
             "description": "Alignment mode: similarity (4-DOF) or translation (2-DOF, fast)."
+          },
+          "overwrite": {
+            "type": "boolean",
+            "default": false,
+            "description": "Replace the output file when it exists (without it, an existing output is refused with 409)."
           }
         },
         "additionalProperties": false

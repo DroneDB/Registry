@@ -181,12 +181,14 @@ public class RasterAnalysisController : ControllerBaseEx
     [HttpPost("merge-multispectral", Name = nameof(ObjectsController) + "." + nameof(MergeMultispectral))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<OkDto>> MergeMultispectral(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] MergeMultispectralRequestDto request, CancellationToken ct)
     {
-        await _processing.MergeMultispectralAsync(orgSlug, dsSlug, PathsOf(request), request.OutputPath, ct: ct);
+        await _processing.MergeMultispectralAsync(orgSlug, dsSlug, PathsOf(request), request.OutputPath,
+            request.Overwrite, ct: ct);
         return OkDto.Success;
     }
 
@@ -328,12 +330,14 @@ public class RasterAnalysisController : ControllerBaseEx
     [HttpPost("mask-borders", Name = nameof(ObjectsController) + "." + nameof(MaskBorders))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<OkDto>> MaskBorders(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromBody, Required] MaskBordersRequestDto request, CancellationToken ct)
     {
-        await _processing.MaskBordersAsync(orgSlug, dsSlug, request.Path.ToString(), request.Near, request.White, ct: ct);
+        await _processing.MaskBordersAsync(orgSlug, dsSlug, request.Path.ToString(), request.Near, request.White,
+            request.Overwrite, ct: ct);
         return OkDto.Success;
     }
 

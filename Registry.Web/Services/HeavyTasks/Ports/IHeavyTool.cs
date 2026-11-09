@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -43,6 +44,28 @@ public interface IHeavyTool
 
     /// <summary>JSON Schema (2020-12) describing the tool's input parameters.</summary>
     JsonDocument InputSchema { get; }
+
+    /// <summary>
+    /// The dataset files the task reads, normalized (FR-XC-25). <see cref="Adapters.HeavyTaskRunner"/> refuses an output that
+    /// is one of them. Invalid parameters may throw a 400 (the runner also asks before <see cref="ValidateAsync"/>).
+    /// </summary>
+    /// <returns>The input paths; empty by default.</returns>
+    IReadOnlyList<string> InputPaths(HeavyToolRequest request) => [];
+
+    /// <summary>
+    /// The dataset files the task writes, normalized; compared as whole paths without regard to case (FR-XC-25, D-013, D-040): the task record
+    /// stores them, and a submit whose output an active task of the dataset writes is refused. A tool whose output is
+    /// a whole folder or the dataset declares none. Invalid parameters may throw a 400.
+    /// </summary>
+    /// <returns>The output paths; empty by default.</returns>
+    IReadOnlyList<string> OutputPaths(HeavyToolRequest request) => [];
+
+    /// <summary>
+    /// The label of the task's target files, shown in the task lists (FR-XC-25, FR-PRC-22), stored in the task record. Asked after a
+    /// successful <see cref="ValidateAsync"/>.
+    /// </summary>
+    /// <returns>The label, or null (none) by default.</returns>
+    string? Label(HeavyToolRequest request) => null;
 
     /// <summary>Validates the request. Must not mutate state; tolerates double invocation.</summary>
     Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct);

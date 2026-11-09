@@ -41,6 +41,7 @@ public class TasksController : ControllerBaseEx
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<SubmitTaskResponseDto>> Submit(
         [FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
         [FromBody] SubmitTaskRequestDto body, CancellationToken ct)

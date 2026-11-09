@@ -225,7 +225,8 @@
       ],
       "previewBands": null,
       "thumbSize": null,
-      "outputPath": "merged.tif"
+      "outputPath": "merged.tif",
+      "overwrite": false
     }
   },
   "hub-align-validate": {
@@ -289,12 +290,13 @@
   },
   "hub-mask-borders": {
     "type": "MaskBordersRequestDto",
-    "input": "{\"path\":\"ortho.tif\",\"near\":15,\"white\":false}",
+    "input": "{\"path\":\"ortho.tif\",\"near\":15,\"white\":false,\"overwrite\":true}",
     "outcome": "bound",
     "model": {
       "path": "ortho.tif",
       "near": 15,
-      "white": false
+      "white": false,
+      "overwrite": true
     }
   },
   "hub-mask-borders-check": {
@@ -304,7 +306,8 @@
     "model": {
       "path": "ortho.tif",
       "near": 15,
-      "white": false
+      "white": false,
+      "overwrite": false
     }
   },
   "hub-stockpile-detect-all": {
@@ -655,7 +658,8 @@
     "model": {
       "path": "a.tif",
       "near": 15,
-      "white": true
+      "white": true,
+      "overwrite": false
     }
   },
   "bool-capitalised-string": {
@@ -665,7 +669,8 @@
     "model": {
       "path": "a.tif",
       "near": 15,
-      "white": true
+      "white": true,
+      "overwrite": false
     }
   },
   "bool-number": {
@@ -675,7 +680,8 @@
     "model": {
       "path": "a.tif",
       "near": 15,
-      "white": true
+      "white": true,
+      "overwrite": false
     }
   },
   "bool-text-not-a-bool": {
@@ -861,7 +867,8 @@
     "model": {
       "path": "a.tif",
       "near": 15,
-      "white": false
+      "white": false,
+      "overwrite": false
     }
   },
   "members-duplicate-last-wins": {
@@ -871,7 +878,8 @@
     "model": {
       "path": "a.tif",
       "near": 2,
-      "white": false
+      "white": false,
+      "overwrite": false
     }
   },
   "members-missing-take-defaults": {
@@ -881,7 +889,8 @@
     "model": {
       "path": "a.tif",
       "near": 15,
-      "white": false
+      "white": false,
+      "overwrite": false
     }
   },
   "members-empty-object": {
@@ -891,7 +900,8 @@
     "model": {
       "path": null,
       "near": 15,
-      "white": false
+      "white": false,
+      "overwrite": false
     }
   },
   "syntax-comments": {
@@ -901,7 +911,8 @@
     "model": {
       "path": "a.tif",
       "near": 3,
-      "white": false
+      "white": false,
+      "overwrite": false
     }
   },
   "syntax-trailing-comma": {
@@ -911,7 +922,8 @@
     "model": {
       "path": "a.tif",
       "near": 3,
-      "white": false
+      "white": false,
+      "overwrite": false
     }
   },
   "syntax-trailing-comma-array": {
@@ -964,7 +976,8 @@
     "model": {
       "path": "a.tif",
       "near": 15,
-      "white": false
+      "white": false,
+      "overwrite": false
     }
   },
   "array-single-value-for-array": {
@@ -1111,7 +1124,8 @@
     "model": {
       "path": "sub/dir/a.tif",
       "near": 15,
-      "white": false
+      "white": false,
+      "overwrite": false
     }
   },
   "path-traversal-refused": {
@@ -1136,7 +1150,8 @@
     "model": {
       "path": null,
       "near": 15,
-      "white": false
+      "white": false,
+      "overwrite": false
     }
   },
   "path-array-of-nullable": {
@@ -1151,7 +1166,8 @@
       ],
       "previewBands": null,
       "thumbSize": null,
-      "outputPath": null
+      "outputPath": null,
+      "overwrite": false
     }
   },
   "path-number": {
@@ -1161,7 +1177,8 @@
     "model": {
       "path": "5",
       "near": 15,
-      "white": false
+      "white": false,
+      "overwrite": false
     }
   }
 }

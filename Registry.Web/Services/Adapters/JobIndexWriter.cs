@@ -120,6 +120,8 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
                 .SetProperty(x => x.RequestHash, meta.RequestHash)
                 .SetProperty(x => x.ParentJobId, meta.ParentJobId)
                 .SetProperty(x => x.WorkflowExecutionId, meta.WorkflowExecutionId)
+                .SetProperty(x => x.OutputPathsJson, meta.OutputPathsJson)
+                .SetProperty(x => x.TargetLabel, meta.TargetLabel)
                 .SetProperty(x => x.ProcessingAtUtc, (DateTime?)null)
                 .SetProperty(x => x.SucceededAtUtc, (DateTime?)null)
                 .SetProperty(x => x.FailedAtUtc, (DateTime?)null)
@@ -154,6 +156,8 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
         row.RequestHash = meta.RequestHash;
         row.ParentJobId = meta.ParentJobId;
         row.WorkflowExecutionId = meta.WorkflowExecutionId;
+        row.OutputPathsJson = meta.OutputPathsJson;
+        row.TargetLabel = meta.TargetLabel;
         row.ProcessingAtUtc = null;
         row.SucceededAtUtc = null;
         row.FailedAtUtc = null;
@@ -177,7 +181,8 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
         if (ji is null || (ji.CurrentState != "Failed" && ji.CurrentState != "Enqueued"))
             return;
 
-        // Mirror the reset block in UpsertOnEnqueueAsync so a re-queued run starts clean.
+        // Mirror the reset block in UpsertOnEnqueueAsync so a re-queued run starts clean. The identity of the
+        // task stays: the same job writes the same outputs (OutputPathsJson) under the same label (TargetLabel).
         ji.ProcessingAtUtc = null;
         ji.SucceededAtUtc = null;
         ji.FailedAtUtc = null;

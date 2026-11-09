@@ -80,6 +80,31 @@ public class SystemTaskSubmitterTest
             Mock.Of<IDDB>(), null, JsonSerializer.SerializeToElement(new { }), null));
     }
 
+    [Test]
+    public async Task SubmitAsync_StoresTheOutputPathsAndTheLabelOfTheTool()
+    {
+        var merge = new Registry.Web.Services.HeavyTasks.Tools.MergeMultispectralTool(Support.TestPaths.Policy);
+        _registry.Setup(r => r.Resolve("merge-multispectral", null)).Returns(merge);
+        var prms = JsonSerializer.SerializeToElement(new { paths = new[] { "b1.tif", "b2.tif" }, outputPath = "m.tif" });
+
+        await CreateSubmitter().SubmitAsync("merge-multispectral", "org", "ds", Mock.Of<IDDB>(), null, prms);
+
+        _payload.ShouldNotBeNull();
+        _payload.OutputPathsJson.ShouldBe("[\"m.tif\"]");
+        _payload.TargetLabel.ShouldBe("→ m.tif");
+    }
+
+    [Test]
+    public async Task SubmitAsync_OfAToolThatDeclaresNoOutput_StoresNone()
+    {
+        await CreateSubmitter().SubmitAsync("rescan-index", "org", "ds", Mock.Of<IDDB>(), null,
+            JsonSerializer.SerializeToElement(new { }), null);
+
+        _payload.ShouldNotBeNull();
+        _payload.OutputPathsJson.ShouldBeNull();
+        _payload.TargetLabel.ShouldBeNull();
+    }
+
     private SystemTaskSubmitter CreateSubmitter() =>
         new(_registry.Object, _processor.Object, NullLogger<SystemTaskSubmitter>.Instance);
 }
