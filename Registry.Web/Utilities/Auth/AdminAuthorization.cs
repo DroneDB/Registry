@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Http;
@@ -79,10 +80,14 @@ public sealed class AdminAuthorizationHandler : IAuthorizationHandler
 }
 
 /// <summary>
-/// Answers a signed-in caller refused by the <see cref="Policies.Admin"/> policy with a ProblemDetails 403
-/// and one message (<see cref="AccessDeniedMessages.AdminRequired"/>, <c>noRetry: true</c>), like every
-/// other refusal of the API. Every other outcome (an anonymous caller's challenge, other policies)
-/// is the framework's default.
+/// The one writer of every refusal of the authorization middleware (FR-XC-29): each Challenged and
+/// Forbidden result of an endpoint's policy ([Authorize], the <see cref="Policies.Admin"/> policy, the
+/// monitoring endpoints, the Hangfire dashboard) answers a ProblemDetails body from
+/// <see cref="ApiErrorResponder.Create"/>, like every other refusal of the API. A challenge runs the
+/// schemes' own challenge first, so the 401 keeps its <c>WWW-Authenticate</c> header, then writes
+/// <see cref="AccessDeniedMessages.NotSignedIn"/> (<c>noRetry: false</c>: signing in helps). A refused
+/// signed-in caller gets a 403 with the message of the failed rule (<see cref="AccessDeniedMessages.AdminRequired"/>
+/// for the admin requirements, <c>noRetry: true</c>). Every other outcome is the framework's default.
 /// </summary>
 public sealed class RegistryAuthorizationResultHandler : IAuthorizationMiddlewareResultHandler
 {
@@ -99,16 +104,44 @@ public sealed class RegistryAuthorizationResultHandler : IAuthorizationMiddlewar
     public async Task HandleAsync(RequestDelegate next, HttpContext context, AuthorizationPolicy policy,
         PolicyAuthorizationResult authorizeResult)
     {
-        if (!authorizeResult.Forbidden ||
-            authorizeResult.AuthorizationFailure?.FailedRequirements.OfType<AdminRequirement>().Any() != true)
+        if (authorizeResult.Challenged)
         {
-            await _default.HandleAsync(next, context, policy, authorizeResult);
+            // The schemes' challenge sets the status and WWW-Authenticate; the body is ours
+            if (policy.AuthenticationSchemes.Count > 0)
+                foreach (var scheme in policy.AuthenticationSchemes)
+                    await context.ChallengeAsync(scheme);
+            else
+                await context.ChallengeAsync();
+
+            if (context.Response.StatusCode == StatusCodes.Status401Unauthorized)
+                await WriteAsync(context, StatusCodes.Status401Unauthorized, AccessDeniedMessages.NotSignedIn,
+                    noRetry: false);
             return;
         }
 
-        var problem = _responder.Create(context, StatusCodes.Status403Forbidden, AccessDeniedMessages.AdminRequired,
-            noRetry: true);
-        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        if (authorizeResult.Forbidden)
+        {
+            await WriteAsync(context, StatusCodes.Status403Forbidden, ForbiddenMessage(authorizeResult), noRetry: true);
+            return;
+        }
+
+        await _default.HandleAsync(next, context, policy, authorizeResult);
+    }
+
+    /// <summary>The message of the failed rule: the admin requirements have theirs, any other a generic one.</summary>
+    internal static string ForbiddenMessage(PolicyAuthorizationResult authorizeResult) =>
+        authorizeResult.AuthorizationFailure?.FailedRequirements
+            .Any(r => r is AdminRequirement or AdminOrMonitorTokenRequirement) == true
+            ? AccessDeniedMessages.AdminRequired
+            : AccessDeniedMessages.OperationRefused;
+
+    private async Task WriteAsync(HttpContext context, int status, string detail, bool noRetry)
+    {
+        if (context.Response.HasStarted)
+            return;
+
+        var problem = _responder.Create(context, status, detail, noRetry);
+        context.Response.StatusCode = status;
         if (!await _problemDetails.TryWriteAsync(new ProblemDetailsContext { HttpContext = context, ProblemDetails = problem }))
             await context.Response.WriteAsJsonAsync(problem, (System.Text.Json.JsonSerializerOptions?)null,
                 ApiErrorResponder.ProblemJsonContentType);

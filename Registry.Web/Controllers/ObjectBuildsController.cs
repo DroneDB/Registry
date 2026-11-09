@@ -112,8 +112,8 @@ public class ObjectBuildsController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Checks if a build file exists by hash and path: the headers of <c>GET</c> (length, type, validators, range
-    /// support) without the body, or 404.
+    /// Checks if a build file exists by hash and path. The answer has the headers of <c>GET</c> (length, type,
+    /// validators, range support) without the body, or 404.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>
@@ -140,7 +140,8 @@ public class ObjectBuildsController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Downloads a built artifact of an entry (COG, COPC, GPKG, the 3D Tiles of a model...), named after the entry.
+    /// Downloads a built artifact of an entry, named after the entry. Artifacts are COG, COPC, GPKG, the 3D Tiles
+    /// of a model...
     /// The entry type determines which artifact is served, unless <paramref name="role"/> names one (for example the
     /// <c>gsplat.export</c> <c>.spz</c> of a splat, once its export task has made it). A file is streamed with range
     /// support; a directory (3D Tiles) is sent as a ZIP archive of what is in it, written while it is read.
@@ -164,7 +165,7 @@ public class ObjectBuildsController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Gets information about pending (deferred) builds for a dataset, i.e.
+    /// Gets information about pending (deferred) builds for a dataset. These are
     /// builds skipped because one or more dependencies (companion files or
     /// external tools) were missing at the time of the last attempt.
     /// </summary>

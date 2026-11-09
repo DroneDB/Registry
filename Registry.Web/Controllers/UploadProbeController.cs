@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Registry.Web.Attributes;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Utilities;
@@ -34,6 +35,7 @@ public class UploadProbeController : ControllerBaseEx
     [HttpPost("upload-probe", Name = nameof(UploadProbeController) + "." + nameof(Probe))]
     [EnableRateLimiting(RateLimitPolicies.UploadProbe)]
     [RequestSizeLimit(MaxProbeBytes)]
+    [StreamedRequestBody(System.Net.Mime.MediaTypeNames.Application.Octet)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]

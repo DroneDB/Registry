@@ -69,7 +69,7 @@ public class PushController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Uploads a file as part of a push operation, by streaming a <c>multipart/form-data</c> request
+    /// Uploads a file as part of a push operation. The <c>multipart/form-data</c> request is streamed,
     /// with the form fields <c>path</c> (destination path) and <c>token</c> (from init) and one file
     /// part. The file is written once, straight to the dataset volume.
     /// </summary>

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
@@ -52,6 +53,12 @@ public static class RegistryApiServiceCollectionExtensions
                 ApiErrorResponder.ToActionResult(actionContext.HttpContext.RequestServices
                     .GetRequiredService<ApiErrorResponder>()
                     .CreateValidation(actionContext.HttpContext, actionContext.ModelState));
+            // The quota refusal has a type and a title like the statuses the framework maps (FR-DEV-09)
+            o.ClientErrorMapping[StatusCodes.Status507InsufficientStorage] = new ClientErrorData
+            {
+                Title = "Insufficient Storage",
+                Link = "https://www.rfc-editor.org/rfc/rfc4918#section-11.5"
+            };
         });
 
         services.AddSwaggerGen(c =>
@@ -75,6 +82,11 @@ public static class RegistryApiServiceCollectionExtensions
             });
             c.DocumentFilter<BasePathDocumentFilter>();
             c.OperationFilter<DownloadPathsParameterFilter>();
+            // Bearer and Basic credentials, the 401/403 of each operation from its authorization metadata, and
+            // the multipart fields of the streamed uploads (FR-DEV-08)
+            ApiSecurityOperationFilter.AddSecuritySchemes(c);
+            c.OperationFilter<ApiSecurityOperationFilter>();
+            c.OperationFilter<StreamedRequestBodyFilter>();
 
             // STAC and metadata endpoints return arbitrary JSON: a JsonElement or JsonNode is an open schema
             c.MapType<JsonElement>(() => new OpenApiSchema { Description = "Arbitrary JSON value." });
@@ -90,6 +102,9 @@ public static class RegistryApiServiceCollectionExtensions
             var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
             if (File.Exists(xmlPath))
                 c.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
+
+            // One short line per operation title (FR-DEV-12); after the XML comments, which set the summaries
+            c.OperationFilter<OperationSummaryFilter>();
         });
 
         services.AddMvcCore()

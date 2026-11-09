@@ -11,10 +11,12 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// REST surface for importing a single file from a URL into an existing dataset. All routes live under
-/// <c>/orgs/{org}/ds/{ds}/import</c>. Distinct from <see cref="ImportController"/>, which imports a
-/// whole remote dataset into a freshly created one.
+/// Importing a single file from a URL into an existing dataset. To import a whole remote dataset into a new one,
+/// use the imports of an organization.
 /// </summary>
+/// <remarks>
+/// All routes live under <c>/orgs/{org}/ds/{ds}/import</c>. Distinct from <see cref="ImportController"/>.
+/// </remarks>
 [ApiController]
 [Route(RoutesHelper.DatasetPrefix + "/import")]
 [Produces("application/json")]
@@ -32,8 +34,8 @@ public class DatasetImportController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Verifies (probes) a file URL without downloading it: reachability, size, derived file name and
-    /// the outcome of the deny-list / size checks.
+    /// Verifies (probes) a file URL without downloading it. The answer has the reachability, size, derived file
+    /// name and the outcome of the deny-list / size checks.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>

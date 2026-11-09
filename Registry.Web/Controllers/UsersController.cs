@@ -265,7 +265,7 @@ public class UsersController : ControllerBaseEx
         await _usersManager.GetPreferences();
 
     /// <summary>
-    /// Sets the sections in the body and keeps the others; a section set to null is deleted (back to the Hub defaults).
+    /// Sets the sections in the body and keeps the others. A section set to null is deleted (back to the Hub defaults).
     /// </summary>
     /// <param name="patch">The sections to set, by name.</param>
     /// <returns>All the sections after the change.</returns>
@@ -283,7 +283,7 @@ public class UsersController : ControllerBaseEx
         await _usersManager.PatchPreferences(patch, ct);
 
     /// <summary>
-    /// Whether the current user can get notification e-mails: <c>reason</c> is <c>emailDisabled</c> (the server sends
+    /// Whether the current user can get notification e-mails. The <c>reason</c> is <c>emailDisabled</c> (the server sends
     /// no e-mail) or <c>noAddress</c> (the account has no valid address), null when they can.
     /// </summary>
     /// <returns>The status.</returns>
@@ -294,7 +294,8 @@ public class UsersController : ControllerBaseEx
         await _notificationStatus.GetAsync(ct);
 
     /// <summary>
-    /// Gets the current user: their name, e-mail, roles and the slugs of the organizations they own or belong to.
+    /// Gets the current user. The answer has their name, e-mail, roles and the slugs of the organizations they own or
+    /// belong to.
     /// </summary>
     /// <returns>The current user.</returns>
     [HttpGet("me", Name = nameof(GetCurrentUser))]
@@ -533,7 +534,7 @@ public class UsersController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Disables a user: they can no longer sign in, and their sessions lose access at once (the system role
+    /// Disables a user. They can no longer sign in, and their sessions lose access at once (the system role
     /// <c>deactivated</c>). Works whatever the identity provider. Requires admin privileges.
     /// </summary>
     /// <param name="userName">The username of the user to disable.</param>

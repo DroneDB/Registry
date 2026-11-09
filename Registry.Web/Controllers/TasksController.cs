@@ -12,10 +12,12 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// Processing Platform task substrate REST surface. All routes live
-/// under <c>/orgs/{org}/ds/{ds}/tasks</c>. Authorization combines dataset access
-/// with per-task ownership.
+/// Tasks of a dataset: the tools, submitting a task, the list, the state, the log and the result of a task.
 /// </summary>
+/// <remarks>
+/// All routes live under <c>/orgs/{org}/ds/{ds}/tasks</c>. Authorization combines dataset access
+/// with per-task ownership.
+/// </remarks>
 [ApiController]
 [Route(RoutesHelper.DatasetPrefix + "/tasks")]
 [Produces("application/json")]
@@ -30,6 +32,7 @@ public class TasksController : ControllerBaseEx
 
     // ---- GET /tasks/tools -------------------------------------------------
 
+    /// <summary>The tools that can run on the dataset, with their parameters.</summary>
     [HttpGet("tools", Name = nameof(TasksController) + "." + nameof(GetTools))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<ActionResult<TaskToolDto[]>> GetTools([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug, CancellationToken ct)
@@ -37,6 +40,8 @@ public class TasksController : ControllerBaseEx
 
     // ---- POST /tasks ------------------------------------------------------
 
+    /// <summary>Submits a task.</summary>
+    /// <remarks>202 with the task when it is queued; 200 with the existing task when the same request is already queued or running.</remarks>
     [HttpPost(Name = nameof(TasksController) + "." + nameof(Submit))]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -54,6 +59,8 @@ public class TasksController : ControllerBaseEx
 
     // ---- GET /tasks -------------------------------------------------------
 
+    /// <summary>Lists the tasks of the dataset, one page at a time.</summary>
+    /// <remarks>The answer has an entity tag: a request with <c>If-None-Match</c> gets 304 when the page did not change.</remarks>
     [HttpGet(Name = nameof(TasksController) + "." + nameof(List))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status304NotModified)]
@@ -70,15 +77,18 @@ public class TasksController : ControllerBaseEx
 
     // ---- GET /tasks/events ------------------------------------------------
 
-    /// <summary>Seconds between keep-alive comments of the task event stream.</summary>
+    /// <summary>Seconds between keep-alive comments of the task event stream (the API reference of <see cref="Events"/> says 25).</summary>
     public const int EventStreamHeartbeatSeconds = 25;
 
     /// <summary>
-    /// Server-sent events: a <c>tasks</c> event whenever the dataset's task list changes.
-    /// The Hub refreshes the list (a conditional GET) on each event instead of polling. A comment
-    /// line is sent every <see cref="EventStreamHeartbeatSeconds"/> seconds so proxies keep the
-    /// connection open; <c>X-Accel-Buffering: no</c> keeps nginx from buffering the stream.
+    /// Server-sent events of the dataset's task list.
     /// </summary>
+    /// <remarks>
+    /// A <c>tasks</c> event is sent whenever the dataset's task list changes.
+    /// The Hub refreshes the list (a conditional GET) on each event instead of polling. A comment
+    /// line is sent every 25 seconds so proxies keep the
+    /// connection open; <c>X-Accel-Buffering: no</c> keeps nginx from buffering the stream.
+    /// </remarks>
     [HttpGet("events", Name = nameof(TasksController) + "." + nameof(Events))]
     [Produces("text/event-stream")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -132,6 +142,7 @@ public class TasksController : ControllerBaseEx
 
     // ---- POST /tasks/clear ------------------------------------------------
 
+    /// <summary>Removes the ended tasks of the dataset (of one tool with toolId) and their files.</summary>
     [HttpPost("clear", Name = nameof(TasksController) + "." + nameof(Clear))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<ActionResult<TasksClearedDto>> Clear(
@@ -141,6 +152,7 @@ public class TasksController : ControllerBaseEx
 
     // ---- GET /tasks/{id} --------------------------------------------------
 
+    /// <summary>The state of a task.</summary>
     [HttpGet("{id}", Name = nameof(TasksController) + "." + nameof(GetStatus))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -151,6 +163,7 @@ public class TasksController : ControllerBaseEx
 
     // ---- GET /tasks/{id}/log ----------------------------------------------
 
+    /// <summary>The log of a task: the lines after the cursor since (0: the whole available tail).</summary>
     [HttpGet("{id}/log", Name = nameof(TasksController) + "." + nameof(GetLog))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<ActionResult<TaskLogDto>> GetLog(
@@ -160,6 +173,7 @@ public class TasksController : ControllerBaseEx
 
     // ---- GET /tasks/{id}/result -------------------------------------------
 
+    /// <summary>Downloads the result file of a task.</summary>
     [HttpGet("{id}/result", Name = nameof(TasksController) + "." + nameof(GetResult))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -173,6 +187,7 @@ public class TasksController : ControllerBaseEx
 
     // ---- DELETE /tasks/{id} -----------------------------------------------
 
+    /// <summary>Cancels a queued or running task.</summary>
     [HttpDelete("{id}", Name = nameof(TasksController) + "." + nameof(Cancel))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -184,6 +199,8 @@ public class TasksController : ControllerBaseEx
 
     // ---- POST /tasks/{id}/retry -------------------------------------------
 
+    /// <summary>Retries a failed task.</summary>
+    /// <remarks>The retry runs the submit checks again.</remarks>
     [HttpPost("{id}/retry", Name = nameof(TasksController) + "." + nameof(Retry))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
@@ -195,6 +212,7 @@ public class TasksController : ControllerBaseEx
 
     // ---- POST /tasks/{id}/delete -----------------------------------------
 
+    /// <summary>Removes an ended task and its files.</summary>
     [HttpPost("{id}/delete", Name = nameof(TasksController) + "." + nameof(Delete))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

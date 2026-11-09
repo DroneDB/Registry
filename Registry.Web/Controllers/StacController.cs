@@ -34,7 +34,7 @@ public class StacController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Gets the STAC API landing page (root catalog) with conformance classes and
+    /// Gets the STAC API landing page (root catalog). It has the conformance classes and
     /// links to collections, conformance, and item search endpoints.
     /// </summary>
     /// <returns>The STAC API landing page.</returns>
@@ -58,8 +58,8 @@ public class StacController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Lists the STAC collections the current user can access, one page at a time
-    /// (follow the "next" link for the rest).
+    /// Lists the STAC collections the current user can access, one page at a time.
+    /// Follow the "next" link for the rest.
     /// </summary>
     [HttpGet("/stac/collections", Name = nameof(StacController) + "." + nameof(GetCollections))]
     [ProducesResponseType(typeof(StacCollectionsDto), StatusCodes.Status200OK)]
@@ -91,7 +91,7 @@ public class StacController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Gets the items (STAC ItemCollection) of a dataset collection, optionally filtered by bbox and datetime.
+    /// Gets the items (STAC ItemCollection) of a dataset collection. They can be filtered by bbox and datetime.
     /// </summary>
     [HttpGet("/stac/collections/{orgSlug}/{dsSlug}/items",
         Name = nameof(StacController) + "." + nameof(GetCollectionItems))]
@@ -366,8 +366,8 @@ public class StacController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Catches single-segment collection ids (e.g. /stac/collections/non-existent) and returns 404,
-    /// as required by the STAC API / OGC API Features conformance tests.
+    /// Answers 404 for a single-segment collection id (e.g. /stac/collections/non-existent).
+    /// The STAC API / OGC API Features conformance tests require it.
     /// </summary>
     [HttpGet("/stac/collections/{collectionId}",
         Name = nameof(StacController) + "." + nameof(GetCollectionNotFound))]

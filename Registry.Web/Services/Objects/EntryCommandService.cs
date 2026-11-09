@@ -50,8 +50,14 @@ public sealed class EntryCommandService : IEntryCommandService
         _logger.LogInformation("Adding folder '{Path}' to '{OrgSlug}/{DsSlug}'", folder, orgSlug, dsSlug);
         ddb.Add(folder);
 
-        return new EntryDto { Path = folder, Type = EntryType.Directory, Size = 0 };
+        // The entry as indexed, with its real mtime (FR-DEV-13); now when the index cannot give it back
+        return ddb.GetEntry(folder).ToDto() ??
+               new EntryDto { Path = folder, Type = EntryType.Directory, Size = 0, ModifiedTime = WholeSecondsNow() };
     }
+
+    // mtime is whole Unix seconds, like the index's
+    private static DateTime WholeSecondsNow() =>
+        DateTime.UnixEpoch.AddSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
     public async Task<EntryDto> MoveAsync(string orgSlug, string dsSlug, string? sourcePath, string? destPath,
         CancellationToken ct = default)

@@ -16,9 +16,10 @@ using Registry.Web.Utilities.Auth;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// The e-mails whose text administrators can change (route names of <see cref="SystemRoutes"/>): the text with
+/// The e-mails whose text administrators can change: the text with
 /// <c>{{placeholders}}</c>, a preview, a test send and the reset to the built-in text. Administrators only.
 /// </summary>
+/// <remarks>Route names of <see cref="SystemRoutes"/>.</remarks>
 [Authorize]
 [ApiController]
 [Route(RoutesHelper.SystemRadix)]
@@ -112,7 +113,8 @@ public class EmailTemplatesController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Renders a text (not saved) with a sample, through the real layout and branding: what a user would receive.
+    /// Renders a text (not saved) with a sample. It goes through the real layout and branding: what a user would
+    /// receive.
     /// </summary>
     /// <param name="name">The template name.</param>
     /// <param name="request">The subject and the body to try.</param>

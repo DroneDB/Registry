@@ -121,9 +121,8 @@ public sealed class DatasetQueries
 
         var bySlug = listed.ToDictionary(r => r.Dto.Slug, r => r.Dataset);
         var matching = query.Apply(listed.Select(r => r.Dto)).ToList();
-        var total = string.IsNullOrWhiteSpace(query.Query)
-            ? listed.Count
-            : (query with { Skip = 0, Take = null }).Apply(listed.Select(r => r.Dto)).Count();
+        // The total counts with every filter of the page, only without the paging (FR-DEV-14)
+        var total = (query with { Skip = 0, Take = null }).Apply(listed.Select(r => r.Dto)).Count();
 
         // The only per-dataset native call left: for the page shown, not the whole organization
         if (includeThumbnailCheck)

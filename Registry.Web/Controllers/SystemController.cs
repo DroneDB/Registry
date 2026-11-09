@@ -18,10 +18,12 @@ namespace Registry.Web.Controllers;
 
 /// <summary>
 /// System administration: the version, the data maintenance (upload batches, empty datasets, visibility, slugs),
-/// moving datasets and merging organizations, the global report and the configuration. The build
-/// maintenance, the remote import, the processing nodes, the features and the update check have their own controllers (same routes,
-/// same route names: <see cref="SystemRoutes"/>).
+/// moving datasets and merging organizations, the global report and the configuration.
 /// </summary>
+/// <remarks>
+/// The build maintenance, the remote import, the processing nodes, the features and the update check have their own
+/// controllers (same routes, same route names: <see cref="SystemRoutes"/>).
+/// </remarks>
 [Authorize]
 [ApiController]
 [Route(RoutesHelper.SystemRadix)]
@@ -102,8 +104,8 @@ public class SystemController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Renames organizations and datasets whose slug is invalid (e.g. contains "--", or has one character: the
-    /// slug rules need two) to their ToSlug form (padded to the minimum length) and moves organization folders
+    /// Renames organizations and datasets whose slug is invalid. A slug is invalid when it contains "--", or has
+    /// one character (the slug rules need two). They get their ToSlug form (padded to the minimum length) and moves organization folders
     /// accordingly. Dry run by default: pass
     /// dryRun=false to apply. Entries with active jobs are skipped; run again once they finish.
     /// </summary>
@@ -183,8 +185,8 @@ public class SystemController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Gets all Registry configuration fields grouped by section, with default values,
-    /// descriptions, and typed metadata for the admin configuration editor page.
+    /// Gets all Registry configuration fields grouped by section. Each has its default value,
+    /// description, and typed metadata for the admin configuration editor page.
     /// Sensitive values (secrets, passwords, tokens) are never exposed - only IsSet flags.
     /// </summary>
     /// <returns>ConfigurationDataDto with all sections and fields.</returns>

@@ -32,7 +32,7 @@ public class WmtsController : ControllerBaseEx
         _mgr = mgr;
     }
 
-    /// <summary>WMTS 1.0.0 KVP request: GetCapabilities (XML), GetTile (an image or a vector tile) or GetFeatureInfo.</summary>
+    /// <summary>WMTS 1.0.0 KVP request. It answers GetCapabilities (XML), GetTile (an image or a vector tile) or GetFeatureInfo.</summary>
     [HttpGet("wmts")]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "text/xml", "application/xml", "image/png", "image/jpeg", "application/vnd.mapbox-vector-tile")]
     public async Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)

@@ -13,9 +13,10 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Controllers;
 
 /// <summary>
-/// The processing nodes (NodeODX) a user can run photogrammetry on (out of <see cref="SystemController"/>):
+/// The processing nodes (NodeODX) a user can run photogrammetry on:
 /// their list, options and status. URLs and tokens are never returned.
 /// </summary>
+/// <remarks>Moved out of <see cref="SystemController"/>.</remarks>
 [Authorize]
 [ApiController]
 [Route(RoutesHelper.SystemRadix)]
@@ -51,8 +52,8 @@ public class ProcessingNodesController : ControllerBaseEx
         Answer<IEnumerable<NodeOdxOptionDto>>(await _nodes.GetOptionsAsync(nodeId, ct));
 
     /// <summary>
-    /// Checks whether a specific NodeODX processing node is reachable and reports its
-    /// queue capacity (used by the "Check Node" action before launching photogrammetry).
+    /// Checks whether a specific NodeODX processing node is reachable and reports its queue capacity.
+    /// The "Check Node" action uses it before launching photogrammetry.
     /// Never throws for an unreachable node: returns <c>Reachable=false</c> with the
     /// failure reason so the UI can display it.
     /// </summary>

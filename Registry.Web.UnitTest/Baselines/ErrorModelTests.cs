@@ -138,6 +138,65 @@ public sealed class ErrorModelTests : IDisposable
         user.Headers.WwwAuthenticate.ShouldBeEmpty();
     }
 
+    // ---- The authorization middleware's refusals (FR-XC-29, FR-DEV-09, SEC-005) ----
+
+    [TestCase("/users")]
+    [TestCase("/users/me")]
+    [TestCase("/sys/version")]
+    [TestCase("/sys/tasks")]
+    [TestCase("/health")]
+    [TestCase("/quickhealth")]
+    [TestCase("/hangfire")]
+    public async Task AuthorizedEndpoint_Anonymous_Is401ProblemDetails(string url)
+    {
+        var (response, problem) = await SendAsync(HttpMethod.Get, url);
+
+        ShouldBeProblem(response, problem, StatusCodes.Status401Unauthorized);
+        problem["detail"]!.GetValue<string>().ShouldBe("Not signed in");
+        problem["noRetry"]!.GetValue<bool>().ShouldBeFalse();
+    }
+
+    [TestCase("/users")]
+    [TestCase("/sys/tasks")]
+    [TestCase("/sys/config")]
+    [TestCase("/health")]
+    [TestCase("/quickhealth")]
+    [TestCase("/hangfire")]
+    public async Task AdminEndpoint_SignedInNonAdmin_Is403ProblemDetails(string url)
+    {
+        var (response, problem) = await SendAsync(HttpMethod.Get, url, RegularUser);
+
+        ShouldBeProblem(response, problem, StatusCodes.Status403Forbidden);
+        problem["detail"]!.GetValue<string>().ShouldBe("Only administrators can perform this operation");
+        problem["noRetry"]!.GetValue<bool>().ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task InvalidBearerToken_Is401ProblemDetailsWithTheBearerChallenge()
+    {
+        // A token the JWT scheme refuses: its challenge sets WWW-Authenticate, the body is the ProblemDetails
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/users/me");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "not-a-valid-token");
+        var (response, problem) = await SendAsync(request);
+
+        ShouldBeProblem(response, problem, StatusCodes.Status401Unauthorized);
+        response.Headers.WwwAuthenticate.Select(h => h.Scheme).ShouldContain("Bearer");
+        problem["detail"]!.GetValue<string>().ShouldBe("Not signed in");
+    }
+
+    [Test]
+    public async Task QuotaExceeded_Is507ProblemDetailsWithTypeAndTitle()
+    {
+        // The one writer of every error body (ApiErrorResponder), here from a middleware: the upload actions'
+        // QuotaExceededException goes through the same Create
+        var (response, problem) = await SendAsync(Fault(HttpMethod.Get, "/sys/version", FaultInjectingTokenManager.Quota));
+
+        ShouldBeProblem(response, problem, StatusCodes.Status507InsufficientStorage);
+        problem["title"]!.GetValue<string>().ShouldBe("Insufficient Storage");
+        problem["type"]!.GetValue<string>().ShouldBe("https://www.rfc-editor.org/rfc/rfc4918#section-11.5");
+        problem["noRetry"]!.GetValue<bool>().ShouldBeTrue();
+    }
+
     [Test]
     public async Task FailedLogin_Anonymous_StaysA401ProblemDetails()
     {
@@ -450,6 +509,7 @@ public sealed class ErrorModelTests : IDisposable
         public const string Crash = "crash";
         public const string Missing = "missing";
         public const string Busy = "busy";
+        public const string Quota = "quota";
         public const string CrashMessage = "middleware secret";
         public const string MissingMessage = "middleware lost it";
         public const int BusyRetryAfter = 7;
@@ -460,6 +520,7 @@ public sealed class ErrorModelTests : IDisposable
                 Crash => throw new InvalidOperationException(CrashMessage),
                 Missing => throw new NotFoundException(MissingMessage),
                 Busy => throw new TransientException("middleware busy", BusyRetryAfter),
+                Quota => throw new QuotaExceededException(),
                 _ => true
             };
     }

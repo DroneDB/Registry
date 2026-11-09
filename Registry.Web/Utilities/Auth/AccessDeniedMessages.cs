@@ -13,6 +13,12 @@ public static class AccessDeniedMessages
     /// <summary>Message of the <c>Admin</c> policy and of admin-only business rules.</summary>
     public const string AdminRequired = "Only administrators can perform this operation";
 
+    /// <summary>Message of a 401 of the authorization middleware: no valid credentials (none, or an expired token).</summary>
+    public const string NotSignedIn = "Not signed in";
+
+    /// <summary>Message of a 403 of the authorization middleware for a rule that has no message of its own.</summary>
+    public const string OperationRefused = "The current user is not allowed to perform this operation";
+
     /// <summary>The refusal of <paramref name="access"/> to a dataset.</summary>
     public static string Dataset(AccessType access) => $"The current user is not allowed to {Verb(access)} this dataset";
 

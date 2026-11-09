@@ -28,8 +28,8 @@ public class DatasetLocationsController : ControllerBaseEx
     }
 
     /// <summary>
-    /// The location of each dataset of the organization the caller can read (the rule of the dataset list), without
-    /// thumbnails. A dataset without a location has a null <c>bbox</c>. Datasets that are unlisted are left out for a
+    /// The location of each dataset of the organization the caller can read. It follows the rule of the dataset
+    /// list, without thumbnails. A dataset without a location has a null <c>bbox</c>. Datasets that are unlisted are left out for a
     /// caller who is not an owner, administrator or member of the organization.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
