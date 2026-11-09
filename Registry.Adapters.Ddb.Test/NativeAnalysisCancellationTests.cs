@@ -16,7 +16,7 @@ namespace Registry.Adapters.Ddb.Test;
 
 /// <summary>
 /// On the real libddb (26 cancellable exports): the raster analysis exports,
-/// the volume, stockpile and contour exports, <c>DDBMaskBorders</c> and the delta exports run under the cancel token the
+/// the volume, stockpile and contour exports, <c>DDBMaskBordersEx</c> and the delta exports run under the cancel token the
 /// call envelope gives every export libddb lists, so a canceled request stops them. Nothing here is Registry code of its
 /// own: the envelope picks the new exports up from <c>DDBGetCapabilities().cancellable</c>, and these tests show it does.
 /// <see cref="DdbCancellation"/> is entered right around each call, as the native work gate and the push commit do.
@@ -53,7 +53,7 @@ public class NativeAnalysisCancellationTests : TestBase
         nameof(NativeDdb.DDBGetRasterPointValue), nameof(NativeDdb.DDBGetRasterAreaStats),
         nameof(NativeDdb.DDBGetRasterProfile), nameof(NativeDdb.DDBCalculateVolume),
         nameof(NativeDdb.DDBDetectStockpile), nameof(NativeDdb.DDBDetectAllStockpiles),
-        nameof(NativeDdb.DDBGenerateContours), nameof(NativeDdb.DDBMaskBorders),
+        nameof(NativeDdb.DDBGenerateContours), nameof(NativeDdb.DDBMaskBordersEx),
         nameof(NativeDdb.DDBComputeDeltaLocals), nameof(NativeDdb.DDBApplyDeltaEx)
     ];
 
@@ -105,7 +105,7 @@ public class NativeAnalysisCancellationTests : TestBase
             [nameof(NativeDdb.DDBDetectStockpile)] = () => Wrapper.DetectStockpile(_raster, 46.84258, -91.99383, 15.0, 0.5f),
             [nameof(NativeDdb.DDBDetectAllStockpiles)] = () => Wrapper.DetectAllStockpiles(_raster, 0.5f, 10.0, 10),
             [nameof(NativeDdb.DDBGenerateContours)] = () => Wrapper.GenerateContours(_raster, 5.0, null),
-            [nameof(NativeDdb.DDBMaskBorders)] = () => Wrapper.MaskBorders(_raster, masked)
+            [nameof(NativeDdb.DDBMaskBordersEx)] = () => Wrapper.MaskBorders(_raster, masked)
         };
         calls.Keys.ShouldBe(NewlyCancellable.Where(e => e != nameof(NativeDdb.DDBComputeDeltaLocals) &&
                                                        !e.StartsWith("DDBApplyDelta", StringComparison.Ordinal)),

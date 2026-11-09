@@ -31,6 +31,21 @@ public class NativeDdbDeclarationTests
     }
 
     [Test]
+    public void DdbOverwriteOptions_Is8Bytes_LikeTheAlignMergeAndMaskOptions()
+    {
+        Unsafe.SizeOf<DdbOverwriteOptions>().ShouldBe(8);
+        Marshal.OffsetOf<DdbOverwriteOptions>(nameof(DdbOverwriteOptions.StructSize)).ShouldBe(0);
+        Marshal.OffsetOf<DdbOverwriteOptions>(nameof(DdbOverwriteOptions.Overwrite)).ShouldBe(4);
+        Marshal.OffsetOf<DdbOverwriteOptions>(nameof(DdbOverwriteOptions.Reserved0)).ShouldBe(5);
+        Marshal.OffsetOf<DdbOverwriteOptions>(nameof(DdbOverwriteOptions.Reserved2)).ShouldBe(7);
+
+        var replace = DdbOverwriteOptions.Create(true);
+        (replace.StructSize, replace.Overwrite, replace.Reserved0, replace.Reserved1, replace.Reserved2)
+            .ShouldBe((8u, (byte)1, (byte)0, (byte)0, (byte)0));
+        DdbOverwriteOptions.Create(false).Overwrite.ShouldBe((byte)0);
+    }
+
+    [Test]
     public void DdbAddHint_Is32Bytes_LikeDDBAddHint()
     {
         Unsafe.SizeOf<DdbAddHint>().ShouldBe(32);
@@ -63,6 +78,13 @@ public class NativeDdbDeclarationTests
         // The splat exports are imports like the rest: a libddb without them fails the startup handshake
         DdbAbi.RequiredSymbols.ShouldContain("DDBExportSplatSpz");
         DdbAbi.RequiredSymbols.ShouldContain("DDBExportSplatTrainingData");
+        // Align, merge and mask write through the 2.1 variants that take overwrite (FR-PRC-01), never the old ones
+        DdbAbi.RequiredSymbols.ShouldContain("DDBAlignRasterEx");
+        DdbAbi.RequiredSymbols.ShouldContain("DDBMergeMultispectralEx");
+        DdbAbi.RequiredSymbols.ShouldContain("DDBMaskBordersEx");
+        DdbAbi.RequiredSymbols.ShouldNotContain("DDBAlignRaster");
+        DdbAbi.RequiredSymbols.ShouldNotContain("DDBMergeMultispectral");
+        DdbAbi.RequiredSymbols.ShouldNotContain("DDBMaskBorders");
         DdbAbi.RequiredSymbols.ShouldAllBe(s => s.StartsWith("DDB"));
         Imports.ShouldAllBe(m => m.GetCustomAttribute<LibraryImportAttribute>()!.EntryPoint == null);
     }

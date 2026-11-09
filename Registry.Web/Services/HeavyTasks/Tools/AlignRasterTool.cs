@@ -209,9 +209,9 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
             progress.Report(new HeavyToolProgress(-1, "aligning",
                 LogChunk: $"Aligning '{sourcePath}' → '{outputPath}' (mode: {mode})"));
 
-            // NOTE: libddb 2.0 writes the output in place and needs it gone: the request asked for the replace. Decided
-            // BEFORE that delete: an output the alignment replaces is never recorded (FR-XC-27, FR-XC-07), a rollback
-            // must not delete the file that was there (and cannot bring the replaced one back)
+            // libddb replaces an existing output only when asked (DDBAlignRasterEx), in one rename once the aligned file
+            // is complete: a failed run leaves it as it was (FR-PRC-01). Decided before the call: an output the
+            // alignment replaces is never recorded (FR-XC-27, FR-XC-07), a rollback must not delete the file that was there
             var outputFullPath = ctx.Ddb.GetLocalPath(outputPath);
             var replacing = Overwrite(args, ctx) && File.Exists(outputFullPath);
             if (!replacing && File.Exists(outputFullPath))
@@ -231,11 +231,7 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
                 TaskImportWrites.CreateFolder(root, TaskImportWrites.ParentOf(outputPath));
             }
 
-            // A cancel that came meanwhile stops here, before the file that was there is deleted
-            ct.ThrowIfCancellationRequested();
-            if (replacing)
-                File.Delete(outputFullPath);
-
+            // A cancel that came meanwhile stops here, before libddb runs
             ct.ThrowIfCancellationRequested();
 
             // Created by another writer while the record was saved: kept, and not the task's
@@ -245,10 +241,10 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
                 throw new NameClashException(outputPath);
             }
 
-            // A failed run keeps the output recorded: a partial file that libddb wrote before it failed is the task's,
-            // and the rollback deletes it (FR-XC-27)
+            // A failed run keeps the output recorded: a file that appears there is the task's, and the rollback deletes
+            // it (FR-XC-27). Without the replace, libddb refuses a file that another writer created meanwhile
             var resultJson = await Task.Run(
-                () => ctx.Ddb.AlignRaster(sourcePath, referencePath, outputPath, mode), ct);
+                () => ctx.Ddb.AlignRaster(sourcePath, referencePath, outputPath, mode, overwrite: replacing), ct);
 
             // The owner of the organization must have room for the growth of the output (FR-XC-26): the task fails with
             // the 507 text. An output that replaced a file is never deleted (FR-XC-27: a rollback never deletes a path

@@ -34,10 +34,11 @@ public class MergeMultispectralToolTests
         _h.File("bands/b1.tif");
         _h.File("bands/b2.tif");
         _h.Ddb.Setup(d => d.ValidateMergeMultispectral(It.IsAny<string[]>())).Returns("{\"ok\":true}");
-        _h.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()))
-            .Callback<string[], string>((_, output) =>
+        _h.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<bool>()))
+            .Callback<string[], string, bool>((_, output, overwrite) =>
             {
-                _h.Calls.Add("merge " + output);
+                // The replace of an existing output is libddb's (DDBMergeMultispectralEx overwrite), never a delete before it
+                _h.Calls.Add("merge " + output + (overwrite ? " (replace)" : ""));
                 File.WriteAllText(_h.Local(output), "merged");
             });
     }
@@ -101,7 +102,7 @@ public class MergeMultispectralToolTests
 
         ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 3 B left.");
         File.ReadAllText(_h.Local("bands/merged.tif")).ShouldBe("merged");
-        _h.Calls.ShouldBe(["merge bands/merged.tif", "index bands/merged.tif"]);
+        _h.Calls.ShouldBe(["merge bands/merged.tif (replace)", "index bands/merged.tif"]);
         _h.Recorder.Paths.ShouldBeEmpty();
     }
 
@@ -129,7 +130,7 @@ public class MergeMultispectralToolTests
         await Execute(Request("bands/merged.tif", overwrite: true));
 
         File.ReadAllText(_h.Local("bands/merged.tif")).ShouldBe("merged");
-        _h.Calls.ShouldBe(["merge bands/merged.tif", "published bands/merged.tif", "index bands/merged.tif"]);
+        _h.Calls.ShouldBe(["merge bands/merged.tif (replace)", "published bands/merged.tif", "index bands/merged.tif"]);
     }
 
     // The plan of a replace tells the runner the size the owner's use counts for the file it replaces
@@ -199,7 +200,7 @@ public class MergeMultispectralToolTests
         await _tool.ValidateAsync(request, _h.Ctx.Object, CancellationToken.None);
         await Execute(request);
 
-        _h.Calls.ShouldBe(["merge bands/merged.tif", "published bands/merged.tif", "index bands/merged.tif"]);
+        _h.Calls.ShouldBe(["merge bands/merged.tif (replace)", "published bands/merged.tif", "index bands/merged.tif"]);
         File.ReadAllText(_h.Local("bands/merged.tif")).ShouldBe("merged");
     }
 
@@ -210,7 +211,7 @@ public class MergeMultispectralToolTests
 
         await Execute(Request("BANDS/merged.tif", overwrite: true));
 
-        _h.Calls.ShouldBe(["merge bands/Merged.TIF", "published bands/Merged.TIF", "index bands/Merged.TIF"]);
+        _h.Calls.ShouldBe(["merge bands/Merged.TIF (replace)", "published bands/Merged.TIF", "index bands/Merged.TIF"]);
     }
 
     [Test]
@@ -224,7 +225,7 @@ public class MergeMultispectralToolTests
         await Execute(request);
 
         _h.Calls.ShouldBe(["index bands/merged.tif"]);
-        _h.Ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()), Times.Never);
+        _h.Ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
     }
 
     [Test]
@@ -247,7 +248,7 @@ public class MergeMultispectralToolTests
         await _tool.ValidateAsync(request, _h.Ctx.Object, CancellationToken.None);
         await Execute(request);
 
-        _h.Calls.ShouldBe(["merge bands/merged.tif", "published bands/merged.tif", "index bands/merged.tif"]);
+        _h.Calls.ShouldBe(["merge bands/merged.tif (replace)", "published bands/merged.tif", "index bands/merged.tif"]);
     }
 
     [Test]
@@ -310,7 +311,7 @@ public class MergeMultispectralToolTests
     public async Task DeleteSources_AFailedMerge_KeepsTheBands()
     {
         TrackSourceDeletes();
-        _h.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()))
+        _h.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<bool>()))
             .Throws(new DdbException("merge failed"));
 
         await Should.ThrowAsync<DdbException>(() => Execute(Request("bands/new.tif", deleteSources: true)));
@@ -366,7 +367,7 @@ public class MergeMultispectralToolTests
         await Execute(Request("bands/new.tif", deleteSources: true));
 
         _h.Calls.ShouldBe(["index bands/new.tif", "open bands/new.tif", "remove bands/b2.tif"]);
-        _h.Ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()), Times.Never);
+        _h.Ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
         File.Exists(_h.Local("bands/b2.tif")).ShouldBeFalse();
         File.ReadAllText(_h.Local("bands/new.tif")).ShouldBe("merged");
     }
@@ -425,8 +426,8 @@ public class MergeMultispectralToolTests
     public async Task NewOutput_AndItsNewFolders_AreSavedInTheRecord_BeforeEitherExists()
     {
         var saved = false;
-        _h.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()))
-            .Callback<string[], string>((_, output) =>
+        _h.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<bool>()))
+            .Callback<string[], string, bool>((_, output, _) =>
             {
                 // §8.1: a process lost from here on leaves a record that rolls the output back
                 _h.Recorder.SavedPaths.ShouldBe([output]);
@@ -451,14 +452,14 @@ public class MergeMultispectralToolTests
         File.ReadAllText(_h.Local("bands/new.tif")).ShouldBe("somebody else's");
         _h.Recorder.Paths.ShouldBeEmpty("a rollback must not delete the other writer's file");
         _h.Recorder.Forgotten.ShouldBe(["bands/new.tif"]);
-        _h.Ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()), Times.Never);
+        _h.Ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
     }
 
     [Test]
     public async Task APartialOutputLibddbLeavesWhenItFails_StaysRecorded_SoTheRollbackDeletesIt()
     {
-        _h.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()))
-            .Callback<string[], string>((_, output) => File.WriteAllText(_h.Local(output), "partial"))
+        _h.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<bool>()))
+            .Callback<string[], string, bool>((_, output, _) => File.WriteAllText(_h.Local(output), "partial"))
             .Throws(new InvalidOperationException("Cannot merge multispectral: the write failed"));
 
         await Should.ThrowAsync<InvalidOperationException>(() => Execute(Request("bands/new.tif")));
@@ -492,6 +493,29 @@ public class MergeMultispectralToolTests
     }
 
     [Test]
+    public async Task Overwrite_FailedMerge_LeavesTheReplacedFileUnchanged()
+    {
+        // AC-005: libddb replaces the output in one rename once the merge is complete; nothing deletes it before
+        _h.File("bands/merged.tif");
+        _h.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<bool>()))
+            .Throws(new DdbException("merge failed"));
+
+        await Should.ThrowAsync<DdbException>(() => Execute(Request("bands/merged.tif", overwrite: true)));
+
+        File.ReadAllText(_h.Local("bands/merged.tif")).ShouldBe("original");
+        _h.Ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), "bands/merged.tif", true), Times.Once);
+        _h.Recorder.Paths.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task NewOutput_IsWrittenWithoutTheReplace_SoAFileThatAppearsMeanwhileIsRefusedByLibddb()
+    {
+        await Execute(Request("bands/new.tif", overwrite: true));
+
+        _h.Ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), "bands/new.tif", false), Times.Once);
+    }
+
+    [Test]
     public async Task Overwrite_CancelledBeforeTheMerge_KeepsTheExistingOutput_AndRecordsNothing()
     {
         _h.File("bands/merged.tif");
@@ -511,8 +535,8 @@ public class MergeMultispectralToolTests
         // The decision is made before the existing output is deleted: a cancel in the middle changes nothing
         _h.File("bands/merged.tif");
         using var cts = new CancellationTokenSource();
-        _h.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()))
-            .Callback<string[], string>((_, output) =>
+        _h.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<bool>()))
+            .Callback<string[], string, bool>((_, output, _) =>
             {
                 File.WriteAllText(_h.Local(output), "merged");
                 cts.Cancel();

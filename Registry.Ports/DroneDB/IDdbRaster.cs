@@ -50,9 +50,11 @@ public interface IDdbRaster
     byte[] PreviewMergeMultispectral(string[] paths, string? previewBands = null, int thumbSize = 512);
 
     /// <summary>
-    /// Merge single-band rasters into multi-band COG
+    /// Merge single-band rasters into a multi-band GeoTIFF. An output that exists is replaced only with
+    /// <paramref name="overwrite"/>, in one rename once the merge is complete (a failed call leaves it as it was);
+    /// without it, libddb refuses it.
     /// </summary>
-    void MergeMultispectral(string[] paths, string outputCog);
+    void MergeMultispectral(string[] paths, string outputCog, bool overwrite = false);
 
     /// <summary>
     /// Validate that source and reference rasters are compatible for alignment
@@ -60,9 +62,12 @@ public interface IDdbRaster
     string ValidateAlignRaster(string sourcePath, string referencePath);
 
     /// <summary>
-    /// Align a source GeoTIFF to a reference GeoTIFF and write the output COG
+    /// Align a source GeoTIFF to a reference GeoTIFF and write the aligned GeoTIFF. An output that exists is replaced
+    /// only with <paramref name="overwrite"/>, in one rename once it is complete (a failed call leaves it as it was);
+    /// without it, libddb refuses it.
     /// </summary>
-    string AlignRaster(string sourcePath, string referencePath, string outputPath, string mode = "similarity");
+    string AlignRaster(string sourcePath, string referencePath, string outputPath, string mode = "similarity",
+        bool overwrite = false);
 
     /// <summary>
     /// Export raster with visualization params applied as GeoTIFF
@@ -106,7 +111,9 @@ public interface IDdbRaster
     string GetRasterProfile(string path, string geoJsonLineString, int samples);
 
     /// <summary>
-    /// Mask orthophoto borders making them transparent
+    /// Mask orthophoto borders making them transparent. An output that exists is replaced only with
+    /// <paramref name="overwrite"/>, in one rename once the mask is complete (a failed or cancelled call leaves it as
+    /// it was); without it, libddb refuses it.
     /// </summary>
-    void MaskBorders(string input, string output, int nearDist = 15, bool white = false);
+    void MaskBorders(string input, string output, int nearDist = 15, bool white = false, bool overwrite = false);
 }

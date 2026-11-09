@@ -179,7 +179,7 @@ public sealed class NativeGateHeavyLaneTests : IDisposable
         string[] bands = ["b1.tif", "b2.tif"];
         Native(d => d.ValidateMergeMultispectral(It.IsAny<string[]>()), "{}");
         Native(d => d.PreviewMergeMultispectral(It.IsAny<string[]>(), It.IsAny<string?>(), It.IsAny<int>()), [1, 2]);
-        NativeVoid(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()));
+        NativeVoid(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<bool>()));
         Native(d => d.ValidateAlignRaster(It.IsAny<string>(), It.IsAny<string>()), "{}");
 
         await _services.Processing.ValidateMergeMultispectralAsync(OrgSlug, DsSlug, bands);

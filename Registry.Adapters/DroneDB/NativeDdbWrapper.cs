@@ -506,12 +506,13 @@ public class NativeDdbWrapper : IDdbWrapper
                 previewBands, thumbSize, out buffer, out length));
     }
 
-    public void MergeMultispectral(string[] paths, string outputCog)
+    public void MergeMultispectral(string[] paths, string outputCog, bool overwrite = false)
     {
         RequirePaths(paths);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputCog);
-        NativeCall.Invoke(nameof(NativeDdb.DDBMergeMultispectral),
-            () => NativeDdb.DDBMergeMultispectral(paths, paths.Length, outputCog));
+        var options = DdbOverwriteOptions.Create(overwrite);
+        NativeCall.Invoke(nameof(NativeDdb.DDBMergeMultispectralEx),
+            () => NativeDdb.DDBMergeMultispectralEx(paths, paths.Length, outputCog, in options));
     }
 
     public string ValidateAlignRaster(string sourcePath, string referencePath)
@@ -522,13 +523,16 @@ public class NativeDdbWrapper : IDdbWrapper
             (out IntPtr output) => NativeDdb.DDBValidateAlignRaster(sourcePath, referencePath, out output));
     }
 
-    public string AlignRaster(string sourcePath, string referencePath, string outputPath, string mode = "similarity")
+    public string AlignRaster(string sourcePath, string referencePath, string outputPath, string mode = "similarity",
+        bool overwrite = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(referencePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
-        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBAlignRaster),
-            (out IntPtr output) => NativeDdb.DDBAlignRaster(sourcePath, referencePath, outputPath, mode, out output));
+        var options = DdbOverwriteOptions.Create(overwrite);
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBAlignRasterEx),
+            (out IntPtr output) =>
+                NativeDdb.DDBAlignRasterEx(sourcePath, referencePath, outputPath, mode, in options, out output));
     }
 
     public void ExportRaster(string inputPath, string outputPath,
@@ -711,11 +715,13 @@ public class NativeDdbWrapper : IDdbWrapper
                 bandIndex, out output));
     }
 
-    public void MaskBorders(string input, string output, int nearDist = 15, bool white = false)
+    public void MaskBorders(string input, string output, int nearDist = 15, bool white = false, bool overwrite = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(input);
         ArgumentException.ThrowIfNullOrWhiteSpace(output);
-        NativeCall.Invoke(nameof(NativeDdb.DDBMaskBorders), () => NativeDdb.DDBMaskBorders(input, output, nearDist, white));
+        var options = DdbOverwriteOptions.Create(overwrite);
+        NativeCall.Invoke(nameof(NativeDdb.DDBMaskBordersEx),
+            () => NativeDdb.DDBMaskBordersEx(input, output, nearDist, white, in options));
     }
 
     // ---------------------------------------------------------------- OGC

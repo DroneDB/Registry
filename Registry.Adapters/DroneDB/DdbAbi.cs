@@ -23,8 +23,11 @@ public static class DdbAbi
     /// </summary>
     public const int Major = 2;
 
-    /// <summary><c>DDB_ABI_MINOR</c> Registry needs at least (DroneDB 2.0.0).</summary>
-    public const int Minor = 0;
+    /// <summary>
+    /// <c>DDB_ABI_MINOR</c> Registry needs at least: 1 (DroneDB 2.1.0) for the output options of align, merge
+    /// multispectral and mask borders (<c>DDBAlignRasterEx</c>, <c>DDBMergeMultispectralEx</c>, <c>DDBMaskBordersEx</c>).
+    /// </summary>
+    public const int Minor = 1;
 
     private const string Library = "ddb";
 

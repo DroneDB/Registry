@@ -405,11 +405,11 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual byte[] PreviewMergeMultispectral(string[] paths, string? previewBands = null, int thumbSize = 512) =>
         throw Unsupported();
 
-    public virtual void MergeMultispectral(string[] paths, string outputCog) => throw Unsupported();
+    public virtual void MergeMultispectral(string[] paths, string outputCog, bool overwrite = false) => throw Unsupported();
     public virtual string ValidateAlignRaster(string sourcePath, string referencePath) => throw Unsupported();
 
     public virtual string AlignRaster(string sourcePath, string referencePath, string outputPath,
-        string mode = "similarity") => throw Unsupported();
+        string mode = "similarity", bool overwrite = false) => throw Unsupported();
 
     public virtual void ExportRaster(string inputPath, string outputPath,
         string? preset = null, string? bands = null, string? formula = null,
@@ -446,8 +446,8 @@ public class FakeDdbWrapper : IDdbWrapper
         double? minElev = null, double? maxElev = null, double simplifyTolerance = 0.0, int bandIndex = 1) =>
         throw Unsupported();
 
-    public virtual void MaskBorders(string input, string output, int nearDist = 15, bool white = false) =>
-        throw Unsupported();
+    public virtual void MaskBorders(string input, string output, int nearDist = 15, bool white = false,
+        bool overwrite = false) => throw Unsupported();
 
     public virtual byte[] RenderRasterRegion(string inputPath, double[] bbox, string bboxSrs,
         int width, int height, string format, int[]? bands = null, string? outputCrs = null) => throw Unsupported();

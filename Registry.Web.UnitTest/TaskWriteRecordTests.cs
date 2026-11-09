@@ -1095,7 +1095,7 @@ public class TaskRollbackTests
     public async Task APartialAlignOutput_IsRolledBack_WhenLibddbFailsAfterCreatingIt()
     {
         var ds = NewDataset("ds", out var id);
-        ds.Ddb.Setup(d => d.AlignRaster("src.tif", "ref.tif", "out/new.tif", It.IsAny<string>()))
+        ds.Ddb.Setup(d => d.AlignRaster("src.tif", "ref.tif", "out/new.tif", It.IsAny<string>(), It.IsAny<bool>()))
             .Callback(() => ds.Write("out/new.tif", indexed: false))
             .Throws(new InvalidOperationException("Cannot align raster: the write failed"));
         var request = new Registry.Web.Services.HeavyTasks.Models.HeavyToolRequest("align-raster", "1", "org", "ds",
@@ -1110,7 +1110,7 @@ public class TaskRollbackTests
     public async Task APartialMergeOutput_IsRolledBack_WhenLibddbFailsAfterCreatingIt()
     {
         var ds = NewDataset("ds", out var id);
-        ds.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), "out/new.tif"))
+        ds.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), "out/new.tif", It.IsAny<bool>()))
             .Callback(() => ds.Write("out/new.tif", indexed: false))
             .Throws(new InvalidOperationException("Cannot merge multispectral: the write failed"));
         var request = new Registry.Web.Services.HeavyTasks.Models.HeavyToolRequest("merge-multispectral", "1", "org",

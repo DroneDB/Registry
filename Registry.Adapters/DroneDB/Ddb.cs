@@ -500,13 +500,13 @@ public class DDB : IDDB
         }, ex => "Cannot preview merge multispectral");
     }
 
-    public void MergeMultispectral(string[] paths, string outputCog)
+    public void MergeMultispectral(string[] paths, string outputCog, bool overwrite = false)
     {
         Wrap(() =>
         {
             var fullPaths = paths.Select(GetLocalPath).ToArray();
             var fullOutputCog = GetLocalPath(outputCog);
-            Wrapper.MergeMultispectral(fullPaths, fullOutputCog);
+            Wrapper.MergeMultispectral(fullPaths, fullOutputCog, overwrite);
         }, ex => $"Cannot merge multispectral: {ex.Message}");
     }
 
@@ -516,12 +516,13 @@ public class DDB : IDDB
             ex => "Cannot validate align raster");
     }
 
-    public string AlignRaster(string sourcePath, string referencePath, string outputPath, string mode = "similarity")
+    public string AlignRaster(string sourcePath, string referencePath, string outputPath, string mode = "similarity",
+        bool overwrite = false)
     {
         return Wrap(() =>
         {
             return Wrapper.AlignRaster(GetLocalPath(sourcePath), GetLocalPath(referencePath),
-                GetLocalPath(outputPath), mode);
+                GetLocalPath(outputPath), mode, overwrite);
         }, ex => $"Cannot align raster: {ex.Message}");
     }
 
@@ -643,13 +644,13 @@ public class DDB : IDDB
         }, ex => "Could not generate contour lines for this raster.");
     }
 
-    public void MaskBorders(string input, string output, int nearDist = 15, bool white = false)
+    public void MaskBorders(string input, string output, int nearDist = 15, bool white = false, bool overwrite = false)
     {
         Wrap(() =>
         {
             var fullInput = GetLocalPath(input);
             var fullOutput = GetLocalPath(output);
-            Wrapper.MaskBorders(fullInput, fullOutput, nearDist, white);
+            Wrapper.MaskBorders(fullInput, fullOutput, nearDist, white, overwrite);
         }, ex => $"Cannot mask borders of '{input}'");
     }
 }

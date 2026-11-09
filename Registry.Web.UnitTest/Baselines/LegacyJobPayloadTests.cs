@@ -202,7 +202,7 @@ public sealed class LegacyJobPayloadTests : IDisposable
         Perform(Deserialize(Payload("MaskBordersWrapper"), false));
 
         _wrapper.Verify(x => x.MaskBorders(Path.Combine(_folder, "a.tif").ToDdbPath(),
-            Path.Combine(_folder, "a_masked.tif").ToDdbPath(), 15, true), Times.Once);
+            Path.Combine(_folder, "a_masked.tif").ToDdbPath(), 15, true, true), Times.Once);
         _wrapper.Verify(x => x.Build(_folder, "a_masked.tif", null, false, false), Times.Once);
     }
 
@@ -221,7 +221,7 @@ public sealed class LegacyJobPayloadTests : IDisposable
         Perform(job);
 
         _wrapper.Verify(x => x.MaskBorders(Path.Combine(_folder, "a.tif").ToDdbPath(),
-            Path.Combine(_folder, "a_masked.tif").ToDdbPath(), 15, true), Times.Once);
+            Path.Combine(_folder, "a_masked.tif").ToDdbPath(), 15, true, true), Times.Once);
     }
 
     [TestCase("SafeDelete", "/tmp/x")]

@@ -24,19 +24,17 @@ public sealed class RasterProcessingService
 
     private readonly IDatasetAccessResolver _access;
     private readonly DatasetPathPolicy _paths;
-    private readonly IFileSystem _fs;
     private readonly INativeWorkGate _gate;
     private readonly EntryJobs _jobs;
     private readonly IStorageQuota _quota;
     private readonly ILogger<RasterProcessingService> _logger;
 
-    public RasterProcessingService(IDatasetAccessResolver access, DatasetPathPolicy paths, IFileSystem fs,
+    public RasterProcessingService(IDatasetAccessResolver access, DatasetPathPolicy paths,
         INativeWorkGate gate, EntryJobs jobs, IStorageQuota quota, ILogger<RasterProcessingService> logger)
     {
         _quota = quota;
         _access = access;
         _paths = paths;
-        _fs = fs;
         _gate = gate;
         _jobs = jobs;
         _logger = logger;
@@ -89,13 +87,10 @@ public sealed class RasterProcessingService
         outputPath = DatasetEntryLookup.ResolveOutput(ddb, outputPath, overwrite);
         await EnsureOwnerHasStorageLeftAsync(access.Dataset, ct);
 
-        // NOTE: libddb 2.0 refuses an existing output: the request asked for the replace
-        var outputFullPath = ddb.GetLocalPath(outputPath);
-        if (overwrite && _fs.RemoveEntry(outputFullPath, isFolder: false))
-            _logger.LogInformation("Output file already existed, deleted: '{OutputPath}'", outputFullPath);
-
-        _logger.LogInformation("Merging multispectral for '{OutputPath}'", outputFullPath);
-        await _gate.RunAsync(NativeLane.Heavy, () => ddb.MergeMultispectral(paths, outputPath), ct);
+        // libddb replaces an existing output only when asked, once the merge is complete: a failed merge leaves it as
+        // it was (FR-PRC-01)
+        _logger.LogInformation("Merging multispectral for '{OutputPath}'", outputPath);
+        await _gate.RunAsync(NativeLane.Heavy, () => ddb.MergeMultispectral(paths, outputPath, overwrite), ct);
 
         ddb.AddRaw(outputPath);
         _logger.LogInformation("Merge complete and file added to the dataset");
@@ -152,11 +147,8 @@ public sealed class RasterProcessingService
         var outputPath = DatasetEntryLookup.ResolveOutput(ddb, MaskedOutputPath(path), overwrite);
         await EnsureOwnerHasStorageLeftAsync(access.Dataset, ct);
 
-        // NOTE: libddb 2.0 writes the output in place and needs it gone: the request asked for the replace
-        var outputFullPath = ddb.GetLocalPath(outputPath);
-        if (overwrite && _fs.RemoveEntry(outputFullPath, isFolder: false))
-            _logger.LogInformation("Output file already existed, deleted: '{OutputPath}'", outputFullPath);
-
+        // The job replaces an existing copy only when asked, once the mask is complete (libddb): a failed job leaves
+        // it as it was (FR-PRC-01)
         var jobId = await _jobs.EnqueueMaskBordersAsync(access, orgSlug, dsSlug, entry, outputPath, nearDist, white,
             overwrite);
         _logger.LogInformation("Masking borders for '{Path}' asynchronously, background job id is {JobId}", path, jobId);

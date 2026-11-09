@@ -189,9 +189,9 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
             progress.Report(new HeavyToolProgress(-1, "merging",
                 LogChunk: $"Merging {paths.Length} bands → {outputPath}"));
 
-            // NOTE: libddb 2.0 refuses an existing output: the request asked for the replace. Decided BEFORE that delete:
-            // an output the merge replaces is never recorded (FR-XC-27, FR-XC-07), a rollback must not delete the file
-            // that was there (and cannot bring the replaced one back)
+            // libddb replaces an existing output only when asked (DDBMergeMultispectralEx), in one rename once the merge
+            // is complete: a failed run leaves it as it was (FR-PRC-01). Decided before the call: an output the merge
+            // replaces is never recorded (FR-XC-27, FR-XC-07), a rollback must not delete the file that was there
             var outputFullPath = ctx.Ddb.GetLocalPath(outputPath);
             var replacing = (args.Overwrite ?? ctx.QueuedBeforeOverwriteRule) && File.Exists(outputFullPath);
             if (!replacing && File.Exists(outputFullPath))
@@ -211,10 +211,8 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
                 TaskImportWrites.CreateFolder(root, TaskImportWrites.ParentOf(outputPath));
             }
 
-            // A cancel that came meanwhile stops here, before the file that was there is deleted
+            // A cancel that came meanwhile stops here, before libddb runs
             ct.ThrowIfCancellationRequested();
-            if (replacing)
-                File.Delete(outputFullPath);
 
             // Created by another writer while the record was saved: kept, and not the task's
             if (!replacing && File.Exists(outputFullPath))
@@ -223,9 +221,9 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
                 throw new NameClashException(outputPath);
             }
 
-            // A failed run keeps the output recorded: a partial file that libddb wrote before it failed is the task's,
-            // and the rollback deletes it (FR-XC-27)
-            await Task.Run(() => ctx.Ddb.MergeMultispectral(paths, outputPath), ct);
+            // A failed run keeps the output recorded: a file that appears there is the task's, and the rollback deletes
+            // it (FR-XC-27). Without the replace, libddb refuses a file that another writer created meanwhile
+            await Task.Run(() => ctx.Ddb.MergeMultispectral(paths, outputPath, overwrite: replacing), ct);
 
             // The owner of the organization must have room for the growth of the output (FR-XC-26): the task fails with
             // the 507 text

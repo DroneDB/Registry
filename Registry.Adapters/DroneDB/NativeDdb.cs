@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace Registry.Adapters.DroneDB;
 
 /// <summary>
-/// The libddb C ABI as Registry calls it (ddb.h of DroneDB 2.0.0, ABI 2.0): the only place an export
+/// The libddb C ABI as Registry calls it (ddb.h of DroneDB 2.1.0, ABI 2.1): the only place an export
 /// is declared. Every declaration is a source-generated
 /// <see cref="LibraryImportAttribute"/> stub named exactly like its export, so
 /// <see cref="DdbAbi.RequiredSymbols"/> (the startup check) is derived from this class.
@@ -272,16 +272,25 @@ internal static unsafe partial class NativeDdb
     internal static partial DdbResult DDBPreviewMergeMultispectral(string[] paths, int numPaths, string? previewBands,
         int thumbSize, out IntPtr outBuffer, out int outBufferSize);
 
+    /// <summary>
+    /// <c>DDBMergeMultispectralEx</c> (ABI 2.1): an output that exists is replaced only with
+    /// <see cref="DdbOverwriteOptions.Overwrite"/>, in one rename once the merge is complete.
+    /// </summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBMergeMultispectral(string[] paths, int numPaths, string outputPath);
+    internal static partial DdbResult DDBMergeMultispectralEx(string[] paths, int numPaths, string outputPath,
+        in DdbOverwriteOptions options);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBValidateAlignRaster(string sourcePath, string referencePath,
         out IntPtr output);
 
+    /// <summary>
+    /// <c>DDBAlignRasterEx</c> (ABI 2.1): an output that exists is replaced only with
+    /// <see cref="DdbOverwriteOptions.Overwrite"/>, in one rename once the aligned file is complete.
+    /// </summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBAlignRaster(string sourcePath, string referencePath, string outputPath,
-        string? mode, out IntPtr output);
+    internal static partial DdbResult DDBAlignRasterEx(string sourcePath, string referencePath, string outputPath,
+        string? mode, in DdbOverwriteOptions options, out IntPtr output);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBExportRaster(string inputPath, string outputPath, string? preset,
@@ -336,9 +345,13 @@ internal static unsafe partial class NativeDdb
     internal static partial DdbResult DDBGenerateContours(string rasterPath, double interval, int count,
         double baseOffset, double minElev, double maxElev, double simplifyTolerance, int bandIndex, out IntPtr output);
 
+    /// <summary>
+    /// <c>DDBMaskBordersEx</c> (ABI 2.1): an output that exists is replaced only with
+    /// <see cref="DdbOverwriteOptions.Overwrite"/>, in one rename once the mask is complete.
+    /// </summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBMaskBorders(string input, string output, int nearDist,
-        [MarshalAs(UnmanagedType.U1)] bool white);
+    internal static partial DdbResult DDBMaskBordersEx(string input, string output, int nearDist,
+        [MarshalAs(UnmanagedType.U1)] bool white, in DdbOverwriteOptions options);
 
     // ------------------------------------------------------------------ OGC
 
@@ -387,6 +400,27 @@ internal struct DdbAddOptions
         Recursive = recursive ? (byte)1 : (byte)0,
         StopOnError = stopOnError ? (byte)1 : (byte)0,
         MaxConflictRetries = maxConflictRetries
+    };
+}
+
+/// <summary>
+/// <c>DDBAlignRasterOptions</c>, <c>DDBMergeMultispectralOptions</c> and <c>DDBMaskBordersOptions</c> (ABI 2.1, one
+/// layout): 8 bytes, <c>structSize</c> at 0, <c>overwrite</c> at 4 (a 1-byte bool), three reserved bytes that must be
+/// 0 at 5. Blittable: the bool is a byte.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct DdbOverwriteOptions
+{
+    internal uint StructSize;
+    internal byte Overwrite;
+    internal byte Reserved0;
+    internal byte Reserved1;
+    internal byte Reserved2;
+
+    internal static DdbOverwriteOptions Create(bool overwrite) => new()
+    {
+        StructSize = 8,
+        Overwrite = overwrite ? (byte)1 : (byte)0
     };
 }
 

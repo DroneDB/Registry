@@ -90,7 +90,7 @@ public class DdbJobs : DdbRetriedJob
 
     /// <summary>
     /// The mask-borders job stored before the <c>overwrite</c> parameter: its request had already removed the
-    /// existing output, so it runs as one that may replace it.
+    /// existing output (any file there now came later and was replaced as well), so it runs as one that may replace it.
     /// </summary>
     public void MaskBorders(string orgSlug, Guid internalRef, string inputPath, string outputPath, int nearDist,
         bool white, PerformContext? context) =>
@@ -117,8 +117,10 @@ public class DdbJobs : DdbRetriedJob
             if (!overwrite && DatasetEntryLookup.FindExisting(ddb, outputPath) is { } existing)
                 throw new NameClashException(existing.Path);
 
+            // libddb replaces an existing output only with overwrite, once the mask is complete: a failed or
+            // cancelled job leaves it as it was (FR-PRC-01); without it, an output that appeared since the check is refused
             console.Debug("Running mask borders");
-            ddb.MaskBorders(inputPath, outputPath, nearDist, white);
+            ddb.MaskBorders(inputPath, outputPath, nearDist, white, overwrite);
 
             // The very next step after the write: from here a later attempt indexes and builds the output.
             // NOTE: a process crash between the write and this line leaves the file without the marker

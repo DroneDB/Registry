@@ -133,7 +133,7 @@ public class RasterServicesOutputTests
 
         ex.Message.ShouldBe("The output 'B1.tif' is also one of the input files: choose another output path.");
         _fs.Verify(f => f.Delete(It.IsAny<string>()), Times.Never);
-        _ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()), Times.Never);
+        _ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
     }
 
     [Test]
@@ -149,7 +149,7 @@ public class RasterServicesOutputTests
         ex.Message.ShouldBe("A file or folder named 'Merged.tif' already exists in this folder");
         ex.ConflictPath.ShouldBe("Merged.tif");
         _fs.Verify(f => f.Delete(It.IsAny<string>()), Times.Never);
-        _ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()), Times.Never);
+        _ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
     }
 
     [Test]
@@ -161,8 +161,26 @@ public class RasterServicesOutputTests
 
         await _services.Processing.MergeMultispectralAsync(Org, Ds, ["b1.tif", "b2.tif"], "merged.tif", overwrite: true);
 
-        _ddb.Verify(d => d.MergeMultispectral(new[] { "b1.tif", "b2.tif" }, "Merged.tif"), Times.Once);
+        _ddb.Verify(d => d.MergeMultispectral(new[] { "b1.tif", "b2.tif" }, "Merged.tif", true), Times.Once);
         _ddb.Verify(d => d.AddRaw("Merged.tif"), Times.Once);
+        // libddb replaces it once the merge is complete (FR-PRC-01): nothing deletes it before
+        _fs.Verify(f => f.Delete(It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
+    public async Task Merge_WithOverwrite_FailedMerge_LeavesTheExistingFile()
+    {
+        Entry("b1.tif");
+        Entry("b2.tif");
+        Entry("Merged.tif");
+        _ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<bool>()))
+            .Throws(new DdbException("merge failed"));
+
+        await Should.ThrowAsync<DdbException>(() =>
+            _services.Processing.MergeMultispectralAsync(Org, Ds, ["b1.tif", "b2.tif"], "merged.tif", overwrite: true));
+
+        _fs.Verify(f => f.Delete(It.IsAny<string>()), Times.Never);
+        _ddb.Verify(d => d.AddRaw(It.IsAny<string>()), Times.Never);
     }
 
     // FR-XC-26, SEC-003: the synchronous merge writes a file into the dataset: an owner of the organization with nothing
@@ -241,6 +259,8 @@ public class RasterServicesOutputTests
         var job = _enqueued.ShouldHaveSingleItem();
         job.Method.GetParameters().Length.ShouldBe(8);
         job.Args.Take(7).ShouldBe(new object[] { Org, _ref, "ortho.tif", "ORTHO_masked.TIF", 15, false, true });
+        // The job replaces it once the mask is complete (FR-PRC-01): the request deletes nothing
+        _fs.Verify(f => f.Delete(It.IsAny<string>()), Times.Never);
     }
 
     [Test]
@@ -297,7 +317,19 @@ public class RasterServicesOutputTests
                 jobs.MaskBorders(Org, _ref, "ortho.tif", "ortho_masked.tif", 15, false, false, context))
             .ConflictPath.ShouldBe("ortho_masked.tif");
 
-        _ddb.Verify(d => d.MaskBorders(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<bool>()), Times.Never);
+        _ddb.Verify(d => d.MaskBorders(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<bool>(),
+            It.IsAny<bool>()), Times.Never);
+    }
+
+    [Test]
+    public void MaskJob_WithOverwrite_LetsLibddbReplaceTheExistingOutput()
+    {
+        Entry("ortho_masked.tif");
+        var (jobs, _, context) = MaskJob();
+
+        jobs.MaskBorders(Org, _ref, "ortho.tif", "ortho_masked.tif", 15, false, true, context);
+
+        _ddb.Verify(d => d.MaskBorders("ortho.tif", "ortho_masked.tif", 15, false, true), Times.Once);
     }
 
     [Test]
@@ -305,7 +337,7 @@ public class RasterServicesOutputTests
     {
         var order = new List<string>();
         var (jobs, connection, context) = MaskJob();
-        _ddb.Setup(d => d.MaskBorders("ortho.tif", "ortho_masked.tif", 15, false)).Callback(() => order.Add("mask"));
+        _ddb.Setup(d => d.MaskBorders("ortho.tif", "ortho_masked.tif", 15, false, false)).Callback(() => order.Add("mask"));
         connection.Setup(c => c.SetJobParameter("7", PublishedOutputMarker.Key, "ortho_masked.tif"))
             .Callback(() => order.Add("published"));
         _ddb.Setup(d => d.AddRaw("ortho_masked.tif")).Callback(() => order.Add("index"));
@@ -328,7 +360,8 @@ public class RasterServicesOutputTests
 
             jobs.MaskBorders(Org, _ref, "ortho.tif", "ortho_masked.tif", 15, false, false, context);
 
-            _ddb.Verify(d => d.MaskBorders(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<bool>()), Times.Never);
+            _ddb.Verify(d => d.MaskBorders(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<bool>(),
+            It.IsAny<bool>()), Times.Never);
             _ddb.Verify(d => d.AddRaw("ortho_masked.tif"), Times.Once);
             _ddb.Verify(d => d.Build("ortho_masked.tif", null, false), Times.Once);
         }
@@ -346,7 +379,7 @@ public class RasterServicesOutputTests
 
         jobs.MaskBorders(Org, _ref, "ortho.tif", "ortho_masked.tif", 15, false, false, context);
 
-        _ddb.Verify(d => d.MaskBorders("ortho.tif", "ortho_masked.tif", 15, false), Times.Once);
+        _ddb.Verify(d => d.MaskBorders("ortho.tif", "ortho_masked.tif", 15, false, false), Times.Once);
         _ddb.Verify(d => d.AddRaw("ortho_masked.tif"), Times.Once);
     }
 
@@ -358,6 +391,6 @@ public class RasterServicesOutputTests
 
         jobs.MaskBorders(Org, _ref, "ortho.tif", "ortho_masked.tif", 15, false, context);
 
-        _ddb.Verify(d => d.MaskBorders("ortho.tif", "ortho_masked.tif", 15, false), Times.Once);
+        _ddb.Verify(d => d.MaskBorders("ortho.tif", "ortho_masked.tif", 15, false, true), Times.Once);
     }
 }

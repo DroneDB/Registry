@@ -135,10 +135,11 @@ public class AlignRasterToolTests
         _h.File("src.tif");
         _h.File("ref.tif");
         _h.Ddb.Setup(d => d.ValidateAlignRaster("src.tif", "ref.tif")).Returns("{\"ok\":true}");
-        _h.Ddb.Setup(d => d.AlignRaster("src.tif", "ref.tif", It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<string, string, string, string>((_, _, output, _) =>
+        _h.Ddb.Setup(d => d.AlignRaster("src.tif", "ref.tif", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()))
+            .Callback<string, string, string, string, bool>((_, _, output, _, overwrite) =>
             {
-                _h.Calls.Add("align " + output);
+                // The replace of an existing output is libddb's (DDBAlignRasterEx overwrite), never a delete before it
+                _h.Calls.Add("align " + output + (overwrite ? " (replace)" : ""));
                 File.WriteAllText(_h.Local(output), "aligned");
             })
             .Returns("{ \"ok\": true, \"shift\": 1 }");
@@ -171,7 +172,8 @@ public class AlignRasterToolTests
 
         ex.Message.ShouldContain("Insufficient overlap after reprojection (0%)");
         ex.ParamName.ShouldBeNull("the message is shown as it is, without a parameter name");
-        _h.Ddb.Verify(d => d.AlignRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+        _h.Ddb.Verify(d => d.AlignRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<bool>()),
             Times.Never);
     }
 
@@ -220,7 +222,7 @@ public class AlignRasterToolTests
         await _tool.ValidateAsync(request, _h.Ctx.Object, CancellationToken.None);
         await Execute(request);
 
-        _h.Calls.ShouldBe(["align out/a.tif", "published out/a.tif", "index out/a.tif"]);
+        _h.Calls.ShouldBe(["align out/a.tif (replace)", "published out/a.tif", "index out/a.tif"]);
         File.ReadAllText(_h.Local("out/a.tif")).ShouldBe("aligned");
     }
 
@@ -231,7 +233,7 @@ public class AlignRasterToolTests
 
         await Execute(Request("out/a.tif", overwrite: true));
 
-        _h.Calls.ShouldBe(["align Out/A.TIF", "published Out/A.TIF", "index Out/A.TIF"]);
+        _h.Calls.ShouldBe(["align Out/A.TIF (replace)", "published Out/A.TIF", "index Out/A.TIF"]);
     }
 
     [Test]
@@ -273,7 +275,7 @@ public class AlignRasterToolTests
 
         ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 3 B left.");
         File.ReadAllText(_h.Local("out/a.tif")).ShouldBe("aligned");
-        _h.Calls.ShouldBe(["align out/a.tif", "index out/a.tif"]);
+        _h.Calls.ShouldBe(["align out/a.tif (replace)", "index out/a.tif"]);
         _h.Recorder.Paths.ShouldBeEmpty();
     }
 
@@ -300,7 +302,7 @@ public class AlignRasterToolTests
         await Execute(Request("out/a.tif", overwrite: true));
 
         File.ReadAllText(_h.Local("out/a.tif")).ShouldBe("aligned");
-        _h.Calls.ShouldBe(["align out/a.tif", "published out/a.tif", "index out/a.tif"]);
+        _h.Calls.ShouldBe(["align out/a.tif (replace)", "published out/a.tif", "index out/a.tif"]);
     }
 
     [Test]
@@ -311,7 +313,7 @@ public class AlignRasterToolTests
 
         await Execute(Request("out/a.tif", overwrite: true));
 
-        _h.Calls.ShouldBe(["align out/a.tif", "published out/a.tif", "index out/a.tif"]);
+        _h.Calls.ShouldBe(["align out/a.tif (replace)", "published out/a.tif", "index out/a.tif"]);
     }
 
     [Test]
@@ -337,7 +339,7 @@ public class AlignRasterToolTests
     [Test]
     public async Task UnreadableReport_AfterTheWrite_StillLeavesTheMarker()
     {
-        _h.Ddb.Setup(d => d.AlignRaster("src.tif", "ref.tif", "new.tif", It.IsAny<string>())).Returns("not json");
+        _h.Ddb.Setup(d => d.AlignRaster("src.tif", "ref.tif", "new.tif", It.IsAny<string>(), false)).Returns("not json");
 
         await Should.ThrowAsync<JsonException>(() => Execute(Request("new.tif")));
 
@@ -365,7 +367,7 @@ public class AlignRasterToolTests
         await _tool.ValidateAsync(request, _h.Ctx.Object, CancellationToken.None);
         await Execute(request);
 
-        _h.Calls.ShouldBe(["align out/a.tif", "published out/a.tif", "index out/a.tif"]);
+        _h.Calls.ShouldBe(["align out/a.tif (replace)", "published out/a.tif", "index out/a.tif"]);
     }
 
     [Test]
@@ -399,7 +401,8 @@ public class AlignRasterToolTests
         await Execute(request);
 
         _h.Calls.ShouldBe(["index new.tif"]);
-        _h.Ddb.Verify(d => d.AlignRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+        _h.Ddb.Verify(d => d.AlignRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<bool>()),
             Times.Never);
         File.ReadAllText(_h.Local("new.tif")).ShouldBe("aligned");
     }
@@ -427,8 +430,8 @@ public class AlignRasterToolTests
     public async Task NewOutput_AndItsNewFolders_AreSavedInTheRecord_BeforeEitherExists()
     {
         var saved = false;
-        _h.Ddb.Setup(d => d.AlignRaster("src.tif", "ref.tif", It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<string, string, string, string>((_, _, output, _) =>
+        _h.Ddb.Setup(d => d.AlignRaster("src.tif", "ref.tif", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()))
+            .Callback<string, string, string, string, bool>((_, _, output, _, _) =>
             {
                 // §8.1: a process lost from here on leaves a record that rolls the output back
                 _h.Recorder.SavedPaths.ShouldBe([output]);
@@ -455,15 +458,16 @@ public class AlignRasterToolTests
         File.ReadAllText(_h.Local("new.tif")).ShouldBe("somebody else's");
         _h.Recorder.Paths.ShouldBeEmpty("a rollback must not delete the other writer's file");
         _h.Recorder.Forgotten.ShouldBe(["new.tif"]);
-        _h.Ddb.Verify(d => d.AlignRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+        _h.Ddb.Verify(d => d.AlignRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<bool>()),
             Times.Never);
     }
 
     [Test]
     public async Task APartialOutputLibddbLeavesWhenItFails_StaysRecorded_SoTheRollbackDeletesIt()
     {
-        _h.Ddb.Setup(d => d.AlignRaster("src.tif", "ref.tif", It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<string, string, string, string>((_, _, output, _) => File.WriteAllText(_h.Local(output), "partial"))
+        _h.Ddb.Setup(d => d.AlignRaster("src.tif", "ref.tif", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()))
+            .Callback<string, string, string, string, bool>((_, _, output, _, _) => File.WriteAllText(_h.Local(output), "partial"))
             .Throws(new InvalidOperationException("Cannot align raster: the write failed"));
 
         await Should.ThrowAsync<InvalidOperationException>(() => Execute(Request("new.tif")));
@@ -485,6 +489,29 @@ public class AlignRasterToolTests
         _h.Recorder.Paths.ShouldBeEmpty();
         _h.Recorder.Folders.ShouldBeEmpty();
         _h.Recorder.Stamped.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task Overwrite_FailedAlignment_LeavesTheReplacedFileUnchanged()
+    {
+        // AC-005: libddb replaces the output in one rename once the aligned file is complete; nothing deletes it before
+        _h.File("out/a.tif");
+        _h.Ddb.Setup(d => d.AlignRaster("src.tif", "ref.tif", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()))
+            .Throws(new InvalidOperationException("Cannot align raster: no overlap"));
+
+        await Should.ThrowAsync<InvalidOperationException>(() => Execute(Request("out/a.tif", overwrite: true)));
+
+        File.ReadAllText(_h.Local("out/a.tif")).ShouldBe("original");
+        _h.Ddb.Verify(d => d.AlignRaster("src.tif", "ref.tif", "out/a.tif", "similarity", true), Times.Once);
+        _h.Recorder.Paths.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task NewOutput_IsWrittenWithoutTheReplace_SoAFileThatAppearsMeanwhileIsRefusedByLibddb()
+    {
+        await Execute(Request("new.tif", overwrite: true));
+
+        _h.Ddb.Verify(d => d.AlignRaster("src.tif", "ref.tif", "new.tif", "similarity", false), Times.Once);
     }
 
     [Test]

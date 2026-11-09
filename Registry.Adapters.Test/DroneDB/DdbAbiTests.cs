@@ -6,20 +6,29 @@ namespace Registry.Adapters.Test.DroneDB;
 
 /// <summary>
 /// The ABI rule of the startup handshake. DroneDB has one version and the ABI follows it, so
-/// Registry runs on libddb 2.x (ABI major 2, any minor) and refuses a 1.x library with a message
-/// that says which library it needs.
+/// Registry runs on libddb 2.x from 2.1 (ABI major 2, minor at least 1: the output options of align, merge and
+/// mask) and refuses a 1.x or 2.0 library with a message that says which library it needs.
 /// </summary>
 [TestFixture]
 public class DdbAbiTests
 {
     private static uint Abi(int major, int minor) => (uint)((major << 16) | minor);
 
-    [TestCase(2, 0)]
     [TestCase(2, 1)]
+    [TestCase(2, 2)]
     [TestCase(2, 17)]
     public void RequireAbi_AcceptsLibddb2x(int major, int minor)
     {
-        DdbAbi.RequireAbi("2.0.0", Abi(major, minor)).ShouldBe((major, minor));
+        DdbAbi.RequireAbi("2.1.0", Abi(major, minor)).ShouldBe((major, minor));
+    }
+
+    [Test]
+    public void RequireAbi_RejectsAnOlderMinor_NamingTheMinorItNeeds()
+    {
+        var ex = Should.Throw<DdbAbiMismatchException>(() => DdbAbi.RequireAbi("2.0.1", Abi(2, 0)));
+
+        ex.Message.ShouldContain("libddb 2.0.1 has ABI 2.0");
+        ex.Message.ShouldContain("(ABI 2.x with x >= 1)");
     }
 
     [TestCase(1, 0)]
@@ -42,6 +51,6 @@ public class DdbAbiTests
         DdbAbi.Decode(Abi(2, 0)).ShouldBe((2, 0));
         DdbAbi.Decode(Abi(2, 3)).ShouldBe((2, 3));
         DdbAbi.Major.ShouldBe(2);
-        DdbAbi.Minor.ShouldBe(0);
+        DdbAbi.Minor.ShouldBe(1);
     }
 }
