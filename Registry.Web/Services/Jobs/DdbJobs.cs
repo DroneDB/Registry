@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Hangfire;
 using Hangfire.Server;
 using Microsoft.Extensions.Logging;
@@ -90,18 +91,20 @@ public class DdbJobs : DdbRetriedJob
 
     /// <summary>
     /// The mask-borders job stored before the <c>overwrite</c> parameter: its request had already removed the
-    /// existing output (any file there now came later and was replaced as well), so it runs as one that may replace it.
+    /// existing output, so any file there now came later from another writer and is refused, never replaced (D-040).
     /// </summary>
     public void MaskBorders(string orgSlug, Guid internalRef, string inputPath, string outputPath, int nearDist,
         bool white, PerformContext? context) =>
-        MaskBorders(orgSlug, internalRef, inputPath, outputPath, nearDist, white, true, context);
+        MaskBorders(orgSlug, internalRef, inputPath, outputPath, nearDist, white, false, context);
 
     /// <summary>
     /// Masks the borders of <paramref name="inputPath"/> into <paramref name="outputPath"/>, indexes and builds it.
-    /// Without <paramref name="overwrite"/>, an output that exists when the job runs is refused (D-040). An attempt
-    /// after one that wrote the output (<see cref="PublishedOutputMarker"/>) only indexes and builds it.
+    /// <paramref name="overwrite"/> is set by a request that found the output and may replace it; without it, an
+    /// output that exists when the job runs, or that another writer creates while it runs, is refused (D-040). An
+    /// attempt after one that wrote the output (<see cref="PublishedOutputMarker"/>) only indexes and builds it.
     /// </summary>
-    /// <exception cref="NameClashException">The output exists and <paramref name="overwrite"/> is false.</exception>
+    /// <exception cref="NameClashException">The output exists and <paramref name="overwrite"/> is false, or it did not
+    /// exist when libddb started and another writer created it before the mask was written.</exception>
     public void MaskBorders(string orgSlug, Guid internalRef, string inputPath, string outputPath, int nearDist,
         bool white, bool overwrite, PerformContext? context)
     {
@@ -118,9 +121,20 @@ public class DdbJobs : DdbRetriedJob
                 throw new NameClashException(existing.Path);
 
             // libddb replaces an existing output only with overwrite, once the mask is complete: a failed or
-            // cancelled job leaves it as it was (FR-PRC-01); without it, an output that appeared since the check is refused
+            // cancelled job leaves it as it was (FR-PRC-01). The replace is decided now, for the file that is there:
+            // an output that appears while libddb runs (another writer) is refused, never replaced
+            var outputFullPath = ddb.GetLocalPath(outputPath);
+            var replacing = overwrite && File.Exists(outputFullPath);
             console.Debug("Running mask borders");
-            ddb.MaskBorders(inputPath, outputPath, nearDist, white, overwrite);
+            try
+            {
+                ddb.MaskBorders(inputPath, outputPath, nearDist, white, replacing);
+            }
+            catch (DdbException) when (!replacing && File.Exists(outputFullPath))
+            {
+                // Created by another writer since the check: kept, and refused as any existing output
+                throw new NameClashException(outputPath);
+            }
 
             // The very next step after the write: from here a later attempt indexes and builds the output.
             // NOTE: a process crash between the write and this line leaves the file without the marker

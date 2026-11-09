@@ -21,6 +21,7 @@ using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Attributes;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Adapters;
@@ -201,27 +202,30 @@ public sealed class LegacyJobPayloadTests : IDisposable
     {
         Perform(Deserialize(Payload("MaskBordersWrapper"), false));
 
+        // No output there: written without the replace (libddb refuses a file another writer creates meanwhile)
         _wrapper.Verify(x => x.MaskBorders(Path.Combine(_folder, "a.tif").ToDdbPath(),
-            Path.Combine(_folder, "a_masked.tif").ToDdbPath(), 15, true, true), Times.Once);
+            Path.Combine(_folder, "a_masked.tif").ToDdbPath(), 15, true, false), Times.Once);
         _wrapper.Verify(x => x.Build(_folder, "a_masked.tif", null, false, false), Times.Once);
     }
 
     [TestCase(false)]
     [TestCase(true)]
-    public void StoredMaskBordersJob_WithoutTheOverwriteParameter_StillReplacesItsOutput(bool split)
+    public void StoredMaskBordersJob_WithoutTheOverwriteParameter_RefusesAnOutputThatAppearedSinceTheRequest(bool split)
     {
         // A DdbJobs.MaskBorders job queued before the overwrite parameter (seven parameters): its request had
-        // removed the output, so it still replaces one that exists when it runs
+        // removed the output, so a file there now is another writer's: refused (D-040), never replaced
         var payload = InvocationData.SerializeJob(Job.FromExpression<DdbJobs>(
             j => j.MaskBorders(Org, Ref, "a.tif", "a_masked.tif", 15, true, null))).SerializePayload();
-        File.WriteAllText(Path.Combine(_folder, "a_masked.tif"), "old");
+        File.WriteAllText(Path.Combine(_folder, "a_masked.tif"), "another user's file");
 
         var job = Deserialize(payload, split);
         job.Method.GetParameters().Length.ShouldBe(7);
-        Perform(job);
+        Should.Throw<JobPerformanceException>(() => Perform(job))
+            .InnerException.ShouldBeOfType<NameClashException>().ConflictPath.ShouldBe("a_masked.tif");
 
-        _wrapper.Verify(x => x.MaskBorders(Path.Combine(_folder, "a.tif").ToDdbPath(),
-            Path.Combine(_folder, "a_masked.tif").ToDdbPath(), 15, true, true), Times.Once);
+        File.ReadAllText(Path.Combine(_folder, "a_masked.tif")).ShouldBe("another user's file");
+        _wrapper.Verify(x => x.MaskBorders(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<bool>(),
+            It.IsAny<bool>()), Times.Never);
     }
 
     [TestCase("SafeDelete", "/tmp/x")]

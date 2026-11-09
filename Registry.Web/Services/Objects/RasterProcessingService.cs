@@ -68,7 +68,8 @@ public sealed class RasterProcessingService
     /// output is replaced only with <paramref name="overwrite"/> (D-040); an output that is one of the bands never is.
     /// </summary>
     /// <exception cref="BadRequestException">A path is missing, or the output is one of the bands.</exception>
-    /// <exception cref="NameClashException">The output exists and <paramref name="overwrite"/> is false.</exception>
+    /// <exception cref="NameClashException">The output exists and <paramref name="overwrite"/> is false, or it did not
+    /// exist at the request and another writer created it before the merge wrote it.</exception>
     public async Task MergeMultispectralAsync(string orgSlug, string dsSlug, string[] paths, string? outputPath,
         bool overwrite = false, CancellationToken ct = default)
     {
@@ -88,9 +89,21 @@ public sealed class RasterProcessingService
         await EnsureOwnerHasStorageLeftAsync(access.Dataset, ct);
 
         // libddb replaces an existing output only when asked, once the merge is complete: a failed merge leaves it as
-        // it was (FR-PRC-01)
+        // it was (FR-PRC-01). The replace is decided now, for the file that is there: an output that did not exist
+        // and appears while the merge waits or runs (another writer) is refused by libddb, never replaced
+        var outputFullPath = ddb.GetLocalPath(outputPath);
+        var replacing = overwrite && File.Exists(outputFullPath);
+
         _logger.LogInformation("Merging multispectral for '{OutputPath}'", outputPath);
-        await _gate.RunAsync(NativeLane.Heavy, () => ddb.MergeMultispectral(paths, outputPath, overwrite), ct);
+        try
+        {
+            await _gate.RunAsync(NativeLane.Heavy, () => ddb.MergeMultispectral(paths, outputPath, replacing), ct);
+        }
+        catch (DdbException) when (!replacing && File.Exists(outputFullPath))
+        {
+            // Created by another writer since the request: kept, and refused as any existing output (409)
+            throw new NameClashException(outputPath);
+        }
 
         ddb.AddRaw(outputPath);
         _logger.LogInformation("Merge complete and file added to the dataset");
@@ -148,9 +161,11 @@ public sealed class RasterProcessingService
         await EnsureOwnerHasStorageLeftAsync(access.Dataset, ct);
 
         // The job replaces an existing copy only when asked, once the mask is complete (libddb): a failed job leaves
-        // it as it was (FR-PRC-01)
+        // it as it was (FR-PRC-01). Only a copy that exists now may be replaced: without one, the job runs without the
+        // replace and refuses a file that another writer creates while it waits (409)
+        var replaces = overwrite && DatasetEntryLookup.FindExisting(ddb, outputPath) != null;
         var jobId = await _jobs.EnqueueMaskBordersAsync(access, orgSlug, dsSlug, entry, outputPath, nearDist, white,
-            overwrite);
+            replaces);
         _logger.LogInformation("Masking borders for '{Path}' asynchronously, background job id is {JobId}", path, jobId);
     }
 

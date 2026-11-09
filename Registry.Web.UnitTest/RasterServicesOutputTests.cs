@@ -31,9 +31,10 @@ namespace Registry.Web.Test;
 /// <summary>
 /// The output rules of the synchronous merge and of Mask Borders (FR-PRC-01, FR-XC-07, D-040): an output that is one
 /// of the bands is a 400, an existing output without <c>overwrite</c> a 409 with its path and nothing is removed, a
-/// replace goes to the existing entry (any letter case); the mask job checks again when it runs, records the written
-/// output (<see cref="PublishedOutputMarker"/>) and a later attempt only indexes and builds it; a job stored before
-/// the <c>overwrite</c> parameter keeps replacing.
+/// replace goes to the existing entry (any letter case); libddb is asked to replace only a file that exists when the
+/// request (merge) or the job (mask) decides it, so an output another writer creates meanwhile is refused (409) and
+/// kept; the mask job checks again when it runs, records the written output (<see cref="PublishedOutputMarker"/>) and a
+/// later attempt only indexes and builds it; a job stored before the <c>overwrite</c> parameter replaces nothing.
 /// </summary>
 [TestFixture]
 public class RasterServicesOutputTests
@@ -41,6 +42,7 @@ public class RasterServicesOutputTests
     private const string Org = "org";
     private const string Ds = "ds";
     private const string Folder = "/datasets/org/ds";
+    private const string Previous = "the file another user uploaded\n";
 
     private Mock<IDDB> _ddb = null!;
     private Mock<IFileSystem> _fs = null!;
@@ -50,6 +52,7 @@ public class RasterServicesOutputTests
     private ObjectServices _services = null!;
     private Mock<IStorageQuota> _quota = null!;
     private Guid _ref;
+    private string _root = null!;
     private readonly List<InMemoryStorage> _storages = [];
 
     [TearDown]
@@ -58,6 +61,7 @@ public class RasterServicesOutputTests
         foreach (var storage in _storages)
             storage.Dispose();
         _storages.Clear();
+        Directory.Delete(_root, recursive: true);
     }
 
     [SetUp]
@@ -65,6 +69,8 @@ public class RasterServicesOutputTests
     {
         _entries = [];
         _enqueued = [];
+        // The files of the dataset: the replace is decided by the file that is there
+        _root = Directory.CreateTempSubdirectory("raster-output-tests").FullName;
 
         var org = new Organization { Slug = Org, Name = "Org", CreationDate = DateTime.UtcNow, OwnerId = "u" };
         var dataset = new Dataset { Slug = Ds, InternalRef = Guid.NewGuid(), CreationDate = DateTime.UtcNow, Organization = org };
@@ -77,7 +83,7 @@ public class RasterServicesOutputTests
 
         _ddb = new Mock<IDDB>();
         _ddb.SetupGet(d => d.DatasetFolderPath).Returns(Folder);
-        _ddb.Setup(d => d.GetLocalPath(It.IsAny<string>())).Returns<string>(p => Folder + "/" + p);
+        _ddb.Setup(d => d.GetLocalPath(It.IsAny<string>())).Returns<string>(p => Path.Combine(_root, p));
         _ddb.Setup(d => d.EntryExists(It.IsAny<string>())).Returns<string>(p => _entries.Any(e => e.Path == p));
         _ddb.Setup(d => d.GetEntry(It.IsAny<string>())).Returns<string>(p =>
             _entries.FirstOrDefault(e => e.Path == p) is { } e
@@ -113,6 +119,14 @@ public class RasterServicesOutputTests
 
     private void Entry(string path, EntryType type = EntryType.GeoRaster) =>
         _entries.Add(new EntrySummary { Path = path, Type = type });
+
+    // A file on disk at the dataset path, as another writer left it
+    private string OnDisk(string path)
+    {
+        var local = Path.Combine(_root, path);
+        File.WriteAllText(local, Previous);
+        return local;
+    }
 
     private static string Parent(string path)
     {
@@ -158,6 +172,7 @@ public class RasterServicesOutputTests
         Entry("b1.tif");
         Entry("b2.tif");
         Entry("Merged.tif");
+        OnDisk("Merged.tif");
 
         await _services.Processing.MergeMultispectralAsync(Org, Ds, ["b1.tif", "b2.tif"], "merged.tif", overwrite: true);
 
@@ -199,7 +214,42 @@ public class RasterServicesOutputTests
         ex.StatusCode.ShouldBe(507);
         ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 0 B left.");
         _fs.Verify(f => f.Delete(It.IsAny<string>()), Times.Never);
-        _ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()), Times.Never);
+        _ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    [Test]
+    public async Task Merge_WithOverwrite_NoOutputYet_MergesWithoutTheReplace()
+    {
+        Entry("b1.tif");
+        Entry("b2.tif");
+
+        await _services.Processing.MergeMultispectralAsync(Org, Ds, ["b1.tif", "b2.tif"], "merged.tif", overwrite: true);
+
+        // Nothing to replace: libddb refuses a file that another writer creates meanwhile
+        _ddb.Verify(d => d.MergeMultispectral(new[] { "b1.tif", "b2.tif" }, "merged.tif", false), Times.Once);
+        _ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), true), Times.Never);
+        _ddb.Verify(d => d.AddRaw("merged.tif"), Times.Once);
+    }
+
+    [Test]
+    public async Task Merge_WithOverwrite_OutputCreatedByAnotherWriterMeanwhile_Is409_AndKeepsIt()
+    {
+        Entry("b1.tif");
+        Entry("b2.tif");
+        // Another user uploads merged.tif after the request, before the merge writes it: libddb (without the replace)
+        // refuses the output that now exists
+        _ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), "merged.tif", false))
+            .Callback(() => OnDisk("merged.tif"))
+            .Throws(new DdbException("Output file already exists"));
+
+        var ex = await Should.ThrowAsync<NameClashException>(() =>
+            _services.Processing.MergeMultispectralAsync(Org, Ds, ["b1.tif", "b2.tif"], "merged.tif", overwrite: true));
+
+        ex.ConflictPath.ShouldBe("merged.tif");
+        ex.Message.ShouldBe("A file or folder named 'merged.tif' already exists in this folder");
+        File.ReadAllText(Path.Combine(_root, "merged.tif")).ShouldBe(Previous);
+        _ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), true), Times.Never);
+        _ddb.Verify(d => d.AddRaw(It.IsAny<string>()), Times.Never);
     }
 
     // ---- Mask borders (request) ----
@@ -276,6 +326,40 @@ public class RasterServicesOutputTests
     }
 
     [Test]
+    public async Task Mask_WithOverwrite_NoCopyYet_QueuesAJobThatRefusesAnExistingOutput()
+    {
+        Entry("ortho.tif");
+
+        await _services.Processing.MaskBordersAsync(Org, Ds, "ortho.tif", 15, false, overwrite: true);
+
+        // Nothing to replace at the request: a copy that appears before the job runs is not the user's to replace
+        _enqueued.ShouldHaveSingleItem().Args.Take(7)
+            .ShouldBe(new object[] { Org, _ref, "ortho.tif", "ortho_masked.tif", 15, false, false });
+    }
+
+    [Test]
+    public async Task Mask_WithOverwrite_CopyCreatedBetweenRequestAndJob_IsRefused_AndKept()
+    {
+        Entry("ortho.tif");
+        await _services.Processing.MaskBordersAsync(Org, Ds, "ortho.tif", 15, false, overwrite: true);
+        var queued = _enqueued.ShouldHaveSingleItem();
+
+        // Another user uploads ortho_masked.tif while the job waits in the queue
+        Entry("ortho_masked.tif");
+        OnDisk("ortho_masked.tif");
+        var (jobs, _, context) = MaskJob();
+
+        Should.Throw<NameClashException>(() => jobs.MaskBorders(Org, _ref, "ortho.tif", "ortho_masked.tif", 15, false,
+                (bool)queued.Args[6], context))
+            .ConflictPath.ShouldBe("ortho_masked.tif");
+
+        File.ReadAllText(Path.Combine(_root, "ortho_masked.tif")).ShouldBe(Previous);
+        _ddb.Verify(d => d.MaskBorders(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<bool>(),
+            It.IsAny<bool>()), Times.Never);
+        _ddb.Verify(d => d.AddRaw(It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
     public async Task MaskCheck_FindsTheCopyInAnyLetterCase()
     {
         Entry("ortho.tif");
@@ -325,11 +409,43 @@ public class RasterServicesOutputTests
     public void MaskJob_WithOverwrite_LetsLibddbReplaceTheExistingOutput()
     {
         Entry("ortho_masked.tif");
+        OnDisk("ortho_masked.tif");
         var (jobs, _, context) = MaskJob();
 
         jobs.MaskBorders(Org, _ref, "ortho.tif", "ortho_masked.tif", 15, false, true, context);
 
         _ddb.Verify(d => d.MaskBorders("ortho.tif", "ortho_masked.tif", 15, false, true), Times.Once);
+    }
+
+    [Test]
+    public void MaskJob_WithOverwrite_NoOutputWhenItRuns_MasksWithoutTheReplace()
+    {
+        var (jobs, _, context) = MaskJob();
+
+        jobs.MaskBorders(Org, _ref, "ortho.tif", "ortho_masked.tif", 15, false, true, context);
+
+        // The copy the request found is gone: libddb refuses a file that another writer creates while the mask runs
+        _ddb.Verify(d => d.MaskBorders("ortho.tif", "ortho_masked.tif", 15, false, false), Times.Once);
+        _ddb.Verify(d => d.MaskBorders(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<bool>(),
+            true), Times.Never);
+    }
+
+    [Test]
+    public void MaskJob_OutputCreatedByAnotherWriterWhileItRuns_IsRefused_AndKept()
+    {
+        var (jobs, connection, context) = MaskJob();
+        _ddb.Setup(d => d.MaskBorders("ortho.tif", "ortho_masked.tif", 15, false, false))
+            .Callback(() => OnDisk("ortho_masked.tif"))
+            .Throws(new DdbException("Output file already exists"));
+
+        Should.Throw<NameClashException>(() =>
+                jobs.MaskBorders(Org, _ref, "ortho.tif", "ortho_masked.tif", 15, false, true, context))
+            .ConflictPath.ShouldBe("ortho_masked.tif");
+
+        File.ReadAllText(Path.Combine(_root, "ortho_masked.tif")).ShouldBe(Previous);
+        connection.Verify(c => c.SetJobParameter(It.IsAny<string>(), PublishedOutputMarker.Key, It.IsAny<string>()),
+            Times.Never);
+        _ddb.Verify(d => d.AddRaw(It.IsAny<string>()), Times.Never);
     }
 
     [Test]
@@ -384,13 +500,29 @@ public class RasterServicesOutputTests
     }
 
     [Test]
-    public void MaskJob_StoredBeforeTheOverwriteParameter_KeepsReplacing()
+    public void MaskJob_StoredBeforeTheOverwriteParameter_RefusesAnOutputThatAppearedSinceTheRequest()
     {
+        // Its request removed the output: the file there now is another writer's
         Entry("ortho_masked.tif");
+        OnDisk("ortho_masked.tif");
+        var (jobs, _, context) = MaskJob();
+
+        Should.Throw<NameClashException>(() =>
+                jobs.MaskBorders(Org, _ref, "ortho.tif", "ortho_masked.tif", 15, false, context))
+            .ConflictPath.ShouldBe("ortho_masked.tif");
+
+        File.ReadAllText(Path.Combine(_root, "ortho_masked.tif")).ShouldBe(Previous);
+        _ddb.Verify(d => d.MaskBorders(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<bool>(),
+            It.IsAny<bool>()), Times.Never);
+    }
+
+    [Test]
+    public void MaskJob_StoredBeforeTheOverwriteParameter_WritesANewOutput_WithoutTheReplace()
+    {
         var (jobs, _, context) = MaskJob();
 
         jobs.MaskBorders(Org, _ref, "ortho.tif", "ortho_masked.tif", 15, false, context);
 
-        _ddb.Verify(d => d.MaskBorders("ortho.tif", "ortho_masked.tif", 15, false, true), Times.Once);
+        _ddb.Verify(d => d.MaskBorders("ortho.tif", "ortho_masked.tif", 15, false, false), Times.Once);
     }
 }

@@ -14,7 +14,8 @@ namespace Registry.Adapters.Ddb.Test;
 /// On the real libddb (ABI 2.1 and later): align, merge multispectral and mask borders go through
 /// <c>DDBAlignRasterEx</c>, <c>DDBMergeMultispectralEx</c> and <c>DDBMaskBordersEx</c> (FR-PRC-01, FR-XC-07, D-028): an
 /// output that exists is refused without overwrite and left as it was, replaced with it, and a failed call with
-/// overwrite leaves it byte for byte as it was (the Registry no longer deletes it before the call).
+/// overwrite leaves it byte for byte as it was (the Registry no longer deletes it before the call); a mask that
+/// replaces an output takes the stale external mask (<c>&lt;output&gt;.msk</c>) of the replaced file with it.
 /// Run: dotnet test Registry.Adapters.Ddb.Test --filter "FullyQualifiedName~NativeOutputReplaceTests"
 /// </summary>
 [TestFixture]
@@ -97,6 +98,35 @@ public class NativeOutputReplaceTests : TestBase
     }
 
     [Test]
+    public void Mask_ExistingOutput_WithOverwrite_TakesTheStaleSidecarOfTheReplacedFile()
+    {
+        using var area = new TestArea(nameof(Mask_ExistingOutput_WithOverwrite_TakesTheStaleSidecarOfTheReplacedFile));
+        var output = Existing(area, "masked.tif");
+        var sidecar = output + ".msk";
+        File.WriteAllText(sidecar, "the external mask of the file that was there\n");
+
+        Wrapper.MaskBorders(_geoRaster, output, overwrite: true);
+
+        ShouldBeATiff(output);
+        // The mask is written inside the new GeoTIFF: the external mask of the replaced file goes (ddb.h)
+        File.Exists(sidecar).ShouldBeFalse();
+    }
+
+    [Test]
+    public void Mask_ExistingOutput_WithoutOverwrite_KeepsItsSidecar()
+    {
+        using var area = new TestArea(nameof(Mask_ExistingOutput_WithoutOverwrite_KeepsItsSidecar));
+        var output = Existing(area, "masked.tif");
+        var sidecar = output + ".msk";
+        File.WriteAllText(sidecar, "the external mask of the file that was there\n");
+
+        Should.Throw<DdbException>(() => Wrapper.MaskBorders(_geoRaster, output));
+
+        File.ReadAllText(output).ShouldBe(Previous);
+        File.ReadAllText(sidecar).ShouldBe("the external mask of the file that was there\n");
+    }
+
+    [Test]
     public void Mask_FailedRun_WithOverwrite_LeavesTheExistingOutputUnchanged()
     {
         using var area = new TestArea(nameof(Mask_FailedRun_WithOverwrite_LeavesTheExistingOutputUnchanged));
@@ -147,6 +177,28 @@ public class NativeOutputReplaceTests : TestBase
     }
 
     // ---- align ----
+
+    [Test]
+    public void Align_ExistingOutput_WithoutOverwrite_IsRefused_AndLeftAsItWas()
+    {
+        using var area = new TestArea(nameof(Align_ExistingOutput_WithoutOverwrite_IsRefused_AndLeftAsItWas));
+        var output = Existing(area, "aligned.tif");
+
+        Should.Throw<DdbException>(() => Wrapper.AlignRaster(_geoRaster, _geoRaster, output));
+
+        File.ReadAllText(output).ShouldBe(Previous);
+    }
+
+    [Test]
+    public void Align_ExistingOutput_WithOverwrite_IsReplaced()
+    {
+        using var area = new TestArea(nameof(Align_ExistingOutput_WithOverwrite_IsReplaced));
+        var output = Existing(area, "aligned.tif");
+
+        Wrapper.AlignRaster(_geoRaster, _geoRaster, output, overwrite: true);
+
+        ShouldBeATiff(output);
+    }
 
     [Test]
     public void Align_FailedRun_WithOverwrite_LeavesTheExistingOutputUnchanged()
