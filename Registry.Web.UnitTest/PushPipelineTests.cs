@@ -116,7 +116,7 @@ public class PushPipelineTests : TestBase
         _storageQuota = new Mock<IStorageQuota>();
         _utils.Setup(u => u.GetDatasetAsync("org", "ds", It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(_ds);
         // The storage evaluation behind the quota guard
-        _storageQuota.Setup(u => u.GetCurrentUserStorageLimit()).ReturnsAsync(() =>
+        _storageQuota.Setup(u => u.GetOwnerStorageLimitAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(() =>
         {
             _quotaChecks++;
             return _quotaExceeded ? new UserStorageInfo { Used = 10, Total = 10 } : _quota;
@@ -558,6 +558,20 @@ public class PushPipelineTests : TestBase
             CreateManager().StreamUploadAsync("org", "ds", new MemoryStream([1, 2, 3]), 3));
 
         Directory.Exists(Path.Combine(_root, IDDB.UploadsFolderName)).ShouldBeFalse("nothing was written");
+    }
+
+    // FR-XC-26, D-039: the quota of a push is the one of the owner of the organization ("u"), not of the user who pushes
+    [Test]
+    public async Task StreamUpload_IsAgainstTheQuotaOfTheOwnerOfTheOrganization()
+    {
+        _quotaExceeded = true;
+
+        await Should.ThrowAsync<QuotaExceededException>(() =>
+            CreateManager().StreamUploadAsync("org", "ds", new MemoryStream([1, 2, 3]), 3));
+
+        _storageQuota.Verify(q => q.GetOwnerStorageLimitAsync("u", It.IsAny<CancellationToken>()), Times.Once);
+        _storageQuota.Verify(q => q.GetOwnerStorageLimitAsync(It.Is<string?>(id => id != "u"), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Test]

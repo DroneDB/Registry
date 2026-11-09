@@ -23,7 +23,7 @@ public class ImportManager
 {
     private readonly IDatasetAccessResolver _access;
     private readonly ImportSourceCatalog _sources;
-    private readonly ImportQuotaGate _quota;
+    private readonly IStorageQuota _quota;
     private readonly ImportTargetDatasets _targets;
     private readonly CurrentUserTaskSubmitter _submitter;
     private readonly ImportCredentials _credentials;
@@ -34,7 +34,7 @@ public class ImportManager
     public ImportManager(
         IDatasetAccessResolver access,
         ImportSourceCatalog sources,
-        ImportQuotaGate quota,
+        IStorageQuota quota,
         ImportTargetDatasets targets,
         CurrentUserTaskSubmitter submitter,
         ImportCredentials credentials)
@@ -118,12 +118,11 @@ public class ImportManager
         if (!probe.Reachable)
             throw new BadRequestException(probe.Message ?? "The import source is not reachable.");
 
-        // Soft quota gate when a size is known (archive-url reports the compressed size, a lower bound;
-        // the worker enforces the hard cap incrementally).
+        // Soft quota gate when a size is known (archive-url reports the compressed size, a lower bound): the quota of the
+        // owner of the destination organization, whoever imports (FR-XC-26). The worker reads the remaining bytes when it
+        // writes and enforces the hard cap incrementally.
         if (probe.EstimatedBytes is > 0)
-            await _quota.CheckAsync(probe.EstimatedBytes.Value);
-
-        var budgetBytes = await _quota.RemainingBytesAsync();
+            await _quota.CheckOrganizationStorageAsync(orgSlug, probe.EstimatedBytes.Value, ct);
 
         var name = ImportDatasetNaming.NameOf(request.Name, probe);
         var slug = ImportDatasetNaming.SlugOf(request.Slug, probe, name);
@@ -133,7 +132,7 @@ public class ImportManager
 
         try
         {
-            var toolParams = BuildToolParams(request.SourceType, request.Params, budgetBytes);
+            var toolParams = BuildToolParams(request.SourceType, request.Params);
 
             // The task's write record holds the dataset from the start: a cancelled, failed or lost import deletes it
             // (FR-UPL-05, D-004); never a parameter of the request, which a caller of the task API could set
@@ -197,15 +196,13 @@ public class ImportManager
         };
     }
 
-    private JsonElement BuildToolParams(string sourceType, Dictionary<string, string> source, long? budgetBytes)
+    private JsonElement BuildToolParams(string sourceType, Dictionary<string, string> source)
     {
         var root = new JsonObject
         {
             ["sourceType"] = sourceType,
             ["params"] = _credentials.SealParameters(sourceType, source)
         };
-        if (budgetBytes is { } b)
-            root["budgetBytes"] = b;
 
         return root.ToElement();
     }

@@ -53,6 +53,10 @@ public abstract class HeavyToolBase<TParams> : IHeavyTool where TParams : class
     /// <inheritdoc cref="IHeavyTool.OutputPaths"/>
     public IReadOnlyList<string> OutputPaths(HeavyToolRequest request) => OutputPaths(Params(request));
 
+    /// <inheritdoc cref="IHeavyTool.StorageOrganization"/>
+    /// <remarks>A tool that writes into another organization than the request's overrides this one.</remarks>
+    public virtual string StorageOrganization(HeavyToolRequest request) => request.OrgSlug;
+
     /// <inheritdoc cref="IHeavyTool.Label"/>
     /// <remarks>A tool whose label needs more than its parameters (the request's path) overrides this one.</remarks>
     public virtual string? Label(HeavyToolRequest request) => Label(Params(request));

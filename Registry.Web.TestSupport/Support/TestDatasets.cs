@@ -46,7 +46,7 @@ public static class TestDatasets
             .ReturnsAsync(true);
 
         var ddbManager = new Mock<IDdbManager>().WithFolders("test-datasets");
-        var ports = TestPorts.All(auth.Object, context, Microsoft.Extensions.Options.Options.Create(new AccountOptions()),
+        var ports = TestPorts.All(context, Microsoft.Extensions.Options.Options.Create(new AccountOptions()),
             Microsoft.Extensions.Options.Options.Create(new HttpHostOptions()), new Microsoft.AspNetCore.Http.HttpContextAccessor(),
             TestCaches.Summaries(ddbManager.Object));
         return Manager(context, ports, ddbManager.Object, auth.Object, Mock.Of<IDatasetListingInvalidator>(),

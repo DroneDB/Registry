@@ -109,6 +109,7 @@ public class HeavyTaskRollbackTriggerTests
         services.AddLogging();
         services.AddScoped(_ => _db.NewContext());
         services.AddSingleton(manager.Object);
+        services.AddSingleton<Registry.Web.Services.Ports.IStorageQuota>(Registry.Web.Services.Ports.UnlimitedStorageQuota.Instance);
         services.AddSingleton(writer.Object);
         services.AddSingleton(_jobs.Object);
         services.AddSingleton(_rollback.Object);

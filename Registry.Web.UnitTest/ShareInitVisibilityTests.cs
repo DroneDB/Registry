@@ -88,7 +88,7 @@ public class ShareInitVisibilityTests
             });
 
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings());
-        var utils = TestPorts.All(auth.Object, _context, TestSettings.Options<AccountOptions>(settings),
+        var utils = TestPorts.All(_context, TestSettings.Options<AccountOptions>(settings),
             TestSettings.Options<HttpHostOptions>(settings), Mock.Of<IHttpContextAccessor>(), Mock.Of<IDatasetSummaryProvider>());
         var tokens = new Mock<IBatchTokenGenerator>();
         tokens.Setup(t => t.GenerateToken()).Returns(() => Guid.NewGuid().ToString("N"));

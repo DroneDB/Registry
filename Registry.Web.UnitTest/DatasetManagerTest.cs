@@ -83,7 +83,7 @@ public class DatasetManagerTest : TestBase
                 CanDelete = true
             }));
 
-        var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var utils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry{
@@ -125,7 +125,7 @@ public class DatasetManagerTest : TestBase
         _settingsOptions.Value = _settings;
         _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(), It.IsAny<AccessType>()))
             .Returns(Task.FromResult(true));
-        var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var utils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.Meta).Returns(new Mock<Registry.Ports.DroneDB.IMetaManager>().Object);
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry { Properties = TestJson.Props() });
@@ -160,7 +160,7 @@ public class DatasetManagerTest : TestBase
                 CanDelete = false
             }));
 
-        var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var utils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([]);
@@ -215,7 +215,7 @@ public class DatasetManagerTest : TestBase
                 CanDelete = true
             }));
 
-        var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var utils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([]);
@@ -267,7 +267,7 @@ public class DatasetManagerTest : TestBase
                 CanDelete = false
             }));
 
-        var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var utils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
@@ -335,7 +335,7 @@ public class DatasetManagerTest : TestBase
                 CanDelete = false
             }));
 
-        var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var utils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
@@ -390,7 +390,7 @@ public class DatasetManagerTest : TestBase
                 CanDelete = false
             }));
 
-        var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var utils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
@@ -448,7 +448,7 @@ public class DatasetManagerTest : TestBase
                 CanDelete = false
             }));
 
-        var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var utils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
@@ -506,7 +506,7 @@ public class DatasetManagerTest : TestBase
         _authManagerMock.Setup(o => o.CanListDataset(It.IsAny<Dataset>()))
             .ReturnsAsync((Dataset dataset) => dataset.Slug == "public-dataset");
 
-        var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var utils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.GetInfo()).Returns(new Entry
@@ -558,7 +558,7 @@ public class DatasetManagerTest : TestBase
             }));
         _authManagerMock.Setup(o => o.CanListDataset(It.IsAny<Dataset>())).ReturnsAsync(false);
 
-        var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var utils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var datasetsManager = CreateManager(context, utils);
 
@@ -1020,7 +1020,7 @@ public class DatasetManagerTest : TestBase
     {
         _settingsOptions.Value = _settings;
         var fileSystemMock = new Mock<IFileSystem>();
-        var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var utils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
         return (utils, fileSystemMock);
     }
 
@@ -1121,7 +1121,7 @@ public class DatasetManagerTest : TestBase
         _authManagerMock.Setup(o => o.GetDatasetPermissions(It.IsAny<Dataset>()))
             .Returns(Task.FromResult(new DatasetPermissionsDto { CanRead = true, CanWrite = canWrite, CanDelete = false }));
 
-        var utils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+        var utils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
 
         var ddbMock = new Mock<IDDB>();
         ddbMock.Setup(x => x.Meta).Returns(new Mock<Registry.Ports.DroneDB.IMetaManager>().Object);

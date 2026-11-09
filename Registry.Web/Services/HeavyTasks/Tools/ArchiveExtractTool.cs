@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Registry.Common;
 using Registry.Ports.DroneDB;
@@ -56,7 +55,6 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
         """);
 
     private readonly DatasetArchiveExtractor _archives;
-    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ProcessingPlatformSettings _settings;
     private readonly ImportSettings _importSettings;
     private readonly DatasetPathPolicy _paths;
@@ -65,7 +63,6 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
 
     public ArchiveExtractTool(
         DatasetArchiveExtractor archives,
-        IServiceScopeFactory scopeFactory,
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
         DatasetPathPolicy paths,
         VolumeHeadroom headroom,
@@ -75,7 +72,6 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
         _indexer = indexer;
         _archives = archives;
         _paths = paths;
-        _scopeFactory = scopeFactory;
         _settings = platformSettings.Value;
         _importSettings = importSettings.Value;
     }
@@ -142,17 +138,11 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
 
         if (uncompressed is > 0)
         {
-            // The uncompressed size is known cheaply only for random-access formats
-            // (zip/rar/7z/tar). When available we enforce the user quota + disk space here
-            // at submit. For compressed tarballs the size is null (computing it would
-            // require fully decompressing the archive), so those guards run incrementally
-            // during extraction instead - see ExecuteAsync.
-            if (ctx.Caller is not null)
-            {
-                using var scope = _scopeFactory.CreateScope();
-                var quota = scope.ServiceProvider.GetRequiredService<IStorageQuota>();
-                await quota.CheckCurrentUserStorage(uncompressed.Value); // throws QuotaExceededException
-            }
+            // The uncompressed size is known cheaply only for random-access formats (zip/rar/7z/tar). The storage quota of
+            // the owner of the organization is not checked here: HeavyTaskRunner.CheckSubmitAsync checks the plan's estimate
+            // (this same size) for submit and retry, and the worker reads the remaining bytes when it writes (FR-XC-26).
+            // For compressed tarballs the size is null (computing it would require fully decompressing the archive), so
+            // the guards run incrementally during extraction instead - see ExecuteAsync.
 
             // Free disk space on the dataset volume, keeping the head-room (the safety margin plus
             // libddb's free-disk floor). Runs in both contexts: at execution time it is the worker's
@@ -187,12 +177,20 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
     protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
     {
         long? estimate = null;
+        long replaced = 0;
         try
         {
             var sourcePath = args.SourcePath;
             if (!string.IsNullOrWhiteSpace(sourcePath))
             {
-                estimate = _archives.FastUncompressedBytes(ctx.Ddb.GetLocalPath(sourcePath));
+                var localArchive = ctx.Ddb.GetLocalPath(sourcePath);
+                estimate = _archives.FastUncompressedBytes(localArchive);
+
+                // The files it replaces are counted in the owner's use already: the storage quota checks only the growth
+                // (FR-XC-26). Known cheaply only with the estimate (random-access formats)
+                if (estimate is > 0 && (args.Overwrite ?? false))
+                    replaced = ReplacedBytes(ctx.Ddb, localArchive,
+                        DestinationFolder(ctx.Ddb, _paths.NormalizeFolder(args.DestPath)), overwrite: true);
             }
         }
         catch
@@ -201,8 +199,18 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
         }
 
         return new HeavyToolPlan(estimate, QuotaKey: "archive-extract",
-            DefaultFileName: null, ContentType: null);
+            DefaultFileName: null, ContentType: null, ReplacedBytes: replaced);
     }
+
+    // The size the owner's use counts now for the files that an extraction of the archive into destPath replaces (their
+    // index entries): none without overwrite, which keeps every existing file
+    private long ReplacedBytes(IDDB ddb, string localArchive, string destPath, bool overwrite) =>
+        !overwrite
+            ? 0
+            : _archives.ReplacedBytes(
+                new ArchiveExtractionRequest(localArchive, ddb.DatasetFolderPath, destPath,
+                    _importSettings.IsExtensionAllowed, _ => false, MaxBytes: 0, SafetyMarginBytes: 0),
+                path => WorkerStorageQuota.IndexedBytes(ddb, path));
 
     protected override async Task<HeavyToolArtifact?> ExecuteAsync(
         HeavyToolRequest request,
@@ -227,11 +235,19 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
         // no cheap uncompressed size, so the submit-time guard cannot cover them - and any failure
         // leaves the dataset as it was. Indexing happens only AFTER the extraction, so a rollback has
         // nothing to un-index. The archive is closed before indexing and deleteArchive.
+        //
+        // The cap is the smaller of the archive limit and what the owner of the organization may still store, read now: it
+        // counts only the entries written (FR-XC-26). When it is reached the task fails with the 507 text and the write
+        // record rolls the extraction back
+        // A file it replaces (overwrite) is counted in the owner's use already: only the growth counts, so the cap gets
+        // the size of the files it replaces (read only when a limit applies)
+        var (maxBytes, maxBytesMessage) = await WorkerStorageQuota.CapAsync(ctx.Storage, request.OrgSlug,
+            _settings.MaxArchiveExtractSizeBytes, () => ReplacedBytes(ctx.Ddb, localArchive, destPath, overwrite), ct);
         var extraction = await _archives.ExtractAsync(
             new ArchiveExtractionRequest(localArchive, ctx.Ddb.DatasetFolderPath, destPath,
                 _importSettings.IsExtensionAllowed,
                 target => !overwrite && ctx.Ddb.EntryExists(target),
-                _settings.MaxArchiveExtractSizeBytes, _settings.DiskSafetyMarginBytes, writes),
+                maxBytes, _settings.DiskSafetyMarginBytes, writes, MaxBytesMessage: maxBytesMessage),
             new CallbackProgress<ArchiveExtractionProgress>(p => ReportProgress(progress, p, sourcePath)), ct);
         var extractedPaths = extraction.Extracted.ToList();
 
@@ -264,8 +280,7 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
             }
         }
 
-        progress.Report(new HeavyToolProgress(1, "done",
-            LogChunk: $"Extraction complete: {extraction.Extracted.Count} extracted, {extraction.Skipped} skipped"));
+        progress.Report(new HeavyToolProgress(1, "done", LogChunk: string.Join('\n', extraction.LogLines())));
         return null;
     }
 
@@ -279,7 +294,8 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
             return;
         }
 
-        progress.Report(new HeavyToolProgress(p.Total > 0 ? (double)p.Done / p.Total : -1, "extracting", Message: p.Key));
+        progress.Report(new HeavyToolProgress(p.Total > 0 ? (double)p.Done / p.Total : -1, "extracting",
+            Message: p.Key.Length > 0 ? p.Key : null));
     }
 
     // Reports inline (System.Progress<T> posts to the thread pool)

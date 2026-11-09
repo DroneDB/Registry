@@ -69,6 +69,11 @@ public static class ProcessingNodeServiceCollectionExtensions
         // aligned on a single lane.
         services.AddSingleton<IDatasetIndexQueue, DatasetIndexQueue>();
 
+        // The storage quota of the owner of an organization (FR-XC-26), read by the submit checks of the web host and by the
+        // tasks that add files wherever they run (the sizes of the datasets are cached until their index changes)
+        services.AddScoped<IDatasetSummaryProvider, DatasetSummaryProvider>();
+        services.AddScoped<IStorageQuota, StorageQuota>();
+
         // Datasets and the services the background jobs run
         services.AddScoped<IDdbManager, DdbManager>();
         services.AddSingleton<InitializedDatasetFolders>();

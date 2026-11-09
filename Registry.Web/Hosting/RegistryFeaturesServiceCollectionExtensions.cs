@@ -41,10 +41,8 @@ public static class RegistryFeaturesServiceCollectionExtensions
     {
         services.AddScoped<IDatasetResolver, DatasetResolver>();
         services.AddScoped<IUrlBuilder, UrlBuilder>();
-        services.AddScoped<IStorageQuota, StorageQuota>();
         services.AddSingleton<IDatasetLookupCache, DatasetLookupCache>();
         services.AddSingleton<Microsoft.EntityFrameworkCore.Diagnostics.ISaveChangesInterceptor, DatasetChangeInterceptor>();
-        services.AddScoped<IDatasetSummaryProvider, DatasetSummaryProvider>();
 
         services.AddScoped<UsersManager>();
         services.AddScoped<JwtTokenIssuer>();
@@ -108,7 +106,6 @@ public static class RegistryFeaturesServiceCollectionExtensions
 
         // Import orchestration (the import heavy tools are registered by AddImportSources for every job host)
         services.AddScoped<ImportManager>();
-        services.AddScoped<ImportQuotaGate>();
         services.AddScoped<ImportTargetDatasets>();
         services.AddScoped<FileUrlImportManager>();
 

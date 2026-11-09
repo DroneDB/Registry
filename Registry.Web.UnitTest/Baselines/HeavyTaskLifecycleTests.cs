@@ -101,6 +101,7 @@ public class HeavyTaskLifecycleTests
         services.AddLogging();
         services.AddScoped(_ => _db.NewContext());
         services.AddSingleton(manager.Object);
+        services.AddSingleton<Registry.Web.Services.Ports.IStorageQuota>(Registry.Web.Services.Ports.UnlimitedStorageQuota.Instance);
         services.AddSingleton(_writer.Object);
         services.AddSingleton(_jobs.Object);
         services.AddScoped(_ => TestJobs.DdbJobs(manager.Object));

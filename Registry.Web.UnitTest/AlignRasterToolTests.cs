@@ -34,6 +34,9 @@ internal sealed class OutputToolHarness : IDisposable
 
     private readonly List<EntrySummary> _entries = [];
 
+    // The sizes of the index entries (the storage use of the owner counts them); 1 when a test does not say
+    private readonly Dictionary<string, long> _indexedSizes = [];
+
     public OutputToolHarness()
     {
         Directory.CreateDirectory(Folder);
@@ -41,7 +44,9 @@ internal sealed class OutputToolHarness : IDisposable
         Ddb.Setup(d => d.GetLocalPath(It.IsAny<string>())).Returns<string>(Local);
         Ddb.Setup(d => d.EntryExists(It.IsAny<string>())).Returns<string>(p => _entries.Any(e => e.Path == p));
         Ddb.Setup(d => d.GetEntry(It.IsAny<string>())).Returns<string>(p =>
-            _entries.FirstOrDefault(e => e.Path == p) is { } e ? new Entry { Path = e.Path, Type = e.Type, Size = 1 } : null);
+            _entries.FirstOrDefault(e => e.Path == p) is { } e
+                ? new Entry { Path = e.Path, Type = e.Type, Size = _indexedSizes.GetValueOrDefault(e.Path, 1) }
+                : null);
         Ddb.Setup(d => d.FindSummaries(It.IsAny<EntryQuery>())).Returns<EntryQuery>(q =>
             _entries.Where(e => Parent(e.Path) == (q.Path ?? string.Empty)).ToList());
         Ddb.Setup(d => d.AddRaw(It.IsAny<string>())).Callback<string>(p => Calls.Add("index " + p));
@@ -50,6 +55,7 @@ internal sealed class OutputToolHarness : IDisposable
         Ctx.SetupGet(c => c.TaskId).Returns("task-1");
         Ctx.SetupGet(c => c.Dataset).Returns(new DatasetKey("org", Guid.NewGuid()));
         Ctx.SetupGet(c => c.WriteRecord).Returns(Recorder);
+        Ctx.SetupGet(c => c.Storage).Returns(Registry.Web.Services.Ports.UnlimitedStorageQuota.Instance);
         Ctx.Setup(c => c.MarkOutputPublished(It.IsAny<string>())).Callback<string>(p => Calls.Add("published " + p));
     }
 
@@ -62,9 +68,12 @@ internal sealed class OutputToolHarness : IDisposable
 
     public string Local(string path) => Path.Combine(Folder, path.Replace('/', Path.DirectorySeparatorChar));
 
-    /// <summary>A file in the index and on disk (its folders too), with <paramref name="content"/>.</summary>
-    public void File(string path, string content = "original")
+    /// <summary>A file in the index and on disk (its folders too), with <paramref name="content"/>; its index entry has
+    /// the size <paramref name="indexedSize"/> (1 when not given).</summary>
+    public void File(string path, string content = "original", long? indexedSize = null)
     {
+        if (indexedSize is { } size)
+            _indexedSizes[path] = size;
         var segments = path.Split('/');
         for (var i = 1; i < segments.Length; i++)
         {
@@ -75,6 +84,15 @@ internal sealed class OutputToolHarness : IDisposable
         _entries.Add(new EntrySummary { Path = path, Type = EntryType.GeoRaster });
         Directory.CreateDirectory(Path.GetDirectoryName(Local(path))!);
         System.IO.File.WriteAllText(Local(path), content);
+    }
+
+    /// <summary>The owner of the organization has <paramref name="remaining"/> bytes left (FR-XC-26).</summary>
+    public void OwnerHas(long remaining)
+    {
+        var storage = new Mock<Registry.Web.Services.Ports.IStorageQuota>();
+        storage.Setup(q => q.OwnerIdOfAsync("org", It.IsAny<System.Threading.CancellationToken>())).ReturnsAsync("owner-1");
+        storage.Setup(q => q.RemainingBytesAsync("owner-1", It.IsAny<System.Threading.CancellationToken>())).ReturnsAsync(remaining);
+        Ctx.SetupGet(c => c.Storage).Returns(storage.Object);
     }
 
     public void PublishedBefore(string path) => Ctx.SetupGet(c => c.PublishedOutput).Returns(path);
@@ -219,6 +237,88 @@ public class AlignRasterToolTests
     [Test]
     public async Task NewOutput_IsWritten_WithoutOverwrite()
     {
+        await Execute(Request("new.tif"));
+
+        _h.Calls.ShouldBe(["align new.tif", "published new.tif", "index new.tif"]);
+    }
+
+    // FR-XC-26, D-039: the worker reads what the owner of the organization has left once the output is written; an output
+    // that does not fit fails the task with the 507 text, is not published nor indexed, and its recorded path is the
+    // rollback's to delete
+    [Test]
+    public async Task AnOutputThatDoesNotFitTheQuotaOfTheOwner_Fails507_AndIsNeitherPublishedNorIndexed()
+    {
+        _h.OwnerHas(6); // "aligned" is 7 bytes
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() => Execute(Request("new.tif")));
+
+        ex.StatusCode.ShouldBe(507);
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 6 B left.");
+        _h.Calls.ShouldBe(["align new.tif"]);
+        _h.Recorder.SavedPaths.ShouldBe(["new.tif"], "recorded before the write: the rollback deletes the file");
+        _h.Recorder.Stamped.ShouldBeEmpty();
+    }
+
+    // FR-XC-26, FR-XC-27, AC-005: a replace is checked for its growth only (the replaced file is counted in the owner's use
+    // by its index entry). When the growth does not fit, the task fails with the 507 text, and the output that replaced the
+    // file is never deleted: it stays on disk and in the index (indexed again: the entry describes the file), and it is
+    // not in the write record, so no rollback deletes it
+    [Test]
+    public async Task AReplaceWhoseGrowthDoesNotFit_Fails507_AndTheFileStaysOnDiskAndInTheIndex()
+    {
+        _h.File("out/a.tif", "old", indexedSize: 3);
+        _h.OwnerHas(3); // "aligned" is 7 bytes: it grows by 4
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() => Execute(Request("out/a.tif", overwrite: true)));
+
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 3 B left.");
+        File.ReadAllText(_h.Local("out/a.tif")).ShouldBe("aligned");
+        _h.Calls.ShouldBe(["align out/a.tif", "index out/a.tif"]);
+        _h.Recorder.Paths.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task AReplaceWhoseGrowthDoesNotFit_StillFails507_WhenTheIndexIsBusy()
+    {
+        _h.File("out/a.tif", "old", indexedSize: 3);
+        _h.OwnerHas(3);
+        _h.Ddb.Setup(d => d.AddRaw("out/a.tif")).Throws(new DdbBusyException("busy"));
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() => Execute(Request("out/a.tif", overwrite: true)));
+
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 3 B left.");
+        File.ReadAllText(_h.Local("out/a.tif")).ShouldBe("aligned");
+        _h.Recorder.Paths.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task AReplaceWhoseGrowthFits_IsWritten_ThoughTheWholeOutputWouldNotFit()
+    {
+        _h.File("out/a.tif", "old", indexedSize: 5);
+        _h.OwnerHas(2); // "aligned" is 7 bytes: it grows by 2
+
+        await Execute(Request("out/a.tif", overwrite: true));
+
+        File.ReadAllText(_h.Local("out/a.tif")).ShouldBe("aligned");
+        _h.Calls.ShouldBe(["align out/a.tif", "published out/a.tif", "index out/a.tif"]);
+    }
+
+    [Test]
+    public async Task AReplaceByASmallerOutput_GrowsByNothing_AndPassesWithNothingLeft()
+    {
+        _h.File("out/a.tif", "old", indexedSize: 50);
+        _h.OwnerHas(0);
+
+        await Execute(Request("out/a.tif", overwrite: true));
+
+        _h.Calls.ShouldBe(["align out/a.tif", "published out/a.tif", "index out/a.tif"]);
+    }
+
+    [Test]
+    public async Task AnOutputThatFitsTheQuotaOfTheOwner_IsWritten()
+    {
+        _h.OwnerHas(7);
+
         await Execute(Request("new.tif"));
 
         _h.Calls.ShouldBe(["align new.tif", "published new.tif", "index new.tif"]);

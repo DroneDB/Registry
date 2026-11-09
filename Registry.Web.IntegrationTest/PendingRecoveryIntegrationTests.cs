@@ -811,7 +811,7 @@ public class PendingRecoveryIntegrationTests
         auth.Setup(x => x.RequestAccess(It.IsAny<Dataset>(), AccessType.Write)).ReturnsAsync(true);
         auth.Setup(x => x.GetCurrentUser()).ReturnsAsync(new User { Id = "uploader" });
         var quota = new Mock<IStorageQuota>();
-        quota.Setup(x => x.GetCurrentUserStorageLimit())
+        quota.Setup(x => x.GetOwnerStorageLimitAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new UserStorageInfo { Used = 0, Total = long.MaxValue });
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings { DatasetsPath = _root });
         using var scope = _provider.CreateScope();

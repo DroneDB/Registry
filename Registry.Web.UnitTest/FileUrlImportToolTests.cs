@@ -193,6 +193,7 @@ public class FileUrlImportToolTests
             TestBuilds.SetupBuilds(ddb);
             var ctx = new Mock<IHeavyToolExecutionContext>();
             ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
+            ctx.SetupGet(c => c.Storage).Returns(Registry.Web.Services.Ports.UnlimitedStorageQuota.Instance);
             ctx.SetupGet(c => c.TaskId).Returns("task-1");
             ctx.SetupGet(c => c.BuildQueue).Returns(TestJobs.Scheduler());
             ctx.SetupGet(c => c.PublishedOutput).Returns("cloud.laz");
@@ -218,6 +219,7 @@ public class FileUrlImportToolTests
         ddb.Setup(d => d.EntryExists("cloud.laz")).Returns(true);
         var ctx = new Mock<IHeavyToolExecutionContext>();
         ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
+        ctx.SetupGet(c => c.Storage).Returns(Registry.Web.Services.Ports.UnlimitedStorageQuota.Instance);
         ctx.SetupGet(c => c.PublishedOutput).Returns("cloud.laz");
         var req = Req(new { url = "http://download.test/cloud.laz", fileName = "cloud.laz", folder = "", overwrite = false });
 

@@ -73,6 +73,88 @@ public class MergeMultispectralToolTests
     private Task Execute(HeavyToolRequest request) =>
         _tool.ExecuteAsync(request, _h.Ctx.Object, new Progress<HeavyToolProgress>(), CancellationToken.None);
 
+    // FR-XC-26, D-039: an output that does not fit what the owner of the organization has left fails the task with the 507
+    // text; it is not published nor indexed, and its recorded path is the rollback's to delete
+    [Test]
+    public async Task AnOutputThatDoesNotFitTheQuotaOfTheOwner_Fails507_AndIsNeitherPublishedNorIndexed()
+    {
+        _h.OwnerHas(5); // "merged" is 6 bytes
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() => Execute(Request("bands/merged.tif")));
+
+        ex.StatusCode.ShouldBe(507);
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 5 B left.");
+        _h.Calls.ShouldBe(["merge bands/merged.tif"]);
+        _h.Recorder.SavedPaths.ShouldBe(["bands/merged.tif"]);
+    }
+
+    // FR-XC-26, FR-XC-27, AC-005: a replace is checked for its growth only; when the growth does not fit, the task fails
+    // with the 507 text and the output that replaced the file stays on disk and in the index, outside the write record
+    [Test]
+    public async Task AReplaceWhoseGrowthDoesNotFit_Fails507_AndTheFileStaysOnDiskAndInTheIndex()
+    {
+        _h.File("bands/merged.tif", "old", indexedSize: 2);
+        _h.OwnerHas(3); // "merged" is 6 bytes: it grows by 4
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() =>
+            Execute(Request("bands/merged.tif", overwrite: true)));
+
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 3 B left.");
+        File.ReadAllText(_h.Local("bands/merged.tif")).ShouldBe("merged");
+        _h.Calls.ShouldBe(["merge bands/merged.tif", "index bands/merged.tif"]);
+        _h.Recorder.Paths.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task AReplaceWhoseGrowthDoesNotFit_StillFails507_WhenTheIndexIsBusy()
+    {
+        _h.File("bands/merged.tif", "old", indexedSize: 2);
+        _h.OwnerHas(3);
+        _h.Ddb.Setup(d => d.AddRaw("bands/merged.tif")).Throws(new DdbBusyException("busy"));
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() =>
+            Execute(Request("bands/merged.tif", overwrite: true)));
+
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 3 B left.");
+        File.ReadAllText(_h.Local("bands/merged.tif")).ShouldBe("merged");
+        _h.Recorder.Paths.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task AReplaceWhoseGrowthFits_IsPublishedAndIndexed_ThoughTheWholeOutputWouldNotFit()
+    {
+        _h.File("bands/merged.tif", "old", indexedSize: 4);
+        _h.OwnerHas(2); // "merged" is 6 bytes: it grows by 2
+
+        await Execute(Request("bands/merged.tif", overwrite: true));
+
+        File.ReadAllText(_h.Local("bands/merged.tif")).ShouldBe("merged");
+        _h.Calls.ShouldBe(["merge bands/merged.tif", "published bands/merged.tif", "index bands/merged.tif"]);
+    }
+
+    // The plan of a replace tells the runner the size the owner's use counts for the file it replaces
+    [Test]
+    public void Plan_OfAReplace_CarriesTheIndexedSizeOfTheReplacedFile()
+    {
+        _h.File("bands/merged.tif", "old", indexedSize: 40);
+
+        var replace = _tool.Plan(Request("bands/merged.tif", overwrite: true), _h.Ctx.Object);
+        var create = _tool.Plan(Request("bands/new.tif"), _h.Ctx.Object);
+
+        replace.ReplacedBytes.ShouldBe(40);
+        create.ReplacedBytes.ShouldBe(0);
+    }
+
+    [Test]
+    public async Task AnOutputThatFitsTheQuotaOfTheOwner_IsPublishedAndIndexed()
+    {
+        _h.OwnerHas(6);
+
+        await Execute(Request("bands/merged.tif"));
+
+        _h.Calls.ShouldBe(["merge bands/merged.tif", "published bands/merged.tif", "index bands/merged.tif"]);
+    }
+
     [Test]
     public void DeclaresItsBandsOutputAndLabel()
     {

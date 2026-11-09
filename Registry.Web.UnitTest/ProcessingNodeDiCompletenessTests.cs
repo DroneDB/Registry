@@ -84,6 +84,18 @@ public class ProcessingNodeDiCompletenessTests
         scope.ServiceProvider.GetService<Registry.Web.Services.Datasets.DatasetCreation>().ShouldNotBeNull();
     }
 
+    // FR-XC-26, D-039: the tools that add files read the storage quota of the owner of the organization on the worker, so
+    // the node registers the one IStorageQuota (it needs no current user)
+    [Test]
+    public void ProcessingNode_RegistersTheStorageQuota()
+    {
+        using var provider = BuildNodeProvider(role: InstanceType.ProcessingNode);
+        using var scope = provider.CreateScope();
+
+        scope.ServiceProvider.GetRequiredService<IStorageQuota>()
+            .ShouldBeOfType<Registry.Web.Services.Adapters.StorageQuota>();
+    }
+
     [Test]
     public void ProcessingNode_AllHeavyToolsActivate()
     {

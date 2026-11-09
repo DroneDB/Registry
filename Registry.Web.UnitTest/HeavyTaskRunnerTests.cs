@@ -49,6 +49,7 @@ public class HeavyTaskRunnerTests
     private List<IndexPayload> _enqueued = null!;
     private ProcessingPlatformSettings _settings = null!;
     private Dictionary<string, IHeavyTool> _tools = null!;
+    private Mock<IStorageQuota> _ownerStorage = null!;
 
     [SetUp]
     public void SetUp()
@@ -66,6 +67,10 @@ public class HeavyTaskRunnerTests
             .Callback<Expression<Func<HeavyTaskJobWrapper, Task>>, IndexPayload>((_, p) => _enqueued.Add(p))
             .Returns(() => "task-" + _enqueued.Count);
 
+        // The storage of the owner of the organization: no limit unless a test sets what is left (FR-XC-26)
+        _ownerStorage = new Mock<IStorageQuota>();
+        _ownerStorage.Setup(q => q.OwnerIdOfAsync(Org, It.IsAny<CancellationToken>())).ReturnsAsync("owner-1");
+
         _tools = new Dictionary<string, IHeavyTool>
         {
             ["writer"] = new PathTool("writer"),
@@ -79,7 +84,8 @@ public class HeavyTaskRunnerTests
     // ---- The two tools: they read "input" and write "output", and validate as told ----
 
     private sealed class PathTool(string id, Func<Exception?>? validation = null, bool producesArtifact = false,
-        Action<IHeavyToolValidationContext>? seen = null)
+        Action<IHeavyToolValidationContext>? seen = null, bool addsDatasetFiles = false, long? estimate = 10,
+        string? storageOrganization = null, long replaced = 0)
         : HeavyToolBase<PathTool.P>
     {
         public sealed record P(string? Input, string? Output);
@@ -91,6 +97,9 @@ public class HeavyTaskRunnerTests
         public override string Title => id;
         public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
         public override bool ProducesArtifact => producesArtifact;
+        public override bool AddsDatasetFiles => addsDatasetFiles;
+
+        public override string StorageOrganization(HeavyToolRequest request) => storageOrganization ?? request.OrgSlug;
         public override JsonDocument InputSchema { get; } = JsonDocument.Parse("{}");
 
         protected override P ReadParams(ToolParameters p) => new(p.Text("input"), p.Text("output"));
@@ -106,7 +115,7 @@ public class HeavyTaskRunnerTests
         }
 
         protected override HeavyToolPlan Plan(HeavyToolRequest request, P p, IHeavyToolValidationContext ctx) =>
-            new(10, id, null, null);
+            new(estimate, id, null, null, ReplacedBytes: replaced);
 
         protected override Task<HeavyToolArtifact?> ExecuteAsync(HeavyToolRequest request, P p,
             IHeavyToolExecutionContext ctx, IProgress<HeavyToolProgress> progress, CancellationToken ct) =>
@@ -137,7 +146,7 @@ public class HeavyTaskRunnerTests
             Microsoft.Extensions.Options.Options.Create(new AppSettings { ProcessingPlatform = _settings }));
 
         return new HeavyTaskRunner(registry.Object, datasets.Object, ddbManager.Object,
-            new HeavyTaskQuota(quotaIndex ?? _index.Object, options), new HeavyTaskDedup(_index.Object, options),
+            new HeavyTaskQuota(quotaIndex ?? _index.Object, options), _ownerStorage.Object, new HeavyTaskDedup(_index.Object, options),
             _index.Object, submitLock ?? new HeavyTaskSubmitLock(_storage), _processor.Object,
             NullLogger<HeavyTaskRunner>.Instance);
     }
@@ -308,6 +317,136 @@ public class HeavyTaskRunnerTests
             Runner(quotaIndex: quotaIndex.Object).SubmitAsync(Submit("writer", "in.tif", "out/a.tif")));
 
         quotaIndex.VerifyNoOtherCalls();
+    }
+
+    // ---- The storage quota of the owner of the organization (FR-XC-26, D-039) ----
+
+    private void OwnerHas(long? remaining) =>
+        _ownerStorage.Setup(q => q.RemainingBytesAsync("owner-1", It.IsAny<CancellationToken>())).ReturnsAsync(remaining);
+
+    private static HeavyTaskSubmitRequest SubmitWriter() => Submit("writer", "in.tif", "out/a.tif");
+
+    [TestCase(0L, "Storage quota exceeded: the owner of this organization has 0 B left.")]
+    [TestCase(9L, "Storage quota exceeded: the owner of this organization has 9 B left.")]
+    public async Task Storage_OwnerWithLessThanTheEstimateLeft_Is507WithTheOneText(long remaining, string text)
+    {
+        _tools["writer"] = new PathTool("writer", addsDatasetFiles: true, estimate: 10);
+        OwnerHas(remaining);
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() => Runner().SubmitAsync(SubmitWriter()));
+
+        ex.StatusCode.ShouldBe(507);
+        ex.Message.ShouldBe(text);
+        _enqueued.ShouldBeEmpty();
+    }
+
+    // FR-XC-26: the files a task replaces (overwrite) are counted in the owner's use already: only the growth of the
+    // estimate counts, never below 0, as for a copy
+    [TestCase(10L, 4L, 6L, true)]
+    [TestCase(10L, 4L, 5L, false)]
+    [TestCase(10L, 50L, 1L, true)]
+    public async Task Storage_AReplace_IsCheckedForTheGrowthOfItsEstimateOnly(long estimate, long replaced, long remaining,
+        bool accepted)
+    {
+        _tools["writer"] = new PathTool("writer", addsDatasetFiles: true, estimate: estimate, replaced: replaced);
+        OwnerHas(remaining);
+
+        if (accepted)
+        {
+            await Runner().SubmitAsync(SubmitWriter());
+            _enqueued.Count.ShouldBe(1);
+        }
+        else
+        {
+            var ex = await Should.ThrowAsync<QuotaExceededException>(() => Runner().SubmitAsync(SubmitWriter()));
+            ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 5 B left.");
+            _enqueued.ShouldBeEmpty();
+        }
+    }
+
+    [Test]
+    public async Task Storage_OwnerWithNothingLeft_Is507_EvenForAToolWithoutAnEstimate()
+    {
+        _tools["writer"] = new PathTool("writer", addsDatasetFiles: true, estimate: null);
+        OwnerHas(0);
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() => Runner().SubmitAsync(SubmitWriter()));
+
+        ex.StatusCode.ShouldBe(507);
+        _enqueued.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task Storage_ToolWithoutAnEstimate_PassesWhileTheOwnerHasRoomLeft()
+    {
+        _tools["writer"] = new PathTool("writer", addsDatasetFiles: true, estimate: null);
+        OwnerHas(1);
+
+        await Runner().SubmitAsync(SubmitWriter());
+
+        _enqueued.Count.ShouldBe(1);
+    }
+
+    [TestCase(10L)]
+    [TestCase(500L)]
+    [TestCase(null)]
+    public async Task Storage_EstimateThatFitsOrNoLimit_Passes(long? remaining)
+    {
+        _tools["writer"] = new PathTool("writer", addsDatasetFiles: true, estimate: 10);
+        OwnerHas(remaining);
+
+        await Runner().SubmitAsync(SubmitWriter());
+
+        _enqueued.Count.ShouldBe(1);
+    }
+
+    [Test]
+    public async Task Storage_IsTheQuotaOfTheOwnerOfTheTargetOrganization_WhateverTheSubmitter()
+    {
+        _tools["writer"] = new PathTool("writer", addsDatasetFiles: true);
+        OwnerHas(0);
+
+        // A member who is not the owner submits: the owner's quota still applies (and no current user is read)
+        await Should.ThrowAsync<QuotaExceededException>(() =>
+            Runner().SubmitAsync(Submit("writer", "in.tif", "out/a.tif", user: "member-2")));
+
+        _ownerStorage.Verify(q => q.OwnerIdOfAsync(Org, It.IsAny<CancellationToken>()), Times.Once);
+        _ownerStorage.Verify(q => q.RemainingBytesAsync("owner-1", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task Storage_ToolThatAddsNoDatasetFiles_IsNotChecked()
+    {
+        var storage = new Mock<IStorageQuota>(MockBehavior.Strict);
+        _ownerStorage = storage;
+
+        await Runner().SubmitAsync(SubmitWriter());
+
+        _enqueued.Count.ShouldBe(1);
+        storage.VerifyNoOtherCalls();
+    }
+
+    [Test]
+    public async Task Storage_AToolThatWritesIntoAnotherOrganization_ChecksThatOrganization()
+    {
+        _tools["writer"] = new PathTool("writer", addsDatasetFiles: true, storageOrganization: "other-org");
+        _ownerStorage.Setup(q => q.OwnerIdOfAsync("other-org", It.IsAny<CancellationToken>())).ReturnsAsync("owner-2");
+        _ownerStorage.Setup(q => q.RemainingBytesAsync("owner-2", It.IsAny<CancellationToken>())).ReturnsAsync(0L);
+
+        await Should.ThrowAsync<QuotaExceededException>(() => Runner().SubmitAsync(SubmitWriter()));
+    }
+
+    [Test]
+    public async Task Storage_IsCheckedAfterTheDedup_ASecondClickGetsTheRunningTask()
+    {
+        _tools["writer"] = new PathTool("writer", addsDatasetFiles: true);
+        OwnerHas(0);
+        Duplicate("writer", "first-task");
+
+        var result = await Runner().SubmitAsync(SubmitWriter());
+
+        result.Deduplicated.ShouldBeTrue();
+        result.TaskId.ShouldBe("first-task");
     }
 
     // ---- The submit lock ----
@@ -511,6 +650,23 @@ public class HeavyTaskRunnerTests
         await Should.ThrowAsync<HeavyTaskQuotaException>(() => retry.RetryAsync(Org, Ds, FailedJob));
 
         _processor.Verify(p => p.Requeue(It.IsAny<string>()), Times.Never);
+    }
+
+    // FR-XC-26: the retry of a failed task runs the storage check of the submit (the owner may have filled up since)
+    [Test]
+    public async Task Retry_ForAnOwnerOverTheStorageQuota_Is507_AndRequeuesNothing()
+    {
+        _tools["writer"] = new PathTool("writer", addsDatasetFiles: true);
+        OwnerHas(0);
+        var (retry, writer) = RetryOf("Failed");
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() => retry.RetryAsync(Org, Ds, FailedJob));
+
+        ex.StatusCode.ShouldBe(507);
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 0 B left.");
+        _processor.Verify(p => p.Requeue(It.IsAny<string>()), Times.Never);
+        writer.Verify(w => w.ResetForRequeueAsync(It.IsAny<string>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [TestCase("Succeeded")]

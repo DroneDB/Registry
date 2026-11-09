@@ -75,7 +75,7 @@ public sealed partial class UploadManager
 
             // Content-Length is known at byte 0: refuse an upload over quota before it is sent
             if (expectedBytes is > 0)
-                ctx.Reservation = await _quota.ReserveAsync(ctx.QuotaUserId, expectedBytes.Value);
+                ctx.Reservation = await _quota.ReserveAsync(ctx.QuotaOwnerId, expectedBytes.Value);
 
             ctx.Ticket = _indexer.BeginUpload(ctx);
 

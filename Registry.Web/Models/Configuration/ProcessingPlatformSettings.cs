@@ -34,6 +34,27 @@ public class ProcessingPlatformSettings
     /// </summary>
     public long DiskSafetyMarginBytes { get; set; } = 256L * 1024 * 1024;
 
+    /// <summary>
+    /// The folders of a photogrammetry result bundle that are not imported into the dataset (FR-PRC-41): path prefixes
+    /// relative to the bundle, compared without regard to letter case. They are internal files of ODX: the chunks of the
+    /// EPT point cloud (hundreds of files that show as separate point clouds with blank tiles; the Hub builds its own COPC
+    /// from the georeferenced model) and the intermediate products of the reconstruction. The entries are skipped with the
+    /// reason "excluded" and counted in the task log. Not set (null): <see cref="DefaultPhotogrammetryExcludedFolders"/>
+    /// (<c>entwine_pointcloud/</c>, <c>opensfm/</c> and <c>odm_meshing/</c>); an empty list imports every file; a list
+    /// excludes only its folders. The default is not an initial value of the array: the configuration binder appends the
+    /// configured items to it, and an empty configured list would leave it as it is.
+    /// </summary>
+    public string[]? PhotogrammetryExcludedFolders { get; set; }
+
+    /// <summary>The folders <see cref="PhotogrammetryExcludedFolders"/> excludes when it is not set.</summary>
+    public static readonly IReadOnlyList<string> DefaultPhotogrammetryExcludedFolders =
+        ["entwine_pointcloud/", "opensfm/", "odm_meshing/"];
+
+    /// <summary>The folders the photogrammetry results import skips: <see cref="PhotogrammetryExcludedFolders"/>, or the
+    /// defaults when it is not set (a method: neither bound nor serialized as a setting).</summary>
+    public IReadOnlyList<string> PhotogrammetryExcludedFoldersOrDefault() =>
+        PhotogrammetryExcludedFolders ?? DefaultPhotogrammetryExcludedFolders;
+
     /// <summary>Per-org daily output budget in bytes, keyed by org slug ("default" fallback).</summary>
     public Dictionary<string, long> OrgDailyOutputBytes { get; set; } = new()
     {

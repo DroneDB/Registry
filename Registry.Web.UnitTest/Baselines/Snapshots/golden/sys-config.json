@@ -1660,6 +1660,20 @@
             "unit": "bytes"
           },
           {
+            "key": "PhotogrammetryExcludedFolders",
+            "displayName": "Photogrammetry Excluded Folders",
+            "currentValue": "entwine_pointcloud/,opensfm/,odm_meshing/",
+            "defaultValue": "entwine_pointcloud/,opensfm/,odm_meshing/",
+            "isSet": false,
+            "description": "Folders of a photogrammetry result bundle that are not imported into the dataset (path prefixes, letter case ignored). Not set: entwine_pointcloud/, opensfm/ and odm_meshing/. An empty list imports every file.",
+            "fieldType": "array",
+            "enumOptions": null,
+            "sensitive": false,
+            "minValue": null,
+            "maxValue": null,
+            "unit": null
+          },
+          {
             "key": "DefaultRasterTileSize",
             "displayName": "Default Raster Tile Size",
             "currentValue": "0",

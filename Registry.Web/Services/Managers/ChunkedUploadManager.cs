@@ -5,7 +5,10 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Registry.Common;
 using Registry.Ports.DroneDB;
+using Registry.Web.Data;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
@@ -27,7 +30,7 @@ namespace Registry.Web.Services.Managers;
 /// the last-modified time of the file, so the same file selected again after a reload has the same id.
 /// </remarks>
 public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store, UploadQuotaGuard quota,
-    ScratchFileProvider scratch)
+    ScratchFileProvider scratch, RegistryContext context)
 {
     /// <summary>Folder of the chunked uploads of a dataset, under its uploads folder.</summary>
     public static string ChunksRoot(IDDB ddb) =>
@@ -63,11 +66,12 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
         var status = store.GetStatus(root, key);
         if (status == null)
         {
-            // A new upload: refuse it before its first byte if it cannot be stored. The open uploads of the caller hold
-            // room for their whole files until they are committed or removed (7 days): the new one must fit with them
+            // A new upload: refuse it before its first byte if it cannot be stored. The open uploads of the organizations
+            // of the owner hold room for their whole files, in the quota of the owner, until they are committed or
+            // removed (7 days): the new one must fit with them (FR-XC-26, D-039)
             uploads.ResolveTarget(ctx, chunk.Path, chunk.Overwrite);
-            var open = ctx.User == null ? 0 : OpenUploadBytes(ctx.Ddb, ctx.User.Id, chunk.FileId);
-            using (await quota.ReserveAsync(ctx.User?.Id ?? string.Empty, chunk.TotalFileSize + open)) { }
+            var open = await OpenUploadBytesAsync(ctx.Ddb, ctx.QuotaOwnerId, ctx.User?.Id, chunk.FileId, ct);
+            using (await quota.ReserveAsync(ctx.QuotaOwnerId, chunk.TotalFileSize + open)) { }
 
             // The same file sent again after a commit has the same id: the receipt of the earlier one must not answer
             // the commit of this one
@@ -88,26 +92,45 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
     }
 
     /// <summary>
-    /// The size of the files of the open chunked uploads of <paramref name="userId"/> in the organization of
-    /// <paramref name="ddb"/> (every dataset folder next to it): the storage that they hold until they are committed or
-    /// removed, which the storage use of the user does not count yet. The session of <paramref name="fileId"/> in
-    /// <paramref name="ddb"/> is not counted: it is the upload being checked (two first chunks of one file sent at once:
-    /// the second must not count the session the first one just started).
+    /// The size of the files of the open chunked uploads of every user in the organizations of the owner
+    /// <paramref name="ownerId"/> (every dataset folder of each of them; the organization of <paramref name="ddb"/> is one):
+    /// the storage that they hold, in the quota of the owner, which the upload ledger reserves per owner, until they are
+    /// committed or removed, which the storage use of the owner does not count yet. The session of
+    /// <paramref name="userId"/> and <paramref name="fileId"/> in <paramref name="ddb"/> is not counted: it is the upload
+    /// being checked (two first chunks of one file sent at once: the second must not count the session the first one
+    /// just started). Without an owner no limit applies: 0.
     /// </summary>
-    private long OpenUploadBytes(IDDB ddb, string userId, string fileId)
+    private async Task<long> OpenUploadBytesAsync(IDDB ddb, string ownerId, string? userId, string fileId,
+        CancellationToken ct)
     {
+        // No limit (no owner, limiter off, administrator owner): nothing to count, and no folder scan on every first chunk
+        if (string.IsNullOrEmpty(ownerId) || !await quota.LimitAppliesAsync(ownerId, ct))
+            return 0;
+
+        // The folder of a dataset is <datasets>/<organization slug>/<dataset> (DdbManager.GetDatasetFolder)
         var dataset = Path.GetFullPath(ddb.DatasetFolderPath);
         var organization = Path.GetDirectoryName(dataset);
-        if (organization == null || !Directory.Exists(organization))
+        var datasets = organization == null ? null : Path.GetDirectoryName(organization);
+        if (organization == null || datasets == null)
             return 0;
+
+        var owned = await context.Organizations.AsNoTracking()
+            .Where(org => org.OwnerId == ownerId)
+            .Select(org => org.Slug)
+            .ToListAsync(ct);
+        var organizations = owned.Select(slug => Path.GetFullPath(Path.Combine(datasets, slug)))
+            .Append(organization)
+            .Distinct(PathComparison.Comparer)
+            .Where(Directory.Exists);
 
         // In one dataset the session of a user and a file id is one folder (SessionKey): its manifest has both
         bool Current(string folder, ChunkStatus s) =>
-            s.Manifest.FileId == fileId && Path.GetFullPath(folder) == dataset;
+            s.Manifest.FileId == fileId && s.Manifest.UserId == userId && Path.GetFullPath(folder) == dataset;
 
-        return Directory.EnumerateDirectories(organization)
+        return organizations
+            .SelectMany(Directory.EnumerateDirectories)
             .SelectMany(folder => store.List(Path.Combine(folder, IDDB.UploadsFolderName, DatasetUploads.ChunksFolderName))
-                .Where(s => s.Manifest.UserId == userId && !Current(folder, s)))
+                .Where(s => !Current(folder, s)))
             .Sum(s => s.Manifest.TotalSize);
     }
 

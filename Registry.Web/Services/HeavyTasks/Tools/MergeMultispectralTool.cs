@@ -8,6 +8,7 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.Jobs;
+using Registry.Web.Services.Ports;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Utilities;
 
@@ -138,7 +139,25 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
         }
 
         return new HeavyToolPlan(estimate, QuotaKey: "merge-multispectral",
-            DefaultFileName: null, ContentType: null);
+            DefaultFileName: null, ContentType: null, ReplacedBytes: ReplacedBytes(args, ctx));
+    }
+
+    // The size the owner's use counts for the file the output replaces (overwrite): the storage quota checks only the
+    // growth (FR-XC-26). Best-effort, as the estimate
+    private long ReplacedBytes(Parameters args, IHeavyToolValidationContext ctx)
+    {
+        if (!(args.Overwrite ?? ctx.QueuedBeforeOverwriteRule) || string.IsNullOrWhiteSpace(args.OutputPath))
+            return 0;
+        try
+        {
+            var outputPath = DatasetEntryLookup.ResolveOutput(ctx.Ddb,
+                pathPolicy.Normalize(args.OutputPath, "output path"), overwrite: true);
+            return WorkerStorageQuota.IndexedBytes(ctx.Ddb, outputPath);
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     protected override async Task<HeavyToolArtifact?> ExecuteAsync(
@@ -177,6 +196,9 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
             var replacing = (args.Overwrite ?? ctx.QueuedBeforeOverwriteRule) && File.Exists(outputFullPath);
             if (!replacing && File.Exists(outputFullPath))
                 throw new NameClashException(outputPath);
+            // What the owner's use counts for the file the merge replaces, read before the run: only the growth counts
+            // (FR-XC-26)
+            var replacedBytes = replacing ? WorkerStorageQuota.IndexedBytes(ctx.Ddb, outputPath) : 0;
             var root = ctx.Ddb.DatasetFolderPath;
             var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, ct);
 
@@ -205,6 +227,10 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
             // and the rollback deletes it (FR-XC-27)
             await Task.Run(() => ctx.Ddb.MergeMultispectral(paths, outputPath), ct);
 
+            // The owner of the organization must have room for the growth of the output (FR-XC-26): the task fails with
+            // the 507 text
+            await EnsureOutputFitsAsync(ctx, request.OrgSlug, outputPath, outputFullPath, replacedBytes, replacing, progress, ct);
+
             if (!replacing)
                 writes.Written(outputPath);
 
@@ -222,6 +248,33 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
 
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: "Merge complete"));
         return null;
+    }
+
+    // The storage quota of the owner of the organization against the growth of the merged output, read when it is
+    // written. An output that replaced a file is never deleted (FR-XC-27: a rollback never deletes a path that existed
+    // before the task, FR-XC-07): it stays, and it is indexed so that the entry describes the file on disk
+    private static async Task EnsureOutputFitsAsync(IHeavyToolExecutionContext ctx, string orgSlug, string outputPath,
+        string outputFullPath, long replacedBytes, bool replacing, IProgress<HeavyToolProgress> progress, CancellationToken ct)
+    {
+        try
+        {
+            await WorkerStorageQuota.EnsureOutputFitsAsync(ctx.Storage, orgSlug, outputFullPath, replacedBytes, ct);
+        }
+        catch (QuotaExceededException) when (replacing)
+        {
+            // The 507 is the reason the task stops: an index error here must not replace it (a busy index
+            // would make the job retry and write the output again). The rescan corrects the entry later.
+            try
+            {
+                ctx.Ddb.AddRaw(outputPath);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                progress.Report(new HeavyToolProgress(-1, "indexing",
+                        LogChunk: $"Could not index the replaced output {outputPath} again: {ex.Message}"));
+            }
+            throw;
+        }
     }
 
     /// <summary>

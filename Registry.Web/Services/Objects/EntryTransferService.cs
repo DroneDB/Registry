@@ -75,7 +75,7 @@ public sealed class EntryTransferService : IEntryTransferService
         // libddb's path rule: no traversal, no absolute path, not reserved
         destPath = _paths.Normalize(destPath, "destination path");
 
-        await _writePolicy.EnsureAllowedAsync(destPath, isFolder, await GetEntrySizeAsync(sourceDdb, sourceEntry));
+        await _writePolicy.EnsureAllowedAsync(destAccess.Dataset.Organization?.OwnerId, destPath, isFolder, await GetEntrySizeAsync(sourceDdb, sourceEntry));
 
         if (destDdb.GetEntry(destPath) is { } destEntry)
         {
@@ -189,7 +189,7 @@ public sealed class EntryTransferService : IEntryTransferService
         // (at least 0), so content of the same size or smaller is never refused
         var entrySize = await GetEntrySizeAsync(ddb, sourceEntry);
         var storageDelta = destEntry == null ? entrySize : Math.Max(0L, entrySize - await GetEntrySizeAsync(ddb, destEntry));
-        await _writePolicy.EnsureAllowedAsync(dest, isFolder, storageDelta);
+        await _writePolicy.EnsureAllowedAsync(access.Dataset.Organization?.OwnerId, dest, isFolder, storageDelta);
 
         var sourceLocalPath = ddb.GetLocalPath(source);
         var destLocalPath = ddb.GetLocalPath(dest);

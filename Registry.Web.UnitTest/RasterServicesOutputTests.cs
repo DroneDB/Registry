@@ -48,6 +48,7 @@ public class RasterServicesOutputTests
     private List<Job> _enqueued = null!;
     private List<EntrySummary> _entries = null!;
     private ObjectServices _services = null!;
+    private Mock<IStorageQuota> _quota = null!;
     private Guid _ref;
     private readonly List<InMemoryStorage> _storages = [];
 
@@ -96,7 +97,11 @@ public class RasterServicesOutputTests
             .Callback<Expression<Action<DdbJobs>>, IndexPayload>((call, _) => _enqueued.Add(Job.FromExpression(call)))
             .Returns("job-1");
 
+        // No limit unless a test sets one for the owner "u" of the organization
+        _quota = new Mock<IStorageQuota>();
+
         _services = new ObjectServicesBuilder(TestDb.CreateContext<RegistryContext>())
+            .WithQuota(_quota.Object)
             .WithDatasets(datasets.Object)
             .WithAuthManager(auth.Object)
             .WithDdbManager(ddbManager.Object)
@@ -160,7 +165,55 @@ public class RasterServicesOutputTests
         _ddb.Verify(d => d.AddRaw("Merged.tif"), Times.Once);
     }
 
+    // FR-XC-26, SEC-003: the synchronous merge writes a file into the dataset: an owner of the organization with nothing
+    // left is refused with 507 (whoever merges) before anything is removed or written
+    [Test]
+    public async Task Merge_ForAnOwnerWithNothingLeft_Is507_AndWritesNothing()
+    {
+        Entry("b1.tif");
+        Entry("b2.tif");
+        Entry("Merged.tif");
+        _quota.Setup(q => q.RemainingBytesAsync("u", It.IsAny<CancellationToken>())).ReturnsAsync(0L);
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() =>
+            _services.Processing.MergeMultispectralAsync(Org, Ds, ["b1.tif", "b2.tif"], "merged.tif", overwrite: true));
+
+        ex.StatusCode.ShouldBe(507);
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 0 B left.");
+        _fs.Verify(f => f.Delete(It.IsAny<string>()), Times.Never);
+        _ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>()), Times.Never);
+    }
+
     // ---- Mask borders (request) ----
+
+    // FR-XC-26, SEC-003: the legacy Mask Borders endpoint writes a file: an owner of the organization with nothing left is
+    // refused with 507 before the job is queued and before the copy it would replace is removed
+    [Test]
+    public async Task Mask_ForAnOwnerWithNothingLeft_Is507_QueuesNothing_AndRemovesNothing()
+    {
+        Entry("ortho.tif");
+        Entry("ortho_masked.tif");
+        _quota.Setup(q => q.RemainingBytesAsync("u", It.IsAny<CancellationToken>())).ReturnsAsync(0L);
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() =>
+            _services.Processing.MaskBordersAsync(Org, Ds, "ortho.tif", 15, false, overwrite: true));
+
+        ex.StatusCode.ShouldBe(507);
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 0 B left.");
+        _enqueued.ShouldBeEmpty();
+        _fs.Verify(f => f.Delete(It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
+    public async Task Mask_ForAnOwnerWithRoomLeft_IsQueued()
+    {
+        Entry("ortho.tif");
+        _quota.Setup(q => q.RemainingBytesAsync("u", It.IsAny<CancellationToken>())).ReturnsAsync(1L);
+
+        await _services.Processing.MaskBordersAsync(Org, Ds, "ortho.tif", 15, false);
+
+        _enqueued.ShouldHaveSingleItem();
+    }
 
     [Test]
     public async Task Mask_ExistingCopyWithoutOverwrite_Is409_AndQueuesNothing()

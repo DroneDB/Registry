@@ -69,8 +69,8 @@ public sealed class ShareChunkedUploads
         var root = ChunksRoot(batch);
         if (_chunks.GetStatus(root, chunkInfo.FileId) == null)
         {
-            // A new upload: check the user has room for the whole file before its first byte
-            await _quota.CheckCurrentUserStorage(chunkInfo.TotalFileSize);
+            // A new upload: check the owner of the organization has room for the whole file before its first byte (FR-XC-26)
+            await _quota.CheckOwnerStorageAsync(batch.Dataset.Organization.OwnerId, chunkInfo.TotalFileSize, ct);
         }
 
         _logger.LogDebug("Processing chunk {ChunkIndex}/{TotalChunks} for file {FileName} (FileId: {FileId})",

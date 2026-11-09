@@ -13,6 +13,7 @@ using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Import;
 using Registry.Web.Services.Jobs;
+using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.HeavyTasks.Tools;
@@ -180,7 +181,7 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
             // Checked again on the worker: a file may have appeared since the submit. A name that differs only in
             // letter case is the existing file (D-040)
             target = DatasetEntryLookup.ResolveOutput(ctx.Ddb, target, args.Overwrite == true);
-            await DownloadIntoPlaceAsync(uri, fileName, target, args, ctx, progress, ct);
+            await DownloadIntoPlaceAsync(request, uri, fileName, target, args, ctx, progress, ct);
         }
 
         // Index it, queue its build when libddb reports it buildable (a child of the task), invalidate the
@@ -194,12 +195,27 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
 
     // Downloads the file to a scratch path on the dataset volume, then moves it to target (a rename) and marks it
     // written: from the move on, a later attempt of the task only indexes it
-    private async Task DownloadIntoPlaceAsync(Uri uri, string fileName, string target, Parameters args,
+    private async Task DownloadIntoPlaceAsync(HeavyToolRequest request, Uri uri, string fileName, string target, Parameters args,
         IHeavyToolExecutionContext ctx, IProgress<HeavyToolProgress> progress, CancellationToken ct)
     {
         var username = args.Username;
         var password = DecryptPassword(args.Password);
         var cap = _importSettings.EffectiveFileImportCapBytes();
+
+        // The smaller of the size limit and what the owner of the organization may still store, read now, when the file is
+        // about to be written (FR-XC-26, D-039): a file that does not fit fails the task with the 507 text, and nothing of
+        // it stays (the download is a scratch file until it is moved into place)
+        string? capMessage = null;
+        if (await ctx.Storage.RemainingBytesOfOrganizationAsync(request.OrgSlug, ct) is { } left)
+        {
+            if (left <= 0)
+                throw QuotaExceededException.OwnerOverQuota(left);
+            if (cap <= 0 || left < cap)
+            {
+                cap = left;
+                capMessage = QuotaExceededException.OwnerOverQuotaMessage(left);
+            }
+        }
 
         // The download goes to the dataset's uploads folder: never indexed, and on the dataset's volume,
         // so the disk guard measures the volume it fills and the move into place is a rename, not a
@@ -225,7 +241,7 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
         {
             downloaded = await _downloader.DownloadAsync(uri, scratch.Path, username, password,
                 cap, _importSettings.MinDownloadSpeedBytesPerSec, _importSettings.LowSpeedGraceSeconds,
-                _diskSafetyMarginBytes, sink, linkedCts.Token);
+                _diskSafetyMarginBytes, sink, linkedCts.Token, capMessage);
         }
         catch (OperationCanceledException)
             when (transferTimeout > 0 && linkedCts.IsCancellationRequested && !ct.IsCancellationRequested)

@@ -33,6 +33,7 @@ public class ImportDatasetToolTests
     private FakeTaskWriteRecorder _recorder = null!;
     private Mock<IDDB> _ddb = null!;
     private IHeavyToolExecutionContext _ctx = null!;
+    private Registry.Web.Services.Ports.IStorageQuota _storage = Registry.Web.Services.Ports.UnlimitedStorageQuota.Instance;
 
     [SetUp]
     public void SetUp()
@@ -40,6 +41,7 @@ public class ImportDatasetToolTests
         _dataset = Path.Combine(Path.GetTempPath(), "import-dataset-tool-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_dataset);
         _recorder = new FakeTaskWriteRecorder();
+        _storage = Registry.Web.Services.Ports.UnlimitedStorageQuota.Instance;
         _ddb = new Mock<IDDB>();
         _ddb.SetupGet(d => d.DatasetFolderPath).Returns(_dataset);
         _ddb.Setup(d => d.AddRawBatch(It.IsAny<IReadOnlyList<string>>()))
@@ -48,6 +50,7 @@ public class ImportDatasetToolTests
 
         var ctx = new Mock<IHeavyToolExecutionContext>();
         ctx.SetupGet(c => c.Ddb).Returns(_ddb.Object);
+        ctx.SetupGet(c => c.Storage).Returns(() => _storage);
         ctx.SetupGet(c => c.TaskId).Returns("task-1");
         ctx.SetupGet(c => c.Dataset).Returns(new DatasetKey("org", Guid.NewGuid()));
         ctx.SetupGet(c => c.WriteRecord).Returns(_recorder);
@@ -140,6 +143,76 @@ public class ImportDatasetToolTests
         _recorder.Paths.ShouldBe(["a.jpg"]);
         _ddb.Verify(d => d.AddRawBatch(It.IsAny<IReadOnlyList<string>>()), Times.Never);
     }
+
+    private void OwnerHas(long remaining)
+    {
+        var storage = new Mock<Registry.Web.Services.Ports.IStorageQuota>();
+        storage.Setup(q => q.OwnerIdOfAsync("org", It.IsAny<CancellationToken>())).ReturnsAsync("owner-1");
+        storage.Setup(q => q.RemainingBytesAsync("owner-1", It.IsAny<CancellationToken>())).ReturnsAsync(remaining);
+        _storage = storage.Object;
+    }
+
+    // FR-XC-26, D-039: the worker reads what the owner of the organization has left when it starts to write; the import that
+    // goes over it stops with the 507 text, and the write record rolls it back
+    [Test]
+    public async Task TheQuotaOfTheOwner_StopsTheTransfer_WithThe507Text()
+    {
+        OwnerHas(1000);
+        var source = new ScriptedSource(async s =>
+        {
+            s.Writes.Record("a.jpg");
+            await File.WriteAllTextAsync(Path.Combine(_dataset, "a.jpg"), "aaaa");
+            s.Progress.Report(new ImportProgress(0.5, "downloading", BytesSoFar: 5000));
+            s.Ct.ThrowIfCancellationRequested();
+            Assert.Fail("the transfer was not stopped");
+        });
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() => Execute(ToolFor(source)));
+
+        ex.StatusCode.ShouldBe(507);
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 1,000 B left.");
+        _recorder.Paths.ShouldBe(["a.jpg"]);
+        _ddb.Verify(d => d.AddRawBatch(It.IsAny<IReadOnlyList<string>>()), Times.Never);
+    }
+
+    [Test]
+    public async Task AnOwnerWithNothingLeft_FailsBeforeTheSourceIsFetched()
+    {
+        OwnerHas(0);
+        var fetched = false;
+        var source = new ScriptedSource(_ =>
+        {
+            fetched = true;
+            return Task.CompletedTask;
+        });
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() => Execute(ToolFor(source)));
+
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 0 B left.");
+        fetched.ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task AnImportThatFits_IsNotStopped()
+    {
+        OwnerHas(10_000);
+        var source = new ScriptedSource(async s =>
+        {
+            s.Writes.Record("a.jpg");
+            await File.WriteAllTextAsync(Path.Combine(_dataset, "a.jpg"), "a");
+            s.Progress.Report(new ImportProgress(0.5, "downloading", BytesSoFar: 5000));
+        });
+
+        await Execute(ToolFor(source));
+
+        _ddb.Verify(d => d.AddRawBatch(It.IsAny<IReadOnlyList<string>>()), Times.Once);
+    }
+
+    // The plan has no estimate: a stored budget is no estimate of the output (the gate compares the estimate to what is left)
+    [Test]
+    public void ThePlan_HasNoEstimate_WhateverTheBudgetOfTheRequest() =>
+        ToolFor(new ScriptedSource(_ => Task.CompletedTask)).Plan(Request(budgetBytes: 1000), Mock.Of<IHeavyToolValidationContext>())
+            .EstimatedOutputBytes.ShouldBeNull();
 
     [Test]
     public async Task AUserCancel_IsACancellation_NotAQuotaError()

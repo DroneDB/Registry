@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Text.Json;
@@ -33,11 +34,20 @@ public sealed record HeavyToolRequest(
 /// Cheap (O(ms)) pre-submit plan: estimated output size, quota bucket and the
 /// default artifact descriptor. Used for quota checks and the pre-submit estimate.
 /// </summary>
+/// <param name="ReplacedBytes">Of the estimate, the size that the storage use of the owner already counts for the files
+/// the task replaces (<c>overwrite</c>): the storage quota checks only the growth (FR-XC-26), as for a copy.</param>
 public sealed record HeavyToolPlan(
     long? EstimatedOutputBytes,
     string QuotaKey,
     string? DefaultFileName,
-    string? ContentType);
+    string? ContentType,
+    long ReplacedBytes = 0)
+{
+    /// <summary>What the task adds to the storage use of the owner, when the estimate is known: never below 0.</summary>
+    public long? StorageGrowthBytes => EstimatedOutputBytes is { } estimate
+        ? Math.Max(0, estimate - Math.Max(0, ReplacedBytes))
+        : null;
+}
 
 /// <summary>Descriptor of the artifact produced by a tool execution.</summary>
 public sealed record HeavyToolArtifact(
@@ -105,6 +115,13 @@ public interface IHeavyToolExecutionContext : IHeavyToolValidationContext
     /// requester's access again before it acts on it (photogrammetry creating a dataset, D-031) checks this user.
     /// </summary>
     string? RequestedBy { get; }
+
+    /// <summary>
+    /// The storage quota of the owners of organizations (FR-XC-26, D-039), for a tool with
+    /// <see cref="Ports.IHeavyTool.AddsDatasetFiles"/>: it reads the bytes the owner of the target organization may
+    /// still store when the tool writes, never a value kept from the submit, and the worker needs no current user.
+    /// </summary>
+    IStorageQuota Storage => UnlimitedStorageQuota.Instance;
 
     /// <summary>Queues the builds of what the tool added (as children of the task), in the task's scope.</summary>
     BuildScheduler BuildQueue { get; }

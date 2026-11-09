@@ -68,7 +68,7 @@ public class UploadPerFileOverheadBaselineTests : TestBase
         _quota = new Mock<IStorageQuota>();
         _utils.Setup(u => u.GetDatasetAsync(OrgSlug, DsSlug, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => { Interlocked.Increment(ref _getDatasetCalls); return _ds; });
-        _quota.Setup(u => u.GetCurrentUserStorageLimit())
+        _quota.Setup(u => u.GetOwnerStorageLimitAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .Returns(() =>
             {
                 Interlocked.Increment(ref _quotaEvaluations);

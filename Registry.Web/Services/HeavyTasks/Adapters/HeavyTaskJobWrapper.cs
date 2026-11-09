@@ -365,7 +365,7 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         var execCtx = new HeavyToolExecutionContext(ddb, dataset, _log,
             new TaskRun(taskId, workDir), ctx, sp.GetRequiredService<BuildScheduler>(), builds,
             await QueuedBeforeOverwriteRuleAsync(db, taskId, cancellationToken), recorder,
-            await RequestedByAsync(db, taskId, cancellationToken));
+            await RequestedByAsync(db, taskId, cancellationToken), sp.GetRequiredService<IStorageQuota>());
         return new Prepared(tool, request, workDir, ddb, execCtx, recorder);
     }
 

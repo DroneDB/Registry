@@ -92,7 +92,7 @@ public class ImportManagersTests
         _urls.Setup(u => u.GenerateDatasetUrl(It.IsAny<Dataset>(), It.IsAny<bool>())).Returns("https://hub/acme/new");
 
         _quota = new Mock<IStorageQuota>();
-        _quota.Setup(q => q.GetUserStorage(It.IsAny<User>())).Returns(new UserStorageInfo { Total = null, Used = 0 });
+        _quota.Setup(q => q.OwnerIdOfAsync(Org, It.IsAny<CancellationToken>())).ReturnsAsync("owner-1");
 
         _source = new Mock<IImportSource>();
         _source.Setup(s => s.SourceType).Returns("archive-url");
@@ -110,7 +110,7 @@ public class ImportManagersTests
 
     private ImportManager CreateImportManager() => new(_access.Object,
         new ImportSourceCatalog(_factory.Object, Options(_settings)),
-        new ImportQuotaGate(_auth.Object, _quota.Object),
+        _quota.Object,
         new ImportTargetDatasets(_datasetsManager.Object, _datasets.Object, _urls.Object, NullLogger<ImportTargetDatasets>.Instance),
         Submitter(), new ImportCredentials(new ReversingProtector()));
 
@@ -165,10 +165,8 @@ public class ImportManagersTests
     }
 
     [Test]
-    public async Task Create_MakesTheDataset_AndSubmitsTheTaskOfTheCurrentUser_WithEncryptedPasswordAndTheBudget()
+    public async Task Create_MakesTheDataset_AndSubmitsTheTaskOfTheCurrentUser_WithEncryptedPasswordAndNoStoredBudget()
     {
-        _quota.Setup(q => q.GetUserStorage(It.IsAny<User>())).Returns(new UserStorageInfo { Total = 10_000, Used = 4_000 });
-
         var result = await CreateImportManager().CreateAsync(Org, new CreateImportRequestDto
         {
             SourceType = "archive-url",
@@ -182,7 +180,8 @@ public class ImportManagersTests
         result.OrgSlug.ShouldBe(Org);
         result.DsSlug.ShouldBe("my-dataset");
         result.DatasetUrl.ShouldBe("https://hub/acme/new");
-        _quota.Verify(q => q.CheckCurrentUserStorage(2048), Times.Once);
+        // The probed size is checked against the quota of the owner of the destination organization (FR-XC-26)
+        _quota.Verify(q => q.CheckOwnerStorageAsync("owner-1", 2048, It.IsAny<CancellationToken>()), Times.Once);
         _datasetsManager.Verify(m => m.AddNew(Org, It.Is<DatasetNewDto>(d =>
             d.Slug == "my-dataset" && d.Name == "My Dataset" && d.Visibility == Visibility.Private), It.IsAny<CancellationToken>()), Times.Once);
 
@@ -196,7 +195,8 @@ public class ImportManagersTests
         request.Caller.ShouldBeSameAs(_caller);
 
         request.Params.GetProperty("sourceType").GetString().ShouldBe("archive-url");
-        request.Params.GetProperty("budgetBytes").GetInt64().ShouldBe(6_000);
+        // The worker reads the remaining bytes when it writes: no value of the submit is stored (D-039)
+        request.Params.TryGetProperty("budgetBytes", out _).ShouldBeFalse();
         var inner = request.Params.GetProperty("params");
         inner.GetProperty("url").GetString().ShouldBe("https://example.org/a.zip");
         inner.GetProperty("username").GetString().ShouldBe("bob");
@@ -223,10 +223,8 @@ public class ImportManagersTests
     }
 
     [Test]
-    public async Task Create_UsesTheNameAndSlugOfTheRequest_AndHasNoBudgetWithoutALimit()
+    public async Task Create_UsesTheNameAndSlugOfTheRequest()
     {
-        _quota.Setup(q => q.GetUserStorage(It.IsAny<User>())).Returns(new UserStorageInfo { Total = null, Used = 4_000 });
-
         await CreateImportManager().CreateAsync(Org, new CreateImportRequestDto
         {
             SourceType = "archive-url", Name = "Chosen", Slug = "chosen-slug", Visibility = Visibility.Public

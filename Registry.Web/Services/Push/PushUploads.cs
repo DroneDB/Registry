@@ -17,17 +17,15 @@ namespace Registry.Web.Services.Push;
 public sealed class PushUploads
 {
     private readonly IDatasetAccessResolver _access;
-    private readonly IAuthManager _authManager;
     private readonly UploadQuotaGuard _quota;
     private readonly ScratchFileProvider _scratch;
     private readonly IFileSystem _fileSystem;
     private readonly PushSessionStore _sessionStore;
     private readonly DatasetPathPolicy _paths;
 
-    public PushUploads(IDatasetAccessResolver access, IAuthManager authManager, UploadQuotaGuard quota, ScratchFileProvider scratch, IFileSystem fileSystem, PushSessionStore sessionStore, DatasetPathPolicy paths)
+    public PushUploads(IDatasetAccessResolver access, UploadQuotaGuard quota, ScratchFileProvider scratch, IFileSystem fileSystem, PushSessionStore sessionStore, DatasetPathPolicy paths)
     {
         _access = access;
-        _authManager = authManager;
         _quota = quota;
         _scratch = scratch;
         _fileSystem = fileSystem;
@@ -40,10 +38,10 @@ public sealed class PushUploads
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
 
-        // Reserved against one storage evaluation per window, as uploads are (the files of a push
-        // add up): before writing when the size is known
-        var userId = await _authManager.GetCurrentUserId() ?? string.Empty;
-        var reservation = expectedBytes is { } expected ? await _quota.ReserveAsync(userId, expected) : null;
+        // Reserved against one storage evaluation per window, as uploads are (the files of a push add up), in the quota of
+        // the owner of the organization, whoever pushes (FR-XC-26): before writing when the size is known
+        var ownerId = access.Dataset.Organization?.OwnerId ?? string.Empty;
+        var reservation = expectedBytes is { } expected ? await _quota.ReserveAsync(ownerId, expected) : null;
         try
         {
             var ddb = access.Ddb;
@@ -53,7 +51,7 @@ public sealed class PushUploads
             try
             {
                 if (reservation == null)
-                    reservation = await _quota.ReserveAsync(userId, bytes);
+                    reservation = await _quota.ReserveAsync(ownerId, bytes);
                 else
                     reservation.Resize(bytes);
             }

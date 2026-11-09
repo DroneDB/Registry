@@ -76,7 +76,7 @@ internal sealed class MetaManagerTest : TestBase
 
         var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
-        var webUtils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(ddbManager));
+        var webUtils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(ddbManager));
 
         var metaManager = new MetaManager(_metaManagerLogger,
             new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, ddbManager, TestPaths.Policy),
@@ -107,7 +107,7 @@ internal sealed class MetaManagerTest : TestBase
 
         var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
-        var webUtils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(ddbManager));
+        var webUtils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(ddbManager));
 
         var metaManager = new MetaManager(_metaManagerLogger,
             new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, ddbManager, TestPaths.Policy),
@@ -166,7 +166,7 @@ internal sealed class MetaManagerTest : TestBase
 
         var ddbManager = new DdbManager(TestSettings.Options<StorageOptions>(_settingsOptions), _ddbFactoryLogger, DdbWrapper);
 
-        var webUtils = TestPorts.All(_authManagerMock.Object, context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(ddbManager));
+        var webUtils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(ddbManager));
 
         var metaManager = new MetaManager(_metaManagerLogger,
             new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, ddbManager, TestPaths.Policy),

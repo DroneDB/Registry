@@ -32,6 +32,7 @@ namespace Registry.Web.Test;
 public sealed class UploadQuotaHttpTests : IDisposable
 {
     private const string Owner = "quota-owner";
+    private const string Member = "quota-member";
     private const string Org = "quota-org";
     private const string Ds = "quota-ds";
 
@@ -62,17 +63,28 @@ public sealed class UploadQuotaHttpTests : IDisposable
 
         var owner = await _factory.CreateUserAsync(Owner);
         _ownerId = owner.Id;
+        var member = await _factory.CreateUserAsync(Member);
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<RegistryContext>();
         var org = Seed.Organization(context, Org, ownerId: owner.Id, isPublic: false);
         var ds = Seed.Dataset(context, org, Ds);
+        // A member who may write, and is not the owner
+        context.OrganizationsUsers.Add(new Registry.Web.Data.Models.OrganizationUser
+        {
+            Organization = org, OrganizationSlug = Org, UserId = member.Id,
+            Permissions = Registry.Common.OrganizationPermissions.ReadWrite
+        });
         await context.SaveChangesAsync();
 
         _folder = scope.ServiceProvider.GetRequiredService<IDdbManager>().Get(Org, ds.InternalRef).DatasetFolderPath;
     }
 
     [SetUp]
-    public void SetUp() => _quota.Limit = null;
+    public void SetUp()
+    {
+        _quota.Limit = null;
+        _quota.OwnersAsked.Clear();
+    }
 
     public void Dispose()
     {
@@ -80,9 +92,10 @@ public sealed class UploadQuotaHttpTests : IDisposable
         _factory?.Dispose();
     }
 
-    private async Task<(HttpResponseMessage Response, JsonObject Problem)> PostAsync(string url, HttpContent? content = null)
+    private async Task<(HttpResponseMessage Response, JsonObject Problem)> PostAsync(string url, HttpContent? content = null,
+        string user = Owner)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content }.AsUser(Owner);
+        using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content }.AsUser(user);
         var response = await _client.SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();
         return (response, body.TrimStart().StartsWith('{') ? JsonNode.Parse(body)!.AsObject() : []);
@@ -137,6 +150,34 @@ public sealed class UploadQuotaHttpTests : IDisposable
         var (response, problem) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj", File("over-quota.bin"));
 
         ShouldBeQuotaProblem(response, problem);
+    }
+
+    // FR-XC-26, D-039: the quota is the one of the owner of the organization, whoever uploads: a member who writes into an
+    // organization whose owner is over quota gets 507, and the quota is asked for the owner, not for the member
+    [Test]
+    public async Task Upload_ByAMember_IsAgainstTheQuotaOfTheOwnerOfTheOrganization()
+    {
+        _quota.Limit = new UserStorageInfo { Total = 1, Used = 0 };
+
+        var (response, problem) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj", File("member-over-quota.bin"), Member);
+
+        ShouldBeQuotaProblem(response, problem);
+        _quota.OwnersAsked.ShouldContain(_ownerId);
+        _quota.OwnersAsked.ShouldNotContain(owner => owner != _ownerId, "no other id is asked for");
+    }
+
+    [Test]
+    public async Task Chunk_ByAMember_IsAgainstTheQuotaOfTheOwnerOfTheOrganization()
+    {
+        _quota.Limit = new UserStorageInfo { Total = 1, Used = 0 };
+
+        var (response, problem) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj/chunk",
+            Chunk("quota-member-chunk-0001", "member-chunked.bin", 0, 2), Member);
+
+        ShouldBeQuotaProblem(response, problem);
+        // The owner only (asked once whether a limit applies, once for the reservation)
+        _quota.OwnersAsked.ShouldContain(_ownerId);
+        _quota.OwnersAsked.ShouldAllBe(owner => owner == _ownerId);
     }
 
     [Test]
@@ -195,6 +236,78 @@ public sealed class UploadQuotaHttpTests : IDisposable
         finally
         {
             if (Directory.Exists(chunks)) Directory.Delete(chunks, true);
+        }
+    }
+
+    // FR-XC-26, D-039: the room that an open upload holds is room of the owner of the organization, whoever opened it: an
+    // upload of a member counts against the next one of the owner (and of any other member)
+    [Test]
+    public async Task OpenChunkedUploadOfAMember_HoldsRoomAgainstTheOwnersNextUpload()
+    {
+        const long gib = 1024L * 1024 * 1024;
+        const int mib = 1024 * 1024;
+        var chunks = Path.Combine(_folder, IDDB.UploadsFolderName, "chunks");
+        if (Directory.Exists(chunks)) Directory.Delete(chunks, true);
+        // 10 GiB left
+        _quota.Limit = new UserStorageInfo { Total = 20 * gib, Used = 10 * gib };
+
+        try
+        {
+            var (first, _) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj/chunk",
+                Chunk("quota-member-open-0001", "member-9gib.bin", 0, 9216, mib, 9 * gib), Member);
+            first.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+            var (response, problem) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj/chunk",
+                Chunk("quota-owner-open-0002", "owner-9gib.bin", 0, 9216, mib, 9 * gib));
+
+            ShouldBeQuotaProblem(response, problem);
+        }
+        finally
+        {
+            if (Directory.Exists(chunks)) Directory.Delete(chunks, true);
+        }
+    }
+
+    // FR-XC-26, D-039: the ledger reserves per owner, so the room that open uploads hold is counted across the
+    // organizations of the owner: an open upload in another organization of the same owner counts against the next one
+    [Test]
+    public async Task OpenChunkedUploadInAnotherOrganizationOfTheOwner_HoldsRoomAgainstTheNextUpload()
+    {
+        const long gib = 1024L * 1024 * 1024;
+        const int mib = 1024 * 1024;
+        const string otherOrg = "quota-org-second";
+        const string otherDs = "quota-ds-second";
+        string otherFolder;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<RegistryContext>();
+            var org = Seed.Organization(context, otherOrg, ownerId: _ownerId, isPublic: false);
+            var ds = Seed.Dataset(context, org, otherDs);
+            await context.SaveChangesAsync();
+            otherFolder = scope.ServiceProvider.GetRequiredService<IDdbManager>().Get(otherOrg, ds.InternalRef).DatasetFolderPath;
+        }
+
+        var chunks = Path.Combine(_folder, IDDB.UploadsFolderName, "chunks");
+        var otherChunks = Path.Combine(otherFolder, IDDB.UploadsFolderName, "chunks");
+        if (Directory.Exists(chunks)) Directory.Delete(chunks, true);
+        // 10 GiB left
+        _quota.Limit = new UserStorageInfo { Total = 20 * gib, Used = 10 * gib };
+
+        try
+        {
+            var (first, _) = await PostAsync($"/orgs/{otherOrg}/ds/{otherDs}/obj/chunk",
+                Chunk("quota-other-org-0001", "other-9gib.bin", 0, 9216, mib, 9 * gib));
+            first.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+            var (response, problem) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj/chunk",
+                Chunk("quota-this-org-0002", "this-9gib.bin", 0, 9216, mib, 9 * gib));
+
+            ShouldBeQuotaProblem(response, problem);
+        }
+        finally
+        {
+            if (Directory.Exists(chunks)) Directory.Delete(chunks, true);
+            if (Directory.Exists(otherChunks)) Directory.Delete(otherChunks, true);
         }
     }
 
@@ -284,18 +397,31 @@ public sealed class UploadQuotaHttpTests : IDisposable
         }
     }
 
-    /// <summary>The storage limit of the current user: none (null) or the one a test sets.</summary>
+    /// <summary>The storage limit of the owner of the organization: none (null) or the one a test sets.</summary>
     private sealed class SwitchableQuota : IStorageQuota
     {
         public UserStorageInfo? Limit { get; set; }
 
+        /// <summary>The owners the quota was asked for, in order.</summary>
+        public System.Collections.Concurrent.ConcurrentQueue<string?> OwnersAsked { get; } = new();
+
         public UserStorageInfo GetUserStorage(Registry.Web.Identity.Models.User user) => Limit ?? new UserStorageInfo();
 
-        public Task<UserStorageInfo?> GetCurrentUserStorageLimit() => Task.FromResult(Limit);
+        public Task<string?> OwnerIdOfAsync(string orgSlug, System.Threading.CancellationToken ct = default) =>
+            Task.FromResult<string?>(null);
 
-        public Task CheckCurrentUserStorage(long size = 0) =>
+        public Task<UserStorageInfo?> GetOwnerStorageLimitAsync(string? ownerId, System.Threading.CancellationToken ct = default)
+        {
+            OwnersAsked.Enqueue(ownerId);
+            return Task.FromResult(Limit);
+        }
+
+        public Task<long?> RemainingBytesAsync(string? ownerId, System.Threading.CancellationToken ct = default) =>
+            Task.FromResult(Limit is { Total: { } total } limit ? (long?)Math.Max(0, total - limit.Used) : null);
+
+        public Task CheckOwnerStorageAsync(string? ownerId, long size = 0, System.Threading.CancellationToken ct = default) =>
             Limit is { Total: { } total } limit && limit.Used + size > total
-                ? throw new Registry.Web.Exceptions.QuotaExceededException(limit.Used + size, total)
+                ? throw Registry.Web.Exceptions.QuotaExceededException.OwnerOverQuota(total - limit.Used)
                 : Task.CompletedTask;
     }
 }

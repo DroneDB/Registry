@@ -10,6 +10,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -33,10 +34,12 @@ public sealed class ShareTargets
     private readonly IDatasetsManager _datasetsManager;
     private readonly ShareBatchRollback _rollback;
     private readonly INameGenerator _nameGenerator;
+    private readonly IDatasetAccessResolver _access;
     private readonly ILogger<ShareTargets> _logger;
 
-    public ShareTargets(RegistryContext context, IDatasetResolver datasets, IOrganizationsManager organizationsManager, IDatasetsManager datasetsManager, ShareBatchRollback rollback, INameGenerator nameGenerator, ILogger<ShareTargets> logger)
+    public ShareTargets(RegistryContext context, IDatasetResolver datasets, IOrganizationsManager organizationsManager, IDatasetsManager datasetsManager, ShareBatchRollback rollback, INameGenerator nameGenerator, IDatasetAccessResolver access, ILogger<ShareTargets> logger)
     {
+        _access = access;
         _context = context;
         _datasets = datasets;
         _organizationsManager = organizationsManager;
@@ -46,10 +49,18 @@ public sealed class ShareTargets
         _logger = logger;
     }
 
-    public async Task<ShareTarget> ResolveAsync(ShareInitDto parameters, User currentUser)
+    /// <summary>
+    /// The dataset the share goes to. <paramref name="beforeWrite"/> gets the id of the owner of the organization it goes
+    /// to (null: none) once the user's access to write there is checked and before anything is created or rolled back: a
+    /// refusal there (the storage quota, FR-XC-26) changes nothing, and an organization the user may not write to is
+    /// refused for its access, whatever the state of its owner (SEC-003).
+    /// </summary>
+    public async Task<ShareTarget> ResolveAsync(ShareInitDto parameters, User currentUser,
+        Func<string?, Task>? beforeWrite = null)
     {
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(currentUser);
+        beforeWrite ??= _ => Task.CompletedTask;
 
         Dataset dataset;
         var created = true;
@@ -74,6 +85,9 @@ public sealed class ShareTargets
                 throw new BadRequestException("Cannot specify a dataset without an organization");
 
             _logger.LogInformation("No organization and dataset specified");
+
+            // The default organization of the user is the user's (created for the user when it does not exist yet)
+            await beforeWrite(currentUser.Id);
 
             var nameSlug = currentUser.RequiredUserName().ToSlug();
 
@@ -113,6 +127,7 @@ public sealed class ShareTargets
             // If no dataset is specified, we create a new one with a random slug
             if (tag.DatasetSlug == null)
             {
+                await EnsureMayCreateInAsync(organization, beforeWrite);
                 dataset = await CreateNewDatasetAsync(tag.OrganizationSlug, parameters.DatasetName, visibility);
 
                 _logger.LogInformation("Dataset created");
@@ -125,6 +140,7 @@ public sealed class ShareTargets
                 // Create dataset if not exists
                 if (existing == null)
                 {
+                    await EnsureMayCreateInAsync(organization, beforeWrite);
                     _logger.LogInformation("Dataset '{DatasetSlug}' not found, creating it", tag.DatasetSlug);
 
                     await _datasetsManager.AddNew(tag.OrganizationSlug, new DatasetNewDto
@@ -141,6 +157,8 @@ public sealed class ShareTargets
                 else
                 {
                     // A new batch replaces the running ones (who may write to the dataset only)
+                    await _access.EnsureAccessAsync(existing, AccessType.Write);
+                    await beforeWrite(existing.Organization.OwnerId);
                     await _rollback.RollbackRunningAsync(existing);
                     dataset = existing;
                     created = false;
@@ -149,6 +167,14 @@ public sealed class ShareTargets
         }
 
         return new ShareTarget(dataset, created);
+    }
+
+    // The check of the creation of a dataset in the organization (write access, as DatasetsManager.AddNew makes it), then
+    // beforeWrite with its owner
+    private async Task EnsureMayCreateInAsync(Organization organization, Func<string?, Task> beforeWrite)
+    {
+        await _access.ResolveOrganizationAsync(organization.Slug, AccessType.Write);
+        await beforeWrite(organization.OwnerId);
     }
 
     /// <summary>

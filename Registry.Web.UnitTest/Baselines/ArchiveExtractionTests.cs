@@ -181,7 +181,7 @@ public sealed class ArchiveExtractionTests
     private async Task ExecuteAsync(object parameters, Action<HeavyToolProgress>? onProgress = null,
         long maxArchiveBytes = 5L * 1024 * 1024 * 1024, CancellationToken ct = default)
     {
-        var tool = ExtractionHarness.CreateTool(maxArchiveBytes, Scope());
+        var tool = ExtractionHarness.CreateTool(maxArchiveBytes);
         await tool.ExecuteAsync(
             new HeavyToolRequest("archive-extract", "1", "org", "ds", null, JsonSerializer.SerializeToElement(parameters)),
             Ctx(), new SyncProgress(onProgress ?? (_ => { })), ct);
@@ -208,16 +208,9 @@ public sealed class ArchiveExtractionTests
         ctx.SetupGet(c => c.TaskId).Returns("task-1");
         ctx.SetupGet(c => c.Dataset).Returns(new DatasetKey("org", Guid.NewGuid()));
         ctx.SetupGet(c => c.WriteRecord).Returns(new Support.FakeTaskWriteRecorder());
+        ctx.SetupGet(c => c.Storage).Returns(Registry.Web.Services.Ports.UnlimitedStorageQuota.Instance);
         ctx.SetupGet(c => c.BuildQueue).Returns(Support.TestJobs.Scheduler());
         return ctx.Object;
-    }
-
-    private static IServiceScopeFactory Scope()
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton(Mock.Of<IBackgroundJobsProcessor>());
-        services.AddSingleton(Mock.Of<IDatasetCacheInvalidator>());
-        return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
     }
 
     // Reports inline (System.Progress<T> posts to the thread pool)
@@ -230,14 +223,14 @@ public sealed class ArchiveExtractionTests
 /// <summary>How the tests build the tool (the one place that knows its constructor).</summary>
 internal static class ExtractionHarness
 {
-    public static ArchiveExtractTool CreateTool(long maxArchiveBytes, IServiceScopeFactory scopes)
+    public static ArchiveExtractTool CreateTool(long maxArchiveBytes)
     {
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings
         {
             ProcessingPlatform = new ProcessingPlatformSettings { MaxArchiveExtractSizeBytes = maxArchiveBytes }
         });
         var extractor = new SharpCompressArchiveExtractor();
-        return new ArchiveExtractTool(Support.TestArchives.Extractor(extractor), scopes, Support.TestSettings.Options<ImportSettings>(settings), Support.TestSettings.Options<ProcessingPlatformSettings>(settings),
+        return new ArchiveExtractTool(Support.TestArchives.Extractor(extractor), Support.TestSettings.Options<ImportSettings>(settings), Support.TestSettings.Options<ProcessingPlatformSettings>(settings),
             Support.TestPaths.Policy, Support.TestHeadroom.Default, Support.TestJobs.FileIndexer());
     }
 }

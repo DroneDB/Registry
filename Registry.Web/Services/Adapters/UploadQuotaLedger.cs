@@ -12,7 +12,7 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Per-user upload reservations against one storage evaluation per window (singleton state behind
+/// Per-owner upload reservations (the owner of the target organization, FR-XC-26) against one storage evaluation per window (singleton state behind
 /// <see cref="UploadQuotaGuard"/>). Within a window the used size is
 /// <c>evaluated use + stored since + in flight</c>; at the next evaluation the stored uploads are
 /// part of the evaluated use and only the reservations still in flight carry over.
@@ -88,8 +88,8 @@ public sealed class UploadQuotaLedger
     }
 
     /// <summary>
-    /// Reserves <paramref name="bytes"/> for <paramref name="userId"/>; <paramref name="evaluate"/>
-    /// (the user's storage use and limit, null when unlimited) runs at most once per window.
+    /// Reserves <paramref name="bytes"/> for <paramref name="userId"/> (the owner whose quota applies);
+    /// <paramref name="evaluate"/> (the owner's storage use and limit, null when unlimited) runs at most once per window.
     /// </summary>
     public async Task<IQuotaReservation> ReserveAsync(string userId, long bytes, Func<Task<UserStorageInfo?>> evaluate)
     {
@@ -141,7 +141,7 @@ public sealed class UploadQuotaLedger
         if (state.Unlimited) return;
         var usage = state.Used + state.StoredSinceEvaluation + state.InFlight + bytes;
         if (usage > state.Total)
-            throw new QuotaExceededException(usage, state.Total);
+            throw QuotaExceededException.OwnerOverQuota(state.Total.GetValueOrDefault() - (usage - bytes));
     }
 
     private bool Expired(UserState state)
@@ -166,16 +166,25 @@ public sealed class UploadQuotaLedger
 }
 
 /// <summary>
-/// Storage-quota admission for uploads (C.6). The user's storage use is evaluated
-/// once per window and every upload reserves its size against it, so a burst of uploads costs one
-/// evaluation instead of one per file, and an upload over quota is refused before its first byte.
+/// Storage-quota admission for uploads (C.6). The storage use of the owner of the target organization (FR-XC-26,
+/// D-039: whoever uploads, the quota is the owner's) is evaluated once per window and every upload reserves its size
+/// against it, so a burst of uploads costs one evaluation instead of one per file, and an upload over quota is refused
+/// before its first byte.
 /// </summary>
 public sealed class UploadQuotaGuard(UploadQuotaLedger ledger, IStorageQuota quota)
 {
     /// <summary>
-    /// Reserves <paramref name="bytes"/> for an upload of the current user.
+    /// Reserves <paramref name="bytes"/> against the quota of the owner <paramref name="ownerId"/> of the organization
+    /// that an upload writes into (empty: no owner, no limit).
     /// </summary>
     /// <exception cref="Registry.Web.Exceptions.QuotaExceededException">The upload does not fit.</exception>
-    public Task<IQuotaReservation> ReserveAsync(string userId, long bytes) =>
-        ledger.ReserveAsync(userId, bytes, async () => await quota.GetCurrentUserStorageLimit());
+    public Task<IQuotaReservation> ReserveAsync(string ownerId, long bytes) =>
+        ledger.ReserveAsync(ownerId, bytes, async () => await quota.GetOwnerStorageLimitAsync(ownerId));
+
+    /// <summary>
+    /// Whether a storage limit applies to the owner <paramref name="ownerId"/> (false: the limiter is off, the owner is
+    /// an administrator or has no limit, or there is no owner), so that callers can skip work that only a limit needs.
+    /// </summary>
+    public async Task<bool> LimitAppliesAsync(string? ownerId, CancellationToken ct = default) =>
+        !string.IsNullOrEmpty(ownerId) && await quota.GetOwnerStorageLimitAsync(ownerId, ct) != null;
 }

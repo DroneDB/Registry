@@ -28,7 +28,7 @@ public static class TestShares
         var store = new ShareBatchStore(context, authManager, access, tokens, time, NullLogger<ShareBatchStore>.Instance);
         var rollback = new ShareBatchRollback(context, access, store, datasetsManager, entries, ddbManager,
             NullLogger<ShareBatchRollback>.Instance);
-        var targets = new ShareTargets(context, datasets, organizations, datasetsManager, rollback, names,
+        var targets = new ShareTargets(context, datasets, organizations, datasetsManager, rollback, names, access,
             NullLogger<ShareTargets>.Instance);
         return new ShareManager(store,
             new ShareBatches(store, rollback, targets, authManager, quota, NullLogger<ShareBatches>.Instance),

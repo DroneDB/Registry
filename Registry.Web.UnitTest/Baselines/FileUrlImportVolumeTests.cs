@@ -43,6 +43,7 @@ public sealed class FileUrlImportVolumeTests
     public void SetUp()
     {
         Recorder = new FakeTaskWriteRecorder();
+        _storage = Registry.Web.Services.Ports.UnlimitedStorageQuota.Instance;
         _dataset = Path.Combine(Path.GetTempPath(), "fileurlimportvolume-fileimport-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_dataset);
     }
@@ -145,6 +146,58 @@ public sealed class FileUrlImportVolumeTests
         Directory.GetFiles(Uploads).ShouldBeEmpty();
     }
 
+    private Registry.Web.Services.Ports.IStorageQuota _storage = Registry.Web.Services.Ports.UnlimitedStorageQuota.Instance;
+
+    private void OwnerHas(long remaining)
+    {
+        var storage = new Mock<Registry.Web.Services.Ports.IStorageQuota>();
+        storage.Setup(q => q.OwnerIdOfAsync("org", It.IsAny<CancellationToken>())).ReturnsAsync("owner-1");
+        storage.Setup(q => q.RemainingBytesAsync("owner-1", It.IsAny<CancellationToken>())).ReturnsAsync(remaining);
+        _storage = storage.Object;
+    }
+
+    // FR-XC-26, D-039: the worker reads what the owner of the organization has left when it downloads; a file that does not
+    // fit fails the task with the 507 text and nothing of it stays
+    [Test]
+    public async Task Execute_AFileThatDoesNotFitTheQuotaOfTheOwner_Fails507_AndLeavesNothing()
+    {
+        OwnerHas(Payload.Length - 1);
+        var tool = CreateTool(new PayloadHandler(() => { }));
+
+        var ex = await Should.ThrowAsync<Registry.Web.Exceptions.QuotaExceededException>(() =>
+            tool.ExecuteAsync(Request(""), Ctx(out _), new Progress<HeavyToolProgress>(), CancellationToken.None));
+
+        ex.StatusCode.ShouldBe(507);
+        ex.Message.ShouldStartWith("Storage quota exceeded: the owner of this organization has ");
+        ex.Message.ShouldEndWith(" left.");
+        File.Exists(Path.Combine(_dataset, "cloud.laz")).ShouldBeFalse();
+        (Directory.Exists(Uploads) ? Directory.GetFiles(Uploads) : []).ShouldBeEmpty();
+        Recorder.Paths.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task Execute_AnOwnerWithNothingLeft_FailsBeforeDownloading()
+    {
+        OwnerHas(0);
+        var tool = CreateTool(new PayloadHandler(() => Assert.Fail("the file was downloaded")));
+
+        var ex = await Should.ThrowAsync<Registry.Web.Exceptions.QuotaExceededException>(() =>
+            tool.ExecuteAsync(Request(""), Ctx(out _), new Progress<HeavyToolProgress>(), CancellationToken.None));
+
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 0 B left.");
+    }
+
+    [Test]
+    public async Task Execute_AFileThatFitsTheQuotaOfTheOwner_IsImported()
+    {
+        OwnerHas(Payload.Length);
+        var tool = CreateTool(new PayloadHandler(() => { }));
+
+        await tool.ExecuteAsync(Request(""), Ctx(out _), new Progress<HeavyToolProgress>(), CancellationToken.None);
+
+        File.ReadAllBytes(Path.Combine(_dataset, "cloud.laz")).ShouldBe(Payload);
+    }
+
     [Test]
     public void DeclaresThatItAddsDatasetFiles() => CreateTool(new PayloadHandler(() => { })).AddsDatasetFiles.ShouldBeTrue();
 
@@ -178,6 +231,7 @@ public sealed class FileUrlImportVolumeTests
 
         var ctx = new Mock<IHeavyToolExecutionContext>();
         ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
+        ctx.SetupGet(c => c.Storage).Returns(_storage);
         ctx.SetupGet(c => c.TaskId).Returns("task-1");
         ctx.SetupGet(c => c.Dataset).Returns(new DatasetKey("org", Guid.NewGuid()));
         ctx.SetupGet(c => c.WriteRecord).Returns(Recorder);

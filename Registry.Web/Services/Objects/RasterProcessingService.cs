@@ -27,11 +27,13 @@ public sealed class RasterProcessingService
     private readonly IFileSystem _fs;
     private readonly INativeWorkGate _gate;
     private readonly EntryJobs _jobs;
+    private readonly IStorageQuota _quota;
     private readonly ILogger<RasterProcessingService> _logger;
 
     public RasterProcessingService(IDatasetAccessResolver access, DatasetPathPolicy paths, IFileSystem fs,
-        INativeWorkGate gate, EntryJobs jobs, ILogger<RasterProcessingService> logger)
+        INativeWorkGate gate, EntryJobs jobs, IStorageQuota quota, ILogger<RasterProcessingService> logger)
     {
+        _quota = quota;
         _access = access;
         _paths = paths;
         _fs = fs;
@@ -76,7 +78,8 @@ public sealed class RasterProcessingService
             throw new BadRequestException("outputPath is required");
         RequirePaths(paths);
 
-        var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct)).Ddb;
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
+        var ddb = access.Ddb;
 
         outputPath = _paths.Normalize(outputPath, "output path");
         paths = NormalizeAll(paths);
@@ -84,6 +87,7 @@ public sealed class RasterProcessingService
         // The rules of every tool output: not one of the inputs (400), an existing file only when asked (409)
         HeavyToolPaths.EnsureOutputsAreNotInputs(paths, [outputPath]);
         outputPath = DatasetEntryLookup.ResolveOutput(ddb, outputPath, overwrite);
+        await EnsureOwnerHasStorageLeftAsync(access.Dataset, ct);
 
         // NOTE: libddb 2.0 refuses an existing output: the request asked for the replace
         var outputFullPath = ddb.GetLocalPath(outputPath);
@@ -146,6 +150,7 @@ public sealed class RasterProcessingService
 
         // A name that differs only in letter case is the existing copy (D-040)
         var outputPath = DatasetEntryLookup.ResolveOutput(ddb, MaskedOutputPath(path), overwrite);
+        await EnsureOwnerHasStorageLeftAsync(access.Dataset, ct);
 
         // NOTE: libddb 2.0 writes the output in place and needs it gone: the request asked for the replace
         var outputFullPath = ddb.GetLocalPath(outputPath);
@@ -155,6 +160,15 @@ public sealed class RasterProcessingService
         var jobId = await _jobs.EnqueueMaskBordersAsync(access, orgSlug, dsSlug, entry, outputPath, nearDist, white,
             overwrite);
         _logger.LogInformation("Masking borders for '{Path}' asynchronously, background job id is {JobId}", path, jobId);
+    }
+
+    // A write of a file into the dataset: the owner of its organization (whoever writes, D-039) must have storage left
+    // (FR-XC-26, SEC-003), else 507, before anything is deleted or started. The size of the output is not known before
+    // the native step writes it
+    private async Task EnsureOwnerHasStorageLeftAsync(Registry.Web.Data.Models.Dataset dataset, CancellationToken ct)
+    {
+        if (await _quota.RemainingBytesAsync(dataset.Organization?.OwnerId, ct) is { } left && left <= 0)
+            throw QuotaExceededException.OwnerOverQuota(left);
     }
 
     // The masked copy of a normalized path, next to it

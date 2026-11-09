@@ -22,8 +22,9 @@ public interface IHeavyTaskRunner
     /// <summary>
     /// The submit checks of every tool, in one place (FR-XC-25, D-013), then <paramref name="enqueue"/>: an output that
     /// is one of the inputs (400), the tool's own validation, then under the dataset's submit lock the deduplication
-    /// (an equivalent task returns its id), an output that an unfinished task of the dataset writes (409) and the
-    /// quota. Submit enqueues a new task; the retry of a failed task (D-037) passes its own requeue and its job id.
+    /// (an equivalent task returns its id), an output that an unfinished task of the dataset writes (409), for a tool
+    /// with <see cref="IHeavyTool.AddsDatasetFiles"/> the storage quota of the owner of the target organization (507,
+    /// FR-XC-26: nothing left, or the known output estimate does not fit) and the task quota. Submit enqueues a new task; the retry of a failed task (D-037) passes its own requeue and its job id.
     /// </summary>
     /// <param name="request">The submit, as the caller resolved it.</param>
     /// <param name="enqueue">Starts the task once every check passed; returns its id. Runs under the submit lock.</param>

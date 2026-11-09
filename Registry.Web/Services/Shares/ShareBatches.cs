@@ -39,12 +39,14 @@ public sealed class ShareBatches
         if (currentUser == null)
             throw new UnauthorizedException("Invalid user");
 
-        // Check if user has enough space to upload any file
-        await _quota.CheckCurrentUserStorage();
-
         // Honoured until the target (which may be a new dataset) and the batch are written
         ct.ThrowIfCancellationRequested();
-        var target = await _targets.ResolveAsync(parameters, currentUser);
+
+        // The owner of the organization the share goes to must have room for any file (FR-XC-26). Checked once the
+        // access of the user is (SEC-003: an organization the user may not write to answers its access error, never
+        // the state of its owner's storage), and before a dataset is created
+        var target = await _targets.ResolveAsync(parameters, currentUser,
+            ownerId => _quota.CheckOwnerStorageAsync(ownerId, 0, ct));
         var batch = await _batches.StartAsync(target.Dataset, target.Created);
 
         return new ShareInitResultDto

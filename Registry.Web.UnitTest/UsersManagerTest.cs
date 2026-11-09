@@ -91,7 +91,7 @@ public class UsersManagerTest : TestBase
             .Returns(PasswordValidationResult.Success());
 
         // Initialize utils
-        _webUtils = TestPorts.All(_authManagerMock.Object, _context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
+        _webUtils = TestPorts.All(_context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbManagerMock.Object));
 
         var tokens = TestSettings.Options<AuthTokenOptions>(_settingsOptions);
         var identity = TestSettings.Options<IdentityProviderOptions>(_settingsOptions);

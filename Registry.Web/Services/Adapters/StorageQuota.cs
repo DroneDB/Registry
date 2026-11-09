@@ -1,11 +1,13 @@
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Registry.Common;
 using Registry.Web.Data;
 using Registry.Web.Exceptions;
+using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
@@ -13,19 +15,23 @@ using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
 
-/// <summary>Default <see cref="IStorageQuota"/>: the sizes of the datasets a user owns against its limit.</summary>
+/// <summary>
+/// Default <see cref="IStorageQuota"/>: the sizes of the datasets the owner of an organization owns against the limit of
+/// that owner (FR-XC-26). Reads the identity and registry databases only (no request, no current user), so it is the
+/// same on the web host and on a job host.
+/// </summary>
 public class StorageQuota : IStorageQuota
 {
-    private readonly IAuthManager _authManager;
     private readonly RegistryContext _context;
+    private readonly ApplicationDbContext _identity;
     private readonly AccountOptions _accounts;
     private readonly IDatasetSummaryProvider _summaries;
 
-    public StorageQuota(IAuthManager authManager, RegistryContext context, IOptions<AccountOptions> accounts,
+    public StorageQuota(RegistryContext context, ApplicationDbContext identity, IOptions<AccountOptions> accounts,
         IDatasetSummaryProvider summaries)
     {
-        _authManager = authManager;
         _context = context;
+        _identity = identity;
         _accounts = accounts.Value;
         _summaries = summaries;
     }
@@ -56,25 +62,43 @@ public class StorageQuota : IStorageQuota
         };
     }
 
-    public async Task<UserStorageInfo?> GetCurrentUserStorageLimit()
+    public async Task<string?> OwnerIdOfAsync(string orgSlug, CancellationToken ct = default) =>
+        await _context.Organizations.AsNoTracking()
+            .Where(org => org.Slug == orgSlug)
+            .Select(org => org.OwnerId)
+            .FirstOrDefaultAsync(ct);
+
+    public async Task<UserStorageInfo?> GetOwnerStorageLimitAsync(string? ownerId, CancellationToken ct = default)
     {
-        if (!_accounts.EnableStorageLimiter) return null;
+        if (!_accounts.EnableStorageLimiter || string.IsNullOrEmpty(ownerId))
+            return null;
 
-        // Admins do not have limits
-        if (await _authManager.IsUserAdmin()) return null;
+        // An administrator owner has no limit, whoever writes
+        var admins = IdentityRoleQuery.UserIdsIn(_identity, ApplicationDbContext.AdminRoleName);
+        if (await admins.AnyAsync(id => id == ownerId, ct))
+            return null;
 
-        var storageInfo = GetUserStorage(await _authManager.GetRequiredCurrentUser());
+        var owner = await _identity.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == ownerId, ct);
+        if (owner == null)
+            return null;
+
+        var storageInfo = GetUserStorage(owner);
         return storageInfo.Total == null ? null : storageInfo;
     }
 
-    public async Task CheckCurrentUserStorage(long size = 0)
+    public async Task<long?> RemainingBytesAsync(string? ownerId, CancellationToken ct = default)
     {
-        var storageInfo = await GetCurrentUserStorageLimit();
-        if (storageInfo == null) return;
+        var info = await GetOwnerStorageLimitAsync(ownerId, ct);
+        return info == null ? null : Math.Max(0, info.Total!.Value - info.Used);
+    }
 
-        var currentUsage = storageInfo.Used + size;
+    public async Task CheckOwnerStorageAsync(string? ownerId, long size = 0, CancellationToken ct = default)
+    {
+        var info = await GetOwnerStorageLimitAsync(ownerId, ct);
+        if (info == null) return;
 
-        if (currentUsage > storageInfo.Total)
-            throw new QuotaExceededException(currentUsage, storageInfo.Total);
+        var remaining = info.Total!.Value - info.Used;
+        if (size > remaining)
+            throw QuotaExceededException.OwnerOverQuota(remaining);
     }
 }

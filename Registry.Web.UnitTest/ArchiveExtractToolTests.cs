@@ -48,21 +48,14 @@ public class ArchiveExtractToolTests
         }
     }
 
-    private static (ArchiveExtractTool tool, Mock<IStorageQuota> utils) CreateTool(
-        long maxArchiveBytes = 5L * 1024 * 1024 * 1024, bool registerQuota = true)
+    // The tool no longer reads the storage quota itself: HeavyTaskRunner checks the plan at submit (FR-XC-26) and the worker
+    // reads the context's Storage when it writes
+    private static (ArchiveExtractTool tool, Mock<IStorageQuota> storage) CreateTool(
+        long maxArchiveBytes = 5L * 1024 * 1024 * 1024)
     {
         var extractor = new SharpCompressArchiveExtractor();
 
-        var utils = new Mock<IStorageQuota>();
-        utils.Setup(u => u.CheckCurrentUserStorage(It.IsAny<long>())).Returns(Task.CompletedTask);
-
-        var services = new ServiceCollection();
-        // When registerQuota is false the scope has no IStorageQuota, reproducing the
-        // processing-node container where the service is not registered.
-        if (registerQuota)
-            services.AddSingleton(utils.Object);
-        var provider = services.BuildServiceProvider();
-        var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
+        var storage = new Mock<IStorageQuota>();
 
         var settings = new AppSettings
         {
@@ -70,12 +63,12 @@ public class ArchiveExtractToolTests
         };
 
         var tool = new ArchiveExtractTool(
-            TestArchives.Extractor(extractor), scopeFactory, TestSettings.Options<ImportSettings>(Microsoft.Extensions.Options.Options.Create(settings)), TestSettings.Options<ProcessingPlatformSettings>(Microsoft.Extensions.Options.Options.Create(settings)),
+            TestArchives.Extractor(extractor), TestSettings.Options<ImportSettings>(Microsoft.Extensions.Options.Options.Create(settings)), TestSettings.Options<ProcessingPlatformSettings>(Microsoft.Extensions.Options.Options.Create(settings)),
             TestPaths.Policy,
             TestHeadroom.Default,
             TestJobs.FileIndexer());
 
-        return (tool, utils);
+        return (tool, storage);
     }
 
     private static IHeavyToolValidationContext Ctx(IDDB ddb, bool withCaller = true)
@@ -105,39 +98,18 @@ public class ArchiveExtractToolTests
     }
 
     [Test]
-    public async Task ValidateAsync_ValidZip_Passes()
+    public async Task ValidateAsync_ValidZip_Passes_WithoutReadingTheQuota()
     {
         var local = Path.Combine(_dir, "flight.zip");
         CreateZip(local, "a.txt", "hello");
         var ddb = MockDdb("flight.zip", local);
 
-        var (tool, utils) = CreateTool();
+        var (tool, storage) = CreateTool();
 
         await tool.ValidateAsync(Request(new { sourcePath = "flight.zip" }), Ctx(ddb.Object), CancellationToken.None);
 
-        // User storage quota must be checked against the uncompressed size.
-        utils.Verify(u => u.CheckCurrentUserStorage(It.Is<long>(v => v > 0)), Times.Once);
-    }
-
-    [Test]
-    public async Task ValidateAsync_NoCaller_SkipsQuotaCheck()
-    {
-        // Reproduces the Hangfire worker (processing node) scenario: ctx.Caller is null
-        // and IStorageQuota is NOT registered in the scope. ValidateAsync must neither resolve
-        // IStorageQuota nor throw - the quota was already enforced at submit time.
-        var local = Path.Combine(_dir, "flight.zip");
-        CreateZip(local, "a.txt", "hello");
-        var ddb = MockDdb("flight.zip", local);
-
-        var (tool, utils) = CreateTool(registerQuota: false);
-
-        await Should.NotThrowAsync(async () =>
-            await tool.ValidateAsync(
-                Request(new { sourcePath = "flight.zip" }),
-                Ctx(ddb.Object, withCaller: false), CancellationToken.None));
-
-        // The storage quota guard must be skipped entirely on the worker.
-        utils.Verify(u => u.CheckCurrentUserStorage(It.IsAny<long>()), Times.Never);
+        // The storage quota is the gate of HeavyTaskRunner.CheckSubmitAsync, not of the tool (FR-XC-26)
+        storage.VerifyNoOtherCalls();
     }
 
     [Test]
@@ -295,21 +267,6 @@ public class ArchiveExtractToolTests
     }
 
     [Test]
-    public void ValidateAsync_QuotaExceeded_Propagates()
-    {
-        var local = Path.Combine(_dir, "flight.zip");
-        CreateZip(local, "a.txt", "hello");
-        var ddb = MockDdb("flight.zip", local);
-
-        var (tool, utils) = CreateTool();
-        utils.Setup(u => u.CheckCurrentUserStorage(It.IsAny<long>()))
-            .ThrowsAsync(new QuotaExceededException("quota exceeded"));
-
-        Should.Throw<QuotaExceededException>(async () =>
-            await tool.ValidateAsync(Request(new { sourcePath = "flight.zip" }), Ctx(ddb.Object), CancellationToken.None));
-    }
-
-    [Test]
     public void Plan_ReturnsUncompressedEstimate()
     {
         var local = Path.Combine(_dir, "flight.zip");
@@ -334,6 +291,7 @@ public class ArchiveExtractToolTests
         var ddb = MockDdb("flight.zip", local);
         var ctx = new Mock<IHeavyToolExecutionContext>();
         ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
+        ctx.SetupGet(c => c.Storage).Returns(Registry.Web.Services.Ports.UnlimitedStorageQuota.Instance);
         ctx.SetupGet(c => c.TaskId).Returns("task-1");
         ctx.SetupGet(c => c.Dataset).Returns(new DatasetKey("org", Guid.NewGuid()));
         ctx.SetupGet(c => c.WriteRecord).Returns(new FakeTaskWriteRecorder());
@@ -361,6 +319,7 @@ public class ArchiveExtractToolTests
         ddb.Setup(d => d.AddRawBatch(It.IsAny<IReadOnlyList<string>>())).Returns([]);
         var ctx = new Mock<IHeavyToolExecutionContext>();
         ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
+        ctx.SetupGet(c => c.Storage).Returns(Registry.Web.Services.Ports.UnlimitedStorageQuota.Instance);
         ctx.SetupGet(c => c.TaskId).Returns("task-1");
         ctx.SetupGet(c => c.Dataset).Returns(new DatasetKey("org", Guid.NewGuid()));
         ctx.SetupGet(c => c.WriteRecord).Returns(new FakeTaskWriteRecorder());
@@ -376,6 +335,174 @@ public class ArchiveExtractToolTests
                       $"Cannot remove {Registry.Web.Services.Jobs.JobLogText.DatasetPlaceholder}" +
                       $"{Path.DirectorySeparatorChar}flight.zip: locked by [server path]");
         line.ShouldNotContain(_dir);
+    }
+
+    private static Mock<IHeavyToolExecutionContext> ExecutionContext(Mock<IDDB> ddb, IStorageQuota? storage = null)
+    {
+        ddb.Setup(d => d.AddRawBatch(It.IsAny<IReadOnlyList<string>>())).Returns([]);
+        var ctx = new Mock<IHeavyToolExecutionContext>();
+        ctx.SetupGet(c => c.Ddb).Returns(ddb.Object);
+        ctx.SetupGet(c => c.Storage).Returns(storage ?? UnlimitedStorageQuota.Instance);
+        ctx.SetupGet(c => c.TaskId).Returns("task-1");
+        ctx.SetupGet(c => c.Dataset).Returns(new DatasetKey("org", Guid.NewGuid()));
+        ctx.SetupGet(c => c.WriteRecord).Returns(new FakeTaskWriteRecorder());
+        return ctx;
+    }
+
+    private static Mock<IStorageQuota> OwnerWithLeft(long remaining)
+    {
+        var storage = new Mock<IStorageQuota>();
+        storage.Setup(q => q.OwnerIdOfAsync("org", It.IsAny<CancellationToken>())).ReturnsAsync("owner-1");
+        storage.Setup(q => q.RemainingBytesAsync("owner-1", It.IsAny<CancellationToken>())).ReturnsAsync(remaining);
+        return storage;
+    }
+
+    // FR-XC-26, FR-PRC-08: the worker reads the remaining bytes of the owner of the organization when it writes; an archive
+    // that does not fit stops, the task fails with the 507 text, and no file of the extraction stays
+    [Test]
+    public async Task ExecuteAsync_AnArchiveThatDoesNotFitTheQuotaOfTheOwner_Fails507_AndLeavesNoFile()
+    {
+        var local = Path.Combine(_dir, "flight.zip");
+        CreateZip(local, "a.txt", "hello world");
+        var ddb = MockDdb("flight.zip", local);
+        var (tool, _) = CreateTool();
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() => tool.ExecuteAsync(
+            Request(new { sourcePath = "flight.zip" }), ExecutionContext(ddb, OwnerWithLeft(4).Object).Object,
+            new Progress<HeavyToolProgress>(), CancellationToken.None));
+
+        ex.StatusCode.ShouldBe(507);
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 4 B left.");
+        Directory.GetFiles(_dir, "*", SearchOption.AllDirectories).Select(Path.GetFileName)
+            .ShouldBe(["flight.zip"], "only the archive: no file of the extraction stays");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_AnOwnerWithNothingLeft_FailsBeforeWriting()
+    {
+        var local = Path.Combine(_dir, "flight.zip");
+        CreateZip(local, "a.txt", "hello");
+        var ddb = MockDdb("flight.zip", local);
+        var (tool, _) = CreateTool();
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() => tool.ExecuteAsync(
+            Request(new { sourcePath = "flight.zip" }), ExecutionContext(ddb, OwnerWithLeft(0).Object).Object,
+            new Progress<HeavyToolProgress>(), CancellationToken.None));
+
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 0 B left.");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_AnArchiveThatFits_IsExtracted()
+    {
+        var local = Path.Combine(_dir, "flight.zip");
+        CreateZip(local, "a.txt", "hello");
+        var ddb = MockDdb("flight.zip", local);
+        var (tool, _) = CreateTool();
+
+        await tool.ExecuteAsync(Request(new { sourcePath = "flight.zip" }), ExecutionContext(ddb, OwnerWithLeft(5).Object).Object,
+            new Progress<HeavyToolProgress>(), CancellationToken.None);
+
+        File.ReadAllText(Path.Combine(_dir, "a.txt")).ShouldBe("hello");
+    }
+
+    private static void CreateZip(string path, params (string Name, string Content)[] entries)
+    {
+        using var fs = File.Create(path);
+        using var zip = new ZipArchive(fs, ZipArchiveMode.Create);
+        foreach (var (name, content) in entries)
+        {
+            using var entry = zip.CreateEntry(name).Open();
+            entry.Write(Encoding.UTF8.GetBytes(content));
+        }
+    }
+
+    // FR-XC-26: with overwrite, the files the extraction replaces are counted in the owner's use already (their index
+    // entries): the plan carries their size, so the submit checks only the growth; without overwrite nothing is replaced
+    [Test]
+    public void Plan_WithOverwrite_CarriesTheIndexedSizeOfTheFilesItReplaces()
+    {
+        var local = Path.Combine(_dir, "flight.zip");
+        CreateZip(local, ("a.txt", "hello"), ("b.txt", "world!!"), ("tool.exe", "x"));
+        var ddb = MockDdb("flight.zip", local);
+        ddb.Setup(d => d.GetEntry("a.txt")).Returns(new Entry { Path = "a.txt", Type = EntryType.Generic, Size = 3 });
+        // Refused by the import policy: not written, so not replaced
+        ddb.Setup(d => d.GetEntry("tool.exe")).Returns(new Entry { Path = "tool.exe", Type = EntryType.Generic, Size = 100 });
+        var (tool, _) = CreateTool();
+
+        var replace = tool.Plan(Request(new { sourcePath = "flight.zip", overwrite = true }), Ctx(ddb.Object));
+        var keep = tool.Plan(Request(new { sourcePath = "flight.zip" }), Ctx(ddb.Object));
+
+        replace.EstimatedOutputBytes.ShouldBe(13);
+        replace.ReplacedBytes.ShouldBe(3);
+        replace.StorageGrowthBytes.ShouldBe(10);
+        keep.ReplacedBytes.ShouldBe(0);
+    }
+
+    // FR-XC-26: the worker cap counts only the growth of a replace: the owner has 8 bytes left, the archive writes 11 over a
+    // file the owner's use counts as 3
+    [Test]
+    public async Task ExecuteAsync_WithOverwrite_FitsWhenTheGrowthFits()
+    {
+        var local = Path.Combine(_dir, "flight.zip");
+        CreateZip(local, "a.txt", "hello world");
+        File.WriteAllText(Path.Combine(_dir, "a.txt"), "old");
+        var ddb = MockDdb("flight.zip", local);
+        ddb.Setup(d => d.GetEntry("a.txt")).Returns(new Entry { Path = "a.txt", Type = EntryType.Generic, Size = 3 });
+        ddb.Setup(d => d.EntryExists("a.txt")).Returns(true);
+        var (tool, _) = CreateTool();
+
+        await tool.ExecuteAsync(Request(new { sourcePath = "flight.zip", overwrite = true }),
+            ExecutionContext(ddb, OwnerWithLeft(8).Object).Object, new Progress<HeavyToolProgress>(), CancellationToken.None);
+
+        File.ReadAllText(Path.Combine(_dir, "a.txt")).ShouldBe("hello world");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WithOverwrite_WhenTheGrowthDoesNotFit_Fails507_AndKeepsTheFileItWouldReplace()
+    {
+        var local = Path.Combine(_dir, "flight.zip");
+        CreateZip(local, "a.txt", "hello world");
+        File.WriteAllText(Path.Combine(_dir, "a.txt"), "old");
+        var ddb = MockDdb("flight.zip", local);
+        ddb.Setup(d => d.GetEntry("a.txt")).Returns(new Entry { Path = "a.txt", Type = EntryType.Generic, Size = 3 });
+        ddb.Setup(d => d.EntryExists("a.txt")).Returns(true);
+        var (tool, _) = CreateTool();
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() => tool.ExecuteAsync(
+            Request(new { sourcePath = "flight.zip", overwrite = true }), ExecutionContext(ddb, OwnerWithLeft(7).Object).Object,
+            new Progress<HeavyToolProgress>(), CancellationToken.None));
+
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 7 B left.");
+        File.ReadAllText(Path.Combine(_dir, "a.txt")).ShouldBe("old");
+    }
+
+    // FR-PRC-30: the log names the entries that were skipped with the reason, apart from the extracted ones
+    [Test]
+    public async Task ExecuteAsync_LogsTheSkippedEntriesWithTheirReason()
+    {
+        var local = Path.Combine(_dir, "good.zip");
+        using (var fs = File.Create(local))
+        using (var zip = new ZipArchive(fs, ZipArchiveMode.Create))
+        {
+            foreach (var (name, content) in new[] { ("a.txt", "a"), ("vectors/tool.exe", "x") })
+            {
+                using var entry = zip.CreateEntry(name).Open();
+                entry.Write(Encoding.UTF8.GetBytes(content));
+            }
+        }
+
+        var ddb = MockDdb("good.zip", local);
+        var lines = new System.Collections.Generic.List<string>();
+        var (tool, _) = CreateTool();
+
+        await tool.ExecuteAsync(Request(new { sourcePath = "good.zip" }), ExecutionContext(ddb).Object,
+            new SyncLog(lines), CancellationToken.None);
+
+        var log = string.Join('\n', lines).Split('\n');
+        log.ShouldContain("Skipped: vectors/tool.exe (file type not allowed)");
+        log.ShouldContain("Extraction complete: 1 extracted, 1 skipped");
+        File.Exists(Path.Combine(_dir, "vectors", "tool.exe")).ShouldBeFalse();
     }
 
     private sealed class SyncLog(System.Collections.Generic.List<string> lines) : IProgress<HeavyToolProgress>

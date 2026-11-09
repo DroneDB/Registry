@@ -405,6 +405,88 @@ public class PhotogrammetryNewDatasetTests
         recorder.Created!.Org.ShouldBe("other");
     }
 
+    // FR-PRC-08, D-039: the worker reads what the owner of the organization has left when it writes the results; a bundle
+    // that does not fit stops the extraction, the task fails with the 507 text and no file of the extraction stays
+    [Test]
+    public async Task ExecuteAsync_ResultsThatDoNotFitTheQuotaOfTheOwner_FailWithThe507Text_AndNoFileStays()
+    {
+        SetUpNodeThatReturnsAResultBundle("odm_dem/dsm.tif");
+        var tool = CreateTool(withAccessResolver: false);
+        var storage = new Mock<Registry.Web.Services.Ports.IStorageQuota>();
+        storage.Setup(q => q.OwnerIdOfAsync("r3photo", It.IsAny<CancellationToken>())).ReturnsAsync("owner-1");
+        // The bundle holds 5 + 5 bytes: 7 fit the first file and not the second
+        storage.Setup(q => q.RemainingBytesAsync("owner-1", It.IsAny<CancellationToken>())).ReturnsAsync(7L);
+
+        var ex = await Should.ThrowAsync<Registry.Web.Exceptions.QuotaExceededException>(() => tool.ExecuteAsync(
+            Request(new { destPath = "results" }),
+            Execution(new FakeTaskWriteRecorder(), storage: storage.Object).Object, new Progress<HeavyToolProgress>(),
+            CancellationToken.None));
+
+        ex.StatusCode.ShouldBe(507);
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 7 B left.");
+        Directory.GetFiles(Path.Combine(_dir, "source"), "*", SearchOption.AllDirectories)
+            .Where(f => !f.Contains(".uploads")).ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task ExecuteAsync_AnOwnerWithNothingLeft_FailsBeforeAnythingIsWritten()
+    {
+        SetUpNodeThatReturnsAResultBundle();
+        var tool = CreateTool(withAccessResolver: false);
+        var storage = new Mock<Registry.Web.Services.Ports.IStorageQuota>();
+        storage.Setup(q => q.OwnerIdOfAsync("r3photo", It.IsAny<CancellationToken>())).ReturnsAsync("owner-1");
+        storage.Setup(q => q.RemainingBytesAsync("owner-1", It.IsAny<CancellationToken>())).ReturnsAsync(0L);
+
+        var ex = await Should.ThrowAsync<Registry.Web.Exceptions.QuotaExceededException>(() => tool.ExecuteAsync(
+            Request(new { destPath = "results" }),
+            Execution(new FakeTaskWriteRecorder(), storage: storage.Object).Object, new Progress<HeavyToolProgress>(),
+            CancellationToken.None));
+
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 0 B left.");
+    }
+
+    // FR-XC-26: the quota that applies is the one of the owner of the organization the results go to
+    [Test]
+    public void StorageOrganization_IsTheOrganizationOfTheNewDataset_WhenTheResultsGoIntoOne()
+    {
+        var tool = CreateTool(withAccessResolver: false);
+
+        tool.StorageOrganization(Request(new { createNewDataset = true, newDatasetName = "x-y", newDatasetOrgSlug = "other" }))
+            .ShouldBe("other");
+        tool.StorageOrganization(Request(new { createNewDataset = true, newDatasetName = "x-y" })).ShouldBe("r3photo");
+        tool.StorageOrganization(Request(new { destPath = "results", newDatasetOrgSlug = "other" })).ShouldBe("r3photo");
+    }
+
+    // FR-PRC-41: the internal folders of the bundle are not imported (the Hub builds its own COPC), they are skipped with
+    // the reason "excluded" and counted in the log
+    [Test]
+    public async Task ExecuteAsync_TheEptChunksOfTheBundle_AreNotImported_AndTheLogCountsThem()
+    {
+        SetUpNodeThatReturnsAResultBundle("entwine_pointcloud/ept-data/0-0-0-0.laz", "entwine_pointcloud/ept.json",
+            "opensfm/reconstruction.json");
+        var tool = CreateTool(withAccessResolver: false);
+        var log = new List<string>();
+
+        await tool.ExecuteAsync(
+            Request(new { createNewDataset = true, newDatasetName = "phalaborwa-results" }),
+            Execution(new FakeTaskWriteRecorder()).Object, new SyncProgress(p =>
+            {
+                if (p.LogChunk != null) log.AddRange(p.LogChunk.Split('\n'));
+            }), CancellationToken.None);
+
+        File.Exists(Path.Combine(_dir, "target", "odm_orthophoto", "odm_orthophoto.tif")).ShouldBeTrue();
+        Directory.Exists(Path.Combine(_dir, "target", "entwine_pointcloud")).ShouldBeFalse();
+        Directory.Exists(Path.Combine(_dir, "target", "opensfm")).ShouldBeFalse();
+        log.ShouldContain("Excluded 3 internal file(s) of the archive");
+        log.ShouldContain("Extraction complete: 1 extracted, 3 skipped");
+        log.ShouldNotContain(l => l.StartsWith("Skipped: entwine_pointcloud"));
+    }
+
+    private sealed class SyncProgress(Action<HeavyToolProgress> report) : IProgress<HeavyToolProgress>
+    {
+        public void Report(HeavyToolProgress value) => report(value);
+    }
+
     private const string NoWriteAccessText =
         "The user who started this task cannot write to the organization \"other\": the results were not imported";
 
@@ -562,10 +644,12 @@ public class PhotogrammetryNewDatasetTests
         recorder.Created!.InternalRef.ShouldBe(created.InternalRef);
     }
 
-    private Mock<IHeavyToolExecutionContext> Execution(FakeTaskWriteRecorder recorder, string? requestedBy = Requester)
+    private Mock<IHeavyToolExecutionContext> Execution(FakeTaskWriteRecorder recorder, string? requestedBy = Requester,
+        Registry.Web.Services.Ports.IStorageQuota? storage = null)
     {
         var ctx = new Mock<IHeavyToolExecutionContext>();
         ctx.SetupGet(c => c.Ddb).Returns(SourceDdb().Object);
+        ctx.SetupGet(c => c.Storage).Returns(storage ?? Registry.Web.Services.Ports.UnlimitedStorageQuota.Instance);
         ctx.SetupGet(c => c.TaskId).Returns("task-1");
         ctx.SetupGet(c => c.RequestedBy).Returns(requestedBy);
         ctx.SetupGet(c => c.Dataset).Returns(new DatasetKey("r3photo", Guid.NewGuid()));
@@ -573,7 +657,7 @@ public class PhotogrammetryNewDatasetTests
         return ctx;
     }
 
-    private void SetUpNodeThatReturnsAResultBundle()
+    private void SetUpNodeThatReturnsAResultBundle(params string[] moreEntries)
     {
         _node.Setup(n => n.CreateTaskAsync(It.IsAny<NodeOdxEndpoint>(), It.IsAny<string>(),
                 It.IsAny<IReadOnlyList<string>>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
@@ -589,8 +673,14 @@ public class PhotogrammetryNewDatasetTests
             {
                 using var fs = File.Create(dest);
                 using var zip = new ZipArchive(fs, ZipArchiveMode.Create);
-                using var entry = zip.CreateEntry("odm_orthophoto/odm_orthophoto.tif").Open();
-                entry.Write("ortho"u8);
+                using (var entry = zip.CreateEntry("odm_orthophoto/odm_orthophoto.tif").Open())
+                    entry.Write("ortho"u8);
+                foreach (var more in moreEntries)
+                {
+                    using var extra = zip.CreateEntry(more).Open();
+                    extra.Write("chunk"u8);
+                }
+
                 return Task.CompletedTask;
             });
     }

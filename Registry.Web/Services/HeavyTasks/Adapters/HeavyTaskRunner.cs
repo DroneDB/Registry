@@ -23,6 +23,7 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
     private readonly IDatasetResolver _datasets;
     private readonly IDdbManager _ddbManager;
     private readonly HeavyTaskQuota _quota;
+    private readonly IStorageQuota _storage;
     private readonly HeavyTaskDedup _dedup;
     private readonly IJobIndexQuery _jobIndex;
     private readonly HeavyTaskSubmitLock _submitLock;
@@ -34,6 +35,7 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         IDatasetResolver datasets,
         IDdbManager ddbManager,
         HeavyTaskQuota quota,
+        IStorageQuota storage,
         HeavyTaskDedup dedup,
         IJobIndexQuery jobIndex,
         HeavyTaskSubmitLock submitLock,
@@ -44,6 +46,7 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         _datasets = datasets;
         _ddbManager = ddbManager;
         _quota = quota;
+        _storage = storage;
         _dedup = dedup;
         _jobIndex = jobIndex;
         _submitLock = submitLock;
@@ -117,6 +120,9 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
 
         await EnsureOutputsNotWrittenAsync(request.OrgSlug, request.DsSlug, declared.Outputs, ownJobId, ct);
 
+        if (tool.AddsDatasetFiles)
+            await EnsureStorageAsync(tool, toolRequest, plan, ct);
+
         var quotaResult = await _quota.EvaluateAsync(request, plan, ct);
         if (!quotaResult.IsAllowed)
             throw new HeavyTaskQuotaException(quotaResult.Code, quotaResult.Message ?? "Quota exceeded.");
@@ -125,6 +131,25 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
             declared.Label), ct);
 
         return new HeavyTaskSubmitResult(jobId, tool.Id, tool.Version, false, plan.EstimatedOutputBytes);
+    }
+
+    // The storage quota of the owner of the target organization, whoever submits (FR-XC-26, D-039): refused (507) when the
+    // owner has nothing left, or when the tool's known output estimate does not fit (only its growth: the files it replaces
+    // are counted in the owner's use already, HeavyToolPlan.ReplacedBytes). A tool without an estimate passes;
+    // the worker reads the remaining bytes again when it writes. Submit and the retry of a failed task run it alike.
+    private async Task EnsureStorageAsync(IHeavyTool tool, HeavyToolRequest request, HeavyToolPlan plan,
+        CancellationToken ct)
+    {
+        var remaining = await _storage.RemainingBytesOfOrganizationAsync(tool.StorageOrganization(request), ct);
+        if (remaining is not { } left)
+            return;
+
+        if (left <= 0 || plan.StorageGrowthBytes > left)
+        {
+            _log.LogInformation("Refused a {ToolId} submit: the owner of the organization has {Remaining} bytes left",
+                tool.Id, left);
+            throw QuotaExceededException.OwnerOverQuota(left);
+        }
     }
 
     // The task an equivalent submit gets (null: none, or deduplication is off). A finished task is reused only for a

@@ -54,8 +54,9 @@ public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
     public HeavyToolExecutionContext(
         IDDB ddb, DatasetKey dataset, ILogger logger, TaskRun run, PerformContext hangfire,
         BuildScheduler buildQueue, DdbJobs builds, bool queuedBeforeOverwriteRule = false,
-        ITaskWriteRecorder? writeRecord = null, string? requestedBy = null)
+        ITaskWriteRecorder? writeRecord = null, string? requestedBy = null, IStorageQuota? storage = null)
     {
+        Storage = storage ?? UnlimitedStorageQuota.Instance;
         RequestedBy = requestedBy;
         QueuedBeforeOverwriteRule = queuedBeforeOverwriteRule;
         WriteRecord = writeRecord ?? TaskWriteRecorder.Disabled(run.TaskId, dataset, "unknown");
@@ -77,6 +78,9 @@ public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
 
     /// <inheritdoc />
     public string? RequestedBy { get; }
+
+    /// <inheritdoc />
+    public IStorageQuota Storage { get; }
 
     public ILogger Logger { get; }
     public string TaskId => _run.TaskId;

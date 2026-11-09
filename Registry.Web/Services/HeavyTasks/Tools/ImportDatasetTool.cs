@@ -12,6 +12,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Web.Services.Import;
 
@@ -30,6 +31,8 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Parameters>
 {
     /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
+    /// <param name="BudgetBytes">A cap on the bytes the import writes that the request sets, on top of the storage quota, which
+    /// the worker reads when it writes (FR-XC-26); the import manager sends none.</param>
     public sealed record Parameters(string? SourceType, long? BudgetBytes, JsonElement? SourceParams);
 
     protected override Parameters ReadParams(ToolParameters p) => new(
@@ -120,7 +123,7 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
 
     /// <inheritdoc />
     protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
-        => new(args.BudgetBytes, QuotaKey: "import-dataset",
+        => new(null, QuotaKey: "import-dataset",
             DefaultFileName: null, ContentType: null);
 
     /// <inheritdoc />
@@ -155,12 +158,18 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
         // finds the files of the earlier attempts in the record.
         var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, ct);
 
-        // Effective cap = the tightest of: per-user remaining quota (budgetBytes), the absolute
-        // MaxImportSizeBytes ceiling, and the free disk space minus the head-room (the safety
-        // margin plus libddb's free-disk floor, VolumeHeadroom)
+        // Effective cap = the tightest of: what the owner of the organization may still store, read now, when the import
+        // starts to write (FR-XC-26, D-039: never a value kept from the submit), a cap the request sets (budgetBytes), the
+        // absolute MaxImportSizeBytes ceiling, and the free disk space minus the head-room (the safety margin plus
+        // libddb's free-disk floor, VolumeHeadroom)
+        var remaining = await ctx.Storage.RemainingBytesOfOrganizationAsync(request.OrgSlug, ct);
+        if (remaining is <= 0)
+            throw QuotaExceededException.OwnerOverQuota(remaining.Value);
+
         var cap = long.MaxValue;
         if (_settings.MaxImportSizeBytes > 0) cap = Math.Min(cap, _settings.MaxImportSizeBytes);
         if (budgetBytes is >= 0) cap = Math.Min(cap, budgetBytes.Value);
+        if (remaining is { } left) cap = Math.Min(cap, left);
         var freeAtStart = _headroom.AvailableBytes(root);
         var headroom = _headroom.MarginBytes(_diskSafetyMarginBytes);
 
@@ -221,9 +230,11 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
                 LogChunk: $"{reason} - the {writes.Created.Count} file(s) imported so far are deleted"));
 
             if (breached)
-                throw new QuotaExceededException(
-                    "The import exceeded the available storage budget. " +
-                    $"Rolled back after writing {CommonUtils.GetBytesReadable(bytesSoFar)}.");
+                throw remaining is { } owned && bytesSoFar > owned
+                    ? QuotaExceededException.OwnerOverQuota(owned)
+                    : new QuotaExceededException(
+                        "The import exceeded the available storage budget. " +
+                        $"Rolled back after writing {CommonUtils.GetBytesReadable(bytesSoFar)}.");
 
             throw new TimeoutException(
                 $"The import exceeded the configured transfer timeout of {transferTimeout}s.");

@@ -66,8 +66,11 @@ public sealed class VolumeHeadroom
     /// <param name="maxBytes">The size cap; 0 (or less) disables it.</param>
     /// <param name="destination">A path on the volume written to.</param>
     /// <param name="safetyMarginBytes">The caller's margin (see <see cref="MarginBytes"/>).</param>
-    public ExtractionBudget CreateBudget(long maxBytes, string destination, long safetyMarginBytes) =>
-        new(maxBytes, destination, MarginBytes(safetyMarginBytes), AvailableBytes);
+    /// <param name="maxBytesMessage">The text of the failure when the cap is reached, when the cap is not the archive size
+    /// limit (see <see cref="ExtractionBudget"/>); null: the text of the archive size limit.</param>
+    public ExtractionBudget CreateBudget(long maxBytes, string destination, long safetyMarginBytes,
+        string? maxBytesMessage = null) =>
+        new(maxBytes, destination, MarginBytes(safetyMarginBytes), AvailableBytes, maxBytesMessage);
 
     /// <summary>Refuses a write of <paramref name="requiredBytes"/> to <paramref name="path"/> that would eat into the head-room.</summary>
     /// <exception cref="QuotaExceededException">Not enough free space.</exception>

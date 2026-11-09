@@ -45,6 +45,15 @@ public interface IHeavyTool
     bool AddsDatasetFiles => false;
 
     /// <summary>
+    /// The organization whose owner's storage quota the task's new files count against (FR-XC-26, D-039): the request's
+    /// organization, except for a tool that writes into another one (photogrammetry into a new dataset of another
+    /// organization). Asked only of a tool with <see cref="AddsDatasetFiles"/>, after a successful
+    /// <see cref="ValidateAsync"/>.
+    /// </summary>
+    /// <returns>The organization slug; the request's one by default.</returns>
+    string StorageOrganization(HeavyToolRequest request) => request.OrgSlug;
+
+    /// <summary>
     /// Default file extension (without the leading dot) of the produced artifact, or
     /// null when the tool produces none. Authoritative source for client result naming.
     /// </summary>

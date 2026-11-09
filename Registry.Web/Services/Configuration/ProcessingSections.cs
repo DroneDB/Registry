@@ -77,6 +77,14 @@ public sealed class ProcessingSections : IConfigurationSectionBuilder
                     pp?.DiskSafetyMarginBytes ?? dp?.DiskSafetyMarginBytes ?? 0,
                     dp?.DiskSafetyMarginBytes ?? 0, unit: "bytes"),
 
+                ArrayField("PhotogrammetryExcludedFolders", "Photogrammetry Excluded Folders",
+                    "Folders of a photogrammetry result bundle that are not imported into the dataset (path prefixes, " +
+                    "letter case ignored). Not set: entwine_pointcloud/, opensfm/ and odm_meshing/. An empty list imports every file.",
+                    [.. (pp ?? dp)?.PhotogrammetryExcludedFoldersOrDefault()
+                        ?? ProcessingPlatformSettings.DefaultPhotogrammetryExcludedFolders],
+                    [.. dp?.PhotogrammetryExcludedFoldersOrDefault()
+                        ?? ProcessingPlatformSettings.DefaultPhotogrammetryExcludedFolders]),
+
                 NumberField("DefaultRasterTileSize", "Default Raster Tile Size",
                     "Default tile size in pixels for windowed raster export.",
                     pp?.DefaultRasterTileSize ?? dp?.DefaultRasterTileSize ?? 0,

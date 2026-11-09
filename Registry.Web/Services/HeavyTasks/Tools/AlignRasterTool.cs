@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.Jobs;
+using Registry.Web.Services.Ports;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Utilities;
 
@@ -155,7 +156,25 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
         }
 
         return new HeavyToolPlan(estimate, QuotaKey: "align-raster",
-            DefaultFileName: null, ContentType: null);
+            DefaultFileName: null, ContentType: null, ReplacedBytes: ReplacedBytes(args, ctx));
+    }
+
+    // The size the owner's use counts for the file the output replaces (overwrite): the storage quota checks only the
+    // growth (FR-XC-26). Best-effort, as the estimate
+    private long ReplacedBytes(Parameters args, IHeavyToolValidationContext ctx)
+    {
+        if (!(Overwrite(args, ctx)) || string.IsNullOrWhiteSpace(args.OutputPath))
+            return 0;
+        try
+        {
+            var outputPath = DatasetEntryLookup.ResolveOutput(ctx.Ddb,
+                paths.Normalize(args.OutputPath, "output path"), overwrite: true);
+            return WorkerStorageQuota.IndexedBytes(ctx.Ddb, outputPath);
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     protected override async Task<HeavyToolArtifact?> ExecuteAsync(
@@ -197,6 +216,9 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
             var replacing = Overwrite(args, ctx) && File.Exists(outputFullPath);
             if (!replacing && File.Exists(outputFullPath))
                 throw new NameClashException(outputPath);
+            // What the owner's use counts for the file the alignment replaces, read before the run: only the growth
+            // counts (FR-XC-26)
+            var replacedBytes = replacing ? WorkerStorageQuota.IndexedBytes(ctx.Ddb, outputPath) : 0;
             var root = ctx.Ddb.DatasetFolderPath;
             var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, ct);
 
@@ -227,6 +249,30 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
             // and the rollback deletes it (FR-XC-27)
             var resultJson = await Task.Run(
                 () => ctx.Ddb.AlignRaster(sourcePath, referencePath, outputPath, mode), ct);
+
+            // The owner of the organization must have room for the growth of the output (FR-XC-26): the task fails with
+            // the 507 text. An output that replaced a file is never deleted (FR-XC-27: a rollback never deletes a path
+            // that existed before the task, FR-XC-07): it stays, and it is indexed so that the entry describes the file
+            try
+            {
+                await WorkerStorageQuota.EnsureOutputFitsAsync(ctx.Storage, request.OrgSlug, outputFullPath,
+                    replacedBytes, ct);
+            }
+            catch (QuotaExceededException) when (replacing)
+            {
+                // The 507 is the reason the task stops: an index error here must not replace it (a busy index
+                // would make the job retry and write the output again). The rescan corrects the entry later.
+                try
+                {
+                    ctx.Ddb.AddRaw(outputPath);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    progress.Report(new HeavyToolProgress(-1, "indexing",
+                        LogChunk: $"Could not index the replaced output {outputPath} again: {ex.Message}"));
+                }
+                throw;
+            }
 
             if (!replacing)
                 writes.Written(outputPath);

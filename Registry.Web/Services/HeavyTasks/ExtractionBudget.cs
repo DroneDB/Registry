@@ -23,6 +23,7 @@ public sealed class ExtractionBudget
     private const int CopyBufferSize = 1024 * 1024;
 
     private readonly long _maxBytes;          // 0 => no cap
+    private readonly string? _maxBytesMessage; // the text of reaching the cap; null => the archive-size text
     private readonly string _destinationRoot;
     private readonly long _safetyMarginBytes; // 0 => disk guard disabled
     private readonly Func<string, long> _availableBytes;
@@ -40,9 +41,12 @@ public sealed class ExtractionBudget
     /// <param name="destinationRoot">A path on the target volume, used to sample free disk space.</param>
     /// <param name="safetyMarginBytes">Disk head-room to keep free; <c>0</c> (or less) disables the disk guard.</param>
     /// <param name="availableBytes">Free bytes on the volume of a path (<see cref="long.MaxValue"/> when unknown).</param>
+    /// <param name="maxBytesMessage">The text of the failure when the cap is reached, for a cap that is not the archive
+    /// size limit (the storage quota of the owner, FR-XC-26); null: the text of the archive size limit.</param>
     public ExtractionBudget(long maxBytes, string destinationRoot, long safetyMarginBytes,
-        Func<string, long> availableBytes)
+        Func<string, long> availableBytes, string? maxBytesMessage = null)
     {
+        _maxBytesMessage = maxBytesMessage;
         _maxBytes = maxBytes > 0 ? maxBytes : 0;
         _destinationRoot = destinationRoot;
         _safetyMarginBytes = safetyMarginBytes > 0 ? safetyMarginBytes : 0;
@@ -87,7 +91,7 @@ public sealed class ExtractionBudget
 
         // Primary, deterministic guard: the uncompressed-size cap.
         if (_maxBytes > 0 && projected > _maxBytes)
-            throw new QuotaExceededException(
+            throw new QuotaExceededException(_maxBytesMessage ??
                 "The archive is too large to extract: it exceeds the maximum allowed uncompressed size " +
                 $"({CommonUtils.GetBytesReadable(_maxBytes)}).");
 

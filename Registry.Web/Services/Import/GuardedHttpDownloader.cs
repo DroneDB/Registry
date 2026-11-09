@@ -216,12 +216,14 @@ public sealed class GuardedHttpDownloader
     /// <param name="diskSafetyMarginBytes">Disk head-room to keep free; <c>0</c> disables the disk guard.</param>
     /// <param name="progress">Optional progress sink.</param>
     /// <param name="ct">Cancellation token.</param>
+    /// <param name="maxBytesMessage">The text of the failure when the size cap is reached, for a cap that is the storage
+    /// quota of the owner (the 507 text, FR-XC-26); null: the text of the size limit.</param>
     /// <returns>The number of bytes downloaded.</returns>
     /// <exception cref="QuotaExceededException">The size cap or disk-space margin would be breached.</exception>
     /// <exception cref="TimeoutException">The transfer stalled or stayed below the minimum speed.</exception>
     public async Task<long> DownloadAsync(Uri url, string destFile, string? username, string? password,
         long maxBytes, long minSpeedBytesPerSec, int lowSpeedGraceSeconds, long diskSafetyMarginBytes,
-        IProgress<FileDownloadProgress>? progress, CancellationToken ct)
+        IProgress<FileDownloadProgress>? progress, CancellationToken ct, string? maxBytesMessage = null)
     {
         ArgumentNullException.ThrowIfNull(url);
         await _ssrfGuard.AssertAllowedAsync(url.Host, ct);
@@ -237,7 +239,7 @@ public sealed class GuardedHttpDownloader
 
         // Fail fast when the advertised size already exceeds the cap (avoids starting the transfer).
         if (maxBytes > 0 && total is > 0 && total.Value > maxBytes)
-            throw new QuotaExceededException(
+            throw new QuotaExceededException(maxBytesMessage ??
                 $"The file is too large ({CommonUtils.GetBytesReadable(total.Value)}); " +
                 $"the maximum allowed size is {CommonUtils.GetBytesReadable(maxBytes)}.");
 
@@ -246,7 +248,7 @@ public sealed class GuardedHttpDownloader
         Directory.CreateDirectory(destFolder);
 
         // Size cap (primary) + disk head-room (secondary) enforced per chunk, before each write.
-        var budget = _headroom.CreateBudget(maxBytes, destFolder, diskSafetyMarginBytes);
+        var budget = _headroom.CreateBudget(maxBytes, destFolder, diskSafetyMarginBytes, maxBytesMessage);
 
         await using var http = await response.Content.ReadAsStreamAsync(ct);
         await using var file = File.Create(destFile);

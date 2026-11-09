@@ -61,6 +61,8 @@ public sealed class TaskRetry
     /// <exception cref="ConflictException">The task cannot be retried in its state (a succeeded or a cancelled task),
     /// the pending-build sweep owns the retry, or a submit check refused it (an output another task writes).</exception>
     /// <exception cref="HeavyTaskQuotaException">The owner of the task is over a quota.</exception>
+    /// <exception cref="Registry.Web.Exceptions.QuotaExceededException">The tool adds files and the owner of the organization
+    /// has no storage left for it (507, FR-XC-26).</exception>
     public async Task<bool> RetryAsync(string orgSlug, string dsSlug, string id, CancellationToken ct = default)
     {
         var job = await _authorizer.LoadAsync(orgSlug, dsSlug, id, AccessType.Write, ct);

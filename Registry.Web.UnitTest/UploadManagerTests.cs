@@ -71,7 +71,7 @@ public class UploadManagerTests
         _utils = new Mock<IDatasetResolver>();
         _quota = new Mock<IStorageQuota>();
         _utils.Setup(u => u.GetDatasetAsync(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(_dataset);
-        _quota.Setup(u => u.GetCurrentUserStorageLimit()).Returns(() =>
+        _quota.Setup(u => u.GetOwnerStorageLimitAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).Returns(() =>
         {
             Interlocked.Increment(ref _evaluations);
             return Task.FromResult<UserStorageInfo?>(new UserStorageInfo { Used = _used, Total = _limit });
@@ -373,7 +373,7 @@ public class UploadManagerTests
 
     private ChunkedUploadManager CreateChunks(UploadManager uploads) =>
         new(uploads, new ChunkStore(), new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _quota.Object),
-            TestScratch.Provider);
+            TestScratch.Provider, TestDb.CreateContext<RegistryContext>());
 
     private static ChunkRequest Chunk(int index, string path = "big.bin") => new("big-file-0001", index, 3, 25, 10, path);
 

@@ -189,8 +189,8 @@ public class ObjectsManagerCopyTransferTest : TestBase
             .Returns(new Entry { Path = "dst.jpg", Type = EntryType.Generic, Size = 30, Hash = "hd" });
 
         long? observedDelta = null;
-        _quotaMock.Setup(x => x.CheckCurrentUserStorage(It.IsAny<long>()))
-            .Callback<long>(d => observedDelta = d)
+        _quotaMock.Setup(x => x.CheckOwnerStorageAsync(It.IsAny<string?>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .Callback<string?, long, CancellationToken>((_, d, _) => observedDelta = d)
             .ThrowsAsync(new TestStopException("stop"));
 
         var mgr = CreateManager();
@@ -198,6 +198,42 @@ public class ObjectsManagerCopyTransferTest : TestBase
             () => mgr.CopyAsync(OrgSlug, DsSlug, "src.jpg", "dst.jpg", overwrite: true));
 
         observedDelta.ShouldBe(70);
+    }
+
+    // FR-XC-26, D-039: a copy and a paste are against the quota of the owner of the organization of the destination, not of
+    // the user who pastes
+    [Test]
+    public async Task Copy_IsAgainstTheQuotaOfTheOwnerOfTheOrganization()
+    {
+        _ddbMock.Setup(x => x.GetEntry("src.jpg"))
+            .Returns(new Entry { Path = "src.jpg", Type = EntryType.Generic, Size = 100, Hash = "hs" });
+        _ddbMock.Setup(x => x.GetEntry("dst.jpg")).Returns((Entry?)null);
+        _quotaMock.Setup(x => x.CheckOwnerStorageAsync("u", 100, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(QuotaExceededException.OwnerOverQuota(40));
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(
+            () => CreateManager().CopyAsync(OrgSlug, DsSlug, "src.jpg", "dst.jpg"));
+
+        ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 40 B left.");
+        _quotaMock.Verify(x => x.CheckOwnerStorageAsync("u", 100, It.IsAny<CancellationToken>()), Times.Once);
+        _fsMock.Verify(x => x.Copy(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    [Test]
+    public async Task Transfer_IsAgainstTheQuotaOfTheOwnerOfTheDestinationOrganization()
+    {
+        _otherDs.Organization = new Organization { Slug = "dest-org", Name = "Dest", OwnerId = "dest-owner" };
+        _ddbMock.Setup(x => x.GetEntry("src.jpg"))
+            .Returns(new Entry { Path = "src.jpg", Type = EntryType.Generic, Size = 100, Hash = "hs" });
+        _otherDdbMock.Setup(x => x.GetEntry("src.jpg")).Returns((Entry?)null);
+        _quotaMock.Setup(x => x.CheckOwnerStorageAsync("dest-owner", 100, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(QuotaExceededException.OwnerOverQuota(0));
+
+        await Should.ThrowAsync<QuotaExceededException>(() => CreateManager().TransferAsync(OrgSlug, DsSlug, "src.jpg",
+            OrgSlug, OtherDsSlug, destPath: "src.jpg", overwrite: false, keepSource: true));
+
+        _quotaMock.Verify(x => x.CheckOwnerStorageAsync("u", It.IsAny<long>(), It.IsAny<CancellationToken>()), Times.Never);
+        _otherDdbMock.Verify(x => x.AddRaw(It.IsAny<string>()), Times.Never);
     }
 
     [Test]
@@ -209,8 +245,8 @@ public class ObjectsManagerCopyTransferTest : TestBase
             .Returns(new Entry { Path = "dst.jpg", Type = EntryType.Generic, Size = 50, Hash = "hd" });
 
         long? observedDelta = null;
-        _quotaMock.Setup(x => x.CheckCurrentUserStorage(It.IsAny<long>()))
-            .Callback<long>(d => observedDelta = d)
+        _quotaMock.Setup(x => x.CheckOwnerStorageAsync(It.IsAny<string?>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .Callback<string?, long, CancellationToken>((_, d, _) => observedDelta = d)
             .ThrowsAsync(new TestStopException("stop"));
 
         var mgr = CreateManager();
@@ -228,8 +264,8 @@ public class ObjectsManagerCopyTransferTest : TestBase
         _ddbMock.Setup(x => x.GetEntry("dst.jpg")).Returns((Entry?)null);
 
         long? observedDelta = null;
-        _quotaMock.Setup(x => x.CheckCurrentUserStorage(It.IsAny<long>()))
-            .Callback<long>(d => observedDelta = d)
+        _quotaMock.Setup(x => x.CheckOwnerStorageAsync(It.IsAny<string?>(), It.IsAny<long>(), It.IsAny<CancellationToken>()))
+            .Callback<string?, long, CancellationToken>((_, d, _) => observedDelta = d)
             .ThrowsAsync(new TestStopException("stop"));
 
         var mgr = CreateManager();

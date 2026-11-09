@@ -157,7 +157,7 @@ public sealed class UploadCommitter
     private async Task ReserveAsync(UploadRequestContext ctx, long bytes)
     {
         if (ctx.Reservation == null)
-            ctx.Reservation = await _quota.ReserveAsync(ctx.QuotaUserId, bytes);
+            ctx.Reservation = await _quota.ReserveAsync(ctx.QuotaOwnerId, bytes);
         else
             ctx.Reservation.Resize(bytes);
     }

@@ -23,7 +23,7 @@ public static class TestPush
         IDatasetListingInvalidator? listings = null) =>
         new(new PushSessions(datasets, datasetsManager, access, ddbManager, ddbWrapper, sessionStore,
                 NullLogger<PushSessions>.Instance),
-            new PushUploads(access, authManager, quota, scratch, fileSystem, sessionStore, paths),
+            new PushUploads(access, quota, scratch, fileSystem, sessionStore, paths),
             new PushCommit(access, sessionStore, ddbWrapper, fileSystem, importSettings, builds,
                 listings ?? Mock.Of<IDatasetListingInvalidator>()));
 }

@@ -11,6 +11,7 @@ using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
@@ -34,6 +35,7 @@ public class DatasetSummaryTests : TestBase
     private const int ChunksPerUpload = 50;
 
     private RegistryContext _ctx = null!;
+    private TestDb<ApplicationDbContext> _identity = null!;
     private Mock<IDdbManager> _ddbManager = null!;
     private readonly Dictionary<Guid, string?> _fingerprints = new();
     private int _infoCalls;
@@ -46,6 +48,7 @@ public class DatasetSummaryTests : TestBase
         _infoCalls = 0;
         _fingerprints.Clear();
         _ctx = TestDb.CreateContext<RegistryContext>();
+        _identity = TestDb.Create<ApplicationDbContext>();
         var org = new Organization
         {
             Slug = "org", Name = "Org", OwnerId = _user.Id, CreationDate = DateTime.UtcNow,
@@ -76,16 +79,20 @@ public class DatasetSummaryTests : TestBase
     }
 
     [TearDown]
-    public void TearDown() => _ctx.Dispose();
+    public void TearDown()
+    {
+        _ctx.Dispose();
+        _identity.Dispose();
+    }
 
     private StorageQuota CreateUtils(IDatasetSummaryProvider summaries)
     {
-        var auth = new Mock<IAuthManager>();
-        auth.Setup(a => a.IsUserAdmin()).ReturnsAsync(false);
         _user.Metadata[MagicStrings.MaxStorageKey] = 1_000_000_000L;
-        auth.Setup(a => a.GetCurrentUser()).ReturnsAsync(_user);
+        var identity = _identity.NewContext();
+        identity.Users.Add(_user);
+        identity.SaveChanges();
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings { EnableStorageLimiter = true, DatasetsPath = "/tmp" });
-        return TestPorts.Quota(auth.Object, _ctx, TestSettings.Options<AccountOptions>(settings), summaries);
+        return TestPorts.Quota(_ctx, TestSettings.Options<AccountOptions>(settings), summaries, identity);
     }
 
     [Test]
@@ -94,14 +101,14 @@ public class DatasetSummaryTests : TestBase
         var utils = CreateUtils(TestCaches.Summaries(_ddbManager.Object));
 
         for (var chunk = 0; chunk < ChunksPerUpload; chunk++)
-            await utils.CheckCurrentUserStorage(8 * 1024 * 1024);
+            await utils.CheckOwnerStorageAsync(_user.Id, 8 * 1024 * 1024);
 
         _infoCalls.ShouldBe(OwnedDatasets, "one native call per dataset, not per chunk");
         utils.GetUserStorage(_user).Used.ShouldBe(OwnedDatasets * 1_000_000L);
 
         // A write to one dataset changes its index fingerprint: only that one is read again
         _fingerprints[_fingerprints.Keys.First()] = "v2";
-        await utils.CheckCurrentUserStorage(8 * 1024 * 1024);
+        await utils.CheckOwnerStorageAsync(_user.Id, 8 * 1024 * 1024);
         _infoCalls.ShouldBe(OwnedDatasets + 1);
     }
 

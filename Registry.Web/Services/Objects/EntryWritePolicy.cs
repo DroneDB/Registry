@@ -8,7 +8,7 @@ namespace Registry.Web.Services.Objects;
 
 /// <summary>
 /// Whether an entry may be written at a destination by copying it there (a transfer, a copy): the current
-/// user's storage quota, then the extension policy (files only: a folder has no extension and would be
+/// storage quota of the owner of the destination organization (FR-XC-26, D-039: whoever copies), then the extension policy (files only: a folder has no extension and would be
 /// refused outright in allow-list mode).
 /// </summary>
 public sealed class EntryWritePolicy
@@ -22,11 +22,12 @@ public sealed class EntryWritePolicy
         _import = import.Value;
     }
 
-    /// <exception cref="QuotaExceededException">The user has not <paramref name="bytes"/> of storage left.</exception>
+    /// <exception cref="QuotaExceededException">The owner <paramref name="ownerId"/> of the destination organization has
+    /// not <paramref name="bytes"/> of storage left.</exception>
     /// <exception cref="ExtensionBlockedException">The destination file's extension is not allowed.</exception>
-    public async Task EnsureAllowedAsync(string destinationPath, bool isFolder, long bytes)
+    public async Task EnsureAllowedAsync(string? ownerId, string destinationPath, bool isFolder, long bytes)
     {
-        await _quota.CheckCurrentUserStorage(bytes);
+        await _quota.CheckOwnerStorageAsync(ownerId, bytes);
 
         if (!isFolder && !_import.IsExtensionAllowed(destinationPath))
             throw new ExtensionBlockedException(destinationPath, _import.AllowedFileExtensions.Length > 0);

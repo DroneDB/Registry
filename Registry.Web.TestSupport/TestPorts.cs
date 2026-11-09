@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.Identity;
+using Registry.Web.Test.Support;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
@@ -23,17 +25,21 @@ public static class TestPorts
     public static UrlBuilder Urls(IOptions<HttpHostOptions>? http = null, IHttpContextAccessor? accessor = null) =>
         new(http ?? Microsoft.Extensions.Options.Options.Create(new HttpHostOptions()), accessor ?? new HttpContextAccessor());
 
-    /// <summary>The storage quota of the current user (<paramref name="auth"/>) over <paramref name="context"/>.</summary>
-    public static StorageQuota Quota(IAuthManager auth, RegistryContext context, IOptions<AccountOptions> accounts,
-        IDatasetSummaryProvider summaries) => new(auth, context, accounts, summaries);
+    /// <summary>
+    /// The storage quota of the owners of the organizations of <paramref name="context"/>, over <paramref name="identity"/>
+    /// (their metadata and roles; an empty identity database of its own when null).
+    /// </summary>
+    public static StorageQuota Quota(RegistryContext context, IOptions<AccountOptions> accounts,
+        IDatasetSummaryProvider summaries, ApplicationDbContext? identity = null) =>
+        new(context, identity ?? TestDb.Create<ApplicationDbContext>().NewContext(), accounts, summaries);
 
     /// <summary>
     /// The three ports over the collaborators <c>WebUtils</c> took (no lookup cache): what a test that built the
     /// whole <c>IUtils</c> builds now.
     /// </summary>
-    public static WebPorts All(IAuthManager auth, RegistryContext context, IOptions<AccountOptions> accounts,
+    public static WebPorts All(RegistryContext context, IOptions<AccountOptions> accounts,
         IOptions<HttpHostOptions> http, IHttpContextAccessor accessor, IDatasetSummaryProvider summaries) =>
-        new(Datasets(context), Urls(http, accessor), Quota(auth, context, accounts, summaries));
+        new(Datasets(context), Urls(http, accessor), Quota(context, accounts, summaries));
 
     /// <summary>The build artifact resolver over the fake's entry types (or <paramref name="ddbWrapper"/>) and the real file system.</summary>
     public static BuildArtifactResolver Artifacts(Registry.Ports.IDdbWrapper? ddbWrapper = null) =>

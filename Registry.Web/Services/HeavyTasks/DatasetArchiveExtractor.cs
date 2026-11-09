@@ -20,11 +20,18 @@ namespace Registry.Web.Services.HeavyTasks;
 /// <param name="DestinationFolder">The normalized dataset path the entries go under; "" for the dataset root.</param>
 /// <param name="IsExtensionAllowed">The import policy: an entry whose extension it refuses is skipped.</param>
 /// <param name="KeepExisting">True when the file at this dataset path must be kept (the entry is skipped).</param>
-/// <param name="MaxBytes">The uncompressed-size cap; 0 (or less) disables it.</param>
+/// <param name="MaxBytes">The cap on the bytes the extraction writes (it counts only the entries that it writes, never a
+/// skipped one); 0 (or less) disables it. The caller passes the smaller of the archive size limit and the bytes the owner of
+/// the organization may still store (FR-XC-26).</param>
 /// <param name="SafetyMarginBytes">The disk head-room to keep (<see cref="VolumeHeadroom.MarginBytes"/>).</param>
 /// <param name="Writes">The write record of the task that extracts (FR-XC-27): every file and folder the extraction
 /// creates is recorded before it is created; a file it replaces (<paramref name="KeepExisting"/> false for an existing
 /// file) is not. Null: nothing is recorded.</param>
+/// <param name="Exclude">The entries that are not extracted whatever their type (the internal folders of a photogrammetry
+/// result, FR-PRC-41): the dataset path it accepts is skipped with the reason <see cref="ArchiveSkipReason.Excluded"/>,
+/// apart from <paramref name="IsExtensionAllowed"/>. Null: nothing is excluded.</param>
+/// <param name="MaxBytesMessage">The text of the failure when <paramref name="MaxBytes"/> is reached, for a cap that is the
+/// storage quota of the owner (the 507 text, FR-XC-26); null: the text of the archive size limit.</param>
 public sealed record ArchiveExtractionRequest(
     string ArchivePath,
     string DatasetFolder,
@@ -33,7 +40,43 @@ public sealed record ArchiveExtractionRequest(
     Func<string, bool> KeepExisting,
     long MaxBytes,
     long SafetyMarginBytes,
-    Registry.Ports.Import.IImportWriteRecord? Writes = null);
+    Registry.Ports.Import.IImportWriteRecord? Writes = null,
+    Func<string, bool>? Exclude = null,
+    string? MaxBytesMessage = null);
+
+/// <summary>Why an entry of an archive was not extracted (FR-PRC-30).</summary>
+public enum ArchiveSkipReason
+{
+    /// <summary>The import policy refuses its extension.</summary>
+    FileTypeNotAllowed,
+
+    /// <summary>A file is at its dataset path and is kept (no overwrite).</summary>
+    KeptExisting,
+
+    /// <summary>It is in a reserved folder of the dataset (".ddb", the uploads folder).</summary>
+    ReservedPath,
+
+    /// <summary>The caller excludes it (<see cref="ArchiveExtractionRequest.Exclude"/>, FR-PRC-41).</summary>
+    Excluded
+}
+
+/// <summary>An entry of an archive that was not extracted.</summary>
+/// <param name="Path">The dataset path of the entry (its name in the archive when it has no valid dataset path).</param>
+/// <param name="Reason">Why it was skipped.</param>
+public sealed record ArchiveSkippedEntry(string Path, ArchiveSkipReason Reason)
+{
+    /// <summary>The reason as the logs and the toasts of the Hub write it.</summary>
+    public string ReasonText => Reason switch
+    {
+        ArchiveSkipReason.FileTypeNotAllowed => "file type not allowed",
+        ArchiveSkipReason.KeptExisting => "file already exists",
+        ArchiveSkipReason.ReservedPath => "reserved path",
+        _ => "excluded"
+    };
+
+    /// <summary>The line of the task log for this entry: <c>Skipped: vectors/tool.exe (file type not allowed)</c>.</summary>
+    public string LogLine => $"Skipped: {Path} ({ReasonText})";
+}
 
 /// <summary>Progress of an extraction, after each entry (and once before the first, with <see cref="Done"/> 0).</summary>
 /// <param name="Done">Entries handled (extracted or skipped).</param>
@@ -44,10 +87,38 @@ public sealed record ArchiveExtractionProgress(int Done, int Total, string Key, 
 
 /// <summary>What an extraction wrote.</summary>
 /// <param name="Extracted">The dataset paths written, in archive order, each once.</param>
-/// <param name="Skipped">Entries skipped: kept existing files, refused extensions, reserved paths, folder entries without a name.</param>
+/// <param name="Skipped">Entries skipped, with the reason of each: kept existing files, refused extensions, reserved paths,
+/// excluded entries (a folder entry, which holds no file, is not one).</param>
 /// <param name="BytesWritten">Bytes extracted.</param>
 /// <param name="Total">File entries in the archive (0 when it was unknown).</param>
-public sealed record ArchiveExtractionResult(IReadOnlyList<string> Extracted, int Skipped, long BytesWritten, int Total);
+public sealed record ArchiveExtractionResult(IReadOnlyList<string> Extracted, IReadOnlyList<ArchiveSkippedEntry> Skipped,
+    long BytesWritten, int Total)
+{
+    /// <summary>How many skipped entries the task log names one by one; the others are counted.</summary>
+    public const int MaxLoggedSkipped = 50;
+
+    /// <summary>
+    /// The lines of the task log about what was not extracted (FR-PRC-30, FR-PRC-41), then the summary line the Hub reads:
+    /// <c>Skipped: vectors/tool.exe (file type not allowed)</c> for each of the first <see cref="MaxLoggedSkipped"/>
+    /// skipped entries that are not excluded, the number of those that are excluded (internal files, never named one by
+    /// one), and <c>Extraction complete: 8 extracted, 1 skipped</c>. A skipped entry never reads as extracted.
+    /// </summary>
+    public IReadOnlyList<string> LogLines()
+    {
+        var lines = new List<string>();
+        var named = Skipped.Where(s => s.Reason != ArchiveSkipReason.Excluded).ToList();
+        lines.AddRange(named.Take(MaxLoggedSkipped).Select(s => s.LogLine));
+        if (named.Count > MaxLoggedSkipped)
+            lines.Add($"Skipped: and {named.Count - MaxLoggedSkipped} more");
+
+        var excluded = Skipped.Count - named.Count;
+        if (excluded > 0)
+            lines.Add($"Excluded {excluded} internal file(s) of the archive");
+
+        lines.Add($"Extraction complete: {Extracted.Count} extracted, {Skipped.Count} skipped");
+        return lines;
+    }
+}
 
 /// <summary>
 /// The one archive extraction into a dataset, shared by the archive extract tool, the
@@ -99,6 +170,41 @@ public sealed class DatasetArchiveExtractor
         return session.FastUncompressedBytes;
     }
 
+    /// <summary>
+    /// The size that <paramref name="existingBytes"/> gives (the storage use of the owner counts it now) for the files an
+    /// extraction of <paramref name="request"/> replaces: the dataset paths of its file entries that it would write (not
+    /// excluded, of an allowed type, not kept), each path once. The storage quota counts only the growth of a replace
+    /// (FR-XC-26), as for a copy. Reads the list of entries without writing anything (a compressed tarball is read
+    /// through); an entry without a dataset path is not counted (the extraction skips or refuses it).
+    /// </summary>
+    /// <exception cref="Exception">The archive cannot be opened or read.</exception>
+    public long ReplacedBytes(ArchiveExtractionRequest request, Func<string, long> existingBytes)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(existingBytes);
+
+        using var session = _archives.Open(request.ArchivePath);
+        var seen = new HashSet<string>(Common.PathComparison.Comparer);
+        long total = 0;
+        foreach (var entry in session.Entries())
+        {
+            if (entry.IsDirectory)
+                continue;
+
+            var name = _paths.NormalizeArchiveKey(entry.Key);
+            var target = name.Path == null ? name : _paths.CheckIn(request.DestinationFolder, name.Path);
+            if (target.Rejected != null || target.Path is not { } path || !seen.Add(path))
+                continue;
+
+            if (request.Exclude?.Invoke(path) == true || !request.IsExtensionAllowed(path) || request.KeepExisting(path))
+                continue;
+
+            total += Math.Max(0, existingBytes(path));
+        }
+
+        return total;
+    }
+
     /// <summary>Extracts the archive of <paramref name="request"/> into its dataset; on failure the dataset is left as it was.</summary>
     /// <exception cref="Exceptions.InvalidDatasetPathException">An entry name is unsafe (zip-slip).</exception>
     /// <exception cref="Exceptions.QuotaExceededException">The cap or the disk head-room was reached.</exception>
@@ -138,9 +244,10 @@ public sealed class DatasetArchiveExtractor
     private async Task<ArchiveExtractionResult> ExtractEntriesAsync(ArchiveExtractionRequest request, Journal journal,
         IProgress<ArchiveExtractionProgress>? progress, CancellationToken ct)
     {
-        var budget = _headroom.CreateBudget(request.MaxBytes, request.DatasetFolder, request.SafetyMarginBytes);
+        var budget = _headroom.CreateBudget(request.MaxBytes, request.DatasetFolder, request.SafetyMarginBytes,
+            request.MaxBytesMessage);
         var extracted = new List<string>();
-        var skipped = 0;
+        var skipped = new List<ArchiveSkippedEntry>();
         var done = 0;
         var batch = new List<StagedEntry>();
 
@@ -159,12 +266,13 @@ public sealed class DatasetArchiveExtractor
                     if (entry.IsDirectory)
                         continue;
 
-                    var target = Target(request, entry.Key);
-                    if (target == null || !Allowed(request, target) || request.KeepExisting(target))
+                    var skippedBefore = skipped.Count;
+                    var target = Target(request, entry.Key, skipped);
+                    if (target != null && Skip(request, target) is { } reason)
                     {
-                        skipped++;
+                        skipped.Add(new ArchiveSkippedEntry(target, reason));
                     }
-                    else
+                    else if (target != null)
                     {
                         var temp = _scratch.CreateForDataset(request.DatasetFolder);
                         batch.Add(new StagedEntry(entry.Key, target,
@@ -178,16 +286,20 @@ public sealed class DatasetArchiveExtractor
 
                         if (batch.Count >= Math.Max(1, PlaceBatchSize))
                         {
-                            skipped += await PlaceAsync(request, journal, batch, extracted, ct);
+                            await PlaceAsync(request, journal, batch, extracted, skipped, ct);
                             batch.Clear();
                         }
                     }
 
                     done++;
-                    progress?.Report(new ArchiveExtractionProgress(done, total, entry.Key, budget.BytesWritten));
+                    // The message of an entry is shown only for a file that is written: a skipped entry is not named as if
+                    // it were extracted (FR-PRC-30)
+                    var written = skipped.Count == skippedBefore;
+                    progress?.Report(new ArchiveExtractionProgress(done, total, written ? entry.Key : string.Empty,
+                        budget.BytesWritten));
                 }
 
-                skipped += await PlaceAsync(request, journal, batch, extracted, ct);
+                await PlaceAsync(request, journal, batch, extracted, skipped, ct);
                 batch.Clear();
                 return new ArchiveExtractionResult(extracted, skipped, budget.BytesWritten, total);
             }
@@ -202,11 +314,11 @@ public sealed class DatasetArchiveExtractor
 
     // Records the batch (the new files, stamped from their complete temporary files, and the folders they need), saves
     // the record, then moves each file to its place. The entries skipped because their file appeared meanwhile
-    private async Task<int> PlaceAsync(ArchiveExtractionRequest request, Journal journal, List<StagedEntry> batch,
-        List<string> extracted, CancellationToken ct)
+    private async Task PlaceAsync(ArchiveExtractionRequest request, Journal journal, List<StagedEntry> batch,
+        List<string> extracted, List<ArchiveSkippedEntry> skipped, CancellationToken ct)
     {
         if (batch.Count == 0)
-            return 0;
+            return;
 
         var replacing = new HashSet<string>(Common.PathComparison.Comparer);
         foreach (var staged in batch)
@@ -216,7 +328,6 @@ public sealed class DatasetArchiveExtractor
         if (request.Writes != null)
             await TaskImportWrites.SaveAsync(request.Writes, ct);
 
-        var skipped = 0;
         foreach (var staged in batch)
         {
             var placed = journal.Place(staged.Local, staged.Temp, replacing.Contains(staged.Local));
@@ -228,19 +339,18 @@ public sealed class DatasetArchiveExtractor
                     staged.Target);
                 if (request.Writes != null)
                     await request.Writes.ForgetAsync(staged.Target, CancellationToken.None);
-                skipped++;
+                skipped.Add(new ArchiveSkippedEntry(staged.Target, ArchiveSkipReason.KeptExisting));
                 continue;
             }
 
             if (placed.Value)
                 extracted.Add(staged.Target);
         }
-
-        return skipped;
     }
 
-    // The dataset path of an entry, or null to skip it (a folder entry, a reserved path)
-    private string? Target(ArchiveExtractionRequest request, string key)
+    // The dataset path of an entry, or null when it has none: a folder entry without a name, which holds no file, and a
+    // reserved path, which is skipped and listed (FR-PRC-30)
+    private string? Target(ArchiveExtractionRequest request, string key, List<ArchiveSkippedEntry> skipped)
     {
         var name = _paths.NormalizeArchiveKey(key);
         var target = name.Path == null ? name : _paths.CheckIn(request.DestinationFolder, name.Path);
@@ -250,6 +360,7 @@ public sealed class DatasetArchiveExtractor
                 return target.Path;
             case EntryPathRejection.Reserved:
                 _logger.LogWarning("Skipping archive entry '{Key}': it is in a reserved folder", key);
+                skipped.Add(new ArchiveSkippedEntry(key, ArchiveSkipReason.ReservedPath));
                 return null;
             case EntryPathRejection.Empty:
                 return null;
@@ -259,12 +370,20 @@ public sealed class DatasetArchiveExtractor
         }
     }
 
-    private bool Allowed(ArchiveExtractionRequest request, string target)
+    // Why the entry at the dataset path is not extracted, or null when it is: excluded by the caller, refused by the
+    // import policy (a file type), or a file kept
+    private ArchiveSkipReason? Skip(ArchiveExtractionRequest request, string target)
     {
-        if (request.IsExtensionAllowed(target))
-            return true;
-        _logger.LogWarning("Skipping disallowed file type during extraction: '{Path}'", target);
-        return false;
+        if (request.Exclude?.Invoke(target) == true)
+            return ArchiveSkipReason.Excluded;
+
+        if (!request.IsExtensionAllowed(target))
+        {
+            _logger.LogWarning("Skipping disallowed file type during extraction: '{Path}'", target);
+            return ArchiveSkipReason.FileTypeNotAllowed;
+        }
+
+        return request.KeepExisting(target) ? ArchiveSkipReason.KeptExisting : null;
     }
 
     /// <summary>
