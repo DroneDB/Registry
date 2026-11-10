@@ -173,3 +173,8 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   struct, not of a fixture: `NativeRasterOptions` is 64 bytes. No vector changed. `DdbAbi.Minor` is 4 and every export
   the Registry calls is declared in `NativeDdb`, so the startup check requires it (`DdbAbi.RequiredSymbols`); no
   export is optional and no code path depends on the ABI minor.
+* 2026-11-11: DroneDB `cbc4bffb2e8efcad5d53ae8d6fb55a19213d682b` (the DroneDB v2.4.1 release, the pinned build, libddb
+  ABI 2.4 unchanged: `DdbAbi.Minor` stays 4). Since `55ac29b`: only `Contract/README.md` changed, with a 2.4.1 entry (the
+  area statistics and the thermal fallbacks read the raster in windows, so a large raster no longer exhausts the
+  memory; the raw thermal data of a GDAL raster of more than 4 megapixels is refused). No export, schema, fixture or
+  vector changed and no adapter change.
