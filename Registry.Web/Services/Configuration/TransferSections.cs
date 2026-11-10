@@ -92,12 +92,17 @@ public sealed class TransferSections : IConfigurationSectionBuilder
         var downloads = _view.Configured<DownloadOptions>();
         var downloadsDefault = _view.Shipped<DownloadOptions>();
         return Section("ExportZip", "Export & Zip",
-            "Maximum GeoTIFF export sizes. ZIP downloads are streamed and need no memory threshold.",
+            "Maximum GeoTIFF export and WCS coverage sizes. ZIP downloads are streamed and need no memory threshold.",
             [
                 NullableNumberField("MaxExportSizeBytes", "Max Export Size",
                     "Maximum estimated output size for GeoTIFF raster export. Null = unlimited.",
                     downloads.MaxExportSizeBytes, downloadsDefault.MaxExportSizeBytes,
-                    unit: "bytes")
+                    unit: "bytes"),
+
+                NumberField("MaxWcsCoverageSizePixels", "Max WCS Coverage Size",
+                    "Largest WCS GetCoverage output, in pixels on the longest side. A larger request is an OGC exception that states the limit.",
+                    downloads.MaxWcsCoverageSizePixels, downloadsDefault.MaxWcsCoverageSizePixels,
+                    minValue: 1, unit: "pixels")
             ]);
     }
 }

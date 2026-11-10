@@ -51,7 +51,7 @@ public class WmtsManager : OgcManagerBase
             sectionsKey = string.Join("+", sectionsSet.OrderBy(s => s, StringComparer.OrdinalIgnoreCase));
         }
 
-        var key = await LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, "caps-wmts-v5-1.0.0", $"{folderPath}-{sectionsKey}", ct);
+        var key = await LayerCatalog.CacheKeyAsync(orgSlug, dsSlug, "caps-wmts-v7-1.0.0", $"{folderPath}-{sectionsKey}", ct);
         return await Records.GetOrCreateRecordAsync(key, async token =>
         {
             bool Include(string section) => sectionsSet == null || sectionsSet.Contains(section);
@@ -59,6 +59,10 @@ public class WmtsManager : OgcManagerBase
             await ResolveAsync(orgSlug, dsSlug, token);
             var layers = await LayerCatalog.GetLayersAsync(orgSlug, dsSlug, folderPath, ct: token);
             var baseUrl = GetServiceUrl(orgSlug, dsSlug, "wmts", folderPath);
+            // The RESTful route has no folder variant: the template names the layer of the whole dataset, by its
+            // real path (escaped, as the route unescapes it) and not by the NCName of the Identifier: a sanitised
+            // name is not unique ("a/b.tif" and "a_b.tif" are both "a_b.tif") and a root file of that name would win
+            var restBaseUrl = GetServiceUrl(orgSlug, dsSlug, "wmts");
 
             var sb = new StringBuilder();
             await using (var w = CreateXmlWriter(sb))
@@ -143,6 +147,18 @@ public class WmtsManager : OgcManagerBase
                         w.WriteStartElement("TileMatrixSetLink");
                         w.WriteElementString("TileMatrixSet", WmtsConformance.DefaultTileMatrixSet);
                         await w.WriteEndElementAsync();
+
+                        // The RESTful template of each format (WMTS 1.0.0 §10.2): the route accepts it as written
+                        var formats = isVector ? [WmtsConformance.VectorFormat] : WmtsConformance.SupportedRasterFormats;
+                        foreach (var format in formats)
+                        {
+                            w.WriteStartElement("ResourceURL");
+                            w.WriteAttributeString("format", format);
+                            w.WriteAttributeString("resourceType", "tile");
+                            w.WriteAttributeString("template",
+                                WmtsConformance.RestfulTemplate(restBaseUrl, layer.Name, format));
+                            await w.WriteEndElementAsync();
+                        }
                         await w.WriteEndElementAsync(); // Layer
                     }
 
@@ -167,7 +183,7 @@ public class WmtsManager : OgcManagerBase
     private static void WriteGoogleMapsCompatible(XmlWriter w)
     {
         w.WriteStartElement("TileMatrixSet");
-        w.WriteElementString("ows", "Identifier", null, "GoogleMapsCompatible");
+        w.WriteElementString("ows", "Identifier", null, WmtsConformance.DefaultTileMatrixSet);
         w.WriteElementString("ows", "SupportedCRS", null, "urn:ogc:def:crs:EPSG::3857");
         const double initialScale = 559082264.0287178;
         for (var z = 0; z <= 18; z++)

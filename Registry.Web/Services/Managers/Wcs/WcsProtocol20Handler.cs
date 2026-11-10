@@ -46,7 +46,7 @@ public sealed class WcsProtocol20Handler : IWcsProtocolHandler
     public async Task<string> GetCapabilitiesAsync(string orgSlug, string dsSlug, string? folderPath,
         CancellationToken ct = default)
     {
-        var key = await _svc.CacheKeyAsync(orgSlug, dsSlug, "caps-wcs20-v1", folderPath, ct);
+        var key = await _svc.CacheKeyAsync(orgSlug, dsSlug, "caps-wcs20-v2", folderPath, ct);
         return await _records.GetOrCreateRecordAsync(key, async token =>
         {
             var (_, layers) = await _svc.GetCoveragesAsync(orgSlug, dsSlug, folderPath, token);
@@ -149,8 +149,10 @@ public sealed class WcsProtocol20Handler : IWcsProtocolHandler
     {
         var gmlId = OgcNames.ToNcName(id);
         var info = await _svc.ProbeRasterAsync(ddb, layer, ct);
-        var rWidth = info.Width > 0 ? info.Width : 1024;
-        var rHeight = info.Height > 0 ? info.Height : 1024;
+        var bbox = layer.BboxWgs84 ?? [-180.0, -90.0, 180.0, 90.0];
+        var grid = WcsCoverageService.NativeGrid(info, bbox);
+        var rWidth = grid.Width;
+        var rHeight = grid.Height;
         var rBands = info.BandCount > 0 ? info.BandCount : Math.Max(1, layer.BandCount);
         var bandNames = new List<string>(info.BandNames);
         while (bandNames.Count < rBands) bandNames.Add($"band{bandNames.Count + 1}");
@@ -159,7 +161,6 @@ public sealed class WcsProtocol20Handler : IWcsProtocolHandler
         await w.WriteAttributeStringAsync("gml", "id", NsGml, gmlId);
 
         const string srs = "http://www.opengis.net/def/crs/OGC/1.3/CRS84";
-        var bbox = layer.BboxWgs84 ?? [-180.0, -90.0, 180.0, 90.0];
         await w.WriteStartElementAsync("gml", "boundedBy", NsGml);
         await w.WriteStartElementAsync("gml", "Envelope", NsGml);
         w.WriteAttributeString("srsName", srs);
@@ -195,15 +196,13 @@ public sealed class WcsProtocol20Handler : IWcsProtocolHandler
             FormattableString.Invariant($"{bbox[0]} {bbox[3]}"));
         await w.WriteEndElementAsync();
         await w.WriteEndElementAsync();
-        var dx = (bbox[2] - bbox[0]) / Math.Max(1, rWidth);
-        var dy = (bbox[3] - bbox[1]) / Math.Max(1, rHeight);
         await w.WriteStartElementAsync("gml", "offsetVector", NsGml);
         w.WriteAttributeString("srsName", srs);
-        await w.WriteStringAsync(FormattableString.Invariant($"{dx} 0"));
+        await w.WriteStringAsync(FormattableString.Invariant($"{grid.Dx} 0"));
         await w.WriteEndElementAsync();
         await w.WriteStartElementAsync("gml", "offsetVector", NsGml);
         w.WriteAttributeString("srsName", srs);
-        await w.WriteStringAsync(FormattableString.Invariant($"0 {-dy}"));
+        await w.WriteStringAsync(FormattableString.Invariant($"0 {-grid.Dy}"));
         await w.WriteEndElementAsync();
         await w.WriteEndElementAsync();
         await w.WriteEndElementAsync();
@@ -274,7 +273,12 @@ public sealed class WcsProtocol20Handler : IWcsProtocolHandler
             OgcRequestParser.Get(query, "RANGESUBSET"), info);
         var outputCrs = WcsConformance.NormalizeCrs(OgcRequestParser.Get(query, "OUTPUTCRS"));
 
-        var bytes = await _svc.RenderRegionAsync(ddb, layer, bbox, 0, 0, format, bands,
+        // The output is the native pixels of the subset, or what the Scaling extension asks for (FR-SHR-02)
+        var native = WcsCoverageService.NativeGrid(info, coverageBbox).SizeOf(bbox);
+        var (width, height) = WcsScalingParser.Parse(OgcRequestParser.Get(query, "SCALEFACTOR"),
+            OgcRequestParser.Get(query, "SCALEAXES"), OgcRequestParser.Get(query, "SCALESIZE"), native) ?? native;
+
+        var bytes = await _svc.RenderRegionAsync(ddb, layer, bbox, width, height, format, bands,
             string.IsNullOrEmpty(outputCrs) ? null : outputCrs, ct);
         return new WcsCoverageResult(bytes, format);
     }

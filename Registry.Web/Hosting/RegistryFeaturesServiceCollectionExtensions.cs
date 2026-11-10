@@ -310,6 +310,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         // The upgrade rescans (§8.3): one job after the start, which reads the datasets one at a time. A later
         // part of a release adds its rescan as one more step; the job reads each dataset once for all of them
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IUpgradeRescanStep, BuildKeyRescanStep>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IUpgradeRescanStep, VectorFootprintRescanStep>());
         services.AddBackgroundStartupTask<UpgradeRescanStartupTask>();
         return services;
     }

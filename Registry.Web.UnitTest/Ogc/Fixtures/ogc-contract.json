@@ -1,0 +1,24 @@
+{
+  "description": "What the Registry serves, for the OGC share templates of the Hub (FR-XC-31, FR-SHR-01, FR-SHR-04). 'wmtsCapabilities' is the Contents of the WMTS GetCapabilities of a dataset with the built rasters 'ortho.tif', a nested one 'odm_orthophoto/odm_orthophoto.tif' (AC-015) and one whose name is not an NCName, 'my map (1).tif': the Layer Title is the entry path, the Identifier its NCName, and the ResourceURL templates name the layer by its escaped path (encodeURIComponent plus the characters !'()* that Uri.EscapeDataString also escapes), as asserted by Registry.Web.UnitTest/Ogc/OgcContractFixtureTests; 'restfulExtensions' is WmtsConformance.ExtensionFormats (the RESTful route accepts pbf, png, jpg, jpeg); 'servicesByEntryType' lists the entry types each service serves: WmsManager (GeoRaster only, WmsManager.cs:53,262,438), WmtsManager (rasters in GetCapabilities; vector tiles through the RESTful route as pbf), WcsCoverageService (GeoRaster only), WfsFeatureQuery and OgcApiFeaturesManager (Vector only), OgcApiTilesManager (both). This file is copied to Registry.Web.UnitTest/Ogc/Fixtures/ogc-contract.json: when the Registry changes, change both copies and the Hub in the same step.",
+  "wmtsCapabilities": "<Capabilities xmlns=\"http://www.opengis.net/wmts/1.0\" xmlns:ows=\"http://www.opengis.net/ows/1.1\" version=\"1.0.0\"><Contents><Layer><ows:Title>ortho.tif</ows:Title><ows:Identifier>ortho.tif</ows:Identifier><Style isDefault=\"true\"><ows:Identifier>default</ows:Identifier></Style><Format>image/png</Format><Format>image/jpeg</Format><TileMatrixSetLink><TileMatrixSet>GoogleMapsCompatible</TileMatrixSet></TileMatrixSetLink><ResourceURL format=\"image/png\" resourceType=\"tile\" template=\"https://registry.test/orgs/org/ds/ds/wmts/1.0.0/ortho.tif/{Style}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.png\"/><ResourceURL format=\"image/jpeg\" resourceType=\"tile\" template=\"https://registry.test/orgs/org/ds/ds/wmts/1.0.0/ortho.tif/{Style}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.jpg\"/></Layer><Layer><ows:Title>odm_orthophoto/odm_orthophoto.tif</ows:Title><ows:Identifier>odm_orthophoto_odm_orthophoto.tif</ows:Identifier><Style isDefault=\"true\"><ows:Identifier>default</ows:Identifier></Style><Format>image/png</Format><Format>image/jpeg</Format><TileMatrixSetLink><TileMatrixSet>GoogleMapsCompatible</TileMatrixSet></TileMatrixSetLink><ResourceURL format=\"image/png\" resourceType=\"tile\" template=\"https://registry.test/orgs/org/ds/ds/wmts/1.0.0/odm_orthophoto%2Fodm_orthophoto.tif/{Style}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.png\"/><ResourceURL format=\"image/jpeg\" resourceType=\"tile\" template=\"https://registry.test/orgs/org/ds/ds/wmts/1.0.0/odm_orthophoto%2Fodm_orthophoto.tif/{Style}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.jpg\"/></Layer><Layer><ows:Title>my map (1).tif</ows:Title><ows:Identifier>my_map__1_.tif</ows:Identifier><Style isDefault=\"true\"><ows:Identifier>default</ows:Identifier></Style><Format>image/png</Format><Format>image/jpeg</Format><TileMatrixSetLink><TileMatrixSet>GoogleMapsCompatible</TileMatrixSet></TileMatrixSetLink><ResourceURL format=\"image/png\" resourceType=\"tile\" template=\"https://registry.test/orgs/org/ds/ds/wmts/1.0.0/my%20map%20%281%29.tif/{Style}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.png\"/><ResourceURL format=\"image/jpeg\" resourceType=\"tile\" template=\"https://registry.test/orgs/org/ds/ds/wmts/1.0.0/my%20map%20%281%29.tif/{Style}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.jpg\"/></Layer><TileMatrixSet><ows:Identifier>GoogleMapsCompatible</ows:Identifier></TileMatrixSet></Contents></Capabilities>",
+  "restfulExtensions": {
+    "pbf": "application/vnd.mapbox-vector-tile",
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg"
+  },
+  "servicesByEntryType": {
+    "georaster": [
+      "wms",
+      "wmts",
+      "wcs",
+      "ogcApiTiles"
+    ],
+    "vector": [
+      "wmts",
+      "wfs",
+      "ogcApiFeatures",
+      "ogcApiTiles"
+    ]
+  }
+}

@@ -24,6 +24,51 @@ public static class WmtsConformance
     public const string DefaultTileMatrixSet = "GoogleMapsCompatible";
 
     /// <summary>
+    /// The extension of a RESTful tile URL (<c>.../{TileCol}.png</c>) and the media type it stands for: the one map
+    /// the RESTful route, the <c>ResourceURL</c> templates of GetCapabilities and the Hub's share templates use
+    /// (FR-XC-31).
+    /// </summary>
+    public static readonly IReadOnlyList<KeyValuePair<string, string>> ExtensionFormats =
+    [
+        new("pbf", VectorFormat),
+        new("png", "image/png"),
+        new("jpg", "image/jpeg"),
+        new("jpeg", "image/jpeg")
+    ];
+
+    /// <summary>The route constraint of the RESTful tile URL: the extensions of <see cref="ExtensionFormats"/>.</summary>
+    public const string RestfulExtensionPattern = "^(pbf|png|jpe?g)$";
+
+    /// <summary>The media type of a RESTful tile extension (case-insensitive), or <c>null</c> for an unknown one.</summary>
+    public static string? FormatForExtension(string? extension)
+    {
+        foreach (var (ext, format) in ExtensionFormats)
+            if (string.Equals(ext, extension, StringComparison.OrdinalIgnoreCase))
+                return format;
+        return null;
+    }
+
+    /// <summary>The extension a RESTful tile URL of <paramref name="format"/> ends with (<c>jpg</c> for JPEG).</summary>
+    public static string ExtensionForFormat(string format)
+    {
+        foreach (var (ext, f) in ExtensionFormats)
+            if (string.Equals(f, format, StringComparison.OrdinalIgnoreCase))
+                return ext;
+        throw new ArgumentException($"No RESTful tile extension for '{format}'", nameof(format));
+    }
+
+    /// <summary>
+    /// The RESTful tile template of a layer for one format, as GetCapabilities advertises it in a
+    /// <c>ResourceURL</c>: <paramref name="restBaseUrl"/> is the service URL, the layer is written in by
+    /// its real path (<paramref name="layerName"/>, percent-encoded as one segment: <c>a%2Fb.tif</c>) and the
+    /// style, matrix set and tile indexes are placeholders in the order of the route
+    /// (<c>{TileMatrix}/{TileRow}/{TileCol}</c>).
+    /// </summary>
+    public static string RestfulTemplate(string restBaseUrl, string layerName, string format) =>
+        $"{restBaseUrl.TrimEnd('/')}/1.0.0/{Uri.EscapeDataString(layerName)}/{{Style}}/{{TileMatrixSet}}/" +
+        $"{{TileMatrix}}/{{TileRow}}/{{TileCol}}.{ExtensionForFormat(format)}";
+
+    /// <summary>
     /// Validates STYLE against the only style we publish (<see cref="DefaultStyle"/>).
     /// Per OGC 07-057r7 §07.07.1 invalid style → InvalidParameterValue/HTTP 400.
     /// </summary>
@@ -53,14 +98,17 @@ public static class WmtsConformance
     }
 
     /// <summary>
-    /// Validates TILEMATRIXSET against the published sets.
+    /// Validates TILEMATRIXSET against the published sets: <see cref="DefaultTileMatrixSet"/>, and
+    /// <see cref="OgcApiTilesConformance.WebMercatorQuad"/> as an alias of it (the same tiles; the links that name it
+    /// were shared before GetCapabilities advertised the template).
     /// </summary>
     public static void ValidateTileMatrixSet(string? tms)
     {
         if (string.IsNullOrWhiteSpace(tms))
             throw new OgcException("MissingParameterValue",
                 "Missing required parameter 'tileMatrixSet'", 400, "tileMatrixSet");
-        if (!string.Equals(tms, DefaultTileMatrixSet, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(tms, DefaultTileMatrixSet, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(tms, OgcApiTilesConformance.WebMercatorQuad, StringComparison.OrdinalIgnoreCase))
             throw new OgcException("InvalidParameterValue",
                 $"TileMatrixSet '{tms}' is not defined; only '{DefaultTileMatrixSet}' is supported",
                 400, "tileMatrixSet");

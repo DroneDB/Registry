@@ -144,8 +144,7 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
     {
         var bbox = layer.BboxWgs84 ?? [-180.0, -90.0, 180.0, 90.0];
         var info = await _svc.ProbeRasterAsync(ddb, layer, ct);
-        var rWidth = info.Width > 0 ? info.Width : 1024;
-        var rHeight = info.Height > 0 ? info.Height : 1024;
+        var grid = WcsCoverageService.NativeGrid(info, bbox);
 
         await w.WriteStartElementAsync("wcs", "CoverageDescription", null);
         await w.WriteElementStringAsync("ows", "Title", NsOws,
@@ -165,8 +164,6 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
         await w.WriteEndElementAsync();
 
         // GridCRS
-        var dx = (bbox[2] - bbox[0]) / Math.Max(1, rWidth);
-        var dy = (bbox[3] - bbox[1]) / Math.Max(1, rHeight);
         await w.WriteStartElementAsync("wcs", "GridCRS", null);
         await w.WriteElementStringAsync("wcs", "GridBaseCRS", null, "urn:ogc:def:crs:EPSG::4326");
         await w.WriteElementStringAsync("wcs", "GridType", null,
@@ -174,7 +171,7 @@ public sealed class WcsProtocol11Handler : IWcsProtocolHandler
         await w.WriteElementStringAsync("wcs", "GridOrigin", null,
             FormattableString.Invariant($"{bbox[0]} {bbox[3]}"));
         await w.WriteElementStringAsync("wcs", "GridOffsets", null,
-            FormattableString.Invariant($"{dx} {-dy}"));
+            FormattableString.Invariant($"{grid.Dx} {-grid.Dy}"));
         await w.WriteElementStringAsync("wcs", "GridCS", null,
             "urn:ogc:def:cs:OGC:0.0:Grid2dSquareCS");
         await w.WriteEndElementAsync();

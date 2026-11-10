@@ -108,19 +108,13 @@ public class WmtsController : ControllerBaseEx
     }
 
     /// <summary>WMTS 1.0.0 RESTful tile.</summary>
-    [HttpGet("wmts/1.0.0/{layer}/{style}/{tms}/{z:int}/{y:int}/{x:int}.{ext:regex(^(pbf|png|jpe?g)$)}")]
+    [HttpGet("wmts/1.0.0/{layer}/{style}/{tms}/{z:int}/{y:int}/{x:int}.{ext:regex(" + WmtsConformance.RestfulExtensionPattern + ")}")]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "image/png", "image/jpeg", "application/vnd.mapbox-vector-tile")]
     public async Task<IActionResult> Restful([FromRoute] string orgSlug, [FromRoute] string dsSlug,
         [FromRoute] string layer, [FromRoute] string style, [FromRoute] string tms,
         [FromRoute] int z, [FromRoute] int y, [FromRoute] int x, [FromRoute] string ext, CancellationToken ct)
     {
-        var format = ext.ToLowerInvariant() switch
-        {
-            "pbf" => "application/vnd.mapbox-vector-tile",
-            "png" => "image/png",
-            "jpg" or "jpeg" => "image/jpeg",
-            _ => "image/png"
-        };
+        var format = WmtsConformance.FormatForExtension(ext) ?? "image/png";
         // Route values may arrive percent-encoded when the layer identifier contains '/' (e.g. "folder%2Ffile.shp").
         layer = Uri.UnescapeDataString(layer);
         var bytes = await _mgr.GetTileAsync(orgSlug, dsSlug, layer, style, tms, z, x, y, format, ct: ct);

@@ -38,6 +38,11 @@ namespace Registry.Web.Services.Initialization;
 /// step a later release registers runs for every dataset.
 /// </para>
 /// <para>
+/// A step names the ABI minor of the libddb whose rescan gives what it is for (<see cref="IUpgradeRescanStep.RequiredAbiMinor"/>):
+/// the vector footprint step needs 2.3, so with a libddb 2.2 it is skipped without recording progress, and runs once at
+/// the first start with 2.3.
+/// </para>
+/// <para>
 /// A libddb that predates the build key reports no key change, so nothing would be rebuilt: the job records nothing
 /// and stops, and runs at the first start with a libddb that has the key. Checked twice: on the capabilities of the
 /// loaded library (ABI 2.<see cref="BuildKeyAbiMinor"/> or later) before any dataset is read, and on what its rescan
@@ -49,7 +54,7 @@ namespace Registry.Web.Services.Initialization;
 internal sealed class UpgradeRescanStartupTask : IBackgroundStartupTask
 {
     /// <summary>The ABI minor of libddb 2.x that has the build key (DroneDB 2.2.0, U-210).</summary>
-    internal const int BuildKeyAbiMinor = 2;
+    internal const int BuildKeyAbiMinor = BuildKeyRescanStep.RequiredMinor;
 
     private readonly RegistryContext _context;
     private readonly IndexRescanService _rescans;
@@ -79,8 +84,8 @@ internal sealed class UpgradeRescanStartupTask : IBackgroundStartupTask
 
     public async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var steps = _steps.ToArray();
-        if (steps.Length == 0)
+        var registered = _steps.ToArray();
+        if (registered.Length == 0)
             return;
 
         // The capabilities of the loaded library first: one that predates the build key is never asked to rescan
@@ -92,6 +97,16 @@ internal sealed class UpgradeRescanStartupTask : IBackgroundStartupTask
                 _runtime.Capabilities.AbiMajor, abiMinor, _runtime.Capabilities.AbiMajor, BuildKeyAbiMinor);
             return;
         }
+
+        // A step whose fix is not in the loaded libddb waits for one that has it: it is not run and records no progress
+        // (the vector footprints need ABI 2.3), so it runs once at the first start with that library
+        var steps = registered.Where(s => abiMinor >= s.RequiredAbiMinor).ToArray();
+        foreach (var waiting in registered.Except(steps))
+            _logger.LogInformation("Upgrade rescan step {Step} postponed: the loaded libddb has ABI {Major}.{Minor}, " +
+                                   "it needs ABI {Major}.{Required}. It runs once at the first start with a libddb that has it",
+                waiting.Id, _runtime.Capabilities.AbiMajor, abiMinor, _runtime.Capabilities.AbiMajor, waiting.RequiredAbiMinor);
+        if (steps.Length == 0)
+            return;
 
         using var lease = TryLock();
         if (lease == null)

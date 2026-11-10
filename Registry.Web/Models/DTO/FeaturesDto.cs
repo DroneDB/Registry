@@ -69,6 +69,13 @@ public class FeaturesDto
     public long? MaxExportSizeBytes { get; set; }
 
     /// <summary>
+    /// The largest coverage, in pixels on its longest side, that a WCS GetCoverage returns (FR-SHR-02, D-029). The
+    /// Hub sizes the sample GetCoverage URL of the Share dialog within it; a Hub that reads a server without this
+    /// field uses 4096.
+    /// </summary>
+    public int MaxWcsCoverageSizePixels { get; set; }
+
+    /// <summary>
     /// Size threshold (bytes) above which an authenticated bulk download is offloaded to
     /// the asynchronous <c>bulk-download</c> task. Whole-dataset downloads always use the
     /// async path. Clients compare the selection size against this value to route the download.

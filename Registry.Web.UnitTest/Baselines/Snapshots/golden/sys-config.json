@@ -1062,7 +1062,7 @@
       {
         "name": "ExportZip",
         "title": "Export & Zip",
-        "description": "Maximum GeoTIFF export sizes. ZIP downloads are streamed and need no memory threshold.",
+        "description": "Maximum GeoTIFF export and WCS coverage sizes. ZIP downloads are streamed and need no memory threshold.",
         "isActive": false,
         "fields": [
           {
@@ -1078,6 +1078,20 @@
             "minValue": null,
             "maxValue": null,
             "unit": "bytes"
+          },
+          {
+            "key": "MaxWcsCoverageSizePixels",
+            "displayName": "Max WCS Coverage Size",
+            "currentValue": "8192",
+            "defaultValue": "8192",
+            "isSet": false,
+            "description": "Largest WCS GetCoverage output, in pixels on the longest side. A larger request is an OGC exception that states the limit.",
+            "fieldType": "number",
+            "enumOptions": null,
+            "sensitive": false,
+            "minValue": 1,
+            "maxValue": null,
+            "unit": "pixels"
           }
         ]
       },

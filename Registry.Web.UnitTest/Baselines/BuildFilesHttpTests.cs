@@ -205,6 +205,24 @@ public sealed class BuildFilesHttpTests : IDisposable
         response.Content.Headers.ContentType!.ToString().ShouldBe("image/tiff; application=geotiff; profile=cloud-optimized");
     }
 
+    // FR-DEV-15: the type the listing gives for the artifact is the one of the file (it was application/octet-stream)
+    [TestCase("GET", "copc/cloud.copc.laz", "application/vnd.laszip+copc")]
+    [TestCase("HEAD", "copc/cloud.copc.laz", "application/vnd.laszip+copc")]
+    [TestCase("GET", "vec/source.gpkg", "application/geopackage+sqlite3")]
+    [TestCase("HEAD", "bm3d/model.bm3d", "application/vnd.dronedb.bm3d")]
+    public async Task BuildFile_OfACopcGpkgOrBm3d_IsServedWithTheTypeLibddbDeclares(string method, string relative,
+        string mediaType)
+    {
+        Resolves(relative, "artifact bytes", mediaType);
+
+        using var response = await SendAsync(new HttpMethod(method), BuildFileUrl(relative));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.Content.Headers.ContentType!.ToString().ShouldBe(mediaType);
+        // The user's bytes stay confined, whatever the type
+        response.Headers.GetValues("Content-Security-Policy").ShouldBe(["sandbox"]);
+    }
+
     [Test]
     public async Task BuildFile_WithoutAMediaTypeFromLibddb_FallsBackToTheOneOfItsExtension()
     {

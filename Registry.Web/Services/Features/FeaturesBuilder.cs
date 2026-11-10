@@ -126,6 +126,7 @@ public sealed class DownloadFeatures : IFeatureSection
         features.MaxConcurrentDownloadsPerUser = _downloads.MaxConcurrentDownloadsPerUser;
         features.DisableAnonymousBulkDownloads = _downloads.DisableAnonymousBulkDownloads;
         features.MaxExportSizeBytes = _downloads.MaxExportSizeBytes;
+        features.MaxWcsCoverageSizePixels = _downloads.MaxWcsCoverageSizePixels;
         features.BulkDownloadAsyncThresholdBytes = _platform.BulkDownloadAsyncThresholdBytes;
         features.DatasetThumbnailCandidates = _thumbnails.Candidates;
         return Task.CompletedTask;

@@ -158,8 +158,9 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
     {
         var bbox = layer.BboxWgs84 ?? [-180.0, -90.0, 180.0, 90.0];
         var info = await _svc.ProbeRasterAsync(ddb, layer, ct);
-        var rWidth = info.Width > 0 ? info.Width : 1024;
-        var rHeight = info.Height > 0 ? info.Height : 1024;
+        var grid = WcsCoverageService.NativeGrid(info, bbox);
+        var rWidth = grid.Width;
+        var rHeight = grid.Height;
 
         await w.WriteStartElementAsync(null, "CoverageOffering", NsWcs);
         await w.WriteElementStringAsync(null, "name", NsWcs, OgcNames.ToNcName(id));
@@ -193,12 +194,10 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
         await w.WriteElementStringAsync("gml", "pos", NsGml,
             FormattableString.Invariant($"{bbox[0]} {bbox[3]}"));
         await w.WriteEndElementAsync();
-        var dx = (bbox[2] - bbox[0]) / Math.Max(1, rWidth);
-        var dy = (bbox[3] - bbox[1]) / Math.Max(1, rHeight);
         await w.WriteElementStringAsync("gml", "offsetVector", NsGml,
-            FormattableString.Invariant($"{dx} 0"));
+            FormattableString.Invariant($"{grid.Dx} 0"));
         await w.WriteElementStringAsync("gml", "offsetVector", NsGml,
-            FormattableString.Invariant($"0 {-dy}"));
+            FormattableString.Invariant($"0 {-grid.Dy}"));
         await w.WriteEndElementAsync();
         await w.WriteEndElementAsync();
         await w.WriteEndElementAsync();
@@ -269,8 +268,9 @@ public sealed class WcsProtocol10Handler : IWcsProtocolHandler
         // the dependency on a server-side projector - this is acceptable because QGIS' WCS
         // 1.0 client defaults to EPSG:4326 and the GetCapabilities advertises both.
 
-        var width = OgcRequestParser.GetInt(query, "WIDTH", 0, 0, 4096);
-        var height = OgcRequestParser.GetInt(query, "HEIGHT", 0, 0, 4096);
+        // The limit of the size is WcsCoverageService's (FR-SHR-02): above it the answer is an exception, never a clamp
+        var width = OgcRequestParser.GetInt(query, "WIDTH", 0, 0, int.MaxValue);
+        var height = OgcRequestParser.GetInt(query, "HEIGHT", 0, 0, int.MaxValue);
 
         var (ddb, layer) = await _svc.ResolveCoverageAsync(orgSlug, dsSlug, coverageId, ct);
 

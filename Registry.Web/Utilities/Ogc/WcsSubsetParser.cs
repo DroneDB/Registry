@@ -16,8 +16,8 @@ namespace Registry.Web.Utilities.Ogc;
 /// </summary>
 public static class WcsSubsetParser
 {
-    private static readonly HashSet<string> LongAliases = new(StringComparer.OrdinalIgnoreCase) { "Long", "long", "lon", "x", "E", "Easting" };
-    private static readonly HashSet<string> LatAliases  = new(StringComparer.OrdinalIgnoreCase) { "Lat", "lat", "y", "N", "Northing" };
+    internal static readonly HashSet<string> LongAliases = new(StringComparer.OrdinalIgnoreCase) { "Long", "long", "lon", "x", "E", "Easting" };
+    internal static readonly HashSet<string> LatAliases  = new(StringComparer.OrdinalIgnoreCase) { "Lat", "lat", "y", "N", "Northing" };
 
     public static double[]? Parse(IReadOnlyCollection<string?>? rawSubsets, double[] coverageBboxWgs84)
     {

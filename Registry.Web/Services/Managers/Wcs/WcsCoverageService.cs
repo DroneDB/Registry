@@ -4,10 +4,12 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 using Registry.Ports.Json;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
@@ -25,14 +27,54 @@ public class WcsCoverageService : OgcManagerBase
     private readonly ILogger<WcsCoverageService> _logger;
     private readonly INativeWorkGate _gate;
     private readonly RasterInfoCache _rasterInfo;
+    private readonly DownloadOptions _downloads;
+
+    /// <summary>The size of a side of the grid DescribeCoverage writes for a raster whose size could not be read.</summary>
+    internal const int FallbackGridSize = 1024;
 
     public WcsCoverageService(OgcManagerDependencies dependencies, RasterInfoCache rasterInfo,
-        ILogger<WcsCoverageService> logger, INativeWorkGate? gate = null)
+        ILogger<WcsCoverageService> logger, INativeWorkGate? gate = null, IOptions<DownloadOptions>? downloads = null)
         : base(dependencies)
     {
         _logger = logger;
         _rasterInfo = rasterInfo;
         _gate = gate ?? Services.Adapters.NativeWorkGate.Default;
+        _downloads = downloads?.Value ?? new DownloadOptions();
+    }
+
+    /// <summary>
+    /// The largest GetCoverage output, in pixels on its longest side, for every WCS version
+    /// (<see cref="DownloadOptions.MaxWcsCoverageSizePixels"/>, D-029); the default when the key is not positive.
+    /// </summary>
+    public int MaxCoverageSizePixels => _downloads.MaxWcsCoverageSizePixels > 0
+        ? _downloads.MaxWcsCoverageSizePixels
+        : DownloadOptions.DefaultMaxWcsCoverageSizePixels;
+
+    /// <summary>
+    /// The native grid of a coverage whose WGS 84 extent is <paramref name="coverageBbox"/>: the size of the raster
+    /// (a square of <see cref="FallbackGridSize"/> pixels when it could not be read) and the size of one pixel. The one
+    /// place that decides it: DescribeCoverage of WCS 1.0, 1.1 and 2.0 and GetCoverage use it, so they agree.
+    /// </summary>
+    public static WcsGrid NativeGrid(WcsRasterInfo info, double[] coverageBbox)
+    {
+        var width = info.Width > 0 ? info.Width : FallbackGridSize;
+        var height = info.Height > 0 ? info.Height : FallbackGridSize;
+        return new WcsGrid(width, height, (coverageBbox[2] - coverageBbox[0]) / width,
+            (coverageBbox[3] - coverageBbox[1]) / height);
+    }
+
+    /// <summary>
+    /// Refuses an output above <see cref="MaxCoverageSizePixels"/>: an OGC exception that states the limit, never a
+    /// smaller image than the one asked for.
+    /// </summary>
+    /// <exception cref="OgcException">The longest side of the output is above the limit.</exception>
+    public void EnsureWithinLimit(int width, int height)
+    {
+        var limit = MaxCoverageSizePixels;
+        if (Math.Max(width, height) > limit)
+            throw new OgcException("InvalidParameterValue",
+                $"The coverage would be {width}x{height} pixels, above the WCS limit of {limit} pixels on the longest " +
+                "side. Ask for a subset or a smaller size (SCALESIZE, SCALEFACTOR, WIDTH, HEIGHT)", 400, "size");
     }
 
     /// <summary>List all raster coverages exposed by the dataset (already filtered to
@@ -140,8 +182,8 @@ public class WcsCoverageService : OgcManagerBase
     /// <param name="ddb">Resolved DDB handle for the dataset.</param>
     /// <param name="layer">Resolved coverage.</param>
     /// <param name="bboxWgs84">[minLon, minLat, maxLon, maxLat] in EPSG:4326.</param>
-    /// <param name="width">Target pixel width. Pass 0 to auto-compute from bbox.</param>
-    /// <param name="height">Target pixel height. Pass 0 to auto-compute from bbox.</param>
+    /// <param name="width">Target pixel width. Pass 0 for the native one: the bbox span over the pixel size of the coverage.</param>
+    /// <param name="height">Target pixel height. Pass 0 for the native one.</param>
     /// <param name="mime">Output MIME type (e.g. image/tiff, image/png, image/jpeg).</param>
     /// <param name="bands">Optional 1-based band selection (WCS 2.0 RangeSubset /
     /// WCS 1.1 RangeSubset / WCS 1.0 BANDS extension). When non-null the output
@@ -149,28 +191,28 @@ public class WcsCoverageService : OgcManagerBase
     /// <param name="outputCrs">Optional target CRS authority code (WCS 2.0 OUTPUTCRS /
     /// WCS 1.0 RESPONSE_CRS). Null/empty = EPSG:4326 (current behaviour).</param>
     /// <param name="ct">Cancels waiting for a native render slot (not a running render).</param>
-    public Task<byte[]> RenderRegionAsync(IDDB ddb, OgcLayerDto layer, double[] bboxWgs84,
+    /// <exception cref="OgcException">The bbox is invalid, or the output is above <see cref="MaxCoverageSizePixels"/>.</exception>
+    public async Task<byte[]> RenderRegionAsync(IDDB ddb, OgcLayerDto layer, double[] bboxWgs84,
         int width, int height, string mime,
         int[]? bands = null, string? outputCrs = null, CancellationToken ct = default)
     {
         if (bboxWgs84 == null || bboxWgs84.Length < 4)
             throw new OgcException("InvalidParameterValue", "Invalid bbox", 400);
-        const int targetMax = 2048;
-        const int targetMin = 64;
-        // Auto-derive a sensible size when the client does not supply explicit W/H
-        // (WCS 2.0 SUBSET, WCS 1.0 missing WIDTH/HEIGHT). 100000 ≈ ~1 m/pixel at the equator.
-        if (width <= 0)
-            width = (int)Math.Min(targetMax,
-                Math.Max(targetMin, (bboxWgs84[2] - bboxWgs84[0]) * 100000));
-        if (height <= 0)
-            height = (int)Math.Min(targetMax,
-                Math.Max(targetMin, (bboxWgs84[3] - bboxWgs84[1]) * 100000));
-        width = Math.Clamp(width, targetMin, targetMax);
-        height = Math.Clamp(height, targetMin, targetMax);
+        // An axis the client gave no size for gets the native one: the span of the region over the pixel size
+        // of the coverage (FR-SHR-02). Whatever the size, it is checked against the limit, never clamped
+        if (width <= 0 || height <= 0)
+        {
+            var info = await ProbeRasterAsync(ddb, layer, ct);
+            var (nativeWidth, nativeHeight) = NativeGrid(info, layer.BboxWgs84 ?? bboxWgs84).SizeOf(bboxWgs84);
+            if (width <= 0) width = nativeWidth;
+            if (height <= 0) height = nativeHeight;
+        }
+
+        EnsureWithinLimit(width, height);
         var src = ResolveRasterArtifact(ddb, layer);
         var mimeNorm = string.IsNullOrWhiteSpace(mime) ? "image/tiff" : mime;
         // Coverages can be large: they share the Heavy lane with thumbnails
-        return _gate.RunAsync(NativeLane.Heavy, () => DdbWrapper.RenderRasterRegion(src, bboxWgs84, "EPSG:4326",
+        return await _gate.RunAsync(NativeLane.Heavy, () => DdbWrapper.RenderRasterRegion(src, bboxWgs84, "EPSG:4326",
             width, height, mimeNorm, bands, outputCrs), ct);
     }
 

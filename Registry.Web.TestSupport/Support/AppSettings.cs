@@ -243,6 +243,11 @@ public class AppSettings
     public long? MaxExportSizeBytes { get; set; } = DownloadOptions.DefaultMaxExportSizeBytes;
 
     /// <summary>
+    /// The largest WCS GetCoverage output, in pixels on its longest side. Default: 8192.
+    /// </summary>
+    public int MaxWcsCoverageSizePixels { get; set; } = DownloadOptions.DefaultMaxWcsCoverageSizePixels;
+
+    /// <summary>
     /// Cron expression for cleanup expired jobs task.
     /// Default (when null, empty, or omitted): Hangfire's daily cron.
     /// Set to "disabled", "off", or "none" to remove the job.

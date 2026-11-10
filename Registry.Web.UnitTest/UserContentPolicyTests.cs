@@ -92,6 +92,83 @@ public class UserContentPolicyTests
         served.ContentSecurityPolicy.ShouldBe("sandbox");
     }
 
+    // FR-DEV-15: the types libddb declares for the artifacts of its entry handlers (entry_handler_pointcloud.cpp,
+    // entry_handler_vector.cpp, entry_handler_model.cpp), written out as they are there. Each one is served as itself
+    // for the file the artifact names, sandboxed and in place
+    [TestCase("copc/cloud.copc.laz", "application/vnd.laszip+copc")]
+    [TestCase("vec/source.gpkg", "application/geopackage+sqlite3")]
+    [TestCase("bm3d/model.bm3d", "application/vnd.dronedb.bm3d")]
+    [TestCase("cog/cog.tif", "image/tiff; application=geotiff; profile=cloud-optimized")]
+    [TestCase("nxs/model.nexus", "application/octet-stream")]
+    [TestCase("gsplat/model.rad", "application/octet-stream")]
+    [TestCase("3dtiles/tileset.json", "application/json")]
+    [TestCase("vec/local.json", "application/json")]
+    [TestCase("ept/ept.json", "application/json")]
+    public void BuildFile_OfEveryArtifactLibddbDeclares_ResolvesToItsDeclaredType(string path, string declared)
+    {
+        var served = UserContentPolicy.ForBuildFile(path, declared);
+
+        served.MediaType.ShouldBe(declared);
+        served.ContentSecurityPolicy.ShouldBe("sandbox");
+    }
+
+    [TestCase("copc/cloud.copc.laz", "application/vnd.laszip+copc")]
+    [TestCase("vec/source.gpkg", "application/geopackage+sqlite3")]
+    [TestCase("bm3d/model.bm3d", "application/vnd.dronedb.bm3d")]
+    public void BuildFile_OfCopcGpkgOrBm3d_HasTheTypeOfItsExtension_WithoutADeclaredType(string path, string mediaType)
+    {
+        var served = UserContentPolicy.ForBuildFile(path);
+
+        served.MediaType.ShouldBe(mediaType);
+        served.Inline.ShouldBeTrue();
+    }
+
+    [TestCase("copc/cloud.copc.laz")]
+    [TestCase("vec/source.gpkg")]
+    [TestCase("bm3d/model.bm3d")]
+    public void BuildFile_OfThoseTypes_WhoseDeclaredTypeIsOfAnotherKind_KeepsTheTypeOfItsExtension(string path)
+    {
+        // The declared type never changes the kind of the file: a document type is not taken
+        UserContentPolicy.ForBuildFile(path, "text/html").MediaType.ShouldNotBe("text/html");
+        UserContentPolicy.ForBuildFile(path, "text/html").Inline.ShouldBeTrue();
+    }
+
+    // The tiles of a legacy EPT dataset (ept-data/*.laz, not built, libddb build_layout.h LegacyEptDataFolder) are
+    // plain LAZ: only a *.copc.laz file or one in a copc/ folder is COPC
+    [TestCase("ept/ept-data/0-0-0-0.laz", "application/vnd.laszip")]
+    [TestCase("entwine_pointcloud/ept-data/1-0-1-0.LAZ", "application/vnd.laszip")]
+    [TestCase("cloud.laz", "application/vnd.laszip")]
+    [TestCase("copc/cloud.copc.laz", "application/vnd.laszip+copc")]
+    [TestCase("copc/cloud.laz", "application/vnd.laszip+copc")]
+    [TestCase("COPC\\cloud.laz", "application/vnd.laszip+copc")]
+    [TestCase("scan.copc.laz", "application/vnd.laszip+copc")]
+    [TestCase("a/b/scan.COPC.LAZ", "application/vnd.laszip+copc")]
+    public void BuildFile_OfALaz_IsCopcOnlyWhenItIsACopcFile(string path, string mediaType)
+    {
+        var served = UserContentPolicy.ForBuildFile(path);
+
+        served.MediaType.ShouldBe(mediaType);
+        served.Inline.ShouldBeTrue();
+        served.ContentSecurityPolicy.ShouldBe("sandbox");
+    }
+
+    [Test]
+    public void BuildFile_OfAnEptTile_WhoseDeclaredTypeIsCopc_IsStillPlainLaz() =>
+        UserContentPolicy.ForBuildFile("ept/ept-data/0-0-0-0.laz", "application/vnd.laszip+copc").MediaType
+            .ShouldBe("application/vnd.laszip");
+
+    // A raw file is not an artifact: a .laz or a .gpkg a user uploaded is not COPC or a build
+    [TestCase("data/scan.laz")]
+    [TestCase("data/roads.gpkg")]
+    [TestCase("data/model.bm3d")]
+    public void Entry_WithTheExtensionOfAnArtifact_IsStillAnAttachmentOfOctetStream(string path)
+    {
+        var served = UserContentPolicy.ForEntry(path);
+
+        served.MediaType.ShouldBe("application/octet-stream");
+        served.Inline.ShouldBeFalse();
+    }
+
     [Test]
     public void BuildFile_WithADeclaredTypeOfItsKind_KeepsTheDeclaredParameters()
     {

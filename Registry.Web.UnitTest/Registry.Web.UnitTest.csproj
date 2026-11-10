@@ -60,6 +60,10 @@
         <None Include="Baselines\Snapshots\**">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+        <!-- What the Registry serves for the Hub's OGC share templates: a copy of the Hub's __vectors__/ogc-contract.json (OgcContractFixtureTests) -->
+        <None Include="Ogc\Fixtures\*.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
         <!-- The input rule test cases the Hub also runs (InputRulesTests) -->
         <None Include="Rules\*.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

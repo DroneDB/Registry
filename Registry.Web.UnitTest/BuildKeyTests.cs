@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
@@ -14,6 +15,7 @@ using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.Hosting;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
@@ -391,6 +393,99 @@ public class BuildKeyTests
         fx.RescansOf("org", "ds").ShouldBe(1);
         fx.Ddbs.Values.Single().Verify(d => d.RescanIndex(
             It.Is<RescanOptions?>(o => o!.Types == "model,gaussiansplat,vector")), Times.Once);
+    }
+
+    // FR-SHR-03, D-050: the Registry registers the build-key step and the vector footprint step, and one job reads
+    // each dataset once for both: the vector entries are read again so that their footprints become WGS 84
+    [Test]
+    public void TheVectorFootprintStep_IsRegisteredWithTheBuildKeyStep_AndNamesTheVectorEntries()
+    {
+        using var services = new ServiceCollection().AddRegistryWebStartup().BuildServiceProvider();
+
+        var steps = services.GetServices<IUpgradeRescanStep>().ToArray();
+
+        steps.Select(s => s.Id).ShouldBe(["build-key", "vector-footprints"]);
+        steps.Single(s => s.Id == "vector-footprints").EntryTypes.ShouldBe([EntryType.Vector]);
+        UpgradeRescanSteps.FilterOf(steps).ToString().ShouldContain("vector");
+    }
+
+    [Test]
+    public async Task TheJob_WithTheVectorFootprintStep_RescansTheVectorEntriesOfEachDatasetOnce_AndRecordsIt()
+    {
+        using var fx = new JobFixture(("org", "one"), ("org", "two")) { AbiMinor = 3 };
+
+        await fx.Task(new BuildKeyRescanStep(), new VectorFootprintRescanStep()).ExecuteAsync(CancellationToken.None);
+
+        foreach (var ddb in fx.Ddbs.Values)
+            ddb.Verify(d => d.RescanIndex(It.Is<RescanOptions?>(o => o!.Types == "model,gaussiansplat,vector")), Times.Once);
+        fx.Progress("vector-footprints")!.Completed.ShouldBeTrue();
+        fx.Progress("vector-footprints")!.Datasets.ShouldBe(
+            new[] { fx.RefOf("org/one"), fx.RefOf("org/two") }.Order(StringComparer.Ordinal));
+
+        // A dataset rescanned for it is not rescanned again at the next start
+        await fx.Task(new BuildKeyRescanStep(), new VectorFootprintRescanStep()).ExecuteAsync(CancellationToken.None);
+        fx.RescansOf("org", "one").ShouldBe(1);
+        fx.RescansOf("org", "two").ShouldBe(1);
+    }
+
+    // A Registry that already ran the build-key rescan reads the vector entries once more at its first start of this release
+    [Test]
+    public async Task TheJob_AfterTheBuildKeyStepWasDone_RescansOnlyTheVectorEntries()
+    {
+        using var fx = new JobFixture(("org", "ds")) { AbiMinor = 3 };
+        fx.Ddbs.Values.Single().Setup(d => d.FindSummaries(It.IsAny<EntryQuery>())).Returns([
+            new EntrySummary { Path = "geo.ply", Type = EntryType.GaussianSplat, Hash = Hash },
+            new EntrySummary { Path = "roads.fgb", Type = EntryType.Vector, Hash = Hash }]);
+        await fx.Task(new BuildKeyRescanStep()).ExecuteAsync(CancellationToken.None);
+
+        await fx.Task(new BuildKeyRescanStep(), new VectorFootprintRescanStep()).ExecuteAsync(CancellationToken.None);
+
+        fx.Ddbs.Values.Single().Verify(d => d.RescanIndex(It.Is<RescanOptions?>(o => o!.Types == "vector")), Times.Once);
+    }
+
+    // FR-SHR-03: libddb 2.2 does not have the WGS 84 footprint fix (it comes with ABI 2.3). The vector footprint step is
+    // skipped without recording progress while the build-key step runs; at the first start on 2.3 it runs once
+    [Test]
+    public async Task TheJob_OnAbi22_SkipsTheVectorFootprintStepWithoutRecordingIt_AndRunsItOnceOnAbi23()
+    {
+        using var fx = new JobFixture(("org", "one"), ("org", "two")) { AbiMinor = 2 };
+        var steps = new IUpgradeRescanStep[] { new BuildKeyRescanStep(), new VectorFootprintRescanStep() };
+        foreach (var ddb in fx.Ddbs.Values)
+            ddb.Setup(d => d.FindSummaries(It.IsAny<EntryQuery>())).Returns([
+                new EntrySummary { Path = "geo.ply", Type = EntryType.GaussianSplat, Hash = Hash },
+                new EntrySummary { Path = "roads.fgb", Type = EntryType.Vector, Hash = Hash }]);
+
+        await fx.Task(steps).ExecuteAsync(CancellationToken.None);
+
+        foreach (var ddb in fx.Ddbs.Values)
+            ddb.Verify(d => d.RescanIndex(It.Is<RescanOptions?>(o => o!.Types == "model,gaussiansplat")), Times.Once);
+        fx.Progress("build-key")!.Completed.ShouldBeTrue();
+        fx.State!.Steps!.ContainsKey("vector-footprints").ShouldBeFalse("a skipped step records nothing");
+        fx.RescansOf("org", "one").ShouldBe(1);
+
+        // The same start again on 2.2: nothing to do for the vector step, still nothing recorded
+        await fx.Task(steps).ExecuteAsync(CancellationToken.None);
+        fx.RescansOf("org", "one").ShouldBe(1);
+        fx.State!.Steps!.ContainsKey("vector-footprints").ShouldBeFalse();
+
+        // The first start on 2.3: the vector entries are read, once
+        fx.AbiMinor = 3;
+        await fx.Task(steps).ExecuteAsync(CancellationToken.None);
+        foreach (var ddb in fx.Ddbs.Values)
+            ddb.Verify(d => d.RescanIndex(It.Is<RescanOptions?>(o => o!.Types == "vector")), Times.Once);
+        fx.Progress("vector-footprints")!.Completed.ShouldBeTrue();
+        fx.Progress("vector-footprints")!.Datasets.ShouldBe(
+            new[] { fx.RefOf("org/one"), fx.RefOf("org/two") }.Order(StringComparer.Ordinal));
+
+        await fx.Task(steps).ExecuteAsync(CancellationToken.None);
+        fx.RescansOf("org", "one").ShouldBe(2);
+    }
+
+    [Test]
+    public void TheVectorFootprintStep_NeedsAbi23_AndTheBuildKeyStepAbi22()
+    {
+        new VectorFootprintRescanStep().RequiredAbiMinor.ShouldBe(3);
+        new BuildKeyRescanStep().RequiredAbiMinor.ShouldBe(2);
     }
 
     [Test]

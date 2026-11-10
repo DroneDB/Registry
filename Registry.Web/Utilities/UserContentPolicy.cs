@@ -2,6 +2,7 @@ using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace Registry.Web.Utilities;
 
@@ -53,6 +54,23 @@ public static class UserContentPolicy
         new("tiff", "image/tiff"),
     ];
 
+    /// <summary>The type of the COPC point cloud of a build (<c>copc/cloud.copc.laz</c>).</summary>
+    public const string CopcMediaType = "application/vnd.laszip+copc";
+
+    /// <summary>The type of a plain LAZ file of a build: the tiles of a legacy EPT dataset (<c>ept-data/*.laz</c>).</summary>
+    public const string LazMediaType = "application/vnd.laszip";
+
+    // The files only a build makes, with the types libddb declares for its artifacts (FR-DEV-15): a raw file with the
+    // same extension is not one of them (a .laz a user uploaded is not COPC), so they are not in the raw-file list.
+    // Only a COPC file is COPC (IsCopcPath): any other .laz of a build, a tile of a legacy EPT dataset, is plain LAZ.
+    // bm3d is served sandboxed like every build file
+    private static readonly KeyValuePair<string, string>[] BuildOnlyTypes =
+    [
+        new("laz", LazMediaType),
+        new("gpkg", "application/geopackage+sqlite3"),
+        new("bm3d", "application/vnd.dronedb.bm3d"),
+    ];
+
     // What the Hub shows in place in a tab, a lightbox or a viewer: images, PDF, audio and video, text. Every
     // extension libddb makes an Image or a Video entry of is here, because the lightbox plays a video from the
     // download URL and opens a photo or a video in a tab
@@ -82,7 +100,7 @@ public static class UserContentPolicy
         new("geojson", "application/json"),
     ];
 
-    private static readonly FrozenDictionary<string, string> BuildFileTypes = ByExtension(BuildTypes);
+    private static readonly FrozenDictionary<string, string> BuildFileTypes = ByExtension([.. BuildTypes, .. BuildOnlyTypes]);
 
     private static readonly FrozenDictionary<string, string> EntryTypes =
         ByExtension([.. BuildTypes, .. EntryOnlyTypes]);
@@ -92,7 +110,21 @@ public static class UserContentPolicy
     /// libddb gives for an artifact, is kept (with its parameters) when it is a type the allow-list holds.
     /// </summary>
     public static ServedContent ForBuildFile(string path, string? declaredMediaType = null) =>
-        Resolve(BuildFileTypes, path, declaredMediaType, alwaysSandboxed: true);
+        Resolve(BuildFileTypes, path, declaredMediaType, alwaysSandboxed: true,
+            extensionMediaType: IsCopcPath(path) ? CopcMediaType : null);
+
+    /// <summary>
+    /// Whether a .laz file of a build is COPC: it is named <c>*.copc.laz</c> or lies in a <c>copc/</c> folder. The
+    /// other .laz files of a build are the tiles of an EPT dataset, which are plain LAZ.
+    /// </summary>
+    private static bool IsCopcPath(string path)
+    {
+        var segments = path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 0 || !segments[^1].EndsWith(".laz", StringComparison.OrdinalIgnoreCase)) return false;
+
+        return segments[^1].EndsWith(".copc.laz", StringComparison.OrdinalIgnoreCase)
+               || segments[..^1].Any(s => string.Equals(s, "copc", StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>The media type and disposition of a raw file of a dataset.</summary>
     public static ServedContent ForEntry(string path) =>
@@ -106,11 +138,14 @@ public static class UserContentPolicy
         IsViewerType(EssenceOf(mediaType)) ? null : Sandbox;
 
     private static ServedContent Resolve(FrozenDictionary<string, string> allowed, string path,
-        string? declaredMediaType, bool alwaysSandboxed)
+        string? declaredMediaType, bool alwaysSandboxed, string? extensionMediaType = null)
     {
         var extension = Path.GetExtension(path).TrimStart('.');
         if (!allowed.TryGetValue(extension, out var mediaType))
             return new ServedContent(OctetStream, Inline: false, Sandbox);
+
+        // The type of the file by its path where the extension alone does not say (a COPC file is a .laz)
+        mediaType = extensionMediaType ?? mediaType;
 
         // The declared type refines the one of the extension (image/tiff with its profile), it never changes the
         // kind of the file
