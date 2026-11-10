@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -46,6 +47,7 @@ public class DatasetLocationQueriesTests
     private User _outsider = null!;
     private User _administrator = null!;
     private Dictionary<string, Guid> _refs = null!;
+    private Mock<IDatasetSummaryProvider> _summaries = null!;
 
     [SetUp]
     public void Setup()
@@ -54,13 +56,21 @@ public class DatasetLocationQueriesTests
         (_owner, _member, _outsider, _administrator) = (_world.Owner, _world.Member, _world.Outsider, _world.Administrator);
         _refs = _world.Refs;
 
+        // The meta of the index: only "a-public" has a tagline, in the shape of the dataset summary (meta.<key>.data)
+        _summaries = new Mock<IDatasetSummaryProvider>();
+        _summaries.Setup(m => m.Get(It.IsAny<string>(), It.IsAny<Guid>()))
+            .Returns((string _, Guid dsRef) => new DatasetSummary(0,
+                _refs.Single(r => r.Value == dsRef).Key.EndsWith("a-public", StringComparison.Ordinal)
+                    ? TestJson.Parse("""{"meta":{"tagline":{"data":"Coastal orthophoto"}}}""").Deserialize<Dictionary<string, JsonElement>>()
+                    : null, null));
+
         // Every dataset is somewhere, but the one called "c-private" has no location at all
         _locations = new Mock<IDatasetLocationProvider>();
         _locations.Setup(l => l.GetAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string org, Guid dsRef, CancellationToken _) =>
                 _refs.Single(r => r.Value == dsRef).Key.EndsWith("c-private", StringComparison.Ordinal)
                     ? null
-                    : new DatasetLocation([1, 2, 3, 4]));
+                    : new DatasetLocation([1, 2, 3, 4], _refs.Single(r => r.Value == dsRef).Key.EndsWith("a-public", StringComparison.Ordinal) ? [1.5, 2.5] : null));
     }
 
     [TearDown]
@@ -68,7 +78,7 @@ public class DatasetLocationQueriesTests
 
     private Task<IReadOnlyList<Models.DTO.DatasetLocationDto>> Locations(User? caller, string orgSlug) =>
         new DatasetLocationQueries(_world.Datasets(caller), _world.Cache.Object, _world.DdbManager.Object,
-            _locations.Object, NullLogger<DatasetLocationQueries>.Instance).List(orgSlug);
+            _locations.Object, _summaries.Object, NullLogger<DatasetLocationQueries>.Instance).List(orgSlug);
 
     private async Task<string[]> Slugs(User? caller, string orgSlug) =>
         (await Locations(caller, orgSlug)).Select(l => l.Slug).ToArray();
@@ -81,7 +91,31 @@ public class DatasetLocationQueriesTests
         all.Select(l => l.Slug).ShouldBe(["a-public", "b-unlisted", "c-private"]);
         all[0].Name.ShouldBe("private-org a-public");
         all[0].Bbox.ShouldBe([1, 2, 3, 4]);
+        all[0].Point.ShouldBe([1.5, 2.5], "the point of the densest cluster goes with the box (FR-ORG-09)");
+        all[1].Point.ShouldBeNull("a dataset of one place has no point: the box's centre is its pin");
         all[2].Bbox.ShouldBeNull("a dataset without a location is listed with no box");
+    }
+
+    [Test]
+    public async Task TheTagline_GoesWithTheDataset_AsTheListSearchReadsIt_AndIsNullWithoutOne()
+    {
+        var all = await Locations(_owner, PrivateOrg);
+
+        all[0].Tagline.ShouldBe("Coastal orthophoto", "the map is filtered by name, slug and tagline, as the list is (FR-ORG-10)");
+        all[1].Tagline.ShouldBeNull();
+        all[2].Tagline.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task ADatasetWhoseSummaryCannotBeRead_IsListedWithoutATagline_AndTheOthersAreUnaffected()
+    {
+        _summaries.Setup(m => m.Get(PrivateOrg, _refs["private-org/b-unlisted"])).Throws(new DdbException("Not a valid DroneDB directory"));
+
+        var all = await Locations(_owner, PrivateOrg);
+
+        all[1].Tagline.ShouldBeNull();
+        all[1].Bbox.ShouldBe([1, 2, 3, 4]);
+        all[0].Tagline.ShouldBe("Coastal orthophoto");
     }
 
     [Test]

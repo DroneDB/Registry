@@ -58,9 +58,11 @@ public static class CacheCategories
 
     /// <summary>
     /// The location of a dataset (its bounding box on the map) at an index state: the fingerprint of the index files is
-    /// part of the key, so a change to the dataset never reads the location of the one before it.
+    /// part of the key, so a change to the dataset never reads the location of the one before it. The shape of the record
+    /// is part of the key too (<c>v2</c>: with the point of the densest cluster): a record kept in an earlier shape, which
+    /// has no point, is never read, whatever its 7 days.
     /// </summary>
-    public static string DatasetLocation(Guid internalRef, string fingerprint) => $"ds-location:{internalRef}:{fingerprint}";
+    public static string DatasetLocation(Guid internalRef, string fingerprint) => $"ds-location:v2:{internalRef}:{fingerprint}";
 
     /// <summary>The receipt of an upload request (its outcome, for a client retrying after a lost answer).</summary>
     public static string UploadReceipt(string orgSlug, string dsSlug, string uploadId) =>

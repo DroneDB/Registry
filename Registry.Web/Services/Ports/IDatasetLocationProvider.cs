@@ -6,7 +6,11 @@ namespace Registry.Web.Services.Ports;
 
 /// <summary>Where a dataset is on the map.</summary>
 /// <param name="Bbox">The bounding box in WGS84, <c>[minLon, minLat, maxLon, maxLat]</c>.</param>
-public sealed record DatasetLocation(double[] Bbox);
+/// <param name="Point">
+/// Where to pin the dataset, <c>[lon, lat]</c>: a position of its data in the densest cluster of it. Null when the box is
+/// one place (the centre of the box is where the data is) or no entry has a position.
+/// </param>
+public sealed record DatasetLocation(double[] Bbox, double[]? Point = null);
 
 /// <summary>
 /// The location of a dataset, for the maps that show many datasets at once. It is read once per state of the

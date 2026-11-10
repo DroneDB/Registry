@@ -59,7 +59,7 @@ public class CacheCategoriesTest
         CacheCategories.TasksList("o", "d").ShouldBe("tasks-list-v2:o/d");
         CacheCategories.PushSession("/p/session.json").ShouldBe("push-session:/p/session.json");
         CacheCategories.DatasetLocation(Guid.Parse("11111111-2222-3333-4444-555555555555"), "12-34-56-78")
-            .ShouldBe("ds-location:11111111-2222-3333-4444-555555555555:12-34-56-78");
+            .ShouldBe("ds-location:v2:11111111-2222-3333-4444-555555555555:12-34-56-78");
     }
 
     /// <summary>The location of a dataset is keyed on the state of its index: a change never reads the location before it.</summary>

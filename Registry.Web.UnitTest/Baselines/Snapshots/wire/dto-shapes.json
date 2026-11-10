@@ -1560,14 +1560,20 @@
     "full": {
       "slug": "Slug-text",
       "name": "Name-text",
+      "tagline": "Tagline-text",
       "bbox": [
         1.0
+      ],
+      "point": [
+        2.5
       ]
     },
     "sparse": {
       "slug": null,
       "name": null,
-      "bbox": null
+      "tagline": null,
+      "bbox": null,
+      "point": null
     }
   },
   "Registry.Web.Models.DTO.DatasetNewDto": {

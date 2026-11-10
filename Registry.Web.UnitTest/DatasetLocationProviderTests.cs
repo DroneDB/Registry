@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
@@ -32,6 +33,7 @@ public class DatasetLocationProviderTests
     private JsonElement _stac;
     private List<Entry> _entries = null!;
     private DatasetLocationProvider _provider = null!;
+    private IDistributedCache _store = null!;
 
     [SetUp]
     public void Setup()
@@ -49,7 +51,8 @@ public class DatasetLocationProviderTests
         _ddbManager = new Mock<IDdbManager>();
         _ddbManager.Setup(m => m.Open(Org, Ref)).Returns(_ddb.Object);
 
-        _provider = new DatasetLocationProvider(_ddbManager.Object, TestCaches.Records(),
+        _store = TestCaches.MemoryStore();
+        _provider = new DatasetLocationProvider(_ddbManager.Object, TestCaches.Records(_store),
             NullLogger<DatasetLocationProvider>.Instance);
     }
 
@@ -63,12 +66,95 @@ public class DatasetLocationProviderTests
     };
 
     [Test]
-    public async Task TheExtentOfTheIndex_IsTheLocation_AndNoEntryIsRead()
+    public async Task TheExtentOfTheIndex_IsTheLocation_AndNoEntryIsRead_WhenItIsOnePlace()
     {
+        _stac = Collection("[[10,20,10.5,20.25]]");
+
+        var location = await _provider.GetAsync(Org, Ref);
+
+        location.ShouldNotBeNull().Bbox.ShouldBe([10, 20, 10.5, 20.25]);
+        location.Point.ShouldBeNull();
+        _ddb.Verify(d => d.Find(It.IsAny<EntryQuery>()), Times.Never);
+    }
+
+    [Test]
+    public async Task AWideExtent_IsTheLocation_AndGetsThePointOfItsDensestCluster()
+    {
+        // Rome (three photos) and New York (two): the box [-74, 40, 12.6, 42] is wide, its centre is in the Atlantic
+        _stac = Collection("[[-74,40.5,12.6,42]]");
+        _entries = [PointEntry(12.4, 41.8), PointEntry(12.5, 41.9), PointEntry(12.6, 42), PointEntry(-74, 40.7), PointEntry(-73.9, 40.8)];
+
+        var location = await _provider.GetAsync(Org, Ref);
+
+        location.ShouldNotBeNull().Bbox.ShouldBe([-74, 40.5, 12.6, 42]);
+        location.Point.ShouldBe([12.5, 41.9]);
+    }
+
+    [Test]
+    public async Task APointCloudOfPositionsOnTwoContinents_IsPinnedInTheLargerCluster_WhateverTheOrder()
+    {
+        _stac = TestJson.Parse("{}");
+        _entries = [PointEntry(-74, 40.7), PointEntry(-73.9, 40.8), PointEntry(-73.8, 40.7), PointEntry(-73.95, 40.75),
+            PointEntry(2.3, 48.8), PointEntry(2.4, 48.9)];
+
+        var location = await _provider.GetAsync(Org, Ref);
+
+        location.ShouldNotBeNull().Bbox.ShouldBe([-74, 40.7, 2.4, 48.9]);
+        // The position of the New York cluster nearest to its centroid (-73.9125, 40.7375)
+        location.Point.ShouldBe([-73.95, 40.75]);
+
+        _entries.Reverse();
+        _fingerprint = "v2";
+        (await _provider.GetAsync(Org, Ref)).ShouldNotBeNull().Point.ShouldBe([-73.95, 40.75]);
+    }
+
+    [Test]
+    public async Task ADatasetOfOnePlaceFromItsEntries_HasNoPoint()
+    {
+        _stac = TestJson.Parse("{}");
+        _entries = [PointEntry(11, 45), PointEntry(11.2, 45.1)];
+
+        var location = await _provider.GetAsync(Org, Ref);
+
+        location.ShouldNotBeNull().Bbox.ShouldBe([11, 45, 11.2, 45.1]);
+        location.Point.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task AWideExtentWithoutPositionedEntries_HasNoPoint()
+    {
+        _entries = [];
+
         var location = await _provider.GetAsync(Org, Ref);
 
         location.ShouldNotBeNull().Bbox.ShouldBe([10, 20, 30, 40]);
-        _ddb.Verify(d => d.Find(It.IsAny<EntryQuery>()), Times.Never);
+        location.Point.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task ThePoint_IsKeptWithTheLocation()
+    {
+        _entries = [PointEntry(12.4, 41.8), PointEntry(-74, 40.7)];
+
+        (await _provider.GetAsync(Org, Ref)).ShouldNotBeNull().Point.ShouldBe([-74, 40.7]);
+        _entries = [];
+        (await _provider.GetAsync(Org, Ref)).ShouldNotBeNull().Point.ShouldBe([-74, 40.7]);
+        _ddb.Verify(d => d.Find(It.IsAny<EntryQuery>()), Times.Once);
+    }
+
+    [Test]
+    public async Task ARecordKeptInTheShapeBeforeThePoint_IsNotUsed()
+    {
+        // What the previous version kept for this state of the index (7 days): a box, no point, and a box that is not the
+        // current one so that a read of it would show
+        _store.SetString($"ds-location:{Ref}:v1", "{\"Bbox\":[-74,40.5,12.6,42]}");
+        _stac = Collection("[[-74,40.5,12.6,42]]");
+        _entries = [PointEntry(12.4, 41.8), PointEntry(12.5, 41.9), PointEntry(12.6, 42), PointEntry(-74, 40.7)];
+
+        var location = await _provider.GetAsync(Org, Ref);
+
+        location.ShouldNotBeNull().Point.ShouldBe([12.5, 41.9]);
+        _ddb.Verify(d => d.Find(It.IsAny<EntryQuery>()), Times.Once);
     }
 
     [Test]

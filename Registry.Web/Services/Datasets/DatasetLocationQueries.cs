@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
+using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
@@ -20,15 +21,17 @@ public sealed class DatasetLocationQueries
     private readonly ICacheManager _cacheManager;
     private readonly IDdbManager _ddbManager;
     private readonly IDatasetLocationProvider _locations;
+    private readonly IDatasetSummaryProvider _summaries;
     private readonly ILogger<DatasetLocationQueries> _logger;
 
     public DatasetLocationQueries(DatasetQueries datasets, ICacheManager cacheManager, IDdbManager ddbManager,
-        IDatasetLocationProvider locations, ILogger<DatasetLocationQueries> logger)
+        IDatasetLocationProvider locations, IDatasetSummaryProvider summaries, ILogger<DatasetLocationQueries> logger)
     {
         _datasets = datasets;
         _cacheManager = cacheManager;
         _ddbManager = ddbManager;
         _locations = locations;
+        _summaries = summaries;
         _logger = logger;
     }
 
@@ -47,6 +50,7 @@ public sealed class DatasetLocationQueries
             // One native read per dataset on a cold cache: nobody waits for the map any more, stop
             ct.ThrowIfCancellationRequested();
 
+            var location = await _locations.GetAsync(orgSlug, ds.InternalRef, ct);
             locations.Add(new DatasetLocationDto
             {
                 Slug = ds.Slug,
@@ -54,7 +58,12 @@ public sealed class DatasetLocationQueries
                 Name = await PerDatasetRead.OrNullAsync(
                     () => _cacheManager.GetDatasetNameAsync(orgSlug, ds.InternalRef, _ddbManager, ct),
                     ex => _logger.LogWarning(ex, "No name for dataset {OrgSlug}/{DsSlug}", orgSlug, ds.Slug)),
-                Bbox = (await _locations.GetAsync(orgSlug, ds.InternalRef, ct))?.Bbox
+                // The tagline the list's search matches, from the summary the list reads (kept per state of the index)
+                Tagline = await PerDatasetRead.OrNullAsync(
+                    () => Task.FromResult(DatasetListQuery.TaglineOf(_summaries.Get(orgSlug, ds.InternalRef).Properties)),
+                    ex => _logger.LogWarning(ex, "No tagline for dataset {OrgSlug}/{DsSlug}", orgSlug, ds.Slug)),
+                Bbox = location?.Bbox,
+                Point = location?.Point
             });
         }
 

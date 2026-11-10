@@ -1214,7 +1214,7 @@ schema CreateUserRequest { userName:string, password:string, email:string, roles
 schema CronRuleDto { disableWords:array<string>, minFields:integer(int32), maxFields:integer(int32), macros:array<string>, description:string }
 schema DatasetCleanupBuildDto { removedEntries:array<string>, removedBuilds:array<string> }
 schema DatasetDto { slug:string, creationDate:string(date-time), properties:map<any>, size:integer(int64), lastModified:string(date-time), permissions:DatasetPermissionsDto, hasThumbnail:boolean }
-schema DatasetLocationDto { slug:string, name:string, bbox:array<number(double)> }
+schema DatasetLocationDto { slug:string, name:string, tagline:string, bbox:array<number(double)>, point:array<number(double)> }
 schema DatasetPermissionsDto { canRead:boolean, canWrite:boolean, canDelete:boolean }
 schema DeleteBatchResponse { deleted:array<string>, failed:map<string> }
 schema DeleteUserResultDto { userName:string, successor:string, organizationsTransferred:integer(int32), organizationsDeleted:integer(int32), datasetsTransferred:integer(int32), datasetsDeleted:integer(int32), batchesDeleted:integer(int32), datasetResults:array<MoveDatasetResultDto> }

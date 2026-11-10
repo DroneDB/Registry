@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -41,7 +42,7 @@ public sealed class DatasetLocationProvider : IDatasetLocationProvider
     /// What the cache keeps: the cache does not store a null, and "this dataset has no location" is an answer worth
     /// keeping as much as a location.
     /// </summary>
-    private sealed record CachedLocation(double[]? Bbox);
+    private sealed record CachedLocation(double[]? Bbox, double[]? Point);
 
     // One unreadable dataset index must not take a map of many datasets down; a busy one is retried by the caller
     public Task<DatasetLocation?> GetAsync(string orgSlug, Guid internalRef, CancellationToken ct = default) =>
@@ -59,9 +60,13 @@ public sealed class DatasetLocationProvider : IDatasetLocationProvider
             return Read(ddb, orgSlug, internalRef); // the files cannot be stat-ed: nothing to key a record on
 
         var cached = await _records.GetOrCreateRecordAsync(CacheCategories.DatasetLocation(internalRef, fingerprint),
-            _ => Task.FromResult(new CachedLocation(Read(ddb, orgSlug, internalRef)?.Bbox)), CacheOptions, ct);
+            _ =>
+            {
+                var read = Read(ddb, orgSlug, internalRef);
+                return Task.FromResult(new CachedLocation(read?.Bbox, read?.Point));
+            }, CacheOptions, ct);
 
-        return cached.Bbox is null ? null : new DatasetLocation(cached.Bbox);
+        return cached.Bbox is null ? null : new DatasetLocation(cached.Bbox, cached.Point);
     }
 
     // The cost of a miss, which is what a map of many datasets pays on a cold cache (debug log: how long, and which way)
@@ -79,18 +84,30 @@ public sealed class DatasetLocationProvider : IDatasetLocationProvider
     {
         fromEntries = false;
         var extent = StacDocuments.SpatialBbox(ddb.GetStacData());
-        if (IsLocation(extent))
+        var hasExtent = IsLocation(extent);
+
+        // A box of one place needs no entry read: its centre is where the data is. A wider one gets the point of its
+        // densest cluster, and a dataset without extent gets its box from the entries (the same read)
+        if (hasExtent && LocationClusters.IsCompact(extent!))
             return new DatasetLocation(extent!);
 
-        fromEntries = true;
+        fromEntries = !hasExtent;
         var box = new GeoJsonBbox();
+        var positions = new List<(double Lon, double Lat)>();
         foreach (var entry in ddb.Find(EntryQuery.OfTypes(null, PositionedTypes)))
         {
             box.Add(entry.PointGeometry);
             box.Add(entry.PolygonGeometry);
+            if ((GeoJsonBbox.Of(entry.PointGeometry) ?? GeoJsonBbox.Of(entry.PolygonGeometry)) is [var minLon, var minLat, var maxLon, var maxLat])
+                positions.Add(((minLon + maxLon) / 2, (minLat + maxLat) / 2));
         }
 
-        return box.Result is { } bbox ? new DatasetLocation(bbox) : null;
+        if (hasExtent)
+            return new DatasetLocation(extent!, LocationClusters.RepresentativePoint(positions));
+
+        if (box.Result is not { } bbox)
+            return null;
+        return new DatasetLocation(bbox, LocationClusters.IsCompact(bbox) ? null : LocationClusters.RepresentativePoint(positions));
     }
 
     // libddb writes all zeros for a dataset without extent

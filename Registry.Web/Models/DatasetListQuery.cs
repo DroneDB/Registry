@@ -61,7 +61,10 @@ public sealed record DatasetListQuery(int Skip = 0, int? Take = null, string? Qu
     private static bool Matches(DatasetDto d, string query) =>
         NameOf(d).Contains(query, StringComparison.CurrentCultureIgnoreCase) ||
         d.Slug.Contains(query, StringComparison.CurrentCultureIgnoreCase) ||
-        (Meta(d, "tagline")?.Contains(query, StringComparison.CurrentCultureIgnoreCase) ?? false);
+        (TaglineOf(d.Properties)?.Contains(query, StringComparison.CurrentCultureIgnoreCase) ?? false);
+
+    /// <summary>The tagline of a dataset from its properties (its tagline meta), null when it has none: what the search matches.</summary>
+    public static string? TaglineOf(Dictionary<string, JsonElement>? properties) => Meta(properties, "tagline");
 
     /// <summary>The display name the Hub shows: the name meta, else the slug.</summary>
     public static string NameOf(DatasetDto d) => Meta(d, "name") is { Length: > 0 } name ? name : d.Slug;
@@ -76,11 +79,15 @@ public sealed record DatasetListQuery(int Skip = 0, int? Take = null, string? Qu
             ? (Visibility)visibility
             : Visibility.Private;
 
-    private static string? Meta(DatasetDto d, string key) =>
-        MetaToken(d, key) is { } token ? token.ValueKind == JsonValueKind.String ? token.GetString() : token.GetRawText() : null;
+    private static string? Meta(DatasetDto d, string key) => Meta(d.Properties, key);
 
-    private static JsonElement? MetaToken(DatasetDto d, string key) =>
-        d.Properties != null && d.Properties.TryGetValue("meta", out var meta) && meta.ValueKind == JsonValueKind.Object &&
+    private static string? Meta(Dictionary<string, JsonElement>? properties, string key) =>
+        MetaToken(properties, key) is { } token ? token.ValueKind == JsonValueKind.String ? token.GetString() : token.GetRawText() : null;
+
+    private static JsonElement? MetaToken(DatasetDto d, string key) => MetaToken(d.Properties, key);
+
+    private static JsonElement? MetaToken(Dictionary<string, JsonElement>? properties, string key) =>
+        properties != null && properties.TryGetValue("meta", out var meta) && meta.ValueKind == JsonValueKind.Object &&
         meta.TryGetProperty(key, out var entry) && entry.ValueKind == JsonValueKind.Object &&
         entry.TryGetProperty("data", out var data)
             ? data
