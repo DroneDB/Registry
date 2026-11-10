@@ -121,6 +121,12 @@ public sealed class UserRolesHttpTests : IDisposable
         rules["entryName"]!["rootReservedNames"]!.AsArray().Select(r => r!.GetValue<string>()).ShouldBe([".uploads"]);
         rules["nameClash"]!["caseInsensitive"]!.GetValue<bool>().ShouldBeTrue();
         rules["cron"]!["disableWords"]!.AsArray().Count.ShouldBe(3);
+        rules["cron"]!["minFields"]!.GetValue<int>().ShouldBe(5);
+        rules["cron"]!["maxFields"]!.GetValue<int>().ShouldBe(6);
+        rules["name"]!["pattern"]!.GetValue<string>().ShouldBe("^[a-z0-9]{1,127}$");
+        rules["name"]!["minLength"]!.GetValue<int>().ShouldBe(1);
+        rules["name"]!["maxLength"]!.GetValue<int>().ShouldBe(127);
+        rules["name"]!["description"]!.GetValue<string>().ShouldBe(NameRules.Description);
         rules["latinName"]!["messageWithoutSlug"]!.GetValue<string>().ShouldBe(InputRules.LatinNameMessageWithoutSlug);
     }
 
@@ -133,6 +139,101 @@ public sealed class UserRolesHttpTests : IDisposable
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await DetailOf(response)).ShouldContain("system role");
+    }
+
+    // FR-ADM-01: a role from before the name rule, with a "/", is listed and can be deleted (the Hub sends it encoded)
+    [TestCase("a%2Fb", "a/b")]
+    [TestCase("a%2fb%2Fc", "a/b/c")]
+    [TestCase("Bad%20Role!", "Bad Role!")]
+    public async Task DeleteRole_ALegacyRoleWithASlashOrASign_Is204_AndTheRoleIsGone(string route, string stored)
+    {
+        using (var scope = _factory.Services.CreateScope())
+            (await scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>()
+                .CreateAsync(new IdentityRole(stored))).Succeeded.ShouldBeTrue();
+
+        using var listed = await SendAsync(HttpMethod.Get, "/users/roles");
+        JsonNode.Parse(await listed.Content.ReadAsStringAsync())!.AsArray()
+            .Select(r => r!.GetValue<string>()).ShouldContain(stored);
+
+        using var response = await SendAsync(HttpMethod.Delete, $"/users/roles/{route}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        using var scope2 = _factory.Services.CreateScope();
+        (await scope2.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>().RoleExistsAsync(stored)).ShouldBeFalse();
+    }
+
+    [TestCase("a/b")]
+    [TestCase("Bad Role!")]
+    [TestCase("a-b")]
+    public async Task CreateRole_ANameOutsideTheRule_Is400_WithTheRuleAtTheRoleNameField(string name)
+    {
+        using var response = await SendAsync(HttpMethod.Post, "/users/roles", content: JsonContent.Create(new { roleName = name }));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        body["detail"]!.GetValue<string>().ShouldBe(NameRules.InvalidMessage("Role name"));
+        body["errors"]!["roleName"]!.AsArray().Select(m => m!.GetValue<string>()).ShouldBe([NameRules.InvalidMessage("Role name")]);
+        using var scope = _factory.Services.CreateScope();
+        (await scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>().RoleExistsAsync(name)).ShouldBeFalse();
+    }
+
+    // FR-ADM-02, FR-ADM-22: the refusal of Add User names its field
+    [TestCase("t-admin-user")]
+    [TestCase("TADMIN")]
+    [TestCase("bad name!")]
+    public async Task CreateUser_ANameOutsideTheRule_Is400_WithTheRuleAtTheUserNameField(string name)
+    {
+        using var response = await SendAsync(HttpMethod.Post, "/users", content: JsonContent.Create(
+            new { userName = name, password = Password }));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        body["errors"]!["userName"]!.AsArray().Select(m => m!.GetValue<string>()).ShouldBe([NameRules.InvalidMessage("User name")]);
+        (await FindUser(name)).ShouldBeNull();
+    }
+
+    [Test]
+    public async Task CreateUser_AUserThatExists_Is409_AtTheUserNameField()
+    {
+        using var response = await SendAsync(HttpMethod.Post, "/users", content: JsonContent.Create(
+            new { userName = "admin", password = Password }));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        body["errors"]!["userName"]!.AsArray().Select(m => m!.GetValue<string>()).ShouldBe(["User already exists"]);
+    }
+
+    // FR-ADM-07: the e-mail is optional in Edit User
+    [Test]
+    public async Task UpdateUser_AnEmptyEmail_IsAccepted_AndStoresNoAddress_AnOmittedOneKeepsIt()
+    {
+        const string user = "noaddress";
+        await _factory.CreateUserAsync(user, password: Password);
+
+        using (var omitted = await SendAsync(HttpMethod.Put, $"/users/{user}", content: JsonContent.Create(new { roles = new[] { "viewer" } })))
+            omitted.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await FindUser(user)).Email.ShouldBe($"{user}@example.com");
+        (await RolesOf(user)).ShouldBe(["viewer"]);
+
+        using (var emptied = await SendAsync(HttpMethod.Put, $"/users/{user}", content: Edit("", "editor")))
+            emptied.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await FindUser(user)).Email.ShouldBeNull();
+        (await RolesOf(user)).ShouldBe(["editor"]);
+    }
+
+    [Test]
+    public async Task UpdateUser_AnEmailThatIsNotAnAddress_Is400_AtTheEmailField_AndChangesNothing()
+    {
+        const string user = "badaddress";
+        await _factory.CreateUserAsync(user, password: Password);
+
+        using var response = await SendAsync(HttpMethod.Put, $"/users/{user}", content: Edit("not an email", "viewer"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        body["errors"]!["email"]!.AsArray().Select(m => m!.GetValue<string>()).ShouldBe([InputRules.InvalidEmailMessage]);
+        (await RolesOf(user)).ShouldBeEmpty();
+        (await FindUser(user)).Email.ShouldBe($"{user}@example.com");
     }
 
     [Test]

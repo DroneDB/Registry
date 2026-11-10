@@ -36,6 +36,9 @@ public sealed class UserRoles
         _authManager = authManager;
     }
 
+    // The member of the create request that names the field (D-047)
+    private const string RoleNameField = "roleName";
+
     private const string LastActiveAdminMessage =
         "Cannot disable the last active administrator: make another user an administrator first";
 
@@ -55,6 +58,10 @@ public sealed class UserRoles
         if (string.IsNullOrWhiteSpace(roleName))
             throw new BadRequestException("Role name cannot be empty");
 
+        // The rule of FR-XC-12 (D-007), the one of user names: a role that the delete route cannot name ("a/b") is never made
+        if (!NameRules.IsValid(roleName))
+            throw new InvalidFieldException(RoleNameField, NameRules.InvalidMessage("Role name"));
+
         var roleExists = await _roleManager.RoleExistsAsync(roleName);
         if (roleExists)
             throw new BadRequestException($"Role '{roleName}' already exists");
@@ -65,16 +72,27 @@ public sealed class UserRoles
                 $"Failed to create role: {string.Join(", ", result.Errors.Select(e => e.Description))}");
     }
 
+    /// <summary>
+    /// Deletes a role. <paramref name="roleName"/> is the route value: a name with "/" arrives percent-encoded
+    /// ("a%2Fb", the router keeps %2F), so a role that is not found as written is looked up unescaped (FR-ADM-01):
+    /// every listed role can be deleted, also a legacy one that the creation rule would refuse today.
+    /// </summary>
     public async Task DeleteRole(string roleName)
     {
         if (string.IsNullOrWhiteSpace(roleName))
             throw new BadRequestException("Role name cannot be empty");
 
+        var role = await _roleManager.FindByNameAsync(roleName);
+        if (role == null && roleName.Contains('%'))
+        {
+            roleName = Uri.UnescapeDataString(roleName);
+            role = string.IsNullOrWhiteSpace(roleName) ? null : await _roleManager.FindByNameAsync(roleName);
+        }
+
         // The server depends on the system roles, in any letter case (Identity finds 'Admin' as 'admin')
         if (SystemRoles.IsSystemRole(roleName))
             throw new BadRequestException($"Cannot delete the system role '{roleName}'");
 
-        var role = await _roleManager.FindByNameAsync(roleName);
         if (role == null)
             throw new BadRequestException($"Role '{roleName}' does not exist");
 

@@ -129,6 +129,142 @@ public class UserRolesTests
 
     #endregion
 
+    #region CreateRole and the delete of a legacy role (FR-ADM-01)
+
+    // The role created, listed and deleted by one name rule
+    [TestCase("a/b")]
+    [TestCase("Bad Role!")]
+    [TestCase("a-b")]
+    [TestCase("Editor2")]
+    [TestCase("a.b")]
+    public async Task CreateRole_ANameOutsideTheRule_Is400AtTheRoleNameField_AndMakesNoRole(string name)
+    {
+        var ex = await Should.ThrowAsync<InvalidFieldException>(() => _roles.CreateRole(name));
+
+        ex.StatusCode.ShouldBe(400);
+        ex.Message.ShouldBe("Role name is invalid: use 1 to 127 characters: lowercase letters (a–z) and digits (0–9)");
+        ex.FieldErrors!.Keys.ShouldBe(["roleName"]);
+        (await _roleManager.RoleExistsAsync(name)).ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task CreateRole_ANameThatFollowsTheRule_IsCreated()
+    {
+        await _roles.CreateRole("surveyors2");
+
+        (await _roleManager.RoleExistsAsync("surveyors2")).ShouldBeTrue();
+        await Should.ThrowAsync<InvalidFieldException>(() => _roles.CreateRole(new string('a', 128)));
+        await _roles.CreateRole(new string('a', 127));
+    }
+
+    // A role from before the rule: listed, so it can be deleted, also through the percent-encoded route value
+    [TestCase("a/b", "a%2Fb")]
+    [TestCase("a/b", "a/b")]
+    [TestCase("Bad Role!", "Bad Role!")]
+    [TestCase("Bad Role!", "Bad%20Role!")]
+    [TestCase("100%", "100%")]
+    public async Task DeleteRole_ALegacyRoleWithASlashOrASign_IsDeleted(string stored, string routeValue)
+    {
+        (await _roleManager.CreateAsync(new IdentityRole(stored))).Succeeded.ShouldBeTrue();
+
+        await _roles.DeleteRole(routeValue);
+
+        (await _roleManager.RoleExistsAsync(stored)).ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task DeleteRole_ASystemRoleBehindAPercentEscape_Is400()
+    {
+        await Should.ThrowAsync<BadRequestException>(() => _roles.DeleteRole("%61dmin"));
+
+        (await _roleManager.RoleExistsAsync(Admin)).ShouldBeTrue();
+    }
+
+    #endregion
+
+    #region Add User and Edit User names and e-mail
+
+    [TestCase("t-admin-user")]
+    [TestCase("TADMINUPPER")]
+    [TestCase("bad name!")]
+    [TestCase("")]
+    [TestCase("a.b")]
+    [TestCase("bob\n")]
+    public async Task CreateUser_ANameOutsideTheRule_Is400AtTheUserNameField(string name)
+    {
+        var ex = await Should.ThrowAsync<InvalidFieldException>(() => _accounts.CreateUser(name, null, "Password1", null));
+
+        ex.Message.ShouldBe("User name is invalid: use 1 to 127 characters: lowercase letters (a–z) and digits (0–9)");
+        ex.FieldErrors!.Keys.ShouldBe(["userName"]);
+    }
+
+    [Test]
+    public async Task CreateUser_ANameThatExists_Is409AtTheUserNameField()
+    {
+        var ex = await Should.ThrowAsync<ConflictException>(() => _accounts.CreateUser("boss", null, "Password1", null));
+
+        ex.StatusCode.ShouldBe(409);
+        ex.FieldErrors!["userName"].ShouldBe(["User already exists"]);
+    }
+
+    [Test]
+    public async Task CreateUser_AnEmailThatIsNotAnAddress_Is400AtTheEmailField()
+    {
+        var ex = await Should.ThrowAsync<InvalidFieldException>(() => _accounts.CreateUser("bob", "not an email", "Password1", null));
+
+        ex.Message.ShouldBe(InputRules.InvalidEmailMessage);
+        ex.FieldErrors!.Keys.ShouldBe(["email"]);
+    }
+
+    // FR-ADM-07: the e-mail is optional in Edit User
+    [TestCase("")]
+    [TestCase("   ")]
+    public async Task UpdateUser_AnEmptyEmail_RemovesTheAddress(string email)
+    {
+        await CreateUser("pat");
+
+        await _accounts.UpdateUser("pat", email);
+
+        var pat = await _users.FindByNameAsync("pat");
+        pat!.Email.ShouldBeNull();
+        pat.NormalizedEmail.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task UpdateUser_AnOmittedEmail_KeepsTheAddress()
+    {
+        await CreateUser("pat");
+
+        await _accounts.UpdateUser("pat", null);
+
+        (await _users.FindByNameAsync("pat"))!.Email.ShouldBe("pat@example.com");
+    }
+
+    [Test]
+    public async Task UpdateUser_AnEmailThatIsNotAnAddress_Is400AtTheEmailField_AndKeepsTheAddress()
+    {
+        await CreateUser("pat");
+
+        var ex = await Should.ThrowAsync<InvalidFieldException>(() => _accounts.UpdateUser("pat", "not an email"));
+
+        ex.FieldErrors!.Keys.ShouldBe(["email"]);
+        (await _users.FindByNameAsync("pat"))!.Email.ShouldBe("pat@example.com");
+    }
+
+    [Test]
+    public async Task UpdateUser_ANewAddress_IsStoredTrimmed_WithItsNormalizedForm()
+    {
+        await CreateUser("pat");
+
+        await _accounts.UpdateUser("pat", " Pat.New@Example.com ");
+
+        var pat = await _users.FindByNameAsync("pat");
+        pat!.Email.ShouldBe("Pat.New@Example.com");
+        pat.NormalizedEmail.ShouldBe("PAT.NEW@EXAMPLE.COM");
+    }
+
+    #endregion
+
     #region UpdateUserRoles (Edit User)
 
     [Test]

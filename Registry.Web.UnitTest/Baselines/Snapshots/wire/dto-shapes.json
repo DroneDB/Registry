@@ -1458,10 +1458,18 @@
       "disableWords": [
         "DisableWords-text"
       ],
+      "minFields": 42,
+      "maxFields": 42,
+      "macros": [
+        "Macros-text"
+      ],
       "description": "Description-text"
     },
     "sparse": {
       "disableWords": null,
+      "minFields": null,
+      "maxFields": null,
+      "macros": null,
       "description": null
     }
   },
@@ -1937,6 +1945,13 @@
           "description": "Description-text",
           "message": "Message-text"
         },
+        "name": {
+          "pattern": "Pattern-text",
+          "minLength": 42,
+          "maxLength": 42,
+          "description": "Description-text",
+          "message": "Message-text"
+        },
         "email": {
           "pattern": "Pattern-text",
           "minLength": 42,
@@ -1961,6 +1976,11 @@
         "cron": {
           "disableWords": [
             "DisableWords-text"
+          ],
+          "minFields": 42,
+          "maxFields": 42,
+          "macros": [
+            "Macros-text"
           ],
           "description": "Description-text"
         },
@@ -2401,6 +2421,13 @@
         "description": "Description-text",
         "message": "Message-text"
       },
+      "name": {
+        "pattern": "Pattern-text",
+        "minLength": 42,
+        "maxLength": 42,
+        "description": "Description-text",
+        "message": "Message-text"
+      },
       "email": {
         "pattern": "Pattern-text",
         "minLength": 42,
@@ -2426,6 +2453,11 @@
         "disableWords": [
           "DisableWords-text"
         ],
+        "minFields": 42,
+        "maxFields": 42,
+        "macros": [
+          "Macros-text"
+        ],
         "description": "Description-text"
       },
       "latinName": {
@@ -2438,6 +2470,7 @@
     },
     "sparse": {
       "slug": null,
+      "name": null,
       "email": null,
       "entryName": null,
       "nameClash": null,

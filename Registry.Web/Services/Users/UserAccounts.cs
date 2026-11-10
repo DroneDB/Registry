@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -49,8 +48,9 @@ public sealed class UserAccounts
                 "Manual user creation is disabled. Users are provisioned automatically on their first login " +
                 "via the configured identity provider.", noRetry: true);
 
-        if (!IsValidUserName(userName))
-            throw new BadRequestException("The provided username is not valid");
+        // The rule of FR-XC-12 for users created here (D-007); a user an external provider signs in keeps the Identity set
+        if (!NameRules.IsValid(userName))
+            throw new InvalidFieldException(UserNameField, NameRules.InvalidMessage("User name"));
 
         // The e-mail address is optional; one that is given must be one valid address
         email = string.IsNullOrWhiteSpace(email) ? null : CheckedEmail(email);
@@ -58,7 +58,10 @@ public sealed class UserAccounts
         var user = await _userManager.FindByNameAsync(userName);
 
         if (user != null)
-            throw new ConflictException("User already exists");
+            throw new ConflictException("User already exists")
+            {
+                FieldErrors = new Dictionary<string, string[]> { [UserNameField] = ["User already exists"] }
+            };
 
         user = await _provisioning.CreateAsync(new User { UserName = userName, Email = email }, password, roles);
 
@@ -79,36 +82,45 @@ public sealed class UserAccounts
         };
     }
 
-    private static bool IsValidUserName(string userName)
-    {
-        return Regex.IsMatch(userName, "^[a-z0-9]{1,127}$", RegexOptions.Singleline);
-    }
+    // The members of the requests that name a field (D-047)
+    private const string UserNameField = "userName";
+    private const string EmailField = "email";
 
-    // The address as stored (trimmed), or the 400 of the e-mail rule
+    // The address as stored (trimmed), or the 400 of the e-mail rule at the e-mail field
     private static string CheckedEmail(string email) =>
-        EmailAddress.IsValid(email) ? email.Trim() : throw new BadRequestException(InputRules.InvalidEmailMessage);
+        EmailAddress.IsValid(email) ? email.Trim() : throw new InvalidFieldException(EmailField, InputRules.InvalidEmailMessage);
 
+    /// <summary>
+    /// Edit User, the address: a null <paramref name="email"/> keeps the current one; an empty or blank one removes it
+    /// (the address is optional, as in <see cref="CreateUser"/>); any other must be one valid address (FR-ADM-07, FR-XC-12).
+    /// When the identity provider manages the profile, only a change of the address is refused (403): an omitted or
+    /// unchanged one is accepted, so the roles of the user can be edited.
+    /// </summary>
     public async Task UpdateUser(string userName, string? email)
     {
         if (string.IsNullOrWhiteSpace(userName))
             throw new BadRequestException("User name cannot be empty");
-
-        // If the user is not an admin, they can only update their own data
-        if (string.IsNullOrWhiteSpace(email))
-            throw new BadRequestException("Email cannot be empty");
 
         var user = await _userManager.FindByNameAsync(userName);
 
         if (user == null)
             throw new BadRequestException("User does not exist");
 
-        if (Caps.ManagesProfileExternally)
-            throw new ForbiddenException(
-                "Profile data (email) is synchronised from the identity provider and cannot be modified locally.", noRetry: true);
+        if (email != null)
+        {
+            // Checked only when it changes: an address stored before the rule does not block an edit of the roles
+            var wanted = email.Trim();
+            if (!string.Equals(wanted, user.Email?.Trim() ?? "", StringComparison.Ordinal))
+            {
+                // An omitted or unchanged address leaves the profile alone, so the roles can still be edited
+                if (Caps.ManagesProfileExternally)
+                    throw new ForbiddenException(
+                        "Profile data (email) is synchronised from the identity provider and cannot be modified locally.", noRetry: true);
 
-        // Checked only when it changes: an address stored before the rule does not block an edit of the roles
-        if (!string.Equals(email.Trim(), user.Email?.Trim(), StringComparison.Ordinal))
-            user.Email = CheckedEmail(email);
+                user.Email = wanted.Length == 0 ? null : CheckedEmail(wanted);
+                user.NormalizedEmail = _userManager.NormalizeEmail(user.Email);
+            }
+        }
 
         _applicationDbContext.Entry(user).State = EntityState.Modified;
         await _applicationDbContext.SaveChangesAsync();

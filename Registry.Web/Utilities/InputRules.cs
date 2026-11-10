@@ -9,7 +9,7 @@ namespace Registry.Web.Utilities;
 /// <summary>
 /// The input rules the Hub checks before it submits a form (FR-XC-12, D-014), as <c>GET /sys/features</c> publishes
 /// them (<see cref="Describe"/>). Each rule keeps its one definition, which this class only describes for a client:
-/// slugs are <see cref="SlugRules"/>, e-mail addresses <see cref="Models.Email.EmailAddress.IsValid"/>, cron words
+/// slugs are <see cref="SlugRules"/>, user and role names <see cref="NameRules"/>, e-mail addresses <see cref="Models.Email.EmailAddress.IsValid"/>, cron words
 /// <see cref="CronSetting"/>, entry names <see cref="DatasetPathPolicy"/>, system roles <see cref="SystemRoles"/>.
 /// It holds the rules that have no other home: the "already exists" message and its case rule (D-040) and the Latin
 /// letter rule of organization and dataset names (D-035). A published pattern is ECMAScript (a browser's
@@ -24,6 +24,13 @@ public static class InputRules
     /// </summary>
     public static readonly string SlugPattern =
         $@"^(?!.*--)[a-z0-9][a-z0-9_\-]{{{SlugRules.MinLength - 1},{SlugRules.MaxLength - 1}}}$";
+
+    /// <summary>
+    /// <see cref="NameRules"/> as a pattern: lowercase letters and digits, <see cref="NameRules.MinLength"/> to
+    /// <see cref="NameRules.MaxLength"/> of them. A browser's <c>$</c> does not match before a final line feed, as
+    /// .NET's does, so the pattern decides the same as <see cref="NameRules.IsValid"/>.
+    /// </summary>
+    public static readonly string NamePattern = $"^[a-z0-9]{{{NameRules.MinLength},{NameRules.MaxLength}}}$";
 
     /// <summary>
     /// A pre-check of an e-mail address: one '@' between characters that are neither whitespace nor '@'. Looser than
@@ -62,7 +69,8 @@ public static class InputRules
 
     /// <summary>The cron rule as a client shows it.</summary>
     public const string CronDescription =
-        "leave it empty for the default schedule; 'disabled', 'off' or 'none' (any case) turns the job off";
+        "leave it empty for the default schedule; 'disabled', 'off' or 'none' (any case) turns the job off; " +
+        "a macro such as '@daily' is a schedule; any other value has 5 or 6 fields separated by spaces";
 
     /// <summary>What the normalized name must contain (D-035): an ASCII letter or digit, the characters a slug keeps.</summary>
     public const string LatinNamePattern = "[A-Za-z0-9]";
@@ -105,6 +113,13 @@ public static class InputRules
             MaxLength = SlugRules.MaxLength,
             Description = SlugRules.Description
         },
+        Name = new InputRuleDto
+        {
+            Pattern = NamePattern,
+            MinLength = NameRules.MinLength,
+            MaxLength = NameRules.MaxLength,
+            Description = NameRules.Description
+        },
         Email = new InputRuleDto
         {
             Pattern = EmailPattern,
@@ -126,6 +141,9 @@ public static class InputRules
         Cron = new CronRuleDto
         {
             DisableWords = [.. CronSetting.DisableWords],
+            MinFields = CronSetting.MinFields,
+            MaxFields = CronSetting.MaxFields,
+            Macros = [.. CronSetting.Macros],
             Description = CronDescription
         },
         LatinName = new LatinNameRuleDto

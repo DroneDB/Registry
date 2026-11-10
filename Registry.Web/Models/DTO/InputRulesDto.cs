@@ -10,6 +10,9 @@ public class InputRulesDto
     /// <summary>Organization and dataset slugs.</summary>
     public InputRuleDto? Slug { get; set; }
 
+    /// <summary>User and role names (D-007, D-015): lowercase letters and digits.</summary>
+    public InputRuleDto? Name { get; set; }
+
     /// <summary>E-mail addresses: the pattern is a pre-check, looser than the server's parser.</summary>
     public InputRuleDto? Email { get; set; }
 
@@ -86,6 +89,15 @@ public class CronRuleDto
 {
     /// <summary>The words that switch the job off, in lowercase; a setting matches them in any case.</summary>
     public string[]? DisableWords { get; set; }
+
+    /// <summary>The fewest fields of a cron expression (a value that is empty or a disable word has none).</summary>
+    public int? MinFields { get; set; }
+
+    /// <summary>The most fields of a cron expression.</summary>
+    public int? MaxFields { get; set; }
+
+    /// <summary>The macros that are a whole cron value (such as "@daily"), in lowercase; a setting matches them in any case.</summary>
+    public string[]? Macros { get; set; }
 
     /// <summary>The rule as a client shows it at the field.</summary>
     public string? Description { get; set; }

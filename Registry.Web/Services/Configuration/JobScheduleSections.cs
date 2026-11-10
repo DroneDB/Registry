@@ -25,40 +25,42 @@ public sealed class JobScheduleSections : IConfigurationSectionBuilder
     {
         var jobs = _view.Configured<JobScheduleOptions>();
         var jobsDefault = _view.Shipped<JobScheduleOptions>();
+        // A cron the file leaves empty runs its job's default (JobScheduleOptions.DefaultCrons: the shipped files leave it unset),
+        // so that is the default the page shows and the one an empty field means (FR-ADM-13)
         return Section("CronJobs", "Cron Jobs",
             "Recurring background job schedules (cron expressions) and retention periods.",
             [
                 StringField("CleanupExpiredJobsCron", "Cleanup Expired Jobs Cron",
                     $"Cron expression for cleaning up expired Hangfire jobs. Default: '{Default.CleanupExpiredJobsCron}' (daily at midnight). Set to 'disabled' to remove.",
-                    jobs.CleanupExpiredJobsCron, jobsDefault.CleanupExpiredJobsCron, "cron"),
+                    jobs.CleanupExpiredJobsCron, Default.CleanupExpiredJobsCron, "cron"),
 
                 StringField("SyncJobIndexStatesCron", "Sync Job Index States Cron",
                     $"Cron expression for reconciling JobIndex states across restarts. Default: '{Default.SyncJobIndexStatesCron}' (hourly).",
-                    jobs.SyncJobIndexStatesCron, jobsDefault.SyncJobIndexStatesCron, "cron"),
+                    jobs.SyncJobIndexStatesCron, Default.SyncJobIndexStatesCron, "cron"),
 
                 StringField("RecoverIndexedJobPublicationsCron", "Recover Indexed Job Publications Cron",
                     $"Cron expression for completing indexed job publications interrupted before the job became runnable. Default: '{Default.RecoverIndexedJobPublicationsCron}' (every minute).",
-                    jobs.RecoverIndexedJobPublicationsCron, jobsDefault.RecoverIndexedJobPublicationsCron, "cron"),
+                    jobs.RecoverIndexedJobPublicationsCron, Default.RecoverIndexedJobPublicationsCron, "cron"),
 
                 StringField("ProcessPendingBuildsCron", "Process Pending Builds Cron",
                     $"Cron expression for retrying pending builds. Default: '{Default.ProcessPendingBuildsCron}' (every 6 hours).",
-                    jobs.ProcessPendingBuildsCron, jobsDefault.ProcessPendingBuildsCron, "cron"),
+                    jobs.ProcessPendingBuildsCron, Default.ProcessPendingBuildsCron, "cron"),
 
                 StringField("OrphanedDatasetCleanupCron", "Orphaned Dataset Cleanup Cron",
                     $"Cron expression for cleaning up orphaned dataset folders. Default: '{Default.OrphanedDatasetCleanupCron}' (daily at 3 AM).",
-                    jobs.OrphanedDatasetCleanupCron, jobsDefault.OrphanedDatasetCleanupCron, "cron"),
+                    jobs.OrphanedDatasetCleanupCron, Default.OrphanedDatasetCleanupCron, "cron"),
 
                 StringField("DatasetCleanupCron", "Dataset Cleanup Cron",
                     $"Cron expression for full DDB cleanup (entries + build artifacts) on all datasets. Default: '{Default.DatasetCleanupCron}' (daily at midnight).",
-                    jobs.DatasetCleanupCron, jobsDefault.DatasetCleanupCron, "cron"),
+                    jobs.DatasetCleanupCron, Default.DatasetCleanupCron, "cron"),
 
                 StringField("ArtifactCompletenessCheckerCron", "Artifact Completeness Checker Cron",
                     $"Cron expression for scanning entries and rebuilding incomplete artifacts. Default: '{Default.ArtifactCompletenessCheckerCron}' (daily at 2 AM).",
-                    jobs.ArtifactCompletenessCheckerCron, jobsDefault.ArtifactCompletenessCheckerCron, "cron"),
+                    jobs.ArtifactCompletenessCheckerCron, Default.ArtifactCompletenessCheckerCron, "cron"),
 
                 StringField("JobIndexCleanupCron", "Job Index Cleanup Cron",
                     $"Cron expression for purging old terminal JobIndex records. Default: '{Default.JobIndexCleanupCron}' (daily at 4 AM).",
-                    jobs.JobIndexCleanupCron, jobsDefault.JobIndexCleanupCron, "cron"),
+                    jobs.JobIndexCleanupCron, Default.JobIndexCleanupCron, "cron"),
 
                 NumberField("JobIndexRetentionDays", "Job Index Retention (days)",
                     "Number of days to keep terminal (Succeeded/Failed/Deleted) JobIndex records.",

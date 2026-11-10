@@ -1210,7 +1210,7 @@ schema ContourRequestDto { path:string, interval:number(double), count:integer(i
 schema CreateImportRequestDto { sourceType:string, params:map<string>, slug:string, name:string, visibility:Visibility }
 schema CreateRoleRequestDto { roleName:string }
 schema CreateUserRequest { userName:string, password:string, email:string, roles:array<string> }
-schema CronRuleDto { disableWords:array<string>, description:string }
+schema CronRuleDto { disableWords:array<string>, minFields:integer(int32), maxFields:integer(int32), macros:array<string>, description:string }
 schema DatasetCleanupBuildDto { removedEntries:array<string>, removedBuilds:array<string> }
 schema DatasetDto { slug:string, creationDate:string(date-time), properties:map<any>, size:integer(int64), lastModified:string(date-time), permissions:DatasetPermissionsDto, hasThumbnail:boolean }
 schema DatasetLocationDto { slug:string, name:string, bbox:array<number(double)> }
@@ -1248,7 +1248,7 @@ schema ImportResultDto { importedItems:array<ImportedItemDto>, errors:array<Impo
 schema ImportVerifyResultDto { reachable:boolean, note:string, estimatedBytes:integer(int64), fileCount:integer(int32), suggestedName:string, suggestedSlug:string }
 schema ImportedItemDto { organization:string, dataset:string, size:integer(int64), fileCount:integer(int32), skippedFileCount:integer(int32), importedAt:string(date-time) }
 schema InputRuleDto { pattern:string, minLength:integer(int32), maxLength:integer(int32), description:string, message:string }
-schema InputRulesDto { slug:InputRuleDto, email:InputRuleDto, entryName:EntryNameRuleDto, nameClash:NameClashRuleDto, cron:CronRuleDto, latinName:LatinNameRuleDto }
+schema InputRulesDto { slug:InputRuleDto, name:InputRuleDto, email:InputRuleDto, entryName:EntryNameRuleDto, nameClash:NameClashRuleDto, cron:CronRuleDto, latinName:LatinNameRuleDto }
 schema LatinNameRuleDto { pattern:string, normalization:string, description:string, message:string, messageWithoutSlug:string }
 schema MaskBordersCheckResponseDto { exists:boolean, outputPath:string }
 schema MaskBordersRequestDto { path:string, near:integer(int32), white:boolean, overwrite:boolean }

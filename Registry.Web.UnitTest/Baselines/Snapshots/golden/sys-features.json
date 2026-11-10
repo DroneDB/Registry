@@ -26,6 +26,13 @@
         "description": "it has 2 to 128 characters (lowercase letters, digits, '_' and '-'), starts with a letter or digit and has no '--'",
         "message": null
       },
+      "name": {
+        "pattern": "^[a-z0-9]{1,127}$",
+        "minLength": 1,
+        "maxLength": 127,
+        "description": "1 to 127 characters: lowercase letters (a–z) and digits (0–9)",
+        "message": null
+      },
       "email": {
         "pattern": "^[^\\s@]+@[^\\s@]+$",
         "minLength": null,
@@ -53,7 +60,20 @@
           "off",
           "none"
         ],
-        "description": "leave it empty for the default schedule; 'disabled', 'off' or 'none' (any case) turns the job off"
+        "minFields": 5,
+        "maxFields": 6,
+        "macros": [
+          "@yearly",
+          "@annually",
+          "@monthly",
+          "@weekly",
+          "@daily",
+          "@midnight",
+          "@hourly",
+          "@every_minute",
+          "@every_second"
+        ],
+        "description": "leave it empty for the default schedule; 'disabled', 'off' or 'none' (any case) turns the job off; a macro such as '@daily' is a schedule; any other value has 5 or 6 fields separated by spaces"
       },
       "latinName": {
         "pattern": "[A-Za-z0-9]",
