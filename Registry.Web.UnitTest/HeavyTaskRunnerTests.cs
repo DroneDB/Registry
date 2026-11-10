@@ -166,9 +166,10 @@ public class HeavyTaskRunnerTests
     {
         var row = new JobIndex { JobId = jobId, ToolId = tool, CurrentState = state };
         _index.Setup(q => q.FindDedupCandidateAsync(Org, Ds, tool, It.IsAny<string>(), It.IsAny<int>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<TaskOwnerScope?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(row);
-        _index.Setup(q => q.FindActiveDedupCandidateAsync(Org, Ds, tool, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _index.Setup(q => q.FindActiveDedupCandidateAsync(Org, Ds, tool, It.IsAny<string>(), It.IsAny<TaskOwnerScope?>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(state == "Succeeded" ? null : row);
     }
 
@@ -230,7 +231,7 @@ public class HeavyTaskRunnerTests
         result.Deduplicated.ShouldBeTrue();
         _enqueued.ShouldBeEmpty();
         _index.Verify(q => q.FindActiveDedupCandidateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
-            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<string>(), It.IsAny<TaskOwnerScope?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]

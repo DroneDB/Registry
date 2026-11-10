@@ -52,19 +52,20 @@ public interface IJobIndexQuery
 
     /// <summary>
     /// Finds an existing active or recently-succeeded task with the same dedup hash,
-    /// for submit deduplication.
+    /// for submit deduplication. With <paramref name="ownedBy"/>, only a task of that user.
     /// </summary>
     Task<JobIndex?> FindDedupCandidateAsync(
         string orgSlug, string dsSlug, string toolId, string requestHash,
-        int lookbackHours, CancellationToken ct = default);
+        int lookbackHours, TaskOwnerScope? ownedBy = null, CancellationToken ct = default);
 
     /// <summary>
     /// Finds an unfinished task (<c>Indexing</c> included) with the same dedup hash, never a finished one: the
     /// submit deduplication of a tool that writes the dataset, whose earlier result may since have been deleted
-    /// or replaced (FR-PRC-02).
+    /// or replaced (FR-PRC-02). With <paramref name="ownedBy"/>, only a task of that user.
     /// </summary>
     Task<JobIndex?> FindActiveDedupCandidateAsync(
-        string orgSlug, string dsSlug, string toolId, string requestHash, CancellationToken ct = default);
+        string orgSlug, string dsSlug, string toolId, string requestHash, TaskOwnerScope? ownedBy = null,
+        CancellationToken ct = default);
 
     /// <summary>
     /// Counts the active tasks of users (<see cref="HeavyTasks.UserTasks.CountTowardLimits"/>: no builds, no
@@ -127,3 +128,11 @@ public sealed record JobIndexGlobalQueryFilter(
     int Take = 50,
     JobIndexSortField SortField = JobIndexSortField.CreatedAt,
     JobIndexSortOrder SortOrder = JobIndexSortOrder.Descending);
+
+/// <summary>
+/// The tasks of one user that a submit deduplication may reuse (FR-RAS-11): the task of a tool that needs only read access
+/// is authorized per user, so one user's task is never handed to another. A null <see cref="UserId"/> is the tasks of no
+/// user (anonymous), which every caller of the dataset may already touch.
+/// </summary>
+/// <param name="UserId">The user (null: anonymous).</param>
+public sealed record TaskOwnerScope(string? UserId);

@@ -6,6 +6,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Adapters;
+using Registry.Web.Services.Ports;
 using Registry.Web.Test.Support;
 using Shouldly;
 
@@ -78,6 +79,40 @@ public class JobIndexActiveOutputsTests
         await db.SaveChangesAsync();
 
         (await query.FindActiveDedupCandidateAsync("org", "ds", "merge-multispectral", "h"))!.JobId.ShouldBe("indexing");
+    }
+
+    // FR-RAS-11: the task of a read tool is authorized per user, so a submit reuses only a task of the same user (an
+    // anonymous one, only a task of no user)
+    [Test]
+    public async Task DedupCandidates_OfOneOwner_AreOnlyTheTasksOfThatUser()
+    {
+        JobIndex Of(string id, string? user, int minutesAgo)
+        {
+            var row = Row(id, "Processing", null);
+            row.ToolId = "raster-contours";
+            row.RequestHash = "h";
+            row.UserId = user;
+            row.CreatedAtUtc = DateTime.UtcNow.AddMinutes(-minutesAgo);
+            return row;
+        }
+
+        await using var db = TestDb.CreateContext<RegistryContext>(ctx =>
+        {
+            ctx.JobIndices.AddRange(Of("of-u1", "u1", 3), Of("of-u2", "u2", 2), Of("of-nobody", null, 1));
+            ctx.SaveChanges();
+        });
+        var query = new JobIndexQuery(db);
+
+        (await query.FindDedupCandidateAsync("org", "ds", "raster-contours", "h", 24, new TaskOwnerScope("u1")))!
+            .JobId.ShouldBe("of-u1");
+        (await query.FindActiveDedupCandidateAsync("org", "ds", "raster-contours", "h", new TaskOwnerScope("u2")))!
+            .JobId.ShouldBe("of-u2");
+        (await query.FindDedupCandidateAsync("org", "ds", "raster-contours", "h", 24, new TaskOwnerScope(null)))!
+            .JobId.ShouldBe("of-nobody");
+        (await query.FindDedupCandidateAsync("org", "ds", "raster-contours", "h", 24, new TaskOwnerScope("u3")))
+            .ShouldBeNull();
+        (await query.FindDedupCandidateAsync("org", "ds", "raster-contours", "h", 24))!.JobId.ShouldBe("of-nobody",
+            "without an owner, the newest task of anybody");
     }
 
     [Test]

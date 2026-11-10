@@ -58,6 +58,7 @@ public static class ProcessingPlatformServiceCollectionExtensions
         // Native tools (Sprint 1). Adding a new native tool = one line here.
         services.AddSingleton<IHeavyTool, BuildTool>();
         services.AddSingleton<IHeavyTool, RasterExportTool>();
+        services.AddSingleton<IHeavyTool, RasterContoursTool>();
         services.AddSingleton<IHeavyTool, PhotogrammetryTool>();
         services.AddSingleton<IHeavyTool, BulkDownloadTool>();
         services.AddSingleton<IHeavyTool, MergeMultispectralTool>();

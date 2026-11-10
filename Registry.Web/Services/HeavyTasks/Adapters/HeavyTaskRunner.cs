@@ -154,16 +154,19 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
 
     // The task an equivalent submit gets (null: none, or deduplication is off). A finished task is reused only for a
     // tool whose result is a downloadable artifact; a tool that writes the dataset reuses only an unfinished task,
-    // since what a finished one wrote may have been deleted or replaced since (FR-PRC-02)
+    // since what a finished one wrote may have been deleted or replaced since (FR-PRC-02). The task of a tool that needs
+    // only read access is authorized per user (its status, its result): a submit reuses only a task of the same user,
+    // or for an anonymous one a task of no user, which every caller of the dataset may touch already (FR-RAS-11)
     private async Task<string?> FindDuplicateAsync(HeavyTaskSubmitRequest request, IHeavyTool tool, string requestHash,
         CancellationToken ct)
     {
-        var candidateId = await _dedup.FindAsync(request.OrgSlug, request.DsSlug, tool.Id, requestHash, ct);
+        var ownedBy = tool.RequiredAccess == HeavyToolPermission.Read ? new TaskOwnerScope(request.UserId) : null;
+        var candidateId = await _dedup.FindAsync(request.OrgSlug, request.DsSlug, tool.Id, requestHash, ownedBy, ct);
         if (candidateId is null || tool.ProducesArtifact)
             return candidateId;
 
-        return (await _jobIndex.FindActiveDedupCandidateAsync(request.OrgSlug, request.DsSlug, tool.Id, requestHash, ct))
-            ?.JobId;
+        return (await _jobIndex.FindActiveDedupCandidateAsync(request.OrgSlug, request.DsSlug, tool.Id, requestHash,
+            ownedBy, ct))?.JobId;
     }
 
     // An output that an unfinished task of the dataset writes (its own record excluded): 409

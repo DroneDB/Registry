@@ -359,7 +359,9 @@ public class RasterAnalysisController : ControllerBaseEx
     /// Generate contour lines (GeoJSON LineStrings with an `elev` property) from a DEM/DSM/DTM raster.
     /// </summary>
     /// <remarks>
-    /// Either <c>interval</c> or <c>count</c> must be supplied. When both are set, <c>interval</c> wins.
+    /// Either <c>interval</c> or <c>count</c> must be supplied. When both are set, <c>interval</c> wins. The result says
+    /// when libddb cut the lines at its cap (<c>truncated</c>, <c>featureCap</c>, libddb 2.3). The Hub does not call this
+    /// endpoint: it runs the heavy task <c>raster-contours</c> (progress and Cancel, FR-RAS-11), which gives the same GeoJSON.
     /// </remarks>
     [HttpPost("contours", Name = nameof(ObjectsController) + "." + nameof(GenerateContours))]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -375,7 +377,7 @@ public class RasterAnalysisController : ControllerBaseEx
 
         var json = await _raster.GenerateContoursAsync(orgSlug, dsSlug, request.Path.ToString(),
             new ContourOptions(request.Interval, request.Count, request.BaseOffset, request.MinElev, request.MaxElev,
-                request.SimplifyTolerance, request.BandIndex, request.Nodata), ct: ct);
+                request.SimplifyTolerance, request.BandIndex, request.Nodata, request.Formula), ct: ct);
         return Content(json, "application/json");
     }
 

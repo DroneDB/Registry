@@ -189,21 +189,10 @@ public sealed class RasterAnalysisService
         CancellationToken ct = default)
     {
         var o = options;
-        if (!o.Interval.HasValue && !o.Count.HasValue)
-            throw new BadRequestException("Either 'interval' or 'count' must be specified");
-        if (o.Interval <= 0)
-            throw new BadRequestException("'interval' must be > 0");
-        if (o.Count <= 0)
-            throw new BadRequestException("'count' must be > 0");
-        if (o.MinElev >= o.MaxElev)
-            throw new BadRequestException("'minElev' must be less than 'maxElev'");
-        if (o.SimplifyTolerance < 0)
-            throw new BadRequestException("'simplifyTolerance' must be >= 0");
-
-        RasterOptionRules.RequireNodata(o.Nodata);
+        o.Require();
         return await OnSourceAsync(orgSlug, dsSlug, path, (ddb, file) => ddb.GenerateContours(file, o.Interval, o.Count,
             o.BaseOffset, o.MinElev, o.MaxElev, o.SimplifyTolerance, o.BandIndex > 0 ? o.BandIndex : 1,
-            o.Nodata is null ? null : new RasterAnalysisOptions(o.Nodata)), ct);
+            o.ValueOptions()), ct);
     }
 
     /// <summary>The raster as a GeoTIFF with the visualization applied, within the export size limit.</summary>
@@ -286,7 +275,7 @@ public sealed class RasterAnalysisService
     }
 
     /// <summary>The width x height the index holds for the entry (libddb's probe of the file); null when it has none.</summary>
-    private static long? PixelsOf(Entry entry)
+    internal static long? PixelsOf(Entry entry)
     {
         if (entry.Properties is not { } properties) return null;
         if (!properties.TryGetValue("width", out var w) || w.ValueKind != JsonValueKind.Number ||
@@ -308,7 +297,7 @@ public sealed class RasterAnalysisService
     }
 
     // libddb's refusal of a raster of more pixels than a copy can hold names the way out: "build the dataset first"
-    private static bool TooLargeToRead(Exception ex)
+    internal static bool TooLargeToRead(Exception ex)
     {
         for (var e = ex; e != null; e = e.InnerException!)
         {

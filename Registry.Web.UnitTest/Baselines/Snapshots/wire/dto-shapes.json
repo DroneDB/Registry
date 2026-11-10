@@ -1412,7 +1412,8 @@
       "maxElev": 123456789.125,
       "simplifyTolerance": 1.0,
       "bandIndex": 42,
-      "nodata": 2.5
+      "nodata": 2.5,
+      "formula": "Formula-text"
     },
     "sparse": {
       "path": null,
@@ -1423,7 +1424,8 @@
       "maxElev": null,
       "simplifyTolerance": 0.0,
       "bandIndex": 0,
-      "nodata": null
+      "nodata": null,
+      "formula": null
     }
   },
   "Registry.Web.Models.DTO.CreateImportRequestDto": {

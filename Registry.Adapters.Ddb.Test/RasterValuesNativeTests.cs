@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Threading;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using NUnit.Framework;
@@ -192,6 +195,51 @@ public class RasterValuesNativeTests : TestBase
     public void APixelWithANonThermalFormula_IsRefused() =>
         Should.Throw<DdbInvalidArgumentsException>(() =>
             Wrapper.GetRasterAreaStats(_utm, 5, 5, 6, 6, new RasterAnalysisOptions(Formula: "NDVI")));
+
+    // FR-RAS-11, NFR-001: the contours report their progress (libddb 2.3: statistics, levels, lines) and say whether the lines
+    // were cut at the cap (truncated, featureCap). A libddb 2.2 reports no progress and says nothing of a cap: the call is the
+    // same, so the Registry runs on both. The values 11.5 .. 17.2 of utm.tif have the levels 12 .. 17 at interval 1.
+    [Test]
+    public void TheContours_ReportTheirProgress_AndSayTheyAreNotCut()
+    {
+        var seen = new List<(double Fraction, string? Phase)>();
+
+        var contours = Parse(Wrapper.GenerateContours(_utm, 1.0, null, 0, null, null, 0, 1, null,
+            (fraction, phase) => seen.Add((fraction, phase)), CancellationToken.None));
+
+        contours.GetProperty("min").GetDouble().ShouldBe(12);
+        contours.GetProperty("max").GetDouble().ShouldBe(17);
+        if (!NativeDdbWrapper.ContourProgressSupported)
+        {
+            seen.ShouldBeEmpty("libddb before 2.3 has no progress");
+            contours.TryGetProperty("truncated", out _).ShouldBeFalse();
+            return;
+        }
+
+        seen.First().ShouldBe((0.0, "statistics"));
+        seen.Last().ShouldBe((1.0, "lines"));
+        seen.Select(x => x.Phase).Distinct().ShouldBe(["statistics", "levels", "lines"]);
+        seen.Select(x => x.Fraction).ShouldBe(seen.Select(x => x.Fraction).Order());
+        contours.GetProperty("truncated").GetBoolean().ShouldBeFalse();
+        contours.GetProperty("featureCap").GetInt32().ShouldBe(100000);
+    }
+
+    [Test]
+    public void TheCancelOfTheToken_StopsTheContours()
+    {
+        using var cts = new CancellationTokenSource();
+        if (!NativeDdbWrapper.ContourProgressSupported)
+            cts.Cancel(); // no progress to cancel at: the token is canceled before the call
+
+        var ex = Should.Throw<DdbCanceledException>(() => Wrapper.GenerateContours(_utm, 1.0, null, 0, null, null, 0, 1,
+            null, (_, phase) =>
+            {
+                if (phase == "levels")
+                    cts.Cancel();
+            }, cts.Token));
+
+        ex.CancellationToken.ShouldBe(cts.Token);
+    }
 
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
 }

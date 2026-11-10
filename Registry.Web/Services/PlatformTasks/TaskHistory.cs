@@ -100,7 +100,7 @@ public sealed class TaskHistory
     internal sealed record ListedTask(string? UserId, TaskSummaryDto Task, bool Committed = false);
 
     private static TaskSummaryDto[] ForCaller(IEnumerable<ListedTask> rows, TaskCaller caller) =>
-        [.. rows.Select(r => r.Task with { Actions = caller.ActionsOn(r.Task.State, r.UserId, r.Committed) })];
+        [.. rows.Select(r => r.Task with { Actions = caller.ActionsOn(r.Task.State, r.UserId, r.Committed, r.Task.ToolId) })];
 
     // Weak: equal tags mean the same tasks, not byte-identical bodies
     private static string ETagOf(byte[] content, int take) =>
@@ -124,7 +124,8 @@ public sealed class TaskHistory
             job.ParentJobId, job.WorkflowExecutionId,
             cursor, lines, BuildArtifactDto(job, orgSlug, dsSlug),
             job.ErrorMessage ?? job.ErrorType, missing != null, missing,
-            job.TargetLabel, caller.ActionsOn(job.CurrentState, job.UserId, TaskWriteRecord.IsCommitted(job.WriteRecordJson)),
+            job.TargetLabel, caller.ActionsOn(job.CurrentState, job.UserId,
+                TaskWriteRecord.IsCommitted(job.WriteRecordJson), job.ToolId),
             job.WaitingForNode, cancelledBy);
     }
 

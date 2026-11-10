@@ -20,16 +20,17 @@ public sealed class HeavyTaskDedup
 
     /// <summary>
     /// The id of a task of the dataset with the same tool and request hash that was submitted within the lookback
-    /// window and can be reused, or null (none, or deduplication is off).
+    /// window and can be reused, or null (none, or deduplication is off). With <paramref name="ownedBy"/>, only a task of
+    /// that user.
     /// </summary>
     public async Task<string?> FindAsync(string orgSlug, string dsSlug, string toolId, string requestHash,
-        CancellationToken ct)
+        TaskOwnerScope? ownedBy, CancellationToken ct)
     {
         if (!_settings.DedupEnabled)
             return null;
 
         var candidate = await _query.FindDedupCandidateAsync(orgSlug, dsSlug, toolId, requestHash,
-            _settings.DedupLookbackHours, ct);
+            _settings.DedupLookbackHours, ownedBy, ct);
         return candidate?.JobId;
     }
 }

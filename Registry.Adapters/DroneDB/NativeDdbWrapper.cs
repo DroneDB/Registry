@@ -852,6 +852,61 @@ public class NativeDdbWrapper : IDdbWrapper
                 simplifyTolerance, bandIndex, pointer, out output));
     }
 
+    public unsafe string GenerateContours(string path, double? interval, int? count, double baseOffset,
+        double? minElev, double? maxElev, double simplifyTolerance, int bandIndex, RasterAnalysisOptions? options,
+        Action<double, string?>? progress, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        if (!interval.HasValue && !count.HasValue)
+            throw new ArgumentException("Either interval or count must be specified");
+        if (interval is <= 0.0)
+            throw new ArgumentException("interval must be > 0", nameof(interval));
+        if (count is <= 0)
+            throw new ArgumentException("count must be > 0", nameof(count));
+        if (simplifyTolerance < 0.0)
+            throw new ArgumentException("simplifyTolerance must be >= 0", nameof(simplifyTolerance));
+        if (bandIndex <= 0)
+            throw new ArgumentException("bandIndex must be > 0", nameof(bandIndex));
+
+        var iv = interval ?? 0.0;
+        var cnt = count ?? 0;
+        var lo = minElev ?? double.NaN;
+        var hi = maxElev ?? double.NaN;
+
+        // The caller's token is the call's cancellation: the generation stops at its next checkpoint (the statistics pass,
+        // the GDAL generator, each line read back), not only at its next progress report
+        using var cancellation = DdbCancellation.Enter(cancellationToken);
+        using var native = NativeRasterOptionsHandle.Create(options);
+        var pointer = native.Pointer;
+
+        if (!ContourProgressSupported)
+        {
+            // libddb before 2.3: no progress and no "truncated"; the cancel token still stops the call
+            return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGenerateContoursEx),
+                (out IntPtr output) => NativeDdb.DDBGenerateContoursEx(path, iv, cnt, baseOffset, lo, hi,
+                    simplifyTolerance, bandIndex, pointer, out output));
+        }
+
+        // As ExportRaster: the callback reports and stops the call, an exception of the observer wins over the cancel
+        using var callback = NativeProgressCallback.Create(progress, cancellationToken);
+        return NativeCall.InvokeRequiredString(nameof(NativeDdbOptional.DDBGenerateContoursEx2),
+            (out IntPtr output) => NativeProgressCallback.Completed(callback,
+                NativeDdbOptional.DDBGenerateContoursEx2(path, iv, cnt, baseOffset, lo, hi, simplifyTolerance,
+                    bandIndex, pointer, callback == null ? null : NativeProgressCallback.FunctionPointer,
+                    callback?.UserData ?? IntPtr.Zero, out output)));
+    }
+
+    /// <summary>
+    /// True when the loaded libddb lists <c>DDBGenerateContoursEx2</c> in its capabilities (new in ABI 2.3): the call that
+    /// reports progress. The list of exports is what says it, not the ABI minor alone: a 2.3 development build of libddb has
+    /// the export before its ABI minor is raised. Registry pins 2.2, whose startup check does not require it
+    /// (<see cref="NativeDdbOptional"/>), so it falls back to <c>DDBGenerateContoursEx</c>.
+    /// </summary>
+    internal static bool ContourProgressSupported => ContourProgress.Value;
+
+    private static readonly Lazy<bool> ContourProgress = new(() =>
+        DdbAbi.Verify().Symbols.Contains(nameof(NativeDdbOptional.DDBGenerateContoursEx2)));
+
     public void MaskBorders(string input, string output, int nearDist = 15, bool white = false, bool overwrite = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(input);

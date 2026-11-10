@@ -288,7 +288,8 @@
       "maxElev": null,
       "simplifyTolerance": 0.0,
       "bandIndex": 1,
-      "nodata": null
+      "nodata": null,
+      "formula": null
     }
   },
   "hub-mask-borders": {

@@ -98,6 +98,33 @@ public class TaskRowsTests
         new TaskCaller(null, OwnsDataset: false, CanWrite: false).MayTouch("u2").ShouldBeFalse();
     }
 
+    // NFR-001, FR-XC-15: a reader cancels the active task it started of a tool that needs only read access, and only that
+    [TestCase("Processing", false, new[] { "viewLog", "cancel" })]
+    [TestCase("Enqueued", false, new[] { "viewLog", "cancel" })]
+    [TestCase("Processing", true, new[] { "viewLog" })]
+    [TestCase("Failed", false, new[] { "viewLog" })]
+    [TestCase("Deleted", false, new[] { "viewLog" })]
+    public void AReader_CancelsItsOwnActiveTaskOfAReadTool(string state, bool committed, string[] expected) =>
+        TaskActions.For(state, mayTouch: true, canWrite: false, committed, ownReadTask: true).ShouldBe(expected);
+
+    [Test]
+    public void AReadTask_IsTheCallersOwn_OnlyForTheUserWhoStartedIt_AndForAReadTool()
+    {
+        var reader = new TaskCaller("u1", OwnsDataset: false, CanWrite: false,
+            ReadTools: new System.Collections.Generic.HashSet<string> { "raster-contours", "raster-export" });
+
+        reader.ActionsOn("Processing", "u1", toolId: "raster-contours").ShouldBe(["viewLog", "cancel"]);
+        reader.ActionsOn("Processing", "u1", toolId: "raster-export").ShouldBe(["viewLog", "cancel"]);
+        reader.ActionsOn("Processing", "u1", toolId: "merge-multispectral").ShouldBe(["viewLog"], "a write tool");
+        reader.ActionsOn("Processing", "u2", toolId: "raster-contours").ShouldBeEmpty("the task of another reader");
+        reader.ActionsOn("Processing", null, toolId: "raster-contours").ShouldBe(["viewLog"], "a task of no user");
+        new TaskCaller(null, OwnsDataset: false, CanWrite: false, reader.ReadTools)
+            .OwnsReadTask(null, "raster-contours").ShouldBeFalse("an anonymous caller owns no task");
+        // A writer keeps every right of a writer
+        new TaskCaller("u1", OwnsDataset: false, CanWrite: true, reader.ReadTools)
+            .ActionsOn("Failed", "u1", toolId: "raster-contours").ShouldBe(["viewLog", "retry", "delete"]);
+    }
+
     // ---- The task list ----
 
     private TaskHistory History(User? user, bool ownsDataset, bool canWrite, TaskUserNames? names = null)

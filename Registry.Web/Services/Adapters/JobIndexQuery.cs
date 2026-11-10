@@ -179,11 +179,11 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
 
     public async Task<JobIndex?> FindDedupCandidateAsync(
         string orgSlug, string dsSlug, string toolId, string requestHash,
-        int lookbackHours, CancellationToken ct = default)
+        int lookbackHours, TaskOwnerScope? ownedBy = null, CancellationToken ct = default)
     {
         var cutoff = System.DateTime.UtcNow.AddHours(-lookbackHours);
 
-        return await SameRequest(orgSlug, dsSlug, toolId, requestHash)
+        return await SameRequest(orgSlug, dsSlug, toolId, requestHash, ownedBy)
             .Where(x => ActiveStates.Contains(x.CurrentState)
                         || (x.CurrentState == "Succeeded" && x.CreatedAtUtc >= cutoff))
             .OrderByDescending(x => x.CreatedAtUtc)
@@ -191,17 +191,26 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
     }
 
     public async Task<JobIndex?> FindActiveDedupCandidateAsync(
-        string orgSlug, string dsSlug, string toolId, string requestHash, CancellationToken ct = default) =>
-        await SameRequest(orgSlug, dsSlug, toolId, requestHash)
+        string orgSlug, string dsSlug, string toolId, string requestHash, TaskOwnerScope? ownedBy = null,
+        CancellationToken ct = default) =>
+        await SameRequest(orgSlug, dsSlug, toolId, requestHash, ownedBy)
             .Where(x => ActiveStates.Contains(x.CurrentState))
             .OrderByDescending(x => x.CreatedAtUtc)
             .FirstOrDefaultAsync(ct);
 
-    // The task records of the dataset with the same tool and request hash
-    private IQueryable<JobIndex> SameRequest(string orgSlug, string dsSlug, string toolId, string requestHash) =>
-        db.JobIndices.AsNoTracking()
+    // The task records of the dataset with the same tool and request hash (of one user, or of no user, with ownedBy)
+    private IQueryable<JobIndex> SameRequest(string orgSlug, string dsSlug, string toolId, string requestHash,
+        TaskOwnerScope? ownedBy)
+    {
+        var q = db.JobIndices.AsNoTracking()
             .Where(x => x.OrgSlug == orgSlug && x.DsSlug == dsSlug
                         && x.ToolId == toolId && x.RequestHash == requestHash);
+        if (ownedBy is null)
+            return q;
+
+        var userId = ownedBy.UserId;
+        return userId is null ? q.Where(x => x.UserId == null) : q.Where(x => x.UserId == userId);
+    }
 
     public async Task<IReadOnlyList<ActiveTaskOutputs>> GetActiveOutputsAsync(string orgSlug, string dsSlug,
         CancellationToken ct = default)

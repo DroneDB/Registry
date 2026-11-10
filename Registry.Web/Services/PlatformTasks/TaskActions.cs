@@ -21,19 +21,24 @@ public static class TaskActions
     /// owner, an admin, or anybody for a system task) reads its log (D-033); with write access to the dataset too, it
     /// cancels an active task, retries a failed one (only a failed one, D-037: a cancelled task is started again from
     /// its tool) and deletes an ended one. A task that committed its result (FR-XC-27: its write record is committed)
-    /// offers neither Cancel nor Retry: its cancel answers 400 (D-002) and its retry 409 (D-037).
+    /// offers neither Cancel nor Retry: its cancel answers 400 (D-002) and its retry 409 (D-037). A reader without write
+    /// access cancels the active tasks it started of a tool that needs only read access (a contour run, a raster export:
+    /// NFR-001, FR-XC-15), and nothing else.
     /// </summary>
     /// <param name="state">The task's state.</param>
     /// <param name="mayTouch">The caller may touch the task (<see cref="TaskCaller.MayTouch"/>).</param>
     /// <param name="canWrite">The caller has write access to the task's dataset.</param>
     /// <param name="committed">The task committed its result (<see cref="TaskWriteRecord.IsCommitted"/>).</param>
+    /// <param name="ownReadTask">The caller started the task, and its tool needs only read access
+    /// (<see cref="TaskCaller.OwnsReadTask"/>).</param>
     /// <returns>The actions, in the order the row shows them.</returns>
-    public static IReadOnlyList<string> For(string state, bool mayTouch, bool canWrite, bool committed = false)
+    public static IReadOnlyList<string> For(string state, bool mayTouch, bool canWrite, bool committed = false,
+        bool ownReadTask = false)
     {
         if (!mayTouch)
             return [];
         if (!canWrite)
-            return [ViewLog];
+            return ownReadTask && !committed && !TaskStateCatalog.IsTerminal(state) ? [ViewLog, Cancel] : [ViewLog];
 
         if (TaskStateCatalog.IsTerminal(state))
             return state == FailedState.StateName && !committed ? [ViewLog, Retry, Delete] : [ViewLog, Delete];
@@ -44,9 +49,10 @@ public static class TaskActions
 
 /// <summary>
 /// Who reads a dataset's tasks: the user (null when anonymous), whether they own the dataset or are an admin, and
-/// whether they may write to it. Asked once per request (<see cref="TaskAuthorizer.CallerAsync"/>).
+/// whether they may write to it, and the tools that need only read access (<see cref="TaskAuthorizer.ReadTools"/>). Asked
+/// once per request (<see cref="TaskAuthorizer.CallerAsync"/>).
 /// </summary>
-public sealed record TaskCaller(string? UserId, bool OwnsDataset, bool CanWrite)
+public sealed record TaskCaller(string? UserId, bool OwnsDataset, bool CanWrite, IReadOnlySet<string>? ReadTools = null)
 {
     /// <summary>The ownership rule of <see cref="TaskAuthorizer.LoadAsync"/>: a system task, the task's owner, the
     /// dataset's owner or an admin.</summary>
@@ -54,7 +60,15 @@ public sealed record TaskCaller(string? UserId, bool OwnsDataset, bool CanWrite)
     public bool MayTouch(string? taskUserId) =>
         taskUserId is null || (UserId is not null && taskUserId == UserId) || OwnsDataset;
 
+    /// <summary>The caller (signed in) started the task, of a tool that needs only read access: it may cancel it
+    /// without write access to the dataset (NFR-001).</summary>
+    /// <param name="taskUserId">The user the task belongs to (null: a system or an anonymous task).</param>
+    /// <param name="toolId">The tool of the task.</param>
+    public bool OwnsReadTask(string? taskUserId, string? toolId) =>
+        UserId is not null && taskUserId == UserId && toolId is not null && ReadTools?.Contains(toolId) == true;
+
     /// <summary>The actions of a task (<see cref="TaskActions.For"/>).</summary>
-    public IReadOnlyList<string> ActionsOn(string state, string? taskUserId, bool committed = false) =>
-        TaskActions.For(state, MayTouch(taskUserId), CanWrite, committed);
+    public IReadOnlyList<string> ActionsOn(string state, string? taskUserId, bool committed = false,
+        string? toolId = null) =>
+        TaskActions.For(state, MayTouch(taskUserId), CanWrite, committed, OwnsReadTask(taskUserId, toolId));
 }

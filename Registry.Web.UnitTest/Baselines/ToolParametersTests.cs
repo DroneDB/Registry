@@ -32,7 +32,7 @@ public class ToolParametersTests
     public void ToolParameters_ReadLeniently()
     {
         var p = new ToolParameters(JsonDocument.Parse(
-            """{"s":"x","n":12,"big":1e30,"t":true,"f":false,"q":"true","a":["a",1,"  ","b",null],"o":{"k":1},"S":"y"}""").RootElement);
+            """{"s":"x","n":12,"big":1e30,"d":-2.5,"t":true,"f":false,"q":"true","a":["a",1,"  ","b",null],"o":{"k":1},"S":"y"}""").RootElement);
 
         p.Text("s").ShouldBe("x");
         p.Text("n").ShouldBeNull("a number is not a string");
@@ -44,6 +44,12 @@ public class ToolParametersTests
         p.WholeNumber("n").ShouldBe(12);
         p.WholeNumber("big").ShouldBeNull("does not fit a long");
         p.WholeNumber("s").ShouldBeNull();
+        p.Number("n").ShouldBe(12);
+        p.Number("s").ShouldBeNull("a string is not a number");
+        p.Number("t").ShouldBeNull("a boolean is not a number");
+        p.Number("missing").ShouldBeNull();
+        p.Number("d").ShouldBe(-2.5);
+        p.Number("big").ShouldBe(1e30);
         p.Strings("a").ShouldBe(["a", "  ", "b"]);
         p.NonBlankStrings("a").ShouldBe(["a", "b"]);
         p.NonBlankStrings("s").ShouldBeNull();
@@ -130,6 +136,26 @@ public class ToolParametersTests
         p.SourceParams.ShouldNotBeNull().GetProperty("url").GetString().ShouldBe("https://hub.dronedb.app/r/a/b");
         Read<ImportDatasetTool, ImportDatasetTool.Parameters>("import-dataset", """{"params":"x"}""").SourceParams
             .ShouldBeNull();
+    }
+
+    [Test]
+    public void StoredRasterContours_ReadTheirNumbers_AndTreatOtherKindsAsAbsent()
+    {
+        var p = Read<RasterContoursTool, RasterContoursTool.Parameters>("raster-contours",
+            """{"path":"d.tif","interval":2.5,"count":20,"baseOffset":-1,"minElev":"low","maxElev":null,"simplifyTolerance":0.5,"bandIndex":2,"nodata":-9999,"formula":"CELSIUS","fileName":"c.geojson"}""");
+
+        p.Interval.ShouldBe(2.5);
+        p.Count.ShouldBe(20);
+        p.BaseOffset.ShouldBe(-1);
+        p.MinElev.ShouldBeNull("a string is not a number");
+        p.MaxElev.ShouldBeNull();
+        p.SimplifyTolerance.ShouldBe(0.5);
+        p.BandIndex.ShouldBe(2);
+        p.Nodata.ShouldBe(-9999);
+        p.Formula.ShouldBe("CELSIUS");
+        p.FileName.ShouldBe("c.geojson");
+        Read<RasterContoursTool, RasterContoursTool.Parameters>("raster-contours", """{"count":2.5,"interval":true}""")
+            .Count.ShouldBeNull("2.5 is not a whole number");
     }
 
     [Test]

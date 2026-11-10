@@ -457,6 +457,11 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual string GenerateContours(string path, double? interval, int? count, double baseOffset,
         double? minElev, double? maxElev, double simplifyTolerance, int bandIndex,
         RasterAnalysisOptions? options) => throw Unsupported();
+
+    public virtual string GenerateContours(string path, double? interval, int? count, double baseOffset,
+        double? minElev, double? maxElev, double simplifyTolerance, int bandIndex,
+        RasterAnalysisOptions? options, Action<double, string?>? progress, CancellationToken cancellationToken) =>
+        throw Unsupported();
     public virtual string GetRasterPointValue(string path, int x, int y) => throw Unsupported();
     public virtual string GetRasterAreaStats(string path, int x0, int y0, int x1, int y1) => throw Unsupported();
     public virtual string GetRasterPointValue(string path, int x, int y, RasterAnalysisOptions? options) =>

@@ -1,3 +1,5 @@
+using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.Text.Json;
 using Registry.Ports.DroneDB;
@@ -435,6 +437,16 @@ public interface IDdbWrapper
     public string GenerateContours(string path, double? interval, int? count, double baseOffset, double? minElev,
         double? maxElev, double simplifyTolerance, int bandIndex,
         Registry.Ports.DroneDB.RasterAnalysisOptions? options);
+
+    /// <summary>
+    /// <see cref="GenerateContours(string, double?, int?, double, double?, double?, double, int, Registry.Ports.DroneDB.RasterAnalysisOptions?)"/>
+    /// with progress (fraction 0..1, phase) and a cancel token: libddb 2.3 reports the progress, an older one only stops
+    /// at the cancel. The output has <c>truncated</c> and <c>featureCap</c> from libddb 2.3.
+    /// </summary>
+    public string GenerateContours(string path, double? interval, int? count, double baseOffset, double? minElev,
+        double? maxElev, double simplifyTolerance, int bandIndex,
+        Registry.Ports.DroneDB.RasterAnalysisOptions? options, Action<double, string?>? progress,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Mask orthophoto borders making them transparent. An output that exists is replaced only with

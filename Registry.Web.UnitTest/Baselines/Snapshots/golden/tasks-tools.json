@@ -98,6 +98,107 @@
       "disabledMessage": null
     },
     {
+      "id": "raster-contours",
+      "version": "1",
+      "title": "Contour lines",
+      "requiredAccess": "Read",
+      "producesArtifact": true,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Entry path of the raster."
+          },
+          "interval": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "description": "Vertical spacing between levels (raster units). Wins over count."
+          },
+          "count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "description": "Target number of levels, when interval is not set."
+          },
+          "baseOffset": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": 0,
+            "description": "Reference base elevation."
+          },
+          "minElev": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Drop contours below this elevation."
+          },
+          "maxElev": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Drop contours above this elevation."
+          },
+          "simplifyTolerance": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "default": 0,
+            "description": "Simplification tolerance in raster CRS units (0 = none)."
+          },
+          "bandIndex": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": 1,
+            "description": "1-based band."
+          },
+          "nodata": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "A NoData value that replaces the one of the band."
+          },
+          "formula": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A thermal formula gives the levels in its unit; an index formula is ignored."
+          },
+          "fileName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional output file name."
+          }
+        },
+        "additionalProperties": false
+      },
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    },
+    {
       "id": "photogrammetry",
       "version": "2",
       "title": "Photogrammetry (NodeODX)",

@@ -506,3 +506,22 @@ internal unsafe struct NativeRasterOptions
     internal fixed double Bbox[4];
     internal IntPtr Formula;
 }
+
+/// <summary>
+/// The exports of a libddb newer than the one Registry requires (2.2): they are declared apart from
+/// <see cref="NativeDdb"/> so <see cref="DdbAbi.RequiredSymbols"/>, which is derived from that class, does not make the
+/// startup check refuse an older library. A call is gated on <c>DDBGetCapabilities().abi</c> and symbols
+/// (<see cref="NativeDdbWrapper.ContourProgressSupported"/>) and is not made on a library that lacks the export. When
+/// the pin goes to 2.3, the declaration moves into <see cref="NativeDdb"/>.
+/// </summary>
+internal static unsafe partial class NativeDdbOptional
+{
+    private const string Library = "ddb";
+
+    /// <summary><c>DDBGenerateContoursEx</c> with a progress callback (ABI 2.3).</summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBGenerateContoursEx2(string rasterPath, double interval, int count,
+        double baseOffset, double minElev, double maxElev, double simplifyTolerance, int bandIndex,
+        NativeRasterOptions* options, delegate* unmanaged[Cdecl]<double, byte*, IntPtr, int> progress,
+        IntPtr progressUserData, out IntPtr output);
+}

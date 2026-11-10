@@ -40,4 +40,10 @@ public class ContourRequestDto
 
     /// <summary>A NoData value that replaces the one of the band (finite; FR-RAS-31).</summary>
     public double? Nodata { get; set; }
+
+    /// <summary>
+    /// The formula the values are read through: a thermal formula (CELSIUS, KELVIN, FAHRENHEIT) gives the levels, the limits
+    /// and the elevations in its unit (D-022); an index formula is ignored, as the style of a layer.
+    /// </summary>
+    public string? Formula { get; set; }
 }

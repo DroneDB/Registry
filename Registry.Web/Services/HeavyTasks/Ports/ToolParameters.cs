@@ -31,6 +31,13 @@ public readonly struct ToolParameters(JsonElement json)
     public long? WholeNumber(string name) =>
         Get(name, out var el) && el.ValueKind == JsonValueKind.Number && el.TryGetInt64(out var v) ? v : null;
 
+    /// <summary>The finite number <paramref name="name"/> (a JSON number, whole or not), or null.</summary>
+    public double? Number(string name) =>
+        Get(name, out var el) && el.ValueKind == JsonValueKind.Number && el.TryGetDouble(out var v) &&
+        double.IsFinite(v)
+            ? v
+            : null;
+
     /// <summary>
     /// The strings of the array <paramref name="name"/> (other items skipped), or null when it is not
     /// an array.

@@ -71,12 +71,13 @@ public sealed class TaskLifecycle
     /// longer has (lost when an InMemory store restarted) can never run, so it ends here too (Deleted); false
     /// only when the task ended meanwhile. A task that adds dataset files is rolled back from its write record
     /// (FR-XC-27): the cancel request is recorded first, so the task can no longer commit; a task that never started
-    /// (or lost its job) is rolled back here, a running one by its worker when it sees its job deleted.
+    /// (or lost its job) is rolled back here, a running one by its worker when it sees its job deleted. A reader cancels
+    /// the tasks it started of a tool that needs only read access (<see cref="TaskAuthorizer.LoadToCancelAsync"/>).
     /// </summary>
     /// <exception cref="BadRequestException">The task has already ended, or committed its result.</exception>
     public async Task<bool> CancelAsync(string orgSlug, string dsSlug, string id, CancellationToken ct = default)
     {
-        var job = await _authorizer.LoadAsync(orgSlug, dsSlug, id, AccessType.Write, ct);
+        var job = await _authorizer.LoadToCancelAsync(orgSlug, dsSlug, id, ct);
         if (TaskStateCatalog.IsTerminal(job.CurrentState))
             throw new BadRequestException(
                 $"The task has already ended ({job.CurrentState}); only a queued or running task can be cancelled",

@@ -471,6 +471,40 @@ public class ObjectsManagerThumbnailTests : TestBase
             m => m.Raster.GenerateContoursAsync(OrgSlug, DsSlug, "ortho.tif", new ContourOptions(1.0, null, 0.0, null, null, 0.0, 1)),
             x => x.GenerateContours("ortho.tif", 1.0, null, 0.0, null, null, 0.0, 1, It.IsAny<RasterAnalysisOptions?>()));
 
+    // FR-RAS-11, FR-XC-24: the endpoint that stays for existing clients forwards the formula too, with the NoData value,
+    // as the raster-contours task does (the thermal formula gives the levels in its unit, D-022)
+    [Test]
+    public async Task TheContourOptions_NodataAndFormula_ReachLibddb()
+    {
+        SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");
+        RasterAnalysisOptions? seen = null;
+        _ddbMock.Setup(x => x.GenerateContours("ortho.tif", 1.0, null, 0.0, null, null, 0.0, 1,
+                It.IsAny<RasterAnalysisOptions?>()))
+            .Callback<string, double?, int?, double, double?, double?, double, int, RasterAnalysisOptions?>(
+                (_, _, _, _, _, _, _, _, o) => seen = o).Returns("{}");
+
+        await CreateManager().Raster.GenerateContoursAsync(OrgSlug, DsSlug, "ortho.tif",
+            new ContourOptions(1.0, null, 0.0, null, null, 0.0, 1, Nodata: -9999, Formula: " CELSIUS "));
+
+        seen.ShouldBe(new RasterAnalysisOptions(-9999, "CELSIUS"));
+    }
+
+    [Test]
+    public async Task TheContourOptions_WithoutNodataAndFormula_PassNoOptions()
+    {
+        SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");
+        RasterAnalysisOptions? seen = new(Nodata: 1);
+        _ddbMock.Setup(x => x.GenerateContours("ortho.tif", 1.0, null, 0.0, null, null, 0.0, 1,
+                It.IsAny<RasterAnalysisOptions?>()))
+            .Callback<string, double?, int?, double, double?, double?, double, int, RasterAnalysisOptions?>(
+                (_, _, _, _, _, _, _, _, o) => seen = o).Returns("{}");
+
+        await CreateManager().Raster.GenerateContoursAsync(OrgSlug, DsSlug, "ortho.tif",
+            new ContourOptions(1.0, null, 0.0, null, null, 0.0, 1));
+
+        seen.ShouldBeNull();
+    }
+
     [Test]
     public async Task TheValueOptions_ReachLibddb()
     {

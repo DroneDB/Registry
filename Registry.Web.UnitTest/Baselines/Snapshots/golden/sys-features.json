@@ -136,6 +136,17 @@
         "disabledMessage": null
       },
       {
+        "id": "raster-contours",
+        "version": "1",
+        "title": "Contour lines",
+        "requiredAccess": "Read",
+        "producesArtifact": true,
+        "resultExtension": "geojson",
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
         "id": "photogrammetry",
         "version": "2",
         "title": "Photogrammetry (NodeODX)",

@@ -639,6 +639,16 @@ public class DDB : IDDB
             ex => "Could not generate contour lines for this raster.");
     }
 
+    public string GenerateContours(string path, double? interval, int? count, double baseOffset, double? minElev,
+        double? maxElev, double simplifyTolerance, int bandIndex, RasterAnalysisOptions? options,
+        Action<double, string?>? progress, CancellationToken cancellationToken)
+    {
+        // A cancellation (DdbCanceledException) is not a DdbException: it passes through
+        return Wrap(() => Wrapper.GenerateContours(GetLocalPath(path), interval, count, baseOffset, minElev, maxElev,
+                simplifyTolerance, bandIndex, options, progress, cancellationToken),
+            ex => "Could not generate contour lines for this raster.");
+    }
+
     public string GetRasterPointValue(string path, int x, int y)
     {
         return Wrap(() =>
