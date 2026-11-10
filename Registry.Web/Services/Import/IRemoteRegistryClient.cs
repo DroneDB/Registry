@@ -39,6 +39,20 @@ public interface IRemoteRegistryClient
         CancellationToken ct);
 
     /// <summary>
+    /// Reads the display name and the tagline of a remote dataset (<c>GET /orgs/{org}/ds/{ds}</c>, the
+    /// <c>name</c> and <c>tagline</c> of <c>properties.meta</c>). Best effort: a remote that does not answer or does
+    /// not give them returns null, and the import goes on with the slug as the name.
+    /// </summary>
+    /// <param name="registryUrl">The remote registry base URL.</param>
+    /// <param name="authToken">The bearer token, or null for anonymous.</param>
+    /// <param name="orgSlug">The remote organization slug.</param>
+    /// <param name="dsSlug">The remote dataset slug.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The name and the tagline, or null when the remote gave neither.</returns>
+    Task<RemoteDatasetInfo?> GetDatasetInfoAsync(string registryUrl, string? authToken, string orgSlug, string dsSlug,
+        CancellationToken ct);
+
+    /// <summary>
     /// Downloads the given files into <paramref name="destFolder"/> in parallel, each through a temporary file in the
     /// uploads folder of the dataset, a batch at a time: the destinations and the folders created for them are recorded
     /// in <paramref name="writes"/> and saved (§8.1) before they are created, and each file is moved without replacing
@@ -97,3 +111,8 @@ public interface IRemoteRegistryClient
     Task<RemoteBrowseItem[]> ListDatasetsAsync(string registryUrl, string? authToken, string orgSlug,
         CancellationToken ct);
 }
+
+/// <summary>The display name and the tagline of a remote dataset (either may be absent).</summary>
+/// <param name="Name">The display name (<c>meta.name</c>).</param>
+/// <param name="Tagline">The tagline (<c>meta.tagline</c>).</param>
+public sealed record RemoteDatasetInfo(string? Name, string? Tagline);

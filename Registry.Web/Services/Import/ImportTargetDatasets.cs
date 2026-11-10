@@ -26,10 +26,11 @@ public sealed class ImportTargetDatasets
         _logger = logger;
     }
 
-    /// <summary>Creates the empty destination dataset.</summary>
+    /// <summary>Creates the empty destination dataset, with the tagline when there is one.</summary>
     public Task<DatasetDto> CreateAsync(string orgSlug, string slug, string name, Visibility visibility,
-        CancellationToken ct) =>
-        _datasetsManager.AddNew(orgSlug, new DatasetNewDto { Slug = slug, Name = name, Visibility = visibility }, ct);
+        string? tagline, CancellationToken ct) =>
+        _datasetsManager.AddNew(orgSlug,
+            new DatasetNewDto { Slug = slug, Name = name, Visibility = visibility, Tagline = tagline }, ct);
 
     /// <summary>
     /// The dataset created for an import, as its task's write record names it (by folder id, FR-XC-27): a rollback of

@@ -148,6 +148,12 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         var totalFiles = toDownload.Length;
         var filesDone = 0;
         long bytesSoFar = 0;
+        // The listed sizes of the files done: the progress never passes the listed total, whatever the remote sends
+        long listedBytesDone = 0;
+
+        // The progress follows the bytes (FR-UPL-21): the files of a dataset differ in size by orders of magnitude, so
+        // a fraction of files done made the estimate of the time left several times too long
+        var totalBytes = toDownload.Sum(t => Math.Max(0, t.Item.Size));
 
         // Conservative, configurable concurrency: remote registries (e.g. hub.dronedb.app) rate-limit
         // aggressively, so a low default avoids tripping HTTP 429. Per-file downloads retry with backoff
@@ -179,8 +185,9 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
 
                         var done = Interlocked.Increment(ref filesDone);
                         var currentBytes = Interlocked.Add(ref bytesSoFar, fetched[i]?.Bytes ?? 0);
+                        var listedDone = Interlocked.Add(ref listedBytesDone, Math.Max(0, entry.Size));
                         progress?.Report(new ImportProgress(
-                            totalFiles == 0 ? 1.0 : (double)done / totalFiles,
+                            ProgressFraction(done, totalFiles, listedDone, totalBytes),
                             Phase: "downloading",
                             Message: $"Downloaded {done}/{totalFiles} files",
                             BytesSoFar: currentBytes,
@@ -197,6 +204,24 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
             }
         }
     }
+
+    /// <summary>
+    /// The completion fraction of a transfer (FR-UPL-21): the listed sizes of the files done of the listed sizes of the
+    /// files to download (a file listed at 0 bytes is done when it ends, and weighs nothing), or, when the sizes are not
+    /// known (every listed size is 0), the files done of the files to download. It is 1 only when the last file ended:
+    /// files still to come keep it at <see cref="LastFilesFraction"/> at most.
+    /// </summary>
+    internal static double ProgressFraction(int filesDone, int totalFiles, long listedBytesDone, long totalBytes)
+    {
+        if (totalFiles <= 0 || filesDone >= totalFiles)
+            return 1.0;
+
+        var fraction = totalBytes > 0 ? (double)listedBytesDone / totalBytes : (double)filesDone / totalFiles;
+        return Math.Min(Math.Clamp(fraction, 0.0, 1.0), LastFilesFraction);
+    }
+
+    /// <summary>The most a transfer is done while a file is still to come (a whole-number percentage shows 99).</summary>
+    internal const double LastFilesFraction = 0.99;
 
     /// <summary>How many files are downloaded, recorded and moved into the dataset together.</summary>
     internal int PlaceBatchSize { get; init; } = TaskImportWrites.SaveBatch;
@@ -349,6 +374,35 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         string.IsNullOrWhiteSpace(authToken) ? [] : new() { ["Authorization"] = $"Bearer {authToken}" };
 
     /// <inheritdoc />
+    public async Task<RemoteDatasetInfo?> GetDatasetInfoAsync(string registryUrl, string? authToken, string orgSlug,
+        string dsSlug, CancellationToken ct)
+    {
+        try
+        {
+            var client = CreateClient();
+            if (!string.IsNullOrWhiteSpace(authToken))
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {authToken}");
+
+            var response = await client.GetAsync(DatasetUrl(registryUrl, orgSlug, dsSlug), ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("The remote dataset info of '{OrgSlug}/{DsSlug}' answered {StatusCode}", orgSlug,
+                    dsSlug, response.StatusCode);
+                return null;
+            }
+
+            using var dataset = JsonDocument.Parse(await ReadJsonAsync(response, registryUrl, ct));
+            return MetaOf(dataset.RootElement);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The name is a convenience: the import goes on with the slug
+            _logger.LogInformation(ex, "Could not read the remote dataset info of '{OrgSlug}/{DsSlug}'", orgSlug, dsSlug);
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<RemoteBrowseItem[]> ListOrganizationsAsync(string registryUrl, string? authToken,
         CancellationToken ct)
     {
@@ -413,6 +467,23 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         return await response.Content.ReadAsStringAsync(ct);
     }
 
+    // The display name and the tagline of a dataset, from properties.meta.<key>.data; null when it has neither
+    private static RemoteDatasetInfo? MetaOf(JsonElement dataset)
+    {
+        var name = MetaData(dataset, "name");
+        var tagline = MetaData(dataset, "tagline");
+        name = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        tagline = string.IsNullOrWhiteSpace(tagline) ? null : tagline.Trim();
+        return name is null && tagline is null ? null : new RemoteDatasetInfo(name, tagline);
+    }
+
+    // properties.meta.<key>.data of a dataset, as text
+    private static string? MetaData(JsonElement dataset, string key) =>
+        dataset.Member("properties") is { } properties && properties.Member("meta") is { } meta &&
+        meta.Member(key) is { } entry
+            ? entry.Member("data").Text()
+            : null;
+
     // The slug and the name of each object of a remote listing (an organization, a dataset)
     private static RemoteBrowseItem[] BrowseItems(string json)
     {
@@ -422,7 +493,8 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
             .. listing.RootElement.Items()
                 .Select(o => new RemoteBrowseItem(
                     Slug: o.Member("slug").Text() ?? string.Empty,
-                    Name: o.Member("name").Text() ?? string.Empty))
+                    // An organization has a name; a dataset keeps its display name in its meta (FR-UPL-14)
+                    Name: o.Member("name").Text() ?? MetaOf(o)?.Name ?? string.Empty))
                 .Where(o => !string.IsNullOrWhiteSpace(o.Slug))
         ];
     }

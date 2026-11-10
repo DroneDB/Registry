@@ -39,6 +39,9 @@ public class ImportVerifyResultDto
     /// <summary>Suggested dataset display name derived from the source.</summary>
     public string? SuggestedName { get; set; }
 
+    /// <summary>Suggested dataset tagline derived from the source (the tagline of a remote dataset), when it has one.</summary>
+    public string? SuggestedTagline { get; set; }
+
     /// <summary>Suggested URL-safe dataset slug derived from the source.</summary>
     public string? SuggestedSlug { get; set; }
 }

@@ -90,7 +90,9 @@ public class ImportManager
             EstimatedBytes = probe.EstimatedBytes,
             FileCount = probe.FileCount,
             SuggestedName = ImportDatasetNaming.SuggestedNameOf(probe),
-            SuggestedSlug = ImportDatasetNaming.Slugify(ImportDatasetNaming.SuggestedNameOf(probe))
+            SuggestedTagline = ImportDatasetNaming.TaglineOf(probe),
+            SuggestedSlug = ImportDatasetNaming.SuggestedSlugOf(probe) ??
+                            ImportDatasetNaming.Slugify(ImportDatasetNaming.SuggestedNameOf(probe))
         };
     }
 
@@ -130,8 +132,9 @@ public class ImportManager
         var name = ImportDatasetNaming.NameOf(request.Name, probe);
         var slug = ImportDatasetNaming.SlugOf(request.Slug, probe, name);
 
-        // Create the empty destination dataset.
-        var ds = await _targets.CreateAsync(orgSlug, slug, name, request.Visibility ?? Visibility.Private, ct);
+        // Create the empty destination dataset, with the tagline of the remote dataset (FR-UPL-14)
+        var ds = await _targets.CreateAsync(orgSlug, slug, name, request.Visibility ?? Visibility.Private,
+            ImportDatasetNaming.TaglineOf(probe), ct);
 
         try
         {

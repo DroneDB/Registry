@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Services.Import;
@@ -18,13 +19,26 @@ public sealed class SsrfGuard
 {
     private static readonly IPAddress MetadataEndpoint = IPAddress.Parse("169.254.169.254");
 
+    /// <summary>
+    /// What the user is told when the address of a source is local or private (FR-UPL-19): why, and what to do, without
+    /// the technical detail (the resolved address stays in the log). <paramref name="host"/> is the host as the user typed it.
+    /// </summary>
+    public static string BlockedHostMessage(string host) =>
+        $"This server cannot import from local or private network addresses ({host}). Use the public address of the registry.";
+
     private readonly ImportSettings _settings;
+    private readonly ILogger<SsrfGuard>? _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SsrfGuard"/> class.
     /// </summary>
     /// <param name="settings">Import settings carrying the SSRF allow-list and toggles.</param>
-    public SsrfGuard(ImportSettings settings) => _settings = settings;
+    /// <param name="logger">Where a refused address is logged, with the address it resolved to.</param>
+    public SsrfGuard(ImportSettings settings, ILogger<SsrfGuard>? logger = null)
+    {
+        _settings = settings;
+        _logger = logger;
+    }
 
     /// <summary>
     /// Throws <see cref="ArgumentException"/> if the hostname resolves to a blocked address.
@@ -90,13 +104,16 @@ public sealed class SsrfGuard
         (_settings.SsrfAllowedHosts is { Length: > 0 } allowed &&
          allowed.Contains(host, StringComparer.OrdinalIgnoreCase));
 
-    private static void AssertAddressesAllowed(string host, IPAddress[] addresses)
+    private void AssertAddressesAllowed(string host, IPAddress[] addresses)
     {
         foreach (var addr in addresses)
         {
-            if (IsBlocked(addr))
-                throw new ArgumentException(
-                    $"Requests to private or reserved IP addresses are not allowed ('{host}' -> {addr}).");
+            if (!IsBlocked(addr))
+                continue;
+
+            // The host and the address are for the log; the user gets the plain message
+            _logger?.LogWarning("Import refused: '{Host}' resolves to the private or reserved address {Address}", host, addr);
+            throw new ArgumentException(BlockedHostMessage(host));
         }
     }
 

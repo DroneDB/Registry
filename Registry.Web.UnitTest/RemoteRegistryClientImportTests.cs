@@ -187,6 +187,78 @@ public class RemoteRegistryClientImportTests
     }
 
     [Test]
+    public async Task TheProgressFraction_FollowsTheBytes_NotTheFiles()
+    {
+        // A 900-byte file and a 100-byte file, one after the other: the first is 90 % of the transfer (FR-UPL-21)
+        var client = ClientFor(new SizedHandler(("big.jpg", 900), ("small.jpg", 100)), concurrency: 1, batchSize: 1);
+        var writes = await WritesAsync();
+        var fractions = new List<double>();
+        var entries = new[]
+        {
+            new EntryDto { Path = "big.jpg", Type = EntryType.Image, Size = 900 },
+            new EntryDto { Path = "small.jpg", Type = EntryType.Image, Size = 100 }
+        };
+
+        await client.DownloadFilesParallelAsync("http://remote.test", null, "src", "ds", _dataset, entries, writes,
+            new SyncProgress<ImportProgress>(p => fractions.Add(p.Fraction)), CancellationToken.None);
+
+        fractions.ShouldBe([0.9, 1.0]);
+    }
+
+    [Test]
+    public async Task TheProgressFraction_FollowsTheListedSizes_AndIsNotDoneBeforeTheLastFile()
+    {
+        // The remote lists a file at 0 bytes and sends 300, and lists a last file at 0 bytes: the fraction follows the
+        // listed sizes, and reaches 1 only when the last file ended (FR-UPL-21)
+        var client = ClientFor(new SizedHandler(("big.jpg", 900), ("unsized.jpg", 300), ("small.jpg", 100),
+            ("empty.txt", 0)), concurrency: 1, batchSize: 1);
+        var writes = await WritesAsync();
+        var fractions = new List<double>();
+        var entries = new[]
+        {
+            new EntryDto { Path = "big.jpg", Type = EntryType.Image, Size = 900 },
+            new EntryDto { Path = "unsized.jpg", Type = EntryType.Image, Size = 0 },
+            new EntryDto { Path = "small.jpg", Type = EntryType.Image, Size = 100 },
+            new EntryDto { Path = "empty.txt", Type = EntryType.Generic, Size = 0 }
+        };
+
+        await client.DownloadFilesParallelAsync("http://remote.test", null, "src", "ds", _dataset, entries, writes,
+            new SyncProgress<ImportProgress>(p => fractions.Add(p.Fraction)), CancellationToken.None);
+
+        fractions.ShouldBe([0.9, 0.9, 0.99, 1.0]);
+    }
+
+    [Test]
+    public async Task TheProgressFraction_OfAListingWithoutSizes_IsTheFilesDone()
+    {
+        // Every listed size is 0 (the remote does not say): the files done of the files
+        var client = ClientFor(new SizedHandler(("a.jpg", 500), ("b.jpg", 10)), concurrency: 1, batchSize: 1);
+        var writes = await WritesAsync();
+        var fractions = new List<double>();
+        var entries = new[]
+        {
+            new EntryDto { Path = "a.jpg", Type = EntryType.Image, Size = 0 },
+            new EntryDto { Path = "b.jpg", Type = EntryType.Image, Size = 0 }
+        };
+
+        await client.DownloadFilesParallelAsync("http://remote.test", null, "src", "ds", _dataset, entries, writes,
+            new SyncProgress<ImportProgress>(p => fractions.Add(p.Fraction)), CancellationToken.None);
+
+        fractions.ShouldBe([0.5, 1.0]);
+    }
+
+    [TestCase(1, 2, 900L, 1000L, 0.9)]
+    [TestCase(0, 2, 0L, 1000L, 0.0)]
+    [TestCase(2, 2, 1000L, 1000L, 1.0)]
+    [TestCase(2, 3, 1000L, 1000L, 0.99)] // a file listed at 0 bytes is still to come
+    [TestCase(1, 2, 1200L, 1000L, 0.99)]
+    [TestCase(1, 4, 0L, 0L, 0.25)]   // no size is known: the files done of the files
+    [TestCase(0, 0, 0L, 0L, 1.0)]
+    public void ProgressFraction_IsTheBytesDone_OrTheFilesDoneWhenNoSizeIsKnown(int filesDone, int totalFiles,
+        long bytesSoFar, long totalBytes, double expected) =>
+        RemoteRegistryClient.ProgressFraction(filesDone, totalFiles, bytesSoFar, totalBytes).ShouldBe(expected);
+
+    [Test]
     public async Task ACancel_WithSeveralDownloadsInFlight_IsACancellation_NotAnIOException_AndTheRecordCoversWhatWasWritten()
     {
         // The first files are served at once, the others stay in flight until the token is cancelled (a slow remote)
@@ -282,6 +354,18 @@ public class RemoteRegistryClientImportTests
 
             onDownload?.Invoke(path);
             return new HttpResponseMessage(status) { Content = new ByteArrayContent("data"u8.ToArray()) };
+        }
+    }
+
+    // Serves each file with a body of the size given for its path
+    private sealed class SizedHandler(params (string Path, int Size)[] sizes) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var path = Uri.UnescapeDataString(request.RequestUri!.Query.TrimStart('?').Split('&')
+                .Select(kv => kv.Split('=', 2)).Single(kv => kv[0] == "path")[1]);
+            var size = sizes.Single(s => s.Path == path).Size;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(new byte[size]) });
         }
     }
 

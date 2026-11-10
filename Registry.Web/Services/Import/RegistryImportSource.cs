@@ -57,8 +57,11 @@ public sealed class RegistryImportSource : IImportSource, IBrowsableImportSource
         if (files.Length == 0)
             return new ImportSourceProbe(false, "The remote dataset was not found or is empty.", 0, 0, p.Dataset);
 
+        // The remote display name and tagline (FR-UPL-14): the dataset keeps what its owner gave it, not the slug
+        var info = await _client.GetDatasetInfoAsync(p.Url, token, p.Organization, p.Dataset, ct);
+
         var bytes = files.Sum(f => f.Size);
-        return new ImportSourceProbe(true, null, bytes, files.Length, p.Dataset);
+        return new ImportSourceProbe(true, null, bytes, files.Length, info?.Name ?? p.Dataset, info?.Tagline, p.Dataset);
     }
 
     /// <inheritdoc />

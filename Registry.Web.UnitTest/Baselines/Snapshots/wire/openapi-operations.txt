@@ -1246,7 +1246,7 @@ schema ImportMode {  }
 schema ImportOrganizationRequestDto { sourceRegistryUrl:string, username:string, password:string, sourceOrganization:string, destinationOrganization:string, mode:ImportMode }
 schema ImportPhase {  }
 schema ImportResultDto { importedItems:array<ImportedItemDto>, errors:array<ImportErrorDto>, fileErrors:array<FileImportErrorDto>, totalSize:integer(int64), totalFiles:integer(int32), skippedFiles:integer(int32), duration:string(date-span) }
-schema ImportVerifyResultDto { reachable:boolean, note:string, estimatedBytes:integer(int64), fileCount:integer(int32), suggestedName:string, suggestedSlug:string }
+schema ImportVerifyResultDto { reachable:boolean, note:string, estimatedBytes:integer(int64), fileCount:integer(int32), suggestedName:string, suggestedTagline:string, suggestedSlug:string }
 schema ImportedItemDto { organization:string, dataset:string, size:integer(int64), fileCount:integer(int32), skippedFileCount:integer(int32), importedAt:string(date-time) }
 schema InputRuleDto { pattern:string, minLength:integer(int32), maxLength:integer(int32), description:string, message:string }
 schema InputRulesDto { slug:InputRuleDto, name:InputRuleDto, email:InputRuleDto, entryName:EntryNameRuleDto, nameClash:NameClashRuleDto, cron:CronRuleDto, latinName:LatinNameRuleDto, displayName:InputRuleDto, descriptionText:InputRuleDto }

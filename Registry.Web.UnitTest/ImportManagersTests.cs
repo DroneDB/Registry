@@ -143,6 +143,36 @@ public class ImportManagersTests
         result.SuggestedSlug.ShouldBe("my-dataset");
     }
 
+    [Test]
+    public async Task Verify_GivesTheRemoteTagline_AndTheRemoteSlugOfTheDataset()
+    {
+        _source.Setup(s => s.ProbeAsync(It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ImportSourceProbe(true, null, 2048, 3, "Brighton Beach", "Low tide at dawn", "brighton-b"));
+
+        var result = await CreateImportManager().VerifyAsync(Org, new VerifyImportRequestDto { SourceType = "registry" },
+            CancellationToken.None);
+
+        result.SuggestedName.ShouldBe("Brighton Beach");
+        result.SuggestedTagline.ShouldBe("Low tide at dawn");
+        result.SuggestedSlug.ShouldBe("brighton-b");
+    }
+
+    [Test]
+    public async Task Create_GivesTheNewDatasetTheRemoteNameAndTagline()
+    {
+        var longTagline = new string('t', 300);
+        _source.Setup(s => s.ProbeAsync(It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ImportSourceProbe(true, null, 2048, 3, "Brighton Beach", longTagline, "brighton-beach"));
+
+        var result = await CreateImportManager().CreateAsync(Org, new CreateImportRequestDto { SourceType = "registry" },
+            CancellationToken.None);
+
+        result.DsSlug.ShouldBe("brighton-beach");
+        _datasetsManager.Verify(m => m.AddNew(Org, It.Is<DatasetNewDto>(d =>
+            d.Name == "Brighton Beach" && d.Slug == "brighton-beach" && d.Tagline == new string('t', 256)),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     [TestCase("", "A source type is required.")]
     [TestCase("ftp", "Unknown import source type 'ftp'.")]
     public async Task Verify_RefusesAMissingOrUnknownSourceType(string sourceType, string message)

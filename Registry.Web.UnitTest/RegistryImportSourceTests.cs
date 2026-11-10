@@ -101,6 +101,49 @@ public class RegistryImportSourceTests
         items[0].Name.ShouldBe("Acme Corp");
     }
 
+    private static JsonElement DatasetParams(string org, string ds)
+    {
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(
+            new Dictionary<string, string> { ["url"] = Url, ["organization"] = org, ["dataset"] = ds }));
+        return doc.RootElement.Clone();
+    }
+
+    private static Mock<IRemoteRegistryClient> ClientWithFiles(RemoteDatasetInfo? info)
+    {
+        var client = new Mock<IRemoteRegistryClient>();
+        client.Setup(c => c.AuthenticateAsync(Url, "", "", CancellationToken.None)).ReturnsAsync((string?)null);
+        client.Setup(c => c.ListFilesAsync(Url, (string?)null, "odm", "aukerman", CancellationToken.None))
+            .ReturnsAsync([new EntryDto { Path = "a.jpg", Size = 40 }, new EntryDto { Path = "b.jpg", Size = 60 }]);
+        client.Setup(c => c.GetDatasetInfoAsync(Url, (string?)null, "odm", "aukerman", CancellationToken.None))
+            .ReturnsAsync(info);
+        return client;
+    }
+
+    [Test]
+    public async Task Probe_SuggestsTheRemoteDisplayNameAndTagline_AndTheRemoteSlug()
+    {
+        var client = ClientWithFiles(new RemoteDatasetInfo("Aukerman Mine", "An open pit"));
+
+        var probe = await SourceOf(client.Object).ProbeAsync(DatasetParams("odm", "aukerman"), CancellationToken.None);
+
+        probe.Reachable.ShouldBeTrue();
+        probe.SuggestedName.ShouldBe("Aukerman Mine");
+        probe.SuggestedTagline.ShouldBe("An open pit");
+        probe.SuggestedSlug.ShouldBe("aukerman");
+        probe.FileCount.ShouldBe(2);
+        probe.EstimatedBytes.ShouldBe(100);
+    }
+
+    [Test]
+    public async Task Probe_FallsBackToTheSlugAsTheName_WhenTheRemoteGivesNoInfo()
+    {
+        var probe = await SourceOf(ClientWithFiles(null).Object)
+            .ProbeAsync(DatasetParams("odm", "aukerman"), CancellationToken.None);
+
+        probe.SuggestedName.ShouldBe("aukerman");
+        probe.SuggestedTagline.ShouldBeNull();
+    }
+
     [Test]
     public void RemoteAuthFailure_ClassifiesAs403NoRetryForTheSignedInCaller()
     {

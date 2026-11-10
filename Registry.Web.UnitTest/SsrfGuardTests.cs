@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using NUnit.Framework;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Import;
@@ -34,6 +36,23 @@ public class SsrfGuardTests
             async () => await Guard().AssertAllowedAsync(host, CancellationToken.None));
     }
 
+    [TestCase("localhost", "This server cannot import from local or private network addresses (localhost). Use the public address of the registry.")]
+    [TestCase("10.1.2.3", "This server cannot import from local or private network addresses (10.1.2.3). Use the public address of the registry.")]
+    public async Task AssertAllowed_RefusesALocalAddress_WithAPlainMessage_AndLogsTheResolvedAddress(string host, string message)
+    {
+        var logger = new CapturingLogger();
+
+        var ex = await Should.ThrowAsync<ArgumentException>(
+            async () => await new SsrfGuard(new ImportSettings(), logger).AssertAllowedAsync(host, CancellationToken.None));
+
+        ex.Message.ShouldBe(message);
+        ex.Message.ShouldNotContain("reserved");
+        // The address the host resolved to is in the log, not in the message
+        var logged = logger.Warnings.ShouldHaveSingleItem();
+        logged.ShouldContain(host);
+        logged.ShouldMatch(@"10\.1\.2\.3|127\.0\.0\.1|::1");
+    }
+
     [Test]
     public async Task AssertAllowed_AllowsPublicAddress()
     {
@@ -62,5 +81,21 @@ public class SsrfGuardTests
         var settings = new ImportSettings { SsrfAllowedHosts = ["10.1.2.3"] };
         await Should.NotThrowAsync(
             async () => await Guard(settings).AssertAllowedAsync("10.1.2.3", CancellationToken.None));
+    }
+
+    private sealed class CapturingLogger : ILogger<SsrfGuard>
+    {
+        public List<string> Warnings { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Warning)
+                Warnings.Add(formatter(state, exception));
+        }
     }
 }

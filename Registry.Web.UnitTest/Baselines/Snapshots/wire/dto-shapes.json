@@ -2393,6 +2393,7 @@
       "estimatedBytes": 1234567890123,
       "fileCount": 42,
       "suggestedName": "SuggestedName-text",
+      "suggestedTagline": "SuggestedTagline-text",
       "suggestedSlug": "SuggestedSlug-text"
     },
     "sparse": {
@@ -2401,6 +2402,7 @@
       "estimatedBytes": null,
       "fileCount": null,
       "suggestedName": null,
+      "suggestedTagline": null,
       "suggestedSlug": null
     }
   },
