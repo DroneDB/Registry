@@ -164,3 +164,5 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   object of an entry that is not buildable), which `EntryBuild.Key`, `PendingBuildInfo.Key` and
   `CopiedBuildArtifacts.Key` read (U-210); the `raster-metadata-formula` histogram bins the range a viewer shows and gains
   `below` and `above` (additive). `DdbAbi.Minor` is 2. No vector changed.
+* 2026-11-10: DroneDB `0539d66562989cde8a5669c807b7ae7648ce3a88` (the DroneDB v2.2.0 release, the pinned build): no
+  contract file changed since `b01ddf02`, SOURCE names the release commit.
