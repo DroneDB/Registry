@@ -27,7 +27,8 @@
           "canRead": true,
           "canWrite": true,
           "canDelete": true
-        }
+        },
+        "hasThumbnail": false
       },
       "mtime": 1700000000,
       "size": 5729,

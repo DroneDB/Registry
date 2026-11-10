@@ -110,15 +110,19 @@ public sealed class MetaKeyNativeTests : IDisposable
     [Test]
     public async Task TheEndpoints_AnswerAClientError_ForTheKeyRule_AndForAKeyNobodyWrote()
     {
-        // A set on a list key and get of the key that set never wrote were 500
+        // A set on a list key and get of the key that set never wrote were 500; a get of a key nobody wrote is 200 with [] for a list and 404 for a single key
         var (status, body) = await SendAsync(HttpMethod.Post, $"{Api}/set/tags", "\"survey\"");
         status.ShouldBe(400);
         JsonNode.Parse(body)!["detail"]!.GetValue<string>()
             .ShouldBe("Invalid metadata key (must be singular, for example: tag)");
 
+        // A list key that nobody wrote is an empty list, not an error (FR-XC-10, FR-EXP-28: the Hub logs no 404 for no saved views)
         (status, body) = await SendAsync(HttpMethod.Get, $"{Api}/get/tags");
-        status.ShouldBe(404);
-        JsonNode.Parse(body)!["detail"]!.GetValue<string>().ShouldBe("No metadata found for key tags");
+        status.ShouldBe(200);
+        body.ShouldBe("[]");
+        (status, body) = await SendAsync(HttpMethod.Get, $"{Api}/get/views");
+        status.ShouldBe(200);
+        body.ShouldBe("[]");
 
         // The list is written with add, and get returns it
         (status, _) = await SendAsync(HttpMethod.Post, $"{Api}/add/tags", "\"survey\"");

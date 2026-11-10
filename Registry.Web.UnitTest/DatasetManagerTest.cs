@@ -282,6 +282,9 @@ public class DatasetManagerTest : TestBase
             Path = "."
         });
 
+        // No cover candidate at the root
+        ddbMock.Setup(x => x.EntryExists(It.IsAny<string>())).Returns(false);
+
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);
 
@@ -349,6 +352,9 @@ public class DatasetManagerTest : TestBase
             ModifiedTime = DateTime.Now,
             Path = "."
         });
+
+        // No cover candidate at the root
+        ddbMock.Setup(x => x.EntryExists(It.IsAny<string>())).Returns(false);
 
         _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Returns(ddbMock.Object);

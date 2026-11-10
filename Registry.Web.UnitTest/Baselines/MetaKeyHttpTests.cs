@@ -23,7 +23,7 @@ namespace Registry.Web.Test.Baselines;
 /// <c>DDBERR_EXCEPTION</c> with a message (ABI 2.0 keeps the old codes), and a key with no value is the same kind of
 /// failure: Registry could only answer 500 for what the client got wrong. The key rule is checked first
 /// (<see cref="Registry.Web.Utilities.MetaKeyRule"/>, 400 with libddb's message, libddb is never called) and a read
-/// that fails for a key nobody wrote is a 404, decided by asking libddb which keys exist, not by reading its
+/// that fails for a key nobody wrote is a 404 (a list key, views or tags, is an empty list: FR-XC-10), decided by asking libddb which keys exist, not by reading its
 /// message. Any other failure of the read stays what it was.
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~MetaKeyHttpTests"
 /// </summary>
@@ -148,17 +148,34 @@ public sealed class MetaKeyHttpTests : IDisposable
     }
 
     [Test]
-    public async Task GetOfAKeyNobodyWrote_Is404()
+    public async Task GetOfAListKeyNobodyWrote_Is200WithAnEmptyList()
     {
-        _factory.DdbWrapper.Setup(d => d.MetaGet(It.IsAny<string>(), "tags", It.IsAny<string?>()))
-            .Throws(new DdbException("No metadata found for key tags"));
+        // views, tags... : no item is a normal state, so the Hub's request logs no 404 (FR-XC-10, FR-EXP-28)
+        _factory.DdbWrapper.Setup(d => d.MetaGet(It.IsAny<string>(), "views", It.IsAny<string?>()))
+            .Throws(new DdbException("No metadata found for key views"));
         _factory.DdbWrapper.Setup(d => d.MetaList(It.IsAny<string>(), It.IsAny<string?>()))
             .Returns(new List<MetaListItem> { new() { Key = "name", Path = "", Count = 1 } });
 
-        var (status, problem) = await SendAsync(HttpMethod.Get, $"{Api}/get/tags");
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{Api}/get/views");
+        request.AsUser(OwnerUser);
+        using var response = await _client.SendAsync(request);
+
+        response.StatusCode.ShouldBe(System.Net.HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync()).ShouldBe("[]");
+    }
+
+    [Test]
+    public async Task GetOfASingleKeyNobodyWrote_Is404()
+    {
+        _factory.DdbWrapper.Setup(d => d.MetaGet(It.IsAny<string>(), "license", It.IsAny<string?>()))
+            .Throws(new DdbException("No metadata found for key license"));
+        _factory.DdbWrapper.Setup(d => d.MetaList(It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns(new List<MetaListItem> { new() { Key = "name", Path = "", Count = 1 } });
+
+        var (status, problem) = await SendAsync(HttpMethod.Get, $"{Api}/get/license");
 
         status.ShouldBe(StatusCodes.Status404NotFound);
-        problem!["detail"]!.GetValue<string>().ShouldBe("No metadata found for key tags");
+        problem!["detail"]!.GetValue<string>().ShouldBe("No metadata found for key license");
     }
 
     [Test]

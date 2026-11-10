@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -147,14 +146,9 @@ public sealed class DatasetQueries
         return dto;
     }
 
-    private bool CheckHasThumbnail(IDDB ddb)
-    {
-        var rootEntries = ddb.FindSummaries(new EntryQuery(Recursive: false));
-        var rootNames = new HashSet<string>(
-            rootEntries.Select(e => Path.GetFileName(e.Path)),
-            StringComparer.OrdinalIgnoreCase);
-        return _thumbnails.Candidates.Any(c => rootNames.Contains(c));
-    }
+    // The rule of the thumbnail endpoint (ObjectRenderService: the first candidate the dataset has), so that
+    // hasThumbnail is true exactly when the thumbnail is served: one lookup per candidate, no listing of the root
+    private bool CheckHasThumbnail(IDDB ddb) => _thumbnails.Candidates.Any(ddb.EntryExists);
 
     public async Task<EntryDto[]> GetEntry(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
@@ -176,6 +170,10 @@ public sealed class DatasetQueries
 
         var permissions = await _authManager.GetDatasetPermissions(dataset);
         dto.Properties["permissions"] = JsonSerializer.SerializeToElement(permissions, ApiJson.Options);
+
+        // Whether the dataset has a cover: its thumbnail is requested only then, so a dataset without one
+        // logs no 404 in the browser console (FR-XC-10, FR-EXP-28)
+        dto.Properties["hasThumbnail"] = JsonSerializer.SerializeToElement(CheckHasThumbnail(ddb), ApiJson.Options);
 
         return [dto];
     }

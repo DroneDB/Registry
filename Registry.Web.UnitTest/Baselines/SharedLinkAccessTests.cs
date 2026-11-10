@@ -58,7 +58,10 @@ public sealed class SharedLinkAccessTests : DatasetAccessFixture
                     ? $$"""{"data":{{(int)visibility}},"id":"v","mtime":0}"""
                     : throw new DdbException("Key not found"));
 
-        // The dataset entry (GET /orgs/{org}/ds/{ds}) of an empty index
+        // The dataset entry (GET /orgs/{org}/ds/{ds}) of an empty index: no file at the root, so no cover
+        Factory.DdbWrapper.Setup(d => d.ListEntrySummaries(It.IsAny<string>(), It.IsAny<EntryQuery>()))
+            .Returns([]);
+        // (the entry itself)
         Factory.DdbWrapper.Setup(d => d.Info(It.IsAny<string>(), false, 0, false))
             .Returns((string path, bool _, int _, bool _) =>
             [

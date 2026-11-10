@@ -114,7 +114,12 @@ public class MetaManager : IMetaManager
         catch (DdbException ex) when (!DdbErrors.IsTransient(ex) && !HasKey(ddb, key, path))
         {
             // libddb answers a key nobody wrote with a generic failure: the dataset's own list of keys says
-            // whether that is the reason, so the message is never parsed and any other failure stays one
+            // whether that is the reason, so the message is never parsed and any other failure stays one.
+            // A list key (views, tags) with no item is a normal state, not an error: an empty list, so the Hub
+            // shows "no saved views" without a 404 in the browser console (FR-XC-10, FR-EXP-28)
+            if (MetaKeyRule.IsList(key))
+                return EmptyList;
+
             throw new NotFoundException($"No metadata found for key {key}" + (path == null ? "" : $" and path {path}"), ex);
         }
     }
@@ -135,6 +140,9 @@ public class MetaManager : IMetaManager
         if (MetaKeyRule.Violation(key, kind) is { } violation)
             throw new BadRequestException(violation, noRetry: true);
     }
+
+    // The answer for a list key that holds no item: `[]` (a JsonElement of a parsed document is immutable and shareable)
+    private static readonly JsonElement EmptyList = JsonDocument.Parse("[]").RootElement.Clone();
 
     private static bool HasKey(IDDB ddb, string key, string? path) =>
         ddb.Meta.List(path).Any(item => item.Key == key && item.Path == (path ?? ""));

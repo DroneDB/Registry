@@ -284,7 +284,8 @@ public class MetaController : ControllerBaseEx
     /// <param name="dsSlug">The dataset slug.</param>
     /// <param name="key">The metadata key.</param>
     /// <param name="path">Optional path within the dataset.</param>
-    /// <returns>The metadata values as JSON.</returns>
+    /// <returns>The metadata values as JSON: for a list key (views, tags: a key that ends with "s") with no item an empty list
+    /// (<c>200 []</c>); for a single key nobody wrote, 404.</returns>
     [HttpGet("get/{key}", Name = nameof(MetaController) + "." + nameof(Get))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
