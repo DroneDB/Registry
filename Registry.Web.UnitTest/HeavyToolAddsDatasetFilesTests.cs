@@ -24,19 +24,16 @@ public class HeavyToolAddsDatasetFilesTests
             .Where(t => t is { IsClass: true, IsAbstract: false } && typeof(IHeavyTool).IsAssignableFrom(t))
     ];
 
-    /// <remarks>
-    /// The mask-borders step is not here: it is a DdbJobs job, not a heavy tool, and its unit (U-306, FR-PRC-12) sets the
-    /// flag when it becomes one.
-    /// </remarks>
+    /// <remarks>Mask Borders is a heavy tool (FR-PRC-12, D-013), so the quota gate and the write record apply to it.</remarks>
     [Test]
-    public void ExactlyThePhotogrammetryTheImportsTheExtractionMergeAndAlignAddDatasetFiles()
+    public void ExactlyThePhotogrammetryTheImportsTheExtractionMergeAlignAndMaskAddDatasetFiles()
     {
         var adding = AllTools().Where(t => Uninitialized(t).AddsDatasetFiles).Select(t => t.Name).Order().ToArray();
 
         adding.ShouldBe(
         [
             nameof(AlignRasterTool), nameof(ArchiveExtractTool), nameof(FileUrlImportTool), nameof(ImportDatasetTool),
-            nameof(MergeMultispectralTool), nameof(PhotogrammetryTool)
+            nameof(MaskBordersTool), nameof(MergeMultispectralTool), nameof(PhotogrammetryTool)
         ]);
     }
 

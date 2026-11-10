@@ -121,6 +121,33 @@ public class MergeMultispectralToolTests
         _h.Recorder.Paths.ShouldBeEmpty();
     }
 
+    // FR-XC-27: libddb's merge cannot be cancelled; a cancel that comes while it replaces the output does not leave the
+    // index with the old hash and size: the replaced output is indexed, then the task stops as cancelled (no source is
+    // deleted)
+    [Test]
+    public async Task AReplaceCancelledWhileLibddbWritesIt_IsIndexed_ThenTheTaskStops_AndKeepsTheBands()
+    {
+        _h.File("bands/merged.tif", "old");
+        _h.OwnerHasHonouringCancellation();
+        TrackSourceDeletes();
+        using var cts = new CancellationTokenSource();
+        _h.Ddb.Setup(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<bool>()))
+            .Callback<string[], string, bool>((_, output, overwrite) =>
+            {
+                _h.Calls.Add("merge " + output + (overwrite ? " (replace)" : ""));
+                File.WriteAllText(_h.Local(output), "merged");
+                cts.Cancel();
+            });
+
+        await Should.ThrowAsync<OperationCanceledException>(() => _tool.ExecuteAsync(
+            Request("bands/merged.tif", overwrite: true, deleteSources: true), _h.Ctx.Object,
+            new Progress<HeavyToolProgress>(), cts.Token));
+
+        _h.Calls.ShouldBe(["merge bands/merged.tif (replace)", "published bands/merged.tif", "index bands/merged.tif"]);
+        File.ReadAllText(_h.Local("bands/merged.tif")).ShouldBe("merged");
+        _h.Recorder.Paths.ShouldBeEmpty();
+    }
+
     [Test]
     public async Task AReplaceWhoseGrowthFits_IsPublishedAndIndexed_ThoughTheWholeOutputWouldNotFit()
     {

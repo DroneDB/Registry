@@ -62,6 +62,7 @@ public static class ProcessingPlatformServiceCollectionExtensions
         services.AddSingleton<IHeavyTool, BulkDownloadTool>();
         services.AddSingleton<IHeavyTool, MergeMultispectralTool>();
         services.AddSingleton<IHeavyTool, AlignRasterTool>();
+        services.AddSingleton<IHeavyTool, MaskBordersTool>();
         services.AddSingleton<IHeavyTool, RescanIndexTool>();
         services.AddSingleton<IHeavyTool, ArchiveExtractTool>();
         services.AddSingleton<IHeavyTool, SplatTrainingExportTool>();

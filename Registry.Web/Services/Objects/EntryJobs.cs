@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -123,14 +124,21 @@ public sealed class EntryJobs
         Entry entry, string outputPath, int nearDist, bool white, bool overwrite = false)
     {
         var user = await _authManager.GetCurrentUser();
-        var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user?.Id, null, entry.Path);
+        // The job declares the file it writes, as a heavy task does: the runner refuses a task that would write it while
+        // the job waits or runs (FR-XC-25)
+        var meta = new IndexPayload(orgSlug, dsSlug, entry.Hash, user?.Id, null, entry.Path,
+            OutputPathsJson: JsonSerializer.Serialize(new[] { outputPath }));
         return _jobs.EnqueueMaskBorders(access.Key, entry.Path, outputPath, nearDist, white, overwrite, meta);
     }
 
-    /// <summary>Refuses a second job of <paramref name="methodName"/> on <paramref name="path"/> while one waits or runs.</summary>
+    /// <summary>
+    /// Refuses a second job of <paramref name="methodName"/> on <paramref name="path"/> while one waits or runs, and a
+    /// job whose output <paramref name="outputPath"/> an unfinished task of the dataset writes (the Mask Borders heavy
+    /// task, or another job that declares it; letter case ignored, D-040): the 409 the runner gives a task (FR-XC-25).
+    /// </summary>
     /// <exception cref="ConflictException">One is queued, scheduled or running.</exception>
     public async Task EnsureNoActiveJobAsync(string orgSlug, string dsSlug, string path, string methodName,
-        CancellationToken ct = default)
+        string outputPath, CancellationToken ct = default)
     {
         var jobs = await _jobIndex.GetByOrgDsAsync(orgSlug, dsSlug, 0, 1000, ct);
         var active = jobs.FirstOrDefault(j =>
@@ -140,5 +148,11 @@ public sealed class EntryJobs
 
         if (active != null)
             throw new ConflictException($"A {methodName} operation is already in progress for '{path}'");
+
+        foreach (var task in await _jobIndex.GetActiveOutputsAsync(orgSlug, dsSlug, ct))
+        {
+            if (task.Paths.Contains(outputPath, HeavyToolPaths.Comparer))
+                throw new ConflictException(HeavyToolPaths.OutputInUseMessage(outputPath));
+        }
     }
 }

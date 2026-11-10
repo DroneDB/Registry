@@ -191,6 +191,9 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
         var mode = args.Mode ?? "similarity";
 
         string compact;
+        // A replace is indexed whatever a cancel says (libddb's alignment cannot be cancelled: once it returns the file is
+        // replaced, and its entry must describe it); the cancel is honoured once it is indexed (FR-XC-27)
+        var replaced = false;
         var published = ctx.PublishedOutput;
         if (PublishedOutputMarker.Covers(ctx.Ddb, published, outputPath))
         {
@@ -245,6 +248,7 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
             // it (FR-XC-27). Without the replace, libddb refuses a file that another writer created meanwhile
             var resultJson = await Task.Run(
                 () => ctx.Ddb.AlignRaster(sourcePath, referencePath, outputPath, mode, overwrite: replacing), ct);
+            replaced = replacing;
 
             // The owner of the organization must have room for the growth of the output (FR-XC-26): the task fails with
             // the 507 text. An output that replaced a file is never deleted (FR-XC-27: a rollback never deletes a path
@@ -252,7 +256,7 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
             try
             {
                 await WorkerStorageQuota.EnsureOutputFitsAsync(ctx.Storage, request.OrgSlug, outputFullPath,
-                    replacedBytes, ct);
+                    replacedBytes, replacing ? CancellationToken.None : ct);
             }
             catch (QuotaExceededException) when (replacing)
             {
@@ -287,6 +291,10 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
 
         progress.Report(new HeavyToolProgress(-1, "indexing", LogChunk: "Indexing aligned output"));
         ctx.Ddb.AddRaw(outputPath);
+
+        // A cancel that came while a replace ran stops the task now that the entry describes the file
+        if (replaced)
+            ct.ThrowIfCancellationRequested();
 
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: compact));
         return null;

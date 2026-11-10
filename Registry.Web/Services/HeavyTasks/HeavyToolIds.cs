@@ -14,4 +14,7 @@ public static class HeavyToolIds
 
     /// <summary>Dataset import tool: <c>ImportManager</c> creates the dataset it fills.</summary>
     public const string ImportDataset = "import-dataset";
+
+    /// <summary>Mask Borders: the masked copy of a georaster (FR-PRC-12, D-013).</summary>
+    public const string MaskBorders = "mask-borders";
 }

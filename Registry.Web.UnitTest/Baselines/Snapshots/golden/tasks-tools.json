@@ -319,6 +319,47 @@
       "disabledMessage": null
     },
     {
+      "id": "mask-borders",
+      "version": "1",
+      "title": "Mask Borders",
+      "requiredAccess": "Write",
+      "producesArtifact": false,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Dataset-relative path of the georaster whose borders are masked."
+          },
+          "near": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255,
+            "default": 15,
+            "description": "How far from black (or white) a pixel can be and still count as border (0-255)."
+          },
+          "white": {
+            "type": "boolean",
+            "default": false,
+            "description": "Mask the white border instead of the black one."
+          },
+          "overwrite": {
+            "type": "boolean",
+            "default": false,
+            "description": "Replace the masked copy when it exists (without it, an existing copy is refused with 409)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    },
+    {
       "id": "rescan-index",
       "version": "1",
       "title": "Rescan index",

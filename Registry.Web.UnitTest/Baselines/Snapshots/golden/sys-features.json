@@ -145,6 +145,17 @@
         "disabledMessage": null
       },
       {
+        "id": "mask-borders",
+        "version": "1",
+        "title": "Mask Borders",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
         "id": "rescan-index",
         "version": "1",
         "title": "Rescan index",

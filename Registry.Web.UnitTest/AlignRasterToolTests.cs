@@ -95,6 +95,28 @@ internal sealed class OutputToolHarness : IDisposable
         Ctx.SetupGet(c => c.Storage).Returns(storage.Object);
     }
 
+    /// <summary>
+    /// The owner has <paramref name="remaining"/> bytes left, read as the real quota reads it: a cancelled token throws
+    /// (a cancel of the task stops the read).
+    /// </summary>
+    public void OwnerHasHonouringCancellation(long remaining = 1_000_000)
+    {
+        var storage = new Mock<Registry.Web.Services.Ports.IStorageQuota>();
+        storage.Setup(q => q.OwnerIdOfAsync("org", It.IsAny<System.Threading.CancellationToken>()))
+            .Returns((string _, System.Threading.CancellationToken ct) =>
+            {
+                ct.ThrowIfCancellationRequested();
+                return System.Threading.Tasks.Task.FromResult<string?>("owner-1");
+            });
+        storage.Setup(q => q.RemainingBytesAsync("owner-1", It.IsAny<System.Threading.CancellationToken>()))
+            .Returns((string? _, System.Threading.CancellationToken ct) =>
+            {
+                ct.ThrowIfCancellationRequested();
+                return System.Threading.Tasks.Task.FromResult<long?>(remaining);
+            });
+        Ctx.SetupGet(c => c.Storage).Returns(storage.Object);
+    }
+
     public void PublishedBefore(string path) => Ctx.SetupGet(c => c.PublishedOutput).Returns(path);
 
     /// <summary>The task was queued before the overwrite rule (its record declares no output paths).</summary>
@@ -291,6 +313,53 @@ public class AlignRasterToolTests
         ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 3 B left.");
         File.ReadAllText(_h.Local("out/a.tif")).ShouldBe("aligned");
         _h.Recorder.Paths.ShouldBeEmpty();
+    }
+
+    // FR-XC-27: libddb's alignment cannot be cancelled; a cancel that comes while it replaces the output does not leave
+    // the index with the old hash and size: the replaced output is indexed, then the task stops as cancelled
+    [Test]
+    public async Task AReplaceCancelledWhileLibddbWritesIt_IsIndexed_ThenTheTaskStops()
+    {
+        _h.File("out/a.tif", "old");
+        _h.OwnerHasHonouringCancellation();
+        using var cts = new CancellationTokenSource();
+        _h.Ddb.Setup(d => d.AlignRaster("src.tif", "ref.tif", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()))
+            .Callback<string, string, string, string, bool>((_, _, output, _, overwrite) =>
+            {
+                _h.Calls.Add("align " + output + (overwrite ? " (replace)" : ""));
+                File.WriteAllText(_h.Local(output), "aligned");
+                cts.Cancel();
+            })
+            .Returns("{ \"ok\": true }");
+
+        await Should.ThrowAsync<OperationCanceledException>(() => _tool.ExecuteAsync(Request("out/a.tif", overwrite: true),
+            _h.Ctx.Object, new Progress<HeavyToolProgress>(), cts.Token));
+
+        _h.Calls.ShouldBe(["align out/a.tif (replace)", "published out/a.tif", "index out/a.tif"]);
+        File.ReadAllText(_h.Local("out/a.tif")).ShouldBe("aligned");
+        _h.Recorder.Paths.ShouldBeEmpty();
+    }
+
+    // A new output cancelled the same way is not indexed: it is recorded, and the rollback deletes it
+    [Test]
+    public async Task ANewOutputCancelledWhileLibddbWritesIt_IsNotIndexed()
+    {
+        _h.OwnerHasHonouringCancellation();
+        using var cts = new CancellationTokenSource();
+        _h.Ddb.Setup(d => d.AlignRaster("src.tif", "ref.tif", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()))
+            .Callback<string, string, string, string, bool>((_, _, output, _, _) =>
+            {
+                _h.Calls.Add("align " + output);
+                File.WriteAllText(_h.Local(output), "aligned");
+                cts.Cancel();
+            })
+            .Returns("{ \"ok\": true }");
+
+        await Should.ThrowAsync<OperationCanceledException>(() => _tool.ExecuteAsync(Request("new.tif"),
+            _h.Ctx.Object, new Progress<HeavyToolProgress>(), cts.Token));
+
+        _h.Calls.ShouldBe(["align new.tif"]);
+        _h.Recorder.SavedPaths.ShouldBe(["new.tif"]);
     }
 
     [Test]

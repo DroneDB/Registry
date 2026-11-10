@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -51,15 +52,34 @@ public static class WorkerStorageQuota
     /// entry), so the check is <c>max(0, new size - replacedBytes)</c> against what is left, as for a copy.
     /// </summary>
     /// <exception cref="QuotaExceededException">The growth does not fit.</exception>
-    public static async Task EnsureOutputFitsAsync(IStorageQuota storage, string orgSlug, string outputPath,
-        long replacedBytes, CancellationToken ct)
+    public static Task EnsureOutputFitsAsync(IStorageQuota storage, string orgSlug, string outputPath,
+        long replacedBytes, CancellationToken ct) =>
+        EnsureOutputFitsAsync(storage, orgSlug, [outputPath], replacedBytes, ct);
+
+    /// <summary>
+    /// <see cref="EnsureOutputFitsAsync(IStorageQuota, string, string, long, CancellationToken)"/> for an output and the
+    /// files written with it (the <c>.msk</c> sidecar of a masked raster): their sizes, of those that exist, count together.
+    /// </summary>
+    /// <exception cref="QuotaExceededException">The growth does not fit.</exception>
+    public static async Task EnsureOutputFitsAsync(IStorageQuota storage, string orgSlug,
+        IReadOnlyList<string> outputPaths, long replacedBytes, CancellationToken ct)
     {
         var remaining = await storage.RemainingBytesOfOrganizationAsync(orgSlug, ct);
         if (remaining is not { } left)
             return;
 
-        var info = new FileInfo(outputPath);
-        if (info.Exists && GrowthBytes(info.Length, replacedBytes) > left)
+        long written = 0;
+        var any = false;
+        foreach (var path in outputPaths)
+        {
+            var info = new FileInfo(path);
+            if (!info.Exists)
+                continue;
+            any = true;
+            written += info.Length;
+        }
+
+        if (any && GrowthBytes(written, replacedBytes) > left)
             throw QuotaExceededException.OwnerOverQuota(left);
     }
 

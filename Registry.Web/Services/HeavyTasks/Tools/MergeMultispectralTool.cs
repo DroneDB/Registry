@@ -172,6 +172,9 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
                     ?? throw new InvalidOperationException("Band paths are required."), p => pathPolicy.Normalize(p));
         var outputPath = pathPolicy.Normalize(args.OutputPath, "output path");
 
+        // A replace is indexed whatever a cancel says (libddb's merge cannot be cancelled: once it returns the file is
+        // replaced, and its entry must describe it); the cancel is honoured once it is indexed (FR-XC-27)
+        var replaced = false;
         var published = ctx.PublishedOutput;
         if (PublishedOutputMarker.Covers(ctx.Ddb, published, outputPath))
         {
@@ -224,10 +227,12 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
             // A failed run keeps the output recorded: a file that appears there is the task's, and the rollback deletes
             // it (FR-XC-27). Without the replace, libddb refuses a file that another writer created meanwhile
             await Task.Run(() => ctx.Ddb.MergeMultispectral(paths, outputPath, overwrite: replacing), ct);
+            replaced = replacing;
 
             // The owner of the organization must have room for the growth of the output (FR-XC-26): the task fails with
             // the 507 text
-            await EnsureOutputFitsAsync(ctx, request.OrgSlug, outputPath, outputFullPath, replacedBytes, replacing, progress, ct);
+            await EnsureOutputFitsAsync(ctx, request.OrgSlug, outputPath, outputFullPath, replacedBytes, replacing, progress,
+                replacing ? CancellationToken.None : ct);
 
             if (!replacing)
                 writes.Written(outputPath);
@@ -240,6 +245,10 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
 
         progress.Report(new HeavyToolProgress(-1, "indexing", LogChunk: "Indexing merged output"));
         ctx.Ddb.AddRaw(outputPath);
+
+        // A cancel that came while a replace ran stops the task now that the entry describes the file
+        if (replaced)
+            ct.ThrowIfCancellationRequested();
 
         if (args.DeleteSources == true)
             await DeleteSourcesAsync(ctx, paths, outputPath, progress, ct);

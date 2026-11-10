@@ -147,10 +147,11 @@ public sealed class RasterProcessingService
     {
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
 
-        await _jobs.EnsureNoActiveJobAsync(orgSlug, dsSlug, path, MaskBordersJob, ct);
-
         var ddb = access.Ddb;
         path = _paths.Normalize(path);
+
+        // One job per source, and none while an unfinished task writes the masked copy (the Mask Borders tool): 409
+        await _jobs.EnsureNoActiveJobAsync(orgSlug, dsSlug, path, MaskBordersJob, MaskedOutputPath(path), ct);
 
         var entry = ddb.GetEntry(path) ?? throw new NotFoundException($"Cannot find entry: '{path}'");
         if (entry.Type != EntryType.GeoRaster)
@@ -178,13 +179,8 @@ public sealed class RasterProcessingService
             throw QuotaExceededException.OwnerOverQuota(left);
     }
 
-    // The masked copy of a normalized path, next to it
-    private static string MaskedOutputPath(string path)
-    {
-        var fileName = Path.GetFileNameWithoutExtension(path) + "_masked.tif";
-        var slash = path.LastIndexOf('/');
-        return slash < 0 ? fileName : path[..(slash + 1)] + fileName;
-    }
+    // The masked copy of a normalized path, next to it (the rule of the mask-borders tool)
+    private static string MaskedOutputPath(string path) => Registry.Web.Services.HeavyTasks.Tools.MaskBordersTool.MaskedOutputPath(path);
 
     private static void RequirePaths(string[]? paths)
     {

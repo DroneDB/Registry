@@ -20,6 +20,7 @@ using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.PlatformTasks;
@@ -50,11 +51,13 @@ public class HeavyTaskRunnerTests
     private ProcessingPlatformSettings _settings = null!;
     private Dictionary<string, IHeavyTool> _tools = null!;
     private Mock<IStorageQuota> _ownerStorage = null!;
+    private IDDB _dataset = null!;
 
     [SetUp]
     public void SetUp()
     {
         _storage = new InMemoryStorage();
+        _dataset = Mock.Of<IDDB>();
         _enqueued = [];
         _settings = new ProcessingPlatformSettings { DedupEnabled = true };
 
@@ -140,7 +143,7 @@ public class HeavyTaskRunnerTests
         datasets.Setup(d => d.GetDatasetAsync(Org, Ds, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(dataset);
         var ddbManager = new Mock<IDdbManager>();
-        ddbManager.Setup(m => m.Get(Org, dataset.InternalRef)).Returns(Mock.Of<IDDB>());
+        ddbManager.Setup(m => m.Get(Org, dataset.InternalRef)).Returns(_dataset);
 
         var options = TestSettings.Options<ProcessingPlatformSettings>(
             Microsoft.Extensions.Options.Options.Create(new AppSettings { ProcessingPlatform = _settings }));
@@ -290,6 +293,58 @@ public class HeavyTaskRunnerTests
         admitted.OutputPaths.ShouldBe(["out/a.tif"]);
         admitted.Label.ShouldBe("→ out/a.tif");
         _enqueued.ShouldBeEmpty();
+    }
+
+    // ---- Mask Borders is checked like any tool (FR-PRC-12, D-013) ----
+
+    private HeavyTaskSubmitRequest SubmitMask(string path) =>
+        new(Org, Ds, "mask-borders", null, null, JsonSerializer.SerializeToElement(new { path }), false, "user", null);
+
+    private void MaskToolOver(string path)
+    {
+        var ddb = new Mock<IDDB>();
+        ddb.Setup(d => d.GetEntry(path)).Returns(new Registry.Ports.DroneDB.Entry { Path = path, Type = EntryType.GeoRaster, Size = 10 });
+        _dataset = ddb.Object;
+        _tools["mask-borders"] = new MaskBordersTool(TestPaths.Policy, TestJobs.FileIndexer());
+    }
+
+    [Test]
+    public async Task ASecondMaskBordersOnTheSameOutput_WhileTheFirstRuns_Is409()
+    {
+        MaskToolOver("ortho/black.tif");
+        ActiveTask("running", "mask-borders", "ortho/black_masked.tif");
+
+        var ex = await Should.ThrowAsync<ConflictException>(() => Runner().SubmitAsync(SubmitMask("ortho/black.tif")));
+
+        ex.StatusCode.ShouldBe(409);
+        ex.Message.ShouldBe("Another task of this dataset that has not finished writes 'ortho/black_masked.tif': " +
+                            "wait for it to end, or choose another output path.");
+        _enqueued.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task MaskBordersForAnOwnerWithNothingLeft_Is507_AndQueuesNothing()
+    {
+        MaskToolOver("ortho/black.tif");
+        _ownerStorage.Setup(q => q.RemainingBytesAsync("owner-1", It.IsAny<CancellationToken>())).ReturnsAsync(0L);
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() => Runner().SubmitAsync(SubmitMask("ortho/black.tif")));
+
+        ex.StatusCode.ShouldBe(507);
+        _enqueued.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task MaskBorders_IsQueuedWithItsOutputAndItsLabel()
+    {
+        MaskToolOver("ortho/black.tif");
+
+        await Runner().SubmitAsync(SubmitMask("ortho/black.tif"));
+
+        var payload = _enqueued.ShouldHaveSingleItem();
+        payload.ToolId.ShouldBe("mask-borders");
+        payload.OutputPathsJson.ShouldBe("[\"ortho/black_masked.tif\"]");
+        payload.TargetLabel.ShouldBe("→ ortho/black_masked.tif");
     }
 
     // ---- Quota ----

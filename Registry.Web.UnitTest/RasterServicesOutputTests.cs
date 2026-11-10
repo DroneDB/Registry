@@ -48,6 +48,8 @@ public class RasterServicesOutputTests
     private Mock<IFileSystem> _fs = null!;
     private Mock<IBackgroundJobsProcessor> _jobs = null!;
     private List<Job> _enqueued = null!;
+    private List<IndexPayload> _payloads = null!;
+    private Mock<IJobIndexQuery> _jobIndex = null!;
     private List<EntrySummary> _entries = null!;
     private ObjectServices _services = null!;
     private Mock<IStorageQuota> _quota = null!;
@@ -69,6 +71,8 @@ public class RasterServicesOutputTests
     {
         _entries = [];
         _enqueued = [];
+        _payloads = [];
+        _jobIndex = new Mock<IJobIndexQuery> { DefaultValue = DefaultValue.Mock };
         // The files of the dataset: the replace is decided by the file that is there
         _root = Directory.CreateTempSubdirectory("raster-output-tests").FullName;
 
@@ -100,7 +104,11 @@ public class RasterServicesOutputTests
 
         _jobs = new Mock<IBackgroundJobsProcessor>();
         _jobs.Setup(j => j.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()))
-            .Callback<Expression<Action<DdbJobs>>, IndexPayload>((call, _) => _enqueued.Add(Job.FromExpression(call)))
+            .Callback<Expression<Action<DdbJobs>>, IndexPayload>((call, meta) =>
+            {
+                _enqueued.Add(Job.FromExpression(call));
+                _payloads.Add(meta);
+            })
             .Returns("job-1");
 
         // No limit unless a test sets one for the owner "u" of the organization
@@ -113,7 +121,7 @@ public class RasterServicesOutputTests
             .WithDdbManager(ddbManager.Object)
             .WithFileSystem(_fs.Object)
             .WithBackgroundJobs(_jobs.Object)
-            .WithJobIndexQuery(Mock.Of<IJobIndexQuery>())
+            .WithJobIndexQuery(_jobIndex.Object)
             .Build();
     }
 
@@ -335,6 +343,48 @@ public class RasterServicesOutputTests
         // Nothing to replace at the request: a copy that appears before the job runs is not the user's to replace
         _enqueued.ShouldHaveSingleItem().Args.Take(7)
             .ShouldBe(new object[] { Org, _ref, "ortho.tif", "ortho_masked.tif", 15, false, false });
+    }
+
+    // FR-XC-25: the job declares the copy it writes, as a task does, so that the runner refuses a Mask Borders task (or
+    // any task) that would write it while the job waits or runs
+    [Test]
+    public async Task Mask_DeclaresTheCopyItWrites_ForTheRunnersCheckOfTheOutputsInUse()
+    {
+        Entry("sub/ortho.tif");
+
+        await _services.Processing.MaskBordersAsync(Org, Ds, "sub/ortho.tif", 15, false);
+
+        _payloads.ShouldHaveSingleItem().OutputPathsJson.ShouldBe("[\"sub/ortho_masked.tif\"]");
+    }
+
+    // FR-XC-25: a Mask Borders task that writes the copy (letter case ignored, D-040) refuses the request with the 409 the
+    // runner gives a task, and nothing is queued
+    [Test]
+    public async Task Mask_WhileAMaskBordersTaskWritesTheCopy_Is409_AndQueuesNothing()
+    {
+        Entry("ortho.tif");
+        _jobIndex.Setup(q => q.GetActiveOutputsAsync(Org, Ds, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ActiveTaskOutputs("task-7", "mask-borders", ["Ortho_Masked.tif"])]);
+
+        var ex = await Should.ThrowAsync<ConflictException>(() =>
+            _services.Processing.MaskBordersAsync(Org, Ds, "ortho.tif", 15, false));
+
+        ex.StatusCode.ShouldBe(409);
+        ex.Message.ShouldBe("Another task of this dataset that has not finished writes 'ortho_masked.tif': " +
+                            "wait for it to end, or choose another output path.");
+        _enqueued.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task Mask_WhileATaskWritesAnotherFile_IsQueued()
+    {
+        Entry("ortho.tif");
+        _jobIndex.Setup(q => q.GetActiveOutputsAsync(Org, Ds, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ActiveTaskOutputs("task-7", "mask-borders", ["other_masked.tif"])]);
+
+        await _services.Processing.MaskBordersAsync(Org, Ds, "ortho.tif", 15, false);
+
+        _enqueued.ShouldHaveSingleItem();
     }
 
     [Test]
