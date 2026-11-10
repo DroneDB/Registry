@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace Registry.Adapters.DroneDB;
 
 /// <summary>
-/// The libddb C ABI as Registry calls it (ddb.h of DroneDB 2.2.0, ABI 2.2): the only place an export
+/// The libddb C ABI as Registry calls it (ddb.h of DroneDB 2.3.0, ABI 2.3): the only place an export
 /// is declared. Every declaration is a source-generated
 /// <see cref="LibraryImportAttribute"/> stub named exactly like its export, so
 /// <see cref="DdbAbi.RequiredSymbols"/> (the startup check) is derived from this class.
@@ -172,6 +172,16 @@ internal static unsafe partial class NativeDdb
     internal static partial DdbResult DDBBuildEx(string ddbPath, string? source, string? dest,
         [MarshalAs(UnmanagedType.U1)] bool force, [MarshalAs(UnmanagedType.U1)] bool pendingOnly,
         string? optionsJson);
+
+    /// <summary>
+    /// <c>DDBBuildEx</c> with a progress callback (ABI 2.3, FR-PRC-42): the fraction of the build (-1 until something is
+    /// measured, never going down, 1 at the end) and its phase (the entry type, "warping", "overviews", "compressing",
+    /// "publishing", null at the end); a non-zero return cancels the build.
+    /// </summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBBuildEx2(string ddbPath, string? source, string? dest,
+        [MarshalAs(UnmanagedType.U1)] bool force, [MarshalAs(UnmanagedType.U1)] bool pendingOnly, string? optionsJson,
+        delegate* unmanaged[Cdecl]<double, byte*, IntPtr, int> progress, IntPtr progressUserData);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBCleanup(string ddbPath, out IntPtr output);
@@ -374,6 +384,13 @@ internal static unsafe partial class NativeDdb
         double baseOffset, double minElev, double maxElev, double simplifyTolerance, int bandIndex,
         NativeRasterOptions* options, out IntPtr output);
 
+    /// <summary><c>DDBGenerateContoursEx</c> with a progress callback (ABI 2.3).</summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBGenerateContoursEx2(string rasterPath, double interval, int count,
+        double baseOffset, double minElev, double maxElev, double simplifyTolerance, int bandIndex,
+        NativeRasterOptions* options, delegate* unmanaged[Cdecl]<double, byte*, IntPtr, int> progress,
+        IntPtr progressUserData, out IntPtr output);
+
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBGetRasterAreaStats(string filePath, int x0, int y0, int x1, int y1,
         out IntPtr output);
@@ -508,34 +525,4 @@ internal unsafe struct NativeRasterOptions
     internal fixed double Bbox[4];
     internal IntPtr Formula;
     internal IntPtr RescaleUnit;
-}
-
-/// <summary>
-/// The exports of a libddb newer than the one Registry requires (2.2): they are declared apart from
-/// <see cref="NativeDdb"/> so <see cref="DdbAbi.RequiredSymbols"/>, which is derived from that class, does not make the
-/// startup check refuse an older library. A call is gated on <c>DDBGetCapabilities().abi</c> and symbols
-/// (<see cref="NativeDdbWrapper.ContourProgressSupported"/>, <see cref="NativeDdbWrapper.BuildProgressSupported"/>) and is
-/// not made on a library that lacks the export. When the pin goes to 2.3, the declarations move into
-/// <see cref="NativeDdb"/>.
-/// </summary>
-internal static unsafe partial class NativeDdbOptional
-{
-    private const string Library = "ddb";
-
-    /// <summary><c>DDBGenerateContoursEx</c> with a progress callback (ABI 2.3).</summary>
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBGenerateContoursEx2(string rasterPath, double interval, int count,
-        double baseOffset, double minElev, double maxElev, double simplifyTolerance, int bandIndex,
-        NativeRasterOptions* options, delegate* unmanaged[Cdecl]<double, byte*, IntPtr, int> progress,
-        IntPtr progressUserData, out IntPtr output);
-
-    /// <summary>
-    /// <c>DDBBuildEx</c> with a progress callback (ABI 2.3, FR-PRC-42): the fraction of the build (-1 until something is
-    /// measured, never going down, 1 at the end) and its phase (the entry type, "warping", "overviews", "compressing",
-    /// "publishing", null at the end); a non-zero return cancels the build.
-    /// </summary>
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBBuildEx2(string ddbPath, string? source, string? dest,
-        [MarshalAs(UnmanagedType.U1)] bool force, [MarshalAs(UnmanagedType.U1)] bool pendingOnly, string? optionsJson,
-        delegate* unmanaged[Cdecl]<double, byte*, IntPtr, int> progress, IntPtr progressUserData);
 }

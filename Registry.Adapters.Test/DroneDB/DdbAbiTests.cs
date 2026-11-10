@@ -15,22 +15,23 @@ public class DdbAbiTests
 {
     private static uint Abi(int major, int minor) => (uint)((major << 16) | minor);
 
-    [TestCase(2, 2)]
     [TestCase(2, 3)]
+    [TestCase(2, 4)]
     [TestCase(2, 17)]
     public void RequireAbi_AcceptsLibddb2x(int major, int minor)
     {
-        DdbAbi.RequireAbi("2.2.0", Abi(major, minor)).ShouldBe((major, minor));
+        DdbAbi.RequireAbi("2.3.0", Abi(major, minor)).ShouldBe((major, minor));
     }
 
     [TestCase("2.0.1", 0)]
     [TestCase("2.1.0", 1)]
+    [TestCase("2.2.0", 2)]
     public void RequireAbi_RejectsAnOlderMinor_NamingTheMinorItNeeds(string version, int minor)
     {
         var ex = Should.Throw<DdbAbiMismatchException>(() => DdbAbi.RequireAbi(version, Abi(2, minor)));
 
         ex.Message.ShouldContain($"libddb {version} has ABI 2.{minor}");
-        ex.Message.ShouldContain("(ABI 2.x with x >= 2)");
+        ex.Message.ShouldContain("(ABI 2.x with x >= 3)");
     }
 
     [TestCase(1, 0)]
@@ -53,6 +54,6 @@ public class DdbAbiTests
         DdbAbi.Decode(Abi(2, 0)).ShouldBe((2, 0));
         DdbAbi.Decode(Abi(2, 3)).ShouldBe((2, 3));
         DdbAbi.Major.ShouldBe(2);
-        DdbAbi.Minor.ShouldBe(2);
+        DdbAbi.Minor.ShouldBe(3);
     }
 }

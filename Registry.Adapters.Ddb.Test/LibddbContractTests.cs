@@ -191,35 +191,12 @@ public unsafe class LibddbContractTests : TestBase
         declared.Except(Symbols()).ShouldBeEmpty("exports Registry declares that DDBGetCapabilities does not list");
     }
 
-    /// <summary>
-    /// An export of <see cref="NativeDdbOptional"/> is called only when the loaded libddb lists it (ABI 2.3): the library
-    /// either lists it and exports it, or does neither, so a call never meets a missing entry point.
-    /// </summary>
+    /// <summary>The exports of 2.3 the wrapper calls are there, so it always takes the calls that report progress.</summary>
     [Test]
-    public void OptionalExports_AreListedWhenTheLibraryExportsThem()
+    public void TheProgressExports_AreUsed()
     {
-        var optional = typeof(NativeDdbOptional)
-            .GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
-            .Where(m => m.GetCustomAttribute<LibraryImportAttribute>() != null)
-            .Select(m => m.Name)
-            .ToArray();
-        optional.Order(StringComparer.Ordinal).ShouldBe([nameof(NativeDdbOptional.DDBBuildEx2),
-            nameof(NativeDdbOptional.DDBGenerateContoursEx2)]);
-        optional.Except(DdbAbi.RequiredSymbols).ShouldBe(optional, "the startup check does not require them");
-
-        NativeLibrary.TryLoad("ddb", typeof(NativeDdbWrapper).Assembly, null, out var library).ShouldBeTrue();
-        try
-        {
-            foreach (var name in optional)
-                NativeLibrary.TryGetExport(library, name, out _).ShouldBe(Symbols().Contains(name), name);
-        }
-        finally
-        {
-            NativeLibrary.Free(library);
-        }
-
-        NativeDdbWrapper.ContourProgressSupported.ShouldBe(Symbols().Contains(nameof(NativeDdbOptional.DDBGenerateContoursEx2)));
-        NativeDdbWrapper.BuildProgressSupported.ShouldBe(Symbols().Contains(nameof(NativeDdbOptional.DDBBuildEx2)));
+        NativeDdbWrapper.ContourProgressSupported.ShouldBeTrue();
+        NativeDdbWrapper.BuildProgressSupported.ShouldBeTrue();
     }
 
     [Test]
@@ -982,11 +959,9 @@ public unsafe class LibddbContractTests : TestBase
     /// The libddb entry points Registry.Adapters declares: every [DllImport("ddb")] method of the
     /// assembly, the ones LibraryImport generates included.
     /// </summary>
-    // The exports Registry requires (ABI 2.2): NativeDdbOptional declares those of a newer libddb apart, called only when
-    // the capabilities list them (OptionalExports_AreListedWhenTheLibraryExportsThem)
+    // The exports Registry requires (ABI 2.3)
     private static string[] DeclaredExports() =>
         typeof(NativeDdbWrapper).Assembly.GetTypes()
-            .Where(t => t.Name != nameof(NativeDdbOptional))
             .SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic |
                                           BindingFlags.DeclaredOnly))
             .Select(m => (Method: m, Import: m.GetCustomAttribute<DllImportAttribute>()))

@@ -24,12 +24,14 @@ public static class DdbAbi
     public const int Major = 2;
 
     /// <summary>
-    /// <c>DDB_ABI_MINOR</c> Registry needs at least: 2 (DroneDB 2.2.0). ABI 2.1 has the output options of align, merge
+    /// <c>DDB_ABI_MINOR</c> Registry needs at least: 3 (DroneDB 2.3.0). ABI 2.1 has the output options of align, merge
     /// multispectral and mask borders (<c>DDBAlignRasterEx</c>, <c>DDBMergeMultispectralEx</c>, <c>DDBMaskBordersEx</c>);
     /// ABI 2.2 the raster value exports with a <c>DDBRasterOptions</c> and the build key (<c>key</c>, <c>buildKey</c>,
-    /// <c>buildKeyChanged</c>, the key argument of <c>DDBResolveBuildFile</c>), which a 2.1 library would not report.
+    /// <c>buildKeyChanged</c>, the key argument of <c>DDBResolveBuildFile</c>), which a 2.1 library would not report;
+    /// ABI 2.3 the build and the contours with progress (<c>DDBBuildEx2</c>, <c>DDBGenerateContoursEx2</c>), the unit of
+    /// the rescale (<c>DDBRasterOptions.rescaleUnit</c>) and the window of <c>DDBExportRaster3</c>.
     /// </summary>
-    public const int Minor = 2;
+    public const int Minor = 3;
 
     private const string Library = "ddb";
 

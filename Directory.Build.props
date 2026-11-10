@@ -40,7 +40,7 @@
             MSBuild; ci: fetch-windows-zip) and fails the build when its SHA256 differs.
         scripts/ddb-release.sh check (CI) fails when the pin is malformed or written elsewhere, or
         when anything downloads releases/latest. Startup checks the ABI of the loaded library
-        (DdbAbi: libddb 2.x, ABI major 2, minor >= 2), not this version number.
+        (DdbAbi: libddb 2.x, ABI major 2, minor >= 3), not this version number.
 
         DdbSource:
           release  a published release: DdbVersion, and the SHA256 of ddb_<DdbVersion>_amd64.deb and
@@ -60,17 +60,17 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-11-10): the DroneDB v2.2.0 release (ABI 2.2; the handshake requires
-        ABI 2.2: DdbAbi.Minor). It adds to 2.0 the output options of align, merge multispectral
-        and mask borders (2.1: DDBAlignRasterEx, DDBMergeMultispectralEx, DDBMaskBordersEx), the
-        raster value exports with DDBRasterOptions and the build key (2.2). The SHA256 values are
-        those of the release's SHA256SUMS.
+        Pinned now (2026-11-10): the DroneDB v2.3.0 release (ABI 2.3; the handshake requires
+        ABI 2.3: DdbAbi.Minor). It adds to 2.2 the build with progress (DDBBuildEx2, FR-PRC-42),
+        the contours with progress (DDBGenerateContoursEx2, U-413), the unit of the rescale of a
+        thermal formula (DDBRasterOptions.rescaleUnit, U-202) and the window of DDBExportRaster3
+        (U-406). The SHA256 values are those of the release's SHA256SUMS.
     -->
     <PropertyGroup>
         <DdbSource>release</DdbSource>
-        <DdbVersion>2.2.0</DdbVersion>
-        <DdbDebSha256>e5a2ede3b486f4f083a962a1144978ea0b1536be669a6b7f094953abac02d4ee</DdbDebSha256>
-        <DdbWindowsZipSha256>45e741891e5d49de31d4e4ab3c221802da1edd189236238699e4df1f36c5a085</DdbWindowsZipSha256>
+        <DdbVersion>2.3.0</DdbVersion>
+        <DdbDebSha256>29f3596824e80b947ff7829f4ce22228e37a7623e5ce71f8668f9aeab7d2d6fd</DdbDebSha256>
+        <DdbWindowsZipSha256>32469fb2d901a154c3721e2e6df2269cd66eb0bd1ad5b6d02e94e6ab695c7c20</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>

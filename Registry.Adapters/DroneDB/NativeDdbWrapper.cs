@@ -282,20 +282,19 @@ public class NativeDdbWrapper : IDdbWrapper
         var optionsJson = ToBuildJson(options);
 
         using var callback = NativeProgressCallback.Create(progress, DdbCancellation.Current);
-        NativeCall.Invoke(nameof(NativeDdbOptional.DDBBuildEx2), () => AcceptDeferred(NativeProgressCallback.Completed(
-            callback, NativeDdbOptional.DDBBuildEx2(ddbPath, normalizedSource, normalizedDest, force, pendingOnly,
+        NativeCall.Invoke(nameof(NativeDdb.DDBBuildEx2), () => AcceptDeferred(NativeProgressCallback.Completed(
+            callback, NativeDdb.DDBBuildEx2(ddbPath, normalizedSource, normalizedDest, force, pendingOnly,
                 optionsJson, NativeProgressCallback.FunctionPointer, callback!.UserData))));
     }
 
     /// <summary>
     /// True when the loaded libddb lists <c>DDBBuildEx2</c> in its capabilities (new in ABI 2.3): the build that reports
-    /// its progress. The list of exports says it, not the ABI minor alone (a 2.3 development build has the export before
-    /// its minor is raised). Registry pins 2.2, whose startup check does not require it (<see cref="NativeDdbOptional"/>).
+    /// its progress. Registry requires ABI 2.3, whose startup check requires the export: always true once it passed.
     /// </summary>
     internal static bool BuildProgressSupported => BuildProgress.Value;
 
     private static readonly Lazy<bool> BuildProgress = new(() =>
-        DdbAbi.Verify().Symbols.Contains(nameof(NativeDdbOptional.DDBBuildEx2)));
+        DdbAbi.Verify().Symbols.Contains(nameof(NativeDdb.DDBBuildEx2)));
 
     /// <summary>The <c>DDBBuildEx</c> JSON of <paramref name="options"/>: only the limits that are set, null for none.</summary>
     public static string? ToBuildJson(BuildOptions? options)
@@ -961,23 +960,21 @@ public class NativeDdbWrapper : IDdbWrapper
 
         // As ExportRaster: the callback reports and stops the call, an exception of the observer wins over the cancel
         using var callback = NativeProgressCallback.Create(progress, cancellationToken);
-        return NativeCall.InvokeRequiredString(nameof(NativeDdbOptional.DDBGenerateContoursEx2),
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGenerateContoursEx2),
             (out IntPtr output) => NativeProgressCallback.Completed(callback,
-                NativeDdbOptional.DDBGenerateContoursEx2(path, iv, cnt, baseOffset, lo, hi, simplifyTolerance,
+                NativeDdb.DDBGenerateContoursEx2(path, iv, cnt, baseOffset, lo, hi, simplifyTolerance,
                     bandIndex, pointer, callback == null ? null : NativeProgressCallback.FunctionPointer,
                     callback?.UserData ?? IntPtr.Zero, out output)));
     }
 
     /// <summary>
     /// True when the loaded libddb lists <c>DDBGenerateContoursEx2</c> in its capabilities (new in ABI 2.3): the call that
-    /// reports progress. The list of exports is what says it, not the ABI minor alone: a 2.3 development build of libddb has
-    /// the export before its ABI minor is raised. Registry pins 2.2, whose startup check does not require it
-    /// (<see cref="NativeDdbOptional"/>), so it falls back to <c>DDBGenerateContoursEx</c>.
+    /// reports progress. Registry requires ABI 2.3, whose startup check requires the export: always true once it passed.
     /// </summary>
     internal static bool ContourProgressSupported => ContourProgress.Value;
 
     private static readonly Lazy<bool> ContourProgress = new(() =>
-        DdbAbi.Verify().Symbols.Contains(nameof(NativeDdbOptional.DDBGenerateContoursEx2)));
+        DdbAbi.Verify().Symbols.Contains(nameof(NativeDdb.DDBGenerateContoursEx2)));
 
     public void MaskBorders(string input, string output, int nearDist = 15, bool white = false, bool overwrite = false)
     {

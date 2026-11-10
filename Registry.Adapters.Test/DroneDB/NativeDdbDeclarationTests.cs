@@ -93,25 +93,16 @@ public class NativeDdbDeclarationTests
     }
 
     /// <summary>
-    /// The exports new in libddb 2.3 that Registry calls when the loaded library has them (U-413 contours with progress,
-    /// FR-PRC-42 build with progress) are declared apart (<see cref="NativeDdbOptional"/>) while the required ABI is 2.2:
-    /// as required symbols they would make the startup handshake refuse the pinned libddb 2.2. They move into
-    /// <see cref="NativeDdb"/> with the pin of 2.3 (DdbAbi.Minor 3).
+    /// The exports new in libddb 2.3 that Registry calls (U-413 contours with progress, FR-PRC-42 build with progress) are
+    /// required with the pin of 2.3: the startup handshake refuses a library without them.
     /// </summary>
     [Test]
-    public void TheExportsOfLibddb23_AreOptional_WhileTheRequiredAbiIs22()
+    public void TheExportsOfLibddb23_AreRequired_WithTheRequiredAbi23()
     {
-        var optional = typeof(NativeDdbOptional)
-            .GetMethods(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)
-            .Where(m => m.GetCustomAttribute<LibraryImportAttribute>() != null)
-            .Select(m => m.Name)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
-        DdbAbi.Minor.ShouldBe(2);
-        optional.ShouldBe(["DDBBuildEx2", "DDBGenerateContoursEx2"]);
-        DdbAbi.RequiredSymbols.ShouldNotContain("DDBBuildEx2");
-        DdbAbi.RequiredSymbols.ShouldNotContain("DDBGenerateContoursEx2");
+        DdbAbi.Minor.ShouldBe(3);
+        DdbAbi.RequiredSymbols.ShouldContain("DDBBuildEx2");
+        DdbAbi.RequiredSymbols.ShouldContain("DDBGenerateContoursEx2");
+        typeof(NativeDdb).Assembly.GetType("Registry.Adapters.DroneDB.NativeDdbOptional").ShouldBeNull();
     }
 
     [Test]

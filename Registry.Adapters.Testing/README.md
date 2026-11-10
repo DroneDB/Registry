@@ -175,3 +175,8 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   changed. `raster-info.schema.json` describes `detectedSensorName` (U-415) and `entry.schema.json` the `warningCode`
   property (U-408); the Registry passes both through as libddb writes them. `DDBRasterOptions.rescaleUnit` (U-202) is
   a field of the struct, not of a fixture: `NativeRasterOptions` is 64 bytes. No vector changed. `DdbAbi.Minor` is 2.
+* 2026-11-10: DroneDB `7dabb12913110f01053133faa74dd6f472384ba0` (the DroneDB v2.3.0 release, the pinned build, libddb
+  ABI 2.3). Since `099526fc`: `capabilities` has `abi.minor` 3, and `Contract/README.md` describes the 2.3 changes
+  (the window of `DDBExportRaster3`, `warningCode`, the R-JPEG values and the summary of 2.3.0); no schema or vector
+  changed. `DdbAbi.Minor` is 3: `DDBBuildEx2` and `DDBGenerateContoursEx2` moved from `NativeDdbOptional` (removed)
+  into `NativeDdb`, so the startup check requires them (`DdbAbi.RequiredSymbols`).

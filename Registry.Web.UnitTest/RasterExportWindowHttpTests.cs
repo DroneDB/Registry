@@ -52,14 +52,20 @@ public abstract class RasterExportWindowFixture : DatasetAccessFixture
 /// FR-RAS-16 (D-023) through the task API (<c>POST /tasks</c>): the submit of a <c>raster-export</c> checks the estimate of
 /// the export, of the window when there is one, against the export limit and answers a 400 ProblemDetails that carries
 /// the estimate and the limit; a window is refused with a 400 at <c>errors.bbox</c> on a libddb older than 2.3 (the
-/// fixture's libddb is the recorded 2.2).
+/// fixture's libddb reports ABI 2.2).
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~RasterExportWindowHttpTests"
 /// </summary>
 [TestFixture]
 [NonParallelizable]
 public sealed class RasterExportWindowHttpTests : RasterExportWindowFixture
 {
-    // The recorded libddb is 2.2: the Hub is told that it exports no window, so it disables 'Visible extent' (FR-XC-22)
+    protected override Action<IServiceCollection> FactoryServices => services =>
+    {
+        services.RemoveAll<IDdbRuntime>();
+        services.AddSingleton<IDdbRuntime>(new AbiMinorRuntime(2));
+    };
+
+    // The runtime reports ABI 2.2: the Hub is told that it exports no window, so it disables 'Visible extent' (FR-XC-22)
     [Test]
     public async Task TheFeatures_SayNoWindow_OnLibddb22() => (await RasterExportWindowFeature()).ShouldBe(false);
 

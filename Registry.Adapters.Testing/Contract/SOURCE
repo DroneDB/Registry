@@ -1,15 +1,15 @@
 # libddb contract fixtures vendored from DroneDB. Do not edit the vendored files:
 # run Registry.Adapters.Testing/update-contract.sh <DroneDB clone> <commit> instead.
 repository: https://github.com/DroneDB/DroneDB
-commit: 099526fc10d41f177654d180a379bb17bf52e5f5
+commit: 7dabb12913110f01053133faa74dd6f472384ba0
 path: tests/contract
 # sha256 and path relative to Contract/ (sha256sum format), one line per vendored file
-628ce39f871f85c741a1b294d8a1ee8be8797c0a12fab5ad5c8037912e8f6507  README.md
+9bfd89e66c5c0907cd324dd01b207592be7d90bf91d8a1d59f7e09283a1cf930  README.md
 ea51b328026bc175031f1cfe2e0b1d2b2426a092b1a6ab3f19e35731a8293e7a  fixtures/add.json
 0abcbb343032b20d02a3f15ba0a93d80cc73b83c29478eea26865c1834758772  fixtures/build-artifacts-pending.json
 106c39cfc7fe60ace047fbb2f9abd2ba7de60fcbd5c16a4282660284538131d8  fixtures/build-artifacts.json
 d2c21f116f1007b33f66fa1f12001f51acb46a16913e0f97a329740f409c130e  fixtures/build-status.json
-60149c4932cc0abf869b092add177918d832068f754bd50b02292739a48d6543  fixtures/capabilities.json
+0a958fd1df6bbb352262ff1030c26586332c29393c395e5a9cfde5132cf393f9  fixtures/capabilities.json
 d0e723bb79a56b4eefa553a88bd903c3e0de24349c0873e441441d5d65d2e003  fixtures/copy-build-artifacts.json
 8aef2149dc83c4a9a1031144c495093cf6818b19b2f8b1fad345473d1b0de9d9  fixtures/effective-config.json
 00c18254ca7404828e3d80d076a7db5b996c5d5d44ea3e3b217b65a418af6778  fixtures/entry-types.json

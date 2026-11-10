@@ -25,7 +25,7 @@ This project adheres to the [Contributor Covenant](CONDUCT.md). By participating
 - **.NET 10 SDK** (or later)
 - **Node.js >= 18** (for the Vue.js frontend)
 - **DroneDB C++ library** (`ddb.dll`/`libddb.so`) available in system PATH: the build pinned in
-  `Directory.Build.props` (libddb 2.x, ABI 2.2 or later; Registry refuses to start on another ABI, see below)
+  `Directory.Build.props` (libddb 2.x, ABI 2.3 or later; Registry refuses to start on another ABI, see below)
 - **Git** for version control
 
 ### The DroneDB build (libddb)
