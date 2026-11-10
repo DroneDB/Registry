@@ -43,4 +43,12 @@ public interface IImportWriteRecord
 
     /// <summary>Writes the buffered records when a batch is due; called between files.</summary>
     ValueTask FlushIfDueAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Saves what was recorded (and stamped) now: a writer calls it once it has recorded a batch and BEFORE it creates
+    /// anything of it (§8.1), so that a process lost after a write leaves a record that rolls the write back. A write
+    /// record that cannot save must not pretend to: it throws instead, since writing before the save could leave a file
+    /// that no rollback finds.
+    /// </summary>
+    Task SaveAsync(CancellationToken ct);
 }

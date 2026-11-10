@@ -326,7 +326,7 @@ public sealed class DatasetArchiveExtractor
                 replacing.Add(staged.Local);
 
         if (request.Writes != null)
-            await TaskImportWrites.SaveAsync(request.Writes, ct);
+            await request.Writes.SaveAsync(ct);
 
         foreach (var staged in batch)
         {

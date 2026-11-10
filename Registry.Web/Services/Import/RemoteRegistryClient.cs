@@ -314,7 +314,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
             return;
         }
 
-        await TaskImportWrites.SaveAsync(writes, ct);
+        await writes.SaveAsync(ct);
 
         foreach (var file in toMove)
         {

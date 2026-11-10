@@ -18,7 +18,7 @@ namespace Registry.Web.Services.HeavyTasks;
 /// the files the task created, in order, which the tool then indexes (<see cref="Created"/>): never the other files
 /// of the folder. A path is in the stored record before the first byte of it is written (§8.1): a writer records a
 /// batch of files and folders (<see cref="RecordFolders"/>, <see cref="Record"/>), saves them with one
-/// <see cref="SaveAsync(IImportWriteRecord, CancellationToken)"/>, and only then creates them
+/// <see cref="SaveAsync(CancellationToken)"/>, and only then creates them
 /// (<see cref="CreateFolder"/>, a move that does not overwrite), so that a process that is lost after a write leaves a
 /// record that rolls it back.
 /// </summary>
@@ -96,24 +96,9 @@ public sealed class TaskImportWrites : IImportWriteRecord
 
     public ValueTask FlushIfDueAsync(CancellationToken ct) => _recorder.FlushIfDueAsync(ct);
 
-    /// <summary>Saves what was recorded (and stamped) to the task's write record now: call it before creating it.</summary>
+    /// <inheritdoc/>
     /// <exception cref="Registry.Web.Services.Ports.TaskWriteRecordClosedException">A rollback claimed the record.</exception>
     public Task SaveAsync(CancellationToken ct) => _recorder.FlushAsync(ct);
-
-    /// <summary>
-    /// Saves what <paramref name="writes"/> recorded before anything of it is created (§8.1). Only the task's own write
-    /// record (<see cref="TaskImportWrites"/>) can: any other is refused, since writing before the save could leave a
-    /// file that no rollback finds.
-    /// </summary>
-    /// <exception cref="NotSupportedException"><paramref name="writes"/> is not a <see cref="TaskImportWrites"/>.</exception>
-    public static Task SaveAsync(IImportWriteRecord writes, CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(writes);
-        return writes is TaskImportWrites own
-            ? own.SaveAsync(ct)
-            : throw new NotSupportedException(
-                $"{writes.GetType().Name} cannot save its records before the files are written");
-    }
 
     /// <summary>
     /// Records the missing folders of <paramref name="folder"/> (dataset-relative; the missing parents first), which
