@@ -60,7 +60,7 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (YYYY-MM-DD): the DroneDB v2.4.0 release (ABI 2.4; the handshake requires
+        Pinned now (2026-11-10): the DroneDB v2.4.0 release (ABI 2.4; the handshake requires
         ABI 2.4: DdbAbi.Minor). It is the first libddb 2.x the Registry runs (after 2.0.1) and the
         only one it supports: the output options of align, merge multispectral and mask borders,
         the raster value exports with DDBRasterOptions (NoData, the unit of the rescale of a
@@ -71,8 +71,8 @@
     <PropertyGroup>
         <DdbSource>release</DdbSource>
         <DdbVersion>2.4.0</DdbVersion>
-        <DdbDebSha256>SHA256_OF_ddb_2.4.0_amd64.deb</DdbDebSha256>
-        <DdbWindowsZipSha256>SHA256_OF_ddb-2.4.0-Windows.zip</DdbWindowsZipSha256>
+        <DdbDebSha256>87fcc39ea33b1c33dffbd857d6d26a6a7643af5929a74dea1bc858bb08243759</DdbDebSha256>
+        <DdbWindowsZipSha256>48787234cd9cbb9a0ffc0e9ca2608e57b9c3d0f08e93603fa6007198f0b42e53</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
