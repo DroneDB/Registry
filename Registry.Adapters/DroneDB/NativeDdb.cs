@@ -176,7 +176,7 @@ internal static unsafe partial class NativeDdb
     /// <summary>
     /// <c>DDBBuildEx</c> with a progress callback (ABI 2.4, FR-PRC-42): the fraction of the build (-1 until something is
     /// measured, never going down, 1 at the end) and its phase (the entry type, "warping", "overviews", "compressing",
-    /// "publishing", null at the end); a non-zero return cancels the build.
+    /// "statistics", "publishing", null at the end); a non-zero return cancels the build.
     /// </summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBBuildEx2(string ddbPath, string? source, string? dest,

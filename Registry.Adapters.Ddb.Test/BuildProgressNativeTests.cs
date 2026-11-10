@@ -59,9 +59,10 @@ public class BuildProgressNativeTests : TestBase
         reports[0].ShouldBe((-1d, "georaster"));
         reports[^1].ShouldBe((1d, (string?)null));
         // The UTM raster is warped to the tile grid: the phases of a COG build, in this order (a 20 x 20 raster has no
-        // overview level, so it has no "overviews" phase)
+        // overview level, so it has no "overviews" phase); "statistics" (libddb 2.4.0) is the exact one-pass statistics,
+        // after the compressing and before the publishing
         var phases = reports.Select(r => r.Phase).Where(p => p != null).Distinct().ToList();
-        phases.ShouldBe(new List<string?> { "georaster", "warping", "compressing", "publishing" });
+        phases.ShouldBe(new List<string?> { "georaster", "warping", "compressing", "statistics", "publishing" });
         var measured = reports.Select(r => r.Fraction).SkipWhile(f => f < 0).ToList();
         measured.ShouldAllBe(f => f >= 0 && f <= 1);
         measured.Zip(measured.Skip(1)).ShouldAllBe(pair => pair.Second >= pair.First);

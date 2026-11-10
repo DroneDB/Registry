@@ -154,7 +154,7 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   fixtures `gdal-util-probe` (with its schema; the response of the helper program, which Registry does not read) and
   `info-pointcloud-no-footprint`; `entry.schema.json` describes the `warning` property, which the entry properties
   carry as they are. No adapter change.
-* 2026-11-10: DroneDB `a439c35ba9c1ea3f1a43a3b2da14189944311521` (the DroneDB v2.4.0 release, the pinned build, libddb ABI 2.4: the first libddb
+* 2026-11-10: DroneDB `55ac29b9b63beb45bb91d91c08a0fc2df2db0223` (the DroneDB v2.4.0 release, the pinned build, libddb ABI 2.4: the first libddb
   2.x after 2.0.1 and the only one the Registry runs; the intermediate 2.1, 2.2 and 2.3 builds are not supported). Since
   `f878cef`: `capabilities` has `abi.minor` 4 and lists in `symbols` (the cancellable ones in `cancellable`) the
   exports with an `overwrite` option (`DDBAlignRasterEx`, `DDBMaskBordersEx`, `DDBMergeMultispectralEx`), the raster
