@@ -78,14 +78,14 @@ public class NativeDdbDeclarationTests
         // The splat exports are imports like the rest: a libddb without them fails the startup handshake
         DdbAbi.RequiredSymbols.ShouldContain("DDBExportSplatSpz");
         DdbAbi.RequiredSymbols.ShouldContain("DDBExportSplatTrainingData");
-        // Align, merge and mask write through the 2.1 variants that take overwrite (FR-PRC-01), never the old ones
+        // Align, merge and mask write through the Ex variants that take overwrite (FR-PRC-01), never the old ones
         DdbAbi.RequiredSymbols.ShouldContain("DDBAlignRasterEx");
         DdbAbi.RequiredSymbols.ShouldContain("DDBMergeMultispectralEx");
         DdbAbi.RequiredSymbols.ShouldContain("DDBMaskBordersEx");
         DdbAbi.RequiredSymbols.ShouldNotContain("DDBAlignRaster");
         DdbAbi.RequiredSymbols.ShouldNotContain("DDBMergeMultispectral");
         DdbAbi.RequiredSymbols.ShouldNotContain("DDBMaskBorders");
-        // The pixel values of an R-JPEG with the options of the values (ABI 2.2)
+        // The pixel values of an R-JPEG with the options of the values
         DdbAbi.RequiredSymbols.ShouldContain("DDBGetRasterPointValuePixelEx");
         DdbAbi.RequiredSymbols.ShouldContain("DDBGetRasterAreaStatsPixelEx");
         DdbAbi.RequiredSymbols.ShouldAllBe(s => s.StartsWith("DDB"));
@@ -93,16 +93,27 @@ public class NativeDdbDeclarationTests
     }
 
     /// <summary>
-    /// The exports new in libddb 2.3 that Registry calls (U-413 contours with progress, FR-PRC-42 build with progress) are
-    /// required with the pin of 2.3: the startup handshake refuses a library without them.
+    /// libddb 2.4 is the only libddb the Registry runs: every export it calls since 2.0 is required by the startup
+    /// handshake (ABI 2.4), with no optional export and no fallback for an older library: the Ex variants of align, merge
+    /// and mask, the raster value exports with a <c>DDBRasterOptions</c>, the renders and the export with options
+    /// (U-202, U-406), the build and the contours with progress (FR-PRC-42, U-413).
     /// </summary>
     [Test]
-    public void TheExportsOfLibddb23_AreRequired_WithTheRequiredAbi23()
+    public void TheExportsOfLibddb24_AreRequired_WithTheRequiredAbi24()
     {
-        DdbAbi.Minor.ShouldBe(3);
+        DdbAbi.Minor.ShouldBe(4);
         DdbAbi.RequiredSymbols.ShouldContain("DDBBuildEx2");
         DdbAbi.RequiredSymbols.ShouldContain("DDBGenerateContoursEx2");
+        DdbAbi.RequiredSymbols.ShouldContain("DDBExportRaster3");
+        DdbAbi.RequiredSymbols.ShouldContain("DDBGenerateMemoryThumbnailEx2");
+        DdbAbi.RequiredSymbols.ShouldContain("DDBMemoryTileEx2");
+        DdbAbi.RequiredSymbols.ShouldContain("DDBGetRasterValueInfoEx");
+        DdbAbi.RequiredSymbols.ShouldContain("DDBResolveBuildFile");
         typeof(NativeDdb).Assembly.GetType("Registry.Adapters.DroneDB.NativeDdbOptional").ShouldBeNull();
+        typeof(NativeDdbWrapper).GetProperty("BuildProgressSupported",
+            BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public).ShouldBeNull();
+        typeof(NativeDdbWrapper).GetProperty("ContourProgressSupported",
+            BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public).ShouldBeNull();
     }
 
     [Test]

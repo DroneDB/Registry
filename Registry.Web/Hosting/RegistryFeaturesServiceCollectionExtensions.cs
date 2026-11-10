@@ -159,7 +159,6 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IFeatureSection, InputRuleFeatures>();
         services.AddScoped<IFeatureSection, EmailFeatures>();
         services.AddScoped<IFeatureSection, DownloadFeatures>();
-        services.AddScoped<IFeatureSection, RasterExportFeatures>();
         services.AddScoped<IFeatureSection, TaskFeatures>();
         services.AddScoped<IFeatureSection, HubFeatures>();
         services.AddScoped<IFeatureSection, EntryTypeFeatures>();

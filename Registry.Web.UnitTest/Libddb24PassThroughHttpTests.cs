@@ -15,15 +15,15 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// The members libddb 2.3 adds to its JSON reach the Hub as libddb writes them, with no DTO of the Registry between that
+/// The members libddb 2.4 adds to its JSON reach the Hub as libddb writes them, with no DTO of the Registry between that
 /// drops one: <c>requiredBands</c> and <c>category</c> of each formula of raster-metadata (U-415), <c>detectedSensorName</c>
 /// of raster-info (U-415) and <c>properties.warningCode</c> of an entry (U-408, FR-EXP-18; a DWG on a server without
 /// dwg2dxf: "dwg-converter-missing").
-/// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~Libddb23PassThroughHttpTests"
+/// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~Libddb24PassThroughHttpTests"
 /// </summary>
 [TestFixture]
 [NonParallelizable]
-public sealed class Libddb23PassThroughHttpTests : DatasetAccessFixture
+public sealed class Libddb24PassThroughHttpTests : DatasetAccessFixture
 {
     private const string Ds = "/orgs/" + PrivateOrg + "/ds/" + PrivateDs;
     private const string Image = "multispectral.tif";

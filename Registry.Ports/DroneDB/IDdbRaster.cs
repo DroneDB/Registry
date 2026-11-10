@@ -41,8 +41,8 @@ public interface IDdbRaster
 
     /// <summary>
     /// Generate thumbnail with extended visualization params and the options of the render: the NoData value
-    /// (FR-RAS-31) and, from libddb ABI 2.3, the unit of the rescale of a thermal formula
-    /// (<see cref="RasterAnalysisOptions.RescaleUnit"/>, D-022), which an older libddb refuses: the caller checks the ABI.
+    /// (FR-RAS-31) and the unit of the rescale of a thermal formula (<see cref="RasterAnalysisOptions.RescaleUnit"/>,
+    /// D-022).
     /// </summary>
     byte[] GenerateThumbnailEx(string imagePath, int size, string? preset, string? bands, string? formula,
         string? bandFilter, string? colormap, string? rescale, RasterAnalysisOptions? options);
@@ -64,8 +64,7 @@ public interface IDdbRaster
 
     /// <summary>
     /// Generate tile with extended visualization params and the options of the render: the NoData value (FR-RAS-31)
-    /// and, from libddb ABI 2.3, the unit of the rescale of a thermal formula (<see cref="RasterAnalysisOptions.RescaleUnit"/>,
-    /// D-022), which an older libddb refuses: the caller checks the ABI.
+    /// and the unit of the rescale of a thermal formula (<see cref="RasterAnalysisOptions.RescaleUnit"/>, D-022).
     /// </summary>
     byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
         string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
@@ -125,7 +124,7 @@ public interface IDdbRaster
     string GetRasterValueInfo(string path);
 
     /// <summary>
-    /// <see cref="GetRasterValueInfo(string)"/> with the options of the values (libddb 2.1): the exact range of the pixels
+    /// <see cref="GetRasterValueInfo(string)"/> with the options of the values: the exact range of the pixels
     /// that have a value in the units of the band, the NoData value that applies (<c>nodata</c>, <c>nodataInvalid</c>), the
     /// pixel counts for the export estimate and the default <c>stretch</c> (D-041).
     /// </summary>
@@ -194,9 +193,8 @@ public interface IDdbRaster
 
     /// <summary>
     /// <see cref="ExportRaster(string, string, string?, string?, string?, string?, string?, string?, int, double?, Action{double, string?}?, CancellationToken)"/>
-    /// with the options of the values: the NoData value and, from libddb ABI 2.3, the WGS 84 window
-    /// (<see cref="RasterAnalysisOptions.Bbox"/>) to export instead of the whole raster (FR-RAS-16). A libddb older than 2.3
-    /// ignores the window and exports the whole raster: the caller checks the ABI minor first.
+    /// with the options of the values: the NoData value, the unit of the rescale and the WGS 84 window
+    /// (<see cref="RasterAnalysisOptions.Bbox"/>) to export instead of the whole raster (FR-RAS-16).
     /// </summary>
     void ExportRaster(string inputPath, string outputPath,
         string? preset, string? bands, string? formula, string? bandFilter,

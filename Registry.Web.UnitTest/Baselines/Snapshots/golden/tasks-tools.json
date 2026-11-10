@@ -88,7 +88,7 @@
               "string",
               "null"
             ],
-            "description": "Temperature unit the rescale of a thermal formula is written in (K, C or F); converted to the unit of the formula. Needs libddb 2.3 or later."
+            "description": "Temperature unit the rescale of a thermal formula is written in (K, C or F); converted to the unit of the formula."
           },
           "fileName": {
             "type": [
@@ -114,7 +114,7 @@
             },
             "minItems": 4,
             "maxItems": 4,
-            "description": "WGS 84 window to export (minLon, minLat, maxLon, maxLat), at the native resolution of the raster. Needs libddb 2.3 or later."
+            "description": "WGS 84 window to export (minLon, minLat, maxLon, maxLat), at the native resolution of the raster."
           }
         },
         "additionalProperties": false

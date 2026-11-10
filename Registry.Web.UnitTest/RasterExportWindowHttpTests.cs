@@ -5,13 +5,11 @@ using System.Net.Http;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Moq;
 using NUnit.Framework;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Test.Baselines;
-using Registry.Web.Test.Support;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -49,25 +47,29 @@ public abstract class RasterExportWindowFixture : DatasetAccessFixture
 }
 
 /// <summary>
-/// FR-RAS-16 (D-023) through the task API (<c>POST /tasks</c>): the submit of a <c>raster-export</c> checks the estimate of
-/// the export, of the window when there is one, against the export limit and answers a 400 ProblemDetails that carries
-/// the estimate and the limit; a window is refused with a 400 at <c>errors.bbox</c> on a libddb older than 2.3 (the
-/// fixture's libddb reports ABI 2.2).
+/// FR-RAS-16 (D-023) through the task API (<c>POST /tasks</c>): the features say the window is exported (libddb 2.4, the
+/// only libddb the Registry runs), the submit of a <c>raster-export</c> checks the estimate of the export, of the window
+/// when there is one, against the export limit and answers a 400 ProblemDetails that carries the estimate and the limit;
+/// a window under the limit is queued with its box, a box that is not four numbers or has no pixel of the raster is a 400
+/// at <c>errors.bbox</c> at the submit, not a failure on the worker (libddb refuses that export; its value info counts no
+/// pixel in the box).
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~RasterExportWindowHttpTests"
 /// </summary>
 [TestFixture]
 [NonParallelizable]
 public sealed class RasterExportWindowHttpTests : RasterExportWindowFixture
 {
-    protected override Action<IServiceCollection> FactoryServices => services =>
-    {
-        services.RemoveAll<IDdbRuntime>();
-        services.AddSingleton<IDdbRuntime>(new AbiMinorRuntime(2));
-    };
+    private static readonly double[] Box = [12, 45, 13, 46];
 
-    // The runtime reports ABI 2.2: the Hub is told that it exports no window, so it disables 'Visible extent' (FR-XC-22)
+    // The value info of the raster with the window: windowPixelCount source pixels in it
+    private void WindowInfo(long windowPixels) =>
+        Factory.DdbWrapper.Setup(d => d.GetRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>()))
+            .Returns((string _, RasterAnalysisOptions? options) => options?.Bbox is null
+                ? WholeInfo
+                : $$"""{"pixelCount": 400000000, "validPixelCount": 300000000, "windowPixelCount": {{windowPixels}}}""");
+
     [Test]
-    public async Task TheFeatures_SayNoWindow_OnLibddb22() => (await RasterExportWindowFeature()).ShouldBe(false);
+    public async Task TheFeatures_SayTheWindowIsExported() => (await RasterExportWindowFeature()).ShouldBe(true);
 
     [Test]
     public async Task AnExportOverTheLimit_Is400AtTheSubmit_WithTheEstimateAndTheLimit()
@@ -86,21 +88,6 @@ public sealed class RasterExportWindowHttpTests : RasterExportWindowFixture
     }
 
     [Test]
-    public async Task AWindow_OnLibddb22_Is400AtTheBboxMember_AndIsNotExportedWhole()
-    {
-        Factory.DdbWrapper.Setup(d => d.GetRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>()))
-            .Returns(WholeInfo);
-
-        var (response, body, json) = await Submit("""{"bbox":[12,45,13,46]}""");
-
-        // libddb 2.2 would ignore the window and export the whole raster: the window is refused at its own member, with the
-        // reason, before the estimate is read
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
-        json!["errors"]!["bbox"]![0]!.GetValue<string>().ShouldContain("libddb 2.3 or later");
-        json["estimatedExportBytes"].ShouldBeNull();
-    }
-
-    [Test]
     public async Task ABadWindow_Is400AtTheBboxMember()
     {
         var (response, body, json) = await Submit("""{"bbox":[12,45,13]}""");
@@ -108,36 +95,6 @@ public sealed class RasterExportWindowHttpTests : RasterExportWindowFixture
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
         json!["errors"]!["bbox"]![0]!.GetValue<string>().ShouldContain("four finite numbers");
     }
-}
-
-/// <summary>
-/// FR-RAS-16 on a libddb that exports a window (ABI 2.3, a runtime that reports it): the features say so, a window under
-/// the limit is queued with its box, one over the limit is refused with the estimate of the window, and a box without a
-/// pixel of the raster is a 400 at <c>errors.bbox</c> at the submit, not a failure on the worker (libddb 2.3 refuses that
-/// export; its value info counts no pixel in the box).
-/// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~RasterExportWindowAbi23HttpTests"
-/// </summary>
-[TestFixture]
-[NonParallelizable]
-public sealed class RasterExportWindowAbi23HttpTests : RasterExportWindowFixture
-{
-    private static readonly double[] Box = [12, 45, 13, 46];
-
-    protected override Action<IServiceCollection> FactoryServices => services =>
-    {
-        services.RemoveAll<IDdbRuntime>();
-        services.AddSingleton<IDdbRuntime>(new AbiMinorRuntime(3));
-    };
-
-    // The value info of the raster with the window: windowPixelCount source pixels in it
-    private void WindowInfo(long windowPixels) =>
-        Factory.DdbWrapper.Setup(d => d.GetRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>()))
-            .Returns((string _, RasterAnalysisOptions? options) => options?.Bbox is null
-                ? WholeInfo
-                : $$"""{"pixelCount": 400000000, "validPixelCount": 300000000, "windowPixelCount": {{windowPixels}}}""");
-
-    [Test]
-    public async Task TheFeatures_SayTheWindowIsExported() => (await RasterExportWindowFeature()).ShouldBe(true);
 
     [Test]
     public async Task AWindowUnderTheLimit_IsQueued_WithTheEstimateOfTheWindow()

@@ -61,7 +61,7 @@ public class RasterValuesNativeTests : TestBase
     {
         unsafe
         {
-            // The struct of ABI 2.3: rescaleUnit is appended after formula
+            // The struct of ABI 2.4: rescaleUnit is appended after formula
             sizeof(NativeRasterOptions).ShouldBe(64);
             Marshal.OffsetOf<NativeRasterOptions>(nameof(NativeRasterOptions.Flags)).ToInt32().ShouldBe(4);
             Marshal.OffsetOf<NativeRasterOptions>(nameof(NativeRasterOptions.Nodata)).ToInt32().ShouldBe(8);
@@ -88,37 +88,25 @@ public class RasterValuesNativeTests : TestBase
     }
 
     // D-022 (U-202): the thumbnail of a Celsius band with the formula CELSIUS and the rescale 283.15..293.15 written in K is
-    // the thumbnail with the rescale 10..20 in °C (both ends are exact in binary: 283.15 - 273.15 = 10). A libddb 2.2 knows
-    // no rescaleUnit and refuses a struct that sets it, which is why the Registry gates it on ABI 2.3
+    // the thumbnail with the rescale 10..20 in °C (both ends are exact in binary: 283.15 - 273.15 = 10)
     [Test]
-    public void ARescaleInKelvin_IsConvertedToTheUnitOfTheFormula_WithLibddb23()
+    public void ARescaleInKelvin_IsConvertedToTheUnitOfTheFormula()
     {
         var inCelsius = Wrapper.GenerateThumbnailEx(_utm, 64, null, null, "CELSIUS", null, "ironbow", "10,20",
             RasterAnalysisOptions.None);
         var unconverted = Wrapper.GenerateThumbnailEx(_utm, 64, null, null, "CELSIUS", null, "ironbow", "283.15,293.15",
             RasterAnalysisOptions.None);
 
-        byte[] inKelvin;
-        try
-        {
-            inKelvin = Wrapper.GenerateThumbnailEx(_utm, 64, null, null, "CELSIUS", null, "ironbow", "283.15,293.15",
-                new RasterAnalysisOptions(RescaleUnit: "K"));
-        }
-        catch (DdbInvalidArgumentsException ex) when (ex.Message.Contains("does not know"))
-        {
-            new NativeDdbRuntime().Capabilities.AbiMinor.ShouldBeLessThan(3, "only libddb before 2.3 has no rescaleUnit");
-            Assert.Ignore("libddb before 2.3 refuses rescaleUnit: " + ex.Message);
-            return;
-        }
+        var inKelvin = Wrapper.GenerateThumbnailEx(_utm, 64, null, null, "CELSIUS", null, "ironbow", "283.15,293.15",
+            new RasterAnalysisOptions(RescaleUnit: "K"));
 
         inKelvin.ShouldBe(inCelsius);
         unconverted.ShouldNotBe(inCelsius);
     }
 
-    // The 64-byte struct with rescaleUnit unset is taken by every libddb 2.2 or later (its bytes past 56 are zero): a NoData
-    // render works on both
+    // The 64-byte struct with rescaleUnit unset (its bytes past 56 are zero): a NoData render
     [Test]
-    public void ARenderWithTheOptionsStruct_WithoutAUnit_WorksOnAnyLibddb()
+    public void ARenderWithTheOptionsStruct_WithoutAUnit_Works()
     {
         var thumbnail = Wrapper.GenerateThumbnailEx(_utm, 64, null, null, "CELSIUS", null, "ironbow", "10,20",
             new RasterAnalysisOptions(Nodata: 130));
@@ -174,9 +162,7 @@ public class RasterValuesNativeTests : TestBase
     }
 
     // FR-RAS-16: the export of a window. The box of the area test above holds pixels 5..9 x 10..14 of web.tif (25 pixels,
-    // by gdaltransform of the corners), so the export is 5 x 5 pixels of the same 2 m. The libddb 2.2 release ignores the
-    // window and exports the 20 x 20 raster (the Registry refuses the window there, by the ABI minor); a build of 2.3
-    // exports it, whatever ABI minor it reports before the version is bumped
+    // by gdaltransform of the corners), so the export is 5 x 5 pixels of the same 2 m
     private static readonly double[] Window = [15.0019550763244, 45.1525536869656, 15.0020449078528, 45.152617038061];
 
     private JsonElement ExportWindow(string name)
@@ -188,14 +174,9 @@ public class RasterValuesNativeTests : TestBase
     }
 
     [Test]
-    public void TheExportOfAWindow_IsThePixelsUnderTheBox_WithLibddb23()
+    public void TheExportOfAWindow_IsThePixelsUnderTheBox()
     {
         var exported = ExportWindow("window.tif");
-        if (exported.GetProperty("width").GetInt32() == 20)
-        {
-            new NativeDdbRuntime().Capabilities.AbiMinor.ShouldBeLessThan(3, "only libddb before 2.3 exports the whole raster");
-            Assert.Ignore("libddb before 2.3 ignores the window");
-        }
 
         exported.GetProperty("width").GetInt32().ShouldBe(5);
         exported.GetProperty("height").GetInt32().ShouldBe(5);
@@ -205,13 +186,10 @@ public class RasterValuesNativeTests : TestBase
         exported.GetProperty("valueMax").GetDouble().ShouldBe(15.2, 1e-5);
     }
 
-    // A window with no pixel of the raster is invalid arguments from libddb 2.3
+    // A window with no pixel of the raster is invalid arguments
     [Test]
-    public void TheExportOfAWindowOutsideTheRaster_IsInvalidArguments_WithLibddb23()
+    public void TheExportOfAWindowOutsideTheRaster_IsInvalidArguments()
     {
-        if (ExportWindow("probe.tif").GetProperty("width").GetInt32() == 20)
-            Assert.Ignore("libddb before 2.3 ignores the window");
-
         var output = Path.Combine(_folder, "outside.tif");
         Should.Throw<DdbInvalidArgumentsException>(() => Wrapper.ExportRaster(_web, output, null, null, null, null, null,
             "0,255", 0, new RasterAnalysisOptions(Bbox: [16, 46, 16.1, 46.1]), null, default));
@@ -242,7 +220,7 @@ public class RasterValuesNativeTests : TestBase
     }
 
     // FR-RAS-16: the value info of a box with no pixel of the raster (a degree east of it) does not fail; it counts no pixel
-    // in it, which the submit of a window export refuses (the export of libddb 2.3 would be invalid arguments)
+    // in it, which the submit of a window export refuses (the export of libddb would be invalid arguments)
     [Test]
     public void TheValueInfoOfAWindowOutsideTheRaster_CountsNoPixel()
     {
@@ -278,7 +256,7 @@ public class RasterValuesNativeTests : TestBase
         Parse(Wrapper.GetRasterAreaStats(_utm, 5, 5, 6, 6, null)).GetProperty("pixelCount").GetInt32().ShouldBe(4);
     }
 
-    // libddb 2.2 applies the options at a pixel (DDBGetRasterPointValuePixelEx): the NoData override of 130 leaves the
+    // libddb applies the options at a pixel (DDBGetRasterPointValuePixelEx): the NoData override of 130 leaves the
     // pixel (5, 5) without a value, and KELVIN reads 13.0 Celsius as 286.15 K
     [Test]
     public void APixelWithOptions_IsReadWithThem()
@@ -310,9 +288,8 @@ public class RasterValuesNativeTests : TestBase
         Should.Throw<DdbInvalidArgumentsException>(() =>
             Wrapper.GetRasterAreaStats(_utm, 5, 5, 6, 6, new RasterAnalysisOptions(Formula: "NDVI")));
 
-    // FR-RAS-11, NFR-001: the contours report their progress (libddb 2.3: statistics, levels, lines) and say whether the lines
-    // were cut at the cap (truncated, featureCap). A libddb 2.2 reports no progress and says nothing of a cap: the call is the
-    // same, so the Registry runs on both. The values 11.5 .. 17.2 of utm.tif have the levels 12 .. 17 at interval 1.
+    // FR-RAS-11, NFR-001: the contours report their progress (statistics, levels, lines) and say whether the lines were cut
+    // at the cap (truncated, featureCap). The values 11.5 .. 17.2 of utm.tif have the levels 12 .. 17 at interval 1.
     [Test]
     public void TheContours_ReportTheirProgress_AndSayTheyAreNotCut()
     {
@@ -323,13 +300,6 @@ public class RasterValuesNativeTests : TestBase
 
         contours.GetProperty("min").GetDouble().ShouldBe(12);
         contours.GetProperty("max").GetDouble().ShouldBe(17);
-        if (!NativeDdbWrapper.ContourProgressSupported)
-        {
-            seen.ShouldBeEmpty("libddb before 2.3 has no progress");
-            contours.TryGetProperty("truncated", out _).ShouldBeFalse();
-            return;
-        }
-
         seen.First().ShouldBe((0.0, "statistics"));
         seen.Last().ShouldBe((1.0, "lines"));
         seen.Select(x => x.Phase).Distinct().ShouldBe(["statistics", "levels", "lines"]);
@@ -342,8 +312,6 @@ public class RasterValuesNativeTests : TestBase
     public void TheCancelOfTheToken_StopsTheContours()
     {
         using var cts = new CancellationTokenSource();
-        if (!NativeDdbWrapper.ContourProgressSupported)
-            cts.Cancel(); // no progress to cancel at: the token is canceled before the call
 
         var ex = Should.Throw<DdbCanceledException>(() => Wrapper.GenerateContours(_utm, 1.0, null, 0, null, null, 0, 1,
             null, (_, phase) =>

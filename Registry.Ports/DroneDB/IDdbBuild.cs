@@ -28,7 +28,7 @@ public interface IDdbBuild
     /// <see cref="Build"/> of <paramref name="path"/> (null: the whole dataset) under <paramref name="options"/> (null: no
     /// limit) that reports its progress to <paramref name="progress"/> (FR-PRC-42): the fraction done (0..1, or -1 while
     /// nothing is measured) and the phase libddb names (the entry type, then "warping", "overviews", "compressing" for a
-    /// raster, "publishing"; null at the end). A libddb before ABI 2.3 builds without reporting.
+    /// raster, "publishing"; null at the end).
     /// </summary>
     void BuildWithProgress(string? path, bool force, BuildOptions? options, Action<double, string?> progress);
 

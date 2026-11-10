@@ -69,11 +69,11 @@ public class FeaturesDto
     public long? MaxExportSizeBytes { get; set; }
 
     /// <summary>
-    /// Whether a raster export takes a window (the <c>bbox</c> of the <c>raster-export</c> task): the loaded libddb exports
-    /// one (ABI 2.3 or later, FR-RAS-16). When it is false, or absent (an older server), the Hub shows 'Export visible
-    /// extent' disabled with its reason (FR-XC-22); the submit refuses a <c>bbox</c> all the same.
+    /// Whether a raster export takes a window (the <c>bbox</c> of the <c>raster-export</c> task, FR-RAS-16): always true,
+    /// the libddb the Registry runs (2.4) exports one. A Hub that reads a server without this field (an older server) shows
+    /// 'Export visible extent' disabled with its reason (FR-XC-22).
     /// </summary>
-    public bool RasterExportWindow { get; set; }
+    public bool RasterExportWindow { get; set; } = true;
 
     /// <summary>
     /// The largest coverage, in pixels on its longest side, that a WCS GetCoverage returns (FR-SHR-02, D-029). The

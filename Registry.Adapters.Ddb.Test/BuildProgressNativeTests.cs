@@ -11,9 +11,9 @@ using static Registry.Adapters.Ddb.Test.LibddbNative;
 namespace Registry.Adapters.Ddb.Test;
 
 /// <summary>
-/// FR-PRC-42 on the real libddb: the build of a raster reports its progress through <c>DDBBuildEx2</c> (new in 2.3) as
+/// FR-PRC-42 on the real libddb: the build of a raster reports its progress through <c>DDBBuildEx2</c> as
 /// ddb.h describes it: the entry type first with no fraction, then the phases of the COG build, "publishing", and the
-/// fraction 1 with no phase at the end; the fractions never go down. A libddb without the export builds without reporting.
+/// fraction 1 with no phase at the end; the fractions never go down.
 /// Run: dotnet test Registry.Adapters.Ddb.Test --filter "FullyQualifiedName~BuildProgressNativeTests"
 /// </summary>
 [TestFixture]
@@ -54,12 +54,6 @@ public class BuildProgressNativeTests : TestBase
         var reports = new List<(double Fraction, string? Phase)>();
 
         Wrapper.Build(_folder, "utm.tif", null, true, false, null, (fraction, phase) => reports.Add((fraction, phase)));
-
-        if (!NativeDdbWrapper.BuildProgressSupported)
-        {
-            reports.ShouldBeEmpty("a libddb without DDBBuildEx2 builds without reporting");
-            Assert.Ignore("libddb without DDBBuildEx2 (before 2.3)");
-        }
 
         reports.ShouldNotBeEmpty();
         reports[0].ShouldBe((-1d, "georaster"));

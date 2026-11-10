@@ -11,7 +11,7 @@ using static Registry.Adapters.Ddb.Test.LibddbNative;
 namespace Registry.Adapters.Ddb.Test;
 
 /// <summary>
-/// On the real libddb (ABI 2.1 and later): align, merge multispectral and mask borders go through
+/// On the real libddb (ABI 2.4): align, merge multispectral and mask borders go through
 /// <c>DDBAlignRasterEx</c>, <c>DDBMergeMultispectralEx</c> and <c>DDBMaskBordersEx</c> (FR-PRC-01, FR-XC-07, D-028): an
 /// output that exists is refused without overwrite and left as it was, replaced with it, and a failed call with
 /// overwrite leaves it byte for byte as it was (the Registry no longer deletes it before the call); a mask that

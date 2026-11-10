@@ -32,18 +32,16 @@ public sealed class RasterAnalysisService
     private readonly ScratchFileProvider _scratch;
     private readonly IFileSystem _fs;
     private readonly DownloadOptions _downloads;
-    private readonly IDdbRuntime _runtime;
     private readonly ILogger<RasterAnalysisService> _logger;
 
     public RasterAnalysisService(RenderSources sources, INativeWorkGate gate, ScratchFileProvider scratch,
-        IFileSystem fs, IOptions<DownloadOptions> downloads, IDdbRuntime runtime, ILogger<RasterAnalysisService> logger)
+        IFileSystem fs, IOptions<DownloadOptions> downloads, ILogger<RasterAnalysisService> logger)
     {
         _sources = sources;
         _gate = gate;
         _scratch = scratch;
         _fs = fs;
         _downloads = downloads.Value;
-        _runtime = runtime;
         _logger = logger;
     }
 
@@ -210,10 +208,10 @@ public sealed class RasterAnalysisService
         RasterVisualization visualization, CancellationToken ct = default)
     {
         RasterOptionRules.RequireNodata(visualization.Nodata);
-        // The unit of the rescale needs libddb 2.3 (a 400 before any work)
+        // A unit of the rescale libddb does not know is a 400 before any work
         var v = visualization with
         {
-            RescaleUnit = RasterOptionRules.RescaleUnit(visualization.RescaleUnit, _runtime.Capabilities)
+            RescaleUnit = RasterOptionRules.RescaleUnit(visualization.RescaleUnit)
         };
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
 
@@ -332,7 +330,7 @@ public sealed class RasterAnalysisService
     /// <see cref="DownloadOptions.MaxExportSizeBytes"/>; nothing when there is no limit or no estimate. The one check of
     /// an export: the direct export and the submit of the raster-export task (<see cref="IRasterExportSizeCheck"/>).
     /// A window without a pixel of the raster is a 400 at <c>errors.bbox</c>, with or without a limit: the value info counts
-    /// no pixel in it, and the export of libddb 2.3 would refuse it on the worker (FR-RAS-16).
+    /// no pixel in it, and the export of libddb would refuse it on the worker (FR-RAS-16).
     /// </summary>
     /// <exception cref="InvalidFieldException">The window (<see cref="RasterAnalysisOptions.Bbox"/>) is outside the raster.</exception>
     public async Task EnsureExportSizeWithinLimitAsync(string orgSlug, string dsSlug, string path,

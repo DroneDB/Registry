@@ -49,17 +49,15 @@ public class RasterExportToolTests
     public void SetUp()
     {
         _sizeCheck = new Mock<IRasterExportSizeCheck>();
-        _tool = ToolWith(abiMinor: 3);
+        _tool = Tool();
         _ddb = new Mock<IDDB>(MockBehavior.Strict);
         _ddb.Setup(d => d.EntryExists(Ortho)).Returns(true);
         _ctx = new Mock<IHeavyToolValidationContext>();
         _ctx.SetupGet(c => c.Ddb).Returns(_ddb.Object);
     }
 
-    // The tool on a libddb of this ABI minor (the recorded capabilities of libddb with another minor)
-    private RasterExportTool ToolWith(int abiMinor) =>
-        new(Microsoft.Extensions.Options.Options.Create(new ProcessingPlatformSettings()), _sizeCheck.Object,
-            new Support.AbiMinorRuntime(abiMinor));
+    private RasterExportTool Tool() =>
+        new(Microsoft.Extensions.Options.Options.Create(new ProcessingPlatformSettings()), _sizeCheck.Object);
 
     private static HeavyToolRequest RequestWith(string paramsJson) =>
         new("raster-export", "1", "org", "ds", Ortho, JsonDocument.Parse(paramsJson).RootElement.Clone());
@@ -113,7 +111,7 @@ public class RasterExportToolTests
     // A single-band DEM: libddb's list marks the temperature formulas "Requires bands: T", the rendering computes them
     [TestCase("CELSIUS")]
     [TestCase("KELVIN")]
-    [TestCase("FAHRENHEIT")] // D-022: the formula of libddb 2.3 reads the same band
+    [TestCase("FAHRENHEIT")] // D-022: the formula of libddb 2.4 reads the same band
     public async Task ATemperatureFormulaOnASingleBandDem_Passes(string formula)
     {
         var dem = JsonSerializer.Serialize(new
@@ -236,26 +234,10 @@ public class RasterExportToolTests
         (ex.EstimatedBytes, ex.LimitBytes).ShouldBe((1_500_000_000L, 1_073_741_824L));
     }
 
-    // The window is exported by libddb 2.3: before it DDBExportRaster3 ignores it and would export the whole raster
     [Test]
-    public async Task AWindow_OnLibddb22_IsRefusedAtTheBboxMemberBeforeTheSizeCheck()
+    public async Task TheWholeRaster_IsCheckedWithTheNodataValue_WithoutAWindow()
     {
-        var tool = ToolWith(abiMinor: 2);
-
-        var ex = await Should.ThrowAsync<InvalidFieldException>(() =>
-            tool.ValidateAsync(RequestWith("""{"bbox":[12,45,13,46]}"""), _ctx.Object, CancellationToken.None));
-
-        ex.Field.ShouldBe("bbox");
-        ex.StatusCode.ShouldBe(400);
-        ex.Message.ShouldContain("libddb 2.3 or later");
-        ex.Message.ShouldContain("ABI 2.2");
-        _sizeCheck.VerifyNoOtherCalls();
-    }
-
-    [Test]
-    public async Task TheWholeRaster_OnLibddb22_StillExports()
-    {
-        await ToolWith(abiMinor: 2).ValidateAsync(RequestWith("""{"nodata":0}"""), _ctx.Object, CancellationToken.None);
+        await _tool.ValidateAsync(RequestWith("""{"nodata":0}"""), _ctx.Object, CancellationToken.None);
 
         _sizeCheck.Verify(c => c.EnsureWithinLimitAsync("org", "ds", Ortho,
             It.Is<RasterAnalysisOptions?>(o => o != null && o.Nodata == 0 && o.Bbox == null),
@@ -377,27 +359,11 @@ public class RasterExportToolTests
         properties.TryGetProperty("rescaleUnit", out _).ShouldBeTrue();
     }
 
-    // D-022: a rescale in another unit than the formula's needs libddb 2.3; on 2.2 the submit refuses it at its own member,
-    // before the formula is checked (the strict mock has no raster metadata)
+    // D-022: a unit libddb does not name is a 400 at its member, before the formula is checked (the strict mock has no
+    // raster metadata)
     [Test]
-    public async Task ARescaleUnit_OnLibddb22_Is400AtItsMember()
+    public async Task AnUnknownRescaleUnit_Is400AtItsMember()
     {
-        _tool = ToolWith(abiMinor: 2);
-
-        var ex = await Should.ThrowAsync<InvalidFieldException>(() => Validate(
-            RequestWith("""{"formula":"CELSIUS","rescale":"280,310","rescaleUnit":"K"}""")));
-
-        ex.Field.ShouldBe("rescaleUnit");
-        ex.Message.ShouldContain("needs libddb 2.3 or later");
-    }
-
-    // A unit libddb does not name is a 400 at its member on any libddb, before the formula is checked
-    [TestCase(2)]
-    [TestCase(3)]
-    public async Task AnUnknownRescaleUnit_Is400AtItsMember(int abiMinor)
-    {
-        _tool = ToolWith(abiMinor: abiMinor);
-
         var ex = await Should.ThrowAsync<InvalidFieldException>(() => Validate(
             RequestWith("""{"formula":"CELSIUS","rescale":"280,310","rescaleUnit":"feet"}""")));
 
@@ -405,7 +371,7 @@ public class RasterExportToolTests
         ex.Message.ShouldBe("'feet' is not a temperature unit: use K (Kelvin), C (Celsius) or F (Fahrenheit).");
     }
 
-    // On 2.3 the unit reaches libddb in the options of the export (which converts the rescale), and only there: the size
+    // The unit reaches libddb in the options of the export (which converts the rescale), and only there: the size
     // estimate of the submit reads no unit
     [Test]
     public async Task TheExport_SendsTheUnitOfTheRescaleToLibddb()
@@ -444,16 +410,9 @@ public class RasterExportToolTests
         }
     }
 
-    // FR-RAS-16, FR-XC-22: /sys/features says whether the loaded libddb exports a window, by the rule of the submit, so
-    // the Hub disables 'Visible extent' with its reason where the submit would refuse the bbox
-    [TestCase(2, false)]
-    [TestCase(3, true)]
-    [TestCase(4, true)]
-    public async Task TheRasterExportWindowFeature_FollowsTheAbiMinor(int abiMinor, bool expected)
-    {
-        var features = new Registry.Web.Models.DTO.FeaturesDto();
-        await new Registry.Web.Services.Features.RasterExportFeatures(new Support.AbiMinorRuntime(abiMinor)).FillAsync(features);
-
-        features.RasterExportWindow.ShouldBe(expected);
-    }
+    // FR-RAS-16, FR-XC-22: /sys/features says the window is exported (the Hub reads it to offer 'Visible extent'): always,
+    // libddb 2.4 exports one
+    [Test]
+    public void TheRasterExportWindowFeature_IsAlwaysTrue() =>
+        new Registry.Web.Models.DTO.FeaturesDto().RasterExportWindow.ShouldBeTrue();
 }

@@ -162,27 +162,10 @@ public class DdbJobsTests
 
     // ---- Build progress (FR-PRC-42) ----
 
-    // The recorded libddb with or without the export that reports the progress of a build
-    private sealed class BuildProgressRuntime(bool reported) : FakeDdbRuntime
-    {
-        public override DdbCapabilities Capabilities { get; } = With(reported);
-
-        private static DdbCapabilities With(bool reported)
-        {
-            var json = System.Text.Json.Nodes.JsonNode.Parse(ContractFixture.Load("capabilities").Output.ToJsonString())!;
-            var symbols = json["symbols"]!.AsArray();
-            var names = symbols.Select(n => n!.GetValue<string>()).Where(n => n != "DDBBuildEx2").ToList();
-            if (reported)
-                names.Add("DDBBuildEx2");
-            json["symbols"] = new System.Text.Json.Nodes.JsonArray([.. names.Select(n => (System.Text.Json.Nodes.JsonNode?)n)]);
-            return DdbCapabilities.Parse(json.ToJsonString());
-        }
-    }
-
     private sealed record ProgressWrite(string JobId, int? Percent, string? Phase);
 
     // The jobs with the progress of their builds written through this writer (no throttle)
-    private DdbJobs JobsReporting(bool reported, List<ProgressWrite> writes,
+    private DdbJobs JobsReporting(List<ProgressWrite> writes,
         ProcessingBudgetSettings? processing = null)
     {
         var writer = new Mock<IJobIndexWriter>();
@@ -198,7 +181,7 @@ public class DdbJobsTests
             .AddScoped(_ => writer.Object)
             .BuildServiceProvider()
             .GetRequiredService<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>();
-        var progress = new BuildJobProgress(scopes, new BuildProgressRuntime(reported),
+        var progress = new BuildJobProgress(scopes,
             Microsoft.Extensions.Options.Options.Create(new ProcessingPlatformSettings { ProgressUpdateThrottleSeconds = 0 }),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<HangfireProgressSink>.Instance);
         return new DdbJobs(_ddbManager.Object, Pending(), new FileSystem(), _log, TestJobs.Budget(processing), progress);
@@ -215,13 +198,13 @@ public class DdbJobsTests
             });
 
     [Test]
-    public void ABuildJob_WritesThePercentAndThePhaseToItsRow_WhenLibddbReportsThem()
+    public void ABuildJob_WritesThePercentAndThePhaseLibddbReportsToItsRow()
     {
         var writes = new List<ProgressWrite>();
         BuildReports("ortho.tif");
         var (context, tail) = Context();
 
-        JobsReporting(true, writes).Build(Org, Ref, "ortho.tif", false, context);
+        JobsReporting(writes).Build(Org, Ref, "ortho.tif", false, context);
 
         _ddb.Verify(x => x.Build(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
         writes.ShouldNotBeEmpty();
@@ -242,25 +225,11 @@ public class DdbJobsTests
         var writes = new List<ProgressWrite>();
         BuildReports("model.obj", new BuildOptions(3));
 
-        JobsReporting(true, writes, new ProcessingBudgetSettings { BackgroundRebuildThreads = 3 })
+        JobsReporting(writes, new ProcessingBudgetSettings { BackgroundRebuildThreads = 3 })
             .RebuildInBackground(Org, Ref, "model.obj", Context().Context);
 
         _ddb.Verify(x => x.BuildWithOptions(It.IsAny<string>(), It.IsAny<BuildOptions>(), It.IsAny<bool>()), Times.Never);
         (writes[^1].Percent, writes[^1].Phase).ShouldBe((100, "done"));
-    }
-
-    // libddb 2.2 has no DDBBuildEx2: the job builds and writes its row as it always did
-    [Test]
-    public void ABuildJob_OnALibddbThatDoesNotReportProgress_BuildsAsBefore()
-    {
-        var writes = new List<ProgressWrite>();
-
-        JobsReporting(false, writes).Build(Org, Ref, "ortho.tif", false, Context().Context);
-
-        _ddb.Verify(x => x.Build("ortho.tif", null!, false), Times.Once);
-        _ddb.Verify(x => x.BuildWithProgress(It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<BuildOptions?>(),
-            It.IsAny<Action<double, string?>>()), Times.Never);
-        writes.ShouldBeEmpty();
     }
 
     // A build outside a Hangfire job has no row to write
@@ -269,7 +238,7 @@ public class DdbJobsTests
     {
         var writes = new List<ProgressWrite>();
 
-        JobsReporting(true, writes).Build(Org, Ref, "ortho.tif", false, null);
+        JobsReporting(writes).Build(Org, Ref, "ortho.tif", false, null);
 
         _ddb.Verify(x => x.Build("ortho.tif", null!, false), Times.Once);
         writes.ShouldBeEmpty();

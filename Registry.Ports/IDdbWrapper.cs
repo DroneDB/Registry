@@ -98,8 +98,7 @@ public interface IDdbWrapper
 
     /// <summary>
     /// <see cref="Build(string, string?, string?, bool, bool, BuildOptions?)"/> that reports its progress (FR-PRC-42):
-    /// the fraction done (0..1, or -1 while nothing is measured) and the phase, through <c>DDBBuildEx2</c> (libddb ABI
-    /// 2.3) when the loaded libddb exports it; an older libddb builds without reporting.
+    /// the fraction done (0..1, or -1 while nothing is measured) and the phase, through <c>DDBBuildEx2</c>.
     /// </summary>
     public void Build(string ddbPath, string? source, string? dest, bool force, bool pendingOnly, BuildOptions? options,
         Action<double, string?>? progress);
@@ -237,8 +236,8 @@ public interface IDdbWrapper
 
     /// <summary>
     /// Generate thumbnail with extended visualization params and the options of the render: the NoData value that replaces
-    /// the one of the bands (FR-RAS-31) and, from libddb ABI 2.3, the unit of the rescale of a thermal formula
-    /// (<see cref="Registry.Ports.DroneDB.RasterAnalysisOptions.RescaleUnit"/>, D-022), which an older libddb refuses
+    /// the one of the bands (FR-RAS-31) and the unit of the rescale of a thermal formula
+    /// (<see cref="Registry.Ports.DroneDB.RasterAnalysisOptions.RescaleUnit"/>, D-022)
     /// </summary>
     public byte[] GenerateThumbnailEx(string filePath, int size, string? preset, string? bands, string? formula,
         string? bandFilter, string? colormap, string? rescale, Registry.Ports.DroneDB.RasterAnalysisOptions? options);
@@ -254,7 +253,7 @@ public interface IDdbWrapper
 
     /// <summary>
     /// Generate tile with extended visualization params and the options of the render: the NoData value (FR-RAS-31) and,
-    /// from libddb ABI 2.3, the unit of the rescale of a thermal formula (D-022), which an older libddb refuses
+    /// the unit of the rescale of a thermal formula (D-022)
     /// </summary>
     public byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
         int tileSize, bool tms, bool forceRecreate, string inputPathHash,
@@ -342,7 +341,7 @@ public interface IDdbWrapper
     public string GetRasterValueInfo(string path);
 
     /// <summary>
-    /// Get raster value info with the options of the values (libddb 2.1)
+    /// Get raster value info with the options of the values
     /// </summary>
     public string GetRasterValueInfo(string path, Registry.Ports.DroneDB.RasterAnalysisOptions? options);
 
@@ -407,9 +406,8 @@ public interface IDdbWrapper
 
     /// <summary>
     /// <see cref="ExportRaster(string, string, string?, string?, string?, string?, string?, string?, int, double?, System.Action{double, string?}?, System.Threading.CancellationToken)"/>
-    /// with the options of the values: the NoData value and, from libddb ABI 2.3, the WGS 84 window
+    /// with the options of the values: the NoData value, the unit of the rescale and the WGS 84 window
     /// (<see cref="Registry.Ports.DroneDB.RasterAnalysisOptions.Bbox"/>) to export instead of the whole raster (FR-RAS-16).
-    /// A libddb older than 2.3 ignores the window and exports the whole raster: the caller checks the ABI minor first.
     /// </summary>
     public void ExportRaster(string inputPath, string outputPath,
         string? preset, string? bands, string? formula, string? bandFilter,
@@ -478,8 +476,8 @@ public interface IDdbWrapper
 
     /// <summary>
     /// <see cref="GenerateContours(string, double?, int?, double, double?, double?, double, int, Registry.Ports.DroneDB.RasterAnalysisOptions?)"/>
-    /// with progress (fraction 0..1, phase) and a cancel token: libddb 2.3 reports the progress, an older one only stops
-    /// at the cancel. The output has <c>truncated</c> and <c>featureCap</c> from libddb 2.3.
+    /// with progress (fraction 0..1, phase) and a cancel token (<c>DDBGenerateContoursEx2</c>). The output has
+    /// <c>truncated</c> and <c>featureCap</c>.
     /// </summary>
     public string GenerateContours(string path, double? interval, int? count, double baseOffset, double? minElev,
         double? maxElev, double simplifyTolerance, int bandIndex,

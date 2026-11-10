@@ -206,9 +206,11 @@ after the scheme's own challenge: production's JWT scheme adds `WWW-Authenticate
   (`InputRulesTests`, `UserRolesHttpTests.Features_ListTheInputRules_AndBothSystemRoles`).
 * `sys-features`: `inputRules.name` (FR-XC-12, D-007: the user and role name rule, `^[a-z0-9]{1,127}$`) and `inputRules.cron`
   `minFields` and `maxFields` (5 and 6), additive (`InputRulesTests.Name_*`, `InputRulesTests.Cron_TheDisableWords_AreCronSettings_InAnyCase`).
-* `sys-features`: `rasterExportWindow` (FR-RAS-16, FR-XC-22: the loaded libddb exports the window of a raster export, ABI
-  2.3 or later; `false` with the recorded 2.2), additive (`RasterExportToolTests.TheRasterExportWindowFeature_FollowsTheAbiMinor`,
-  `RasterExportWindowHttpTests`, `RasterExportWindowAbi23HttpTests`).
+* `sys-features`: `rasterExportWindow` (FR-RAS-16, FR-XC-22: the libddb the Registry runs exports the window of a raster
+  export; always `true` with libddb 2.4), additive (`RasterExportToolTests.TheRasterExportWindowFeature_IsAlwaysTrue`,
+  `RasterExportWindowHttpTests`).
+* `tasks-tools`: the `rescaleUnit` and `bbox` members of `raster-export` no longer say "Needs libddb 2.3 or later" (libddb
+  2.4 is the only libddb the Registry runs); no member changed.
 * `sys-config`: a cron field of the Cron Jobs section carries the schedule its job runs when it is empty as `defaultValue`
   (`JobScheduleOptions.DefaultCrons`, FR-ADM-13; it was `null`) (`ConfigurationCronDefaultsTests`).
 * Organizations: `datasetCount` and `lastModified` (the newest write to the index of one of its datasets, its creation date when none can

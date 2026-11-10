@@ -207,30 +207,6 @@ public class BuildKeyTests
         ddb.Verify(d => d.RescanIndex(It.IsAny<RescanOptions?>()), Times.Never);
     }
 
-    // A libddb that predates the build key names no key in the entries it re-reads; a failed entry has none either way
-    [Test]
-    public async Task RescanDatasetNow_ALibddbWithoutTheBuildKey_IsReported()
-    {
-        await using var context = TestDb.CreateContext<RegistryContext>();
-        var older = DdbWith([OlderLibddb("a.ply"), OlderLibddb("b.ply")], "a.ply", "b.ply");
-        var current = DdbWith([Rescanned("a.ply", changed: false), OlderLibddb("b.ply", success: false)], "a.ply", "b.ply");
-        var builds = new RecordingBuilds();
-
-        var olderOutcome = await Service(context, Mock.Of<IDdbManager>(m => m.Get("org", It.IsAny<Guid>()) == older.Object))
-            .RescanDatasetNowAsync("org", "ds", Guid.NewGuid(), RescanFilter(), builds);
-        var currentOutcome = await Service(context, Mock.Of<IDdbManager>(m => m.Get("org", It.IsAny<Guid>()) == current.Object))
-            .RescanDatasetNowAsync("org", "ds", Guid.NewGuid(), RescanFilter(), builds);
-
-        olderOutcome.LibddbPredatesBuildKey.ShouldBeTrue();
-        olderOutcome.Rebuilt.ShouldBe(0);
-        currentOutcome.LibddbPredatesBuildKey.ShouldBeFalse();
-        builds.Built.ShouldBeEmpty();
-    }
-
-    // The element of a libddb from before the build key: no buildKey, no buildKeyChanged
-    private static RescanResult OlderLibddb(string path, bool success = true) =>
-        new() { Path = path, Hash = success ? Hash : null, Success = success, Error = success ? null : "unreadable" };
-
     private static RescanFilter RescanFilter() => UpgradeRescanSteps.FilterOf([new BuildKeyRescanStep()]);
 
     // ---- The upgrade job ------------------------------------------------------------------------------------
@@ -283,9 +259,6 @@ public class BuildKeyTests
 
         public string RefOf(string name) => Refs[name].ToString("N");
 
-        /// <summary>The ABI minor the loaded libddb reports in its capabilities (2: the build key, DroneDB 2.2.0).</summary>
-        public int AbiMinor { get; set; } = 2;
-
         public UpgradeRescanStartupTask Task(params IUpgradeRescanStep[] steps)
         {
             var manager = new Mock<IDdbManager>();
@@ -304,7 +277,7 @@ public class BuildKeyTests
                 new RescanRebuild(Mock.Of<IDatasetCacheInvalidator>(), NullLogger<RescanRebuild>.Instance),
                 NullLogger<IndexRescanService>.Instance);
             return new UpgradeRescanStartupTask(Context, service, steps.Length == 0 ? [new BuildKeyRescanStep()] : steps,
-                manager.Object, TestJobs.Scheduler(jobs.Object), new RuntimeWithAbiMinor(AbiMinor),
+                manager.Object, TestJobs.Scheduler(jobs.Object),
                 Microsoft.Extensions.Options.Options.Create(new StorageOptions { StoragePath = _storage }),
                 new Registry.Adapters.FileSystem(), NullLogger<UpgradeRescanStartupTask>.Instance);
         }
@@ -412,7 +385,7 @@ public class BuildKeyTests
     [Test]
     public async Task TheJob_WithTheVectorFootprintStep_RescansTheVectorEntriesOfEachDatasetOnce_AndRecordsIt()
     {
-        using var fx = new JobFixture(("org", "one"), ("org", "two")) { AbiMinor = 3 };
+        using var fx = new JobFixture(("org", "one"), ("org", "two"));
 
         await fx.Task(new BuildKeyRescanStep(), new VectorFootprintRescanStep()).ExecuteAsync(CancellationToken.None);
 
@@ -432,7 +405,7 @@ public class BuildKeyTests
     [Test]
     public async Task TheJob_AfterTheBuildKeyStepWasDone_RescansOnlyTheVectorEntries()
     {
-        using var fx = new JobFixture(("org", "ds")) { AbiMinor = 3 };
+        using var fx = new JobFixture(("org", "ds"));
         fx.Ddbs.Values.Single().Setup(d => d.FindSummaries(It.IsAny<EntryQuery>())).Returns([
             new EntrySummary { Path = "geo.ply", Type = EntryType.GaussianSplat, Hash = Hash },
             new EntrySummary { Path = "roads.fgb", Type = EntryType.Vector, Hash = Hash }]);
@@ -441,51 +414,6 @@ public class BuildKeyTests
         await fx.Task(new BuildKeyRescanStep(), new VectorFootprintRescanStep()).ExecuteAsync(CancellationToken.None);
 
         fx.Ddbs.Values.Single().Verify(d => d.RescanIndex(It.Is<RescanOptions?>(o => o!.Types == "vector")), Times.Once);
-    }
-
-    // FR-SHR-03: libddb 2.2 does not have the WGS 84 footprint fix (it comes with ABI 2.3). The vector footprint step is
-    // skipped without recording progress while the build-key step runs; at the first start on 2.3 it runs once
-    [Test]
-    public async Task TheJob_OnAbi22_SkipsTheVectorFootprintStepWithoutRecordingIt_AndRunsItOnceOnAbi23()
-    {
-        using var fx = new JobFixture(("org", "one"), ("org", "two")) { AbiMinor = 2 };
-        var steps = new IUpgradeRescanStep[] { new BuildKeyRescanStep(), new VectorFootprintRescanStep() };
-        foreach (var ddb in fx.Ddbs.Values)
-            ddb.Setup(d => d.FindSummaries(It.IsAny<EntryQuery>())).Returns([
-                new EntrySummary { Path = "geo.ply", Type = EntryType.GaussianSplat, Hash = Hash },
-                new EntrySummary { Path = "roads.fgb", Type = EntryType.Vector, Hash = Hash }]);
-
-        await fx.Task(steps).ExecuteAsync(CancellationToken.None);
-
-        foreach (var ddb in fx.Ddbs.Values)
-            ddb.Verify(d => d.RescanIndex(It.Is<RescanOptions?>(o => o!.Types == "model,gaussiansplat")), Times.Once);
-        fx.Progress("build-key")!.Completed.ShouldBeTrue();
-        fx.State!.Steps!.ContainsKey("vector-footprints").ShouldBeFalse("a skipped step records nothing");
-        fx.RescansOf("org", "one").ShouldBe(1);
-
-        // The same start again on 2.2: nothing to do for the vector step, still nothing recorded
-        await fx.Task(steps).ExecuteAsync(CancellationToken.None);
-        fx.RescansOf("org", "one").ShouldBe(1);
-        fx.State!.Steps!.ContainsKey("vector-footprints").ShouldBeFalse();
-
-        // The first start on 2.3: the vector entries are read, once
-        fx.AbiMinor = 3;
-        await fx.Task(steps).ExecuteAsync(CancellationToken.None);
-        foreach (var ddb in fx.Ddbs.Values)
-            ddb.Verify(d => d.RescanIndex(It.Is<RescanOptions?>(o => o!.Types == "vector")), Times.Once);
-        fx.Progress("vector-footprints")!.Completed.ShouldBeTrue();
-        fx.Progress("vector-footprints")!.Datasets.ShouldBe(
-            new[] { fx.RefOf("org/one"), fx.RefOf("org/two") }.Order(StringComparer.Ordinal));
-
-        await fx.Task(steps).ExecuteAsync(CancellationToken.None);
-        fx.RescansOf("org", "one").ShouldBe(2);
-    }
-
-    [Test]
-    public void TheVectorFootprintStep_NeedsAbi23_AndTheBuildKeyStepAbi22()
-    {
-        new VectorFootprintRescanStep().RequiredAbiMinor.ShouldBe(3);
-        new BuildKeyRescanStep().RequiredAbiMinor.ShouldBe(2);
     }
 
     [Test]
@@ -515,76 +443,6 @@ public class BuildKeyTests
         fx.RescansOf("org", "two").ShouldBe(0);
         fx.Progress()!.Completed.ShouldBeFalse();
         fx.Progress()!.Datasets.ShouldBe([fx.Refs["org/one"].ToString("N")]);
-    }
-
-    // The capabilities of a libddb 2.1 (ABI 2.1, before the build key): the job reads no dataset, records nothing and
-    // runs at the first start with ABI 2.2
-    [Test]
-    public async Task TheJob_ALibddbWhoseCapabilitiesPredateTheBuildKey_RescansNothing_AndRunsWithAbi22()
-    {
-        using var fx = new JobFixture(("org", "a"), ("org", "b"));
-        fx.AbiMinor = 1;
-
-        await fx.Task().ExecuteAsync(CancellationToken.None);
-
-        fx.RescansOf("org", "a").ShouldBe(0);
-        fx.RescansOf("org", "b").ShouldBe(0);
-        fx.Queued.ShouldBeEmpty();
-        fx.State.ShouldBeNull("nothing is recorded");
-
-        fx.AbiMinor = 2;
-        await fx.Task().ExecuteAsync(CancellationToken.None);
-
-        fx.RescansOf("org", "a").ShouldBe(1);
-        fx.RescansOf("org", "b").ShouldBe(1);
-        fx.Progress()!.Completed.ShouldBeTrue();
-    }
-
-    /// <summary>The recorded capabilities of libddb with another ABI minor.</summary>
-    private sealed class RuntimeWithAbiMinor(int minor) : Registry.Adapters.Testing.FakeDdbRuntime
-    {
-        public override DdbCapabilities Capabilities { get; } = WithMinor(minor);
-
-        private static DdbCapabilities WithMinor(int minor)
-        {
-            var json = System.Text.Json.Nodes.JsonNode.Parse(
-                Registry.Adapters.Testing.ContractFixture.Load("capabilities").Output.ToJsonString())!;
-            json["abi"]!["minor"] = minor;
-            return DdbCapabilities.Parse(json.ToJsonString());
-        }
-    }
-
-    // §8.3 with the pinned libddb from before the build key: nothing is told apart, so nothing is recorded and the
-    // job runs again at the first start with a libddb that has the key
-    [Test]
-    public async Task TheJob_ALibddbWithoutTheBuildKey_RecordsNothing_AndRunsWhenOneWithTheKeyArrives()
-    {
-        using var fx = new JobFixture(("org", "a-empty"), ("org", "b"), ("org", "c"));
-        var empty = fx.Ddbs[fx.Refs["org/a-empty"]];
-        empty.Setup(d => d.FindSummaries(It.IsAny<EntryQuery>())).Returns([]);
-        var b = fx.Ddbs[fx.Refs["org/b"]];
-        b.Setup(d => d.RescanIndex(It.IsAny<RescanOptions?>())).Returns([OlderLibddb("b/geo.ply"), OlderLibddb("b/root.ply")]);
-        var c = fx.Ddbs[fx.Refs["org/c"]];
-        c.Setup(d => d.RescanIndex(It.IsAny<RescanOptions?>())).Returns([OlderLibddb("c/geo.ply")]);
-
-        await fx.Task().ExecuteAsync(CancellationToken.None);
-
-        fx.RescansOf("org", "b").ShouldBe(1);
-        fx.RescansOf("org", "c").ShouldBe(0, "the job stops at the first dataset that shows the libddb predates the key");
-        fx.Queued.ShouldBeEmpty();
-        (fx.Progress()?.Completed ?? false).ShouldBeFalse();
-        (fx.Progress()?.Datasets ?? []).ShouldBeEmpty("not even the dataset without models or splats is recorded");
-
-        // The libddb with the key: every dataset is rescanned and the step completes
-        b.Setup(d => d.RescanIndex(It.IsAny<RescanOptions?>())).Returns([Rescanned("b/geo.ply", true), Rescanned("b/root.ply", false)]);
-        c.Setup(d => d.RescanIndex(It.IsAny<RescanOptions?>())).Returns([Rescanned("c/geo.ply", true)]);
-        await fx.Task().ExecuteAsync(CancellationToken.None);
-
-        fx.RescansOf("org", "b").ShouldBe(2);
-        fx.RescansOf("org", "c").ShouldBe(1);
-        fx.Queued.Order().ShouldBe(["b/geo.ply", "c/geo.ply"]);
-        fx.Progress()!.Completed.ShouldBeTrue();
-        fx.Progress()!.Datasets.ShouldBe(new[] { fx.RefOf("org/a-empty"), fx.RefOf("org/b"), fx.RefOf("org/c") }.Order(StringComparer.Ordinal));
     }
 
     // D-050: the step of a later release (U-209's vector footprints) runs for every dataset after the build-key

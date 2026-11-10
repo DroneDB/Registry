@@ -204,7 +204,7 @@ public class DdbJobs : DdbRetriedJob
     /// a build whose lock another process holds is skipped (the holder does the work); any other
     /// failure is written to the job log tail and rethrown (Hangfire's Failed state, the retry
     /// policy, the failure filters). With <paramref name="progress"/>, the build reports its fraction and phase there
-    /// (<see cref="BuildProgress"/>, libddb 2.3; an older libddb builds without reporting).
+    /// (<see cref="BuildProgress"/>).
     /// </summary>
     public void BuildNow(IDDB ddb, string? path, bool force, PerformContext? context, BuildOptions? options = null,
         IProgress<HeavyTasks.Models.HeavyToolProgress>? progress = null)

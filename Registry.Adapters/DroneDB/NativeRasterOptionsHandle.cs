@@ -7,7 +7,7 @@ namespace Registry.Adapters.DroneDB;
 /// <summary>
 /// The native <c>DDBRasterOptions</c> of a <see cref="RasterAnalysisOptions"/> (or of a NoData value alone), in unmanaged
 /// memory for the length of one call: <see cref="Pointer"/> is null when nothing is set (libddb takes it as no options).
-/// The struct is the 2.3 one (64 bytes, with <c>rescaleUnit</c>), which a libddb 2.2 takes while the unit is not set.
+/// The struct is the one of ABI 2.4 (64 bytes, with <c>rescaleUnit</c>).
 /// Dispose after the call.
 /// </summary>
 internal sealed unsafe class NativeRasterOptionsHandle : IDisposable
@@ -28,7 +28,7 @@ internal sealed unsafe class NativeRasterOptionsHandle : IDisposable
 
     internal static NativeRasterOptionsHandle Create(double? nodata) => Create(nodata, null, null, null);
 
-    /// <param name="rescaleUnit">The unit of the rescale of a thermal formula (ABI 2.3); null or blank: not set.</param>
+    /// <param name="rescaleUnit">The unit of the rescale of a thermal formula ; null or blank: not set.</param>
     internal static NativeRasterOptionsHandle Create(double? nodata, string? formula, double[]? bbox, string? rescaleUnit)
     {
         var handle = new NativeRasterOptionsHandle();

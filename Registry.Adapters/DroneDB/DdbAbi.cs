@@ -24,14 +24,15 @@ public static class DdbAbi
     public const int Major = 2;
 
     /// <summary>
-    /// <c>DDB_ABI_MINOR</c> Registry needs at least: 3 (DroneDB 2.3.0). ABI 2.1 has the output options of align, merge
-    /// multispectral and mask borders (<c>DDBAlignRasterEx</c>, <c>DDBMergeMultispectralEx</c>, <c>DDBMaskBordersEx</c>);
-    /// ABI 2.2 the raster value exports with a <c>DDBRasterOptions</c> and the build key (<c>key</c>, <c>buildKey</c>,
-    /// <c>buildKeyChanged</c>, the key argument of <c>DDBResolveBuildFile</c>), which a 2.1 library would not report;
-    /// ABI 2.3 the build and the contours with progress (<c>DDBBuildEx2</c>, <c>DDBGenerateContoursEx2</c>), the unit of
-    /// the rescale (<c>DDBRasterOptions.rescaleUnit</c>) and the window of <c>DDBExportRaster3</c>.
+    /// <c>DDB_ABI_MINOR</c> Registry needs at least: 4 (DroneDB 2.4.0, the only libddb 2.x the Registry runs). ABI 2.4
+    /// has every export <see cref="NativeDdb"/> declares: the output options of align, merge multispectral and mask
+    /// borders (<c>DDBAlignRasterEx</c>, <c>DDBMergeMultispectralEx</c>, <c>DDBMaskBordersEx</c>), the raster value
+    /// exports with a <c>DDBRasterOptions</c> (with the unit of the rescale, <c>rescaleUnit</c>), the build key
+    /// (<c>key</c>, <c>buildKey</c>, <c>buildKeyChanged</c>, the key argument of <c>DDBResolveBuildFile</c>), the build
+    /// and the contours with progress (<c>DDBBuildEx2</c>, <c>DDBGenerateContoursEx2</c>) and the window of
+    /// <c>DDBExportRaster3</c>; an older libddb is refused, so no code path depends on the ABI minor.
     /// </summary>
-    public const int Minor = 3;
+    public const int Minor = 4;
 
     private const string Library = "ddb";
 

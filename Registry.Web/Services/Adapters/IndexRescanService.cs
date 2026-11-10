@@ -83,11 +83,7 @@ public class IndexRescanService
         _logger.LogInformation(
             "Rescanned {Count} entries ({Filter}) in {Org}/{Ds}: {Unreadable} unreadable, {Built} rebuild(s) queued, {Failed} failed",
             results.Count, filter, orgSlug, dsSlug, unreadable.Length, rebuilt.Built, rebuilt.Failed);
-        return new DatasetRescanOutcome(results.Count, unreadable.Length, rebuilt.Built, rebuilt.Failed)
-        {
-            // A libddb with the build key names it in every entry it re-read (an empty key for a type without builds)
-            LibddbPredatesBuildKey = results.Any(r => r.Success && r.BuildKey == null)
-        };
+        return new DatasetRescanOutcome(results.Count, unreadable.Length, rebuilt.Built, rebuilt.Failed);
     }
 
     /// <param name="orgSlug">Organization of the scope, or null for all organizations.</param>
@@ -151,12 +147,6 @@ public class IndexRescanService
 /// <param name="RebuildFailures">The rebuilds it could not queue.</param>
 public sealed record DatasetRescanOutcome(int Rescanned, int Unreadable, int Rebuilt, int RebuildFailures)
 {
-    /// <summary>
-    /// The loaded libddb predates the build key (D-020): an entry it re-read has no <see cref="RescanResult.BuildKey"/>,
-    /// so it reports no key change and nothing was rebuilt.
-    /// </summary>
-    public bool LibddbPredatesBuildKey { get; init; }
-
     /// <summary>The dataset has no entry of the filter's types: nothing was rescanned.</summary>
     public static DatasetRescanOutcome NothingToRescan { get; } = new(0, 0, 0, 0);
 }

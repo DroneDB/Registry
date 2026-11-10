@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace Registry.Adapters.DroneDB;
 
 /// <summary>
-/// The libddb C ABI as Registry calls it (ddb.h of DroneDB 2.3.0, ABI 2.3): the only place an export
+/// The libddb C ABI as Registry calls it (ddb.h of DroneDB 2.4.0, ABI 2.4): the only place an export
 /// is declared. Every declaration is a source-generated
 /// <see cref="LibraryImportAttribute"/> stub named exactly like its export, so
 /// <see cref="DdbAbi.RequiredSymbols"/> (the startup check) is derived from this class.
@@ -174,7 +174,7 @@ internal static unsafe partial class NativeDdb
         string? optionsJson);
 
     /// <summary>
-    /// <c>DDBBuildEx</c> with a progress callback (ABI 2.3, FR-PRC-42): the fraction of the build (-1 until something is
+    /// <c>DDBBuildEx</c> with a progress callback (ABI 2.4, FR-PRC-42): the fraction of the build (-1 until something is
     /// measured, never going down, 1 at the end) and its phase (the entry type, "warping", "overviews", "compressing",
     /// "publishing", null at the end); a non-zero return cancels the build.
     /// </summary>
@@ -266,13 +266,13 @@ internal static unsafe partial class NativeDdb
         string inputPathHash, string? preset, string? bands, string? formula, string? bandFilter, string? colormap,
         string? rescale, out IntPtr outBuffer, out int outBufferSize);
 
-    /// <summary>DDBGenerateMemoryThumbnailEx with a <c>DDBRasterOptions</c> (ABI 2.2).</summary>
+    /// <summary>DDBGenerateMemoryThumbnailEx with a <c>DDBRasterOptions</c> (ABI 2.4).</summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBGenerateMemoryThumbnailEx2(string filePath, int size, string? preset,
         string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
         NativeRasterOptions* options, out IntPtr outBuffer, out int outBufferSize);
 
-    /// <summary>DDBMemoryTileEx with a <c>DDBRasterOptions</c> (ABI 2.2).</summary>
+    /// <summary>DDBMemoryTileEx with a <c>DDBRasterOptions</c> (ABI 2.4).</summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBMemoryTileEx2(string inputPath, int tz, int tx, int ty, int tileSize,
         [MarshalAs(UnmanagedType.U1)] bool tms, [MarshalAs(UnmanagedType.U1)] bool forceRecreate,
@@ -296,7 +296,7 @@ internal static unsafe partial class NativeDdb
         int thumbSize, out IntPtr outBuffer, out int outBufferSize);
 
     /// <summary>
-    /// <c>DDBMergeMultispectralEx</c> (ABI 2.1): an output that exists is replaced only with
+    /// <c>DDBMergeMultispectralEx</c> (ABI 2.4): an output that exists is replaced only with
     /// <see cref="DdbOverwriteOptions.Overwrite"/>, in one rename once the merge is complete.
     /// </summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
@@ -308,7 +308,7 @@ internal static unsafe partial class NativeDdb
         out IntPtr output);
 
     /// <summary>
-    /// <c>DDBAlignRasterEx</c> (ABI 2.1): an output that exists is replaced only with
+    /// <c>DDBAlignRasterEx</c> (ABI 2.4): an output that exists is replaced only with
     /// <see cref="DdbOverwriteOptions.Overwrite"/>, in one rename once the aligned file is complete.
     /// </summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
@@ -325,7 +325,7 @@ internal static unsafe partial class NativeDdb
         string? bands, string? formula, string? bandFilter, string? colormap, string? rescale, int tileSize,
         delegate* unmanaged[Cdecl]<double, byte*, IntPtr, int> progress, IntPtr progressUserData);
 
-    /// <summary>DDBExportRaster2 with a <c>DDBRasterOptions</c> (ABI 2.2).</summary>
+    /// <summary>DDBExportRaster2 with a <c>DDBRasterOptions</c> (ABI 2.4).</summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBExportRaster3(string inputPath, string outputPath, string? preset,
         string? bands, string? formula, string? bandFilter, string? colormap, string? rescale, int tileSize,
@@ -351,7 +351,7 @@ internal static unsafe partial class NativeDdb
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBGetRasterPointValue(string filePath, int x, int y, out IntPtr output);
 
-    // The raster value calls of ABI 2.2: map coordinates (WGS 84) or pixels, and a DDBRasterOptions (null: no option)
+    // The raster value calls of ABI 2.4: map coordinates (WGS 84) or pixels, and a DDBRasterOptions (null: no option)
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBGetRasterValueInfoEx(string filePath, NativeRasterOptions* options,
@@ -384,7 +384,7 @@ internal static unsafe partial class NativeDdb
         double baseOffset, double minElev, double maxElev, double simplifyTolerance, int bandIndex,
         NativeRasterOptions* options, out IntPtr output);
 
-    /// <summary><c>DDBGenerateContoursEx</c> with a progress callback (ABI 2.3).</summary>
+    /// <summary><c>DDBGenerateContoursEx</c> with a progress callback (ABI 2.4).</summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBGenerateContoursEx2(string rasterPath, double interval, int count,
         double baseOffset, double minElev, double maxElev, double simplifyTolerance, int bandIndex,
@@ -416,7 +416,7 @@ internal static unsafe partial class NativeDdb
         double baseOffset, double minElev, double maxElev, double simplifyTolerance, int bandIndex, out IntPtr output);
 
     /// <summary>
-    /// <c>DDBMaskBordersEx</c> (ABI 2.1): an output that exists is replaced only with
+    /// <c>DDBMaskBordersEx</c> (ABI 2.4): an output that exists is replaced only with
     /// <see cref="DdbOverwriteOptions.Overwrite"/>, in one rename once the mask is complete.
     /// </summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
@@ -474,7 +474,7 @@ internal struct DdbAddOptions
 }
 
 /// <summary>
-/// <c>DDBAlignRasterOptions</c>, <c>DDBMergeMultispectralOptions</c> and <c>DDBMaskBordersOptions</c> (ABI 2.1, one
+/// <c>DDBAlignRasterOptions</c>, <c>DDBMergeMultispectralOptions</c> and <c>DDBMaskBordersOptions</c> (ABI 2.4, one
 /// layout): 8 bytes, <c>structSize</c> at 0, <c>overwrite</c> at 4 (a 1-byte bool), three reserved bytes that must be
 /// 0 at 5. Blittable: the bool is a byte.
 /// </summary>
@@ -509,9 +509,8 @@ internal struct DdbAddHint
 
 /// <summary>
 /// <c>DDBRasterOptions</c> (64-bit layout): 64 bytes, <c>structSize</c> at 0, <c>flags</c> at 4, <c>nodata</c> at 8,
-/// <c>bbox</c> (4 doubles) at 16, <c>formula</c> at 48 and <c>rescaleUnit</c> (ABI 2.3) at 56 (UTF-8 pointers owned by
-/// the caller). Blittable. A libddb 2.2 knows 56 bytes and takes the larger struct while <c>rescaleUnit</c> is null (its
-/// bytes are zero); it refuses one that sets it.
+/// <c>bbox</c> (4 doubles) at 16, <c>formula</c> at 48 and <c>rescaleUnit</c> at 56 (UTF-8 pointers owned by
+/// the caller). Blittable.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct NativeRasterOptions

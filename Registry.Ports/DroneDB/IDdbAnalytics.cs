@@ -56,9 +56,8 @@ public interface IDdbAnalytics
     /// <summary>
     /// <see cref="GenerateContours(string, double?, int?, double, double?, double?, double, int, RasterAnalysisOptions?)"/> that
     /// reports its progress (fraction 0..1 and the phase: "statistics", "levels", "lines") and stops when
-    /// <paramref name="cancellationToken"/> is canceled (<see cref="DdbCanceledException"/>). A libddb older than 2.3 reports no
-    /// progress (the cancel still stops it). The output says when the lines were cut at the cap (<c>truncated</c>,
-    /// <c>featureCap</c>, libddb 2.3).
+    /// <paramref name="cancellationToken"/> is canceled (<see cref="DdbCanceledException"/>). The output says when the
+    /// lines were cut at the cap (<c>truncated</c>, <c>featureCap</c>).
     /// </summary>
     string GenerateContours(string path,
                             double? interval,

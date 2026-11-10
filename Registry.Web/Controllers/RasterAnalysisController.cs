@@ -363,7 +363,7 @@ public class RasterAnalysisController : ControllerBaseEx
     /// </summary>
     /// <remarks>
     /// Either <c>interval</c> or <c>count</c> must be supplied. When both are set, <c>interval</c> wins. The result says
-    /// when libddb cut the lines at its cap (<c>truncated</c>, <c>featureCap</c>, libddb 2.3). The Hub does not call this
+    /// when libddb cut the lines at its cap (<c>truncated</c>, <c>featureCap</c>). The Hub does not call this
     /// endpoint: it runs the heavy task <c>raster-contours</c> (progress and Cancel, FR-RAS-11), which gives the same GeoJSON.
     /// </remarks>
     [HttpPost("contours", Name = nameof(ObjectsController) + "." + nameof(GenerateContours))]

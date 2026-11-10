@@ -4,13 +4,11 @@ using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Moq;
 using NUnit.Framework;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Test.Baselines;
-using Registry.Web.Test.Support;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -61,94 +59,15 @@ public abstract class RescaleUnitFixture : DatasetAccessFixture
 }
 
 /// <summary>
-/// D-022 on a libddb 2.2 (no <c>DDBRasterOptions.rescaleUnit</c>; the recorded capabilities with ABI 2.2, whatever the
-/// vendored fixtures say): a render or an export that names the unit of its rescale is a 400 at <c>errors.rescaleUnit</c>
-/// that says why, before any native work, and a render without it is unchanged.
+/// D-022 (libddb 2.4 reads the unit of the rescale, <c>DDBRasterOptions.rescaleUnit</c>): the unit reaches libddb in the
+/// options of the render, which converts the rescale to the unit of the formula, and it is part of the cache key; a unit
+/// libddb does not know is a 400 at <c>errors.rescaleUnit</c> before any native work, and a render without it is unchanged.
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~RescaleUnitHttpTests"
 /// </summary>
 [TestFixture]
 [NonParallelizable]
 public sealed class RescaleUnitHttpTests : RescaleUnitFixture
 {
-    protected override Action<IServiceCollection> FactoryServices => services =>
-    {
-        services.RemoveAll<IDdbRuntime>();
-        services.AddSingleton<IDdbRuntime>(new AbiMinorRuntime(2));
-    };
-
-    [Test]
-    public async Task AThumbnailWithARescaleUnit_OnLibddb22_Is400AtRescaleUnit()
-    {
-        var (response, body, json) = await ThumbEx(ThermalStyle);
-
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
-        json!["errors"]!["rescaleUnit"]![0]!.GetValue<string>().ShouldContain("needs libddb 2.3 or later");
-        ShouldNotHaveRendered();
-    }
-
-    [Test]
-    public async Task ATileWithARescaleUnit_OnLibddb22_Is400AtRescaleUnit()
-    {
-        var (response, body, json) = await SendAsync(Request(HttpMethod.Get,
-            $"{Ds}/tiles-ex/18/1/2.png?path={Image}&{ThermalStyle}", Caller.Owner));
-
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
-        json!["errors"]!["rescaleUnit"]![0]!.GetValue<string>().ShouldContain("needs libddb 2.3 or later");
-        Factory.DdbWrapper.Invocations.ShouldNotContain(i => i.Method.Name == nameof(IDdbWrapper.GenerateMemoryTileEx));
-    }
-
-    [Test]
-    public async Task AnExportWithARescaleUnit_OnLibddb22_Is400AtRescaleUnit()
-    {
-        var (response, body, json) = await SendAsync(Request(HttpMethod.Get,
-            $"{Ds}/export?path={Image}&{ThermalStyle}", Caller.Owner));
-
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
-        json!["errors"]!["rescaleUnit"]![0]!.GetValue<string>().ShouldContain("needs libddb 2.3 or later");
-    }
-
-    // The task schema has the member (not an unknown property), and the submit refuses it on 2.2 at its own member
-    [Test]
-    public async Task AnExportTaskWithARescaleUnit_OnLibddb22_Is400AtRescaleUnit()
-    {
-        var (response, body, json) = await SubmitExport(
-            """{"formula":"CELSIUS","colormap":"ironbow","rescale":"280,310","rescaleUnit":"K"}""");
-
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
-        json!["errors"]!["rescaleUnit"]![0]!.GetValue<string>().ShouldContain("needs libddb 2.3 or later");
-    }
-
-    // Without the unit nothing changes on 2.2: the render without options
-    [Test]
-    public async Task AThumbnailWithoutARescaleUnit_IsRenderedWithoutOptions()
-    {
-        Factory.DdbWrapper.Setup(d => d.GenerateThumbnailEx(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
-            .Returns(Thumbnail);
-
-        var (response, body, _) = await ThumbEx("formula=CELSIUS&colormap=ironbow&rescale=7%2C37");
-
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
-        Factory.DdbWrapper.Verify(d => d.GenerateThumbnailEx(It.IsAny<string>(), It.IsAny<int>(), null, null, "CELSIUS",
-            null, "ironbow", "7,37"), Times.Once);
-    }
-}
-
-/// <summary>
-/// D-022 on a libddb that reads the unit of the rescale (ABI 2.3, a runtime that reports it): the unit reaches libddb in the
-/// options of the render, which converts the rescale to the unit of the formula, and it is part of the cache key.
-/// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~RescaleUnitAbi23HttpTests"
-/// </summary>
-[TestFixture]
-[NonParallelizable]
-public sealed class RescaleUnitAbi23HttpTests : RescaleUnitFixture
-{
-    protected override Action<IServiceCollection> FactoryServices => services =>
-    {
-        services.RemoveAll<IDdbRuntime>();
-        services.AddSingleton<IDdbRuntime>(new AbiMinorRuntime(3));
-    };
-
     [Test]
     public async Task AThumbnailWithARescaleUnit_SendsTheUnitInTheOptions()
     {
@@ -233,5 +152,20 @@ public sealed class RescaleUnitAbi23HttpTests : RescaleUnitFixture
         var (response, body, _) = await ThumbEx("formula=CELSIUS&colormap=ironbow&rescale=1%2C2&rescaleUnit=%C2%B0F");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+    }
+
+    // Without the unit nothing changes: the render without options
+    [Test]
+    public async Task AThumbnailWithoutARescaleUnit_IsRenderedWithoutOptions()
+    {
+        Factory.DdbWrapper.Setup(d => d.GenerateThumbnailEx(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Returns(Thumbnail);
+
+        var (response, body, _) = await ThumbEx("formula=CELSIUS&colormap=ironbow&rescale=7%2C37");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        Factory.DdbWrapper.Verify(d => d.GenerateThumbnailEx(It.IsAny<string>(), It.IsAny<int>(), null, null, "CELSIUS",
+            null, "ironbow", "7,37"), Times.Once);
     }
 }

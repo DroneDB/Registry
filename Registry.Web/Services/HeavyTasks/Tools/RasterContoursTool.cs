@@ -19,7 +19,7 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// Native tool that generates the contour lines of a raster (FR-RAS-11, NFR-001): every contour request of the Hub runs
 /// as this task, so the progress and the Cancel come from the task (FR-XC-15). The result is the GeoJSON of
 /// <c>POST contours</c> (a FeatureCollection of LineStrings with an <c>elev</c> property, plus <c>interval</c>,
-/// <c>min</c>, <c>max</c>, <c>unit</c>, <c>rasterMin</c>, <c>rasterMax</c> and, from libddb 2.3, <c>truncated</c> and
+/// <c>min</c>, <c>max</c>, <c>unit</c>, <c>rasterMin</c>, <c>rasterMax</c>, <c>truncated</c> and
 /// <c>featureCap</c>), kept as the artifact of the task. The raster is read as the endpoint reads it: the file the user
 /// uploaded, or the COG of its build when it has too many pixels to read in one piece (D-021: by the size the index holds,
 /// or by libddb's refusal for an entry indexed without it, as <c>RasterAnalysisService</c> does). A cancel stops libddb

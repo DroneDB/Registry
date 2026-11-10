@@ -263,14 +263,13 @@ public class NativeDdbWrapper : IDdbWrapper
 
     /// <summary>
     /// <see cref="Build(string, string?, string?, bool, bool, BuildOptions?)"/> that reports the progress of the build
-    /// (FR-PRC-42): through <c>DDBBuildEx2</c> when the loaded libddb exports it (<see cref="BuildProgressSupported"/>),
-    /// else the build without progress. The build stops with the current <see cref="DdbCancellation"/> as the other builds
+    /// (FR-PRC-42) through <c>DDBBuildEx2</c>; without an observer, the build without progress. The build stops with the current <see cref="DdbCancellation"/> as the other builds
     /// do, and when the observer throws (its exception is rethrown once the call has returned).
     /// </summary>
     public unsafe void Build(string ddbPath, string? source, string? dest, bool force, bool pendingOnly,
         BuildOptions? options, Action<double, string?>? progress)
     {
-        if (progress == null || !BuildProgressSupported)
+        if (progress == null)
         {
             Build(ddbPath, source, dest, force, pendingOnly, options);
             return;
@@ -286,15 +285,6 @@ public class NativeDdbWrapper : IDdbWrapper
             callback, NativeDdb.DDBBuildEx2(ddbPath, normalizedSource, normalizedDest, force, pendingOnly,
                 optionsJson, NativeProgressCallback.FunctionPointer, callback!.UserData))));
     }
-
-    /// <summary>
-    /// True when the loaded libddb lists <c>DDBBuildEx2</c> in its capabilities (new in ABI 2.3): the build that reports
-    /// its progress. Registry requires ABI 2.3, whose startup check requires the export: always true once it passed.
-    /// </summary>
-    internal static bool BuildProgressSupported => BuildProgress.Value;
-
-    private static readonly Lazy<bool> BuildProgress = new(() =>
-        DdbAbi.Verify().Symbols.Contains(nameof(NativeDdb.DDBBuildEx2)));
 
     /// <summary>The <c>DDBBuildEx</c> JSON of <paramref name="options"/>: only the limits that are set, null for none.</summary>
     public static string? ToBuildJson(BuildOptions? options)
@@ -517,7 +507,7 @@ public class NativeDdbWrapper : IDdbWrapper
 
     /// <summary>
     /// <c>DDBGenerateMemoryThumbnailEx2</c> with the options of a render: the NoData value and the unit of the rescale
-    /// (ABI 2.3). The formula of the render is the argument; the formula and the window of the options are not sent.
+    /// (ABI 2.4). The formula of the render is the argument; the formula and the window of the options are not sent.
     /// </summary>
     public unsafe byte[] GenerateThumbnailEx(string filePath, int size, string? preset, string? bands, string? formula,
         string? bandFilter, string? colormap, string? rescale, RasterAnalysisOptions? options)
@@ -542,7 +532,7 @@ public class NativeDdbWrapper : IDdbWrapper
             bandFilter, colormap, rescale, new RasterAnalysisOptions(nodata));
 
     /// <summary>
-    /// <c>DDBMemoryTileEx2</c> with the options of a render: the NoData value and the unit of the rescale (ABI 2.3). The
+    /// <c>DDBMemoryTileEx2</c> with the options of a render: the NoData value and the unit of the rescale (ABI 2.4). The
     /// formula of the render is the argument; the formula and the window of the options are not sent.
     /// </summary>
     public unsafe byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
@@ -672,8 +662,8 @@ public class NativeDdbWrapper : IDdbWrapper
             nodata is null ? null : new RasterAnalysisOptions(nodata), progress, cancellationToken);
 
     /// <summary>
-    /// <c>DDBExportRaster3</c> with the options of the values: the NoData value, and with libddb ABI 2.3 the WGS 84 window
-    /// to export (an older library ignores it: the caller checks the ABI minor first).
+    /// <c>DDBExportRaster3</c> with the options of the values: the NoData value, the unit of the rescale and the WGS 84
+    /// window to export.
     /// </summary>
     public unsafe void ExportRaster(string inputPath, string outputPath,
         string? preset, string? bands, string? formula, string? bandFilter,
@@ -801,7 +791,7 @@ public class NativeDdbWrapper : IDdbWrapper
             (out IntPtr output) => NativeDdb.DDBGetRasterAreaStats(path, x0, y0, x1, y1, out output));
     }
 
-    // The pixel of an R-JPEG's raw thermal grid with the NoData value and the thermal formula of the options (ABI 2.2):
+    // The pixel of an R-JPEG's raw thermal grid with the NoData value and the thermal formula of the options (ABI 2.4):
     // libddb applies them, or refuses them (DDBERR_INVALIDARGS); no options is the plain pixel value plus its "unit"
     public unsafe string GetRasterPointValue(string path, int x, int y, RasterAnalysisOptions? options)
     {
@@ -950,14 +940,6 @@ public class NativeDdbWrapper : IDdbWrapper
         using var native = NativeRasterOptionsHandle.Create(options);
         var pointer = native.Pointer;
 
-        if (!ContourProgressSupported)
-        {
-            // libddb before 2.3: no progress and no "truncated"; the cancel token still stops the call
-            return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGenerateContoursEx),
-                (out IntPtr output) => NativeDdb.DDBGenerateContoursEx(path, iv, cnt, baseOffset, lo, hi,
-                    simplifyTolerance, bandIndex, pointer, out output));
-        }
-
         // As ExportRaster: the callback reports and stops the call, an exception of the observer wins over the cancel
         using var callback = NativeProgressCallback.Create(progress, cancellationToken);
         return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGenerateContoursEx2),
@@ -966,15 +948,6 @@ public class NativeDdbWrapper : IDdbWrapper
                     bandIndex, pointer, callback == null ? null : NativeProgressCallback.FunctionPointer,
                     callback?.UserData ?? IntPtr.Zero, out output)));
     }
-
-    /// <summary>
-    /// True when the loaded libddb lists <c>DDBGenerateContoursEx2</c> in its capabilities (new in ABI 2.3): the call that
-    /// reports progress. Registry requires ABI 2.3, whose startup check requires the export: always true once it passed.
-    /// </summary>
-    internal static bool ContourProgressSupported => ContourProgress.Value;
-
-    private static readonly Lazy<bool> ContourProgress = new(() =>
-        DdbAbi.Verify().Symbols.Contains(nameof(NativeDdb.DDBGenerateContoursEx2)));
 
     public void MaskBorders(string input, string output, int nearDist = 15, bool white = false, bool overwrite = false)
     {

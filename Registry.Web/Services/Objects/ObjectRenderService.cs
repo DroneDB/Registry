@@ -30,11 +30,10 @@ public sealed class ObjectRenderService : IObjectRenderService
     private readonly IDdbWrapper _ddbWrapper;
     private readonly INativeWorkGate _gate;
     private readonly ThumbnailOptions _options;
-    private readonly IDdbRuntime _runtime;
     private readonly ILogger<ObjectRenderService> _logger;
 
     public ObjectRenderService(RenderSources sources, ICacheManager cache, IThumbnailGenerator thumbnails,
-        IDdbWrapper ddbWrapper, INativeWorkGate gate, IOptions<ThumbnailOptions> options, IDdbRuntime runtime,
+        IDdbWrapper ddbWrapper, INativeWorkGate gate, IOptions<ThumbnailOptions> options,
         ILogger<ObjectRenderService> logger)
     {
         _sources = sources;
@@ -43,7 +42,6 @@ public sealed class ObjectRenderService : IObjectRenderService
         _ddbWrapper = ddbWrapper;
         _gate = gate;
         _options = options.Value;
-        _runtime = runtime;
         _logger = logger;
     }
 
@@ -145,13 +143,13 @@ public sealed class ObjectRenderService : IObjectRenderService
                     v.Bands, v.Formula, v.BandFilter, v.Colormap, v.Rescale, v.Options)).InFormat(format), token))));
     }
 
-    // The NoData value is a finite number and the unit of the rescale needs libddb 2.3 (400s), before any native work
-    private RasterVisualization Checked(RasterVisualization visualization)
+    // The NoData value is a finite number and the unit of the rescale one libddb knows (400s), before any native work
+    private static RasterVisualization Checked(RasterVisualization visualization)
     {
         RasterOptionRules.RequireNodata(visualization.Nodata);
         return visualization with
         {
-            RescaleUnit = RasterOptionRules.RescaleUnit(visualization.RescaleUnit, _runtime.Capabilities)
+            RescaleUnit = RasterOptionRules.RescaleUnit(visualization.RescaleUnit)
         };
     }
 

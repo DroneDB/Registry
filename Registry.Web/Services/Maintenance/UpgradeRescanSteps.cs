@@ -28,13 +28,6 @@ public interface IUpgradeRescanStep
 
     /// <summary>The entry types the step has the job rescan.</summary>
     IReadOnlyList<EntryType> EntryTypes { get; }
-
-    /// <summary>
-    /// The least ABI minor (of the loaded libddb 2.x) whose rescan gives what the step is for: the job skips the step,
-    /// recording nothing for it, until the library reports it, and runs it once at the first start with such a library.
-    /// A rescan with a libddb older than 2.2 (no build key) is never run, so the default is the build key's minor.
-    /// </summary>
-    int RequiredAbiMinor => BuildKeyRescanStep.RequiredMinor;
 }
 
 /// <summary>
@@ -48,35 +41,23 @@ public sealed class BuildKeyRescanStep : IUpgradeRescanStep
     /// <summary>The id of the step, also the one a state file of the first shape (no step ids) recorded.</summary>
     public const string StepId = "build-key";
 
-    /// <summary>The ABI minor of libddb 2.x that has the build key (DroneDB 2.2.0, U-210).</summary>
-    public const int RequiredMinor = 2;
-
     public string Id => StepId;
-
-    public int RequiredAbiMinor => RequiredMinor;
 
     public IReadOnlyList<EntryType> EntryTypes { get; } = [EntryType.Model, EntryType.GaussianSplat];
 }
 
 /// <summary>
-/// The vector footprint rescan (FR-SHR-03, D-050): libddb 2.3 keeps the footprint of a vector entry in WGS 84, or none
-/// when it cannot tell the coordinates (it kept the raw envelope, in the metres of a UTM file, before). An index written
+/// The vector footprint rescan (FR-SHR-03, D-050): libddb 2.4 keeps the footprint of a vector entry in WGS 84, or none
+/// when it cannot tell the coordinates (libddb 2.0 kept the raw envelope, in the metres of a UTM file). An index written
 /// by an earlier release is corrected by reading the vector entries again. The rescan goes with the one of the build key
 /// (one job, one read of each dataset): a vector entry has no build whose key changes, so nothing is rebuilt for it.
-/// libddb 2.2 does not have the fix, so a rescan with it would correct nothing: the job skips the step, records nothing
-/// for it (<see cref="RequiredAbiMinor"/>), and runs it once at the first start with libddb 2.3.
 /// </summary>
 public sealed class VectorFootprintRescanStep : IUpgradeRescanStep
 {
     /// <summary>The id of the step in the log and the state file of the job: it must not change once released.</summary>
     public const string StepId = "vector-footprints";
 
-    /// <summary>The ABI minor of libddb 2.x whose vector footprints are WGS 84 (FR-SHR-03).</summary>
-    public const int WgsFootprintAbiMinor = 3;
-
     public string Id => StepId;
-
-    public int RequiredAbiMinor => WgsFootprintAbiMinor;
 
     public IReadOnlyList<EntryType> EntryTypes { get; } = [EntryType.Vector];
 }

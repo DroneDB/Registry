@@ -109,10 +109,9 @@ public class ObjectsManagerThumbnailTests : TestBase
     }
 
     // The build-pending service is the builder default: a real one on the SUT context and these mocks. The libddb is the
-    // recorded one (ABI 2.2) unless a test names another.
-    private ObjectServices CreateManager(IDdbRuntime? runtime = null) =>
+    // recorded one.
+    private ObjectServices CreateManager() =>
         new ObjectServicesBuilder(TestDb.CreateContext<RegistryContext>())
-            .WithDdbRuntime(runtime ?? new Registry.Adapters.Testing.FakeDdbRuntime())
             .WithLogger(_logger)
             .WithSettings(_settingsOptions)
             .WithDdbManager(_ddbManagerMock.Object)
@@ -621,9 +620,9 @@ public class ObjectsManagerThumbnailTests : TestBase
     // The source and the COG of its build have different grids (the COG is resampled): the check of an export and the
     // estimate of the value info read the same file, so the Hub's "within the limit" is what the export accepts (D-023)
     // D-022: the export of a layer whose rescale is in another unit sends the unit in the options of the export (libddb
-    // 2.3 converts it), also without a NoData value; the size check reads no unit
+    // converts it), also without a NoData value; the size check reads no unit
     [Test]
-    public async Task Export_WithARescaleUnit_UsesTheExportWithOptions_OnLibddb23()
+    public async Task Export_WithARescaleUnit_UsesTheExportWithOptions()
     {
         SetupSourceAndCogWithDifferentGrids("""{"pixelCount": 100, "validPixelCount": 100}""",
             """{"pixelCount": 100, "validPixelCount": 100}""");
@@ -634,7 +633,7 @@ public class ObjectsManagerThumbnailTests : TestBase
             .Callback<string, string, string?, string?, string?, string?, string?, string?, int, RasterAnalysisOptions?,
                 Action<double, string?>?, CancellationToken>((_, _, _, _, _, _, _, _, _, o, _, _) => sent = o);
 
-        await CreateManager(new AbiMinorRuntime(3)).Raster.ExportRasterAsync(OrgSlug, DsSlug, "ortho.tif",
+        await CreateManager().Raster.ExportRasterAsync(OrgSlug, DsSlug, "ortho.tif",
             new RasterVisualization(Formula: "CELSIUS", Colormap: "ironbow", Rescale: "280,310", RescaleUnit: "K"));
 
         sent.ShouldNotBeNull();
@@ -644,13 +643,13 @@ public class ObjectsManagerThumbnailTests : TestBase
             It.Is<RasterAnalysisOptions?>(o => o == null || o.RescaleUnit == null)), Times.Once);
     }
 
-    // On libddb 2.2 the unit is a 400 at its member before anything is read
+    // A unit libddb does not know is a 400 at its member before anything is read
     [Test]
-    public async Task Renders_WithARescaleUnit_OnLibddb22_Are400BeforeAnyNativeWork()
+    public async Task Renders_WithAnUnknownRescaleUnit_Are400BeforeAnyNativeWork()
     {
         SetupEntry("thermal.jpg", EntryType.GeoImage, "rjpeg1");
-        var style = new RasterVisualization(Formula: "CELSIUS", Rescale: "280,310", RescaleUnit: "K");
-        var services = CreateManager(new AbiMinorRuntime(2));
+        var style = new RasterVisualization(Formula: "CELSIUS", Rescale: "280,310", RescaleUnit: "feet");
+        var services = CreateManager();
 
         (await Should.ThrowAsync<InvalidFieldException>(() => services.Renders.GenerateThumbnailDataExAsync(OrgSlug,
             DsSlug, "thermal.jpg", 64, style))).Field.ShouldBe("rescaleUnit");
@@ -664,7 +663,7 @@ public class ObjectsManagerThumbnailTests : TestBase
 
     // A tile of a thermal layer with the unit of its rescale: the render with options, which carry the unit
     [Test]
-    public async Task ATileWithARescaleUnit_IsRenderedWithTheUnitInItsOptions_OnLibddb23()
+    public async Task ATileWithARescaleUnit_IsRenderedWithTheUnitInItsOptions()
     {
         SetupEntry("thermal.jpg", EntryType.GeoImage, "rjpeg1");
         RasterAnalysisOptions? sent = null;
@@ -674,7 +673,7 @@ public class ObjectsManagerThumbnailTests : TestBase
                 string? _, string? _, RasterAnalysisOptions? o) => sent = o)
             .Returns(PngBytes());
 
-        await CreateManager(new AbiMinorRuntime(3)).Renders.GenerateTileDataExAsync(OrgSlug, DsSlug, "thermal.jpg", 18,
+        await CreateManager().Renders.GenerateTileDataExAsync(OrgSlug, DsSlug, "thermal.jpg", 18,
             1, 2, false, new RasterVisualization(Formula: "KELVIN", Colormap: "ironbow", Rescale: "7,37",
                 Nodata: -9999, RescaleUnit: "C"), TileFormat.Png);
 

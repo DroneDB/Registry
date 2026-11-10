@@ -45,30 +45,21 @@ public static class RasterOptionRules
             throw new BadRequestException("'bbox' must be in WGS 84 degrees: longitude -180..180, latitude -90..90");
     }
 
-    /// <summary>The first libddb ABI minor that reads the unit of the rescale (<c>DDBRasterOptions.rescaleUnit</c>, D-022).</summary>
-    public const int RescaleUnitAbiMinor = 3;
-
     /// <summary>
     /// The unit the rescale of a thermal formula is written in (<c>rescaleUnit</c> of a tile, a thumbnail or an export),
     /// trimmed, or null when there is none. libddb converts the rescale to the unit of the formula and refuses a unit it
-    /// does not know (<see cref="IsKnownTemperatureUnit"/>), which is a 400 at <c>rescaleUnit</c> before any native work;
-    /// a libddb before 2.3 has no such option and would refuse the struct that sets it, so there it is a 400 at
-    /// <c>rescaleUnit</c> that says why.
+    /// does not know (<see cref="IsKnownTemperatureUnit"/>), which is a 400 at <c>rescaleUnit</c> before any native work
+    /// (<c>DDBRasterOptions.rescaleUnit</c>).
     /// </summary>
-    /// <exception cref="InvalidFieldException">A unit libddb does not know, or a unit on a libddb before 2.3.</exception>
-    public static string? RescaleUnit(string? rescaleUnit, DdbCapabilities capabilities)
+    /// <exception cref="InvalidFieldException">A unit libddb does not know.</exception>
+    public static string? RescaleUnit(string? rescaleUnit)
     {
-        ArgumentNullException.ThrowIfNull(capabilities);
         if (string.IsNullOrWhiteSpace(rescaleUnit))
             return null;
 
         if (!IsKnownTemperatureUnit(rescaleUnit))
             throw new InvalidFieldException("rescaleUnit",
                 $"'{rescaleUnit.Trim()}' is not a temperature unit: use K (Kelvin), C (Celsius) or F (Fahrenheit).");
-
-        if (capabilities.AbiMinor < RescaleUnitAbiMinor)
-            throw new InvalidFieldException("rescaleUnit",
-                $"A rescale in another temperature unit needs libddb 2.{RescaleUnitAbiMinor} or later: this server runs libddb {capabilities.Version} (ABI {capabilities.AbiMajor}.{capabilities.AbiMinor}). Send the rescale in the unit of the formula.");
 
         return rescaleUnit.Trim();
     }

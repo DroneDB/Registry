@@ -135,20 +135,6 @@ public sealed class DownloadFeatures : IFeatureSection
     }
 }
 
-/// <summary>Raster exports: whether the loaded libddb exports a window, by the one rule of the export task.</summary>
-public sealed class RasterExportFeatures : IFeatureSection
-{
-    private readonly IDdbRuntime _runtime;
-
-    public RasterExportFeatures(IDdbRuntime runtime) => _runtime = runtime;
-
-    public Task FillAsync(FeaturesDto features)
-    {
-        features.RasterExportWindow = RasterExportTool.SupportsWindow(_runtime.Capabilities);
-        return Task.CompletedTask;
-    }
-}
-
 /// <summary>Tasks: the tools with their gating for the caller, and the task states.</summary>
 public sealed class TaskFeatures : IFeatureSection
 {

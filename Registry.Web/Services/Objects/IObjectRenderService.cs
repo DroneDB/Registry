@@ -52,7 +52,7 @@ public interface IObjectRenderService
 /// How a raster is shown: a sensor preset or explicit bands, a band formula with its band filter, a
 /// colormap and a rescale range (null: the default of each), a NoData value that replaces the one of
 /// the bands (FR-RAS-31: a pixel equal to it is transparent and out of the stretch), and the temperature unit the
-/// rescale of a thermal formula is written in (D-022: libddb converts it to the unit of the formula; ABI 2.3,
+/// rescale of a thermal formula is written in (D-022: libddb converts it to the unit of the formula,
 /// <see cref="RasterOptionRules.RescaleUnit"/>).
 /// </summary>
 public sealed record RasterVisualization(
