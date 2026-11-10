@@ -69,6 +69,10 @@ public class MetaManager : IMetaManager
 
         RequireWritableKey(key, data, MetaKeyKind.Item);
 
+        // The name of the dataset follows the rule of every request that sets a name (D-035, FR-ORG-14)
+        if (path == null && key == DatasetNameKey)
+            RequireValidDatasetName(data, ds.Slug);
+
         var ddb = access.Ddb;
 
         if (path != null && !ddb.EntryExists(path))
@@ -139,6 +143,30 @@ public class MetaManager : IMetaManager
 
         if (MetaKeyRule.Violation(key, kind) is { } violation)
             throw new BadRequestException(violation, noRetry: true);
+    }
+
+    private const string DatasetNameKey = "name";
+
+    // `data` is the JSON of the name (what the Hub sends), or the name as plain text (what a script may send); a JSON
+    // value that is not a string is left to the native call. The dataset keeps its slug, so a new name has that slug
+    // (D-035: a name in another script with a slug is accepted, as for an edit)
+    private static void RequireValidDatasetName(string data, string slug)
+    {
+        string? name;
+        try
+        {
+            using var document = JsonDocument.Parse(data);
+            name = document.RootElement.ValueKind == JsonValueKind.String ? document.RootElement.GetString() : null;
+        }
+        catch (JsonException)
+        {
+            name = data;
+        }
+
+        if (name is { Length: > SlugRules.NameMaxLength })
+            throw new InvalidFieldException("name", SlugRules.NameTooLongMessage);
+
+        InputRules.EnsureLatinName(name, slug, "name");
     }
 
     // The answer for a list key that holds no item: `[]` (a JsonElement of a parsed document is immutable and shareable)

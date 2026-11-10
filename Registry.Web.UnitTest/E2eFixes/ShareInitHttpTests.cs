@@ -150,4 +150,39 @@ public sealed class ShareInitHttpTests : IDisposable
         var errors = JsonNode.Parse(await response.Content.ReadAsStringAsync())!["errors"]!.AsObject();
         errors.Select(e => e.Key).ShouldContain(key => key.Equals("Visibility", StringComparison.OrdinalIgnoreCase));
     }
+
+    // D-035, FR-ORG-05: the slug of a new dataset comes from its name, so a name with no Latin letter or digit is refused,
+    // at errors.datasetName (the member of this request), with the message of a request that has no slug field
+    [TestCase("!!!")]
+    [TestCase("Москва")]
+    public async Task ADatasetNameWithoutALatinLetterOrDigit_Is400AtTheDatasetNameMember(string name)
+    {
+        using var response = await InitAsync(new Dictionary<string, string> { ["OrgSlug"] = Org, ["DatasetName"] = name });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        body["detail"]!.GetValue<string>().ShouldBe("Use at least one Latin letter (a–z) or digit");
+        body["errors"]!["datasetName"]![0]!.GetValue<string>().ShouldBe("Use at least one Latin letter (a–z) or digit");
+        _writes.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task AnAccentedDatasetName_GetsATransliteratedSlug_AndALongOneStaysWithinTheLimits()
+    {
+        using var accented = await InitAsync(new Dictionary<string, string> { ["OrgSlug"] = Org, ["DatasetName"] = "Ørsted Café Ü" });
+        accented.StatusCode.ShouldBe(HttpStatusCode.OK, await accented.Content.ReadAsStringAsync());
+        var token = JsonNode.Parse(await accented.Content.ReadAsStringAsync())!["token"]!.GetValue<string>();
+        (await BatchOfAsync(token)).Slug.ShouldBe("orsted-cafe-u");
+
+        // 127 letters and a space, then more: the cut at 128 would leave a dash
+        using var longName = await InitAsync(new Dictionary<string, string>
+            { ["OrgSlug"] = Org, ["DatasetName"] = new string('l', 127) + " tail" });
+        longName.StatusCode.ShouldBe(HttpStatusCode.OK, await longName.Content.ReadAsStringAsync());
+        var longToken = JsonNode.Parse(await longName.Content.ReadAsStringAsync())!["token"]!.GetValue<string>();
+        (await BatchOfAsync(longToken)).Slug.ShouldBe(new string('l', 127));
+
+        using var tooLong = await InitAsync(new Dictionary<string, string>
+            { ["OrgSlug"] = Org, ["DatasetName"] = new string('n', 257) });
+        tooLong.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
 }

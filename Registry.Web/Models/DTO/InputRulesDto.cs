@@ -27,6 +27,12 @@ public class InputRulesDto
 
     /// <summary>An organization or dataset name needs a Latin letter or a digit, or a slug the user enters (D-035).</summary>
     public LatinNameRuleDto? LatinName { get; set; }
+
+    /// <summary>The length of the name of an organization or a dataset: <c>minLength</c>, <c>maxLength</c> (FR-ORG-14).</summary>
+    public InputRuleDto? DisplayName { get; set; }
+
+    /// <summary>The length of the description of an organization: <c>maxLength</c> (FR-ORG-14).</summary>
+    public InputRuleDto? DescriptionText { get; set; }
 }
 
 /// <summary>

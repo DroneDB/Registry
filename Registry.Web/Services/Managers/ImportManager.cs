@@ -89,8 +89,8 @@ public class ImportManager
             Note = probe.Message,
             EstimatedBytes = probe.EstimatedBytes,
             FileCount = probe.FileCount,
-            SuggestedName = probe.SuggestedName,
-            SuggestedSlug = ImportDatasetNaming.Slugify(probe.SuggestedName)
+            SuggestedName = ImportDatasetNaming.SuggestedNameOf(probe),
+            SuggestedSlug = ImportDatasetNaming.Slugify(ImportDatasetNaming.SuggestedNameOf(probe))
         };
     }
 
@@ -123,6 +123,9 @@ public class ImportManager
         // writes and enforces the hard cap incrementally.
         if (probe.EstimatedBytes is > 0)
             await _quota.CheckOrganizationStorageAsync(orgSlug, probe.EstimatedBytes.Value, ct);
+
+        // The name the user typed needs a Latin letter or digit, or a slug the user enters (D-035)
+        InputRules.EnsureLatinName(request.Name, request.Slug, "name");
 
         var name = ImportDatasetNaming.NameOf(request.Name, probe);
         var slug = ImportDatasetNaming.SlugOf(request.Slug, probe, name);

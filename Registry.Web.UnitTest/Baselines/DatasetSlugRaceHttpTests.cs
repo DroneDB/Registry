@@ -97,6 +97,8 @@ public sealed class DatasetSlugRaceHttpTests : IDisposable
 
         status.ShouldBe(400);
         body!["detail"]!.GetValue<string>().ShouldBe("Dataset with this slug already exists");
+        // What must be unique is the slug: the form shows the refusal there (D-047, FR-ORG-04)
+        body["errors"]!["slug"]![0]!.GetValue<string>().ShouldBe("Dataset with this slug already exists");
         (await CountAsync("first")).ShouldBe(1);
     }
 
@@ -122,6 +124,7 @@ public sealed class DatasetSlugRaceHttpTests : IDisposable
 
         status.ShouldBe(400);
         body!["detail"]!.GetValue<string>().ShouldBe("Dataset 'renamed' already exists");
+        body["errors"]!["slug"]![0]!.GetValue<string>().ShouldBe("Dataset 'renamed' already exists");
         _competitor.Inserted.ShouldBeTrue();
         (await CountAsync("renamed")).ShouldBe(1);
         (await CountAsync("second")).ShouldBe(1, "the loser keeps its slug");

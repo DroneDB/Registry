@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Web.Exceptions;
 using Registry.Web.Models;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Objects;
 
@@ -55,6 +57,13 @@ public sealed record RasterVisualization(
     string? Preset = null, string? Bands = null, string? Formula = null, string? BandFilter = null,
     string? Colormap = null, string? Rescale = null, double? Nodata = null)
 {
+    /// <summary>
+    /// The rescale range, <c>min,max</c> with '.' as the decimal sign. A value that is not two finite numbers, or whose min is
+    /// not less than its max, is a 400 at the <c>rescale</c> parameter, not a failure of the native render (FR-RAS-10).
+    /// </summary>
+    /// <exception cref="InvalidFieldException">The value is not a valid range.</exception>
+    public string? Rescale { get; init; } = RescaleRange.Validated(Rescale);
+
     /// <summary>The cache key part of these parameters.</summary>
     public string CacheKey => $"{Preset}|{Bands}|{Formula}|{BandFilter}|{Colormap}|{Rescale}|{NodataKey}";
 

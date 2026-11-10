@@ -89,12 +89,7 @@ public sealed class ShareTargets
             // The default organization of the user is the user's (created for the user when it does not exist yet)
             await beforeWrite(currentUser.Id);
 
-            var nameSlug = currentUser.RequiredUserName().ToSlug();
-
-            // We start from the principle that a default user organization begins with the username in slug form
-            // If we notice that this strategy is weak we have to add a new field to the db entry
-            var userOrganization = await _context.Organizations.FirstOrDefaultAsync(item =>
-                item.OwnerId == currentUser.Id && item.Name.StartsWith(nameSlug));
+            var userOrganization = await FindUserDefaultOrganizationAsync(currentUser.Id, currentUser.RequiredUserName());
 
             // Some idiot removed its own organization, maybe we should prevent this, btw nevermind: let's take care of it
             if (userOrganization == null)
@@ -178,12 +173,39 @@ public sealed class ShareTargets
     }
 
     /// <summary>
+    /// The default organization of a user: one the user owns whose slug is the slug of the user name, of the current
+    /// rule or of the former one (an organization made before FR-ORG-14 keeps its slug), or one of them with the suffix
+    /// "-&lt;n&gt;" a taken slug gets; the closest match, then the oldest.
+    /// </summary>
+    private async Task<Organization?> FindUserDefaultOrganizationAsync(string userId, string userName)
+    {
+        var slugs = Extenders.DefaultOrganizationSlugs(userName);
+        var slug = slugs[0];
+        var legacy = slugs[^1];
+
+        var candidates = await _context.Organizations
+            .Where(item => item.OwnerId == userId && (item.Slug.StartsWith(slug) || item.Slug.StartsWith(legacy)))
+            .ToListAsync();
+
+        return candidates
+            .Select(item => (Organization: item, Rank: Extenders.DefaultOrganizationSlugRank(item.Slug, userName)))
+            .Where(match => match.Rank != null)
+            .OrderBy(match => match.Rank)
+            .ThenBy(match => match.Organization.CreationDate)
+            .Select(match => match.Organization)
+            .FirstOrDefault();
+    }
+
+    /// <summary>
     /// Creates a dataset in <paramref name="orgSlug"/> with a slug that <paramref name="name"/> gives (§7.1), or a random
     /// one without a name. The check for a free slug is not enough: a request that creates the same slug in between is
     /// answered by the unique index, and this one goes on with the next suffix.
     /// </summary>
     private async Task<Dataset> CreateNewDatasetAsync(string orgSlug, string? name, Visibility visibility)
     {
+        // The slug comes from the name, which then needs a Latin letter or digit (D-035: the request has no slug field)
+        InputRules.EnsureLatinName(name, null, "datasetName", withSlugField: false);
+
         if (string.IsNullOrWhiteSpace(name))
         {
             var random = await GetUniqueDatasetSlugAsync();

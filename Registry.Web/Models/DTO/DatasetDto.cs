@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Registry.Ports.DroneDB;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Models.DTO;
 
@@ -38,10 +39,11 @@ public class DatasetDto
 
 public class DatasetNewDto
 {
-    // [ApiController] answers 400 before the action runs when a [Required] member is missing, so it is never null there
-    [Required]
-    public string Slug { get; set; } = null!;
+    // Not [Required]: a name with no Latin letter or digit and no slug is refused for the name (D-035), with its own
+    // message, before the missing slug is (DatasetCreation refuses a create without a slug)
+    public string? Slug { get; set; }
 
+    [MaxLength(SlugRules.NameMaxLength, ErrorMessage = SlugRules.NameTooLongMessage)]
     public string? Name { get; set; }
 
     public Visibility? Visibility { get; set; }
@@ -53,6 +55,7 @@ public class DatasetNewDto
 public class DatasetEditDto
 {
 
+    [MaxLength(SlugRules.NameMaxLength, ErrorMessage = SlugRules.NameTooLongMessage)]
     public string? Name { get; set; }
 
     public Visibility? Visibility { get; set; }

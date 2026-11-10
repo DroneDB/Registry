@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -147,7 +148,17 @@ public sealed class OrganizationMembershipService
     {
         var normalized = _normalizer.NormalizeName(userName);
         return await _identity.Users.FirstOrDefaultAsync(u => u.NormalizedUserName == normalized, ct)
-               ?? throw new NotFoundException($"User '{userName}' not found");
+               ?? throw UnknownUser(userName);
+    }
+
+    /// <summary>The 404 of a user name that no user has: the message names it, at the <c>userName</c> member of the request (D-047, FR-ORG-23).</summary>
+    internal static NotFoundException UnknownUser(string userName)
+    {
+        var message = $"No user named {userName}";
+        return new NotFoundException(message)
+        {
+            FieldErrors = new Dictionary<string, string[]> { ["userName"] = [message] }
+        };
     }
 
     private async Task<(User User, OrganizationUser Membership)> FindMemberAsync(Organization organization,

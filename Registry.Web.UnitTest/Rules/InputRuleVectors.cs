@@ -19,6 +19,13 @@ internal static class InputRuleVectors
     private static readonly Lazy<JsonObject> Document = new(() =>
         JsonNode.Parse(File.ReadAllText(Path.Combine(TestContext.CurrentContext.TestDirectory, FileName)))!.AsObject());
 
+    /// <summary>The name and the slug <c>ToSlug</c> makes of it (<c>toSlug</c>), shared with the Hub's <c>slugFromName</c>.</summary>
+    public static IReadOnlyList<(string Name, string Slug)> ToSlugCases() =>
+    [
+        .. Document.Value["toSlug"]!.AsArray()
+            .Select(v => (v!["name"]!.GetValue<string>(), v["slug"]!.GetValue<string>()))
+    ];
+
     /// <summary>A value of a rule with the server's and the client's answer.</summary>
     public sealed record Case(string Value, bool Server, bool Precheck)
     {

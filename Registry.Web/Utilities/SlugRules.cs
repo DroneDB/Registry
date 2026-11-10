@@ -22,6 +22,27 @@ public static class SlugRules
     /// <summary>The longest slug: the size of the slug columns.</summary>
     public const int MaxLength = 128;
 
+    /// <summary>The shortest display name of an organization or a dataset (FR-ORG-14).</summary>
+    public const int NameMinLength = 1;
+
+    /// <summary>The longest display name of an organization or a dataset (FR-ORG-14): longer than a slug, which the name makes.</summary>
+    public const int NameMaxLength = 256;
+
+    /// <summary>The longest description of an organization (FR-ORG-14).</summary>
+    public const int DescriptionMaxLength = 2000;
+
+    /// <summary>The name limits as a client reads them.</summary>
+    public static readonly string NameDescription = $"{NameMinLength} to {NameMaxLength} characters";
+
+    /// <summary>The description limit as a client reads it.</summary>
+    public static readonly string DescriptionLimitDescription = $"up to {DescriptionMaxLength} characters";
+
+    /// <summary>The 400 message of a name that is too long (a model attribute needs a constant).</summary>
+    public const string NameTooLongMessage = "The name is too long: use 1 to 256 characters";
+
+    /// <summary>The 400 message of a description that is too long.</summary>
+    public const string DescriptionTooLongMessage = "The description is too long: use up to 2000 characters";
+
     /// <summary>The rules as a client reads them.</summary>
     public static readonly string Description =
         $"it has {MinLength} to {MaxLength} characters (lowercase letters, digits, '_' and '-'), " +

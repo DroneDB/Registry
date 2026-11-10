@@ -66,8 +66,8 @@ public class SlugRulesTests
     [TestCase("A", "a0")]
     [TestCase("é", "e0")]
     [TestCase("7", "70")]
-    [TestCase("-", "0-")]
-    [TestCase("*", "0-")]
+    [TestCase("-", "00")]
+    [TestCase("*", "00")]
     [TestCase("ab", "ab")]
     public void ToSlug_AlwaysMakesAValidSlug(string name, string expected)
     {
@@ -104,6 +104,57 @@ public class SlugRulesTests
         rejected.ShouldNotBeEmpty();
         accepted.Where(s => !s.IsValidSlug()).ShouldBeEmpty();
         rejected.Where(s => s.IsValidSlug()).ShouldBeEmpty();
+    }
+
+    // The cases the Hub runs against slugFromName (libs/slug.js): one generator on both sides (FR-ORG-05, FR-ORG-14)
+    [Test]
+    public void SharedToSlugCases_AreWhatToSlugMakes()
+    {
+        var cases = InputRuleVectors.ToSlugCases();
+
+        cases.ShouldNotBeEmpty();
+        cases.Where(c => c.Name.ToSlug() != c.Slug).Select(c => $"'{c.Name}' -> '{c.Name.ToSlug()}', expected '{c.Slug}'")
+            .ShouldBeEmpty();
+    }
+
+    [TestCase("Ørsted Café Ü", "orsted-cafe-u")]
+    [TestCase("Équipe Été", "equipe-ete")]
+    [TestCase("Straße", "strasse")]
+    [TestCase("ÆØÅ Łódź", "aeoa-lodz")]
+    public void ToSlug_TransliteratesTheLettersThatNfdLeavesWhole(string name, string expected) =>
+        name.ToSlug().ShouldBe(expected);
+
+    [Test]
+    public void ToSlug_OfALongName_IsWithinTheLimit_AndDoesNotEndWithADashOrAnUnderscore()
+    {
+        // The cut at 128 leaves "...a-" and "...a_"
+        var withDash = (new string('a', 127) + " bbbb").ToSlug();
+        var withUnderscore = (new string('a', 127) + "_bbbb").ToSlug();
+        var twoHundred = string.Join(' ', Enumerable.Repeat("word", 40)).ToSlug();
+
+        withDash.ShouldBe(new string('a', 127));
+        withUnderscore.ShouldBe(new string('a', 127));
+        twoHundred.Length.ShouldBeLessThanOrEqualTo(SlugRules.MaxLength);
+        twoHundred.ShouldNotEndWith("-");
+        twoHundred.IsValidSlug().ShouldBeTrue();
+    }
+
+    [Test]
+    public void ToSlug_OfAnExpandingTransliteration_StaysWithinTheLimit()
+    {
+        var slug = new string('ß', 100).ToSlug();
+
+        slug.ShouldBe(new string('s', SlugRules.MaxLength));
+    }
+
+    [Test]
+    public void NameLimits_AreTheOnesTheRegistryPublishes()
+    {
+        (SlugRules.NameMinLength, SlugRules.NameMaxLength, SlugRules.DescriptionMaxLength).ShouldBe((1, 256, 2000));
+        var rules = InputRules.Describe();
+        rules.DisplayName!.MaxLength.ShouldBe(256);
+        rules.DisplayName.MinLength.ShouldBe(1);
+        rules.DescriptionText!.MaxLength.ShouldBe(2000);
     }
 
     [Test]

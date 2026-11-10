@@ -167,20 +167,45 @@ internal sealed class DefaultAdminProvisioner
     private async Task EnsureAdminOrganizationAsync(RegistryContext context, User adminUser, AdminInfo defaultAdmin, CancellationToken token)
     {
         // The options validation refuses to start without the admin's user name
-        var adminOrgSlug = defaultAdmin.UserName!.ToSlug();
-        var org = await context.Organizations.FirstOrDefaultAsync(o => o.Slug == adminOrgSlug, token);
+        var adminOrgSlugs = Extenders.DefaultOrganizationSlugs(defaultAdmin.UserName!);
+        var adminOrgSlug = adminOrgSlugs[0];
+        var legacyOrgSlug = adminOrgSlugs[^1];
+
+        // The default organization of the admin is there: one the admin owns whose slug is a default slug (the one made at
+        // an earlier start, whatever rule made its slug: the slug rule changed with FR-ORG-14, a user name that ends with
+        // '-', '_', '.', '@' or '+' has another slug now; or one with the suffix "-<n>" a taken slug gets), not any
+        // organization the admin owns (an organization named "projects" is not the default one). Then an organization with
+        // that slug, of the current rule or of the former one, that has no owner; then a new one
+        var owned = await context.Organizations.Where(o => o.OwnerId == adminUser.Id).ToListAsync(token);
+        var org = owned
+            .Select(item => (Organization: item, Rank: Extenders.DefaultOrganizationSlugRank(item.Slug, defaultAdmin.UserName!)))
+            .Where(match => match.Rank != null)
+            .OrderBy(match => match.Rank)
+            .ThenBy(match => match.Organization.CreationDate)
+            .Select(match => match.Organization)
+            .FirstOrDefault();
+
+        org ??= await context.Organizations
+            .Where(o => o.OwnerId == null && (o.Slug == adminOrgSlug || o.Slug == legacyOrgSlug))
+            .OrderBy(o => o.Slug == adminOrgSlug ? 0 : 1)
+            .FirstOrDefaultAsync(token);
 
         if (org != null)
         {
-            _logger.LogDebug("Admin organization '{OrgSlug}' already exists", adminOrgSlug);
+            _logger.LogDebug("Admin organization '{OrgSlug}' already exists", org.Slug);
             return;
         }
 
-        _logger.LogInformation("Creating admin organization '{OrgSlug}'", adminOrgSlug);
+        // The slug of a default organization another user owns is not free: the next one with a suffix is
+        var slug = adminOrgSlug;
+        for (var suffix = 1; await context.Organizations.AnyAsync(o => o.Slug == slug, token); suffix++)
+            slug = $"{adminOrgSlug}-{suffix}";
+
+        _logger.LogInformation("Creating admin organization '{OrgSlug}'", slug);
 
         org = new Organization
         {
-            Slug = adminOrgSlug,
+            Slug = slug,
             Name = $"{defaultAdmin.UserName} organization",
             CreationDate = DateTime.UtcNow,
             Description = null,

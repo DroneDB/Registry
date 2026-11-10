@@ -77,6 +77,9 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
         if (!ctx.Ddb.EntryExists(request.Path!))
             throw new ArgumentException($"Source raster '{request.Path}' does not exist in the dataset.");
 
+        // A range that is not two numbers with min below max is a 400 at the submit (FR-RAS-10), not a failed export
+        RescaleRange.Validated(p.Rescale);
+
         if (!string.IsNullOrWhiteSpace(p.Formula))
             ValidateFormula(ctx.Ddb, request.Path!, p.Formula!, p.BandFilter, ct);
 
@@ -217,7 +220,7 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
         // Task History "View log" dialog shows meaningful progress for the export.
         var lastReportedPhase = "loading";
         await Task.Run(() => ctx.Ddb.ExportRaster(
-            request.Path!, outputPath, p.Preset, p.Bands, p.Formula, p.BandFilter, p.Colormap, p.Rescale,
+            request.Path!, outputPath, p.Preset, p.Bands, p.Formula, p.BandFilter, p.Colormap, RescaleRange.Validated(p.Rescale),
             _defaultTileSize,
             (fraction, phase) =>
             {

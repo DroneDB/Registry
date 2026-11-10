@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -173,5 +174,52 @@ public sealed class TileFormatHttpTests : IDisposable
         response.Content.Headers.ContentType!.MediaType.ShouldBe(mediaType);
         response.Content.Headers.ContentDisposition!.FileName.ShouldBe($"{row}.{extension}");
         ShouldBeLike(await response.Content.ReadAsByteArrayAsync(), extension);
+    }
+
+    // FR-RAS-10: a rescale that is not "min,max" with min below max is a 400 at the rescale member, not a failure of the
+    // native render (the Hub saw HTTP 500s and a blank raster)
+    [TestCase("abc")]
+    [TestCase("1")]
+    [TestCase("1,")]
+    [TestCase(",5")]
+    [TestCase("1,2,3")]
+    [TestCase("40,10")]
+    [TestCase("5,5")]
+    [TestCase("NaN,5")]
+    [TestCase("12,5")]
+    public async Task VisualizationTile_WithAnInvalidRescale_Is400AtTheRescaleMember(string rescale)
+    {
+        using var response = await GetAsync(
+            $"/orgs/{Org}/ds/{Ds}/tiles-ex/18/4/3.png?path={Raster}&rescale={Uri.EscapeDataString(rescale)}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        body["errors"]!["rescale"]![0]!.GetValue<string>().ShouldBe(
+            $"The rescale value '{rescale}' is invalid: use two numbers, min and max, separated by a comma, with min less than max (for example 0,255)");
+        _factory.DdbWrapper.Verify(d => d.GenerateMemoryTileEx(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(),
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string>(),
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+            It.IsAny<string?>(), It.IsAny<string?>()), Times.Never);
+    }
+
+    [TestCase("0,255")]
+    [TestCase("-1.5,2.5")]
+    [TestCase(" 0 , 1e3 ")]
+    public async Task VisualizationTile_WithAValidRescale_IsServed(string rescale)
+    {
+        using var response = await GetAsync(
+            $"/orgs/{Org}/ds/{Ds}/tiles-ex/18/4/3.png?path={Raster}&rescale={Uri.EscapeDataString(rescale)}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Test]
+    public async Task VisualizationThumbnail_AndExport_WithAnInvalidRescale_Are400()
+    {
+        using var thumb = await GetAsync($"/orgs/{Org}/ds/{Ds}/thumb-ex?path={Raster}&rescale=abc");
+        using var export = await GetAsync($"/orgs/{Org}/ds/{Ds}/export?path={Raster}&rescale=abc");
+
+        thumb.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        export.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 }

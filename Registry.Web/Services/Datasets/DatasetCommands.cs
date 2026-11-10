@@ -63,6 +63,11 @@ public sealed class DatasetCommands
         var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
         var meta = ddb.Meta.GetSafe();
 
+        // D-035: a name the edit keeps is not checked again (a dataset named 'Москва' with the slug 'moskva' keeps its
+        // visibility editable); a new name has the slug of the dataset, which an edit keeps
+        if (!string.IsNullOrWhiteSpace(dataset.Name) && !string.Equals(dataset.Name, meta.Name, StringComparison.Ordinal))
+            InputRules.EnsureLatinName(dataset.Name, ds.Slug, "name");
+
         if (dataset.Visibility.HasValue)
             meta.Visibility = dataset.Visibility.Value;
 
@@ -144,7 +149,10 @@ public sealed class DatasetCommands
     }
 
     private static BadRequestException SlugTakenOnRename(string slug, Exception? inner = null) =>
-        new($"Dataset '{slug}' already exists", innerException: inner);
+        new($"Dataset '{slug}' already exists", innerException: inner)
+        {
+            FieldErrors = new Dictionary<string, string[]> { ["slug"] = [$"Dataset '{slug}' already exists"] }
+        };
 
     private Task SaveUniqueSlugAsync(string orgSlug, string slug, Func<Exception, BadRequestException> taken) =>
         _creation.SaveUniqueSlugAsync(orgSlug, slug, taken);

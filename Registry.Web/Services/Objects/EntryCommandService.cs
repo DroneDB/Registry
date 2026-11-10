@@ -44,8 +44,12 @@ public sealed class EntryCommandService : IEntryCommandService
         // libddb's path rule: no traversal, no absolute path, not reserved
         var folder = _paths.Normalize(path);
 
-        if (ddb.EntryExists(folder))
-            throw new ConflictException("Cannot create a folder on another entry");
+        // An entry of any type with that name (letter case ignored, D-040): the one "already exists" answer, before
+        // anything is written. A name in a folder that differs in case from the indexed one is created in that folder
+        var location = DatasetEntryLookup.Locate(ddb, folder);
+        if (location.Existing is { } existing)
+            throw new NameClashException(existing.Path);
+        folder = location.Path;
 
         _logger.LogInformation("Adding folder '{Path}' to '{OrgSlug}/{DsSlug}'", folder, orgSlug, dsSlug);
         ddb.Add(folder);
@@ -83,15 +87,29 @@ public sealed class EntryCommandService : IEntryCommandService
 
         var sourceEntry = ddb.GetEntry(source) ?? throw new NotFoundException("Cannot find source entry: '" + source + "'");
 
-        if ((dest + "/").StartsWith(source + "/", StringComparison.Ordinal))
+        // Where the destination is (D-040, as for a new folder): its folders in the letter case of the existing ones
+        // ("FOLDER/a.txt" with the folder "Folder" is "Folder/a.txt", no sibling folder "FOLDER" appears on a
+        // case-sensitive file system), its own name as the request writes it (a rename may change only the case)
+        var location = DatasetEntryLookup.Locate(ddb, dest);
+        dest = WithName(location.Path, dest);
+
+        // Names compare without regard to case: "folder/x" is inside the folder "Folder"; the entry itself under
+        // another case ("a.tif" to "A.tif") is a rename
+        if (string.Equals(dest, source, StringComparison.Ordinal) ||
+            dest.StartsWith(source + "/", StringComparison.OrdinalIgnoreCase))
             throw new BadRequestException("Cannot move a path onto itself or one of its descendants");
 
         var isFolder = sourceEntry.Type == EntryType.Directory;
-        if (ddb.GetEntry(dest) is { } destEntry && isFolder != (destEntry.Type == EntryType.Directory))
-            throw new BadRequestException(isFolder ? "Cannot move a folder on a file" : "Cannot move a file on a folder");
 
         if (sourceEntry.Type == EntryType.DroneDB)
             throw new BadRequestException("Cannot move a DroneDB file");
+
+        // An entry of any type that holds the destination name (letter case ignored, D-040) is never replaced: 409 with
+        // the one "already exists" message, before the file system is touched. The entry itself does not count, so
+        // a rename that only changes the letter case ("a.tif" to "A.tif") goes through
+        if (location.Existing is { } existing &&
+            !string.Equals(existing.Path, source, StringComparison.Ordinal))
+            throw new NameClashException(existing.Path);
 
         var destLocalPath = ddb.GetLocalPath(dest);
         _logger.LogInformation("Moving {Kind} '{Source}' to '{Dest}'", isFolder ? "directory" : "file", source, dest);
@@ -113,6 +131,14 @@ public sealed class EntryCommandService : IEntryCommandService
         await _changes.EntriesArrivedAsync(access, orgSlug, dsSlug, [dest]);
 
         return updatedEntry.ToDto();
+    }
+
+    // The folder of `located` followed by the last segment of `requested`
+    private static string WithName(string located, string requested)
+    {
+        var folderEnd = located.LastIndexOf('/');
+        var nameStart = requested.LastIndexOf('/') + 1;
+        return (folderEnd < 0 ? string.Empty : located[..(folderEnd + 1)]) + requested[nameStart..];
     }
 
     public async Task DeleteAsync(string orgSlug, string dsSlug, string[] paths, CancellationToken ct = default)

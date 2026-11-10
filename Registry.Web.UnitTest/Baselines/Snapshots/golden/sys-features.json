@@ -76,11 +76,25 @@
         "description": "leave it empty for the default schedule; 'disabled', 'off' or 'none' (any case) turns the job off; a macro such as '@daily' is a schedule; any other value has 5 or 6 fields separated by spaces"
       },
       "latinName": {
-        "pattern": "[A-Za-z0-9]",
+        "pattern": "[A-Za-z0-9ØøÆæßẞŁł]",
         "normalization": "NFD",
         "description": "the name needs a Latin letter (a–z) or a digit (accents are dropped), unless you enter a slug",
         "message": "Use at least one Latin letter (a–z) or digit in the name, or enter a slug",
         "messageWithoutSlug": "Use at least one Latin letter (a–z) or digit"
+      },
+      "displayName": {
+        "pattern": null,
+        "minLength": 1,
+        "maxLength": 256,
+        "description": "1 to 256 characters",
+        "message": "The name is too long: use 1 to 256 characters"
+      },
+      "descriptionText": {
+        "pattern": null,
+        "minLength": null,
+        "maxLength": 2000,
+        "description": "up to 2000 characters",
+        "message": "The description is too long: use up to 2000 characters"
       }
     },
     "systemRoles": [

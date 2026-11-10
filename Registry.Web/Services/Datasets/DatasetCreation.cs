@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -57,7 +58,11 @@ public sealed class DatasetCreation
 
     /// <summary>The 400 of a creation that finds its slug taken.</summary>
     public static BadRequestException SlugTakenOnCreate(Exception? inner = null) =>
-        new("Dataset with this slug already exists", innerException: inner);
+        new("Dataset with this slug already exists", innerException: inner)
+        {
+            // What must be unique is the slug: the form shows the refusal there (D-047, FR-ORG-04)
+            FieldErrors = new Dictionary<string, string[]> { ["slug"] = ["Dataset with this slug already exists"] }
+        };
 
     /// <summary>
     /// Creates the dataset <paramref name="dataset"/> in <paramref name="org"/> (tracked, with its datasets) without an
@@ -71,6 +76,9 @@ public sealed class DatasetCreation
 
         if (dataset == null)
             throw new BadRequestException("Dataset is null");
+
+        // A name with no Latin letter or digit needs a slug the request gives (D-035): the name's refusal comes first
+        InputRules.EnsureLatinName(dataset.Name, dataset.Slug, "name");
 
         if (dataset.Slug == null)
             throw new BadRequestException("Dataset slug is null");

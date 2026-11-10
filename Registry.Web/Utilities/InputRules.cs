@@ -1,6 +1,5 @@
-using System.Linq;
-using System.Text;
 using Registry.Ports.DroneDB;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 
@@ -72,8 +71,11 @@ public static class InputRules
         "leave it empty for the default schedule; 'disabled', 'off' or 'none' (any case) turns the job off; " +
         "a macro such as '@daily' is a schedule; any other value has 5 or 6 fields separated by spaces";
 
-    /// <summary>What the normalized name must contain (D-035): an ASCII letter or digit, the characters a slug keeps.</summary>
-    public const string LatinNamePattern = "[A-Za-z0-9]";
+    /// <summary>
+    /// What the normalized name must contain (D-035): an ASCII letter or digit, or a letter the slug generator
+    /// transliterates (ø, æ, ß, ł and their capitals, which NFD leaves whole): the characters a slug keeps.
+    /// </summary>
+    public const string LatinNamePattern = "[A-Za-z0-9ØøÆæßẞŁł]";
 
     /// <summary>The normalization the slug generator applies first (<see cref="Extenders.ToSlug"/>).</summary>
     public const string LatinNameNormalization = "NFD";
@@ -94,13 +96,30 @@ public static class InputRules
     public static string NameClashMessage(string name) => NameClashMessageTemplate.Replace("{name}", name);
 
     /// <summary>
-    /// Whether the slug made from <paramref name="name"/> holds a Latin letter or a digit (D-035): its NFD form has an
-    /// ASCII letter or digit, the characters <see cref="Extenders.ToSlug"/> keeps (its fallback "0" does not count).
+    /// Whether the slug made from <paramref name="name"/> holds a Latin letter or a digit (D-035): what
+    /// <see cref="Extenders.ToSlug"/> writes before its fallback ("0") has one, so a letter it transliterates counts
+    /// ('Ø' gives "o", 'ß' gives "ss").
     /// </summary>
-    /// <returns>False for a null or empty name.</returns>
-    public static bool HasLatinLetterOrDigit(string? name) =>
-        !string.IsNullOrEmpty(name) &&
-        name.Normalize(NormalizationForm.FormD).Any(c => c is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9');
+    /// <returns>False for a null or blank name.</returns>
+    public static bool HasLatinLetterOrDigit(string? name) => Extenders.SlugHasLatinLetterOrDigit(name);
+
+    /// <summary>
+    /// Refuses a name that holds no Latin letter or digit, when the slug of the request has none either (D-035): the rule
+    /// of every request that sets the name of an organization or a dataset (create, edit, meta <c>name</c>,
+    /// <c>share/init</c>, import). A blank name has nothing to check (the slug stands for it).
+    /// </summary>
+    /// <param name="name">The name of the request.</param>
+    /// <param name="slug">The slug of the request, or null when it has none.</param>
+    /// <param name="field">The member of the request that holds the name (<c>name</c>, <c>datasetName</c>), where the refusal is shown.</param>
+    /// <param name="withSlugField">Whether the request has a slug field (the message then tells to enter one).</param>
+    /// <exception cref="InvalidFieldException">400 with <c>errors.&lt;field&gt;</c>.</exception>
+    public static void EnsureLatinName(string? name, string? slug, string field, bool withSlugField = true)
+    {
+        if (string.IsNullOrWhiteSpace(name) || HasLatinLetterOrDigit(name) || HasLatinLetterOrDigit(slug))
+            return;
+
+        throw new InvalidFieldException(field, withSlugField ? LatinNameMessage : LatinNameMessageWithoutSlug);
+    }
 
     /// <summary>The rules as <c>GET /sys/features</c> publishes them.</summary>
     /// <returns>A new DTO.</returns>
@@ -153,6 +172,19 @@ public static class InputRules
             Description = LatinNameDescription,
             Message = LatinNameMessage,
             MessageWithoutSlug = LatinNameMessageWithoutSlug
+        },
+        DisplayName = new InputRuleDto
+        {
+            MinLength = SlugRules.NameMinLength,
+            MaxLength = SlugRules.NameMaxLength,
+            Description = SlugRules.NameDescription,
+            Message = SlugRules.NameTooLongMessage
+        },
+        DescriptionText = new InputRuleDto
+        {
+            MaxLength = SlugRules.DescriptionMaxLength,
+            Description = SlugRules.DescriptionLimitDescription,
+            Message = SlugRules.DescriptionTooLongMessage
         }
     };
 }

@@ -1,4 +1,6 @@
+using System.ComponentModel.DataAnnotations;
 using Registry.Ports.DroneDB;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Models.DTO;
 
@@ -13,6 +15,7 @@ public class ShareInitDto
     /// </summary>
     public string? OrgSlug { get; set; }
 
+    [MaxLength(SlugRules.NameMaxLength, ErrorMessage = SlugRules.NameTooLongMessage)]
     public string? DatasetName { get; set; }
 
     /// <summary>

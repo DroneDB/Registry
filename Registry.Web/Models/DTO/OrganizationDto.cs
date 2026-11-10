@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using Registry.Common;
 using Registry.Web.Services.Managers;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Models.DTO;
 
@@ -74,13 +75,15 @@ public class OrganizationDto
 /// </summary>
 public class OrganizationRequestDto
 {
-    // [ApiController] answers 400 before the action runs when a [Required] member is missing, so it is never null there
-    [Required]
-    public string Slug { get; init; } = null!;
+    // Not [Required]: a name with no Latin letter or digit and no slug is refused for the name (D-035), with its own
+    // message, before the missing slug is (the service refuses a create without a valid slug); an edit ignores it
+    public string? Slug { get; init; }
 
     [Required]
+    [MaxLength(SlugRules.NameMaxLength, ErrorMessage = SlugRules.NameTooLongMessage)]
     public string Name { get; init; } = null!;
 
+    [MaxLength(SlugRules.DescriptionMaxLength, ErrorMessage = SlugRules.DescriptionTooLongMessage)]
     public string? Description { get; init; }
 
     public string? Owner { get; init; }

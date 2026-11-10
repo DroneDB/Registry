@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -97,14 +98,42 @@ public sealed class ApiErrorResponder
 
     /// <summary>
     /// The 400 body of an invalid model: <c>errors</c> per field, and <c>detail</c> with the field messages
-    /// joined by <c>|</c> (what the Hub shows, and what the former <c>error</c> member carried).
+    /// joined by <c>|</c> (what the Hub shows, and what the former <c>error</c> member carried). The keys of
+    /// <c>errors</c> are the request members in camelCase (<c>name</c>, not the property <c>Name</c>), as the
+    /// refusals a service raises for a field (D-047).
     /// </summary>
     public ValidationProblemDetails CreateValidation(HttpContext httpContext, ModelStateDictionary modelState)
     {
         var problem = _factory.CreateValidationProblemDetails(httpContext, modelState,
             StatusCodes.Status400BadRequest, detail: JoinMessages(modelState));
+        problem.Errors = CamelCaseKeys(problem.Errors);
         problem.Extensions[NoRetryMember] = false;
         return problem;
+    }
+
+    // The errors with each member of their key in camelCase ("Items[0].Name" is "items[0].name"); a JSON path ("$.name")
+    // and an empty key stay. Two keys that become one keep the messages of both
+    private static Dictionary<string, string[]> CamelCaseKeys(IDictionary<string, string[]> errors)
+    {
+        var result = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        foreach (var (key, messages) in errors)
+        {
+            var camel = CamelCaseKey(key);
+            result[camel] = result.TryGetValue(camel, out var earlier) ? [.. earlier, .. messages] : messages;
+        }
+
+        return result;
+    }
+
+    private static string CamelCaseKey(string key)
+    {
+        if (key.Length == 0 || key[0] == '$')
+            return key;
+
+        return string.Join('.', key.Split('.').Select(member =>
+            member.Length > 0 && char.IsUpper(member[0])
+                ? JsonNamingPolicy.CamelCase.ConvertName(member)
+                : member));
     }
 
     /// <summary>

@@ -1990,6 +1990,20 @@
           "description": "Description-text",
           "message": "Message-text",
           "messageWithoutSlug": "MessageWithoutSlug-text"
+        },
+        "displayName": {
+          "pattern": "Pattern-text",
+          "minLength": 42,
+          "maxLength": 42,
+          "description": "Description-text",
+          "message": "Message-text"
+        },
+        "descriptionText": {
+          "pattern": "Pattern-text",
+          "minLength": 42,
+          "maxLength": 42,
+          "description": "Description-text",
+          "message": "Message-text"
         }
       },
       "systemRoles": [
@@ -2466,6 +2480,20 @@
         "description": "Description-text",
         "message": "Message-text",
         "messageWithoutSlug": "MessageWithoutSlug-text"
+      },
+      "displayName": {
+        "pattern": "Pattern-text",
+        "minLength": 42,
+        "maxLength": 42,
+        "description": "Description-text",
+        "message": "Message-text"
+      },
+      "descriptionText": {
+        "pattern": "Pattern-text",
+        "minLength": 42,
+        "maxLength": 42,
+        "description": "Description-text",
+        "message": "Message-text"
       }
     },
     "sparse": {
@@ -2475,7 +2503,9 @@
       "entryName": null,
       "nameClash": null,
       "cron": null,
-      "latinName": null
+      "latinName": null,
+      "displayName": null,
+      "descriptionText": null
     }
   },
   "Registry.Web.Models.DTO.IsBatchReadyResult": {

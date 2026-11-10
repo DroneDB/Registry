@@ -65,6 +65,9 @@ public sealed class CreateFolderHttpTests : IDisposable
                     ? new Entry { Path = path, Type = EntryType.Directory, ModifiedTime = IndexedTime, Depth = 0 }
                     : null;
             });
+        // The name lookup of a new folder (D-040) lists nothing: no entry has the name
+        _factory.DdbWrapper.Setup(d => d.ListEntrySummaries(It.IsAny<string>(), It.IsAny<EntryQuery>()))
+            .Returns([]);
         _client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
         var owner = await _factory.CreateUserAsync(Owner);

@@ -134,7 +134,25 @@
     { "name": " ", "server": false, "precheck": false }
   ],
   "latinName": {
-    "accept": ["Survey Team", "a", "7", "2024", "Orsted Café", "Équipe Été", "Москва 2", "東京 HQ", "Ørsted"],
+    "accept": ["Survey Team", "a", "7", "2024", "Orsted Café", "Équipe Été", "Москва 2", "東京 HQ", "Ørsted", "Ø", "ß", "Łł", "Æ"],
     "reject": ["", "   ", "Москва", "!!!@@@###", "東京", "Ωμέγα", "ｆｕｌｌ", "---", "__"]
-  }
+  },
+  "toSlug": [
+    { "name": "Ørsted Café Ü", "slug": "orsted-cafe-u", "note": "NFD drops the marks, ø is transliterated (FR-ORG-05)" },
+    { "name": "Équipe Été", "slug": "equipe-ete" },
+    { "name": "Straße", "slug": "strasse" },
+    { "name": "Łódź Æble", "slug": "lodz-aeble" },
+    { "name": "My Survey 2026", "slug": "my-survey-2026" },
+    { "name": "  Brighton   Beach  ", "slug": "brighton-beach", "note": "a run of anything else is one dash, none at the ends" },
+    { "name": "Survey Team", "slug": "survey-team" },
+    { "name": "a--b", "slug": "a-b" },
+    { "name": "ab--", "slug": "ab", "note": "never ends with a dash (FR-ORG-14)" },
+    { "name": "ab_-", "slug": "ab" },
+    { "name": "_ab", "slug": "0_ab", "note": "the first character is a letter or a digit" },
+    { "name": "-ab", "slug": "0-ab" },
+    { "name": "a", "slug": "a0", "note": "padded to the minimum length" },
+    { "name": "7", "slug": "70" },
+    { "name": "!!!", "slug": "00", "note": "the internal fallback: a request whose name and slug have no Latin letter or digit is refused (D-035)" },
+    { "name": "Москва", "slug": "00" }
+  ]
 }

@@ -58,7 +58,8 @@ public class CreateImportRequestDto
     /// <summary>Desired dataset slug. When omitted it is derived from <see cref="Name"/> or the source.</summary>
     public string? Slug { get; set; }
 
-    /// <summary>Desired dataset display name. When omitted it is derived from the source.</summary>
+    /// <summary>Desired dataset display name, up to 256 characters (FR-ORG-14). When omitted it is derived from the source.</summary>
+    [MaxLength(Utilities.SlugRules.NameMaxLength, ErrorMessage = Utilities.SlugRules.NameTooLongMessage)]
     public string? Name { get; set; }
 
     /// <summary>Desired dataset visibility. Defaults to <see cref="Visibility.Private"/>.</summary>

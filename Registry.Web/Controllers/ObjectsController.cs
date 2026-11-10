@@ -300,7 +300,8 @@ public class ObjectsController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Moves or renames an object within a dataset.
+    /// Moves or renames an object within a dataset. An entry of any type that already has the destination name (letter
+    /// case ignored) is never replaced: <c>409</c> with the "already exists" message and <c>conflictPath</c> (D-040).
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>
@@ -312,6 +313,7 @@ public class ObjectsController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<EntryDto>> Move(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,

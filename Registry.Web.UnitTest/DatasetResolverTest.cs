@@ -162,7 +162,7 @@ public class DatasetResolverTest : TestBase
         var slug = str.ToSlug();
 
         slug.ShouldBe(
-                "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz0123456789eeau-c-_-");
+                "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz0123456789eeau-c");
 
         slug.IsValidSlug().ShouldBeTrue();
 

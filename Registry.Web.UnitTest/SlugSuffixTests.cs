@@ -31,6 +31,21 @@ public class SlugSuffixTests
     }
 
     [Test]
+    public void FromName_OfA200CharacterName_IsWithinTheLimit_AndTheSuffixOfATakenOneEndsTheSlug()
+    {
+        var name = string.Join(' ', System.Linq.Enumerable.Repeat("survey", 30));
+
+        var slug = SlugSuffix.FromName(name);
+        var next = SlugSuffix.Candidate(new string('a', SlugRules.MaxLength), 2);
+
+        slug.Length.ShouldBeLessThanOrEqualTo(SlugRules.MaxLength);
+        slug.ShouldNotEndWith("-");
+        SlugRules.IsValid(slug).ShouldBeTrue();
+        next.Length.ShouldBe(SlugRules.MaxLength);
+        next.ShouldEndWith("-2");
+    }
+
+    [Test]
     public void Candidate_OfOne_IsTheBase_AndOfTwoOrMore_AddsTheSuffix()
     {
         SlugSuffix.Candidate("my-survey", 1).ShouldBe("my-survey");

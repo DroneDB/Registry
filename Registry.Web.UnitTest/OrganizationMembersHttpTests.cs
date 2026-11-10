@@ -106,7 +106,9 @@ public sealed class OrganizationMembersHttpTests : IDisposable
         var (status, problem) = await AddAsync(Owner, UnknownUser);
 
         status.ShouldBe(StatusCodes.Status404NotFound);
-        problem.ShouldNotBeNull()["detail"]!.GetValue<string>().ShouldBe($"User '{UnknownUser}' not found");
+        problem.ShouldNotBeNull()["detail"]!.GetValue<string>().ShouldBe($"No user named {UnknownUser}");
+        // The member of the request that names the user, for the field of the form (D-047, FR-ORG-23)
+        problem["errors"]!["userName"]![0]!.GetValue<string>().ShouldBe($"No user named {UnknownUser}");
     }
 
     [Test]

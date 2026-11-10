@@ -1007,6 +1007,69 @@ public class ObjectManagerTest : TestBase
             .Count().ShouldBe(2);
     }
 
+    // FR-EXP-04, FR-EXP-15, D-040 on real libddb: a rename, a move or a new folder onto a name that an entry of any type
+    // holds is a 409 with the one message and conflictPath, and nothing is changed
+    [Test]
+    public async Task MoveAndCreateFolder_OntoAnExistingName_Are409_AndChangeNothing()
+    {
+        await using var context = GetTest1Context();
+        using var test = new TestFS(Test4ArchiveUrl, BaseTestFolder);
+
+        var settings = TestSettings.Default;
+
+        settings.DatasetsPath = test.TestFolder;
+        _settingsOptions.Value = settings;
+        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.IsOwnerOrAdmin(It.IsAny<Dataset>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(),
+            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Organization>(),
+            It.IsAny<AccessType>())).Returns(Task.FromResult(true));
+
+        var webUtils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions), TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object, TestCaches.Summaries(_ddbFactoryMock.Object));
+
+        var objectManager = ObjectsManagerFor(context, webUtils).Build();
+        const string org = MagicStrings.PublicOrganizationSlug;
+        const string ds = MagicStrings.DefaultDatasetSlug;
+
+        (await objectManager.Queries.ListAsync(org, ds)).Count().ShouldBe(20);
+        await objectManager.Manager.AddNew(org, ds, "Folder");
+        var listing = (await objectManager.Queries.ListAsync(org, ds)).ToArray();
+        var before = listing.Select(e => e.Path).Order().ToArray();
+        var files = listing.Where(e => e.Type != EntryType.Directory).Select(e => e.Path).Order().ToArray();
+        var moved = files[0];
+        var target = files[1];
+        var otherCaseOfTarget = string.Equals(target, target.ToUpperInvariant(), StringComparison.Ordinal) ? target.ToLowerInvariant() : target.ToUpperInvariant();
+
+        // A file onto a file, the same name in another letter case, a file onto a folder
+        var onFile = await Should.ThrowAsync<NameClashException>(() => objectManager.Commands.MoveAsync(org, ds, moved, target));
+        onFile.StatusCode.ShouldBe(409);
+        onFile.ConflictPath.ShouldBe(target);
+        onFile.Message.ShouldBe($"A file or folder named '{target}' already exists in this folder");
+
+        var otherCase = await Should.ThrowAsync<NameClashException>(() =>
+            objectManager.Commands.MoveAsync(org, ds, moved, otherCaseOfTarget));
+        otherCase.ConflictPath.ShouldBe(target);
+
+        var onFolder = await Should.ThrowAsync<NameClashException>(() => objectManager.Commands.MoveAsync(org, ds, moved, "folder"));
+        onFolder.ConflictPath.ShouldBe("Folder");
+
+        // A new folder with the name of a file, and of a folder in another letter case
+        var folderOnFile = await Should.ThrowAsync<NameClashException>(() => objectManager.Commands.CreateFolderAsync(org, ds, target));
+        folderOnFile.ConflictPath.ShouldBe(target);
+        var folderOnFolder = await Should.ThrowAsync<NameClashException>(() => objectManager.Commands.CreateFolderAsync(org, ds, "FOLDER"));
+        folderOnFolder.ConflictPath.ShouldBe("Folder");
+
+        // Nothing moved, nothing created
+        (await objectManager.Queries.ListAsync(org, ds)).Select(e => e.Path).Order().ToArray().ShouldBe(before);
+
+        // A free name still works, and so does a rename that only changes the letter case of the entry itself
+        (await objectManager.Commands.MoveAsync(org, ds, moved, "Folder/" + moved)).Path.ShouldBe("Folder/" + moved);
+        (await objectManager.Commands.CreateFolderAsync(org, ds, "Fresh")).Path.ShouldBe("Fresh");
+        var lowered = "Folder/" + moved.ToLowerInvariant();
+        (await objectManager.Commands.MoveAsync(org, ds, "Folder/" + moved, lowered)).Path.ShouldBe(lowered);
+    }
+
 
     #region SUT factories
 

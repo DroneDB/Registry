@@ -500,8 +500,8 @@ public class ObjectsManagerCopyTransferTest : TestBase
     {
         _ddbMock.Setup(x => x.GetEntry("model.mtl.txt"))
             .Returns(new Entry { Path = "model.mtl.txt", Type = EntryType.Generic, Size = 10, Hash = "hh" });
-        _ddbMock.SetupSequence(x => x.GetEntry("model.mtl"))
-            .Returns((Entry?)null)
+        // The destination is free (EntryExists is false); the entry is read back after the move
+        _ddbMock.Setup(x => x.GetEntry("model.mtl"))
             .Returns(new Entry { Path = "model.mtl", Type = EntryType.Generic, Size = 10, Hash = "hh" });
         _ddbMock.Setup(x => x.IsBuildPending()).Returns(true);
         var coordinators = RecordCoordinators();
@@ -516,8 +516,8 @@ public class ObjectsManagerCopyTransferTest : TestBase
     {
         _ddbMock.Setup(x => x.GetEntry("a.txt"))
             .Returns(new Entry { Path = "a.txt", Type = EntryType.Generic, Size = 10, Hash = "hh" });
-        _ddbMock.SetupSequence(x => x.GetEntry("b.txt"))
-            .Returns((Entry?)null)
+        // The destination is free (EntryExists is false); the entry is read back after the move
+        _ddbMock.Setup(x => x.GetEntry("b.txt"))
             .Returns(new Entry { Path = "b.txt", Type = EntryType.Generic, Size = 10, Hash = "hh" });
         var coordinators = RecordCoordinators();
 
@@ -599,8 +599,8 @@ public class ObjectsManagerCopyTransferTest : TestBase
     {
         _ddbMock.Setup(x => x.GetEntry("a.obj"))
             .Returns(new Entry { Path = "a.obj", Type = EntryType.Generic, Size = 10, Hash = "hh" });
-        _ddbMock.SetupSequence(x => x.GetEntry("b.obj"))
-            .Returns((Entry?)null)
+        // The destination is free (EntryExists is false); the entry is read back after the move
+        _ddbMock.Setup(x => x.GetEntry("b.obj"))
             .Returns(new Entry { Path = "b.obj", Type = EntryType.Generic, Size = 10, Hash = "hh" });
         var ended = RecordEndedWaits();
 
