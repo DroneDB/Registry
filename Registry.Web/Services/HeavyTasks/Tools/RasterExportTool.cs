@@ -6,7 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Registry.Ports.DroneDB;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Objects;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Ports;
@@ -17,17 +19,30 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// <summary>
 /// Native tool that exports a single raster entry to GeoTIFF applying the
 /// visualization params (preset/bands/formula/colormap/rescale). Uses the
-/// block-windowed <c>DDBExportRaster2</c> path (bounded peak memory) with
-/// incremental progress and cooperative cancellation.
+/// block-windowed <c>DDBExportRaster2</c>/<c>DDBExportRaster3</c> path (bounded peak memory) with incremental progress and
+/// cooperative cancellation. With <c>bbox</c> (WGS 84 <c>[minLon, minLat, maxLon, maxLat]</c>) it exports that window of
+/// the raster at its native resolution ('Export visible extent', FR-RAS-16, D-023), which needs libddb ABI 2.3.
 /// </summary>
 public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters>
 {
     /// <summary>The visualization parameters and the optional output file name.</summary>
+    /// <param name="Nodata">The NoData value that replaces the one of the bands (FR-RAS-31), as sent: checked at the submit.</param>
+    /// <param name="Bbox">The WGS 84 window to export (FR-RAS-16), as sent: checked at the submit.</param>
     public sealed record Parameters(string? Preset, string? Bands, string? Formula, string? BandFilter,
-        string? Colormap, string? Rescale, string? FileName);
+        string? Colormap, string? Rescale, string? FileName, JsonElement? Nodata = null, JsonElement? Bbox = null);
 
     protected override Parameters ReadParams(ToolParameters p) => new(p.Text("preset"), p.Text("bands"),
-        p.Text("formula"), p.Text("bandFilter"), p.Text("colormap"), p.Text("rescale"), p.Text("fileName"));
+        p.Text("formula"), p.Text("bandFilter"), p.Text("colormap"), p.Text("rescale"), p.Text("fileName"),
+        p.Value("nodata"), p.Value("bbox"));
+
+    /// <summary>The first libddb ABI minor whose <c>DDBExportRaster3</c> exports the window of the <c>bbox</c> option.</summary>
+    public const int WindowAbiMinor = 3;
+
+    /// <summary>
+    /// Whether the loaded libddb exports a window (<c>bbox</c>): the one rule of the submit (<see cref="RequireWindowSupport"/>)
+    /// and of the <c>rasterExportWindow</c> feature the Hub reads to offer 'Export visible extent' (FR-RAS-16, FR-XC-22).
+    /// </summary>
+    public static bool SupportsWindow(DdbCapabilities capabilities) => capabilities.AbiMinor >= WindowAbiMinor;
 
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
@@ -43,7 +58,15 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
             "bandFilter": { "type": ["string", "null"] },
             "colormap": { "type": ["string", "null"] },
             "rescale": { "type": ["string", "null"] },
-            "fileName": { "type": ["string", "null"], "description": "Optional output file name." }
+            "fileName": { "type": ["string", "null"], "description": "Optional output file name." },
+            "nodata": { "type": ["number", "null"], "description": "NoData value that replaces the one of the bands." },
+            "bbox": {
+              "type": ["array", "null"],
+              "items": { "type": "number" },
+              "minItems": 4,
+              "maxItems": 4,
+              "description": "WGS 84 window to export (minLon, minLat, maxLon, maxLat), at the native resolution of the raster. Needs libddb 2.3 or later."
+            }
           },
           "additionalProperties": false
         }
@@ -51,12 +74,15 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
 
     private readonly int _defaultTileSize;
     private readonly IRasterExportSizeCheck _sizeCheck;
+    private readonly IDdbRuntime _runtime;
 
-    public RasterExportTool(IOptions<ProcessingPlatformSettings> platformSettings, IRasterExportSizeCheck sizeCheck)
+    public RasterExportTool(IOptions<ProcessingPlatformSettings> platformSettings, IRasterExportSizeCheck sizeCheck,
+        IDdbRuntime runtime)
     {
         _defaultTileSize = platformSettings.Value.DefaultRasterTileSize;
         if (_defaultTileSize < 1) _defaultTileSize = 512;
         _sizeCheck = sizeCheck;
+        _runtime = runtime;
     }
 
     public override string Id => "raster-export";
@@ -80,13 +106,77 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
         // A range that is not two numbers with min below max is a 400 at the submit (FR-RAS-10), not a failed export
         RescaleRange.Validated(p.Rescale);
 
+        // The NoData value and the window are 400s at their own members; the window needs libddb 2.3 (FR-RAS-16)
+        var raster = RasterOptionsOf(p);
+        RequireWindowSupport(raster);
+
         if (!string.IsNullOrWhiteSpace(p.Formula))
             ValidateFormula(ctx.Ddb, request.Path!, p.Formula!, p.BandFilter, ct);
 
         // At the submit (and the retry of a task), not on the worker: an export over the export limit is a 400, with the
         // estimate of the value info the Hub shows (FR-RAS-16, D-023)
         if (ctx is not IHeavyToolExecutionContext)
-            await _sizeCheck.EnsureWithinLimitAsync(request.OrgSlug, request.DsSlug, request.Path!, null, ct);
+            await _sizeCheck.EnsureWithinLimitAsync(request.OrgSlug, request.DsSlug, request.Path!, raster, ct);
+    }
+
+    /// <summary>
+    /// The NoData value and the window of the request as the options of the values (null when it has neither): the options
+    /// of the export, and of the estimate that the submit checks against the limit (the estimate of the window, D-023).
+    /// </summary>
+    /// <exception cref="InvalidFieldException">A value that is not a finite number, or a window that is not four WGS 84 degrees.</exception>
+    internal static RasterAnalysisOptions? RasterOptionsOf(Parameters p)
+    {
+        double? nodata = null;
+        if (p.Nodata is { } nd)
+        {
+            if (nd.ValueKind != JsonValueKind.Number || !nd.TryGetDouble(out var value) || !double.IsFinite(value))
+                throw new InvalidFieldException("nodata", "'nodata' must be a finite number");
+            nodata = value;
+        }
+
+        double[]? bbox = null;
+        if (p.Bbox is { } box)
+        {
+            const string rule = "'bbox' must be four finite numbers: minLon, minLat, maxLon, maxLat (WGS 84)";
+            if (box.ValueKind != JsonValueKind.Array || box.GetArrayLength() != 4)
+                throw new InvalidFieldException("bbox", rule);
+            bbox = new double[4];
+            var i = 0;
+            foreach (var item in box.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Number || !item.TryGetDouble(out bbox[i]) || !double.IsFinite(bbox[i]))
+                    throw new InvalidFieldException("bbox", rule);
+                i++;
+            }
+
+            try
+            {
+                RasterOptionRules.RequireWindow(bbox);
+            }
+            catch (BadRequestException ex)
+            {
+                throw new InvalidFieldException("bbox", ex.Message);
+            }
+        }
+
+        return nodata is null && bbox is null ? null : new RasterAnalysisOptions(nodata, null, bbox);
+    }
+
+    /// <summary>
+    /// Refuses the window (<c>bbox</c>) on a libddb that cannot export one: before 2.3, <c>DDBExportRaster3</c> ignores it and
+    /// would export the whole raster, which the user asked not to. A 400 at <c>errors.bbox</c> that says why.
+    /// </summary>
+    private void RequireWindowSupport(RasterAnalysisOptions? raster)
+    {
+        if (raster?.Bbox is null)
+            return;
+
+        var capabilities = _runtime.Capabilities;
+        if (SupportsWindow(capabilities))
+            return;
+
+        throw new InvalidFieldException("bbox",
+            $"Exporting the visible extent needs libddb 2.{WindowAbiMinor} or later: this server runs libddb {capabilities.Version} (ABI {capabilities.AbiMajor}.{capabilities.AbiMinor}). Export the whole raster instead.");
     }
 
     /// <summary>
@@ -219,9 +309,11 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
         // Surface phase transitions from the native exporter as log lines so the
         // Task History "View log" dialog shows meaningful progress for the export.
         var lastReportedPhase = "loading";
+        var raster = RasterOptionsOf(p);
+        RequireWindowSupport(raster);
         await Task.Run(() => ctx.Ddb.ExportRaster(
             request.Path!, outputPath, p.Preset, p.Bands, p.Formula, p.BandFilter, p.Colormap, RescaleRange.Validated(p.Rescale),
-            _defaultTileSize,
+            _defaultTileSize, raster,
             (fraction, phase) =>
             {
                 string? logChunk = null;

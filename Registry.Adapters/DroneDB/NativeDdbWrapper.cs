@@ -605,9 +605,20 @@ public class NativeDdbWrapper : IDdbWrapper
                 callback?.UserData ?? IntPtr.Zero)));
     }
 
-    public unsafe void ExportRaster(string inputPath, string outputPath,
+    public void ExportRaster(string inputPath, string outputPath,
         string? preset, string? bands, string? formula, string? bandFilter,
         string? colormap, string? rescale, int tileSize, double? nodata,
+        Action<double, string?>? progress, CancellationToken cancellationToken) =>
+        ExportRaster(inputPath, outputPath, preset, bands, formula, bandFilter, colormap, rescale, tileSize,
+            nodata is null ? null : new RasterAnalysisOptions(nodata), progress, cancellationToken);
+
+    /// <summary>
+    /// <c>DDBExportRaster3</c> with the options of the values: the NoData value, and with libddb ABI 2.3 the WGS 84 window
+    /// to export (an older library ignores it: the caller checks the ABI minor first).
+    /// </summary>
+    public unsafe void ExportRaster(string inputPath, string outputPath,
+        string? preset, string? bands, string? formula, string? bandFilter,
+        string? colormap, string? rescale, int tileSize, RasterAnalysisOptions? options,
         Action<double, string?>? progress, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(inputPath);
@@ -616,8 +627,9 @@ public class NativeDdbWrapper : IDdbWrapper
         // As the export without options: the callback reports and stops the call, the token stops it at its next checkpoint
         using var callback = NativeProgressCallback.Create(progress, cancellationToken);
         using var cancellation = DdbCancellation.Enter(cancellationToken);
-        using var options = NativeRasterOptionsHandle.Create(nodata);
-        var native = options.Pointer;
+        // The formula of the options is the style of the export (the argument), not a native option
+        using var nativeOptions = NativeRasterOptionsHandle.Create(options is null ? null : options with { Formula = null });
+        var native = nativeOptions.Pointer;
 
         NativeCall.Invoke(nameof(NativeDdb.DDBExportRaster3), () => NativeProgressCallback.Completed(callback,
             NativeDdb.DDBExportRaster3(inputPath, outputPath, preset, bands, formula, bandFilter, colormap,

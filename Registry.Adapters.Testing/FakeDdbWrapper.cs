@@ -435,6 +435,12 @@ public class FakeDdbWrapper : IDdbWrapper
         int tileSize, double? nodata, Action<double, string?>? progress,
         CancellationToken cancellationToken) => throw Unsupported();
 
+    public virtual void ExportRaster(string inputPath, string outputPath,
+        string? preset, string? bands, string? formula, string? bandFilter,
+        string? colormap, string? rescale,
+        int tileSize, RasterAnalysisOptions? options, Action<double, string?>? progress,
+        CancellationToken cancellationToken) => throw Unsupported();
+
     public virtual SplatTrainingExport ExportSplatTrainingData(string ddbPath, string folder, string outFolder,
         SplatTrainingOptions? options, Action<double, string?>? progress, CancellationToken cancellationToken) =>
         throw Unsupported();

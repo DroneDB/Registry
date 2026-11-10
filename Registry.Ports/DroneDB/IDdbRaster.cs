@@ -176,6 +176,18 @@ public interface IDdbRaster
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// <see cref="ExportRaster(string, string, string?, string?, string?, string?, string?, string?, int, double?, Action{double, string?}?, CancellationToken)"/>
+    /// with the options of the values: the NoData value and, from libddb ABI 2.3, the WGS 84 window
+    /// (<see cref="RasterAnalysisOptions.Bbox"/>) to export instead of the whole raster (FR-RAS-16). A libddb older than 2.3
+    /// ignores the window and exports the whole raster: the caller checks the ABI minor first.
+    /// </summary>
+    void ExportRaster(string inputPath, string outputPath,
+        string? preset, string? bands, string? formula, string? bandFilter,
+        string? colormap, string? rescale, int tileSize, RasterAnalysisOptions? options,
+        Action<double, string?>? progress,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Mask orthophoto borders making them transparent. An output that exists is replaced only with
     /// <paramref name="overwrite"/>, in one rename once the mask is complete (a failed or cancelled call leaves it as
     /// it was); without it, libddb refuses it.

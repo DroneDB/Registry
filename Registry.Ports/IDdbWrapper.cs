@@ -381,6 +381,19 @@ public interface IDdbWrapper
         System.Threading.CancellationToken cancellationToken);
 
     /// <summary>
+    /// <see cref="ExportRaster(string, string, string?, string?, string?, string?, string?, string?, int, double?, System.Action{double, string?}?, System.Threading.CancellationToken)"/>
+    /// with the options of the values: the NoData value and, from libddb ABI 2.3, the WGS 84 window
+    /// (<see cref="Registry.Ports.DroneDB.RasterAnalysisOptions.Bbox"/>) to export instead of the whole raster (FR-RAS-16).
+    /// A libddb older than 2.3 ignores the window and exports the whole raster: the caller checks the ABI minor first.
+    /// </summary>
+    public void ExportRaster(string inputPath, string outputPath,
+        string? preset, string? bands, string? formula, string? bandFilter,
+        string? colormap, string? rescale, int tileSize,
+        Registry.Ports.DroneDB.RasterAnalysisOptions? options,
+        System.Action<double, string?>? progress,
+        System.Threading.CancellationToken cancellationToken);
+
+    /// <summary>
     /// Calculate stockpile volume (cut/fill/net) over a polygon on a DEM raster.
     /// </summary>
     /// <param name="path">Path to the elevation raster</param>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -48,13 +49,20 @@ public class RasterExportToolTests
     public void SetUp()
     {
         _sizeCheck = new Mock<IRasterExportSizeCheck>();
-        _tool = new RasterExportTool(Microsoft.Extensions.Options.Options.Create(new ProcessingPlatformSettings()),
-            _sizeCheck.Object);
+        _tool = ToolWith(abiMinor: 3);
         _ddb = new Mock<IDDB>(MockBehavior.Strict);
         _ddb.Setup(d => d.EntryExists(Ortho)).Returns(true);
         _ctx = new Mock<IHeavyToolValidationContext>();
         _ctx.SetupGet(c => c.Ddb).Returns(_ddb.Object);
     }
+
+    // The tool on a libddb of this ABI minor (the recorded capabilities of libddb with another minor)
+    private RasterExportTool ToolWith(int abiMinor) =>
+        new(Microsoft.Extensions.Options.Options.Create(new ProcessingPlatformSettings()), _sizeCheck.Object,
+            new Support.AbiMinorRuntime(abiMinor));
+
+    private static HeavyToolRequest RequestWith(string paramsJson) =>
+        new("raster-export", "1", "org", "ds", Ortho, JsonDocument.Parse(paramsJson).RootElement.Clone());
 
     private static HeavyToolRequest Request(string? formula, string? bandFilter = null) =>
         new("raster-export", "1", "org", "ds", Ortho, JsonSerializer.SerializeToElement(
@@ -198,5 +206,184 @@ public class RasterExportToolTests
 
         _sizeCheck.Verify(c => c.EnsureWithinLimitAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<RasterAnalysisOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+    // FR-RAS-16, D-023: the estimate of the submit is the one of the window (the visible extent) with the NoData value
+    [Test]
+    public async Task TheSubmit_ChecksTheLimitWithTheWindowAndTheNodataValue()
+    {
+        await Validate(RequestWith("""{"bbox":[12.5,45.25,13,46],"nodata":0,"formula":null}"""));
+
+        _sizeCheck.Verify(c => c.EnsureWithinLimitAsync("org", "ds", Ortho,
+            It.Is<RasterAnalysisOptions?>(o => o != null && o.Nodata == 0 && o.Formula == null &&
+                                                o.Bbox != null && o.Bbox.SequenceEqual(new[] { 12.5, 45.25, 13, 46.0 })),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task AWindowOverTheLimit_Is400AtTheSubmitWithTheEstimateAndTheLimit()
+    {
+        _sizeCheck.Setup(c => c.EnsureWithinLimitAsync("org", "ds", Ortho, It.IsAny<RasterAnalysisOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ExportTooLargeException("Export output exceeds maximum allowed size (1.4 GB > 1 GB).",
+                1_500_000_000, 1_073_741_824));
+
+        var ex = await Should.ThrowAsync<ExportTooLargeException>(() =>
+            Validate(RequestWith("""{"bbox":[12,45,13,46]}""")));
+
+        ex.StatusCode.ShouldBe(400);
+        (ex.EstimatedBytes, ex.LimitBytes).ShouldBe((1_500_000_000L, 1_073_741_824L));
+    }
+
+    // The window is exported by libddb 2.3: before it DDBExportRaster3 ignores it and would export the whole raster
+    [Test]
+    public async Task AWindow_OnLibddb22_IsRefusedAtTheBboxMemberBeforeTheSizeCheck()
+    {
+        var tool = ToolWith(abiMinor: 2);
+
+        var ex = await Should.ThrowAsync<InvalidFieldException>(() =>
+            tool.ValidateAsync(RequestWith("""{"bbox":[12,45,13,46]}"""), _ctx.Object, CancellationToken.None));
+
+        ex.Field.ShouldBe("bbox");
+        ex.StatusCode.ShouldBe(400);
+        ex.Message.ShouldContain("libddb 2.3 or later");
+        ex.Message.ShouldContain("ABI 2.2");
+        _sizeCheck.VerifyNoOtherCalls();
+    }
+
+    [Test]
+    public async Task TheWholeRaster_OnLibddb22_StillExports()
+    {
+        await ToolWith(abiMinor: 2).ValidateAsync(RequestWith("""{"nodata":0}"""), _ctx.Object, CancellationToken.None);
+
+        _sizeCheck.Verify(c => c.EnsureWithinLimitAsync("org", "ds", Ortho,
+            It.Is<RasterAnalysisOptions?>(o => o != null && o.Nodata == 0 && o.Bbox == null),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [TestCase("[1,2,3]")]
+    [TestCase("[1,2,3,4,5]")]
+    [TestCase("[1,2,3,\"4\"]")]
+    [TestCase("\"1,2,3,4\"")]
+    [TestCase("{\"minLon\":1}")]
+    [TestCase("[-181,0,10,10]")]
+    [TestCase("[0,0,181,10]")]
+    [TestCase("[0,-91,10,10]")]
+    [TestCase("[0,0,10,91]")]
+    public async Task ABboxThatIsNotAWgs84Window_Is400AtTheBboxMember(string bbox)
+    {
+        var ex = await Should.ThrowAsync<InvalidFieldException>(() =>
+            Validate(RequestWith($$"""{"bbox":{{bbox}}}""")));
+
+        ex.Field.ShouldBe("bbox");
+        ex.FieldErrors!["bbox"].ShouldNotBeEmpty();
+    }
+
+    [TestCase("\"0\"")]
+    [TestCase("true")]
+    [TestCase("[0]")]
+    public async Task ANodataThatIsNotANumber_Is400AtTheNodataMember(string nodata)
+    {
+        var ex = await Should.ThrowAsync<InvalidFieldException>(() =>
+            Validate(RequestWith($$"""{"nodata":{{nodata}}}""")));
+
+        ex.Field.ShouldBe("nodata");
+    }
+
+    [Test]
+    public async Task TheExport_SendsTheWindowAndTheNodataValueToLibddb()
+    {
+        var workDir = Directory.CreateTempSubdirectory("raster-export-test-").FullName;
+        try
+        {
+            RasterAnalysisOptions? sent = null;
+            string? output = null;
+            var ddb = new Mock<IDDB>(MockBehavior.Strict);
+            ddb.Setup(d => d.ExportRaster(Ortho, It.IsAny<string>(), null, null, "CELSIUS", null, "ironbow", "10,40",
+                    It.IsAny<int>(), It.IsAny<RasterAnalysisOptions?>(), It.IsAny<Action<double, string?>?>(),
+                    It.IsAny<CancellationToken>()))
+                .Callback<string, string, string?, string?, string?, string?, string?, string?, int, RasterAnalysisOptions?,
+                    Action<double, string?>?, CancellationToken>((_, o, _, _, _, _, _, _, _, options, _, _) =>
+                {
+                    sent = options;
+                    output = o;
+                    File.WriteAllBytes(o, [1, 2, 3]);
+                });
+            var worker = new Mock<IHeavyToolExecutionContext>();
+            worker.SetupGet(c => c.Ddb).Returns(ddb.Object);
+            worker.SetupGet(c => c.WorkDir).Returns(workDir);
+
+            var artifact = await _tool.ExecuteAsync(
+                RequestWith("""{"formula":"CELSIUS","colormap":"ironbow","rescale":"10,40","nodata":-9999,"bbox":[12.5,45.25,13,46]}"""),
+                worker.Object, new Progress<HeavyToolProgress>(), CancellationToken.None);
+
+            sent.ShouldNotBeNull();
+            sent.Nodata.ShouldBe(-9999);
+            sent.Bbox.ShouldBe([12.5, 45.25, 13, 46]);
+            sent.Formula.ShouldBeNull("the formula is the style of the export, not an option of the values");
+            Path.GetFileName(output!).ShouldBe("ortho_export.tif");
+            artifact.ShouldNotBeNull().SizeBytes.ShouldBe(3);
+        }
+        finally
+        {
+            Directory.Delete(workDir, true);
+        }
+    }
+
+    [Test]
+    public async Task TheExport_OfTheWholeRaster_SendsNoOptions()
+    {
+        var workDir = Directory.CreateTempSubdirectory("raster-export-test-").FullName;
+        try
+        {
+            var calls = 0;
+            RasterAnalysisOptions? sent = new(Nodata: 1);
+            var ddb = new Mock<IDDB>(MockBehavior.Strict);
+            ddb.Setup(d => d.ExportRaster(Ortho, It.IsAny<string>(), null, null, null, null, null, null,
+                    It.IsAny<int>(), It.IsAny<RasterAnalysisOptions?>(), It.IsAny<Action<double, string?>?>(),
+                    It.IsAny<CancellationToken>()))
+                .Callback<string, string, string?, string?, string?, string?, string?, string?, int, RasterAnalysisOptions?,
+                    Action<double, string?>?, CancellationToken>((_, o, _, _, _, _, _, _, _, options, _, _) =>
+                {
+                    calls++;
+                    sent = options;
+                    File.WriteAllBytes(o, [1]);
+                });
+            var worker = new Mock<IHeavyToolExecutionContext>();
+            worker.SetupGet(c => c.Ddb).Returns(ddb.Object);
+            worker.SetupGet(c => c.WorkDir).Returns(workDir);
+
+            await _tool.ExecuteAsync(RequestWith("{}"), worker.Object, new Progress<HeavyToolProgress>(),
+                CancellationToken.None);
+
+            calls.ShouldBe(1);
+            sent.ShouldBeNull();
+        }
+        finally
+        {
+            Directory.Delete(workDir, true);
+        }
+    }
+
+    [Test]
+    public void TheToolSchema_ListsTheNodataAndTheWindow()
+    {
+        var properties = _tool.InputSchema.RootElement.GetProperty("properties");
+
+        properties.GetProperty("bbox").GetProperty("minItems").GetInt32().ShouldBe(4);
+        properties.GetProperty("bbox").GetProperty("maxItems").GetInt32().ShouldBe(4);
+        properties.TryGetProperty("nodata", out _).ShouldBeTrue();
+    }
+
+    // FR-RAS-16, FR-XC-22: /sys/features says whether the loaded libddb exports a window, by the rule of the submit, so
+    // the Hub disables 'Visible extent' with its reason where the submit would refuse the bbox
+    [TestCase(2, false)]
+    [TestCase(3, true)]
+    [TestCase(4, true)]
+    public async Task TheRasterExportWindowFeature_FollowsTheAbiMinor(int abiMinor, bool expected)
+    {
+        var features = new Registry.Web.Models.DTO.FeaturesDto();
+        await new Registry.Web.Services.Features.RasterExportFeatures(new Support.AbiMinorRuntime(abiMinor)).FillAsync(features);
+
+        features.RasterExportWindow.ShouldBe(expected);
     }
 }

@@ -2015,6 +2015,7 @@
         "DatasetThumbnailCandidates-text"
       ],
       "maxExportSizeBytes": 1234567890123,
+      "rasterExportWindow": true,
       "maxWcsCoverageSizePixels": 42,
       "bulkDownloadAsyncThresholdBytes": 1234567890123,
       "taskTools": [
@@ -2090,6 +2091,7 @@
       "systemRoles": null,
       "datasetThumbnailCandidates": null,
       "maxExportSizeBytes": null,
+      "rasterExportWindow": false,
       "maxWcsCoverageSizePixels": 0,
       "bulkDownloadAsyncThresholdBytes": 0,
       "taskTools": null,

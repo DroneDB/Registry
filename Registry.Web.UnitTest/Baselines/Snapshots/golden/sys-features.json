@@ -110,6 +110,7 @@
       "cover.png"
     ],
     "maxExportSizeBytes": 1073741824,
+    "rasterExportWindow": false,
     "maxWcsCoverageSizePixels": 8192,
     "bulkDownloadAsyncThresholdBytes": 524288000,
     "taskTools": [

@@ -72,6 +72,13 @@ public readonly struct ToolParameters(JsonElement json)
     public JsonElement? JsonObject(string name) =>
         Get(name, out var el) && el.ValueKind == JsonValueKind.Object ? el : null;
 
+    /// <summary>
+    /// The value of <paramref name="name"/> of whatever JSON kind, or null when it is absent or JSON null: for a tool that
+    /// refuses a value of the wrong kind (a window, a NoData value) instead of reading it as absent.
+    /// </summary>
+    public JsonElement? Value(string name) =>
+        Get(name, out var el) && el.ValueKind != JsonValueKind.Null ? el : null;
+
     private bool Get(string name, out JsonElement value)
     {
         if (json.ValueKind == JsonValueKind.Object && json.TryGetProperty(name, out value))

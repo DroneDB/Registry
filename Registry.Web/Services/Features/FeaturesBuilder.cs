@@ -7,10 +7,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Ports;
 using Registry.Ports.Archives;
+using Registry.Ports.DroneDB;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.Hub;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -129,6 +131,20 @@ public sealed class DownloadFeatures : IFeatureSection
         features.MaxWcsCoverageSizePixels = _downloads.MaxWcsCoverageSizePixels;
         features.BulkDownloadAsyncThresholdBytes = _platform.BulkDownloadAsyncThresholdBytes;
         features.DatasetThumbnailCandidates = _thumbnails.Candidates;
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Raster exports: whether the loaded libddb exports a window, by the one rule of the export task.</summary>
+public sealed class RasterExportFeatures : IFeatureSection
+{
+    private readonly IDdbRuntime _runtime;
+
+    public RasterExportFeatures(IDdbRuntime runtime) => _runtime = runtime;
+
+    public Task FillAsync(FeaturesDto features)
+    {
+        features.RasterExportWindow = RasterExportTool.SupportsWindow(_runtime.Capabilities);
         return Task.CompletedTask;
     }
 }

@@ -82,12 +82,20 @@ public sealed class RasterAnalysisService
     /// pixels.
     /// </summary>
     public async Task<long?> EstimateExportBytesAsync(string orgSlug, string dsSlug, string path,
-        RasterAnalysisOptions? options, CancellationToken ct = default)
+        RasterAnalysisOptions? options, CancellationToken ct = default) =>
+        (await CountExportAsync(orgSlug, dsSlug, path, options, ct)).Bytes;
+
+    /// <summary>
+    /// The estimate of <see cref="EstimateExportBytesAsync"/> and the source pixels in the window of
+    /// <paramref name="options"/> (null without a window, or when libddb did not count them).
+    /// </summary>
+    private async Task<(long? Bytes, long? WindowPixels)> CountExportAsync(string orgSlug, string dsSlug, string path,
+        RasterAnalysisOptions? options, CancellationToken ct)
     {
         var counting = ExportEstimate.CountingOptions(options);
         var json = await OnSourceAsync(orgSlug, dsSlug, path, (ddb, file) => ddb.GetRasterValueInfo(file, counting), ct);
         using var doc = JsonDocument.Parse(json);
-        return ExportEstimate.Bytes(doc.RootElement);
+        return (ExportEstimate.Bytes(doc.RootElement), ExportEstimate.WindowPixels(doc.RootElement));
     }
 
     /// <summary>
@@ -312,20 +320,27 @@ public sealed class RasterAnalysisService
     private Task<T> RunAsync<T>(Func<T> work, CancellationToken ct) => _gate.RunAsync(NativeLane.Heavy, work, ct);
 
     /// <summary>
-    /// Throws <see cref="BadRequestException"/> when the estimated export (<see cref="EstimateExportBytesAsync"/>) exceeds
+    /// Throws <see cref="ExportTooLargeException"/> (a 400 that carries the estimate and the limit) when the estimated
+    /// export (<see cref="EstimateExportBytesAsync"/>, with the NoData value and the window of <paramref name="options"/>) exceeds
     /// <see cref="DownloadOptions.MaxExportSizeBytes"/>; nothing when there is no limit or no estimate. The one check of
     /// an export: the direct export and the submit of the raster-export task (<see cref="IRasterExportSizeCheck"/>).
+    /// A window without a pixel of the raster is a 400 at <c>errors.bbox</c>, with or without a limit: the value info counts
+    /// no pixel in it, and the export of libddb 2.3 would refuse it on the worker (FR-RAS-16).
     /// </summary>
+    /// <exception cref="InvalidFieldException">The window (<see cref="RasterAnalysisOptions.Bbox"/>) is outside the raster.</exception>
     public async Task EnsureExportSizeWithinLimitAsync(string orgSlug, string dsSlug, string path,
         RasterAnalysisOptions options, CancellationToken ct = default)
     {
-        if (_downloads.MaxExportSizeBytes is not { } limit) return;
+        var limit = _downloads.MaxExportSizeBytes;
+        var window = options.Bbox is not null;
+        if (limit is null && !window) return;
 
         long? estimated;
+        long? windowPixels;
         try
         {
             // The estimate of the value info, on the same file with the same NoData value and window
-            estimated = await EstimateExportBytesAsync(orgSlug, dsSlug, path, options, ct);
+            (estimated, windowPixels) = await CountExportAsync(orgSlug, dsSlug, path, options, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -334,10 +349,17 @@ public sealed class RasterAnalysisService
             return;
         }
 
-        if (estimated is { } bytes && bytes > limit)
-            throw new BadRequestException(
-                $"Export output exceeds maximum allowed size ({CommonUtils.GetBytesReadable(bytes)} > {CommonUtils.GetBytesReadable(limit)}).");
+        if (window && windowPixels == 0)
+            throw new InvalidFieldException("bbox", OutsideTheRaster);
+
+        if (limit is { } max && estimated is { } bytes && bytes > max)
+            throw new ExportTooLargeException(
+                $"Export output exceeds maximum allowed size ({CommonUtils.GetBytesReadable(bytes)} > {CommonUtils.GetBytesReadable(max)}).",
+                bytes, max);
     }
+
+    /// <summary>The refusal of a window without a pixel of the raster (<c>errors.bbox</c>).</summary>
+    public const string OutsideTheRaster = "The box is outside the raster";
 
     /// <summary>
     /// The value info of libddb with the size of its export and the limit (D-023): <c>estimatedExportBytes</c> (absent when
@@ -390,6 +412,10 @@ public static class ExportEstimate
         long? total = info.TryGetProperty("pixelCount", out var totalElement) && totalElement.TryGetInt64(out var t) ? t : null;
         return Bytes(valid, total, window);
     }
+
+    /// <summary>The source pixels in the window of the value info (<c>windowPixelCount</c>); null when it has none.</summary>
+    public static long? WindowPixels(JsonElement info) =>
+        info.TryGetProperty("windowPixelCount", out var element) && element.TryGetInt64(out var window) ? window : null;
 
     /// <summary>The estimate of <paramref name="validPixels"/> pixels, or of the part of them in a window of <paramref name="windowPixels"/> source pixels.</summary>
     public static long Bytes(long validPixels, long? totalPixels, long? windowPixels)

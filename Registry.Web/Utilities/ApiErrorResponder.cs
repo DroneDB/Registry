@@ -31,6 +31,12 @@ public sealed class ApiErrorResponder
     /// <summary>Extension member of a name clash (<see cref="NameClashException"/>): the dataset path of the existing entry.</summary>
     public const string ConflictPathMember = "conflictPath";
 
+    /// <summary>Extension member of an export over the limit (<see cref="ExportTooLargeException"/>): the estimated size, in bytes.</summary>
+    public const string EstimatedExportBytesMember = "estimatedExportBytes";
+
+    /// <summary>Extension member of an export over the limit (<see cref="ExportTooLargeException"/>): the limit, in bytes.</summary>
+    public const string ExportLimitBytesMember = "exportLimitBytes";
+
     /// <summary>RFC 9457 media type of every error body.</summary>
     public const string ProblemJsonContentType = "application/problem+json";
 
@@ -66,6 +72,12 @@ public sealed class ApiErrorResponder
                 : Create(httpContext, descriptor.StatusCode, descriptor.Message, descriptor.NoRetry);
         if (problem != null && exception is NameClashException clash)
             problem.Extensions[ConflictPathMember] = clash.ConflictPath;
+        if (problem != null && exception is ExportTooLargeException tooLarge)
+        {
+            problem.Extensions[EstimatedExportBytesMember] = tooLarge.EstimatedBytes;
+            problem.Extensions[ExportLimitBytesMember] = tooLarge.LimitBytes;
+        }
+
         return (descriptor, problem);
     }
 

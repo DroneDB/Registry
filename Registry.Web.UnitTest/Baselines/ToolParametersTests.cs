@@ -167,6 +167,15 @@ public class ToolParametersTests
         export.Formula.ShouldBeNull();
         export.Colormap.ShouldBe("rdylgn");
         export.FileName.ShouldBe("out.tif");
+        export.Nodata.ShouldBeNull("a request stored before the window and the NoData value has neither");
+        export.Bbox.ShouldBeNull();
+
+        var window = Read<RasterExportTool, RasterExportTool.Parameters>("raster-export",
+            """{"path":"o.tif","nodata":-9999,"bbox":[12.5,45.25,13,46]}""");
+        window.Nodata.ShouldNotBeNull().GetDouble().ShouldBe(-9999);
+        window.Bbox.ShouldNotBeNull().GetArrayLength().ShouldBe(4);
+        Read<RasterExportTool, RasterExportTool.Parameters>("raster-export", """{"bbox":null}""").Bbox
+            .ShouldBeNull("JSON null is absent; any other kind is kept for the submit to refuse");
 
         var align = Read<AlignRasterTool, AlignRasterTool.Parameters>("align-raster",
             """{"sourcePath":"a.tif","referencePath":"b.tif","outputPath":"c.tif"}""");

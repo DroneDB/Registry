@@ -89,6 +89,25 @@
               "null"
             ],
             "description": "Optional output file name."
+          },
+          "nodata": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "NoData value that replaces the one of the bands."
+          },
+          "bbox": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number"
+            },
+            "minItems": 4,
+            "maxItems": 4,
+            "description": "WGS 84 window to export (minLon, minLat, maxLon, maxLat), at the native resolution of the raster. Needs libddb 2.3 or later."
           }
         },
         "additionalProperties": false

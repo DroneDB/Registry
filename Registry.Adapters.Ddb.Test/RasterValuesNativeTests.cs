@@ -115,6 +115,51 @@ public class RasterValuesNativeTests : TestBase
         stats.GetProperty("unit").GetString().ShouldBe("Celsius");
     }
 
+    // FR-RAS-16: the export of a window. The box of the area test above holds pixels 5..9 x 10..14 of web.tif (25 pixels,
+    // by gdaltransform of the corners), so the export is 5 x 5 pixels of the same 2 m. The libddb 2.2 release ignores the
+    // window and exports the 20 x 20 raster (the Registry refuses the window there, by the ABI minor); a build of 2.3
+    // exports it, whatever ABI minor it reports before the version is bumped
+    private static readonly double[] Window = [15.0019550763244, 45.1525536869656, 15.0020449078528, 45.152617038061];
+
+    private JsonElement ExportWindow(string name)
+    {
+        var output = Path.Combine(_folder, name);
+        Wrapper.ExportRaster(_web, output, null, null, null, null, null, "0,255", 0, new RasterAnalysisOptions(Bbox: Window),
+            null, default);
+        return Parse(Wrapper.GetRasterValueInfo(output, RasterAnalysisOptions.None));
+    }
+
+    [Test]
+    public void TheExportOfAWindow_IsThePixelsUnderTheBox_WithLibddb23()
+    {
+        var exported = ExportWindow("window.tif");
+        if (exported.GetProperty("width").GetInt32() == 20)
+        {
+            new NativeDdbRuntime().Capabilities.AbiMinor.ShouldBeLessThan(3, "only libddb before 2.3 exports the whole raster");
+            Assert.Ignore("libddb before 2.3 ignores the window");
+        }
+
+        exported.GetProperty("width").GetInt32().ShouldBe(5);
+        exported.GetProperty("height").GetInt32().ShouldBe(5);
+        // The same pixels: raw 140..152 (gdalinfo -stats of the area above), the Byte copy of 0..255 keeps them and the
+        // scale of 0.1 of the band: 14.0..15.2
+        exported.GetProperty("valueMin").GetDouble().ShouldBe(14.0, 1e-5);
+        exported.GetProperty("valueMax").GetDouble().ShouldBe(15.2, 1e-5);
+    }
+
+    // A window with no pixel of the raster is invalid arguments from libddb 2.3
+    [Test]
+    public void TheExportOfAWindowOutsideTheRaster_IsInvalidArguments_WithLibddb23()
+    {
+        if (ExportWindow("probe.tif").GetProperty("width").GetInt32() == 20)
+            Assert.Ignore("libddb before 2.3 ignores the window");
+
+        var output = Path.Combine(_folder, "outside.tif");
+        Should.Throw<DdbInvalidArgumentsException>(() => Wrapper.ExportRaster(_web, output, null, null, null, null, null,
+            "0,255", 0, new RasterAnalysisOptions(Bbox: [16, 46, 16.1, 46.1]), null, default));
+        File.Exists(output).ShouldBeFalse();
+    }
+
     [Test]
     public void TheValueInfo_IsExactAndPhysical_WithTheExportSizeInputs()
     {
@@ -136,6 +181,17 @@ public class RasterValuesNativeTests : TestBase
             new RasterAnalysisOptions(Bbox: [15.001, 45.151, 15.004, 45.154])));
 
         info.GetProperty("windowPixelCount").GetInt64().ShouldBe(400);
+    }
+
+    // FR-RAS-16: the value info of a box with no pixel of the raster (a degree east of it) does not fail; it counts no pixel
+    // in it, which the submit of a window export refuses (the export of libddb 2.3 would be invalid arguments)
+    [Test]
+    public void TheValueInfoOfAWindowOutsideTheRaster_CountsNoPixel()
+    {
+        var info = Parse(Wrapper.GetRasterValueInfo(_web, new RasterAnalysisOptions(Bbox: [16, 46, 16.1, 46.1])));
+
+        info.GetProperty("windowPixelCount").GetInt64().ShouldBe(0);
+        info.GetProperty("validPixelCount").GetInt64().ShouldBe(400);
     }
 
     [Test]

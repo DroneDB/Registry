@@ -61,7 +61,7 @@ public abstract class DatasetAccessFixture : IDisposable
     [OneTimeSetUp]
     public async Task OneTimeSetUp()
     {
-        Factory = new RegistryWebFactory(FactorySettings);
+        Factory = new RegistryWebFactory(FactorySettings, FactoryServices);
 
         // A dataset without visibility metadata is private (native ddb throws on a missing key)
         Factory.DdbWrapper.Setup(d => d.MetaGet(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
@@ -89,6 +89,9 @@ public abstract class DatasetAccessFixture : IDisposable
 
     /// <summary>Settings of the fixture's host (null: the defaults).</summary>
     protected virtual IDictionary<string, string>? FactorySettings => null;
+
+    /// <summary>Services of the fixture's host, registered after the test doubles (null: none).</summary>
+    protected virtual Action<IServiceCollection>? FactoryServices => null;
 
     /// <summary>More seed data of a fixture (saved by the fixture).</summary>
     protected virtual Task SeedAsync(RegistryContext context) => Task.CompletedTask;
