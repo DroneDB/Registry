@@ -61,15 +61,21 @@ public abstract class RescaleUnitFixture : DatasetAccessFixture
 }
 
 /// <summary>
-/// D-022 on the recorded libddb 2.2 (no <c>DDBRasterOptions.rescaleUnit</c>): a render or an export that names the unit of
-/// its rescale is a 400 at <c>errors.rescaleUnit</c> that says why, before any native work, and a render without it is
-/// unchanged.
+/// D-022 on a libddb 2.2 (no <c>DDBRasterOptions.rescaleUnit</c>; the recorded capabilities with ABI 2.2, whatever the
+/// vendored fixtures say): a render or an export that names the unit of its rescale is a 400 at <c>errors.rescaleUnit</c>
+/// that says why, before any native work, and a render without it is unchanged.
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~RescaleUnitHttpTests"
 /// </summary>
 [TestFixture]
 [NonParallelizable]
 public sealed class RescaleUnitHttpTests : RescaleUnitFixture
 {
+    protected override Action<IServiceCollection> FactoryServices => services =>
+    {
+        services.RemoveAll<IDdbRuntime>();
+        services.AddSingleton<IDdbRuntime>(new AbiMinorRuntime(2));
+    };
+
     [Test]
     public async Task AThumbnailWithARescaleUnit_OnLibddb22_Is400AtRescaleUnit()
     {

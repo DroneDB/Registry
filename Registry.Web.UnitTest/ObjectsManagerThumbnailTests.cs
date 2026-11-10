@@ -650,7 +650,7 @@ public class ObjectsManagerThumbnailTests : TestBase
     {
         SetupEntry("thermal.jpg", EntryType.GeoImage, "rjpeg1");
         var style = new RasterVisualization(Formula: "CELSIUS", Rescale: "280,310", RescaleUnit: "K");
-        var services = CreateManager();
+        var services = CreateManager(new AbiMinorRuntime(2));
 
         (await Should.ThrowAsync<InvalidFieldException>(() => services.Renders.GenerateThumbnailDataExAsync(OrgSlug,
             DsSlug, "thermal.jpg", 64, style))).Field.ShouldBe("rescaleUnit");

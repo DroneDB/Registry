@@ -166,3 +166,12 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   `below` and `above` (additive). `DdbAbi.Minor` is 2. No vector changed.
 * 2026-11-10: DroneDB `0539d66562989cde8a5669c807b7ae7648ce3a88` (the DroneDB v2.2.0 release, the pinned build): no
   contract file changed since `b01ddf02`, SOURCE names the release commit.
+* 2026-11-10: DroneDB `099526fc10d41f177654d180a379bb17bf52e5f5` (the `rel/2.3` integration before its version bump: the
+  library still reports ABI 2.2). Since `0539d665`: `capabilities` lists `DDBBuildEx2` (FR-PRC-42) and
+  `DDBGenerateContoursEx2` (U-413) in `symbols` and in `cancellable`; Registry declares both in `NativeDdbOptional` and
+  calls them when the loaded libddb lists them (`NativeDdbWrapper.BuildProgressSupported`, `ContourProgressSupported`)
+  until the pin of 2.3 requires them. Each item of the `algorithms` of `raster-metadata` gains `requiredBands` and
+  `category` (required in the schema, U-415) and the list has `FAHRENHEIT` (U-202): the two `raster-metadata` fixtures
+  changed. `raster-info.schema.json` describes `detectedSensorName` (U-415) and `entry.schema.json` the `warningCode`
+  property (U-408); the Registry passes both through as libddb writes them. `DDBRasterOptions.rescaleUnit` (U-202) is
+  a field of the struct, not of a fixture: `NativeRasterOptions` is 64 bytes. No vector changed. `DdbAbi.Minor` is 2.

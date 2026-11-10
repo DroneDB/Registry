@@ -203,7 +203,8 @@ public unsafe class LibddbContractTests : TestBase
             .Where(m => m.GetCustomAttribute<LibraryImportAttribute>() != null)
             .Select(m => m.Name)
             .ToArray();
-        optional.ShouldBe([nameof(NativeDdbOptional.DDBGenerateContoursEx2)]);
+        optional.Order(StringComparer.Ordinal).ShouldBe([nameof(NativeDdbOptional.DDBBuildEx2),
+            nameof(NativeDdbOptional.DDBGenerateContoursEx2)]);
         optional.Except(DdbAbi.RequiredSymbols).ShouldBe(optional, "the startup check does not require them");
 
         NativeLibrary.TryLoad("ddb", typeof(NativeDdbWrapper).Assembly, null, out var library).ShouldBeTrue();
@@ -218,6 +219,7 @@ public unsafe class LibddbContractTests : TestBase
         }
 
         NativeDdbWrapper.ContourProgressSupported.ShouldBe(Symbols().Contains(nameof(NativeDdbOptional.DDBGenerateContoursEx2)));
+        NativeDdbWrapper.BuildProgressSupported.ShouldBe(Symbols().Contains(nameof(NativeDdbOptional.DDBBuildEx2)));
     }
 
     [Test]
