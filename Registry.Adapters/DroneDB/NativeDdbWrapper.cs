@@ -261,6 +261,42 @@ public class NativeDdbWrapper : IDdbWrapper
                 NativeDdb.DDBBuildEx(ddbPath, normalizedSource, normalizedDest, force, pendingOnly, optionsJson)));
     }
 
+    /// <summary>
+    /// <see cref="Build(string, string?, string?, bool, bool, BuildOptions?)"/> that reports the progress of the build
+    /// (FR-PRC-42): through <c>DDBBuildEx2</c> when the loaded libddb exports it (<see cref="BuildProgressSupported"/>),
+    /// else the build without progress. The build stops with the current <see cref="DdbCancellation"/> as the other builds
+    /// do, and when the observer throws (its exception is rethrown once the call has returned).
+    /// </summary>
+    public unsafe void Build(string ddbPath, string? source, string? dest, bool force, bool pendingOnly,
+        BuildOptions? options, Action<double, string?>? progress)
+    {
+        if (progress == null || !BuildProgressSupported)
+        {
+            Build(ddbPath, source, dest, force, pendingOnly, options);
+            return;
+        }
+
+        ArgumentNullException.ThrowIfNull(ddbPath);
+        var normalizedSource = source == null ? null : NormalizeSeparators(source);
+        var normalizedDest = dest == null ? null : NormalizeSeparators(dest);
+        var optionsJson = ToBuildJson(options);
+
+        using var callback = NativeProgressCallback.Create(progress, DdbCancellation.Current);
+        NativeCall.Invoke(nameof(NativeDdbOptional.DDBBuildEx2), () => AcceptDeferred(NativeProgressCallback.Completed(
+            callback, NativeDdbOptional.DDBBuildEx2(ddbPath, normalizedSource, normalizedDest, force, pendingOnly,
+                optionsJson, NativeProgressCallback.FunctionPointer, callback!.UserData))));
+    }
+
+    /// <summary>
+    /// True when the loaded libddb lists <c>DDBBuildEx2</c> in its capabilities (new in ABI 2.3): the build that reports
+    /// its progress. The list of exports says it, not the ABI minor alone (a 2.3 development build has the export before
+    /// its minor is raised). Registry pins 2.2, whose startup check does not require it (<see cref="NativeDdbOptional"/>).
+    /// </summary>
+    internal static bool BuildProgressSupported => BuildProgress.Value;
+
+    private static readonly Lazy<bool> BuildProgress = new(() =>
+        DdbAbi.Verify().Symbols.Contains(nameof(NativeDdbOptional.DDBBuildEx2)));
+
     /// <summary>The <c>DDBBuildEx</c> JSON of <paramref name="options"/>: only the limits that are set, null for none.</summary>
     public static string? ToBuildJson(BuildOptions? options)
     {

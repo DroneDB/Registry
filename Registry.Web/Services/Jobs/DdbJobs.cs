@@ -26,15 +26,18 @@ public class DdbJobs : DdbRetriedJob
     private readonly IFileSystem _fs;
     private readonly ILogger<DdbJobs> _logger;
     private readonly HostResourceBudget _budget;
+    private readonly BuildJobProgress? _progress;
 
+    /// <param name="progress">Writes the progress of a build job to its row (FR-PRC-42); null: the jobs report none.</param>
     public DdbJobs(IDdbManager ddbManager, PendingBuildEnqueuer pending, IFileSystem fs, ILogger<DdbJobs> logger,
-        HostResourceBudget budget)
+        HostResourceBudget budget, BuildJobProgress? progress = null)
     {
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _pending = pending ?? throw new ArgumentNullException(nameof(pending));
         _fs = fs ?? throw new ArgumentNullException(nameof(fs));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _budget = budget ?? throw new ArgumentNullException(nameof(budget));
+        _progress = progress;
     }
 
     /// <summary>Builds <paramref name="path"/> (null: the whole dataset).</summary>
@@ -51,7 +54,7 @@ public class DdbJobs : DdbRetriedJob
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
         OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
     public void Build(string orgSlug, Guid internalRef, string? path, bool force, PerformContext? context) =>
-        BuildNow(_ddbManager.Open(orgSlug, internalRef), path, force, context);
+        BuildJob(_ddbManager.Open(orgSlug, internalRef), path, force, context, null);
 
     /// <summary>
     /// Builds <paramref name="path"/> in the background: the build of an entry made with an older layout, which no
@@ -68,9 +71,30 @@ public class DdbJobs : DdbRetriedJob
         OnAttemptsExceeded = AttemptsExceededAction.Fail,
         OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
     public void RebuildInBackground(string orgSlug, Guid internalRef, string path, PerformContext? context) =>
-        BuildNow(_ddbManager.Open(orgSlug, internalRef), path, false, context,
+        BuildJob(_ddbManager.Open(orgSlug, internalRef), path, false, context,
             BuildOptions.Capped(_budget.Processing?.BackgroundRebuildThreads ??
                                 ProcessingBudget.DefaultBackgroundRebuildThreads));
+
+    // A build job: the build, with its progress in the job's row when libddb reports it (FR-PRC-42)
+    private void BuildJob(IDDB ddb, string? path, bool force, PerformContext? context, BuildOptions? options)
+    {
+        var sink = _progress?.Open(context);
+        if (sink == null)
+        {
+            BuildNow(ddb, path, force, context, options);
+            return;
+        }
+
+        try
+        {
+            BuildNow(ddb, path, force, context, options, sink);
+        }
+        finally
+        {
+            // The last percent and phase are written before the job's state changes
+            sink.CompleteAsync().GetAwaiter().GetResult();
+        }
+    }
 
     /// <summary>Enqueues one build per due pending entry (<see cref="PendingBuildEnqueuer"/>).</summary>
     public void BuildPending(string orgSlug, Guid internalRef, PerformContext? context) =>
@@ -179,9 +203,11 @@ public class DdbJobs : DdbRetriedJob
     /// The build, run in the calling job (the build heavy tool and the rescan tool run it inline):
     /// a build whose lock another process holds is skipped (the holder does the work); any other
     /// failure is written to the job log tail and rethrown (Hangfire's Failed state, the retry
-    /// policy, the failure filters).
+    /// policy, the failure filters). With <paramref name="progress"/>, the build reports its fraction and phase there
+    /// (<see cref="BuildProgress"/>, libddb 2.3; an older libddb builds without reporting).
     /// </summary>
-    public void BuildNow(IDDB ddb, string? path, bool force, PerformContext? context, BuildOptions? options = null)
+    public void BuildNow(IDDB ddb, string? path, bool force, PerformContext? context, BuildOptions? options = null,
+        IProgress<HeavyTasks.Models.HeavyToolProgress>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(ddb);
         var console = JobConsole.For(_logger, context, ddb.DatasetFolderPath);
@@ -196,7 +222,9 @@ public class DdbJobs : DdbRetriedJob
         try
         {
             // null: the whole dataset
-            if (options == null)
+            if (progress != null)
+                ddb.BuildWithProgress(path, force, options, BuildProgress.To(progress));
+            else if (options == null)
                 ddb.Build(path, force: force);
             else
                 ddb.BuildWithOptions(path, options, force);

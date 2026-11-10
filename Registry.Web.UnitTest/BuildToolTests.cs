@@ -1,5 +1,6 @@
 using Registry.Web.Test.Support;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -62,6 +63,8 @@ public class BuildToolTests
         result.ShouldBeNull();
         ddb.Verify(x => x.BuildPending(null, false), Times.Once);
         ddb.Verify(x => x.Build(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+        ddb.Verify(x => x.BuildWithProgress(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<BuildOptions?>(),
+            It.IsAny<System.Action<double, string?>>()), Times.Never);
         progress.Items.ShouldContain(p => p.LogChunk == "Pending build check complete");
         progress.Items.ShouldNotContain(p => p.LogChunk == "Build complete");
     }
@@ -74,7 +77,8 @@ public class BuildToolTests
 
         await Tool().ExecuteAsync(Request("sub/m.obj"), ctx, progress, CancellationToken.None);
 
-        ddb.Verify(x => x.Build("sub/m.obj", null, false), Times.Once);
+        ddb.Verify(x => x.BuildWithProgress("sub/m.obj", false, null, It.IsAny<System.Action<double, string?>>()),
+            Times.Once);
         ddb.Verify(x => x.BuildPending(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
         progress.Items.ShouldContain(p => p.LogChunk == "Build complete");
     }
@@ -89,8 +93,45 @@ public class BuildToolTests
 
         await Tool().ExecuteAsync(Request("house.obj"), ctx, progress, CancellationToken.None);
 
-        ddb.Verify(x => x.Build("house.obj", null, false), Times.Once);
+        ddb.Verify(x => x.BuildWithProgress("house.obj", false, null, It.IsAny<System.Action<double, string?>>()),
+            Times.Once);
         progress.Items.ShouldContain(p => p.LogChunk == "Waiting for odm_textured_model_geo.mtl, t.png");
         progress.Items.ShouldNotContain(p => p.LogChunk == "Build complete");
+    }
+
+    // FR-PRC-42: the build reports the percent and the phase libddb reports (DDBBuildEx2), in order, with a log line at
+    // each new phase; a build before libddb has measured anything has no percent
+    [Test]
+    public async Task ExecuteAsync_ForwardsThePercentAndThePhaseOfTheBuild()
+    {
+        var (ddb, ctx) = Context();
+        ddb.Setup(x => x.BuildWithProgress("ortho.tif", false, null, It.IsAny<System.Action<double, string?>>()))
+            .Callback<string?, bool, BuildOptions?, System.Action<double, string?>>((_, _, _, report) =>
+            {
+                report(-1, "georaster");
+                report(0.1, "warping");
+                report(0.25, "warping");
+                report(0.5, "overviews");
+                report(0.9, "compressing");
+                report(0.9, "publishing");
+                report(1, null);
+            });
+        var progress = new Progress();
+
+        await Tool().ExecuteAsync(Request("ortho.tif"), ctx, progress, CancellationToken.None);
+
+        var reported = progress.Items.Select(p => (p.Fraction, p.Phase, p.LogChunk)).ToList();
+        reported.ShouldBe(new List<(double, string?, string?)>
+        {
+            (-1, "building", "Building 'ortho.tif'"),
+            (-1, "georaster", "georaster"),
+            (0.1, "warping", "warping (10%)"),
+            (0.25, "warping", null),
+            (0.5, "overviews", "overviews (50%)"),
+            (0.9, "compressing", "compressing (90%)"),
+            (0.9, "publishing", "publishing (90%)"),
+            (1, "done", "done (100%)"),
+            (1, "done", "Build complete")
+        });
     }
 }

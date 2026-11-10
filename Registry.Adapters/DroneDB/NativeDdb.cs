@@ -514,8 +514,9 @@ internal unsafe struct NativeRasterOptions
 /// The exports of a libddb newer than the one Registry requires (2.2): they are declared apart from
 /// <see cref="NativeDdb"/> so <see cref="DdbAbi.RequiredSymbols"/>, which is derived from that class, does not make the
 /// startup check refuse an older library. A call is gated on <c>DDBGetCapabilities().abi</c> and symbols
-/// (<see cref="NativeDdbWrapper.ContourProgressSupported"/>) and is not made on a library that lacks the export. When
-/// the pin goes to 2.3, the declaration moves into <see cref="NativeDdb"/>.
+/// (<see cref="NativeDdbWrapper.ContourProgressSupported"/>, <see cref="NativeDdbWrapper.BuildProgressSupported"/>) and is
+/// not made on a library that lacks the export. When the pin goes to 2.3, the declarations move into
+/// <see cref="NativeDdb"/>.
 /// </summary>
 internal static unsafe partial class NativeDdbOptional
 {
@@ -527,4 +528,14 @@ internal static unsafe partial class NativeDdbOptional
         double baseOffset, double minElev, double maxElev, double simplifyTolerance, int bandIndex,
         NativeRasterOptions* options, delegate* unmanaged[Cdecl]<double, byte*, IntPtr, int> progress,
         IntPtr progressUserData, out IntPtr output);
+
+    /// <summary>
+    /// <c>DDBBuildEx</c> with a progress callback (ABI 2.3, FR-PRC-42): the fraction of the build (-1 until something is
+    /// measured, never going down, 1 at the end) and its phase (the entry type, "warping", "overviews", "compressing",
+    /// "publishing", null at the end); a non-zero return cancels the build.
+    /// </summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBBuildEx2(string ddbPath, string? source, string? dest,
+        [MarshalAs(UnmanagedType.U1)] bool force, [MarshalAs(UnmanagedType.U1)] bool pendingOnly, string? optionsJson,
+        delegate* unmanaged[Cdecl]<double, byte*, IntPtr, int> progress, IntPtr progressUserData);
 }

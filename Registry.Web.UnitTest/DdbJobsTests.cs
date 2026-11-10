@@ -21,6 +21,7 @@ using Registry.Web.Filters;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Utilities;
+using Microsoft.Extensions.DependencyInjection;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.Jobs;
@@ -157,6 +158,121 @@ public class DdbJobsTests
         _ddb.Verify(x => x.Build("ortho.tif", null!, false), Times.Once);
         Logged.ShouldContain(m => m.Contains("Done build"));
         Logged.ShouldNotContain(m => m.Contains("Build failed:"));
+    }
+
+    // ---- Build progress (FR-PRC-42) ----
+
+    // The recorded libddb with or without the export that reports the progress of a build
+    private sealed class BuildProgressRuntime(bool reported) : FakeDdbRuntime
+    {
+        public override DdbCapabilities Capabilities { get; } = With(reported);
+
+        private static DdbCapabilities With(bool reported)
+        {
+            var json = System.Text.Json.Nodes.JsonNode.Parse(ContractFixture.Load("capabilities").Output.ToJsonString())!;
+            var symbols = json["symbols"]!.AsArray();
+            var names = symbols.Select(n => n!.GetValue<string>()).Where(n => n != "DDBBuildEx2").ToList();
+            if (reported)
+                names.Add("DDBBuildEx2");
+            json["symbols"] = new System.Text.Json.Nodes.JsonArray([.. names.Select(n => (System.Text.Json.Nodes.JsonNode?)n)]);
+            return DdbCapabilities.Parse(json.ToJsonString());
+        }
+    }
+
+    private sealed record ProgressWrite(string JobId, int? Percent, string? Phase);
+
+    // The jobs with the progress of their builds written through this writer (no throttle)
+    private DdbJobs JobsReporting(bool reported, List<ProgressWrite> writes,
+        ProcessingBudgetSettings? processing = null)
+    {
+        var writer = new Mock<IJobIndexWriter>();
+        writer.Setup(w => w.UpdateProgressAsync(It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .Callback<string, int?, string?, string?, DateTime, CancellationToken>((id, percent, phase, _, _, _) =>
+            {
+                lock (writes)
+                    writes.Add(new ProgressWrite(id, percent, phase));
+            })
+            .Returns(System.Threading.Tasks.Task.CompletedTask);
+        var scopes = new Microsoft.Extensions.DependencyInjection.ServiceCollection()
+            .AddScoped(_ => writer.Object)
+            .BuildServiceProvider()
+            .GetRequiredService<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>();
+        var progress = new BuildJobProgress(scopes, new BuildProgressRuntime(reported),
+            Microsoft.Extensions.Options.Options.Create(new ProcessingPlatformSettings { ProgressUpdateThrottleSeconds = 0 }),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<HangfireProgressSink>.Instance);
+        return new DdbJobs(_ddbManager.Object, Pending(), new FileSystem(), _log, TestJobs.Budget(processing), progress);
+    }
+
+    // libddb's reports of a raster build: the type, the warp, the end
+    private void BuildReports(string path, BuildOptions? options = null) =>
+        _ddb.Setup(x => x.BuildWithProgress(path, false, options, It.IsAny<Action<double, string?>>()))
+            .Callback<string?, bool, BuildOptions?, Action<double, string?>>((_, _, _, report) =>
+            {
+                report(-1, "georaster");
+                report(0.4, "warping");
+                report(1, null);
+            });
+
+    [Test]
+    public void ABuildJob_WritesThePercentAndThePhaseToItsRow_WhenLibddbReportsThem()
+    {
+        var writes = new List<ProgressWrite>();
+        BuildReports("ortho.tif");
+        var (context, tail) = Context();
+
+        JobsReporting(true, writes).Build(Org, Ref, "ortho.tif", false, context);
+
+        _ddb.Verify(x => x.Build(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+        writes.ShouldNotBeEmpty();
+        writes.ShouldAllBe(w => w.JobId == "42");
+        // The last write, before the job's state changes: the build is complete
+        (writes[^1].Percent, writes[^1].Phase).ShouldBe((100, "done"));
+        // Each new phase is a line of the job's log tail, with the console lines of the job
+        var lines = tail.Snapshot().Lines.Select(l => l.Msg).ToList();
+        lines.ShouldContain("georaster");
+        lines.ShouldContain("warping (40%)");
+        lines.ShouldContain("done (100%)");
+        lines.ShouldContain(l => l.Contains("Done build"));
+    }
+
+    [Test]
+    public void ABackgroundRebuild_WritesItsProgress_UnderItsThreadCap()
+    {
+        var writes = new List<ProgressWrite>();
+        BuildReports("model.obj", new BuildOptions(3));
+
+        JobsReporting(true, writes, new ProcessingBudgetSettings { BackgroundRebuildThreads = 3 })
+            .RebuildInBackground(Org, Ref, "model.obj", Context().Context);
+
+        _ddb.Verify(x => x.BuildWithOptions(It.IsAny<string>(), It.IsAny<BuildOptions>(), It.IsAny<bool>()), Times.Never);
+        (writes[^1].Percent, writes[^1].Phase).ShouldBe((100, "done"));
+    }
+
+    // libddb 2.2 has no DDBBuildEx2: the job builds and writes its row as it always did
+    [Test]
+    public void ABuildJob_OnALibddbThatDoesNotReportProgress_BuildsAsBefore()
+    {
+        var writes = new List<ProgressWrite>();
+
+        JobsReporting(false, writes).Build(Org, Ref, "ortho.tif", false, Context().Context);
+
+        _ddb.Verify(x => x.Build("ortho.tif", null!, false), Times.Once);
+        _ddb.Verify(x => x.BuildWithProgress(It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<BuildOptions?>(),
+            It.IsAny<Action<double, string?>>()), Times.Never);
+        writes.ShouldBeEmpty();
+    }
+
+    // A build outside a Hangfire job has no row to write
+    [Test]
+    public void ABuildWithoutAJob_ReportsNoProgress()
+    {
+        var writes = new List<ProgressWrite>();
+
+        JobsReporting(true, writes).Build(Org, Ref, "ortho.tif", false, null);
+
+        _ddb.Verify(x => x.Build("ortho.tif", null!, false), Times.Once);
+        writes.ShouldBeEmpty();
     }
 
     [Test]

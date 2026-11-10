@@ -97,6 +97,14 @@ public interface IDdbWrapper
         bool pendingOnly = false, BuildOptions? options = null);
 
     /// <summary>
+    /// <see cref="Build(string, string?, string?, bool, bool, BuildOptions?)"/> that reports its progress (FR-PRC-42):
+    /// the fraction done (0..1, or -1 while nothing is measured) and the phase, through <c>DDBBuildEx2</c> (libddb ABI
+    /// 2.3) when the loaded libddb exports it; an older libddb builds without reporting.
+    /// </summary>
+    public void Build(string ddbPath, string? source, string? dest, bool force, bool pendingOnly, BuildOptions? options,
+        Action<double, string?>? progress);
+
+    /// <summary>
     /// The build state and the existing artifacts of several entries with one index open
     /// (DDBGetBuildArtifacts): one element per path, in input order. libddb owns the build
     /// layout, the states and the type rules; Registry serves the paths it returns.

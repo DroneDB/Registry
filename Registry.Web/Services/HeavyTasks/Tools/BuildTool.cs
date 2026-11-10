@@ -83,7 +83,8 @@ public sealed class BuildTool : HeavyToolBase<BuildTool.Parameters>
             return Task.FromResult<HeavyToolArtifact?>(null);
         }
 
-        ctx.Builds.BuildNow(ctx.Ddb, path, force, ctx.Hangfire);
+        // The percent and the phase of the build as libddb reports them (FR-PRC-42, libddb 2.3)
+        ctx.Builds.BuildNow(ctx.Ddb, path, force, ctx.Hangfire, progress: progress);
 
         // The job succeeds either way: libddb's deferral is a normal return
         var waiting = _outcomes.Classify(ctx.Ddb, path, null, succeeded: true) is

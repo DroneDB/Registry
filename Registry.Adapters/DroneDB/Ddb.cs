@@ -210,6 +210,13 @@ public class DDB : IDDB
         RunBuild(path, null, force, options);
     }
 
+    public void BuildWithProgress(string? path, bool force, BuildOptions? options, Action<double, string?> progress)
+    {
+        ArgumentNullException.ThrowIfNull(progress);
+        Wrap(() => Wrapper.Build(DatasetFolderPath, path?.ToDdbPath(), null, force, false, options, progress),
+            ex => $"Cannot build '{path}' from ddb '{DatasetFolderPath}'");
+    }
+
     private void RunBuild(string? path, string? dest, bool force, BuildOptions? options)
     {
         Wrap(() => Wrapper.Build(DatasetFolderPath, path?.ToDdbPath(), dest, force, options: options),

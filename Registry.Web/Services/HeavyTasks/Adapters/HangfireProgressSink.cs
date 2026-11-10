@@ -23,7 +23,9 @@ namespace Registry.Web.Services.HeavyTasks.Adapters;
 /// owns the slow side: it writes the console lines and the latest snapshot, one write at a time,
 /// through an <see cref="IJobIndexWriter"/> of the sink's own DI scope (never the task's scoped
 /// DbContext, which is not thread-safe). No reporting thread waits for the database.
-/// <see cref="CompleteAsync"/> drains it and writes the final tail.
+/// <see cref="CompleteAsync"/> drains it and writes the final tail. The tail is read and written under a lock on the
+/// buffer itself, so a buffer the job's console writes too (<see cref="Jobs.JobConsole"/>, the tail of
+/// <see cref="Filters.BuildLogCaptureFilter"/>) can be shared.
 /// </remarks>
 public sealed class HangfireProgressSink : IProgress<HeavyToolProgress>, IAsyncDisposable
 {
@@ -83,13 +85,15 @@ public sealed class HangfireProgressSink : IProgress<HeavyToolProgress>, IAsyncD
                 {
                     var trimmed = line.TrimEnd('\r');
                     if (trimmed.Length == 0) continue;
-                    _logBuffer.Append(trimmed, "info", value.Phase);
+                    lock (_logBuffer)
+                        _logBuffer.Append(trimmed, "info", value.Phase);
                     _consoleLines.Enqueue(trimmed);
                 }
             }
             else if (!string.IsNullOrEmpty(value.Message))
             {
-                _logBuffer.Append(value.Message!, "info", value.Phase);
+                lock (_logBuffer)
+                    _logBuffer.Append(value.Message!, "info", value.Phase);
             }
 
             var now = DateTime.UtcNow;
@@ -106,7 +110,7 @@ public sealed class HangfireProgressSink : IProgress<HeavyToolProgress>, IAsyncD
                 _lastFlushUtc = now;
                 _lastPercent = percent;
                 _lastPhase = value.Phase ?? _lastPhase;
-                _pending = new Snapshot(_lastPercent, _lastPhase, _logBuffer.ToJson());
+                _pending = new Snapshot(_lastPercent, _lastPhase, TailJson());
             }
             else if (_consoleLines.Count == 0 && !waitingChanged)
             {
@@ -131,12 +135,18 @@ public sealed class HangfireProgressSink : IProgress<HeavyToolProgress>, IAsyncD
 
         Snapshot final;
         lock (_gate)
-            final = new Snapshot(_lastPercent, _lastPhase, _logBuffer.ToJson());
+            final = new Snapshot(_lastPercent, _lastPhase, TailJson());
         await WriteAsync(final);
         _scope.Dispose();
     }
 
     public async ValueTask DisposeAsync() => await CompleteAsync();
+
+    private string TailJson()
+    {
+        lock (_logBuffer)
+            return _logBuffer.ToJson();
+    }
 
     private async Task ConsumeAsync()
     {

@@ -96,6 +96,7 @@ public static class ProcessingNodeServiceCollectionExtensions
         services.AddScoped<DatasetSweep>();
         services.AddScoped<PendingBuildEnqueuer>();
         services.AddScoped<DdbJobs>();
+        services.AddSingleton<BuildJobProgress>();
         services.AddScoped<FileJobs>();
         services.AddScoped<HealthCheckJob>();
         services.AddScoped<ExpiredRecurringJobsSweep>();
