@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -159,13 +160,44 @@ public sealed class UserAccounts
         if (user == null)
             throw new BadRequestException("Cannot find user " + userName);
 
+        // The storage quota is a whole number of MB or null (which removes it): anything else is refused at the field
+        if (meta.TryGetValue(MagicStrings.MaxStorageKey, out var quota) && !IsValidQuota(quota))
+            throw new InvalidFieldException(MagicStrings.MaxStorageKey, MaxStorageInvalidMessage);
+
         // The roles of the metadata are applied: they cannot disable the user (D-043)
         await _provisioning.RefuseDeactivatedAsync(user, UserProvisioning.RequestedMetadataRoles(meta));
 
-        user.Metadata = meta;
+        // The given keys are merged into the metadata, which keeps its other keys (the storage quota is one key among
+        // them, FR-ADM-16); a null value removes its key
+        var merged = new Dictionary<string, object>(user.Metadata);
+        foreach (var (key, value) in meta)
+        {
+            if (value is null or JsonElement { ValueKind: JsonValueKind.Null })
+                merged.Remove(key);
+            else
+                merged[key] = value;
+        }
 
-        await _provisioning.SyncRolesAsync(user);
+        user.Metadata = merged;
+
+        // The roles are applied only when the request names them: the ones stored with the metadata may be older than
+        // the roles the user has now (they are edited through the user), and a quota update must not bring them back
+        if (UserProvisioning.RequestedMetadataRoles(meta) != null)
+            await _provisioning.SyncRolesAsync(user);
 
         await _applicationDbContext.SaveChangesAsync();
     }
+
+    /// <summary>Why a storage quota that is not a whole number of MB, zero or more, is refused.</summary>
+    public const string MaxStorageInvalidMessage = "The storage quota must be a whole number of MB, zero or more";
+
+    private static bool IsValidQuota(object? value) => value switch
+    {
+        null => true,
+        JsonElement { ValueKind: JsonValueKind.Null } => true,
+        JsonElement { ValueKind: JsonValueKind.Number } n => n.TryGetInt64(out var mb) && mb >= 0,
+        long mb => mb >= 0,
+        int mb => mb >= 0,
+        _ => false
+    };
 }

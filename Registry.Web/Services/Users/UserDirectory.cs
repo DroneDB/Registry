@@ -281,7 +281,9 @@ public sealed class UserDirectory
         foreach (var user in await GetUsersWithRolesAsync(ct))
         {
             var orgInfo = userOrg.SafeGetValue(user.Id);
-            var storageInfo = await GetUserStorageInfo(user.UserName);
+            var account = await _userManager.FindByNameAsync(user.UserName)
+                          ?? throw new BadRequestException("Cannot find user " + user.UserName);
+            var storageInfo = _quota.GetUserStorage(account);
 
             // Calculate total datasets for this user across all their organizations
             var totalDatasets = 0;
@@ -297,7 +299,9 @@ public sealed class UserDirectory
                 Email = user.Email,
                 Roles = user.Roles,
                 Organizations = orgInfo?.OrgIds ?? [],
-                StorageQuota = storageInfo.Total,
+                // The quota that is stored, which an administrator edits, whether or not the server enforces it (the
+                // Hub shows a bar only when it does: the storage limiter is on and the user is not an administrator)
+                StorageQuota = account.StoredQuotaBytes(),
                 StorageUsed = storageInfo.Used,
                 OrganizationCount = orgInfo?.OrgCount ?? 0,
                 DatasetCount = totalDatasets,

@@ -170,4 +170,51 @@ public class StorageQuotaOwnerTests
 
         ex.Message.ShouldBe("Storage quota exceeded: the owner of this organization has 0 B left.");
     }
+
+    // GET /users/storage shows the limit that is enforced: none when the limiter is off or the user is an administrator
+    [Test]
+    public async Task GetUserStorage_WithTheLimiterOn_HasTheTotalOfTheStoredQuotaInBytes()
+    {
+        var owner = await OwnerAsync("o1", maxStorageMb: 45);
+        Organization("acme", "o1", datasets: 3);
+
+        var info = Quota().GetUserStorage(owner);
+
+        info.Total.ShouldBe(45 * Mb);
+        info.Used.ShouldBe(30 * Mb);
+    }
+
+    [Test]
+    public async Task GetUserStorage_WithTheLimiterOff_HasNoTotal_ButTheUse()
+    {
+        var owner = await OwnerAsync("o1", maxStorageMb: 45);
+        Organization("acme", "o1", datasets: 3);
+
+        var info = Quota(limiter: false).GetUserStorage(owner);
+
+        info.Total.ShouldBeNull();
+        info.Used.ShouldBe(30 * Mb);
+    }
+
+    [Test]
+    public async Task GetUserStorage_OfAnAdministrator_HasNoTotal_EvenWithAStoredQuota()
+    {
+        var owner = await OwnerAsync("admin-owner", maxStorageMb: 45, admin: true);
+        Organization("acme", "admin-owner", datasets: 2);
+
+        var info = Quota().GetUserStorage(owner);
+
+        info.Total.ShouldBeNull();
+        info.Used.ShouldBe(20 * Mb);
+        owner.StoredQuotaBytes().ShouldBe(45 * Mb);
+    }
+
+    [Test]
+    public async Task GetUserStorage_OfAUserWithoutAQuota_HasNoTotal()
+    {
+        var owner = await OwnerAsync("o1", maxStorageMb: null);
+
+        Quota().GetUserStorage(owner).Total.ShouldBeNull();
+        owner.StoredQuotaBytes().ShouldBeNull();
+    }
 }

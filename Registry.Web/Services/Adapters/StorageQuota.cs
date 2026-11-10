@@ -41,7 +41,10 @@ public class StorageQuota : IStorageQuota
         if (user == null)
             throw new ArgumentException("User is null", nameof(user));
 
-        var maxStorage = user.Metadata?.SafeGetValue(MagicStrings.MaxStorageKey) is long obj ? obj : (long?)null;
+        // The limit shown is the one that is enforced: with the limiter off, or for an administrator, there is none (the
+        // stored value stays in the metadata and in the user list, where it is edited)
+        var enforced = _accounts.EnableStorageLimiter
+                       && !IdentityRoleQuery.UserIdsIn(_identity, ApplicationDbContext.AdminRoleName).Any(id => id == user.Id);
 
         // Get all the datasets that belong to the user - using projection for efficiency
         var datasets = _context.Organizations
@@ -56,8 +59,7 @@ public class StorageQuota : IStorageQuota
 
         return new UserStorageInfo
         {
-            // Max storage is in MB, we need bytes to stay consistent
-            Total = maxStorage * 1024 * 1024,
+            Total = enforced ? user.StoredQuotaBytes() : null,
             Used = size
         };
     }

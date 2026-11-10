@@ -28,10 +28,9 @@ public sealed class ProcessingSections : IConfigurationSectionBuilder
 
     private ConfigurationSectionDataDto BuildProcessingPlatformSection()
     {
-        var platform = _view.ConfiguredOrNull<ProcessingPlatformSettings>();
-        var platformDefault = _view.ShippedOrNull<ProcessingPlatformSettings>();
-        var pp = platform;
-        var dp = platformDefault;
+        var pp = _view.ConfiguredOrNull<ProcessingPlatformSettings>();
+        // appsettings-default.json has no ProcessingPlatform section: the defaults in effect are the class's (FR-ADM-14)
+        var dp = _view.Shipped<ProcessingPlatformSettings>();
         var isActive = pp != null;
 
         var section = Section("ProcessingPlatform", "Processing Platform",
@@ -39,124 +38,122 @@ public sealed class ProcessingSections : IConfigurationSectionBuilder
             [
                 NumberField("ArtifactTtlHours", "Artifact TTL (hours)",
                     "Hours before a produced artifact's WorkDir is swept.",
-                    pp?.ArtifactTtlHours ?? dp?.ArtifactTtlHours ?? 0,
-                    dp?.ArtifactTtlHours ?? 0, unit: "hours"),
+                    pp?.ArtifactTtlHours ?? dp.ArtifactTtlHours,
+                    dp.ArtifactTtlHours, unit: "hours"),
 
                 NumberField("MaxConcurrentTasksPerUser", "Max Concurrent Tasks / User",
                     "Maximum concurrent heavy tasks per user.",
-                    pp?.MaxConcurrentTasksPerUser ?? dp?.MaxConcurrentTasksPerUser ?? 0,
-                    dp?.MaxConcurrentTasksPerUser ?? 0),
+                    pp?.MaxConcurrentTasksPerUser ?? dp.MaxConcurrentTasksPerUser,
+                    dp.MaxConcurrentTasksPerUser),
 
                 NumberField("MaxQueuedTasksPerUser", "Max Queued Tasks / User",
                     "Maximum queued (pending) heavy tasks per user.",
-                    pp?.MaxQueuedTasksPerUser ?? dp?.MaxQueuedTasksPerUser ?? 0,
-                    dp?.MaxQueuedTasksPerUser ?? 0),
+                    pp?.MaxQueuedTasksPerUser ?? dp.MaxQueuedTasksPerUser,
+                    dp.MaxQueuedTasksPerUser),
 
                 NumberField("MaxConcurrentTasksPerOrg", "Max Concurrent Tasks / Org",
                     "Maximum concurrent heavy tasks per organization.",
-                    pp?.MaxConcurrentTasksPerOrg ?? dp?.MaxConcurrentTasksPerOrg ?? 0,
-                    dp?.MaxConcurrentTasksPerOrg ?? 0),
+                    pp?.MaxConcurrentTasksPerOrg ?? dp.MaxConcurrentTasksPerOrg,
+                    dp.MaxConcurrentTasksPerOrg),
 
                 NumberField("MaxConcurrentTasksGlobal", "Max Concurrent Tasks (global)",
                     "Hard cap on concurrent heavy tasks across all users.",
-                    pp?.MaxConcurrentTasksGlobal ?? dp?.MaxConcurrentTasksGlobal ?? 0,
-                    dp?.MaxConcurrentTasksGlobal ?? 0),
+                    pp?.MaxConcurrentTasksGlobal ?? dp.MaxConcurrentTasksGlobal,
+                    dp.MaxConcurrentTasksGlobal),
 
                 NumberField("MaxEstimatedOutputBytesPerSubmit", "Max Estimated Output / Submit",
                     "Hard cap on estimated output size per task submission.",
-                    pp?.MaxEstimatedOutputBytesPerSubmit ?? dp?.MaxEstimatedOutputBytesPerSubmit ?? 0,
-                    dp?.MaxEstimatedOutputBytesPerSubmit ?? 0, unit: "bytes"),
+                    pp?.MaxEstimatedOutputBytesPerSubmit ?? dp.MaxEstimatedOutputBytesPerSubmit,
+                    dp.MaxEstimatedOutputBytesPerSubmit, unit: "bytes"),
 
                 NumberField("MaxArchiveExtractSizeBytes", "Max Archive Extract Size",
-                    "Maximum compressed archive size accepted by archive-extract tool.",
-                    pp?.MaxArchiveExtractSizeBytes ?? dp?.MaxArchiveExtractSizeBytes ?? 0,
-                    dp?.MaxArchiveExtractSizeBytes ?? 0, unit: "bytes"),
+                    "Maximum compressed archive size accepted by archive-extract tool. 0 = no limit.",
+                    pp?.MaxArchiveExtractSizeBytes ?? dp.MaxArchiveExtractSizeBytes,
+                    dp.MaxArchiveExtractSizeBytes, unit: "bytes"),
 
                 NumberField("DiskSafetyMarginBytes", "Disk Safety Margin",
                     "Disk head-room kept free during archive extraction. 0 to disable.",
-                    pp?.DiskSafetyMarginBytes ?? dp?.DiskSafetyMarginBytes ?? 0,
-                    dp?.DiskSafetyMarginBytes ?? 0, unit: "bytes"),
+                    pp?.DiskSafetyMarginBytes ?? dp.DiskSafetyMarginBytes,
+                    dp.DiskSafetyMarginBytes, unit: "bytes"),
 
                 ArrayField("PhotogrammetryExcludedFolders", "Photogrammetry Excluded Folders",
                     "Folders of a photogrammetry result bundle that are not imported into the dataset (path prefixes, " +
                     "letter case ignored). Not set: entwine_pointcloud/, opensfm/ and odm_meshing/. An empty list imports every file.",
-                    [.. (pp ?? dp)?.PhotogrammetryExcludedFoldersOrDefault()
-                        ?? ProcessingPlatformSettings.DefaultPhotogrammetryExcludedFolders],
-                    [.. dp?.PhotogrammetryExcludedFoldersOrDefault()
-                        ?? ProcessingPlatformSettings.DefaultPhotogrammetryExcludedFolders]),
+                    [.. (pp ?? dp).PhotogrammetryExcludedFoldersOrDefault()],
+                    [.. dp.PhotogrammetryExcludedFoldersOrDefault()]),
 
                 NumberField("DefaultRasterTileSize", "Default Raster Tile Size",
                     "Default tile size in pixels for windowed raster export.",
-                    pp?.DefaultRasterTileSize ?? dp?.DefaultRasterTileSize ?? 0,
-                    dp?.DefaultRasterTileSize ?? 0, unit: "pixels"),
+                    pp?.DefaultRasterTileSize ?? dp.DefaultRasterTileSize,
+                    dp.DefaultRasterTileSize, unit: "pixels"),
 
                 NumberField("BulkDownloadAsyncThresholdBytes", "Bulk Download Async Threshold",
                     "Size threshold above which bulk downloads are offloaded to async task.",
-                    pp?.BulkDownloadAsyncThresholdBytes ?? dp?.BulkDownloadAsyncThresholdBytes ?? 0,
-                    dp?.BulkDownloadAsyncThresholdBytes ?? 0, unit: "bytes"),
+                    pp?.BulkDownloadAsyncThresholdBytes ?? dp.BulkDownloadAsyncThresholdBytes,
+                    dp.BulkDownloadAsyncThresholdBytes, unit: "bytes"),
 
                 NumberField("MaxConcurrentBulkDownloadsPerUser", "Max Concurrent Bulk Downloads / User",
                     "Maximum active bulk-download tasks per user.",
-                    pp?.MaxConcurrentBulkDownloadsPerUser ?? dp?.MaxConcurrentBulkDownloadsPerUser ?? 0,
-                    dp?.MaxConcurrentBulkDownloadsPerUser ?? 0),
+                    pp?.MaxConcurrentBulkDownloadsPerUser ?? dp.MaxConcurrentBulkDownloadsPerUser,
+                    dp.MaxConcurrentBulkDownloadsPerUser),
 
                 BoolField("DedupEnabled", "Dedup Enabled",
                     "Enable task deduplication (prevent duplicate submissions).",
-                    pp?.DedupEnabled ?? dp?.DedupEnabled ?? false,
-                    dp?.DedupEnabled ?? false),
+                    pp?.DedupEnabled ?? dp.DedupEnabled,
+                    dp.DedupEnabled),
 
                 NumberField("DedupLookbackHours", "Dedup Lookback (hours)",
                     "Time window for deduplication checks.",
-                    pp?.DedupLookbackHours ?? dp?.DedupLookbackHours ?? 0,
-                    dp?.DedupLookbackHours ?? 0, unit: "hours"),
+                    pp?.DedupLookbackHours ?? dp.DedupLookbackHours,
+                    dp.DedupLookbackHours, unit: "hours"),
 
                 NumberField("LogTailMaxLines", "Log Tail Max Lines",
                     "Maximum lines returned by log tail endpoint.",
-                    pp?.LogTailMaxLines ?? dp?.LogTailMaxLines ?? 0,
-                    dp?.LogTailMaxLines ?? 0),
+                    pp?.LogTailMaxLines ?? dp.LogTailMaxLines,
+                    dp.LogTailMaxLines),
 
                 NumberField("LogTailMaxBytes", "Log Tail Max Bytes",
                     "Maximum bytes returned by log tail endpoint.",
-                    pp?.LogTailMaxBytes ?? dp?.LogTailMaxBytes ?? 0,
-                    dp?.LogTailMaxBytes ?? 0, unit: "bytes"),
+                    pp?.LogTailMaxBytes ?? dp.LogTailMaxBytes,
+                    dp.LogTailMaxBytes, unit: "bytes"),
 
                 NumberField("ProgressUpdateThrottleSeconds", "Progress Update Throttle",
                     "Minimum seconds between progress updates.",
-                    pp?.ProgressUpdateThrottleSeconds ?? dp?.ProgressUpdateThrottleSeconds ?? 0,
-                    dp?.ProgressUpdateThrottleSeconds ?? 0, unit: "seconds"),
+                    pp?.ProgressUpdateThrottleSeconds ?? dp.ProgressUpdateThrottleSeconds,
+                    dp.ProgressUpdateThrottleSeconds, unit: "seconds"),
 
                 NumberField("RemoteNodePollIntervalSeconds", "Remote Node Poll Interval",
                     "Poll interval for remote NodeODX nodes.",
-                    pp?.RemoteNodePollIntervalSeconds ?? dp?.RemoteNodePollIntervalSeconds ?? 0,
-                    dp?.RemoteNodePollIntervalSeconds ?? 0, unit: "seconds"),
+                    pp?.RemoteNodePollIntervalSeconds ?? dp.RemoteNodePollIntervalSeconds,
+                    dp.RemoteNodePollIntervalSeconds, unit: "seconds"),
 
                 NumberField("RemoteNodePollMaxBackoffSeconds", "Remote Node Max Backoff",
                     "Maximum backoff for remote node polling.",
-                    pp?.RemoteNodePollMaxBackoffSeconds ?? dp?.RemoteNodePollMaxBackoffSeconds ?? 0,
-                    dp?.RemoteNodePollMaxBackoffSeconds ?? 0, unit: "seconds"),
+                    pp?.RemoteNodePollMaxBackoffSeconds ?? dp.RemoteNodePollMaxBackoffSeconds,
+                    dp.RemoteNodePollMaxBackoffSeconds, unit: "seconds"),
 
                 NumberField("RemoteNodeRequestTimeoutSeconds", "Remote Node Request Timeout",
                     "HTTP request timeout for remote NodeODX nodes.",
-                    pp?.RemoteNodeRequestTimeoutSeconds ?? dp?.RemoteNodeRequestTimeoutSeconds ?? 0,
-                    dp?.RemoteNodeRequestTimeoutSeconds ?? 0, unit: "seconds"),
+                    pp?.RemoteNodeRequestTimeoutSeconds ?? dp.RemoteNodeRequestTimeoutSeconds,
+                    dp.RemoteNodeRequestTimeoutSeconds, unit: "seconds"),
 
                 BoolField("KeepFailedNodeTasks", "Keep Failed Node Tasks",
                     "Keep a failed or cancelled NodeODX task on its node, for debugging. Off: the Registry removes it from the node (its log stays in the task).",
-                    pp?.KeepFailedNodeTasks ?? dp?.KeepFailedNodeTasks ?? false,
-                    dp?.KeepFailedNodeTasks ?? false),
+                    pp?.KeepFailedNodeTasks ?? dp.KeepFailedNodeTasks,
+                    dp.KeepFailedNodeTasks),
 
                 NumberField("MaxConcurrentUrlImportsPerUser", "Max Concurrent URL Imports / User",
                     "Maximum active import-file (single-file URL import) tasks per user.",
-                    pp?.MaxConcurrentUrlImportsPerUser ?? dp?.MaxConcurrentUrlImportsPerUser ?? 0,
-                    dp?.MaxConcurrentUrlImportsPerUser ?? 0),
+                    pp?.MaxConcurrentUrlImportsPerUser ?? dp.MaxConcurrentUrlImportsPerUser,
+                    dp.MaxConcurrentUrlImportsPerUser),
 
                 JsonField("OrgDailyOutputBytes", "Per-Org Daily Output Budget (bytes)",
                     "Per-organization daily output size budget in bytes, keyed by org slug ('default' is the fallback).",
-                    pp?.OrgDailyOutputBytes, dp?.OrgDailyOutputBytes),
+                    (pp ?? dp).OrgDailyOutputBytes, dp.OrgDailyOutputBytes, isSet: pp?.OrgDailyOutputBytes != null),
 
                 JsonField("NodeOdx", "NodeODX Processing Nodes",
                     $"Array of NodeODX processing node configurations. Each entry: {{ {EntryMembers<NodeOdxNodeConfig>()} }}.",
-                    pp?.NodeOdx, dp?.NodeOdx)
+                    (pp ?? dp).NodeOdx, dp.NodeOdx, isSet: pp?.NodeOdx != null)
             ]);
 
         section.IsActive = isActive;

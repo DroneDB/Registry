@@ -24,52 +24,51 @@ public sealed class HubSections : IConfigurationSectionBuilder
 
     private ConfigurationSectionDataDto BuildHubOptionsSection()
     {
-        var hub = _view.ConfiguredOrNull<HubOptions>();
-        var hubDefault = _view.ShippedOrNull<HubOptions>();
-        var ho = hub;
-        var do_ = hubDefault;
+        var ho = _view.ConfiguredOrNull<HubOptions>();
+        // The defaults in effect when appsettings-default.json has no such section are the class's (FR-ADM-14)
+        var do_ = _view.Shipped<HubOptions>();
         return Section("HubOptions", "Hub Options",
             "UI branding, white-label customization, and feature visibility toggles.",
             [
                 StringField("AppLogo", "App Logo",
                     "URL of the navbar logo. Use /branding/... for user-supplied assets.",
-                    ho?.AppLogo, do_?.AppLogo),
+                    ho?.AppLogo, do_.AppLogo),
 
                 StringField("AppName", "App Name",
                     "Display name used as document title. Defaults to 'DroneDB' when null.",
-                    ho?.AppName, do_?.AppName),
+                    ho?.AppName, do_.AppName),
 
                 StringField("AppIcon", "App Icon",
                     "CSS icon class or URL shown next to app name. Defaults to 'icon-dronedb'.",
-                    ho?.AppIcon, do_?.AppIcon),
+                    ho?.AppIcon, do_.AppIcon),
 
                 BoolField("ShowRegistrationLink", "Show Registration Link",
                     "Whether to show the registration link on the login page.",
-                    ho?.ShowRegistrationLink ?? true, do_?.ShowRegistrationLink ?? true),
+                    ho?.ShowRegistrationLink ?? true, do_.ShowRegistrationLink),
 
                 BoolField("DisableDatasetCreation", "Disable Dataset Creation",
                     "Hides the 'New dataset' button and all dataset creation entry-points.",
-                    ho?.DisableDatasetCreation ?? false, do_?.DisableDatasetCreation ?? false),
+                    ho?.DisableDatasetCreation ?? false, do_.DisableDatasetCreation),
 
                 BoolField("DisableStorageInfo", "Disable Storage Info",
                     "Hides the per-user storage indicator in the header.",
-                    ho?.DisableStorageInfo ?? false, do_?.DisableStorageInfo ?? false),
+                    ho?.DisableStorageInfo ?? false, do_.DisableStorageInfo),
 
                 BoolField("DisableAccountManagement", "Disable Account Management",
                     "Hides account-management menu items. Useful with external auth.",
-                    ho?.DisableAccountManagement ?? false, do_?.DisableAccountManagement ?? false),
+                    ho?.DisableAccountManagement ?? false, do_.DisableAccountManagement),
 
                 StringField("SingleOrganization", "Single Organization",
                     "When set, routes users directly to this organization slug (single-tenant mode).",
-                    ho?.SingleOrganization, do_?.SingleOrganization),
+                    ho?.SingleOrganization, do_.SingleOrganization),
 
                 BoolField("ReadOnlyOrgs", "Read-Only Organizations",
                     "Hides organization create/delete/edit actions.",
-                    ho?.ReadOnlyOrgs ?? false, do_?.ReadOnlyOrgs ?? false),
+                    ho?.ReadOnlyOrgs ?? false, do_.ReadOnlyOrgs),
 
                 JsonField("Favicon", "Favicon / Web Manifest",
                     "Favicon and web manifest configuration: FaviconIco, Favicon16, Favicon32, AppleTouchIcon, Manifest, ThemeColor. Files should be placed under {StoragePath}/branding/.",
-                    ho?.Favicon, do_?.Favicon)
+                    ho?.Favicon, do_.Favicon)
             ]);
     }
 

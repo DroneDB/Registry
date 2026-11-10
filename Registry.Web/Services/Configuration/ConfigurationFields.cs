@@ -232,13 +232,13 @@ public static class ConfigurationFields
 
     public static ConfigurationFieldDataDto JsonField(
         string key, string displayName, string description,
-        object? currentValue, object? defaultValue)
+        object? currentValue, object? defaultValue, bool? isSet = null)
     {
         // Serialize enums by name (e.g. "Disabled") so the generated JSON is human-readable
         // and round-trips cleanly back into appsettings.json.
         var curr = currentValue != null ? JsonSerializer.Serialize(currentValue, DisplayOptions) : null;
         var def = defaultValue != null ? JsonSerializer.Serialize(defaultValue, DisplayOptions) : null;
         return Field(key, displayName, "json", description,
-            curr, def, isSet: currentValue != null);
+            curr, def, isSet: isSet ?? currentValue != null);
     }
 }

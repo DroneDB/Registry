@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -490,6 +491,58 @@ public class UserRolesTests
         ex.Message.ShouldBe(SystemRoles.DeactivatedInRoleListMessage);
         (await RolesOf("jane")).ShouldBe(["editor"]);
     }
+
+    #region SetUserMeta merges (FR-ADM-16)
+
+    private async Task<Dictionary<string, object>> MetadataOf(string userName) =>
+        (await _users.FindByNameAsync(userName))!.Metadata;
+
+    [Test]
+    public async Task SetUserMeta_MergesTheGivenKeys_AndKeepsTheOthers()
+    {
+        var jane = await CreateUser("jane", "editor");
+        jane.Metadata = new Dictionary<string, object> { ["team"] = "north", ["maxStorageMB"] = 10L };
+        (await _users.UpdateAsync(jane)).Succeeded.ShouldBeTrue();
+
+        await _accounts.SetUserMeta("jane", new Dictionary<string, object> { ["maxStorageMB"] = Json("40") });
+
+        var meta = await MetadataOf("jane");
+        meta.Keys.OrderBy(k => k).ShouldBe(["maxStorageMB", "team"]);
+        meta["team"].ShouldBe("north");
+        ((JsonElement)meta["maxStorageMB"]).GetInt64().ShouldBe(40L);
+    }
+
+    [Test]
+    public async Task SetUserMeta_ANullValueRemovesItsKey_AndNoOtherKey()
+    {
+        var jane = await CreateUser("jane");
+        jane.Metadata = new Dictionary<string, object> { ["team"] = "north", ["maxStorageMB"] = 10L, ["other"] = true };
+        (await _users.UpdateAsync(jane)).Succeeded.ShouldBeTrue();
+
+        await _accounts.SetUserMeta("jane", new Dictionary<string, object> { ["maxStorageMB"] = Json("null") });
+        (await MetadataOf("jane")).Keys.OrderBy(k => k).ShouldBe(["other", "team"]);
+
+        await _accounts.SetUserMeta("jane", new Dictionary<string, object> { ["team"] = null! });
+        (await MetadataOf("jane")).Keys.ShouldBe(["other"]);
+    }
+
+    [Test]
+    public async Task SetUserMeta_WithoutRoles_DoesNotBringBackTheRolesStoredWithTheMetadata()
+    {
+        // The user was given 'editor' through Edit User; the 'roles' key stored with the metadata is older
+        var jane = await CreateUser("jane", "editor");
+        jane.Metadata = new Dictionary<string, object> { ["roles"] = new List<object> { "viewer" } };
+        (await _users.UpdateAsync(jane)).Succeeded.ShouldBeTrue();
+
+        await _accounts.SetUserMeta("jane", new Dictionary<string, object> { ["maxStorageMB"] = Json("40") });
+
+        (await RolesOf("jane")).ShouldBe(["editor"]);
+        (await MetadataOf("jane")).ContainsKey("roles").ShouldBeTrue();
+    }
+
+    private static JsonElement Json(string text) => JsonDocument.Parse(text).RootElement.Clone();
+
+    #endregion
 
     [Test]
     public async Task ProviderSync_NeitherAddsNorRemovesDeactivated()

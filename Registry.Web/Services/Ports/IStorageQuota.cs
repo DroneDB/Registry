@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Common;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.DTO;
 
@@ -13,7 +14,10 @@ namespace Registry.Web.Services.Ports;
 /// </summary>
 public interface IStorageQuota
 {
-    /// <summary>The storage <paramref name="user"/> uses (the datasets of the organizations it owns) and its limit.</summary>
+    /// <summary>
+    /// The storage <paramref name="user"/> uses (the datasets of the organizations it owns) and the limit that is enforced:
+    /// <c>Total</c> is null when the storage limiter is off, the user is an administrator, or the user has no quota.
+    /// </summary>
     UserStorageInfo GetUserStorage(User user);
 
     /// <summary>The id of the owner of the organization <paramref name="orgSlug"/>, or null (no such organization, or none owned).</summary>
@@ -41,6 +45,13 @@ public interface IStorageQuota
 /// <summary>The lookups by organization of <see cref="IStorageQuota"/>.</summary>
 public static class StorageQuotaExtensions
 {
+    /// <summary>
+    /// The quota stored for <paramref name="user"/> in bytes (the metadata keeps it in MB), or null when none is set. It is
+    /// what an administrator edits, whether or not it is enforced (see <see cref="IStorageQuota.GetUserStorage"/>).
+    /// </summary>
+    public static long? StoredQuotaBytes(this User user) =>
+        user.Metadata?.SafeGetValue(MagicStrings.MaxStorageKey) is long mb ? mb * 1024 * 1024 : null;
+
     /// <summary>The bytes the owner of <paramref name="orgSlug"/> may still store, or null when no limit applies.</summary>
     public static async Task<long?> RemainingBytesOfOrganizationAsync(this IStorageQuota quota, string orgSlug,
         CancellationToken ct = default) =>

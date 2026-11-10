@@ -403,6 +403,93 @@ public sealed class UserRolesHttpTests : IDisposable
     }
 
     [Test]
+    public async Task UserMeta_SetsAndRemovesTheStorageQuota_AndKeepsTheOtherKeys()
+    {
+        await _factory.CreateUserAsync("quotauser", password: Password);
+        using (var other = await SendAsync(HttpMethod.Post, "/users/quotauser/meta",
+                   content: JsonContent.Create(new { team = "north" })))
+            other.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Only the quota key goes (FR-ADM-16)
+        using (var set = await SendAsync(HttpMethod.Post, "/users/quotauser/meta", content: JsonContent.Create(new { maxStorageMB = 40 })))
+            set.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await QuotaOf("quotauser")).ShouldBe(40L * 1024 * 1024);
+        (await MetaOf("quotauser")).ShouldBe("""{"team":"north","maxStorageMB":40}""");
+
+        using (var removed = await SendAsync(HttpMethod.Post, "/users/quotauser/meta",
+                   content: new StringContent("""{"maxStorageMB":null}""", System.Text.Encoding.UTF8, "application/json")))
+            removed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await QuotaOf("quotauser")).ShouldBeNull();
+        (await MetaOf("quotauser")).ShouldBe("""{"team":"north"}""");
+    }
+
+    [TestCase("""{"maxStorageMB":40.5}""")]
+    [TestCase("""{"maxStorageMB":"40"}""")]
+    [TestCase("""{"maxStorageMB":-5}""")]
+    [TestCase("""{"maxStorageMB":true}""")]
+    [TestCase("""{"maxStorageMB":[1]}""")]
+    public async Task UserMeta_RefusesAStorageQuotaThatIsNotAWholeNumberOfMB_NamingTheField(string body)
+    {
+        var user = "quotabad" + Math.Abs(body.GetHashCode());
+        await _factory.CreateUserAsync(user, password: Password);
+        using (var set = await SendAsync(HttpMethod.Post, $"/users/{user}/meta", content: JsonContent.Create(new { maxStorageMB = 40, team = "a" })))
+            set.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        using var response = await SendAsync(HttpMethod.Post, $"/users/{user}/meta",
+            content: new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        problem["errors"]!["maxStorageMB"]![0]!.GetValue<string>().ShouldBe("The storage quota must be a whole number of MB, zero or more");
+        problem["detail"]!.GetValue<string>().ShouldBe("The storage quota must be a whole number of MB, zero or more");
+        // Nothing changed
+        (await MetaOf(user)).ShouldBe("""{"maxStorageMB":40,"team":"a"}""");
+    }
+
+    [Test]
+    public async Task UserMeta_AcceptsAZeroQuota()
+    {
+        await _factory.CreateUserAsync("quotazero", password: Password);
+        using var response = await SendAsync(HttpMethod.Post, "/users/quotazero/meta", content: JsonContent.Create(new { maxStorageMB = 0 }));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await QuotaOf("quotazero")).ShouldBe(0L);
+    }
+
+    [Test]
+    public async Task UserStorage_WithTheLimiterOff_HasNoTotal_ButTheListStillShowsTheStoredQuota()
+    {
+        await _factory.CreateUserAsync("quotaoff", password: Password);
+        using (var set = await SendAsync(HttpMethod.Post, "/users/quotaoff/meta", content: JsonContent.Create(new { maxStorageMB = 40 })))
+            set.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The limiter is off in this host: what GET /users/storage shows is what is enforced (nothing) ...
+        using var storage = await SendAsync(HttpMethod.Get, "/users/storage", asUser: "quotaoff");
+        storage.StatusCode.ShouldBe(HttpStatusCode.OK);
+        JsonNode.Parse(await storage.Content.ReadAsStringAsync())!.ToJsonString().ShouldBe("""{"total":null,"used":0}""");
+        using var byName = await SendAsync(HttpMethod.Get, "/users/quotaoff/storage");
+        JsonNode.Parse(await byName.Content.ReadAsStringAsync())!["total"].ShouldBeNull();
+
+        // ... and the admin list keeps the stored quota, so that it can be seen and removed
+        (await QuotaOf("quotaoff")).ShouldBe(40L * 1024 * 1024);
+    }
+
+    private async Task<long?> QuotaOf(string userName)
+    {
+        using var response = await SendAsync(HttpMethod.Get, "/users/detailed");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var users = JsonNode.Parse(await response.Content.ReadAsStringAsync())!.AsArray();
+        return users.Single(u => u!["userName"]!.GetValue<string>() == userName)!["storageQuota"]?.GetValue<long>();
+    }
+
+    private async Task<string> MetaOf(string userName)
+    {
+        using var response = await SendAsync(HttpMethod.Get, $"/users/{userName}/meta");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return JsonNode.Parse(await response.Content.ReadAsStringAsync())!.ToJsonString();
+    }
+
+    [Test]
     public async Task Startup_SeedsBothSystemRoles_ForAnExternalProvider()
     {
         using var scope = _factory.Services.CreateScope();
