@@ -481,6 +481,29 @@ public class DDB : IDDB
         }, ex => $"Cannot generate thumbnail ex of '{imagePath}' with size '{size}'");
     }
 
+    public byte[] GenerateThumbnailEx(string imagePath, int size, string? preset, string? bands, string? formula,
+        string? bandFilter, string? colormap, string? rescale, RasterAnalysisOptions? options)
+    {
+        return Wrap(() =>
+        {
+            var fullPath = GetLocalPath(imagePath);
+            return Wrapper.GenerateThumbnailEx(fullPath, size, preset, bands, formula, bandFilter,
+                colormap, rescale, options);
+        }, ex => $"Cannot generate thumbnail ex of '{imagePath}' with size '{size}'");
+    }
+
+    public byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
+        string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
+        RasterAnalysisOptions? options)
+    {
+        return Wrap(() =>
+        {
+            var fullPath = GetLocalPath(inputPath);
+            return Wrapper.GenerateMemoryTileEx(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
+                inputPathHash, preset, bands, formula, bandFilter, colormap, rescale, options);
+        }, ex => $"Cannot generate tile ex of '{inputPath}'");
+    }
+
     public byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
         string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
         double? nodata)

@@ -61,11 +61,69 @@ public class RasterValuesNativeTests : TestBase
     {
         unsafe
         {
-            sizeof(NativeRasterOptions).ShouldBe(56);
+            // The struct of ABI 2.3: rescaleUnit is appended after formula
+            sizeof(NativeRasterOptions).ShouldBe(64);
             Marshal.OffsetOf<NativeRasterOptions>(nameof(NativeRasterOptions.Flags)).ToInt32().ShouldBe(4);
             Marshal.OffsetOf<NativeRasterOptions>(nameof(NativeRasterOptions.Nodata)).ToInt32().ShouldBe(8);
             Marshal.OffsetOf<NativeRasterOptions>(nameof(NativeRasterOptions.Formula)).ToInt32().ShouldBe(48);
+            Marshal.OffsetOf<NativeRasterOptions>(nameof(NativeRasterOptions.RescaleUnit)).ToInt32().ShouldBe(56);
         }
+    }
+
+    [Test]
+    public void TheOptionsHandle_SetsTheUnitOfTheRescale_AndOnlyWhatIsGiven()
+    {
+        unsafe
+        {
+            using (var none = NativeRasterOptionsHandle.Create(null, null, null, "  "))
+                ((IntPtr)none.Pointer).ShouldBe(IntPtr.Zero);
+
+            using var handle = NativeRasterOptionsHandle.Create(null, null, null, " K ");
+            var native = handle.Pointer;
+            native->StructSize.ShouldBe(64u);
+            native->Flags.ShouldBe(0u);
+            native->Formula.ShouldBe(IntPtr.Zero);
+            Marshal.PtrToStringUTF8(native->RescaleUnit).ShouldBe("K");
+        }
+    }
+
+    // D-022 (U-202): the thumbnail of a Celsius band with the formula CELSIUS and the rescale 283.15..293.15 written in K is
+    // the thumbnail with the rescale 10..20 in °C (both ends are exact in binary: 283.15 - 273.15 = 10). A libddb 2.2 knows
+    // no rescaleUnit and refuses a struct that sets it, which is why the Registry gates it on ABI 2.3
+    [Test]
+    public void ARescaleInKelvin_IsConvertedToTheUnitOfTheFormula_WithLibddb23()
+    {
+        var inCelsius = Wrapper.GenerateThumbnailEx(_utm, 64, null, null, "CELSIUS", null, "ironbow", "10,20",
+            RasterAnalysisOptions.None);
+        var unconverted = Wrapper.GenerateThumbnailEx(_utm, 64, null, null, "CELSIUS", null, "ironbow", "283.15,293.15",
+            RasterAnalysisOptions.None);
+
+        byte[] inKelvin;
+        try
+        {
+            inKelvin = Wrapper.GenerateThumbnailEx(_utm, 64, null, null, "CELSIUS", null, "ironbow", "283.15,293.15",
+                new RasterAnalysisOptions(RescaleUnit: "K"));
+        }
+        catch (DdbInvalidArgumentsException ex) when (ex.Message.Contains("does not know"))
+        {
+            new NativeDdbRuntime().Capabilities.AbiMinor.ShouldBeLessThan(3, "only libddb before 2.3 has no rescaleUnit");
+            Assert.Ignore("libddb before 2.3 refuses rescaleUnit: " + ex.Message);
+            return;
+        }
+
+        inKelvin.ShouldBe(inCelsius);
+        unconverted.ShouldNotBe(inCelsius);
+    }
+
+    // The 64-byte struct with rescaleUnit unset is taken by every libddb 2.2 or later (its bytes past 56 are zero): a NoData
+    // render works on both
+    [Test]
+    public void ARenderWithTheOptionsStruct_WithoutAUnit_WorksOnAnyLibddb()
+    {
+        var thumbnail = Wrapper.GenerateThumbnailEx(_utm, 64, null, null, "CELSIUS", null, "ironbow", "10,20",
+            new RasterAnalysisOptions(Nodata: 130));
+
+        thumbnail.Length.ShouldBeGreaterThan(0);
     }
 
     // gdallocationinfo -wgs84 at (15.0001399406774, 45.1533781647436) on utm.tif: 130 (pixel 5, 5)

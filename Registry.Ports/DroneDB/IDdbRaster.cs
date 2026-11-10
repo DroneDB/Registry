@@ -40,6 +40,14 @@ public interface IDdbRaster
         string? bandFilter, string? colormap, string? rescale, double? nodata);
 
     /// <summary>
+    /// Generate thumbnail with extended visualization params and the options of the render: the NoData value
+    /// (FR-RAS-31) and, from libddb ABI 2.3, the unit of the rescale of a thermal formula
+    /// (<see cref="RasterAnalysisOptions.RescaleUnit"/>, D-022), which an older libddb refuses: the caller checks the ABI.
+    /// </summary>
+    byte[] GenerateThumbnailEx(string imagePath, int size, string? preset, string? bands, string? formula,
+        string? bandFilter, string? colormap, string? rescale, RasterAnalysisOptions? options);
+
+    /// <summary>
     /// Generate tile with extended visualization params
     /// </summary>
     byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
@@ -53,6 +61,15 @@ public interface IDdbRaster
     byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
         string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
         double? nodata);
+
+    /// <summary>
+    /// Generate tile with extended visualization params and the options of the render: the NoData value (FR-RAS-31)
+    /// and, from libddb ABI 2.3, the unit of the rescale of a thermal formula (<see cref="RasterAnalysisOptions.RescaleUnit"/>,
+    /// D-022), which an older libddb refuses: the caller checks the ABI.
+    /// </summary>
+    byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
+        string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
+        RasterAnalysisOptions? options);
 
     /// <summary>
     /// Validate merge-multispectral inputs

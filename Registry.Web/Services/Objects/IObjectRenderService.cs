@@ -50,13 +50,26 @@ public interface IObjectRenderService
 
 /// <summary>
 /// How a raster is shown: a sensor preset or explicit bands, a band formula with its band filter, a
-/// colormap and a rescale range (null: the default of each), and a NoData value that replaces the one of
-/// the bands (FR-RAS-31: a pixel equal to it is transparent and out of the stretch).
+/// colormap and a rescale range (null: the default of each), a NoData value that replaces the one of
+/// the bands (FR-RAS-31: a pixel equal to it is transparent and out of the stretch), and the temperature unit the
+/// rescale of a thermal formula is written in (D-022: libddb converts it to the unit of the formula; ABI 2.3,
+/// <see cref="RasterOptionRules.RescaleUnit"/>).
 /// </summary>
 public sealed record RasterVisualization(
     string? Preset = null, string? Bands = null, string? Formula = null, string? BandFilter = null,
-    string? Colormap = null, string? Rescale = null, double? Nodata = null)
+    string? Colormap = null, string? Rescale = null, double? Nodata = null, string? RescaleUnit = null)
 {
+    /// <summary>The unit of the rescale, trimmed; null when blank.</summary>
+    public string? RescaleUnit { get; init; } = string.IsNullOrWhiteSpace(RescaleUnit) ? null : RescaleUnit.Trim();
+
+    /// <summary>
+    /// The options of the render (the NoData value and the unit of the rescale), or null when it has neither: the render
+    /// then uses the export without options.
+    /// </summary>
+    public Registry.Ports.DroneDB.RasterAnalysisOptions? Options => Nodata is null && RescaleUnit is null
+        ? null
+        : new Registry.Ports.DroneDB.RasterAnalysisOptions(Nodata, RescaleUnit: RescaleUnit);
+
     /// <summary>
     /// The rescale range, <c>min,max</c> with '.' as the decimal sign. A value that is not two finite numbers, or whose min is
     /// not less than its max, is a 400 at the <c>rescale</c> parameter, not a failure of the native render (FR-RAS-10).
@@ -65,7 +78,9 @@ public sealed record RasterVisualization(
     public string? Rescale { get; init; } = RescaleRange.Validated(Rescale);
 
     /// <summary>The cache key part of these parameters.</summary>
-    public string CacheKey => $"{Preset}|{Bands}|{Formula}|{BandFilter}|{Colormap}|{Rescale}|{NodataKey}";
+    /// <remarks>The unit of the rescale is added only when it is set, so the keys of the renders without it stay as they were.</remarks>
+    public string CacheKey => $"{Preset}|{Bands}|{Formula}|{BandFilter}|{Colormap}|{Rescale}|{NodataKey}" +
+                              (RescaleUnit is null ? string.Empty : $"|{RescaleUnit}");
 
     private string NodataKey => Nodata is { } nodata ? nodata.ToString("R", CultureInfo.InvariantCulture) : string.Empty;
 }

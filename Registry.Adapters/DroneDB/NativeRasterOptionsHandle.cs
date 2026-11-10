@@ -7,12 +7,14 @@ namespace Registry.Adapters.DroneDB;
 /// <summary>
 /// The native <c>DDBRasterOptions</c> of a <see cref="RasterAnalysisOptions"/> (or of a NoData value alone), in unmanaged
 /// memory for the length of one call: <see cref="Pointer"/> is null when nothing is set (libddb takes it as no options).
+/// The struct is the 2.3 one (64 bytes, with <c>rescaleUnit</c>), which a libddb 2.2 takes while the unit is not set.
 /// Dispose after the call.
 /// </summary>
 internal sealed unsafe class NativeRasterOptionsHandle : IDisposable
 {
     private NativeRasterOptions* _options;
     private IntPtr _formula;
+    private IntPtr _rescaleUnit;
 
     private NativeRasterOptionsHandle()
     {
@@ -22,14 +24,15 @@ internal sealed unsafe class NativeRasterOptionsHandle : IDisposable
     internal NativeRasterOptions* Pointer => _options;
 
     internal static NativeRasterOptionsHandle Create(RasterAnalysisOptions? options) =>
-        Create(options?.Nodata, options?.Formula, options?.Bbox);
+        Create(options?.Nodata, options?.Formula, options?.Bbox, options?.RescaleUnit);
 
-    internal static NativeRasterOptionsHandle Create(double? nodata) => Create(nodata, null, null);
+    internal static NativeRasterOptionsHandle Create(double? nodata) => Create(nodata, null, null, null);
 
-    private static NativeRasterOptionsHandle Create(double? nodata, string? formula, double[]? bbox)
+    /// <param name="rescaleUnit">The unit of the rescale of a thermal formula (ABI 2.3); null or blank: not set.</param>
+    internal static NativeRasterOptionsHandle Create(double? nodata, string? formula, double[]? bbox, string? rescaleUnit)
     {
         var handle = new NativeRasterOptionsHandle();
-        if (nodata is null && string.IsNullOrWhiteSpace(formula) && bbox is null)
+        if (nodata is null && string.IsNullOrWhiteSpace(formula) && bbox is null && string.IsNullOrWhiteSpace(rescaleUnit))
             return handle;
 
         if (nodata is { } value && !double.IsFinite(value))
@@ -62,6 +65,12 @@ internal sealed unsafe class NativeRasterOptionsHandle : IDisposable
                 native->Formula = handle._formula;
             }
 
+            if (!string.IsNullOrWhiteSpace(rescaleUnit))
+            {
+                handle._rescaleUnit = Marshal.StringToCoTaskMemUTF8(rescaleUnit.Trim());
+                native->RescaleUnit = handle._rescaleUnit;
+            }
+
             return handle;
         }
         catch
@@ -77,6 +86,12 @@ internal sealed unsafe class NativeRasterOptionsHandle : IDisposable
         {
             Marshal.FreeCoTaskMem(_formula);
             _formula = IntPtr.Zero;
+        }
+
+        if (_rescaleUnit != IntPtr.Zero)
+        {
+            Marshal.FreeCoTaskMem(_rescaleUnit);
+            _rescaleUnit = IntPtr.Zero;
         }
 
         if (_options != null)

@@ -32,7 +32,8 @@ namespace Registry.Web.Test.Support;
 /// background jobs and cache above;</item>
 /// <item>upload pipeline: a real <see cref="UploadManager"/> over the same collaborators (indexing with AddRaw
 /// unless an index queue is given); OGC catalog and build status: no-op mocks; native gate: the process-wide one
-/// with the default widths.</item>
+/// with the default widths; libddb runtime: a <see cref="Registry.Adapters.Testing.FakeDdbRuntime"/> (the recorded
+/// capabilities).</item>
 /// </list>
 /// </summary>
 public sealed class ObjectServicesBuilder
@@ -57,6 +58,7 @@ public sealed class ObjectServicesBuilder
     private IDatasetIndexQueue? _indexQueue;
     private INativeWorkGate? _nativeGate;
     private IBuildNotificationRecorder? _buildNotifications;
+    private Registry.Ports.DroneDB.IDdbRuntime? _ddbRuntime;
 
     /// <param name="context">The registry context of the SUT (the caller owns and disposes it).</param>
     public ObjectServicesBuilder(RegistryContext context)
@@ -83,6 +85,10 @@ public sealed class ObjectServicesBuilder
     public ObjectServicesBuilder WithBuildArtifactResolver(IBuildArtifactResolver resolver) => Set(() => _buildArtifactResolver = resolver);
     public ObjectServicesBuilder WithIndexQueue(IDatasetIndexQueue indexQueue) => Set(() => _indexQueue = indexQueue);
     public ObjectServicesBuilder WithNativeGate(INativeWorkGate nativeGate) => Set(() => _nativeGate = nativeGate);
+
+    /// <summary>The libddb the renders run on (its ABI gates an option); default: the recorded capabilities.</summary>
+    public ObjectServicesBuilder WithDdbRuntime(Registry.Ports.DroneDB.IDdbRuntime runtime) =>
+        Set(() => _ddbRuntime = runtime);
     public ObjectServicesBuilder WithBuildNotifications(IBuildNotificationRecorder recorder) =>
         Set(() => _buildNotifications = recorder);
 
@@ -128,6 +134,7 @@ public sealed class ObjectServicesBuilder
         services.AddSingleton(Mock.Of<IOgcLayerCatalog>());
         services.AddSingleton(Mock.Of<IBuildStatusService>());
         services.AddSingleton(_nativeGate ?? NativeWorkGate.Default);
+        services.AddSingleton(_ddbRuntime ?? new Registry.Adapters.Testing.FakeDdbRuntime());
         services.AddSingleton(_buildNotifications ?? Mock.Of<IBuildNotificationRecorder>());
         var artifacts = _buildArtifactResolver ?? TestPorts.Artifacts();
         var scheduler = new BuildScheduler(artifacts, backgroundJobs, buildPendingService, buildPendingService,

@@ -398,10 +398,18 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual byte[] GenerateThumbnailEx(string filePath, int size, string? preset, string? bands, string? formula,
         string? bandFilter, string? colormap, string? rescale, double? nodata) => throw Unsupported();
 
+    public virtual byte[] GenerateThumbnailEx(string filePath, int size, string? preset, string? bands, string? formula,
+        string? bandFilter, string? colormap, string? rescale, RasterAnalysisOptions? options) => throw Unsupported();
+
     public virtual byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
         int tileSize, bool tms, bool forceRecreate, string inputPathHash,
         string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
         double? nodata) => throw Unsupported();
+
+    public virtual byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
+        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
+        string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
+        RasterAnalysisOptions? options) => throw Unsupported();
 
     public virtual byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
         int tileSize, bool tms, bool forceRecreate, string inputPathHash,

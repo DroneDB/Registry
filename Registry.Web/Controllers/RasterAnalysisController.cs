@@ -86,10 +86,11 @@ public class RasterAnalysisController : ControllerBaseEx
         [FromQuery] string? bandFilter,
         [FromQuery] string? colormap,
         [FromQuery] string? rescale,
-        [FromQuery] double? nodata, CancellationToken ct)
+        [FromQuery] double? nodata,
+        [FromQuery] string? rescaleUnit, CancellationToken ct)
     {
         var res = await _renders.GenerateThumbnailDataExAsync(orgSlug, dsSlug, path.ToString(), size,
-            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale, nodata), ct: ct);
+            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale, nodata, rescaleUnit), ct: ct);
 
         if (res == null) return NotFound();
         return File(res.Data, res.ContentType, res.Name);
@@ -115,14 +116,15 @@ public class RasterAnalysisController : ControllerBaseEx
         [FromQuery] string? bandFilter,
         [FromQuery] string? colormap,
         [FromQuery] string? rescale,
-        [FromQuery] double? nodata, CancellationToken ct)
+        [FromQuery] double? nodata,
+        [FromQuery] string? rescaleUnit, CancellationToken ct)
     {
         var retina = tyRaw.EndsWith("@2x", StringComparison.Ordinal);
         if (!int.TryParse(retina ? tyRaw.Replace("@2x", string.Empty) : tyRaw, out var ty))
             throw new BadRequestException("Invalid input parameters (retina indicator should be '@2x')");
 
         var res = await _renders.GenerateTileDataExAsync(orgSlug, dsSlug, path.ToString(), tz, tx, ty, retina,
-            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale, nodata),
+            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale, nodata, rescaleUnit),
             TileFormat.FromExtension(ext), ct: ct);
 
         return File(res.Data, res.ContentType, res.Name);
@@ -143,10 +145,11 @@ public class RasterAnalysisController : ControllerBaseEx
         [FromQuery] string? bandFilter = null,
         [FromQuery] string? colormap = null,
         [FromQuery] string? rescale = null,
-        [FromQuery] double? nodata = null, CancellationToken ct = default)
+        [FromQuery] double? nodata = null,
+        [FromQuery] string? rescaleUnit = null, CancellationToken ct = default)
     {
         var res = await _raster.ExportRasterAsync(orgSlug, dsSlug, path.ToString(),
-            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale, nodata), ct: ct);
+            new RasterVisualization(preset, bands, formula, bandFilter, colormap, rescale, nodata, rescaleUnit), ct: ct);
 
         return File(res.Data, res.ContentType, res.Name);
     }

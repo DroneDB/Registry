@@ -113,6 +113,7 @@ public class RasterExportToolTests
     // A single-band DEM: libddb's list marks the temperature formulas "Requires bands: T", the rendering computes them
     [TestCase("CELSIUS")]
     [TestCase("KELVIN")]
+    [TestCase("FAHRENHEIT")] // D-022: the formula of libddb 2.3 reads the same band
     public async Task ATemperatureFormulaOnASingleBandDem_Passes(string formula)
     {
         var dem = JsonSerializer.Serialize(new
@@ -122,7 +123,8 @@ public class RasterExportToolTests
             {
                 new { id = "NDVI", disabled = true, disabledReason = "Requires bands: RN" },
                 new { id = "CELSIUS", disabled = true, disabledReason = "Requires bands: T" },
-                new { id = "KELVIN", disabled = true, disabledReason = "Requires bands: T" }
+                new { id = "KELVIN", disabled = true, disabledReason = "Requires bands: T" },
+                new { id = "FAHRENHEIT", disabled = true, disabledReason = "Requires bands: T" }
             }
         });
         _ddb.Setup(d => d.GetRasterMetadata(Ortho, formula, null)).Returns(dem);
@@ -365,13 +367,67 @@ public class RasterExportToolTests
     }
 
     [Test]
-    public void TheToolSchema_ListsTheNodataAndTheWindow()
+    public void TheToolSchema_ListsTheNodataTheWindowAndTheUnitOfTheRescale()
     {
         var properties = _tool.InputSchema.RootElement.GetProperty("properties");
 
         properties.GetProperty("bbox").GetProperty("minItems").GetInt32().ShouldBe(4);
         properties.GetProperty("bbox").GetProperty("maxItems").GetInt32().ShouldBe(4);
         properties.TryGetProperty("nodata", out _).ShouldBeTrue();
+        properties.TryGetProperty("rescaleUnit", out _).ShouldBeTrue();
+    }
+
+    // D-022: a rescale in another unit than the formula's needs libddb 2.3; on 2.2 the submit refuses it at its own member,
+    // before the formula is checked (the strict mock has no raster metadata)
+    [Test]
+    public async Task ARescaleUnit_OnLibddb22_Is400AtItsMember()
+    {
+        _tool = ToolWith(abiMinor: 2);
+
+        var ex = await Should.ThrowAsync<InvalidFieldException>(() => Validate(
+            RequestWith("""{"formula":"CELSIUS","rescale":"280,310","rescaleUnit":"K"}""")));
+
+        ex.Field.ShouldBe("rescaleUnit");
+        ex.Message.ShouldContain("needs libddb 2.3 or later");
+    }
+
+    // On 2.3 the unit reaches libddb in the options of the export (which converts the rescale), and only there: the size
+    // estimate of the submit reads no unit
+    [Test]
+    public async Task TheExport_SendsTheUnitOfTheRescaleToLibddb()
+    {
+        var workDir = Directory.CreateTempSubdirectory("raster-export-test-").FullName;
+        try
+        {
+            RasterAnalysisOptions? sent = null;
+            var ddb = new Mock<IDDB>(MockBehavior.Strict);
+            ddb.Setup(d => d.ExportRaster(Ortho, It.IsAny<string>(), null, null, "FAHRENHEIT", null, "ironbow", "280,310",
+                    It.IsAny<int>(), It.IsAny<RasterAnalysisOptions?>(), It.IsAny<Action<double, string?>?>(),
+                    It.IsAny<CancellationToken>()))
+                .Callback<string, string, string?, string?, string?, string?, string?, string?, int, RasterAnalysisOptions?,
+                    Action<double, string?>?, CancellationToken>((_, o, _, _, _, _, _, _, _, options, _, _) =>
+                {
+                    sent = options;
+                    File.WriteAllBytes(o, [1]);
+                });
+            var worker = new Mock<IHeavyToolExecutionContext>();
+            worker.SetupGet(c => c.Ddb).Returns(ddb.Object);
+            worker.SetupGet(c => c.WorkDir).Returns(workDir);
+
+            await _tool.ExecuteAsync(
+                RequestWith("""{"formula":"FAHRENHEIT","colormap":"ironbow","rescale":"280,310","rescaleUnit":" K "}"""),
+                worker.Object, new Progress<HeavyToolProgress>(), CancellationToken.None);
+
+            sent.ShouldNotBeNull();
+            sent.RescaleUnit.ShouldBe("K");
+            sent.Nodata.ShouldBeNull();
+            sent.Bbox.ShouldBeNull();
+            sent.Formula.ShouldBeNull();
+        }
+        finally
+        {
+            Directory.Delete(workDir, true);
+        }
     }
 
     // FR-RAS-16, FR-XC-22: /sys/features says whether the loaded libddb exports a window, by the rule of the submit, so

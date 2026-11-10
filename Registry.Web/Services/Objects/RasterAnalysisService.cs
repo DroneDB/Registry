@@ -32,16 +32,18 @@ public sealed class RasterAnalysisService
     private readonly ScratchFileProvider _scratch;
     private readonly IFileSystem _fs;
     private readonly DownloadOptions _downloads;
+    private readonly IDdbRuntime _runtime;
     private readonly ILogger<RasterAnalysisService> _logger;
 
     public RasterAnalysisService(RenderSources sources, INativeWorkGate gate, ScratchFileProvider scratch,
-        IFileSystem fs, IOptions<DownloadOptions> downloads, ILogger<RasterAnalysisService> logger)
+        IFileSystem fs, IOptions<DownloadOptions> downloads, IDdbRuntime runtime, ILogger<RasterAnalysisService> logger)
     {
         _sources = sources;
         _gate = gate;
         _scratch = scratch;
         _fs = fs;
         _downloads = downloads.Value;
+        _runtime = runtime;
         _logger = logger;
     }
 
@@ -208,6 +210,11 @@ public sealed class RasterAnalysisService
         RasterVisualization visualization, CancellationToken ct = default)
     {
         RasterOptionRules.RequireNodata(visualization.Nodata);
+        // The unit of the rescale needs libddb 2.3 (a 400 before any work)
+        var v = visualization with
+        {
+            RescaleUnit = RasterOptionRules.RescaleUnit(visualization.RescaleUnit, _runtime.Capabilities)
+        };
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
 
         // Enforce the export size limit with the estimate of the value info (the pixels of the source file that are not
@@ -218,15 +225,15 @@ public sealed class RasterAnalysisService
         // The configured temp folder; deleted when the bytes are read
         using var output = _scratch.Create(stem + "_export_", ".tif");
 
-        var v = visualization;
         await _gate.RunAsync(NativeLane.Heavy, () =>
         {
-            if (v.Nodata is null)
+            // The export with options (DDBExportRaster3) when the NoData value or the unit of the rescale is set
+            if (v.Options is not { } options)
                 source.Ddb.ExportRaster(source.SourcePath, output.Path, v.Preset, v.Bands, v.Formula, v.BandFilter,
                     v.Colormap, v.Rescale);
             else
                 source.Ddb.ExportRaster(source.SourcePath, output.Path, v.Preset, v.Bands, v.Formula, v.BandFilter,
-                    v.Colormap, v.Rescale, 0, v.Nodata, null, ct);
+                    v.Colormap, v.Rescale, 0, options, null, ct);
         }, ct);
 
         return new StorageDataDto

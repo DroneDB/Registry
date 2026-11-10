@@ -491,8 +491,10 @@ internal struct DdbAddHint
 }
 
 /// <summary>
-/// <c>DDBRasterOptions</c> (64-bit layout): 56 bytes, <c>structSize</c> at 0, <c>flags</c> at 4, <c>nodata</c> at 8,
-/// <c>bbox</c> (4 doubles) at 16, <c>formula</c> (a UTF-8 pointer owned by the caller) at 48. Blittable.
+/// <c>DDBRasterOptions</c> (64-bit layout): 64 bytes, <c>structSize</c> at 0, <c>flags</c> at 4, <c>nodata</c> at 8,
+/// <c>bbox</c> (4 doubles) at 16, <c>formula</c> at 48 and <c>rescaleUnit</c> (ABI 2.3) at 56 (UTF-8 pointers owned by
+/// the caller). Blittable. A libddb 2.2 knows 56 bytes and takes the larger struct while <c>rescaleUnit</c> is null (its
+/// bytes are zero); it refuses one that sets it.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct NativeRasterOptions
@@ -505,6 +507,7 @@ internal unsafe struct NativeRasterOptions
     internal double Nodata;
     internal fixed double Bbox[4];
     internal IntPtr Formula;
+    internal IntPtr RescaleUnit;
 }
 
 /// <summary>

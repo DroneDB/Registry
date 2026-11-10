@@ -83,6 +83,13 @@
               "null"
             ]
           },
+          "rescaleUnit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Temperature unit the rescale of a thermal formula is written in (K, C or F); converted to the unit of the formula. Needs libddb 2.3 or later."
+          },
           "fileName": {
             "type": [
               "string",

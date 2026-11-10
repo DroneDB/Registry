@@ -643,12 +643,14 @@
       "bbox": [
         2.5
       ],
+      "rescaleUnit": "RescaleUnit-text",
       "isEmpty": false
     },
     "sparse": {
       "nodata": null,
       "formula": null,
       "bbox": null,
+      "rescaleUnit": null,
       "isEmpty": true
     }
   },

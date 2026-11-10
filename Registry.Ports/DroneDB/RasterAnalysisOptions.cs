@@ -9,11 +9,16 @@ namespace Registry.Ports.DroneDB;
 /// default stretch is that of the index, D-041); a thermal formula names the unit of the values (D-022).</param>
 /// <param name="Bbox">Value info only: a WGS 84 window <c>[minLon, minLat, maxLon, maxLat]</c>; the info reports the
 /// source pixels in it.</param>
-public sealed record RasterAnalysisOptions(double? Nodata = null, string? Formula = null, double[]? Bbox = null)
+/// <param name="RescaleUnit">Tiles, thumbnails and exports only (libddb ABI 2.3): the temperature unit the rescale of a
+/// thermal formula is written in ("K", "C", "F", ...), which libddb converts to the unit of the formula (D-022); null: the
+/// rescale is in the unit of the formula. A libddb before 2.3 refuses it: the caller checks the ABI minor first.</param>
+public sealed record RasterAnalysisOptions(double? Nodata = null, string? Formula = null, double[]? Bbox = null,
+    string? RescaleUnit = null)
 {
     /// <summary>No option set.</summary>
     public static readonly RasterAnalysisOptions None = new();
 
     /// <summary>True when nothing is set (the call can use the export without options).</summary>
-    public bool IsEmpty => Nodata is null && string.IsNullOrWhiteSpace(Formula) && Bbox is null;
+    public bool IsEmpty => Nodata is null && string.IsNullOrWhiteSpace(Formula) && Bbox is null &&
+                           string.IsNullOrWhiteSpace(RescaleUnit);
 }

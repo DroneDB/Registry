@@ -228,6 +228,14 @@ public interface IDdbWrapper
         string? bandFilter, string? colormap, string? rescale, double? nodata);
 
     /// <summary>
+    /// Generate thumbnail with extended visualization params and the options of the render: the NoData value that replaces
+    /// the one of the bands (FR-RAS-31) and, from libddb ABI 2.3, the unit of the rescale of a thermal formula
+    /// (<see cref="Registry.Ports.DroneDB.RasterAnalysisOptions.RescaleUnit"/>, D-022), which an older libddb refuses
+    /// </summary>
+    public byte[] GenerateThumbnailEx(string filePath, int size, string? preset, string? bands, string? formula,
+        string? bandFilter, string? colormap, string? rescale, Registry.Ports.DroneDB.RasterAnalysisOptions? options);
+
+    /// <summary>
     /// Generate tile with extended visualization params and a NoData value that replaces the one of the bands
     /// (FR-RAS-31)
     /// </summary>
@@ -235,6 +243,15 @@ public interface IDdbWrapper
         int tileSize, bool tms, bool forceRecreate, string inputPathHash,
         string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
         double? nodata);
+
+    /// <summary>
+    /// Generate tile with extended visualization params and the options of the render: the NoData value (FR-RAS-31) and,
+    /// from libddb ABI 2.3, the unit of the rescale of a thermal formula (D-022), which an older libddb refuses
+    /// </summary>
+    public byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
+        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
+        string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
+        Registry.Ports.DroneDB.RasterAnalysisOptions? options);
 
     /// <summary>
     /// Generate tile with extended visualization params

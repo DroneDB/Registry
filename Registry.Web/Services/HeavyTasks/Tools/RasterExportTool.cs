@@ -28,12 +28,15 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
     /// <summary>The visualization parameters and the optional output file name.</summary>
     /// <param name="Nodata">The NoData value that replaces the one of the bands (FR-RAS-31), as sent: checked at the submit.</param>
     /// <param name="Bbox">The WGS 84 window to export (FR-RAS-16), as sent: checked at the submit.</param>
+    /// <param name="RescaleUnit">The temperature unit the rescale of a thermal formula is written in (D-022): libddb converts
+    /// it to the unit of the formula. Needs libddb 2.3, checked at the submit (<see cref="RasterOptionRules.RescaleUnit"/>).</param>
     public sealed record Parameters(string? Preset, string? Bands, string? Formula, string? BandFilter,
-        string? Colormap, string? Rescale, string? FileName, JsonElement? Nodata = null, JsonElement? Bbox = null);
+        string? Colormap, string? Rescale, string? FileName, JsonElement? Nodata = null, JsonElement? Bbox = null,
+        string? RescaleUnit = null);
 
     protected override Parameters ReadParams(ToolParameters p) => new(p.Text("preset"), p.Text("bands"),
         p.Text("formula"), p.Text("bandFilter"), p.Text("colormap"), p.Text("rescale"), p.Text("fileName"),
-        p.Value("nodata"), p.Value("bbox"));
+        p.Value("nodata"), p.Value("bbox"), p.Text("rescaleUnit"));
 
     /// <summary>The first libddb ABI minor whose <c>DDBExportRaster3</c> exports the window of the <c>bbox</c> option.</summary>
     public const int WindowAbiMinor = 3;
@@ -58,6 +61,10 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
             "bandFilter": { "type": ["string", "null"] },
             "colormap": { "type": ["string", "null"] },
             "rescale": { "type": ["string", "null"] },
+            "rescaleUnit": {
+              "type": ["string", "null"],
+              "description": "Temperature unit the rescale of a thermal formula is written in (K, C or F); converted to the unit of the formula. Needs libddb 2.3 or later."
+            },
             "fileName": { "type": ["string", "null"], "description": "Optional output file name." },
             "nodata": { "type": ["number", "null"], "description": "NoData value that replaces the one of the bands." },
             "bbox": {
@@ -106,9 +113,11 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
         // A range that is not two numbers with min below max is a 400 at the submit (FR-RAS-10), not a failed export
         RescaleRange.Validated(p.Rescale);
 
-        // The NoData value and the window are 400s at their own members; the window needs libddb 2.3 (FR-RAS-16)
+        // The NoData value and the window are 400s at their own members; the window (FR-RAS-16) and the unit of the
+        // rescale (D-022) need libddb 2.3
         var raster = RasterOptionsOf(p);
         RequireWindowSupport(raster);
+        RasterOptionRules.RescaleUnit(p.RescaleUnit, _runtime.Capabilities);
 
         if (!string.IsNullOrWhiteSpace(p.Formula))
             ValidateFormula(ctx.Ddb, request.Path!, p.Formula!, p.BandFilter, ct);
@@ -220,7 +229,7 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
     // The temperature formulas read the single band of a DEM or of a thermal raster without a sensor profile: libddb's
     // list of formulas marks them "Requires bands: T" (no band is mapped to T), while the rendering computes them from
     // the first band. A missing band is no refusal for them; any other reason is.
-    private static readonly string[] SingleBandFormulas = ["CELSIUS", "KELVIN"];
+    private static readonly string[] SingleBandFormulas = ["CELSIUS", "KELVIN", "FAHRENHEIT"];
 
     private static bool RendersAnyway(string formula, string reason) =>
         SingleBandFormulas.Contains(formula, StringComparer.Ordinal) &&
@@ -311,6 +320,9 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
         var lastReportedPhase = "loading";
         var raster = RasterOptionsOf(p);
         RequireWindowSupport(raster);
+        // The options of the export also carry the unit of the rescale (not those of the size estimate: no value changes)
+        if (RasterOptionRules.RescaleUnit(p.RescaleUnit, _runtime.Capabilities) is { } rescaleUnit)
+            raster = (raster ?? RasterAnalysisOptions.None) with { RescaleUnit = rescaleUnit };
         await Task.Run(() => ctx.Ddb.ExportRaster(
             request.Path!, outputPath, p.Preset, p.Bands, p.Formula, p.BandFilter, p.Colormap, RescaleRange.Validated(p.Rescale),
             _defaultTileSize, raster,

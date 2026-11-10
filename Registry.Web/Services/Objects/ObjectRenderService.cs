@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeMapping;
 using Registry.Ports;
+using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
@@ -29,10 +30,11 @@ public sealed class ObjectRenderService : IObjectRenderService
     private readonly IDdbWrapper _ddbWrapper;
     private readonly INativeWorkGate _gate;
     private readonly ThumbnailOptions _options;
+    private readonly IDdbRuntime _runtime;
     private readonly ILogger<ObjectRenderService> _logger;
 
     public ObjectRenderService(RenderSources sources, ICacheManager cache, IThumbnailGenerator thumbnails,
-        IDdbWrapper ddbWrapper, INativeWorkGate gate, IOptions<ThumbnailOptions> options,
+        IDdbWrapper ddbWrapper, INativeWorkGate gate, IOptions<ThumbnailOptions> options, IDdbRuntime runtime,
         ILogger<ObjectRenderService> logger)
     {
         _sources = sources;
@@ -41,6 +43,7 @@ public sealed class ObjectRenderService : IObjectRenderService
         _ddbWrapper = ddbWrapper;
         _gate = gate;
         _options = options.Value;
+        _runtime = runtime;
         _logger = logger;
     }
 
@@ -107,16 +110,15 @@ public sealed class ObjectRenderService : IObjectRenderService
     {
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
         var pixels = size ?? _options.DefaultThumbnailSize;
-        var v = visualization;
-        RasterOptionRules.RequireNodata(v.Nodata);
+        var v = Checked(visualization);
 
         var data = await _cache.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug), ct,
             source.Entry.FileHash(), pixels, v.CacheKey,
-            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Heavy, () => v.Nodata is null
+            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Heavy, () => v.Options is null
                 ? source.Ddb.GenerateThumbnailEx(source.SourcePath, pixels, v.Preset, v.Bands, v.Formula, v.BandFilter,
                     v.Colormap, v.Rescale)
                 : source.Ddb.GenerateThumbnailEx(source.SourcePath, pixels, v.Preset, v.Bands, v.Formula, v.BandFilter,
-                    v.Colormap, v.Rescale, v.Nodata), token)));
+                    v.Colormap, v.Rescale, v.Options), token)));
 
         return new StorageDataDto
         {
@@ -131,17 +133,26 @@ public sealed class ObjectRenderService : IObjectRenderService
         CancellationToken ct = default)
     {
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
-        var v = visualization;
-        RasterOptionRules.RequireNodata(v.Nodata);
+        var v = Checked(visualization);
 
         // libddb renders a visualization tile as a PNG: the other formats are encoded from it
         return await CachedTileAsync(ty, format, () => _cache.GetAsync(MagicStrings.TileCacheSeed,
             ForDataset(orgSlug, dsSlug), ct, source.Entry.FileHash(), tx, ty, tz, retina, v.CacheKey, format.MediaType,
-            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles, () => (v.Nodata is null
+            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles, () => (v.Options is null
                 ? source.Ddb.GenerateTileEx(source.SourcePath, tz, tx, ty, retina, source.Entry.FileHash(), v.Preset,
                     v.Bands, v.Formula, v.BandFilter, v.Colormap, v.Rescale)
                 : source.Ddb.GenerateTileEx(source.SourcePath, tz, tx, ty, retina, source.Entry.FileHash(), v.Preset,
-                    v.Bands, v.Formula, v.BandFilter, v.Colormap, v.Rescale, v.Nodata)).InFormat(format), token))));
+                    v.Bands, v.Formula, v.BandFilter, v.Colormap, v.Rescale, v.Options)).InFormat(format), token))));
+    }
+
+    // The NoData value is a finite number and the unit of the rescale needs libddb 2.3 (400s), before any native work
+    private RasterVisualization Checked(RasterVisualization visualization)
+    {
+        RasterOptionRules.RequireNodata(visualization.Nodata);
+        return visualization with
+        {
+            RescaleUnit = RasterOptionRules.RescaleUnit(visualization.RescaleUnit, _runtime.Capabilities)
+        };
     }
 
     // A tile is an image in the format asked for, named after its row; a tile outside the raster is a 404, not a
