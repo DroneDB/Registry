@@ -62,4 +62,45 @@ public class RescaleUnitRuleTests
         ex.Message.ShouldStartWith("A rescale in another temperature unit needs libddb 2.3 or later: this server runs libddb ");
         ex.Message.ShouldContain("(ABI 2.2)");
     }
+
+    // The names libddb's parseTemperatureUnit accepts (thermal.cpp), literally
+    [TestCase("K")]
+    [TestCase("k")]
+    [TestCase("Kelvin")]
+    [TestCase("KELVIN")]
+    [TestCase("degK")]
+    [TestCase("C")]
+    [TestCase("celsius")]
+    [TestCase("degC")]
+    [TestCase("\u00b0C")]
+    [TestCase("Centigrade")]
+    [TestCase("F")]
+    [TestCase("Fahrenheit")]
+    [TestCase("degF")]
+    [TestCase("\u00b0f")]
+    [TestCase("deg C")]
+    public void TheNamesOfLibddb_AreKnownUnits(string unit)
+    {
+        RasterOptionRules.IsKnownTemperatureUnit(unit).ShouldBeTrue();
+        RasterOptionRules.RescaleUnit(unit, new AbiMinorRuntime(3).Capabilities).ShouldBe(unit);
+    }
+
+    [TestCase("feet")]
+    [TestCase("X")]
+    [TestCase("kelvins")]
+    [TestCase("degree")]
+    [TestCase("KC")]
+    [TestCase("\u00b0")]
+    public void AnotherName_IsNotAUnit_And400AtRescaleUnit_OnAnyLibddb(string unit)
+    {
+        RasterOptionRules.IsKnownTemperatureUnit(unit).ShouldBeFalse();
+
+        foreach (var abiMinor in new[] { 2, 3, 4 })
+        {
+            var ex = Should.Throw<InvalidFieldException>(() =>
+                RasterOptionRules.RescaleUnit(unit, new AbiMinorRuntime(abiMinor).Capabilities));
+            ex.Field.ShouldBe("rescaleUnit");
+            ex.Message.ShouldBe($"'{unit}' is not a temperature unit: use K (Kelvin), C (Celsius) or F (Fahrenheit).");
+        }
+    }
 }

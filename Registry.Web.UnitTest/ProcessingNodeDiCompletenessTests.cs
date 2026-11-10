@@ -75,6 +75,17 @@ public class ProcessingNodeDiCompletenessTests
     }
 
     [Test]
+    public void ProcessingNode_InjectsTheBuildProgress_IntoTheBuildJobs()
+    {
+        using var provider = BuildNodeProvider(s => s.AddSingleton(Mock.Of<IBackgroundJobClient>()));
+        using var scope = provider.CreateScope();
+
+        // FR-PRC-42: DdbJobs takes the progress as an optional parameter, so a missing registration would turn it off silently
+        DdbJobsCompositionTests.ProgressOf(scope.ServiceProvider.GetRequiredService<Registry.Web.Services.Jobs.DdbJobs>())
+            .ShouldNotBeNull();
+    }
+
+    [Test]
     public void ProcessingNode_RegistersTheSystemDatasetCreation()
     {
         using var provider = BuildNodeProvider();

@@ -180,4 +180,58 @@ public sealed class RescaleUnitAbi23HttpTests : RescaleUnitFixture
         Factory.DdbWrapper.Invocations.Count(i => i.Method.Name == nameof(IDdbWrapper.GenerateThumbnailEx))
             .ShouldBe(2);
     }
+
+    // An unknown unit is a 400 at its member on every endpoint that takes it, before any native work
+    private const string FeetStyle = "formula=CELSIUS&colormap=ironbow&rescale=280%2C310&rescaleUnit=feet";
+    private const string NotAUnit = "'feet' is not a temperature unit: use K (Kelvin), C (Celsius) or F (Fahrenheit).";
+
+    [Test]
+    public async Task AThumbnailWithAnUnknownUnit_Is400AtRescaleUnit()
+    {
+        var (response, body, json) = await ThumbEx(FeetStyle);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        json!["errors"]!["rescaleUnit"]![0]!.GetValue<string>().ShouldBe(NotAUnit);
+        ShouldNotHaveRendered();
+    }
+
+    [Test]
+    public async Task ATileWithAnUnknownUnit_Is400AtRescaleUnit()
+    {
+        var (response, body, json) = await SendAsync(Request(HttpMethod.Get,
+            $"{Ds}/tiles-ex/18/1/2.png?path={Image}&{FeetStyle}", Caller.Owner));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        json!["errors"]!["rescaleUnit"]![0]!.GetValue<string>().ShouldBe(NotAUnit);
+        Factory.DdbWrapper.Invocations.ShouldNotContain(i => i.Method.Name == nameof(IDdbWrapper.GenerateMemoryTileEx));
+    }
+
+    [Test]
+    public async Task AnExportWithAnUnknownUnit_Is400AtRescaleUnit()
+    {
+        var (response, body, json) = await SendAsync(Request(HttpMethod.Get,
+            $"{Ds}/export?path={Image}&{FeetStyle}", Caller.Owner));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        json!["errors"]!["rescaleUnit"]![0]!.GetValue<string>().ShouldBe(NotAUnit);
+        Factory.DdbWrapper.Invocations.ShouldNotContain(i => i.Method.Name == nameof(IDdbWrapper.ExportRaster));
+    }
+
+    [Test]
+    public async Task AnExportTaskWithAnUnknownUnit_Is400AtRescaleUnit()
+    {
+        var (response, body, json) = await SubmitExport(
+            """{"formula":"CELSIUS","colormap":"ironbow","rescale":"280,310","rescaleUnit":"feet"}""");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        json!["errors"]!["rescaleUnit"]![0]!.GetValue<string>().ShouldBe(NotAUnit);
+    }
+
+    [Test]
+    public async Task AThumbnailWithADegreeName_IsRendered()
+    {
+        var (response, body, _) = await ThumbEx("formula=CELSIUS&colormap=ironbow&rescale=1%2C2&rescaleUnit=%C2%B0F");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+    }
 }

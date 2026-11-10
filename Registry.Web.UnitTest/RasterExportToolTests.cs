@@ -391,6 +391,20 @@ public class RasterExportToolTests
         ex.Message.ShouldContain("needs libddb 2.3 or later");
     }
 
+    // A unit libddb does not name is a 400 at its member on any libddb, before the formula is checked
+    [TestCase(2)]
+    [TestCase(3)]
+    public async Task AnUnknownRescaleUnit_Is400AtItsMember(int abiMinor)
+    {
+        _tool = ToolWith(abiMinor: abiMinor);
+
+        var ex = await Should.ThrowAsync<InvalidFieldException>(() => Validate(
+            RequestWith("""{"formula":"CELSIUS","rescale":"280,310","rescaleUnit":"feet"}""")));
+
+        ex.Field.ShouldBe("rescaleUnit");
+        ex.Message.ShouldBe("'feet' is not a temperature unit: use K (Kelvin), C (Celsius) or F (Fahrenheit).");
+    }
+
     // On 2.3 the unit reaches libddb in the options of the export (which converts the rescale), and only there: the size
     // estimate of the submit reads no unit
     [Test]

@@ -51,21 +51,45 @@ public static class RasterOptionRules
     /// <summary>
     /// The unit the rescale of a thermal formula is written in (<c>rescaleUnit</c> of a tile, a thumbnail or an export),
     /// trimmed, or null when there is none. libddb converts the rescale to the unit of the formula and refuses a unit it
-    /// does not know (K, C or F and their names); a libddb before 2.3 has no such option and would refuse the struct that
-    /// sets it, so there it is a 400 at <c>rescaleUnit</c> that says why.
+    /// does not know (<see cref="IsKnownTemperatureUnit"/>), which is a 400 at <c>rescaleUnit</c> before any native work;
+    /// a libddb before 2.3 has no such option and would refuse the struct that sets it, so there it is a 400 at
+    /// <c>rescaleUnit</c> that says why.
     /// </summary>
-    /// <exception cref="InvalidFieldException">A unit on a libddb before 2.3.</exception>
+    /// <exception cref="InvalidFieldException">A unit libddb does not know, or a unit on a libddb before 2.3.</exception>
     public static string? RescaleUnit(string? rescaleUnit, DdbCapabilities capabilities)
     {
         ArgumentNullException.ThrowIfNull(capabilities);
         if (string.IsNullOrWhiteSpace(rescaleUnit))
             return null;
 
+        if (!IsKnownTemperatureUnit(rescaleUnit))
+            throw new InvalidFieldException("rescaleUnit",
+                $"'{rescaleUnit.Trim()}' is not a temperature unit: use K (Kelvin), C (Celsius) or F (Fahrenheit).");
+
         if (capabilities.AbiMinor < RescaleUnitAbiMinor)
             throw new InvalidFieldException("rescaleUnit",
                 $"A rescale in another temperature unit needs libddb 2.{RescaleUnitAbiMinor} or later: this server runs libddb {capabilities.Version} (ABI {capabilities.AbiMajor}.{capabilities.AbiMinor}). Send the rescale in the unit of the formula.");
 
         return rescaleUnit.Trim();
+    }
+
+    /// <summary>
+    /// Whether libddb reads <paramref name="unit"/> as a temperature unit (<c>parseTemperatureUnit</c> of libddb): only its
+    /// ASCII letters and digits count, in any case, so <c>K</c>, <c>Kelvin</c>, <c>degK</c>; <c>C</c>, <c>Celsius</c>,
+    /// <c>degC</c>, <c>°C</c>, <c>Centigrade</c>; <c>F</c>, <c>Fahrenheit</c>, <c>degF</c>, <c>°F</c> (and <c>deg C</c>).
+    /// </summary>
+    public static bool IsKnownTemperatureUnit(string? unit)
+    {
+        if (unit is null) return false;
+
+        var letters = new System.Text.StringBuilder(unit.Length);
+        foreach (var c in unit)
+            if (char.IsAsciiLetterOrDigit(c))
+                letters.Append(char.ToLowerInvariant(c));
+
+        return letters.ToString() is "k" or "kelvin" or "degk"
+            or "c" or "celsius" or "degc" or "centigrade"
+            or "f" or "fahrenheit" or "degf";
     }
 
     /// <summary>The options of the values with the checks of the endpoint applied.</summary>
