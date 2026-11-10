@@ -14,7 +14,7 @@ namespace Registry.Web.Services.Jobs;
 /// <summary>
 /// The progress of a build as libddb reports it (<c>DDBBuildEx2</c>, FR-PRC-42), as the
 /// <see cref="HeavyToolProgress"/> of its task: the fraction (-1 while nothing is measured: no percent) and the phase libddb
-/// names (the entry type, then "warping", "overviews" and "compressing" for a raster, "publishing"), with a log line at each
+/// names (the entry type, then "warping", "overviews", "compressing" and "statistics" for a raster, "publishing"), with a log line at each
 /// new phase. The last report of a build that ends without an error (fraction 1, no phase) is "done".
 /// </summary>
 public static class BuildProgress
