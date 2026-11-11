@@ -1,5 +1,5 @@
-#nullable enable
 using System.ComponentModel.DataAnnotations;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Models.DTO;
 
@@ -11,7 +11,7 @@ public class RasterProfileRequestDto
 {
     /// <summary>Dataset-relative path of the raster.</summary>
     [Required]
-    public string Path { get; set; } = null!;
+    public DatasetPath Path { get; set; } = null!;
 
     /// <summary>GeoJSON LineString geometry expressed in WGS84 (EPSG:4326).</summary>
     [Required]
@@ -19,4 +19,10 @@ public class RasterProfileRequestDto
 
     /// <summary>Requested number of equispaced samples (optional, server clamps 2..4096).</summary>
     public int? Samples { get; set; }
+
+    /// <summary>A NoData value that replaces the one of the band (finite; FR-RAS-31).</summary>
+    public double? Nodata { get; set; }
+
+    /// <summary>The formula the values are read through (the unit of a thermal formula, D-022).</summary>
+    public string? Formula { get; set; }
 }

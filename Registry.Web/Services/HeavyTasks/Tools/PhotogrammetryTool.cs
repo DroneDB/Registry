@@ -1,28 +1,21 @@
-#nullable enable
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Registry.Common;
 using Registry.Ports;
-using Registry.Ports.Archives;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Datasets;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.NodeOdx;
 using Registry.Web.Services.HeavyTasks.Ports;
-using Registry.Web.Services.Import;
+using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -36,8 +29,24 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// per-file build jobs are enqueued automatically. No downloadable artifact is produced.
 /// Cooperatively cancellable - cancellation propagates to the remote NodeODX task.
 /// </summary>
-public sealed class PhotogrammetryTool : IHeavyTool
+public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parameters>
 {
+    /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
+    public sealed record Parameters(string? NodeId, string? Folder, List<string>? Images, bool? CreateNewDataset, string? DestPath, string? NewDatasetName, string? NewDatasetOrgSlug, string? NewDatasetVisibility, string? Name, string? Options, string? Profile = null);
+
+    protected override Parameters ReadParams(ToolParameters p) => new(
+        p.Text("nodeId"),
+        p.Text("folder"),
+        p.Strings("images"),
+        p.Flag("createNewDataset"),
+        p.Text("destPath"),
+        p.Text("newDatasetName"),
+        p.Text("newDatasetOrgSlug"),
+        p.Text("newDatasetVisibility"),
+        p.Text("name"),
+        p.RawArray("options"),
+        p.Text("profile"));
+
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -48,6 +57,7 @@ public sealed class PhotogrammetryTool : IHeavyTool
             "images": { "type": ["array", "null"], "items": { "type": "string" }, "description": "Explicit list of image entry paths." },
             "nodeId": { "type": ["string", "null"], "description": "Target NodeODX node id (default: first configured)." },
             "name": { "type": ["string", "null"], "description": "Task name shown on the node." },
+            "profile": { "type": ["string", "null"], "description": "Name of the processing profile the options come from, shown in the task's label." },
             "options": { "type": ["array", "null"], "description": "NodeODX options array [{name,value}]." },
             "destPath": { "type": ["string", "null"], "description": "Destination folder within the dataset for extracted results (required unless createNewDataset is true)." },
             "createNewDataset": { "type": ["boolean", "null"], "description": "If true, create a new dataset for the photogrammetry results instead of extracting into the current dataset." },
@@ -59,99 +69,137 @@ public sealed class PhotogrammetryTool : IHeavyTool
         }
         """);
 
-    // Files are indexed in batches of this size: bounds the per-transaction lock time.
-    private const int IndexChunkSize = 250;
-
-    private readonly INodeOdxClient _client;
-    private readonly INodeOdxNodeRegistry _nodes;
-    private readonly IArchiveExtractor _extractor;
+    private readonly NodeOdxTaskRunner _node;
+    private readonly DatasetArchiveExtractor _archives;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ProcessingPlatformSettings _settings;
     private readonly ImportSettings _importSettings;
-    private readonly ILogger<PhotogrammetryTool> _logger;
-    private readonly TimeSpan _pollInterval;
+    private readonly DatasetPathPolicy _paths;
+    private readonly TaskFileIndexer _indexer;
 
     public PhotogrammetryTool(
-        INodeOdxClient client,
-        INodeOdxNodeRegistry nodes,
-        IArchiveExtractor extractor,
+        NodeOdxTaskRunner node,
+        DatasetArchiveExtractor archives,
         IServiceScopeFactory scopeFactory,
-        IOptions<AppSettings> appSettings,
-        ILogger<PhotogrammetryTool> logger)
+        IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
+        DatasetPathPolicy paths,
+        TaskFileIndexer indexer)
     {
-        _client = client;
-        _nodes = nodes;
-        _extractor = extractor;
+        _node = node;
+        _paths = paths;
+        _archives = archives;
         _scopeFactory = scopeFactory;
-        _settings = appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings();
-        _importSettings = appSettings.Value.Import ?? new ImportSettings();
-        _logger = logger;
-        var seconds = appSettings.Value.ProcessingPlatform?.RemoteNodePollIntervalSeconds ?? 2;
-        _pollInterval = TimeSpan.FromSeconds(Math.Max(1, seconds));
+        _settings = platformSettings.Value;
+        _importSettings = importSettings.Value;
+        _indexer = indexer;
     }
 
-    public string Id => "photogrammetry";
-    public string Version => "2";
-    public string Title => "Photogrammetry (NodeODX)";
-    public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
-    public bool ProducesArtifact => false;
-    public JsonDocument InputSchema => Schema;
+    public override string Id => "photogrammetry";
+    public override string Version => "2";
+    public override string Title => "Photogrammetry (NodeODX)";
+    public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
+    public override bool ProducesArtifact => false;
 
-    public async Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
+    /// <inheritdoc />
+    public override bool AddsDatasetFiles => true;
+    public override JsonDocument InputSchema => Schema;
+
+    /// <summary>
+    /// The label of a run, so that runs can be told apart in the task lists (FR-PRC-22): the task name, the image
+    /// folder (or the number of images), the output and the profile, as in
+    /// "limit-1 · images/ → photogrammetry_output (Fast Orthophoto)".
+    /// </summary>
+    protected override string? Label(Parameters p)
     {
-        if (!_nodes.HasNodes)
+        var source = !string.IsNullOrWhiteSpace(p.Folder) ? p.Folder.Trim().TrimEnd('/') + "/"
+            : p.Images is { Count: > 0 } images ? $"{images.Count} images" : null;
+        var head = string.Join(" \u00b7 ",
+            new[] { p.Name?.Trim(), source }.Where(part => !string.IsNullOrEmpty(part)));
+        var target = p.CreateNewDataset == true
+            ? ("new dataset " + (p.NewDatasetName ?? string.Empty)).Trim()
+            : p.DestPath?.Trim();
+        var label = string.IsNullOrEmpty(target) ? head : $"{head} \u2192 {target}".Trim();
+        if (!string.IsNullOrWhiteSpace(p.Profile))
+            label = $"{label} ({p.Profile.Trim()})".Trim();
+        return string.IsNullOrWhiteSpace(label) ? null : label;
+    }
+
+    /// <summary>
+    /// The organization of the new dataset when the results go into one (the quota of its owner applies, D-039), else the
+    /// request's organization.
+    /// </summary>
+    public override string StorageOrganization(HeavyToolRequest request)
+    {
+        var args = Params(request);
+        return args.CreateNewDataset == true && !string.IsNullOrWhiteSpace(args.NewDatasetOrgSlug)
+            ? args.NewDatasetOrgSlug
+            : request.OrgSlug;
+    }
+
+    protected override async Task ValidateAsync(HeavyToolRequest request, Parameters args,
+        IHeavyToolValidationContext ctx, CancellationToken ct)
+    {
+        if (!_node.HasNodes)
             throw new InvalidOperationException("No NodeODX processing node is configured.");
 
-        var nodeId = ReadString(request.Params, "nodeId");
-        if (_nodes.Resolve(nodeId) is null)
+        var nodeId = args.NodeId;
+        if (_node.Resolve(nodeId) is null)
             throw new ArgumentException($"NodeODX node '{nodeId}' is not configured.");
 
         // Validate the optional image folder path (empty = whole dataset). Reject
         // rooted paths and traversal so a clean dataset-relative path is required.
-        var folder = ReadString(request.Params, "folder");
-        if (!string.IsNullOrWhiteSpace(folder))
-        {
-            CommonUtils.ValidateRelativePath(folder, ctx.Ddb.DatasetFolderPath);
-            if (IsReservedPath(folder))
-                throw new ArgumentException($"'{folder}' is a reserved path.");
-        }
+        _paths.NormalizeFolder(args.Folder);
 
         // Validate explicit image list before collecting.
-        var explicitImages = ReadStringArray(request.Params, "images");
+        var explicitImages = args.Images;
         if (explicitImages is { Count: > 0 })
         {
-            var missing = explicitImages.Where(p => !ctx.Ddb.EntryExists(p)).ToList();
+            var missing = explicitImages.Where(p => !ctx.Ddb.EntryExists(_paths.Normalize(p))).ToList();
             if (missing.Count > 0)
                 throw new ArgumentException(
                     $"The following image paths do not exist in the dataset: {string.Join(", ", missing.Select(p => $"'{p}'"))}");
         }
 
-        var images = CollectImageEntries(request, ctx.Ddb);
+        var images = CollectImageEntries(request, args, ctx.Ddb);
         if (images.Count < 2)
             throw new ArgumentException("Photogrammetry requires at least 2 images.");
 
         // Validate output destination parameters.
-        var createNewDataset = ReadBool(request.Params, "createNewDataset") ?? false;
-        var destPath = ReadString(request.Params, "destPath") ?? string.Empty;
+        var createNewDataset = args.CreateNewDataset ?? false;
+        var destPath = args.DestPath ?? string.Empty;
 
         if (createNewDataset)
         {
-            // Validate new dataset name when explicitly provided; omit to auto-generate a timestamped slug.
-            var newDatasetName = ReadString(request.Params, "newDatasetName");
-            if (!string.IsNullOrWhiteSpace(newDatasetName))
-            {
-                if (newDatasetName.Length > 128)
-                    throw new ArgumentException("The new dataset name must be 128 characters or less.");
+            // The slug rule is the Registry's one (SlugRules, FR-XC-12): an omitted name gets a generated slug
+            var newDatasetName = args.NewDatasetName;
+            var hasName = !string.IsNullOrWhiteSpace(newDatasetName);
+            if (hasName && !SlugRules.IsValid(newDatasetName))
+                throw new ArgumentException(SlugRules.InvalidMessage("Dataset"));
 
-                // Basic kebab-case validation.
-                if (!Regex.IsMatch(newDatasetName, @"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"))
-                    throw new ArgumentException("The new dataset name must be kebab-case (lowercase letters, digits, and hyphens).");
-            }
+            var newOrgSlug = args.NewDatasetOrgSlug ?? request.OrgSlug;
+            if (!SlugRules.IsValid(newOrgSlug))
+                throw new ArgumentException(SlugRules.InvalidMessage("Organization"));
 
             // Validate visibility.
-            var visibilityStr = ReadString(request.Params, "newDatasetVisibility") ?? "PRIVATE";
+            var visibilityStr = args.NewDatasetVisibility ?? "PRIVATE";
             if (!Enum.TryParse<Visibility>(visibilityStr, true, out _))
                 throw new ArgumentException($"Invalid visibility '{visibilityStr}'. Must be PRIVATE, UNLISTED, or PUBLIC.");
+
+            // The requesting user may create a dataset in that organization: checked at submit (the caller), and again
+            // by the worker before it creates the dataset, for the user the task runs for (D-031)
+            using var scope = _scopeFactory.CreateScope();
+            if (ctx.Caller is not null)
+                await scope.ServiceProvider.GetRequiredService<IDatasetAccessResolver>()
+                    .ResolveOrganizationAsync(newOrgSlug, AccessType.Write, ct: ct);
+
+            // Fails fast on a slug that is taken (the worker checks again before it creates the dataset, at submit
+            // and when the task starts); nothing is created here. The retry of a task whose earlier run created its
+            // dataset, still there in that organization, imports into it again (the rule of the worker,
+            // ReusableCreatedDatasetAsync): its own dataset is not a taken slug (D-037)
+            var creation = scope.ServiceProvider.GetRequiredService<DatasetCreation>();
+            if (hasName && !await OwnDatasetExistsAsync(creation, ctx.OwnCreatedDataset, newOrgSlug, ct) &&
+                await creation.SlugIsTakenAsync(newOrgSlug, newDatasetName!, ct))
+                throw new ConflictException(SlugTakenMessage(newDatasetName!, newOrgSlug));
         }
         else
         {
@@ -159,10 +207,8 @@ public sealed class PhotogrammetryTool : IHeavyTool
             if (string.IsNullOrWhiteSpace(destPath))
                 throw new ArgumentException("A destination folder path (destPath) is required unless createNewDataset is true.");
 
-            // Destination path safety.
-            CommonUtils.ValidateRelativePath(destPath, ctx.Ddb.DatasetFolderPath);
-            if (IsReservedPath(destPath))
-                throw new ArgumentException($"'{destPath}' is a reserved path.");
+            // libddb's path rule
+            destPath = _paths.NormalizeFolder(destPath);
 
             var destEntry = ctx.Ddb.GetEntry(destPath);
             if (destEntry != null && destEntry.Type != EntryType.Directory)
@@ -170,12 +216,52 @@ public sealed class PhotogrammetryTool : IHeavyTool
         }
     }
 
-    public HeavyToolPlan Plan(HeavyToolRequest request, IHeavyToolValidationContext ctx)
+    /// <summary>The text of a task whose requester may not create a dataset in <paramref name="orgSlug"/> (D-031).</summary>
+    internal static string NoWriteAccessMessage(string orgSlug) =>
+        $"The user who started this task cannot write to the organization \"{orgSlug}\": the results were not imported";
+
+    // The worker's check of the access of the user the task runs for (D-031): the rules of the API for that user, read
+    // without a request (IUserDatasetAccess). A task with no requesting user has nobody whose access holds
+    private static async Task EnsureRequesterMayCreateAsync(IServiceProvider services, string? requestedBy,
+        string orgSlug, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(requestedBy) ||
+            !await services.GetRequiredService<IUserDatasetAccess>()
+                .CanAccessOrganizationAsync(requestedBy, orgSlug, AccessType.Write, ct))
+            throw new ForbiddenException(NoWriteAccessMessage(orgSlug));
+    }
+
+    // The dataset an earlier run of the task created and recorded, when it is still there in the target organization
+    // (by its folder id; its slug may have changed since): null otherwise
+    private static async Task<(Guid InternalRef, string Slug)?> ReusableCreatedDatasetAsync(DatasetCreation creation,
+        ITaskWriteRecorder record, string orgSlug, CancellationToken ct)
+    {
+        if (await record.RecordedCreatedDatasetAsync(ct) is not { } recorded ||
+            !string.Equals(recorded.Org, orgSlug, StringComparison.Ordinal))
+            return null;
+
+        return await creation.ExistingSlugAsync(orgSlug, recorded.InternalRef, ct) is { } slug
+            ? (recorded.InternalRef, slug)
+            : null;
+    }
+
+    // Whether the dataset an earlier run of the task created (the retry's OwnCreatedDataset) is still there in the target
+    // organization, found by its folder id as the worker finds it: the re-run imports into it
+    private static async Task<bool> OwnDatasetExistsAsync(DatasetCreation creation, TaskCreatedDataset? own,
+        string orgSlug, CancellationToken ct) =>
+        own is not null && string.Equals(own.Org, orgSlug, StringComparison.Ordinal) &&
+        await creation.ExistingSlugAsync(orgSlug, own.InternalRef, ct) is not null;
+
+    // The one text of a slug that is taken, at submit and in the worker (§7.1)
+    private static string SlugTakenMessage(string slug, string orgSlug) =>
+        $"A dataset named \"{slug}\" already exists in \"{orgSlug}\"";
+
+    protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
     {
         long? estimate = null;
         try
         {
-            var images = CollectImageEntries(request, ctx.Ddb);
+            var images = CollectImageEntries(request, args, ctx.Ddb);
             var inputBytes = images.Sum(e => Math.Max(0, e.Size));
             // ODM products (ortho + DSM/DTM + point cloud + model) are typically a
             // fraction of the raw image payload; rough upper-bound heuristic.
@@ -190,130 +276,127 @@ public sealed class PhotogrammetryTool : IHeavyTool
             DefaultFileName: null, ContentType: null);
     }
 
-    public async Task<HeavyToolArtifact?> ExecuteAsync(
+    protected override async Task<HeavyToolArtifact?> ExecuteAsync(
         HeavyToolRequest request,
+        Parameters args,
         IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
-        // --- Phase 1: Submit to NodeODX and download results ---
-        var nodeId = ReadString(request.Params, "nodeId");
-        var node = _nodes.Resolve(nodeId)
+        // --- Step 1: Submit to NodeODX and download results ---
+        var nodeId = args.NodeId;
+        var node = _node.Resolve(nodeId)
                    ?? throw new InvalidOperationException($"NodeODX node '{nodeId}' is not configured.");
 
-        var entries = CollectImageEntries(request, ctx.Ddb);
+        var entries = CollectImageEntries(request, args, ctx.Ddb);
         if (entries.Count < 2)
             throw new InvalidOperationException("Photogrammetry requires at least 2 images.");
 
         var imagePaths = entries.Select(e => ctx.Ddb.GetLocalPath(e.Path)).ToList();
-        var taskName = ReadString(request.Params, "name") ?? $"{request.OrgSlug}/{request.DsSlug}";
-        var optionsJson = ReadRawJsonArray(request.Params, "options");
+        var taskName = args.Name ?? $"{request.OrgSlug}/{request.DsSlug}";
+        var optionsJson = args.Options;
 
-        progress.Report(new HeavyToolProgress(0, "submitting",
-            LogChunk: $"Submitting {imagePaths.Count} images to NodeODX node '{node.Id}'"));
+        // Submit, follow the node, download the result bundle (deleted at the end)
+        using var bundle = await _node.RunAsync(node, taskName, imagePaths, optionsJson, progress, ct);
+        var tempZipPath = bundle.Path;
 
-        var uuid = await _client.CreateTaskAsync(node, taskName, imagePaths, optionsJson, ct);
-        progress.Report(new HeavyToolProgress(0, "queued", LogChunk: $"NodeODX task created: {uuid}"));
+        // --- Step 2: Determine output target ---
+        var createNewDataset = args.CreateNewDataset ?? false;
+        var targetDdb = ctx.Ddb;
+        var targetDataset = ctx.Dataset;
+        var targetRoot = ctx.Ddb.DatasetFolderPath;
+        var targetOrgSlug = request.OrgSlug;
+        var targetDsSlug = request.DsSlug;
+        var destPath = _paths.NormalizeFolder(args.DestPath);
 
-        try
+        if (createNewDataset)
         {
-            await PollUntilDoneAsync(node, uuid, progress, ct);
-        }
-        catch (OperationCanceledException)
-        {
-            await _client.CancelTaskAsync(node, uuid, CancellationToken.None);
-            throw;
-        }
+            ct.ThrowIfCancellationRequested();
+            progress.Report(new HeavyToolProgress(0.96, "creating-dataset",
+                LogChunk: "Creating new dataset for photogrammetry results"));
 
-        // Download all.zip to a temp location for extraction.
-        var tempZipPath = Path.Combine(Path.GetTempPath(), $"photogrammetry_{Guid.NewGuid():N}.zip");
-        try
-        {
-            progress.Report(new HeavyToolProgress(0.95, "downloading", LogChunk: "Downloading result bundle (all.zip)"));
-            await _client.DownloadAssetAsync(node, uuid, "all.zip", tempZipPath, ct);
+            var newDatasetName = string.IsNullOrWhiteSpace(args.NewDatasetName)
+                ? $"photogrammetry-{DateTime.UtcNow:yyyyMMddHHmmss}"
+                : args.NewDatasetName;
+            var newDatasetOrgSlug = args.NewDatasetOrgSlug ?? request.OrgSlug;
+            var visibilityStr = args.NewDatasetVisibility ?? "PRIVATE";
+            var visibility = Enum.Parse<Visibility>(visibilityStr, true);
 
-            var info = new FileInfo(tempZipPath);
-            if (!info.Exists || info.Length == 0)
-                throw new InvalidOperationException("NodeODX produced no downloadable result bundle.");
+            targetOrgSlug = newDatasetOrgSlug;
 
-            // Best-effort remote cleanup.
-            await _client.RemoveTaskAsync(node, uuid, CancellationToken.None);
-
-            // --- Phase 2: Determine output target ---
-            var createNewDataset = ReadBool(request.Params, "createNewDataset") ?? false;
-            var targetDdb = ctx.Ddb;
-            var targetRoot = ctx.Ddb.DatasetFolderPath;
-            var targetOrgSlug = request.OrgSlug;
-            var targetDsSlug = request.DsSlug;
-            var destPath = ReadString(request.Params, "destPath") ?? string.Empty;
-
-            if (createNewDataset)
+            // This tool is a singleton; resolve the scoped services from a child scope at the point of use. The
+            // worker has no caller: the dataset is created by the system path, for the user who requested the task,
+            // whose access is checked again here (D-031). Nothing was created before this point
+            using (var scope = _scopeFactory.CreateScope())
             {
-                ct.ThrowIfCancellationRequested();
-                progress.Report(new HeavyToolProgress(0.96, "creating-dataset",
-                    LogChunk: "Creating new dataset for photogrammetry results"));
+                var creation = scope.ServiceProvider.GetRequiredService<DatasetCreation>();
 
-                var newDatasetName = ReadString(request.Params, "newDatasetName")
-                    ?? $"photogrammetry-{DateTime.UtcNow:yyyyMMddHHmmss}";
-                var newDatasetOrgSlug = ReadString(request.Params, "newDatasetOrgSlug") ?? request.OrgSlug;
-                var visibilityStr = ReadString(request.Params, "newDatasetVisibility") ?? "PRIVATE";
-                var visibility = Enum.Parse<Visibility>(visibilityStr, true);
+                // The requester may have lost the write access to the organization during the run: the task fails and
+                // creates nothing. Checked with the rules of the API for that user, also when the dataset exists
+                // already (a re-run writes into it on the user's behalf)
+                await EnsureRequesterMayCreateAsync(scope.ServiceProvider, ctx.RequestedBy, newDatasetOrgSlug, ct);
 
-                targetOrgSlug = newDatasetOrgSlug;
+                // A re-run of this task (a Retry, a lost run run again) finds the dataset an earlier run created in
+                // the record: it imports into it again (the attempt rule deleted what that run wrote), instead of
+                // finding its own slug taken, or creating a second dataset next to it
+                var reused = await ReusableCreatedDatasetAsync(creation, ctx.WriteRecord, newDatasetOrgSlug, ct);
 
-                // This tool is a singleton; resolve the scoped IDatasetsManager and IDdbManager
-                // from a child scope at the point of use.
-                using (var scope = _scopeFactory.CreateScope())
+                Guid internalRef;
+                if (reused is { } earlier)
                 {
-                    var datasetsManager = scope.ServiceProvider.GetRequiredService<IDatasetsManager>();
-                    var newDs = await datasetsManager.AddNew(newDatasetOrgSlug, new DatasetNewDto
-                    {
-                        Slug = newDatasetName,
-                        Name = newDatasetName.Replace("-", " "),
-                        Visibility = visibility,
-                        Tagline = "Photogrammetry results"
-                    });
-
-                    targetDsSlug = newDs.Slug;
+                    internalRef = earlier.InternalRef;
+                    targetDsSlug = earlier.Slug;
                     progress.Report(new HeavyToolProgress(0.96, "creating-dataset",
-                        LogChunk: $"Created new dataset '{newDs.Slug}' in organization '{newDatasetOrgSlug}'"));
+                        LogChunk: $"Reusing dataset '{earlier.Slug}' in organization '{newDatasetOrgSlug}', " +
+                                  "created by an earlier run of this task"));
+                }
+                else
+                {
+                    // The slug may have been taken during the run: the task fails and creates nothing
+                    if (await creation.SlugIsTakenAsync(newDatasetOrgSlug, newDatasetName, ct))
+                        throw new ConflictException(SlugTakenMessage(newDatasetName, newDatasetOrgSlug));
 
-                    // Resolve the DDB for the new dataset.
-                    var ddbManager = scope.ServiceProvider.GetRequiredService<IDdbManager>();
-                    var internalRef = newDs.Properties.TryGetValue("internalRef", out var refVal)
-                        ? Guid.Parse(refVal.ToString()!)
-                        : throw new InvalidOperationException("New dataset is missing internalRef.");
-                    targetDdb = ddbManager.Get(newDatasetOrgSlug, internalRef);
-                    targetRoot = targetDdb.DatasetFolderPath;
+                    var created = await creation.CreateAsSystemAsync(newDatasetOrgSlug, new DatasetNewDto
+                        {
+                            Slug = newDatasetName,
+                            Name = newDatasetName.Replace("-", " "),
+                            Visibility = visibility,
+                            Tagline = "Photogrammetry results"
+                        },
+                        inner => new BadRequestException(SlugTakenMessage(newDatasetName, newDatasetOrgSlug),
+                            innerException: inner),
+                        ct);
+
+                    internalRef = created.InternalRef;
+                    targetDsSlug = created.Dataset.Slug;
+                    progress.Report(new HeavyToolProgress(0.96, "creating-dataset",
+                        LogChunk: $"Created new dataset '{targetDsSlug}' in organization '{newDatasetOrgSlug}'"));
+
+                    // Right after it exists: a cancelled or failed task deletes the dataset it created (FR-XC-27, D-031)
+                    await ctx.WriteRecord.CreatedDatasetAsync(
+                        new TaskCreatedDataset(newDatasetOrgSlug, internalRef, targetDsSlug), CancellationToken.None);
                 }
 
-                // For a new dataset, extract to root (no subfolder).
-                destPath = string.Empty;
+                // Resolve the DDB for the new dataset.
+                var ddbManager = scope.ServiceProvider.GetRequiredService<IDdbManager>();
+                targetDdb = ddbManager.Get(newDatasetOrgSlug, internalRef);
+                targetDataset = new DatasetKey(newDatasetOrgSlug, internalRef);
+                targetRoot = targetDdb.DatasetFolderPath;
             }
 
-            // --- Phase 3: Extract archive into target dataset ---
-            await ExtractArchiveIntoDataset(
-                tempZipPath, destPath, targetDdb, targetRoot, targetOrgSlug, targetDsSlug,
-                request, ctx.TaskId, progress, ct);
-
-            progress.Report(new HeavyToolProgress(1, "done",
-                LogChunk: $"Photogrammetry complete. Results extracted to '{destPath}' in dataset '{targetDsSlug}'."));
-
-            return null;
+            // For a new dataset, extract to root (no subfolder).
+            destPath = string.Empty;
         }
-        finally
-        {
-            // Clean up temp zip file.
-            try
-            {
-                if (File.Exists(tempZipPath))
-                    File.Delete(tempZipPath);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not delete temporary zip file '{Path}'", tempZipPath);
-            }
-        }
+
+        // --- Step 3: Extract archive into target dataset ---
+        await ExtractArchiveIntoDataset(
+            tempZipPath, destPath, targetDdb, targetDataset, targetRoot, targetOrgSlug, targetDsSlug,
+            ctx, progress, ct);
+
+        progress.Report(new HeavyToolProgress(1, "done",
+            LogChunk: $"Photogrammetry complete. Results extracted to '{destPath}' in dataset '{targetDsSlug}'."));
+
+        return null;
     }
 
     /// <summary>
@@ -321,209 +404,71 @@ public sealed class PhotogrammetryTool : IHeavyTool
     /// Reuses the same pattern as ArchiveExtractTool.
     /// </summary>
     private async Task ExtractArchiveIntoDataset(
-        string archivePath, string destPath, IDDB ddb, string root,
+        string archivePath, string destPath, IDDB ddb, DatasetKey dataset, string root,
         string orgSlug, string dsSlug,
-        HeavyToolRequest request, string taskId,
+        IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress, CancellationToken ct)
     {
-        var done = 0;
-        var extracted = 0;
-        var skipped = 0;
-        int total;
-        var extractedPaths = new List<string>();
+        // The shared extractor: the path rule decides every entry, the budget every chunk, existing
+        // files are kept (no overwrite for photogrammetry output), any failure leaves the dataset as it
+        // was, and every result is recorded in the task's write record of the target dataset before it is
+        // written (FR-XC-27)
+        var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, dataset, root, ct);
 
-        var budget = new ExtractionBudget(_settings.MaxArchiveExtractSizeBytes, root, _settings.DiskSafetyMarginBytes);
-
-        using (var session = _extractor.Open(archivePath))
-        {
-            total = session.FastFileEntryCount ?? 0;
-
-            progress.Report(new HeavyToolProgress(total > 0 ? 0.96 : -1, "extracting",
-                LogChunk: total > 0
-                    ? $"Extracting {total} file(s) from photogrammetry results"
-                    : $"Extracting photogrammetry results"));
-
-            foreach (var archiveEntry in session.Entries())
-            {
-                ct.ThrowIfCancellationRequested();
-                if (archiveEntry.IsDirectory) continue;
-
-                // Path sanitization (anti zip-slip + reserved-folder guard).
-                var target = SafeJoin(destPath, archiveEntry.Key);
-                CommonUtils.ValidateRelativePath(target, root);
-
-                // Extension policy (allow-list / block-list): skip disallowed types with
-                // a warning, mirroring ArchiveExtractTool semantics.
-                if (!_importSettings.IsExtensionAllowed(target))
-                {
-                    _logger.LogWarning("Skipping disallowed file type during photogrammetry extraction: '{Path}'", target);
-                    skipped++;
-                    done++;
-                    ReportProgress(progress, done, total, archiveEntry.Key, 0.96);
-                    continue;
-                }
-
-                // Skip existing files (no overwrite for photogrammetry output).
-                if (ddb.EntryExists(target))
-                {
-                    skipped++;
-                    done++;
-                    ReportProgress(progress, done, total, archiveEntry.Key, 0.96);
-                    continue;
-                }
-
-                var localTarget = ddb.GetLocalPath(target);
-                var parent = Path.GetDirectoryName(localTarget);
-                if (!string.IsNullOrEmpty(parent))
-                    Directory.CreateDirectory(parent);
-
-                extractedPaths.Add(target);
-
-                try
-                {
-                    await using var sourceStream = archiveEntry.OpenStream();
-                    await using var fileStream = File.Create(localTarget);
-                    await budget.CopyGuardedAsync(sourceStream, fileStream, ct);
-                }
-                catch (QuotaExceededException)
-                {
-                    progress.Report(new HeavyToolProgress(-1, "cleanup",
-                        LogChunk: $"Out of budget - rolling back {extractedPaths.Count} extracted file(s)"));
-                    CleanupExtracted(ddb, extractedPaths);
-                    throw;
-                }
-
-                extracted++;
-                done++;
-                ReportProgress(progress, done, total, archiveEntry.Key, 0.96);
-            }
-        }
+        // The cap is the smaller of the archive limit and what the owner of the target organization may still store, read
+        // now, when the results are written (FR-PRC-08, D-039): when they do not fit the task fails with the 507 text, and
+        // the write record rolls back what was written. The internal folders of the bundle are not imported (FR-PRC-41)
+        var (maxBytes, maxBytesMessage) = await WorkerStorageQuota.CapAsync(ctx.Storage, orgSlug,
+            _settings.MaxArchiveExtractSizeBytes, replacedBytes: null, ct);
+        var extraction = await _archives.ExtractAsync(
+            new ArchiveExtractionRequest(archivePath, root, destPath, _importSettings.IsExtensionAllowed,
+                target => !writes.MayWrite(target), maxBytes,
+                _settings.DiskSafetyMarginBytes, writes, Exclude: ExcludedResultEntry(destPath),
+                MaxBytesMessage: maxBytesMessage),
+            new CallbackProgress<ArchiveExtractionProgress>(p => ReportProgress(progress, p)), ct);
+        var extractedPaths = extraction.Extracted.ToList();
 
         ct.ThrowIfCancellationRequested();
 
-        // Index everything in batches.
-        var indexed = new List<Entry>(extractedPaths.Count);
-        for (var i = 0; i < extractedPaths.Count; i += IndexChunkSize)
-        {
-            ct.ThrowIfCancellationRequested();
-            var slice = extractedPaths.GetRange(i, Math.Min(IndexChunkSize, extractedPaths.Count - i));
-            indexed.AddRange(ddb.AddRawBatch(slice));
-            progress.Report(new HeavyToolProgress(
-                extractedPaths.Count > 0 ? 0.97 + 0.02 * (double)(i + slice.Count) / extractedPaths.Count : -1,
-                "indexing", LogChunk: $"Indexed {i + slice.Count}/{extractedPaths.Count} file(s)"));
-        }
+        // Index, queue the builds of the buildable results (children of this task), invalidate the caches
+        await _indexer.IndexAsync(new TaskFiles(ddb, dataset, orgSlug, dsSlug, extractedPaths, ctx.BuildQueue, ctx.TaskId,
+            "photogrammetry results", ProgressFrom: 0.97, ProgressTo: 0.99), progress, ct);
 
-        // Enqueue per-file build jobs for buildable entries.
-        using (var scope = _scopeFactory.CreateScope())
-        {
-            var processor = scope.ServiceProvider.GetRequiredService<IBackgroundJobsProcessor>();
-            var buildableCount = 0;
-
-            foreach (var entry in indexed)
-            {
-                if (!ddb.IsBuildable(entry.Path))
-                    continue;
-
-                var path = entry.Path;
-                var meta = new IndexPayload(
-                    orgSlug,
-                    dsSlug,
-                    entry.Hash,
-                    null,
-                    Path: path,
-                    ParentJobId: taskId);
-
-                Expression<Action> buildJob = () => HangfireUtils.BuildWrapper(ddb, path, false, null);
-                processor.EnqueueIndexed(buildJob, meta);
-                buildableCount++;
-            }
-
-            _logger.LogInformation("Enqueued {Count} build job(s) for photogrammetry results in {Org}/{Ds}",
-                buildableCount, orgSlug, dsSlug);
-        }
-
-        // Invalidate cached tiles/thumbnails/OGC.
-        try
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var cacheInvalidator = scope.ServiceProvider.GetRequiredService<IDatasetCacheInvalidator>();
-            await cacheInvalidator.InvalidateAllDatasetCachesAsync(orgSlug, dsSlug);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cache invalidation after photogrammetry extract failed for {Org}/{Ds}",
-                orgSlug, dsSlug);
-        }
-
-        progress.Report(new HeavyToolProgress(0.99, "extracting",
-            LogChunk: $"Extraction complete: {extracted} extracted, {skipped} skipped"));
+        progress.Report(new HeavyToolProgress(0.99, "extracting", LogChunk: string.Join('\n', extraction.LogLines())));
     }
 
-    private async Task PollUntilDoneAsync(
-        NodeOdxEndpoint node, string uuid, IProgress<HeavyToolProgress> progress, CancellationToken ct)
+    // The entries of the result bundle that are not imported: the dataset path is under the folder the results go to, the
+    // prefix is read relative to the bundle (FR-PRC-41)
+    private Func<string, bool> ExcludedResultEntry(string destPath)
     {
-        var outputLine = 0;
-        while (true)
+        var prefixes = _settings.PhotogrammetryExcludedFoldersOrDefault();
+        var root = destPath.Length == 0 ? string.Empty : destPath.TrimEnd('/') + "/";
+        return target =>
         {
-            ct.ThrowIfCancellationRequested();
-
-            var info = await _client.GetTaskInfoAsync(node, uuid, ct);
-            var fraction = Math.Clamp(info.Progress / 100.0, 0, 1);
-            var phase = PhaseFor(info.StatusCode);
-
-            var lines = await _client.GetTaskOutputAsync(node, uuid, outputLine, ct);
-            if (lines.Count > 0)
-            {
-                outputLine += lines.Count;
-                foreach (var line in lines)
-                    progress.Report(new HeavyToolProgress(fraction * 0.95, phase, LogChunk: line));
-            }
-            else
-            {
-                progress.Report(new HeavyToolProgress(fraction * 0.95, phase));
-            }
-
-            switch (info.StatusCode)
-            {
-                case NodeOdxTaskStatusCode.Completed:
-                    return;
-                case NodeOdxTaskStatusCode.Failed:
-                    throw new InvalidOperationException(
-                        $"NodeODX task failed: {info.ErrorMessage ?? "unknown error"}");
-                case NodeOdxTaskStatusCode.Canceled:
-                    throw new OperationCanceledException("NodeODX task was canceled.");
-            }
-
-            await Task.Delay(_pollInterval, ct);
-        }
+            var inBundle = root.Length > 0 && target.StartsWith(root, StringComparison.OrdinalIgnoreCase)
+                ? target[root.Length..]
+                : target;
+            return prefixes.Any(prefix => !string.IsNullOrEmpty(prefix) &&
+                                          inBundle.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+        };
     }
 
-    private static string PhaseFor(NodeOdxTaskStatusCode code) => code switch
+    private List<Entry> CollectImageEntries(HeavyToolRequest request, Parameters args, IDDB ddb)
     {
-        NodeOdxTaskStatusCode.Queued => "queued",
-        NodeOdxTaskStatusCode.Running => "processing",
-        NodeOdxTaskStatusCode.Completed => "completed",
-        NodeOdxTaskStatusCode.Failed => "failed",
-        NodeOdxTaskStatusCode.Canceled => "canceled",
-        _ => "processing"
-    };
-
-    private static List<Entry> CollectImageEntries(HeavyToolRequest request, IDDB ddb)
-    {
-        var explicitImages = ReadStringArray(request.Params, "images");
+        var explicitImages = args.Images;
         IEnumerable<Entry> entries;
 
         if (explicitImages is { Count: > 0 })
         {
             entries = explicitImages
-                .Select(ddb.GetEntry)
+                .Select(p => ddb.GetEntry(_paths.Normalize(p)))
                 .Where(e => e is not null)
                 .Select(e => e!);
         }
         else
         {
-            var folder = ReadString(request.Params, "folder") ?? request.Path ?? string.Empty;
-            entries = ddb.Search(folder, recursive: true);
+            var folder = _paths.NormalizeFolder(args.Folder ?? request.Path);
+            entries = ddb.Find(EntryQuery.OfTypes(folder, EntryType.Image, EntryType.GeoImage));
         }
 
         return
@@ -533,92 +478,26 @@ public sealed class PhotogrammetryTool : IHeavyTool
         ];
     }
 
-    private static string SafeJoin(string destPath, string entryKey)
+    // The extraction is the 0.96..0.98 slice of the task
+    private static void ReportProgress(IProgress<HeavyToolProgress> progress, ArchiveExtractionProgress p)
     {
-        var key = (entryKey ?? string.Empty).Replace('\\', '/').Trim();
-        while (key.StartsWith('/'))
-            key = key[1..];
-
-        if (string.IsNullOrWhiteSpace(key))
-            throw new InvalidOperationException("Archive entry has an empty name.");
-
-        if (Path.IsPathRooted(key) || key.Split('/').Any(seg => seg == ".."))
-            throw new InvalidOperationException($"Unsafe archive entry path (zip-slip): '{entryKey}'.");
-
-        // Normalize segments: Windows reserved device names, trailing dots/spaces, invalid chars.
-        key = FileImportPolicy.SanitizePathSegments(key);
-        if (string.IsNullOrWhiteSpace(key))
-            throw new InvalidOperationException($"Archive entry name is empty after sanitization: '{entryKey}'.");
-
-        var combined = CommonUtils.SafeCombine(destPath ?? string.Empty, key);
-
-        if (IsReservedPath(combined))
-            throw new InvalidOperationException($"Archive entry targets a reserved path: '{combined}'.");
-
-        return combined;
-    }
-
-    private static bool IsReservedPath(string path)
-        => path.Replace('\\', '/').TrimStart('/').StartsWith(IDDB.DatabaseFolderName, StringComparison.Ordinal);
-
-    private static void ReportProgress(IProgress<HeavyToolProgress> progress, int done, int total, string currentKey, double baseFraction)
-    {
-        var fraction = total > 0 ? baseFraction + 0.02 * (double)done / total : -1;
-        progress.Report(new HeavyToolProgress(fraction, "extracting", Message: currentKey));
-    }
-
-    private void CleanupExtracted(IDDB ddb, List<string> paths)
-    {
-        foreach (var p in paths)
+        if (p.Done == 0)
         {
-            try
-            {
-                var local = ddb.GetLocalPath(p);
-                if (File.Exists(local))
-                    File.Delete(local);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not delete partially extracted file '{Path}'", p);
-            }
+            progress.Report(new HeavyToolProgress(p.Total > 0 ? 0.96 : -1, "extracting",
+                LogChunk: p.Total > 0
+                    ? $"Extracting {p.Total} file(s) from photogrammetry results"
+                    : "Extracting photogrammetry results"));
+            return;
         }
+
+        var fraction = p.Total > 0 ? 0.96 + 0.02 * p.Done / p.Total : -1;
+        progress.Report(new HeavyToolProgress(fraction, "extracting", Message: p.Key.Length > 0 ? p.Key : null));
     }
 
-    private static string? ReadString(JsonElement obj, string name)
+    // Reports inline (System.Progress<T> posts to the thread pool)
+    private sealed class CallbackProgress<T>(Action<T> report) : IProgress<T>
     {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.String ? el.GetString() : null;
+        public void Report(T value) => report(value);
     }
 
-    private static bool? ReadBool(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind switch
-        {
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            _ => null
-        };
-    }
-
-    private static List<string>? ReadStringArray(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el) || el.ValueKind != JsonValueKind.Array) return null;
-        return
-        [
-            .. el.EnumerateArray()
-                .Where(x => x.ValueKind == JsonValueKind.String)
-                .Select(x => x.GetString()!)
-        ];
-    }
-
-    private static string? ReadRawJsonArray(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el) || el.ValueKind != JsonValueKind.Array) return null;
-        return el.GetRawText();
-    }
 }

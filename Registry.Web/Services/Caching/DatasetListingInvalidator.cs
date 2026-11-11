@@ -1,0 +1,59 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Registry.Ports;
+using Registry.Web.Services.Adapters;
+using Registry.Web.Utilities;
+
+namespace Registry.Web.Services.Caching;
+
+/// <summary>
+/// What may change who can list a dataset, or how it is listed: its visibility, its name, its slug, its
+/// existence. The one place that drops the caches those answers live in, so no path that changes one of them can
+/// forget a cache: the dataset's cached visibility, and every STAC listing (the landing page and the collections
+/// listing are cached per caller, so they are keyed by one STAC generation that is renewed here).
+/// </summary>
+public interface IDatasetListingInvalidator
+{
+    /// <summary>The dataset's visibility may have changed: its cached visibility and every listing go.</summary>
+    Task VisibilityChangedAsync(string orgSlug, Guid internalRef, CancellationToken ct = default);
+
+    /// <summary>The dataset's name, slugs or existence changed: every listing (and its cached name) goes.</summary>
+    Task ListingChangedAsync(string orgSlug, Guid internalRef, CancellationToken ct = default);
+
+    /// <summary>
+    /// The meta <paramref name="key"/> of <paramref name="path"/> (null or empty: the dataset's root) was set, unset,
+    /// pushed or removed by a push: the one rule of which meta decides who lists the dataset and how. The visibility
+    /// (any path) is <see cref="VisibilityChangedAsync"/>, the name of the root is <see cref="ListingChangedAsync"/>,
+    /// any other key changes no cache.
+    /// </summary>
+    Task MetaChangedAsync(string orgSlug, Guid internalRef, string key, string? path, CancellationToken ct = default);
+}
+
+/// <summary>Default <see cref="IDatasetListingInvalidator"/>.</summary>
+public sealed class DatasetListingInvalidator(ICacheManager cacheManager, IDdbManager ddbManager,
+    CacheGenerations generations) : IDatasetListingInvalidator
+{
+    public async Task VisibilityChangedAsync(string orgSlug, Guid internalRef, CancellationToken ct = default)
+    {
+        // The visibility first: a listing computed after the new generation reads the new visibility
+        await cacheManager.RemoveDatasetVisibilityAsync(orgSlug, internalRef, ddbManager);
+        await ListingChangedAsync(orgSlug, internalRef, ct);
+    }
+
+    public async Task ListingChangedAsync(string orgSlug, Guid internalRef, CancellationToken ct = default)
+    {
+        await cacheManager.RemoveDatasetNameAsync(orgSlug, internalRef, ddbManager);
+        await generations.RenewAsync(CacheCategories.StacGeneration, ct);
+    }
+
+    public async Task MetaChangedAsync(string orgSlug, Guid internalRef, string key, string? path,
+        CancellationToken ct = default)
+    {
+        if (key == SafeMetaManager.VisibilityField)
+            await VisibilityChangedAsync(orgSlug, internalRef, ct);
+        // The root: null from the meta API, "" in a meta dump (libddb's own spelling of it)
+        else if (key == SafeMetaManager.NameField && string.IsNullOrEmpty(path))
+            await ListingChangedAsync(orgSlug, internalRef, ct);
+    }
+}

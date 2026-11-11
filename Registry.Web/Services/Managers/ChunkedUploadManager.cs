@@ -1,233 +1,257 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Registry.Ports;
+using Microsoft.EntityFrameworkCore;
+using Registry.Common;
+using Registry.Ports.DroneDB;
+using Registry.Web.Data;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Ports;
+using Registry.Web.Services.Uploads;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Managers;
 
 /// <summary>
-/// Chunked upload support implementation
-/// to be integrated into ShareManager.cs
+/// Resumable uploads of large files into a dataset: the client sends the file in
+/// chunks, asks which chunks are stored after any failure, sends only those, then commits once.
+/// The commit is idempotent (keyed by the file id) and needs no pass over the file.
 /// </summary>
-public class ChunkedUploadManager
+/// <remarks>
+/// A session is keyed by the caller and the file id the client gave (§7.1): the store folder and the commit receipt are
+/// named by <see cref="SessionKey"/>, so two users that send the same file id have two sessions, and a session of
+/// another user does not exist for the caller (404). The Hub makes the file id from the dataset, the path, the size and
+/// the last-modified time of the file, so the same file selected again after a reload has the same id.
+/// </remarks>
+public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store, UploadQuotaGuard quota,
+    ScratchFileProvider scratch, RegistryContext context)
 {
-    private readonly ILogger _logger;
-    private readonly string _tempDirectory;
-    private readonly IFileSystem _fileSystem;
+    /// <summary>Folder of the chunked uploads of a dataset, under its uploads folder.</summary>
+    public static string ChunksRoot(IDDB ddb) =>
+        Path.Combine(ddb.DatasetFolderPath, IDDB.UploadsFolderName, DatasetUploads.ChunksFolderName);
 
-    // In-memory cache of ongoing chunks for each file
-    // Key: fileId, Value: dictionary with ChunkIndex and status (true = uploaded)
-    private readonly Dictionary<string, Dictionary<int, bool>> _chunkTracker = new();
-
-    // Cache of information about files being uploaded
-    private readonly Dictionary<string, ChunkUploadDto> _fileInfoCache = new();
-
-    // Semaphore to ensure thread-safe access to the cache
-    private readonly SemaphoreSlim _cacheLock = new SemaphoreSlim(1, 1);
-
-    public ChunkedUploadManager(ILogger logger, string tempDirectory, IFileSystem fileSystem)
+    /// <summary>
+    /// The name of the session of <paramref name="fileId"/> for <paramref name="userId"/> in the store and in the
+    /// receipts: 64 hexadecimal characters of the SHA-256 of both. Another user's id gives another session.
+    /// </summary>
+    /// <exception cref="Registry.Web.Exceptions.BadRequestException">The file id is not 8 to 64 letters, digits, '-' or '_'.</exception>
+    public static string SessionKey(string? userId, string fileId)
     {
-        _logger = logger;
-        _tempDirectory = tempDirectory;
-        _fileSystem = fileSystem;
-
-        // Ensure the temporary directory exists
-        _fileSystem.FolderCreate(_tempDirectory);
+        if (!ChunkStore.IsValidFileId(fileId))
+            throw new BadRequestException("Invalid file id: use 8 to 64 letters, digits, '-' or '_'");
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{userId}\n{fileId}")));
     }
 
     /// <summary>
-    /// Handles the upload of a single chunk
+    /// Stores a chunk; the first chunk of an upload checks access, path, name and quota and fixes the path, the
+    /// <c>overwrite</c> flag, the source file name and its last-modified time (later chunks do not change them, and a
+    /// resumed upload goes on at the stored path): without the flag a name that exists is refused (D-040).
     /// </summary>
-    public async Task<ChunkUploadResultDto> UploadChunk(ChunkUploadDto chunkInfo, Stream chunkStream)
+    /// <exception cref="Registry.Web.Exceptions.NameClashException">The first chunk of a file whose name exists,
+    /// without overwrite.</exception>
+    /// <exception cref="Registry.Web.Exceptions.ConflictException">The session exists for another file (size or chunks).</exception>
+    public async Task<ChunkStatusDto> WriteChunkAsync(string orgSlug, string dsSlug, ChunkRequest chunk, Stream body,
+        CancellationToken ct = default)
     {
-        // Assicurati che i dati del chunk siano validi
-        if (chunkInfo.ChunkIndex < 0 || chunkInfo.ChunkIndex >= chunkInfo.TotalChunks)
-            throw new ArgumentException($"Invalid chunk index: {chunkInfo.ChunkIndex}");
+        using var ctx = await uploads.BeginAsync(orgSlug, dsSlug, ct: ct);
+        var key = SessionKey(ctx.User?.Id, chunk.FileId);
+        var root = ChunksRoot(ctx.Ddb);
 
-        if (chunkInfo.TotalFileSize <= 0)
-            throw new ArgumentException("Invalid file size");
-
-        if (string.IsNullOrEmpty(chunkInfo.FileId))
-            throw new ArgumentException("FileId is required");
-
-        // Create the specific directory for this file if it doesn't exist
-        var fileChunkDir = Path.Combine(_tempDirectory, chunkInfo.FileId);
-        _fileSystem.FolderCreate(fileChunkDir);
-
-        // Path of the file for this chunk
-        var chunkPath = Path.Combine(fileChunkDir, $"chunk_{chunkInfo.ChunkIndex}.bin");
-
-        // Verify the MD5 hash of the chunk (if provided)
-        if (!string.IsNullOrEmpty(chunkInfo.ChunkMd5))
+        var status = store.GetStatus(root, key);
+        if (status == null)
         {
-            var calculatedMd5 = await CalculateMd5Async(chunkStream);
-            if (!string.Equals(calculatedMd5, chunkInfo.ChunkMd5, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidDataException($"Chunk MD5 mismatch. Expected: {chunkInfo.ChunkMd5}, Got: {calculatedMd5}");
-            }
+            // A new upload: refuse it before its first byte if it cannot be stored. The open uploads of the organizations
+            // of the owner hold room for their whole files, in the quota of the owner, until they are committed or
+            // removed (7 days): the new one must fit with them (FR-XC-26, D-039)
+            uploads.ResolveTarget(ctx, chunk.Path, chunk.Overwrite);
+            var open = await OpenUploadBytesAsync(ctx.Ddb, ctx.QuotaOwnerId, ctx.User?.Id, chunk.FileId, ct);
+            using (await quota.ReserveAsync(ctx.QuotaOwnerId, chunk.TotalFileSize + open)) { }
 
-            // Reset the stream position to the beginning after calculating the hash
-            chunkStream.Position = 0;
+            // The same file sent again after a commit has the same id: the receipt of the earlier one must not answer
+            // the commit of this one
+            await uploads.ForgetReceiptAsync(orgSlug, dsSlug, key);
+            store.Open(root, key, new ChunkManifest(chunk.Path, chunk.TotalFileSize, chunk.TotalChunks, chunk.ChunkSize,
+                ctx.User?.Id, chunk.Overwrite, chunk.FileId, chunk.SourceFileName, chunk.LastModified));
+        }
+        else
+        {
+            // A session that exists is not started again: one removed meanwhile (its Cancel) refuses the chunk (404)
+            EnsureOwner(ctx, status.Manifest, chunk.FileId);
+            if (status.Manifest.TotalSize != chunk.TotalFileSize || status.Manifest.TotalChunks != chunk.TotalChunks ||
+                status.Manifest.ChunkSize != chunk.ChunkSize)
+                throw new ConflictException($"Upload '{chunk.FileId}' exists with another file or owner");
         }
 
-        // Save the chunk to disk
-        await using (var fileStream = _fileSystem.OpenWrite(chunkPath))
-        {
-            await chunkStream.CopyToAsync(fileStream);
-        }
-
-        // Update tracking information
-        await _cacheLock.WaitAsync();
-        try
-        {
-            // Update file information
-            _fileInfoCache[chunkInfo.FileId] = chunkInfo;
-
-            // Initialize chunk tracking if necessary
-            if (!_chunkTracker.TryGetValue(chunkInfo.FileId, out var chunkStatus))
-            {
-                chunkStatus = new Dictionary<int, bool>();
-                _chunkTracker[chunkInfo.FileId] = chunkStatus;
-            }
-
-            // Mark this chunk as completed
-            chunkStatus[chunkInfo.ChunkIndex] = true;
-
-            // Check if all chunks have been uploaded
-            var isComplete = chunkStatus.Count == chunkInfo.TotalChunks &&
-                             chunkStatus.All(x => x.Value);
-
-            return new ChunkUploadResultDto
-            {
-                FileId = chunkInfo.FileId,
-                ReceivedChunk = chunkInfo.ChunkIndex,
-                Success = true,
-                IsComplete = isComplete
-            };
-        }
-        finally
-        {
-            _cacheLock.Release();
-        }
+        return ToDto(await store.WriteAsync(root, key, chunk.ChunkIndex, body, ct));
     }
 
     /// <summary>
-    /// Reassembles all chunks of a file and completes the upload
+    /// The size of the files of the open chunked uploads of every user in the organizations of the owner
+    /// <paramref name="ownerId"/> (every dataset folder of each of them; the organization of <paramref name="ddb"/> is one):
+    /// the storage that they hold, in the quota of the owner, which the upload ledger reserves per owner, until they are
+    /// committed or removed, which the storage use of the owner does not count yet. The session of
+    /// <paramref name="userId"/> and <paramref name="fileId"/> in <paramref name="ddb"/> is not counted: it is the upload
+    /// being checked (two first chunks of one file sent at once: the second must not count the session the first one
+    /// just started). Without an owner no limit applies: 0.
     /// </summary>
-    public async Task<string> FinalizeChunkedUpload(string fileId)
+    private async Task<long> OpenUploadBytesAsync(IDDB ddb, string ownerId, string? userId, string fileId,
+        CancellationToken ct)
     {
-        await _cacheLock.WaitAsync();
-        ChunkUploadDto fileInfo;
-        Dictionary<int, bool> chunkStatus;
+        // No limit (no owner, limiter off, administrator owner): nothing to count, and no folder scan on every first chunk
+        if (string.IsNullOrEmpty(ownerId) || !await quota.LimitAppliesAsync(ownerId, ct))
+            return 0;
 
-        try
-        {
-            // Verify that all necessary information is available
-            if (!_fileInfoCache.TryGetValue(fileId, out fileInfo))
-                throw new ArgumentException($"No information found for file ID: {fileId}");
+        // The folder of a dataset is <datasets>/<organization slug>/<dataset> (DdbManager.GetDatasetFolder)
+        var dataset = Path.GetFullPath(ddb.DatasetFolderPath);
+        var organization = Path.GetDirectoryName(dataset);
+        var datasets = organization == null ? null : Path.GetDirectoryName(organization);
+        if (organization == null || datasets == null)
+            return 0;
 
-            if (!_chunkTracker.TryGetValue(fileId, out chunkStatus))
-                throw new ArgumentException($"No chunk tracking information for file ID: {fileId}");
+        var owned = await context.Organizations.AsNoTracking()
+            .Where(org => org.OwnerId == ownerId)
+            .Select(org => org.Slug)
+            .ToListAsync(ct);
+        var organizations = owned.Select(slug => Path.GetFullPath(Path.Combine(datasets, slug)))
+            .Append(organization)
+            .Distinct(PathComparison.Comparer)
+            .Where(Directory.Exists);
 
-            // Verify that all chunks have been uploaded successfully
-            if (chunkStatus.Count != fileInfo.TotalChunks || !chunkStatus.All(x => x.Value))
-                throw new InvalidOperationException("Not all chunks have been uploaded successfully");
-        }
-        finally
-        {
-            _cacheLock.Release();
-        }
+        // In one dataset the session of a user and a file id is one folder (SessionKey): its manifest has both
+        bool Current(string folder, ChunkStatus s) =>
+            s.Manifest.FileId == fileId && s.Manifest.UserId == userId && Path.GetFullPath(folder) == dataset;
 
-        // Directory containing the chunks
-        var fileChunkDir = Path.Combine(_tempDirectory, fileId);
+        return organizations
+            .SelectMany(Directory.EnumerateDirectories)
+            .SelectMany(folder => store.List(Path.Combine(folder, IDDB.UploadsFolderName, DatasetUploads.ChunksFolderName))
+                .Where(s => !Current(folder, s)))
+            .Sum(s => s.Manifest.TotalSize);
+    }
 
-        // Final path of the temporary file
-        var outputFilePath = Path.Combine(_tempDirectory, $"{fileId}_complete");
-
-        // Reassemble the file from chunks
-        await using (var outputStream = _fileSystem.OpenWrite(outputFilePath))
-        {
-            for (int i = 0; i < fileInfo.TotalChunks; i++)
-            {
-                var chunkPath = Path.Combine(fileChunkDir, $"chunk_{i}.bin");
-
-                await using (var chunkStream = _fileSystem.OpenRead(chunkPath))
-                {
-                    await chunkStream.CopyToAsync(outputStream);
-                }
-            }
-        }
-
-        // Calculate the MD5 hash of the complete file
-        var fileHash = await CalculateFileMd5Async(outputFilePath);
-
-        // Remove tracking data
-        await _cacheLock.WaitAsync();
-        try
-        {
-            _fileInfoCache.Remove(fileId);
-            _chunkTracker.Remove(fileId);
-        }
-        finally
-        {
-            _cacheLock.Release();
-        }
-
-        return outputFilePath;
+    /// <summary>The state of an upload of the caller.</summary>
+    /// <exception cref="Registry.Web.Exceptions.NotFoundException">Unknown upload, or one of another user.</exception>
+    public async Task<ChunkStatusDto> GetStatusAsync(string orgSlug, string dsSlug, string fileId,
+        CancellationToken ct = default)
+    {
+        using var ctx = await uploads.BeginAsync(orgSlug, dsSlug, ct: ct);
+        var status = store.GetStatus(ChunksRoot(ctx.Ddb), SessionKey(ctx.User?.Id, fileId))
+                     ?? throw new NotFoundException($"Unknown upload '{fileId}'");
+        EnsureOwner(ctx, status.Manifest, fileId);
+        return ToDto(status);
     }
 
     /// <summary>
-    /// Cleans up temporary files for a given fileId
+    /// The receipt of the commit of a chunked upload of the caller, by the file id the client knows (a client whose
+    /// commit lost its answer asks for it, as for any upload id); null when unknown.
     /// </summary>
-    public void CleanupTempFiles(string fileId)
+    public async Task<UploadReceipt?> GetCommitReceiptAsync(string orgSlug, string dsSlug, string fileId,
+        CancellationToken ct = default) =>
+        ChunkStore.IsValidFileId(fileId)
+            ? await uploads.GetReceiptAsync(orgSlug, dsSlug, SessionKey(await uploads.CurrentUserIdAsync(), fileId), ct)
+            : null;
+
+    /// <summary>
+    /// The open uploads of the caller in the dataset, selected by the <c>UserId</c> of the upload manifest (§7.1): the
+    /// Hub offers to resume them after a reload. An upload made before the manifest kept its file id is not listed.
+    /// </summary>
+    public async Task<ChunkStatusDto[]> ListAsync(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
-        var fileChunkDir = Path.Combine(_tempDirectory, fileId);
-        var outputFilePath = Path.Combine(_tempDirectory, $"{fileId}_complete");
+        using var ctx = await uploads.BeginAsync(orgSlug, dsSlug, ct: ct);
+        return store.List(ChunksRoot(ctx.Ddb))
+            .Where(s => s.Manifest.FileId != null && s.Manifest.UserId == ctx.User?.Id)
+            .OrderBy(s => s.Manifest.Path, StringComparer.Ordinal)
+            .Select(ToDto)
+            .ToArray();
+    }
+
+    /// <summary>Removes the stored chunks of an upload of the caller (its Cancel).</summary>
+    /// <exception cref="Registry.Web.Exceptions.NotFoundException">Unknown upload, or one of another user.</exception>
+    public async Task DeleteAsync(string orgSlug, string dsSlug, string fileId, CancellationToken ct = default)
+    {
+        using var ctx = await uploads.BeginAsync(orgSlug, dsSlug, ct: ct);
+        var root = ChunksRoot(ctx.Ddb);
+        var key = SessionKey(ctx.User?.Id, fileId);
+        var status = store.GetStatus(root, key) ?? throw new NotFoundException($"Unknown upload '{fileId}'");
+        EnsureOwner(ctx, status.Manifest, fileId);
+
+        if (!await store.DeleteAsync(root, key))
+            throw new NotFoundException($"Unknown upload '{fileId}'");
+        await uploads.ForgetReceiptAsync(orgSlug, dsSlug, key);
+    }
+
+    /// <summary>
+    /// Adds the finished file to the dataset; again for a committed upload, returns its entry. The name is checked
+    /// again (another upload may have written it since the first chunk) before the chunks are taken, so a refused
+    /// commit keeps them: the same commit with <paramref name="overwrite"/> (the user chose to replace) adds them
+    /// without sending them again.
+    /// </summary>
+    /// <param name="orgSlug">The organization.</param>
+    /// <param name="dsSlug">The dataset.</param>
+    /// <param name="fileId">The upload.</param>
+    /// <param name="overwrite">Replace a file that holds the name, also when the first chunk did not say so.</param>
+    /// <param name="ct">Cancellation.</param>
+    /// <exception cref="Registry.Web.Exceptions.ConflictException">Chunks are missing.</exception>
+    /// <exception cref="Registry.Web.Exceptions.NameClashException">The name exists and the upload does not overwrite.</exception>
+    public async Task<EntryDto> CommitAsync(string orgSlug, string dsSlug, string fileId, bool overwrite = false,
+        CancellationToken ct = default)
+    {
+        // Keyed by the file id: committing again (the response was lost) answers from the receipt. Honoured
+        // while the upload is resolved; the commit then runs to completion
+        using var ctx = await uploads.BeginAsync(orgSlug, dsSlug, uploadId: SessionKey(await uploads.CurrentUserIdAsync(), fileId),
+            ct: ct);
+        if (ctx.Receipt?.Results is { Count: > 0 } done && done[0].Entry is { } entry)
+            return entry;
 
         try
         {
-            if (_fileSystem.FolderExists(fileChunkDir))
-                _fileSystem.FolderDelete(fileChunkDir);
+            var root = ChunksRoot(ctx.Ddb);
+            var key = ctx.UploadId!;
+            var status = store.GetStatus(root, key) ?? throw new NotFoundException($"Unknown upload '{fileId}'");
+            EnsureOwner(ctx, status.Manifest, fileId);
+            var replace = overwrite || status.Manifest.Overwrite;
+            if (status.Complete)
+                uploads.ResolveTarget(ctx, status.Manifest.Path, replace);
 
-            if (_fileSystem.Exists(outputFilePath))
-                _fileSystem.Delete(outputFilePath);
+            // The chunks were written into one file: taking it is a rename onto the dataset volume
+            using var temp = scratch.CreateForDataset(ctx.Ddb.DatasetFolderPath, DatasetUploads.TempFileExtension);
+            var hint = await store.TakeAsync(root, key, temp.Path);
+            temp.Release(); // the commit moves it into place or deletes it
+
+            return await uploads.CommitAsync(ctx, status.Manifest.Path, new StreamedFile(temp.Path, hint.Size, hint),
+                replace);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error cleaning up temporary files for fileId {FileId}", fileId);
+            await uploads.FailAsync(ctx, ex);
+            throw;
         }
     }
 
-    /// <summary>
-    /// Calculates the MD5 hash of a stream
-    /// </summary>
-    private async Task<string> CalculateMd5Async(Stream stream)
+    private static void EnsureOwner(UploadRequestContext ctx, ChunkManifest manifest, string fileId)
     {
-        using (var md5 = MD5.Create())
-        {
-            var hash = await md5.ComputeHashAsync(stream);
-            return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-        }
+        // A session of another user does not exist for the caller (§7.1)
+        if (manifest.UserId != ctx.User?.Id)
+            throw new NotFoundException($"Unknown upload '{fileId}'");
     }
 
-    /// <summary>
-    /// Calculates the MD5 hash of a file
-    /// </summary>
-    private async Task<string> CalculateFileMd5Async(string filePath)
+    // The file id is the client's own: the manifest keeps it, since the store names the session by its key
+    private static ChunkStatusDto ToDto(ChunkStatus status) => new()
     {
-        await using (var stream = _fileSystem.OpenRead(filePath))
-        {
-            using (var md5 = MD5.Create())
-            {
-                var hash = await md5.ComputeHashAsync(stream);
-                return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-            }
-        }
-    }
+        FileId = status.Manifest.FileId ?? string.Empty,
+        Path = status.Manifest.Path,
+        SourceFileName = status.Manifest.SourceFileName,
+        LastModified = status.Manifest.LastModified,
+        TotalFileSize = status.Manifest.TotalSize,
+        TotalChunks = status.Manifest.TotalChunks,
+        ChunkSize = status.Manifest.ChunkSize,
+        Received = status.Received.ToArray(),
+        Missing = status.Missing.ToArray(),
+        Complete = status.Complete
+    };
 }

@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using System.Linq;
 using System.Text.Json;
@@ -17,9 +16,10 @@ namespace Registry.Web.Services.Import;
 public sealed class RegistryImportSource : IImportSource, IBrowsableImportSource
 {
     /// <summary>
-    /// Client-facing message for a remote authentication failure surfaced by the browse endpoints
-    /// (maps to 401 via <c>ApiExceptionClassifier</c>). <c>FetchAsync</c> keeps its own message as the
-    /// heavy-task failure reason.
+    /// Client-facing message for a remote authentication failure surfaced by the browse endpoints: a
+    /// <c>ForbiddenException</c> that never retries, so the signed-in caller gets 403 (never 401, which
+    /// would sign them out of this Registry). <c>FetchAsync</c> keeps its own message as
+    /// the heavy-task failure reason.
     /// </summary>
     public const string AuthFailureMessage = "Authentication to the remote registry failed. Check the username and password.";
 
@@ -57,13 +57,16 @@ public sealed class RegistryImportSource : IImportSource, IBrowsableImportSource
         if (files.Length == 0)
             return new ImportSourceProbe(false, "The remote dataset was not found or is empty.", 0, 0, p.Dataset);
 
+        // The remote display name and tagline (FR-UPL-14): the dataset keeps what its owner gave it, not the slug
+        var info = await _client.GetDatasetInfoAsync(p.Url, token, p.Organization, p.Dataset, ct);
+
         var bytes = files.Sum(f => f.Size);
-        return new ImportSourceProbe(true, null, bytes, files.Length, p.Dataset);
+        return new ImportSourceProbe(true, null, bytes, files.Length, info?.Name ?? p.Dataset, info?.Tagline, p.Dataset);
     }
 
     /// <inheritdoc />
-    public async Task FetchAsync(JsonElement parameters, string destFolder, IProgress<ImportProgress> progress,
-        CancellationToken ct)
+    public async Task FetchAsync(JsonElement parameters, string destFolder, IImportWriteRecord writes,
+        IProgress<ImportProgress> progress, CancellationToken ct)
     {
         var p = ReadParams(parameters);
         await _ssrfGuard.AssertAllowedAsync(p.Host, ct);
@@ -80,15 +83,16 @@ public sealed class RegistryImportSource : IImportSource, IBrowsableImportSource
             throw new InvalidOperationException("The remote dataset was not found or is empty.");
 
         await _client.DownloadFilesParallelAsync(p.Url, token, p.Organization, p.Dataset, destFolder, files,
-            progress, ct);
+            writes, progress, ct);
     }
 
     private static RegistryParams ReadParams(JsonElement parameters)
     {
         var (url, host, username, password) = ReadConnectionParams(parameters);
-        var org = GetString(parameters, "organization")
+        var link = SplitRegistryUrl(new Uri(GetString(parameters, "url")!));
+        var org = GetString(parameters, "organization") ?? link.Organization
                   ?? throw new ArgumentException("A source organization is required.");
-        var dataset = GetString(parameters, "dataset")
+        var dataset = GetString(parameters, "dataset") ?? link.Dataset
                       ?? throw new ArgumentException("A source dataset is required.");
 
         return new RegistryParams(url, host, org, dataset, username, password);
@@ -102,7 +106,7 @@ public sealed class RegistryImportSource : IImportSource, IBrowsableImportSource
 
         var token = await _client.AuthenticateAsync(url, username, password, ct);
         if (!string.IsNullOrWhiteSpace(username) && token is null)
-            throw new UnauthorizedException(AuthFailureMessage);
+            throw new ForbiddenException(AuthFailureMessage);
 
         return await _client.ListOrganizationsAsync(url, token, ct);
     }
@@ -112,12 +116,13 @@ public sealed class RegistryImportSource : IImportSource, IBrowsableImportSource
     {
         var (url, host, username, password) = ReadConnectionParams(parameters);
         var org = GetString(parameters, "organization")
+                  ?? SplitRegistryUrl(new Uri(GetString(parameters, "url")!)).Organization
                   ?? throw new ArgumentException("A source organization is required.");
         await _ssrfGuard.AssertAllowedAsync(host, ct);
 
         var token = await _client.AuthenticateAsync(url, username, password, ct);
         if (!string.IsNullOrWhiteSpace(username) && token is null)
-            throw new UnauthorizedException(AuthFailureMessage);
+            throw new ForbiddenException(AuthFailureMessage);
 
         return await _client.ListDatasetsAsync(url, token, org, ct);
     }
@@ -133,7 +138,39 @@ public sealed class RegistryImportSource : IImportSource, IBrowsableImportSource
 
         var username = GetString(parameters, "username") ?? string.Empty;
         var password = GetString(parameters, "password") ?? string.Empty;
-        return (url, uri.Host, username, password);
+        return (SplitRegistryUrl(uri).BaseUrl, uri.Host, username, password);
+    }
+
+    /// <summary>
+    /// Splits the URL of a registry into its base address and the organization and the dataset it names
+    /// when it is the link of a page (<c>/r/{org}[/{ds}[/...]]</c>) or of the API
+    /// (<c>/orgs/{org}[/ds/{ds}[/...]]</c>) rather than the address of the registry: the API paths are
+    /// appended to the base address, and appended to the link of a page they reach the web app, which
+    /// answers every path with its HTML page. A path before <c>/r/</c> or <c>/orgs/</c> is kept
+    /// (a registry served below a prefix); the query and the fragment are dropped.
+    /// </summary>
+    /// <param name="uri">The absolute http/https URL given for the registry.</param>
+    /// <returns>The base address, and the organization and the dataset of the link (null when absent).</returns>
+    internal static (string BaseUrl, string? Organization, string? Dataset) SplitRegistryUrl(Uri uri)
+    {
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(Uri.UnescapeDataString).ToArray();
+        var origin = uri.GetLeftPart(UriPartial.Authority);
+
+        string Base(int count) => count == 0
+            ? origin
+            : $"{origin}/{string.Join('/', segments.Take(count).Select(Uri.EscapeDataString))}";
+
+        var r = Array.IndexOf(segments, "r");
+        if (r >= 0 && r + 1 < segments.Length)
+            return (Base(r), segments[r + 1], r + 2 < segments.Length ? segments[r + 2] : null);
+
+        var orgs = Array.IndexOf(segments, "orgs");
+        if (orgs >= 0 && orgs + 1 < segments.Length)
+            return (Base(orgs), segments[orgs + 1],
+                orgs + 3 < segments.Length && segments[orgs + 2] == "ds" ? segments[orgs + 3] : null);
+
+        return (uri.GetLeftPart(UriPartial.Path).TrimEnd('/'), null, null);
     }
 
     private static string? GetString(JsonElement obj, string name)

@@ -1,6 +1,6 @@
-#nullable enable
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -28,11 +28,11 @@ public sealed class NodeOdxClient : INodeOdxClient
 
     public NodeOdxClient(
         IHttpClientFactory httpClientFactory,
-        IOptions<AppSettings> appSettings,
+        IOptions<ProcessingPlatformSettings> settings,
         ILogger<NodeOdxClient> log)
     {
         _httpClientFactory = httpClientFactory;
-        var seconds = appSettings.Value.ProcessingPlatform?.RemoteNodeRequestTimeoutSeconds ?? 30;
+        var seconds = settings.Value.RemoteNodeRequestTimeoutSeconds;
         _requestTimeout = TimeSpan.FromSeconds(Math.Max(5, seconds));
         _log = log;
     }
@@ -123,7 +123,7 @@ public sealed class NodeOdxClient : INodeOdxClient
     {
         using var client = NewClient();
         var json = await client.GetStringAsync(
-            BuildUrl(node, $"task/{uuid}/output", ("line", sinceLine.ToString())), ct);
+            BuildUrl(node, $"task/{uuid}/output", ("line", sinceLine.ToString(CultureInfo.InvariantCulture))), ct);
         return ParseOutput(json);
     }
 
@@ -266,7 +266,7 @@ public sealed class NodeOdxClient : INodeOdxClient
             ? d
             : null;
 
-    private static IReadOnlyList<NodeOdxOption> ParseOptions(string json)
+    private static List<NodeOdxOption> ParseOptions(string json)
     {
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;

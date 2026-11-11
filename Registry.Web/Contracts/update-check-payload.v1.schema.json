@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dronedb.app/schemas/registry/update-check-payload.v1.schema.json",
+  "title": "Registry update-check request (schema version 1)",
+  "description": "JSON body that a Registry deployment sends with an HTTPS POST to the update-check endpoint of dronedb.app, once per day. The server validates each field on its own and ignores parameters that it does not know, so a field that is invalid is treated as absent, except schemaVersion, instanceId and version, which are required. Optional values that Registry does not have are sent as null, with three exceptions that are left out instead: os and arch when the platform of the node is not one of their values, and contactEmail unless an administrator agreed to be contacted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "instanceId",
+    "version"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "description": "Version of this contract. Always 1 for this schema. A breaking change ships a new schema version, and the server accepts every version that it knows.",
+      "const": 1
+    },
+    "instanceId": {
+      "description": "Random identifier of this deployment, created at the first start and stored in the shared storage folder, so all nodes of one deployment send the same value. It is the key of the record on the server and the value to quote in a data deletion request.",
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
+    },
+    "installedAt": {
+      "description": "UTC time (ISO 8601) when the instance ID was created, which is when this deployment was first started. Null if the time is not known.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "version": {
+      "description": "Registry version that runs, with three numeric parts (major.minor.patch). The server compares it with the published releases to build the release notes.",
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "ddbVersion": {
+      "description": "Version of the native DroneDB library (libddb) that Registry loaded, numeric part only, without build or commit suffix. Null if it cannot be read.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^\\d+\\.\\d+(\\.\\d+)?$"
+    },
+    "os": {
+      "description": "Operating system family of the node that sends the check. Absent when the node runs another operating system; never sent as null.",
+      "enum": [
+        "windows",
+        "linux"
+      ]
+    },
+    "osCaption": {
+      "description": "Operating system description of the node, for example the Linux distribution and release. At most 32 characters, control characters removed. Null if not available.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 32
+    },
+    "arch": {
+      "description": "CPU architecture of the operating system. Absent on another architecture; never sent as null.",
+      "enum": [
+        "x64",
+        "arm64",
+        "x86",
+        "arm"
+      ]
+    },
+    "runtime": {
+      "description": "Name and version of the .NET runtime that runs Registry, at most 32 characters.",
+      "type": "string",
+      "maxLength": 32
+    },
+    "env": {
+      "description": "Where Registry runs: docker when the node runs in a container (Docker, Kubernetes or containerd), native otherwise.",
+      "enum": [
+        "docker",
+        "native"
+      ]
+    },
+    "instanceType": {
+      "description": "Role of the node that sends the check, as set in the InstanceType configuration key. In a split deployment this is the node that runs the scheduled jobs.",
+      "enum": [
+        "default",
+        "processingNode",
+        "webServer",
+        "thumbnailGenerator"
+      ]
+    },
+    "db": {
+      "description": "Database provider that Registry uses.",
+      "enum": [
+        "sqlite",
+        "mysql"
+      ]
+    },
+    "baseUrl": {
+      "description": "Public address of this deployment: the configured external URL if there is one, otherwise the address that Registry saw in a served request. An absolute http or https URL of at most 512 characters. Null if neither is known. The server fetches the features endpoint of this address to check that it serves this instance.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uri",
+      "pattern": "^https?://\\S+$",
+      "maxLength": 512
+    },
+    "hostname": {
+      "description": "Host name of the node that sends the check, at most 64 characters, control characters removed. Null if not available.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 64
+    },
+    "domain": {
+      "description": "Network or directory domain of the node (for example an Active Directory or DNS domain), at most 253 characters. Usually null on Linux and in containers.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[A-Za-z0-9._-]+$",
+      "maxLength": 253
+    },
+    "licenseRef": {
+      "description": "Reference of a licence held by the operator, at most 64 characters from A-Z, a-z, 0-9, underscore and hyphen. Reserved for a later release: Registry always sends null.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "maxLength": 64
+    },
+    "useDeclaration": {
+      "description": "How an administrator says that this deployment is used, set in Admin > Configuration. It states the use, not the licence that applies. Null if not stated.",
+      "enum": [
+        "personal",
+        "nonprofit",
+        "evaluation",
+        "commercial_licensed",
+        "commercial_needs_license",
+        null
+      ]
+    },
+    "contactEmail": {
+      "description": "E-mail address for security and release news. Optional: the field is absent unless an administrator entered an address and agreed to be contacted. It is never sent as null.",
+      "type": "string",
+      "format": "email",
+      "maxLength": 254
+    }
+  }
+}

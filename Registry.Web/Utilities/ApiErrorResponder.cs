@@ -1,0 +1,179 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.Extensions.Logging;
+using Registry.Web.Exceptions;
+
+namespace Registry.Web.Utilities;
+
+/// <summary>
+/// The one writer of Registry error responses (RFC 9457 ProblemDetails). For an
+/// exception it classifies once (<see cref="ApiExceptionClassifier"/>), logs once at the classifier's
+/// level, sets <c>Retry-After</c> and builds the body; its callers only deliver it:
+/// <see cref="ApiExceptionFilter"/> (MVC actions), <see cref="ApiExceptionHandler"/> (middleware, minimal
+/// endpoints, resource filters, the SPA fallback) and the model-state factory in <c>Startup</c>.
+/// <para>Body: <c>type</c>, <c>title</c>, <c>status</c>, <c>detail</c> (the client-facing message) and
+/// <c>traceId</c> from MVC's <see cref="ProblemDetailsFactory"/>, plus the <see cref="NoRetryMember"/>
+/// extension member.</para>
+/// </summary>
+public sealed class ApiErrorResponder
+{
+    /// <summary>Extension member: true when the same request can never succeed.</summary>
+    public const string NoRetryMember = "noRetry";
+
+    /// <summary>Extension member of a name clash (<see cref="NameClashException"/>): the dataset path of the existing entry.</summary>
+    public const string ConflictPathMember = "conflictPath";
+
+    /// <summary>Extension member of an export over the limit (<see cref="ExportTooLargeException"/>): the estimated size, in bytes.</summary>
+    public const string EstimatedExportBytesMember = "estimatedExportBytes";
+
+    /// <summary>Extension member of an export over the limit (<see cref="ExportTooLargeException"/>): the limit, in bytes.</summary>
+    public const string ExportLimitBytesMember = "exportLimitBytes";
+
+    /// <summary>RFC 9457 media type of every error body.</summary>
+    public const string ProblemJsonContentType = "application/problem+json";
+
+    /// <summary>Detail of a model-state failure that carries no message.</summary>
+    public const string InvalidRequestMessage = "Invalid";
+
+    private readonly ProblemDetailsFactory _factory;
+    private readonly ILogger<ApiErrorResponder> _logger;
+
+    public ApiErrorResponder(ProblemDetailsFactory factory, ILogger<ApiErrorResponder> logger)
+    {
+        _factory = factory;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Classifies and logs <paramref name="exception"/>, sets <c>Retry-After</c>, and returns the outcome:
+    /// the descriptor and the body (null when the client went away: nobody reads it).
+    /// </summary>
+    public (ApiErrorDescriptor Descriptor, ProblemDetails? Problem) Describe(HttpContext httpContext, Exception exception)
+    {
+        var descriptor = ApiExceptionClassifier.Classify(exception, httpContext);
+
+        ApiExceptionClassifier.Log(_logger, descriptor, exception, httpContext.Request);
+
+        if (descriptor.RetryAfterSeconds is { } retryAfter)
+            httpContext.Response.Headers.RetryAfter = retryAfter.ToString(CultureInfo.InvariantCulture);
+
+        var problem = ApiExceptionClassifier.IsClientGone(descriptor)
+            ? null
+            : exception is RegistryException { FieldErrors.Count: > 0 } fieldRefusal
+                ? CreateFieldRefusal(httpContext, descriptor, fieldRefusal.FieldErrors)
+                : Create(httpContext, descriptor.StatusCode, descriptor.Message, descriptor.NoRetry);
+        if (problem != null && exception is NameClashException clash)
+            problem.Extensions[ConflictPathMember] = clash.ConflictPath;
+        if (problem != null && exception is ExportTooLargeException tooLarge)
+        {
+            problem.Extensions[EstimatedExportBytesMember] = tooLarge.EstimatedBytes;
+            problem.Extensions[ExportLimitBytesMember] = tooLarge.LimitBytes;
+        }
+
+        return (descriptor, problem);
+    }
+
+    /// <summary>A ProblemDetails body for <paramref name="statusCode"/> with <paramref name="detail"/>.</summary>
+    public ProblemDetails Create(HttpContext httpContext, int statusCode, string detail, bool noRetry)
+    {
+        var problem = _factory.CreateProblemDetails(httpContext, statusCode, detail: detail);
+        problem.Extensions[NoRetryMember] = noRetry;
+        return problem;
+    }
+
+    /// <summary>
+    /// The body of a refusal that concerns single input fields (D-047): a ValidationProblemDetails with
+    /// <c>errors</c> keyed by the request member, the status of <paramref name="descriptor"/> and its message as
+    /// <c>detail</c>.
+    /// </summary>
+    private ValidationProblemDetails CreateFieldRefusal(HttpContext httpContext, ApiErrorDescriptor descriptor,
+        IReadOnlyDictionary<string, string[]> fieldErrors)
+    {
+        var modelState = new ModelStateDictionary();
+        foreach (var (field, messages) in fieldErrors)
+            foreach (var message in messages)
+                modelState.AddModelError(field, message);
+
+        var problem = _factory.CreateValidationProblemDetails(httpContext, modelState, descriptor.StatusCode,
+            detail: descriptor.Message);
+        problem.Extensions[NoRetryMember] = descriptor.NoRetry;
+        return problem;
+    }
+
+    /// <summary>
+    /// The 400 body of an invalid model: <c>errors</c> per field, and <c>detail</c> with the field messages
+    /// joined by <c>|</c> (what the Hub shows, and what the former <c>error</c> member carried). The keys of
+    /// <c>errors</c> are the request members in camelCase (<c>name</c>, not the property <c>Name</c>), as the
+    /// refusals a service raises for a field (D-047).
+    /// </summary>
+    public ValidationProblemDetails CreateValidation(HttpContext httpContext, ModelStateDictionary modelState)
+    {
+        var problem = _factory.CreateValidationProblemDetails(httpContext, modelState,
+            StatusCodes.Status400BadRequest, detail: JoinMessages(modelState));
+        problem.Errors = CamelCaseKeys(problem.Errors);
+        problem.Extensions[NoRetryMember] = false;
+        return problem;
+    }
+
+    // The errors with each member of their key in camelCase ("Items[0].Name" is "items[0].name"); a JSON path ("$.name")
+    // and an empty key stay. Two keys that become one keep the messages of both
+    private static Dictionary<string, string[]> CamelCaseKeys(IDictionary<string, string[]> errors)
+    {
+        var result = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        foreach (var (key, messages) in errors)
+        {
+            var camel = CamelCaseKey(key);
+            result[camel] = result.TryGetValue(camel, out var earlier) ? [.. earlier, .. messages] : messages;
+        }
+
+        return result;
+    }
+
+    private static string CamelCaseKey(string key)
+    {
+        if (key.Length == 0 || key[0] == '$')
+            return key;
+
+        return string.Join('.', key.Split('.').Select(member =>
+            member.Length > 0 && char.IsUpper(member[0])
+                ? JsonNamingPolicy.CamelCase.ConvertName(member)
+                : member));
+    }
+
+    /// <summary>
+    /// The MVC result of <paramref name="problem"/>: its status and <c>application/problem+json</c>. Not an
+    /// <see cref="ObjectResult"/> itself, so a controller's <c>[Produces("application/json")]</c> (a result
+    /// filter) cannot rewrite the media type of an error body.
+    /// </summary>
+    public static IActionResult ToActionResult(ProblemDetails problem) => new ProblemResult(problem);
+
+    private sealed class ProblemResult(ProblemDetails problem) : IActionResult, IStatusCodeActionResult
+    {
+        public int? StatusCode => problem.Status;
+
+        public Task ExecuteResultAsync(ActionContext context) =>
+            new ObjectResult(problem)
+            {
+                StatusCode = problem.Status,
+                ContentTypes = { ProblemJsonContentType }
+            }.ExecuteResultAsync(context);
+    }
+
+    private static string JoinMessages(ModelStateDictionary modelState)
+    {
+        var messages = modelState.Values
+            .SelectMany(entry => entry.Errors)
+            .Select(error => error.ErrorMessage)
+            .Where(message => !string.IsNullOrEmpty(message))
+            .ToList();
+        return messages.Count == 0 ? InvalidRequestMessage : string.Join("|", messages);
+    }
+}

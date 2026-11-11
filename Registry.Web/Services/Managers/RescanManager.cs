@@ -1,0 +1,121 @@
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Registry.Ports;
+using Registry.Ports.DroneDB;
+using Registry.Web.Data;
+using Registry.Web.Exceptions;
+using Registry.Web.Models;
+using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Builds;
+using Registry.Web.Services.Ports;
+
+namespace Registry.Web.Services.Managers;
+
+/// <summary>
+/// Index rescans: re-read entries to refresh their metadata, then rebuild what changed
+/// (see <see cref="Adapters.RescanRebuild"/>). The system rescan across datasets is
+/// <see cref="Maintenance.BuildMaintenance.RescanAsync"/>.
+/// </summary>
+public class RescanManager
+{
+    private readonly IBuildRequester _requester;
+    private readonly IDatasetAccessResolver _access;
+    private readonly RegistryContext _context;
+    private readonly IDdbManager _ddbManager;
+    private readonly BuildScheduler _builds;
+    private readonly RescanRebuild _rebuild;
+    private readonly ILogger<RescanManager> _logger;
+
+    public RescanManager(
+        IBuildRequester requester,
+        IDatasetAccessResolver access,
+        RegistryContext context,
+        IDdbManager ddbManager,
+        BuildScheduler builds,
+        RescanRebuild rebuild,
+        ILogger<RescanManager> logger)
+    {
+        _requester = requester;
+        _access = access;
+        _context = context;
+        _ddbManager = ddbManager;
+        _builds = builds;
+        _rebuild = rebuild;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Rescans the index of one dataset synchronously and queues the rebuilds.
+    /// Admins and users with write access to the dataset only.
+    /// </summary>
+    /// <param name="options">Types and extensions to rescan (null for all) and whether to stop at the first error.</param>
+    public async Task<RescanResultDto> RescanDatasetIndex(string orgSlug, string dsSlug, RescanOptions? options = null,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(orgSlug))
+            throw new BadRequestException("Organization slug is required");
+
+        if (string.IsNullOrWhiteSpace(dsSlug))
+            throw new BadRequestException("Dataset slug is required");
+
+        options ??= new RescanOptions();
+        var filter = RescanFilter.Parse(options.Types, options.Extensions);
+
+        var dataset = await _context.Datasets
+            .Include(d => d.Organization)
+            .FirstOrDefaultAsync(d => d.Organization.Slug == orgSlug && d.Slug == dsSlug, ct);
+
+        if (dataset == null)
+            throw new BadRequestException($"Dataset '{orgSlug}/{dsSlug}' not found");
+
+        // Write access (administrators have it on every dataset)
+        await _access.EnsureAccessAsync(dataset, AccessType.Write);
+
+        _logger.LogInformation("Rescanning index for dataset {OrgSlug}/{DsSlug} ({Filter})",
+            orgSlug, dsSlug, filter);
+
+        var ddb = _ddbManager.Get(orgSlug, dataset.InternalRef);
+        var results = ddb.RescanIndex(filter.ToOptions(options.StopOnError));
+
+        var origin = new BuildOrigin(await _requester.UserIdAsync() ?? MagicStrings.AutoBuildServiceUserId);
+        var target = new BuildTarget(ddb, new DatasetKey(orgSlug, dataset.InternalRef), orgSlug, dsSlug);
+        await _rebuild.RunAsync(orgSlug, dsSlug, ddb, filter, results, new QueuedBuilds(_builds, target, origin), ct: CancellationToken.None);
+
+        var entries = results.Select(r => new RescanEntryResultDto
+        {
+            Path = r.Path,
+            Hash = r.Hash,
+            Success = r.Success,
+            Error = r.Error
+        }).ToArray();
+
+        _logger.LogInformation("Rescan completed for {OrgSlug}/{DsSlug}: {Total} entries processed, {Success} successful, {Errors} errors",
+            orgSlug, dsSlug, entries.Length, entries.Count(e => e.Success), entries.Count(e => !e.Success));
+
+        return new RescanResultDto
+        {
+            OrganizationSlug = orgSlug,
+            DatasetSlug = dsSlug,
+            TotalProcessed = entries.Length,
+            SuccessCount = entries.Count(e => e.Success),
+            ErrorCount = entries.Count(e => !e.Success),
+            Entries = entries
+        };
+    }
+
+    // Queued build jobs: a request must not run builds itself.
+    private sealed class QueuedBuilds(BuildScheduler builds, BuildTarget target, BuildOrigin origin)
+        : IRescanBuildRunner
+    {
+        public Task BuildDataset() => builds.QueueDatasetAsync(target, force: true, origin);
+
+        public Task BuildEntry(RescanResult entry) => builds.QueueAsync(target, entry.Path, entry.Hash, force: true, origin);
+
+        public Task BuildPending() => builds.RetryPendingAsync(target);
+    }
+}

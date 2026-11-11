@@ -1,5 +1,5 @@
-#nullable enable
 using System;
+using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.DTO;
 
@@ -21,4 +21,14 @@ public class PendingBuildInfoDto
 
     /// <summary>Timestamp of the last build attempt (UTC).</summary>
     public DateTime LastAttempt { get; set; }
+
+    /// <summary>
+    /// The build waits for missing files: it runs again when one of them is added to the dataset, not on a timer.
+    /// </summary>
+    public bool AwaitingFiles { get; set; }
+
+    /// <summary>The artifacts of the entry's build that exist, absent when there are none.</summary>
+    [JsonPropertyName("artifacts")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ArtifactLinkDto[]? Artifacts { get; set; }
 }

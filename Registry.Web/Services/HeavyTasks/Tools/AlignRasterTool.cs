@@ -1,13 +1,16 @@
-#nullable enable
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Registry.Common;
+using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks.Models;
+using Registry.Web.Services.Jobs;
+using Registry.Web.Services.Ports;
 using Registry.Web.Services.HeavyTasks.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.HeavyTasks.Tools;
 
@@ -18,8 +21,23 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// artifact is produced. The caller (frontend) is responsible for submitting a
 /// separate "build" task for the output file after this task succeeds.
 /// </summary>
-public sealed class AlignRasterTool : IHeavyTool
+public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<AlignRasterTool.Parameters>
 {
+    /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
+    public sealed record Parameters(string? SourcePath, string? ReferencePath, string? OutputPath, string? Mode,
+        bool? Overwrite);
+
+    /// <summary>Job parameter that keeps the alignment report of the attempt that wrote the output (<see cref="PublishedOutputMarker"/>).</summary>
+    public const string ResultParameter = "alignResult";
+
+    protected override Parameters ReadParams(ToolParameters p) => new(
+        p.Text("sourcePath"),
+        p.Text("referencePath"),
+        p.Text("outputPath"),
+        p.Text("mode"),
+        p.Flag("overwrite"));
+
+
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -29,26 +47,33 @@ public sealed class AlignRasterTool : IHeavyTool
           "properties": {
             "sourcePath":    { "type": "string", "description": "Dataset-relative path of the GeoTIFF to align." },
             "referencePath": { "type": "string", "description": "Dataset-relative path of the reference GeoTIFF." },
-            "outputPath":    { "type": "string", "description": "Dataset-relative path for the aligned output COG." },
+            "outputPath":    { "type": "string", "description": "Dataset-relative path for the aligned output (a lossless GeoTIFF in the source projection and grid)." },
             "mode":          { "type": "string", "enum": ["similarity", "translation"], "default": "similarity",
-                               "description": "Alignment mode: similarity (4-DOF) or translation (2-DOF, fast)." }
+                               "description": "Alignment mode: similarity (4-DOF) or translation (2-DOF, fast)." },
+            "overwrite":     { "type": "boolean", "default": false,
+                               "description": "Replace the output file when it exists (without it, an existing output is refused with 409)." }
           },
           "additionalProperties": false
         }
         """);
 
-    public string Id => "align-raster";
-    public string Version => "1";
-    public string Title => "Align GeoTIFF to reference";
-    public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
-    public bool ProducesArtifact => false;
-    public JsonDocument InputSchema => Schema;
+    public override string Id => "align-raster";
+    public override string Version => "1";
+    public override string Title => "Align GeoTIFF to reference";
+    public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
+    public override bool ProducesArtifact => false;
+    public override bool RunsNativeBuild => true;
 
-    public Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
+    /// <inheritdoc />
+    public override bool AddsDatasetFiles => true;
+    public override JsonDocument InputSchema => Schema;
+
+    protected override Task ValidateAsync(HeavyToolRequest request, Parameters args,
+        IHeavyToolValidationContext ctx, CancellationToken ct)
     {
-        var sourcePath = ReadString(request.Params, "sourcePath");
-        var referencePath = ReadString(request.Params, "referencePath");
-        var outputPath = ReadString(request.Params, "outputPath");
+        var sourcePath = args.SourcePath;
+        var referencePath = args.ReferencePath;
+        var outputPath = args.OutputPath;
 
         if (string.IsNullOrWhiteSpace(sourcePath))
             throw new ArgumentException("sourcePath is required.");
@@ -57,14 +82,29 @@ public sealed class AlignRasterTool : IHeavyTool
         if (string.IsNullOrWhiteSpace(outputPath))
             throw new ArgumentException("outputPath is required.");
 
-        var root = ctx.Ddb.DatasetFolderPath;
-        CommonUtils.ValidateRelativePath(sourcePath, root);
-        CommonUtils.ValidateRelativePath(referencePath, root);
-        CommonUtils.ValidateRelativePath(outputPath, root);
+        sourcePath = paths.Normalize(sourcePath, "source path");
+        referencePath = paths.Normalize(referencePath, "reference path");
+        outputPath = paths.Normalize(outputPath, "output path");
 
         // Native validation (CRS, overlap, type compatibility)
+        ValidateNative(ctx, sourcePath, referencePath);
+
+        // An existing output is replaced only when the request says so (409 otherwise, D-040); the output an
+        // earlier attempt of this task wrote is its own
+        if (!PublishedOutputMarker.Covers(ctx.Ddb, ctx.PublishedOutput, outputPath))
+            DatasetEntryLookup.ResolveOutput(ctx.Ddb, outputPath, Overwrite(args, ctx));
+
+        return Task.CompletedTask;
+    }
+
+    // An absent overwrite is false, except in a task queued before the overwrite rule, which replaced its output
+    private static bool Overwrite(Parameters args, IHeavyToolValidationContext ctx) =>
+        args.Overwrite ?? ctx.QueuedBeforeOverwriteRule;
+
+    private static void ValidateNative(IHeavyToolValidationContext ctx, string sourcePath, string referencePath)
+    {
         var validationJson = ctx.Ddb.ValidateAlignRaster(sourcePath, referencePath);
-        if (string.IsNullOrWhiteSpace(validationJson)) return Task.CompletedTask;
+        if (string.IsNullOrWhiteSpace(validationJson)) return;
 
         try
         {
@@ -83,16 +123,27 @@ public sealed class AlignRasterTool : IHeavyTool
         {
             // If native output is not parseable, defer to execution phase.
         }
-
-        return Task.CompletedTask;
     }
 
-    public HeavyToolPlan Plan(HeavyToolRequest request, IHeavyToolValidationContext ctx)
+    protected override IReadOnlyList<string> InputPaths(Parameters p) =>
+    [
+        .. new[] { (Path: p.SourcePath, Subject: "source path"), (Path: p.ReferencePath, Subject: "reference path") }
+            .Where(x => !string.IsNullOrWhiteSpace(x.Path))
+            .Select(x => paths.Normalize(x.Path, x.Subject))
+    ];
+
+    protected override IReadOnlyList<string> OutputPaths(Parameters p) =>
+        string.IsNullOrWhiteSpace(p.OutputPath) ? [] : [paths.Normalize(p.OutputPath, "output path")];
+
+    protected override string? Label(Parameters p) =>
+        string.IsNullOrWhiteSpace(p.OutputPath) ? null : "\u2192 " + paths.Normalize(p.OutputPath, "output path");
+
+    protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
     {
         long? estimate = null;
         try
         {
-            var sourcePath = ReadString(request.Params, "sourcePath");
+            var sourcePath = args.SourcePath;
             if (!string.IsNullOrWhiteSpace(sourcePath))
             {
                 var entry = ctx.Ddb.GetEntry(sourcePath);
@@ -105,45 +156,146 @@ public sealed class AlignRasterTool : IHeavyTool
         }
 
         return new HeavyToolPlan(estimate, QuotaKey: "align-raster",
-            DefaultFileName: null, ContentType: null);
+            DefaultFileName: null, ContentType: null, ReplacedBytes: ReplacedBytes(args, ctx));
     }
 
-    public async Task<HeavyToolArtifact?> ExecuteAsync(
+    // The size the owner's use counts for the file the output replaces (overwrite): the storage quota checks only the
+    // growth (FR-XC-26). Best-effort, as the estimate
+    private long ReplacedBytes(Parameters args, IHeavyToolValidationContext ctx)
+    {
+        if (!(Overwrite(args, ctx)) || string.IsNullOrWhiteSpace(args.OutputPath))
+            return 0;
+        try
+        {
+            var outputPath = DatasetEntryLookup.ResolveOutput(ctx.Ddb,
+                paths.Normalize(args.OutputPath, "output path"), overwrite: true);
+            return WorkerStorageQuota.IndexedBytes(ctx.Ddb, outputPath);
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    protected override async Task<HeavyToolArtifact?> ExecuteAsync(
         HeavyToolRequest request,
+        Parameters args,
         IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
-        var sourcePath = ReadString(request.Params, "sourcePath")
-                         ?? throw new InvalidOperationException("sourcePath is required.");
-        var referencePath = ReadString(request.Params, "referencePath")
-                            ?? throw new InvalidOperationException("referencePath is required.");
-        var outputPath = ReadString(request.Params, "outputPath")
-                         ?? throw new InvalidOperationException("outputPath is required.");
-        var mode = ReadString(request.Params, "mode") ?? "similarity";
+        // Validated at submit; normalized again on the worker (a job enqueued by an older version)
+        var sourcePath = paths.Normalize(args.SourcePath, "source path");
+        var referencePath = paths.Normalize(args.ReferencePath, "reference path");
+        var outputPath = paths.Normalize(args.OutputPath, "output path");
+        var mode = args.Mode ?? "similarity";
 
-        progress.Report(new HeavyToolProgress(-1, "aligning",
-            LogChunk: $"Aligning '{sourcePath}' → '{outputPath}' (mode: {mode})"));
+        string compact;
+        // A replace is indexed whatever a cancel says (libddb's alignment cannot be cancelled: once it returns the file is
+        // replaced, and its entry must describe it); the cancel is honoured once it is indexed (FR-XC-27)
+        var replaced = false;
+        var published = ctx.PublishedOutput;
+        if (PublishedOutputMarker.Covers(ctx.Ddb, published, outputPath))
+        {
+            // An earlier attempt wrote the output and failed after it (the index was busy): index it, never write again
+            outputPath = published!;
+            compact = ctx.Hangfire?.Connection?.GetJobParameter(ctx.TaskId, ResultParameter) ?? "{}";
+            progress.Report(new HeavyToolProgress(-1, "indexing",
+                LogChunk: $"'{outputPath}' was written by an earlier attempt"));
+        }
+        else
+        {
+            // Checked again on the worker: a file may have appeared since the submit. A name that differs only in
+            // letter case is the existing file (D-040)
+            outputPath = DatasetEntryLookup.ResolveOutput(ctx.Ddb, outputPath, Overwrite(args, ctx));
 
-        // Overwrite an existing output (parity with ObjectsManager.AlignRaster).
-        var outputFullPath = ctx.Ddb.GetLocalPath(outputPath);
-        if (File.Exists(outputFullPath))
-            File.Delete(outputFullPath);
+            progress.Report(new HeavyToolProgress(-1, "aligning",
+                LogChunk: $"Aligning '{sourcePath}' → '{outputPath}' (mode: {mode})"));
 
-        ct.ThrowIfCancellationRequested();
+            // libddb replaces an existing output only when asked (DDBAlignRasterEx), in one rename once the aligned file
+            // is complete: a failed run leaves it as it was (FR-PRC-01). Decided before the call: an output the
+            // alignment replaces is never recorded (FR-XC-27, FR-XC-07), a rollback must not delete the file that was there
+            var outputFullPath = ctx.Ddb.GetLocalPath(outputPath);
+            var replacing = Overwrite(args, ctx) && File.Exists(outputFullPath);
+            if (!replacing && File.Exists(outputFullPath))
+                throw new NameClashException(outputPath);
+            // What the owner's use counts for the file the alignment replaces, read before the run: only the growth
+            // counts (FR-XC-26)
+            var replacedBytes = replacing ? WorkerStorageQuota.IndexedBytes(ctx.Ddb, outputPath) : 0;
+            var root = ctx.Ddb.DatasetFolderPath;
+            var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, ct);
 
-        var resultJson = await Task.Run(
-            () => ctx.Ddb.AlignRaster(sourcePath, referencePath, outputPath, mode), ct);
+            // A new output (and the folders it needs) is in the saved record before it is written (§8.1)
+            if (!replacing)
+            {
+                TaskImportWrites.RecordFolders(writes, root, TaskImportWrites.ParentOf(outputPath));
+                writes.Record(outputPath);
+                await writes.SaveAsync(ct);
+                TaskImportWrites.CreateFolder(root, TaskImportWrites.ParentOf(outputPath));
+            }
 
-        ct.ThrowIfCancellationRequested();
+            // A cancel that came meanwhile stops here, before libddb runs
+            ct.ThrowIfCancellationRequested();
+
+            // Created by another writer while the record was saved: kept, and not the task's
+            if (!replacing && File.Exists(outputFullPath))
+            {
+                await writes.ForgetAsync(outputPath, CancellationToken.None);
+                throw new NameClashException(outputPath);
+            }
+
+            // A failed run keeps the output recorded: a file that appears there is the task's, and the rollback deletes
+            // it (FR-XC-27). Without the replace, libddb refuses a file that another writer created meanwhile
+            var resultJson = await Task.Run(
+                () => ctx.Ddb.AlignRaster(sourcePath, referencePath, outputPath, mode, overwrite: replacing), ct);
+            replaced = replacing;
+
+            // The owner of the organization must have room for the growth of the output (FR-XC-26): the task fails with
+            // the 507 text. An output that replaced a file is never deleted (FR-XC-27: a rollback never deletes a path
+            // that existed before the task, FR-XC-07): it stays, and it is indexed so that the entry describes the file
+            try
+            {
+                await WorkerStorageQuota.EnsureOutputFitsAsync(ctx.Storage, request.OrgSlug, outputFullPath,
+                    replacedBytes, replacing ? CancellationToken.None : ct);
+            }
+            catch (QuotaExceededException) when (replacing)
+            {
+                // The 507 is the reason the task stops: an index error here must not replace it (a busy index
+                // would make the job retry and write the output again). The rescan corrects the entry later.
+                try
+                {
+                    ctx.Ddb.AddRaw(outputPath);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    progress.Report(new HeavyToolProgress(-1, "indexing",
+                        LogChunk: $"Could not index the replaced output {outputPath} again: {ex.Message}"));
+                }
+                throw;
+            }
+
+            if (!replacing)
+                writes.Written(outputPath);
+
+            // The very next step after the write: from here a later attempt indexes the output, and no
+            // cancellation check stands between the write and the index. NOTE: a process crash between the
+            // write and this line leaves the file without the marker (the retry then refuses it as existing)
+            ctx.MarkOutputPublished(outputPath);
+
+            // Emit compact (single-line) JSON so the log tail delivers it as a single
+            // entry that the frontend can JSON.parse after stripping the timestamp prefix.
+            using (var doc = JsonDocument.Parse(resultJson))
+                compact = JsonSerializer.Serialize(doc);
+            ctx.Hangfire?.Connection?.SetJobParameter(ctx.TaskId, ResultParameter, compact);
+        }
 
         progress.Report(new HeavyToolProgress(-1, "indexing", LogChunk: "Indexing aligned output"));
         ctx.Ddb.AddRaw(outputPath);
 
-        // Emit compact (single-line) JSON so the log tail delivers it as a single
-        // entry that the frontend can JSON.parse after stripping the timestamp prefix.
-        using var doc = JsonDocument.Parse(resultJson);
-        var compact = JsonSerializer.Serialize(doc);
+        // A cancel that came while a replace ran stops the task now that the entry describes the file
+        if (replaced)
+            ct.ThrowIfCancellationRequested();
+
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: compact));
         return null;
     }
@@ -164,10 +316,4 @@ public sealed class AlignRasterTool : IHeavyTool
         ];
     }
 
-    private static string? ReadString(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.String ? el.GetString() : null;
-    }
 }

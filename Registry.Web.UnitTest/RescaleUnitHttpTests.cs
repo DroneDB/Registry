@@ -1,0 +1,171 @@
+using System;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using Moq;
+using NUnit.Framework;
+using Registry.Ports;
+using Registry.Ports.DroneDB;
+using Registry.Web.Test.Baselines;
+using Shouldly;
+
+namespace Registry.Web.Test;
+
+/// <summary>A thermal image of the fixtures and the renders of it with a rescale in another unit (D-022).</summary>
+public abstract class RescaleUnitFixture : DatasetAccessFixture
+{
+    protected const string Ds = "/orgs/" + PrivateOrg + "/ds/" + PrivateDs;
+    protected const string Image = "thermal.jpg";
+
+    // A Celsius layer whose rescale was written in Kelvin (the user changed the unit after setting it)
+    protected const string ThermalStyle = "formula=CELSIUS&colormap=ironbow&rescale=280%2C310&rescaleUnit=K";
+
+    protected static readonly byte[] Thumbnail = [1, 2, 3];
+
+    [OneTimeSetUp]
+    public async Task IndexTheImage()
+    {
+        var internalRef = await WithContextAsync(context =>
+            Task.FromResult(context.Datasets.Single(d => d.Slug == PrivateDs).InternalRef));
+        using var scope = Factory.Services.CreateScope();
+        var folder = scope.ServiceProvider.GetRequiredService<IDdbManager>().Get(PrivateOrg, internalRef).DatasetFolderPath;
+        Factory.DdbWrapper.Setup(d => d.GetEntry(folder, Image))
+            .Returns(new Entry { Path = Image, Hash = "rescale-unit-hash", Type = EntryType.GeoImage, Size = 1 });
+    }
+
+    [SetUp]
+    public void RenderAnything()
+    {
+        Factory.DdbWrapper.Invocations.Clear();
+        Factory.DdbWrapper.Setup(d => d.GenerateThumbnailEx(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<RasterAnalysisOptions?>()))
+            .Returns(Thumbnail);
+    }
+
+    protected Task<(HttpResponseMessage Response, string Body, System.Text.Json.Nodes.JsonObject? Json)> ThumbEx(
+        string query) =>
+        SendAsync(Request(HttpMethod.Get, $"{Ds}/thumb-ex?path={Image}&size=64&{query}", Caller.Owner));
+
+    protected Task<(HttpResponseMessage Response, string Body, System.Text.Json.Nodes.JsonObject? Json)> SubmitExport(
+        string paramsJson) =>
+        SendAsync(Request(HttpMethod.Post, Ds + "/tasks", Caller.Owner, Json(
+            $$"""{"toolId":"raster-export","path":"{{Image}}","params":{{paramsJson}},"force":true}""")));
+
+    protected void ShouldNotHaveRendered() =>
+        Factory.DdbWrapper.Invocations.ShouldNotContain(i => i.Method.Name == nameof(IDdbWrapper.GenerateThumbnailEx));
+}
+
+/// <summary>
+/// D-022 (libddb 2.4 reads the unit of the rescale, <c>DDBRasterOptions.rescaleUnit</c>): the unit reaches libddb in the
+/// options of the render, which converts the rescale to the unit of the formula, and it is part of the cache key; a unit
+/// libddb does not know is a 400 at <c>errors.rescaleUnit</c> before any native work, and a render without it is unchanged.
+/// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~RescaleUnitHttpTests"
+/// </summary>
+[TestFixture]
+[NonParallelizable]
+public sealed class RescaleUnitHttpTests : RescaleUnitFixture
+{
+    [Test]
+    public async Task AThumbnailWithARescaleUnit_SendsTheUnitInTheOptions()
+    {
+        RasterAnalysisOptions? seen = null;
+        Factory.DdbWrapper.Setup(d => d.GenerateThumbnailEx(It.IsAny<string>(), 64, null, null, "CELSIUS", null,
+                "ironbow", "280,310", It.IsAny<RasterAnalysisOptions?>()))
+            .Callback((string _, int _, string? _, string? _, string? _, string? _, string? _, string? _,
+                RasterAnalysisOptions? o) => seen = o)
+            .Returns(Thumbnail);
+
+        var (response, body, _) = await ThumbEx(ThermalStyle);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        seen.ShouldNotBeNull();
+        seen.RescaleUnit.ShouldBe("K");
+        seen.Nodata.ShouldBeNull();
+        seen.Formula.ShouldBeNull();
+    }
+
+    // The same style in another unit is another render: the cache does not answer the first one
+    [Test]
+    public async Task TheUnitOfTheRescale_IsPartOfTheCacheKey()
+    {
+        (await ThumbEx("formula=CELSIUS&colormap=ironbow&rescale=1%2C2&rescaleUnit=K")).Response.StatusCode
+            .ShouldBe(HttpStatusCode.OK);
+        (await ThumbEx("formula=CELSIUS&colormap=ironbow&rescale=1%2C2&rescaleUnit=F")).Response.StatusCode
+            .ShouldBe(HttpStatusCode.OK);
+
+        Factory.DdbWrapper.Invocations.Count(i => i.Method.Name == nameof(IDdbWrapper.GenerateThumbnailEx))
+            .ShouldBe(2);
+    }
+
+    // An unknown unit is a 400 at its member on every endpoint that takes it, before any native work
+    private const string FeetStyle = "formula=CELSIUS&colormap=ironbow&rescale=280%2C310&rescaleUnit=feet";
+    private const string NotAUnit = "'feet' is not a temperature unit: use K (Kelvin), C (Celsius) or F (Fahrenheit).";
+
+    [Test]
+    public async Task AThumbnailWithAnUnknownUnit_Is400AtRescaleUnit()
+    {
+        var (response, body, json) = await ThumbEx(FeetStyle);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        json!["errors"]!["rescaleUnit"]![0]!.GetValue<string>().ShouldBe(NotAUnit);
+        ShouldNotHaveRendered();
+    }
+
+    [Test]
+    public async Task ATileWithAnUnknownUnit_Is400AtRescaleUnit()
+    {
+        var (response, body, json) = await SendAsync(Request(HttpMethod.Get,
+            $"{Ds}/tiles-ex/18/1/2.png?path={Image}&{FeetStyle}", Caller.Owner));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        json!["errors"]!["rescaleUnit"]![0]!.GetValue<string>().ShouldBe(NotAUnit);
+        Factory.DdbWrapper.Invocations.ShouldNotContain(i => i.Method.Name == nameof(IDdbWrapper.GenerateMemoryTileEx));
+    }
+
+    [Test]
+    public async Task AnExportWithAnUnknownUnit_Is400AtRescaleUnit()
+    {
+        var (response, body, json) = await SendAsync(Request(HttpMethod.Get,
+            $"{Ds}/export?path={Image}&{FeetStyle}", Caller.Owner));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        json!["errors"]!["rescaleUnit"]![0]!.GetValue<string>().ShouldBe(NotAUnit);
+        Factory.DdbWrapper.Invocations.ShouldNotContain(i => i.Method.Name == nameof(IDdbWrapper.ExportRaster));
+    }
+
+    [Test]
+    public async Task AnExportTaskWithAnUnknownUnit_Is400AtRescaleUnit()
+    {
+        var (response, body, json) = await SubmitExport(
+            """{"formula":"CELSIUS","colormap":"ironbow","rescale":"280,310","rescaleUnit":"feet"}""");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        json!["errors"]!["rescaleUnit"]![0]!.GetValue<string>().ShouldBe(NotAUnit);
+    }
+
+    [Test]
+    public async Task AThumbnailWithADegreeName_IsRendered()
+    {
+        var (response, body, _) = await ThumbEx("formula=CELSIUS&colormap=ironbow&rescale=1%2C2&rescaleUnit=%C2%B0F");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+    }
+
+    // Without the unit nothing changes: the render without options
+    [Test]
+    public async Task AThumbnailWithoutARescaleUnit_IsRenderedWithoutOptions()
+    {
+        Factory.DdbWrapper.Setup(d => d.GenerateThumbnailEx(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Returns(Thumbnail);
+
+        var (response, body, _) = await ThumbEx("formula=CELSIUS&colormap=ironbow&rescale=7%2C37");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        Factory.DdbWrapper.Verify(d => d.GenerateThumbnailEx(It.IsAny<string>(), It.IsAny<int>(), null, null, "CELSIUS",
+            null, "ironbow", "7,37"), Times.Once);
+    }
+}

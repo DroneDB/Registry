@@ -1,0 +1,18 @@
+{
+  "request": "POST /orgs",
+  "caller": "organization owner",
+  "status": 201,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "slug": "golden-new-org",
+    "name": "Golden new organization",
+    "description": "Created by the golden tests",
+    "creationDate": "<datetime:Z>",
+    "owner": "golden-owner",
+    "isPublic": false,
+    "datasetCount": 0,
+    "lastModified": "<datetime:Z>",
+    "permissions": null
+  }
+}

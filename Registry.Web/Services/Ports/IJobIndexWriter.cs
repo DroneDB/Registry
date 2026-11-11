@@ -1,10 +1,8 @@
-﻿#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Models;
-using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.Services.Ports;
 
@@ -31,8 +29,6 @@ public enum JobIndexPreparationResult
 /// </summary>
 public interface IJobIndexWriter
 {
-    Task UpsertOnEnqueueAsync(string jobId, IndexPayload meta, DateTime createdAtUtc, string? methodDisplay, CancellationToken ct = default);
-
     /// <summary>
     /// Forward-only, idempotent JobIndex preparation for an indexed job publication. Inserts a missing
     /// row in <c>Indexing</c> with the original creation time. An existing row with the same creation
@@ -84,17 +80,39 @@ public interface IJobIndexWriter
     Task<(bool deleted, string? orgSlug, string? dsSlug)> DeleteTerminalJobByIdAsync(string jobId, CancellationToken ct = default);
 
     /// <summary>
-    /// Clears stale prior-run state (state timestamps, progress, artifact, error fields) from a
-    /// JobIndex record after the job has been re-queued under the same id. Call it only when the
-    /// re-queue was accepted. No-op unless the row is in the <c>Failed</c> or (freshly stamped)
-    /// <c>Enqueued</c> state, which protects against wiping a row already at a live/terminal state
-    /// after a concurrent fresh run has started.
+    /// Clears stale prior-run state (state timestamps, progress, artifact, error fields, the waiting flag and who
+    /// cancelled) from a JobIndex record after the job has been re-queued under the same id, and sets its state to
+    /// <c>Enqueued</c> at once, so that the list shows the task queued (FR-PRC-19). Call it only when the
+    /// re-queue was accepted. No-op unless the row is (freshly stamped) <c>Enqueued</c>, or <c>Failed</c> since before
+    /// <paramref name="requeuedAtUtc"/> (the time taken before the re-queue), which protects against wiping a row already
+    /// at a live/terminal state after a concurrent fresh run has started, or the error of that run when it failed
+    /// already. Who cancelled is cleared only on a <c>Failed</c> row.
     /// </summary>
-    Task ResetForRequeueAsync(string jobId, CancellationToken ct = default);
+    Task ResetForRequeueAsync(string jobId, DateTime requeuedAtUtc, CancellationToken ct = default);
 
     /// <summary>Persists produced-artifact metadata (size + SHA-256) for a task.</summary>
     Task UpdateArtifactAsync(string jobId, long sizeBytes, string? sha256, CancellationToken ct = default);
 
-    /// <summary>Records the exception type name when a task failed.</summary>
-    Task UpdateErrorAsync(string jobId, string errorType, CancellationToken ct = default);
+    /// <summary>
+    /// Records why a task failed: the exception type name (<c>ErrorType</c>, for administrators and the retry rules) and
+    /// the message a reader of the task sees (<c>ErrorMessage</c>, from <c>JobLogText.UserMessage</c>: no server path;
+    /// null when there is none).
+    /// </summary>
+    Task UpdateErrorAsync(string jobId, string errorType, string? errorMessage, CancellationToken ct = default);
+
+    /// <summary>
+    /// Records who cancelled a task (<c>CancelledBy</c>, D-038): only the cancel of a user sets it, while the task is
+    /// active. A null <paramref name="userId"/> removes it again (the cancel found the task ended), unless the task
+    /// is <c>Deleted</c>.
+    /// </summary>
+    /// <returns>Whether the record changed.</returns>
+    Task<bool> SetCancelledByAsync(string jobId, string? userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Records whether a processing node holds the task in its queue (<c>WaitingForNode</c>, D-024). The flag is set
+    /// only on a <c>Processing</c> task; when it clears, the processing starts at <paramref name="changedAtUtc"/>
+    /// (<c>ProcessingAtUtc</c>), so that the duration counts from the node's start (FR-PRC-37).
+    /// </summary>
+    /// <returns>Whether the record changed.</returns>
+    Task<bool> SetWaitingForNodeAsync(string jobId, bool waiting, DateTime changedAtUtc, CancellationToken ct = default);
 }

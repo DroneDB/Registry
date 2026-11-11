@@ -1,4 +1,4 @@
-#nullable enable
+using Registry.Common;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -25,7 +25,7 @@ namespace Registry.Adapters.Archives;
 public sealed class SharpCompressArchiveExtractor : IArchiveExtractor
 {
     // Order matters: longer compound extensions must be tested before their suffixes.
-    private static readonly string[] SupportedExtensions =
+    private static readonly string[] SupportedSuffixes =
     [
         ".tar.gz", ".tar.bz2", ".tar.xz",
         ".tgz", ".tbz2", ".txz",
@@ -41,11 +41,13 @@ public sealed class SharpCompressArchiveExtractor : IArchiveExtractor
     // Single-stream formats that frequently carry no internal entry name.
     private static readonly string[] SingleFileExtensions = [".gz", ".bz2", ".xz"];
 
+    public IReadOnlyList<string> SupportedExtensions => SupportedSuffixes;
+
     public bool IsSupported(string fileName)
     {
         if (string.IsNullOrWhiteSpace(fileName)) return false;
         var lower = fileName.Trim().ToLowerInvariant();
-        return SupportedExtensions.Any(ext => lower.EndsWith(ext, StringComparison.Ordinal));
+        return SupportedSuffixes.Any(ext => lower.EndsWith(ext, StringComparison.Ordinal));
     }
 
     public bool IsValidArchive(string filePath)
@@ -114,7 +116,6 @@ public sealed class SharpCompressArchiveExtractor : IArchiveExtractor
 
         private int? _fileEntryCount;
         private long? _total;
-        private bool _counted;
 
         public SharpCompressArchiveReadSession(IArchive? archive, string archivePath, bool isCompressedTar)
         {
@@ -136,18 +137,7 @@ public sealed class SharpCompressArchiveExtractor : IArchiveExtractor
                 }
 
                 _total = total > 0 ? total : null;
-                _counted = true;
             }
-        }
-
-        public int FileEntryCount
-        {
-            get { EnsureCounted(); return _fileEntryCount ?? 0; }
-        }
-
-        public long? TotalUncompressedBytes
-        {
-            get { EnsureCounted(); return _total; }
         }
 
         // Cheap variants that never trigger decompression. For compressed tarballs the
@@ -159,27 +149,6 @@ public sealed class SharpCompressArchiveExtractor : IArchiveExtractor
 
         public IEnumerable<ArchiveEntry> Entries()
             => _isCompressedTar ? CompressedTarEntries() : RandomAccessEntries();
-
-        // Forward-only count + size pass for compressed tarballs (the Reader API
-        // transparently decompresses the outer gz/bz2/xz layer).
-        private void EnsureCounted()
-        {
-            if (_counted) return;
-            _counted = true;
-
-            var count = 0;
-            long total = 0;
-            using var reader = ReaderFactory.OpenReader(_archivePath, ReaderOptions.ForFilePath);
-            while (reader.MoveToNextEntry())
-            {
-                if (reader.Entry.IsDirectory) continue;
-                count++;
-                if (reader.Entry.Size > 0) total += reader.Entry.Size;
-            }
-
-            _fileEntryCount = count;
-            _total = total > 0 ? total : null;
-        }
 
         private IEnumerable<ArchiveEntry> RandomAccessEntries()
         {
@@ -223,7 +192,7 @@ public sealed class SharpCompressArchiveExtractor : IArchiveExtractor
         private string NormalizeKey(string? key, bool isDirectory, ref int emptyKeyIndex)
         {
             if (!string.IsNullOrWhiteSpace(key))
-                return key!.Replace('\\', '/').TrimStart('/');
+                return key!.ToDdbPath().TrimStart('/');
 
             if (isDirectory)
                 return string.Empty; // directories are skipped by the consumer

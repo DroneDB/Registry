@@ -1,27 +1,20 @@
-#nullable enable
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.Import;
 using Registry.Web.Exceptions;
-using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
-using Registry.Web.Services.Import;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
+using Registry.Web.Services.Import;
 
 namespace Registry.Web.Services.HeavyTasks.Tools;
 
@@ -29,12 +22,24 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// Native tool that populates a freshly created (empty) dataset from a remote source - another Registry
 /// instance or a downloadable archive (spec ImportDataset). Runs on the Hangfire worker, HTTP-context
 /// free, and works entirely through <see cref="IDDB"/>: the resolved <see cref="IImportSource"/> writes
-/// files straight into the dataset folder, then the tool indexes them with <c>AddRawBatch</c> and
+/// files into the dataset folder through the task's write record (FR-XC-27: every file and folder is recorded before
+/// it is created, and a cancelled, failed or lost import is rolled back from the record by the task, never by
+/// comparing the folder), then the tool indexes them with <c>AddRawBatch</c> and
 /// enqueues a per-file build job for every buildable entry (mirrors <see cref="ArchiveExtractTool"/>).
 /// Mutates the dataset in place, so it produces no downloadable artifact.
 /// </summary>
-public sealed class ImportDatasetTool : IHeavyTool
+public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Parameters>
 {
+    /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
+    /// <param name="BudgetBytes">A cap on the bytes the import writes that the request sets, on top of the storage quota, which
+    /// the worker reads when it writes (FR-XC-26); the import manager sends none.</param>
+    public sealed record Parameters(string? SourceType, long? BudgetBytes, JsonElement? SourceParams);
+
+    protected override Parameters ReadParams(ToolParameters p) => new(
+        p.Text("sourceType"),
+        p.WholeNumber("budgetBytes"),
+        p.JsonObject("params"));
+
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -50,121 +55,123 @@ public sealed class ImportDatasetTool : IHeavyTool
         }
         """);
 
-    private readonly IImportSourceFactory _factory;
-    private readonly IImportCredentialProtector _protector;
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ImportSourceCatalog _sources;
+    private readonly ImportCredentials _credentials;
+    private readonly TaskFileIndexer _indexer;
     private readonly ImportSettings _settings;
     private readonly long _diskSafetyMarginBytes;
-    private readonly ILogger<ImportDatasetTool> _logger;
+    private readonly VolumeHeadroom _headroom;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ImportDatasetTool"/> class.
     /// </summary>
-    /// <param name="factory">The import source factory.</param>
-    /// <param name="protector">The credential protector used to decrypt stored secrets.</param>
-    /// <param name="scopeFactory">Scope factory for per-execution scoped services.</param>
-    /// <param name="appSettings">The application settings.</param>
-    /// <param name="logger">The logger.</param>
+    /// <param name="sources">The import sources the server offers (registered, narrowed by the allow-list).</param>
+    /// <param name="credentials">Decrypts the stored secrets of the source parameters.</param>
+    /// <param name="indexer">Indexes the imported files and queues their builds.</param>
+    /// <param name="importSettings">The import settings.</param>
+    /// <param name="platformSettings">The processing platform settings (size cap, disk safety margin).</param>
+    /// <param name="headroom">The disk head-room of the dataset volume.</param>
     public ImportDatasetTool(
-        IImportSourceFactory factory,
-        IImportCredentialProtector protector,
-        IServiceScopeFactory scopeFactory,
-        IOptions<AppSettings> appSettings,
-        ILogger<ImportDatasetTool> logger)
+        ImportSourceCatalog sources,
+        ImportCredentials credentials,
+        TaskFileIndexer indexer,
+        IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
+        VolumeHeadroom headroom)
     {
-        _factory = factory;
-        _protector = protector;
-        _scopeFactory = scopeFactory;
-        _settings = appSettings.Value.Import ?? new ImportSettings();
+        _headroom = headroom;
+        _sources = sources;
+        _credentials = credentials;
+        _indexer = indexer;
+        _settings = importSettings.Value;
         _diskSafetyMarginBytes =
-            (appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings()).DiskSafetyMarginBytes;
-        _logger = logger;
+            platformSettings.Value.DiskSafetyMarginBytes;
     }
 
     /// <inheritdoc />
-    public string Id => "import-dataset";
+    public override string Id => "import-dataset";
 
     /// <inheritdoc />
-    public string Version => "1";
+    public override string Version => "1";
 
     /// <inheritdoc />
-    public string Title => "Import dataset";
+    public override string Title => "Import dataset";
 
     /// <inheritdoc />
-    public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
+    public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
 
     /// <inheritdoc />
-    public bool ProducesArtifact => false;
+    public override bool ProducesArtifact => false;
 
     /// <inheritdoc />
-    public JsonDocument InputSchema => Schema;
-
-    // One DDB transaction (and one native connection open) per chunk instead of one-per-file.
-    private const int IndexChunkSize = 250;
+    public override bool AddsDatasetFiles => true;
 
     /// <inheritdoc />
-    public Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
+    public override JsonDocument InputSchema => Schema;
+
+    /// <inheritdoc />
+    protected override Task ValidateAsync(HeavyToolRequest request, Parameters args,
+        IHeavyToolValidationContext ctx, CancellationToken ct)
     {
-        var sourceType = ReadString(request.Params, "sourceType");
-        if (string.IsNullOrWhiteSpace(sourceType))
-            throw new ArgumentException("A source type is required.");
+        if (_sources.Refusal(args.SourceType) is { } refusal)
+            throw new ArgumentException(refusal);
 
-        if (!_factory.AvailableTypes.Contains(sourceType, StringComparer.OrdinalIgnoreCase))
-            throw new ArgumentException($"Unknown import source type '{sourceType}'.");
-
-        if (!_settings.IsSourceTypeAllowed(sourceType))
-            throw new ArgumentException($"The import source type '{sourceType}' is disabled on this server.");
-
-        if (request.Params.ValueKind != JsonValueKind.Object ||
-            !request.Params.TryGetProperty("params", out var p) || p.ValueKind != JsonValueKind.Object)
+        if (args.SourceParams is null)
             throw new ArgumentException("Source parameters are required.");
 
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public HeavyToolPlan Plan(HeavyToolRequest request, IHeavyToolValidationContext ctx)
-        => new(ReadLong(request.Params, "budgetBytes"), QuotaKey: "import-dataset",
+    protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
+        => new(null, QuotaKey: "import-dataset",
             DefaultFileName: null, ContentType: null);
 
     /// <inheritdoc />
-    public async Task<HeavyToolArtifact?> ExecuteAsync(
+    protected override async Task<HeavyToolArtifact?> ExecuteAsync(
         HeavyToolRequest request,
+        Parameters args,
         IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
-        var sourceType = ReadString(request.Params, "sourceType")
+        var sourceType = args.SourceType
                          ?? throw new InvalidOperationException("A source type is required.");
 
         // Defense in depth: re-check the allow-list on the worker, so a job enqueued before the
         // allow-list was tightened (or a crafted job) cannot run a now-disabled source type.
-        if (!_settings.IsSourceTypeAllowed(sourceType))
-            throw new InvalidOperationException(
-                $"The import source type '{sourceType}' is disabled on this server.");
+        if (!_sources.IsAllowed(sourceType))
+            throw new InvalidOperationException(ImportSourceCatalog.DisabledMessage(sourceType));
 
-        var budgetBytes = ReadLong(request.Params, "budgetBytes");
+        var budgetBytes = args.BudgetBytes;
 
-        if (!request.Params.TryGetProperty("params", out var rawParams) ||
-            rawParams.ValueKind != JsonValueKind.Object)
-            throw new InvalidOperationException("Source parameters are required.");
+        var rawParams = args.SourceParams ?? throw new InvalidOperationException("Source parameters are required.");
 
-        var sourceParams = DecryptParams(sourceType, rawParams, _protector);
-        var source = _factory.Resolve(sourceType);
+        var sourceParams = _credentials.OpenParameters(sourceType, rawParams);
+        var source = _sources.Resolve(sourceType);
 
         var root = ctx.Ddb.DatasetFolderPath;
+
         Directory.CreateDirectory(root);
 
-        // Resumability: files already present from a previous partial run are kept; only the files
-        // written during THIS run are rolled back on a budget breach.
-        var before = EnumerateRelativeFiles(root).ToHashSet(StringComparer.Ordinal);
+        // What the source creates is recorded before it is written (FR-XC-27): a breach of the budget, the timeout, a
+        // cancel or any failure ends the task, and the task deletes what its record holds, and only that. A retry
+        // finds the files of the earlier attempts in the record.
+        var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, ct);
 
-        // Effective cap = the tightest of: per-user remaining quota (budgetBytes), the absolute
-        // MaxImportSizeBytes ceiling, and the free disk space (minus a safety margin).
+        // Effective cap = the tightest of: what the owner of the organization may still store, read now, when the import
+        // starts to write (FR-XC-26, D-039: never a value kept from the submit), a cap the request sets (budgetBytes), the
+        // absolute MaxImportSizeBytes ceiling, and the free disk space minus the head-room (the safety margin plus
+        // libddb's free-disk floor, VolumeHeadroom)
+        var remaining = await ctx.Storage.RemainingBytesOfOrganizationAsync(request.OrgSlug, ct);
+        if (remaining is <= 0)
+            throw QuotaExceededException.OwnerOverQuota(remaining.Value);
+
         var cap = long.MaxValue;
         if (_settings.MaxImportSizeBytes > 0) cap = Math.Min(cap, _settings.MaxImportSizeBytes);
         if (budgetBytes is >= 0) cap = Math.Min(cap, budgetBytes.Value);
-        var freeAtStart = ExtractionBudget.GetAvailableDiskBytes(root);
+        if (remaining is { } left) cap = Math.Min(cap, left);
+        var freeAtStart = _headroom.AvailableBytes(root);
+        var headroom = _headroom.MarginBytes(_diskSafetyMarginBytes);
 
         long bytesSoFar = 0;
         var breached = false;
@@ -188,7 +195,7 @@ public sealed class ImportDatasetTool : IHeavyTool
             if (p.BytesSoFar is { } b)
             {
                 bytesSoFar = b;
-                if ((cap != long.MaxValue && b > cap) || freeAtStart - b < _diskSafetyMarginBytes)
+                if ((cap != long.MaxValue && b > cap) || freeAtStart - b < headroom)
                 {
                     breached = true;
                     // ReSharper disable once AccessToDisposedClosure
@@ -202,173 +209,51 @@ public sealed class ImportDatasetTool : IHeavyTool
 
         try
         {
-            await source.FetchAsync(sourceParams, root, sink, linkedCts.Token);
+            await source.FetchAsync(sourceParams, root, writes, sink, linkedCts.Token);
         }
         catch (OperationCanceledException) when (breached)
         {
-            // Expected: the budget guard cancelled the transfer. Roll back below.
+            // Expected: the budget guard cancelled the transfer (a cancel the source reports as such)
         }
         catch (OperationCanceledException)
             when (transferTimeout > 0 && linkedCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
-            // The per-task transfer timeout elapsed (not a user cancellation). Roll back below.
+            // The per-task transfer timeout elapsed (not a user cancellation)
             timedOut = true;
         }
 
         if (breached || timedOut)
         {
-            var added = EnumerateRelativeFiles(root).Where(f => !before.Contains(f)).ToList();
+            // The failed task is rolled back from its write record (FR-XC-27)
             var reason = breached ? "Storage budget exceeded" : "Transfer timed out";
             progress.Report(new HeavyToolProgress(-1, "cleanup",
-                LogChunk: $"{reason} - rolling back {added.Count} file(s)"));
-            CleanupFiles(root, added);
+                LogChunk: $"{reason} - the {writes.Created.Count} file(s) imported so far are deleted"));
 
             if (breached)
-                throw new QuotaExceededException(
-                    "The import exceeded the available storage budget. " +
-                    $"Rolled back after writing {CommonUtils.GetBytesReadable(bytesSoFar)}.");
+                throw remaining is { } owned && bytesSoFar > owned
+                    ? QuotaExceededException.OwnerOverQuota(owned)
+                    : new QuotaExceededException(
+                        "The import exceeded the available storage budget. " +
+                        $"Rolled back after writing {CommonUtils.GetBytesReadable(bytesSoFar)}.");
 
             throw new TimeoutException(
                 $"The import exceeded the configured transfer timeout of {transferTimeout}s.");
         }
 
-        // A genuine user cancellation (not a breach/timeout) leaves partial files in place for resume.
+        // A user cancellation rolls the task back
         ct.ThrowIfCancellationRequested();
 
-        // Index everything currently in the dataset folder, in batches. The returned entries carry
-        // Type + Hash, so buildable files can be scheduled without extra per-file native calls.
-        var allFiles = EnumerateRelativeFiles(root).ToList();
-        var indexed = new List<Entry>(allFiles.Count);
-        for (var i = 0; i < allFiles.Count; i += IndexChunkSize)
-        {
-            ct.ThrowIfCancellationRequested();
-            var slice = allFiles.GetRange(i, Math.Min(IndexChunkSize, allFiles.Count - i));
-            indexed.AddRange(ctx.Ddb.AddRawBatch(slice));
-            progress.Report(new HeavyToolProgress(
-                allFiles.Count > 0 ? (double)(i + slice.Count) / allFiles.Count : -1,
-                "indexing", LogChunk: $"Indexed {i + slice.Count}/{allFiles.Count} file(s)"));
-        }
-
-        // Enqueue a per-file build job for every buildable entry (mirrors ObjectsManager.AddNew).
-        using (var scope = _scopeFactory.CreateScope())
-        {
-            var processor = scope.ServiceProvider.GetRequiredService<IBackgroundJobsProcessor>();
-            var buildableCount = 0;
-
-            foreach (var entry in indexed)
-            {
-                if (!ctx.Ddb.IsBuildable(entry.Path))
-                    continue;
-
-                var path = entry.Path;
-                var meta = new IndexPayload(
-                    request.OrgSlug,
-                    request.DsSlug,
-                    entry.Hash,
-                    null,
-                    Path: path,
-                    ParentJobId: ctx.TaskId);
-
-                Expression<Action> buildJob = () => HangfireUtils.BuildWrapper(ctx.Ddb, path, false, null);
-                processor.EnqueueIndexed(buildJob, meta);
-                buildableCount++;
-            }
-
-            _logger.LogInformation("Enqueued {Count} build job(s) for imported files in {Org}/{Ds}",
-                buildableCount, request.OrgSlug, request.DsSlug);
-        }
-
-        // Invalidate cached tiles/thumbnails/OGC (no auth needed; keyed by org/ds).
-        try
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var cacheInvalidator = scope.ServiceProvider.GetRequiredService<IDatasetCacheInvalidator>();
-            await cacheInvalidator.InvalidateAllDatasetCachesAsync(request.OrgSlug, request.DsSlug);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cache invalidation after import failed for {Org}/{Ds}",
-                request.OrgSlug, request.DsSlug);
-        }
+        // Index the files the import created (those of an earlier attempt included), never the other files of the
+        // folder; queue the builds of the buildable files (children of this task), invalidate the caches
+        var recorded = await ctx.WriteRecord.RecordedPathsAsync(ctx.Dataset, ct);
+        var allFiles = recorded.Concat(writes.Created).Distinct(StringComparer.Ordinal)
+            .Where(f => File.Exists(DatasetPathPolicy.ToLocalPath(root, f))).Order(StringComparer.Ordinal).ToList();
+        await _indexer.IndexAsync(new TaskFiles(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug, allFiles,
+            ctx.BuildQueue, ctx.TaskId, "imported files"), progress, ct);
 
         progress.Report(new HeavyToolProgress(1, "done",
             LogChunk: $"Import complete: {allFiles.Count} file(s) indexed"));
         return null;
-    }
-
-    // Walks the dataset folder, returning forward-slash relative paths and excluding the reserved
-    // .ddb index folder.
-    private static IEnumerable<string> EnumerateRelativeFiles(string root)
-    {
-        if (!Directory.Exists(root)) yield break;
-
-        var reserved = IDDB.DatabaseFolderName + "/";
-        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
-        {
-            var rel = Path.GetRelativePath(root, file).Replace('\\', '/');
-            if (rel.StartsWith(reserved, StringComparison.Ordinal)) continue;
-            yield return rel;
-        }
-    }
-
-    private void CleanupFiles(string root, IEnumerable<string> relativePaths)
-    {
-        foreach (var rel in relativePaths)
-        {
-            try
-            {
-                var local = Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar));
-                if (File.Exists(local))
-                    File.Delete(local);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not delete partially imported file '{Path}'", rel);
-            }
-        }
-    }
-
-    // Returns a copy of the source params with known sensitive fields decrypted in place.
-    // Only fields listed in ImportSourceDefinitions.SensitiveFields for the given sourceType are
-    // treated as ciphertext, so arbitrary user-supplied values cannot trigger Unprotect.
-    private static JsonElement DecryptParams(string sourceType, JsonElement paramsEl, IImportCredentialProtector protector)
-    {
-        var sensitive = ImportSourceDefinitions.SensitiveFields.TryGetValue(sourceType, out var fields)
-            ? fields
-            : (IReadOnlySet<string>)new HashSet<string>();
-
-        var obj = new JsonObject();
-        foreach (var prop in paramsEl.EnumerateObject())
-        {
-            if (prop.Value.ValueKind == JsonValueKind.String)
-            {
-                var s = prop.Value.GetString() ?? string.Empty;
-                obj[prop.Name] = sensitive.Contains(prop.Name) && s.StartsWith("ENC:", StringComparison.Ordinal)
-                    ? protector.Unprotect(s[4..])
-                    : s;
-            }
-            else
-            {
-                obj[prop.Name] = JsonNode.Parse(prop.Value.GetRawText());
-            }
-        }
-
-        using var doc = JsonDocument.Parse(obj.ToJsonString());
-        return doc.RootElement.Clone();
-    }
-
-    private static string? ReadString(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.String ? el.GetString() : null;
-    }
-
-    private static long? ReadLong(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.Number && el.TryGetInt64(out var v) ? v : null;
     }
 
     private sealed class CallbackProgress<T>(Action<T> callback) : IProgress<T>

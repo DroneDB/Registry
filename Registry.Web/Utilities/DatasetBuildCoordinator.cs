@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using System.Globalization;
 using System.Security.Cryptography;
@@ -11,33 +10,49 @@ using MySqlConnector;
 namespace Registry.Web.Utilities;
 
 /// <summary>
-/// Serializes pending-build snapshots, indexed enqueueing and retry-state updates
-/// for one dataset using the configured Hangfire storage.
+/// The per-dataset distributed lock of the configured Hangfire storage (a MySQL session lock on top of the
+/// storage lock with MySQL storage, the storage lock alone otherwise). The key prefix names what it serializes:
+/// <see cref="PendingKeyPrefix"/> the pending-build snapshots, indexed enqueueing and retry-state updates,
+/// <see cref="HeavySubmitKeyPrefix"/> the checks and enqueue of a heavy-task submit.
 /// </summary>
 internal static class DatasetBuildCoordinator
 {
-    internal static string ResourceKey(string orgSlug, string dsSlug)
+    /// <summary>Lock of the pending-build coordination.</summary>
+    internal const string PendingKeyPrefix = "ddb-pending";
+
+    /// <summary>Lock of a heavy-task submit (its checks and its enqueue).</summary>
+    internal const string HeavySubmitKeyPrefix = "heavy-submit";
+
+    internal static string ResourceKey(string orgSlug, string dsSlug, string keyPrefix = PendingKeyPrefix)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(orgSlug);
         ArgumentException.ThrowIfNullOrWhiteSpace(dsSlug);
-        return DigestKey($"{orgSlug.Length}:{orgSlug}{dsSlug.Length}:{dsSlug}");
+        return DigestKey($"{orgSlug.Length}:{orgSlug}{dsSlug.Length}:{dsSlug}", keyPrefix);
     }
 
     internal static string RetryStateKey(string orgSlug, string dsSlug) => ResourceKey(orgSlug, dsSlug) + ":retry";
 
-    private static string DigestKey(string identity)
+    private static string DigestKey(string identity, string keyPrefix)
     {
-        // MySQL session lock names are limited to 64 characters.
+        ArgumentException.ThrowIfNullOrWhiteSpace(keyPrefix);
+        // MySQL session lock names are limited to 64 characters: the prefix, ':' and the 43 characters of the hash.
         var hash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(identity)))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        return "ddb-pending:" + hash;
+        return keyPrefix + ":" + hash;
     }
 
-    internal static IDisposable Acquire(string orgSlug, string dsSlug, JobStorage? storage = null,
-        IStorageConnection? connection = null, string? mysqlConnectionString = null)
+    /// <summary>
+    /// Takes the lock of the dataset for <paramref name="keyPrefix"/>, waiting up to 5 seconds.
+    /// </summary>
+    /// <returns>The lease; disposing it releases the lock.</returns>
+    /// <exception cref="PendingBuildCoordinatorContentionException">Another holder kept the lock past the wait.</exception>
+    internal static IDisposable Acquire(string orgSlug, string dsSlug, JobStorage storage,
+        IStorageConnection? connection = null, string? mysqlConnectionString = null,
+        string keyPrefix = PendingKeyPrefix)
     {
-        var configuredStorage = storage ?? JobStorage.Current;
-        var resource = ResourceKey(orgSlug, dsSlug);
+        ArgumentNullException.ThrowIfNull(storage);
+        var configuredStorage = storage;
+        var resource = ResourceKey(orgSlug, dsSlug, keyPrefix);
         MySqlConnection? session = null;
         string? sessionResource = null;
         IStorageConnection? ownedConnection = null;
@@ -55,7 +70,7 @@ internal static class DatasetBuildCoordinator
                     Pooling = false
                 }.ConnectionString);
                 session.Open();
-                sessionResource = DigestKey($"{session.Database.Length}:{session.Database}{resource}");
+                sessionResource = DigestKey($"{session.Database.Length}:{session.Database}{resource}", keyPrefix);
                 using var command = session.CreateCommand();
                 command.CommandText = "SELECT GET_LOCK(@resource, 5)";
                 command.Parameters.AddWithValue("@resource", sessionResource);

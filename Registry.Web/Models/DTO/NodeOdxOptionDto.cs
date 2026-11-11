@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Models.DTO;
 
 /// <summary>
@@ -12,7 +11,7 @@ public sealed record NodeOdxOptionDto(
     string Type,
     // Domain: string (unit label) for scalars or string[] for enum choices.
     object? Domain,
-    // Help text, may contain <c>{choices}</c> and <c>{default}</c> placeholders.
+    // Help text with its choices and default written out (the node's %(choices)s / %(default)s are replaced).
     string? Help,
-    // Default value (string, number, or bool).
+    // The node's default value (string, number, or bool): the member is named "value", not "default".
     object? Value);

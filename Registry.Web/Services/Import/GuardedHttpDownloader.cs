@@ -1,13 +1,10 @@
-#nullable enable
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using Registry.Common;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks;
@@ -44,21 +41,31 @@ public sealed class GuardedHttpDownloader
 
     private readonly SsrfGuard _ssrfGuard;
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ILogger<GuardedHttpDownloader> _logger;
+    private readonly VolumeHeadroom _headroom;
+    private readonly TimeProvider _time;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="GuardedHttpDownloader"/> class.
     /// </summary>
     /// <param name="ssrfGuard">The SSRF guard used to pre-validate the target host.</param>
     /// <param name="httpClientFactory">Factory for the SSRF-hardened named client.</param>
-    /// <param name="logger">The logger.</param>
-    public GuardedHttpDownloader(SsrfGuard ssrfGuard, IHttpClientFactory httpClientFactory,
-        ILogger<GuardedHttpDownloader> logger)
+    /// <param name="headroom">The disk guard of the destination volume (with libddb's free-disk floor).</param>
+    /// <param name="time">Clock of the low-speed and stall guards; <see cref="TimeProvider.System"/> when null.</param>
+    public GuardedHttpDownloader(SsrfGuard ssrfGuard, IHttpClientFactory httpClientFactory, VolumeHeadroom headroom,
+        TimeProvider? time = null)
     {
         _ssrfGuard = ssrfGuard;
         _httpClientFactory = httpClientFactory;
-        _logger = logger;
+        _headroom = headroom;
+        _time = time ?? TimeProvider.System;
     }
+
+    /// <summary>
+    /// Fast SSRF rejection of <paramref name="host"/> (the pre-validation every request here does), for a caller that
+    /// wants to refuse a URL before it queues anything. The connection is validated again when it is made.
+    /// </summary>
+    /// <exception cref="ArgumentException">The host resolves to a private or reserved address.</exception>
+    public Task AssertHostAllowedAsync(string host, CancellationToken ct) => _ssrfGuard.AssertAllowedAsync(host, ct);
 
     // Outbound calls go through the SSRF-hardened client (connect-time IP validation + redirect guard).
     private HttpClient CreateClient() => _httpClientFactory.CreateClient(SsrfHttpHandler.HttpClientName);
@@ -73,7 +80,38 @@ public sealed class GuardedHttpDownloader
     /// <param name="password">Optional HTTP basic-auth password.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The probe result.</returns>
-    public async Task<UrlProbeResult> ProbeAsync(Uri url, string? username, string? password, CancellationToken ct)
+    public Task<UrlProbeResult> ProbeAsync(Uri url, string? username, string? password, CancellationToken ct) =>
+        ProbeAsync(url, username, password, requireArchive: false, ct);
+
+    /// <summary>The refusal of a URL whose content is not an archive (FR-UPL-12).</summary>
+    public const string NotAnArchiveMessage = "The file is not a ZIP, TAR, 7z or RAR archive";
+
+    /// <summary>The bytes of the file <see cref="ProbeAsync(Uri,string?,string?,bool,CancellationToken)"/> reads to tell an archive.</summary>
+    internal const int ArchiveProbeBytes = 8;
+
+    /// <summary>
+    /// <see cref="ProbeAsync(Uri,string?,string?,CancellationToken)"/>; with <paramref name="requireArchive"/>, the URL
+    /// must also serve an archive: a page (an HTML content type, or content that starts with markup, such as the
+    /// error or login page of a server) is refused with <see cref="NotAnArchiveMessage"/>. The first
+    /// <see cref="ArchiveProbeBytes"/> bytes are read with a range request, and never more, even when the server
+    /// ignores the range.
+    /// </summary>
+    public async Task<UrlProbeResult> ProbeAsync(Uri url, string? username, string? password, bool requireArchive,
+        CancellationToken ct)
+    {
+        var probe = await ProbeReachableAsync(url, username, password, ct);
+        if (!requireArchive || !probe.Result.Reachable)
+            return probe.Result;
+
+        if (probe.Html || await StartsWithMarkupAsync(url, username, password, ct))
+            return probe.Result with { Reachable = false, Message = NotAnArchiveMessage };
+        return probe.Result;
+    }
+
+    private readonly record struct ReachableProbe(UrlProbeResult Result, bool Html);
+
+    private async Task<ReachableProbe> ProbeReachableAsync(Uri url, string? username, string? password,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(url);
         await _ssrfGuard.AssertAllowedAsync(url.Host, ct);
@@ -85,15 +123,17 @@ public sealed class GuardedHttpDownloader
             ApplyAuth(head, username, password);
             using var headResp = await client.SendAsync(head, HttpCompletionOption.ResponseHeadersRead, ct);
             if (headResp.IsSuccessStatusCode)
-                return Reachable(headResp);
+                return new ReachableProbe(Reachable(headResp), IsHtml(headResp));
 
             // Some servers reject HEAD (405/501). Fall back to a headers-only GET.
             using var get = new HttpRequestMessage(HttpMethod.Get, url);
             ApplyAuth(get, username, password);
             using var getResp = await client.SendAsync(get, HttpCompletionOption.ResponseHeadersRead, ct);
             return getResp.IsSuccessStatusCode
-                ? Reachable(getResp)
-                : new UrlProbeResult(false, $"The URL is not reachable (HTTP {(int)getResp.StatusCode}).", null, null);
+                ? new ReachableProbe(Reachable(getResp), IsHtml(getResp))
+                : new ReachableProbe(
+                    new UrlProbeResult(false, $"The URL is not reachable (HTTP {(int)getResp.StatusCode}).", null, null),
+                    false);
         }
         catch (OperationCanceledException)
         {
@@ -101,8 +141,65 @@ public sealed class GuardedHttpDownloader
         }
         catch (Exception ex)
         {
-            return new UrlProbeResult(false, $"The URL could not be reached: {ex.Message}", null, null);
+            return new ReachableProbe(new UrlProbeResult(false, $"The URL could not be reached: {ex.Message}", null, null),
+                false);
         }
+    }
+
+    private static bool IsHtml(HttpResponseMessage response) =>
+        response.Content.Headers.ContentType?.MediaType is { } type &&
+        (type.Equals("text/html", StringComparison.OrdinalIgnoreCase) ||
+         type.Equals("application/xhtml+xml", StringComparison.OrdinalIgnoreCase));
+
+    // Whether the content starts with markup ('<' after a BOM or blanks): a page, not an archive. A server that does not
+    // answer the ranged GET cannot tell: the download checks the archive again
+    private async Task<bool> StartsWithMarkupAsync(Uri url, string? username, string? password, CancellationToken ct)
+    {
+        try
+        {
+            using var get = new HttpRequestMessage(HttpMethod.Get, url);
+            ApplyAuth(get, username, password);
+            get.Headers.Range = new RangeHeaderValue(0, ArchiveProbeBytes - 1);
+            using var response = await CreateClient().SendAsync(get, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (!response.IsSuccessStatusCode)
+                return false;
+            if (IsHtml(response))
+                return true;
+
+            // Never more than the probe bytes, even when the server ignores the range and sends the whole file
+            var head = new byte[ArchiveProbeBytes];
+            var read = 0;
+            await using (var stream = await response.Content.ReadAsStreamAsync(ct))
+            {
+                int n;
+                while (read < head.Length && (n = await stream.ReadAsync(head.AsMemory(read), ct)) > 0)
+                    read += n;
+            }
+
+            return LooksLikeMarkup(head.AsSpan(0, read));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (HttpRequestException)
+        {
+            return false;
+        }
+    }
+
+    internal static bool LooksLikeMarkup(ReadOnlySpan<byte> head)
+    {
+        if (head.StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF]))
+            head = head[3..];
+        foreach (var b in head)
+        {
+            if (b is 0x20 or 0x09 or 0x0D or 0x0A)
+                continue;
+            return b == (byte)'<';
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -119,12 +216,14 @@ public sealed class GuardedHttpDownloader
     /// <param name="diskSafetyMarginBytes">Disk head-room to keep free; <c>0</c> disables the disk guard.</param>
     /// <param name="progress">Optional progress sink.</param>
     /// <param name="ct">Cancellation token.</param>
+    /// <param name="maxBytesMessage">The text of the failure when the size cap is reached, for a cap that is the storage
+    /// quota of the owner (the 507 text, FR-XC-26); null: the text of the size limit.</param>
     /// <returns>The number of bytes downloaded.</returns>
     /// <exception cref="QuotaExceededException">The size cap or disk-space margin would be breached.</exception>
     /// <exception cref="TimeoutException">The transfer stalled or stayed below the minimum speed.</exception>
     public async Task<long> DownloadAsync(Uri url, string destFile, string? username, string? password,
         long maxBytes, long minSpeedBytesPerSec, int lowSpeedGraceSeconds, long diskSafetyMarginBytes,
-        IProgress<FileDownloadProgress>? progress, CancellationToken ct)
+        IProgress<FileDownloadProgress>? progress, CancellationToken ct, string? maxBytesMessage = null)
     {
         ArgumentNullException.ThrowIfNull(url);
         await _ssrfGuard.AssertAllowedAsync(url.Host, ct);
@@ -140,16 +239,16 @@ public sealed class GuardedHttpDownloader
 
         // Fail fast when the advertised size already exceeds the cap (avoids starting the transfer).
         if (maxBytes > 0 && total is > 0 && total.Value > maxBytes)
-            throw new QuotaExceededException(
+            throw new QuotaExceededException(maxBytesMessage ??
                 $"The file is too large ({CommonUtils.GetBytesReadable(total.Value)}); " +
                 $"the maximum allowed size is {CommonUtils.GetBytesReadable(maxBytes)}.");
 
-        var destFolder = Path.GetDirectoryName(destFile);
-        if (string.IsNullOrEmpty(destFolder)) destFolder = Path.GetTempPath();
+        // The folder of the destination: the disk guard measures the volume the download fills
+        var destFolder = Path.GetDirectoryName(Path.GetFullPath(destFile))!;
         Directory.CreateDirectory(destFolder);
 
         // Size cap (primary) + disk head-room (secondary) enforced per chunk, before each write.
-        var budget = new ExtractionBudget(maxBytes, destFolder, diskSafetyMarginBytes);
+        var budget = _headroom.CreateBudget(maxBytes, destFolder, diskSafetyMarginBytes, maxBytesMessage);
 
         await using var http = await response.Content.ReadAsStreamAsync(ct);
         await using var file = File.Create(destFile);
@@ -158,7 +257,7 @@ public sealed class GuardedHttpDownloader
         long downloaded = 0;
 
         var lowSpeedOn = minSpeedBytesPerSec > 0 && lowSpeedGraceSeconds > 0;
-        var window = Stopwatch.StartNew();
+        var windowStart = _time.GetTimestamp();
         long windowStartBytes = 0;
 
         while (true)
@@ -167,13 +266,13 @@ public sealed class GuardedHttpDownloader
             if (lowSpeedOn)
             {
                 // Hard stall guard: a single read that outlasts the grace window means ~0 B/s.
-                using var readCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                readCts.CancelAfter(TimeSpan.FromSeconds(lowSpeedGraceSeconds + 5));
+                using var stall = new CancellationTokenSource(TimeSpan.FromSeconds(lowSpeedGraceSeconds + 5), _time);
+                using var readCts = CancellationTokenSource.CreateLinkedTokenSource(ct, stall.Token);
                 try
                 {
                     read = await http.ReadAsync(buffer, readCts.Token);
                 }
-                catch (OperationCanceledException) when (readCts.IsCancellationRequested && !ct.IsCancellationRequested)
+                catch (OperationCanceledException) when (stall.IsCancellationRequested && !ct.IsCancellationRequested)
                 {
                     throw new TimeoutException("The download stalled (no data received).");
                 }
@@ -192,16 +291,17 @@ public sealed class GuardedHttpDownloader
 
             // Rolling low-speed guard: at each grace boundary the window's average speed must meet
             // the minimum, otherwise the transfer is aborted.
-            if (lowSpeedOn && window.Elapsed.TotalSeconds >= lowSpeedGraceSeconds)
+            var windowElapsed = _time.GetElapsedTime(windowStart);
+            if (lowSpeedOn && windowElapsed.TotalSeconds >= lowSpeedGraceSeconds)
             {
                 var windowBytes = downloaded - windowStartBytes;
-                var speed = windowBytes / window.Elapsed.TotalSeconds;
+                var speed = windowBytes / windowElapsed.TotalSeconds;
                 if (speed < minSpeedBytesPerSec)
                     throw new TimeoutException(
                         $"The download is too slow ({speed:F0} B/s is below the required " +
                         $"{minSpeedBytesPerSec} B/s over {lowSpeedGraceSeconds}s).");
 
-                window.Restart();
+                windowStart = _time.GetTimestamp();
                 windowStartBytes = downloaded;
             }
 

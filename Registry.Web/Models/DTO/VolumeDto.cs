@@ -1,5 +1,5 @@
-#nullable enable
 using System.ComponentModel.DataAnnotations;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Models.DTO;
 
@@ -11,7 +11,7 @@ public class VolumeCalculationRequestDto
 {
     /// <summary>Dataset-relative path of the elevation raster.</summary>
     [Required]
-    public string Path { get; set; } = null!;
+    public DatasetPath Path { get; set; } = null!;
 
     /// <summary>GeoJSON Polygon or MultiPolygon geometry in WGS84 (EPSG:4326).</summary>
     [Required]
@@ -34,7 +34,7 @@ public class StockpileDetectionRequestDto
 {
     /// <summary>Dataset-relative path of the elevation raster.</summary>
     [Required]
-    public string Path { get; set; } = null!;
+    public DatasetPath Path { get; set; } = null!;
 
     /// <summary>Click latitude (WGS84).</summary>
     [Required]
@@ -60,7 +60,7 @@ public class StockpileBatchDetectionRequestDto
 {
     /// <summary>Dataset-relative path of the elevation raster.</summary>
     [Required]
-    public string Path { get; set; } = null!;
+    public DatasetPath Path { get; set; } = null!;
 
     /// <summary>Sensitivity in [0, 1]. Higher = more detail. Defaults to 0.5.</summary>
     public float? Sensitivity { get; set; }

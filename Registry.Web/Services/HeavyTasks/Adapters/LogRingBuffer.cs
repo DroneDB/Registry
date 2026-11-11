@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -96,14 +95,6 @@ public sealed class LogRingBuffer
         _maxLines = maxLines < 1 ? 1 : maxLines;
         _maxBytes = maxBytes < 1 ? 1 : maxBytes;
     }
-
-    /// <summary>Monotonic cursor; equals the total number of lines ever appended.</summary>
-    public long Cursor => _cursor;
-
-    /// <summary>Number of lines evicted from the head due to capacity limits.</summary>
-    public long TruncatedFromTail => _truncatedFromTail;
-
-    public int Count => _lines.Count;
 
     /// <summary>Appends a line, evicting from the head to honor the limits.</summary>
     public void Append(string message, string level = "info", string? phase = null, long? unixMs = null)

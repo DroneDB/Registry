@@ -1,7 +1,7 @@
-#nullable enable
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Common;
 using Registry.Ports.Import;
 using Registry.Web.Models.DTO;
 
@@ -39,8 +39,26 @@ public interface IRemoteRegistryClient
         CancellationToken ct);
 
     /// <summary>
-    /// Downloads the given files into <paramref name="destFolder"/> in parallel, skipping files already
-    /// present on disk with the matching size (resumable re-import). Reports incremental progress.
+    /// Reads the display name and the tagline of a remote dataset (<c>GET /orgs/{org}/ds/{ds}</c>, the
+    /// <c>name</c> and <c>tagline</c> of <c>properties.meta</c>). Best effort: a remote that does not answer or does
+    /// not give them returns null, and the import goes on with the slug as the name.
+    /// </summary>
+    /// <param name="registryUrl">The remote registry base URL.</param>
+    /// <param name="authToken">The bearer token, or null for anonymous.</param>
+    /// <param name="orgSlug">The remote organization slug.</param>
+    /// <param name="dsSlug">The remote dataset slug.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The name and the tagline, or null when the remote gave neither.</returns>
+    Task<RemoteDatasetInfo?> GetDatasetInfoAsync(string registryUrl, string? authToken, string orgSlug, string dsSlug,
+        CancellationToken ct);
+
+    /// <summary>
+    /// Downloads the given files into <paramref name="destFolder"/> in parallel, each through a temporary file in the
+    /// uploads folder of the dataset, a batch at a time: the destinations and the folders created for them are recorded
+    /// in <paramref name="writes"/> and saved (§8.1) before they are created, and each file is moved without replacing
+    /// anything. A cancel drops the downloaded files of the batch not moved yet. A file that is not the task's
+    /// is kept and skipped; one the task wrote before at the matching size is kept (resumable re-import). Reports
+    /// incremental progress. A cancellation throws <see cref="OperationCanceledException"/>.
     /// </summary>
     /// <param name="registryUrl">The remote registry base URL.</param>
     /// <param name="authToken">The bearer token, or null for anonymous.</param>
@@ -48,11 +66,28 @@ public interface IRemoteRegistryClient
     /// <param name="sourceDs">The remote dataset slug.</param>
     /// <param name="destFolder">The destination folder (the dataset folder).</param>
     /// <param name="files">The files to download.</param>
+    /// <param name="writes">The write record of the task.</param>
     /// <param name="progress">Progress sink (may be null).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A task that completes when all files have been downloaded.</returns>
     Task DownloadFilesParallelAsync(string registryUrl, string? authToken, string sourceOrg, string sourceDs,
-        string destFolder, EntryDto[] files, IProgress<ImportProgress>? progress, CancellationToken ct);
+        string destFolder, EntryDto[] files, IImportWriteRecord writes, IProgress<ImportProgress>? progress,
+        CancellationToken ct);
+
+    /// <summary>
+    /// Downloads one file of a remote dataset to <paramref name="localPath"/>, retrying transient failures
+    /// (<see cref="Models.Configuration.ImportSettings.RegistryDownloadMaxRetries"/>, honouring <c>Retry-After</c>).
+    /// A failure is reported in the result, not thrown; cancellation throws.
+    /// </summary>
+    Task<HttpHelper.DownloadResult> DownloadFileAsync(string registryUrl, string? authToken, string orgSlug,
+        string dsSlug, string entryPath, string localPath, CancellationToken ct);
+
+    /// <summary>
+    /// Downloads a whole remote dataset as the ZIP archive of its download route (index included) to
+    /// <paramref name="destFile"/>. Throws <see cref="System.Net.Http.HttpRequestException"/> when the remote refuses.
+    /// </summary>
+    Task DownloadArchiveAsync(string registryUrl, string? authToken, string orgSlug, string dsSlug, string destFile,
+        CancellationToken ct);
 
     /// <summary>
     /// Lists all organizations visible to the given token (or publicly visible when token is null).
@@ -76,3 +111,8 @@ public interface IRemoteRegistryClient
     Task<RemoteBrowseItem[]> ListDatasetsAsync(string registryUrl, string? authToken, string orgSlug,
         CancellationToken ct);
 }
+
+/// <summary>The display name and the tagline of a remote dataset (either may be absent).</summary>
+/// <param name="Name">The display name (<c>meta.name</c>).</param>
+/// <param name="Tagline">The tagline (<c>meta.tagline</c>).</param>
+public sealed record RemoteDatasetInfo(string? Name, string? Tagline);

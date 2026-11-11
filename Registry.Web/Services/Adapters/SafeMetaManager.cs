@@ -1,12 +1,11 @@
-﻿using System;
-using Registry.Adapters.DroneDB;
-using Registry.Common;
+using System;
+using System.Globalization;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Centralized meta manager to prevent magic strings proliferation
+/// The well-known meta of a dataset (name, visibility, entries, ...) by name: null when a value is not set.
 /// </summary>
 public class SafeMetaManager
 {
@@ -23,19 +22,26 @@ public class SafeMetaManager
         _manager = manager;
     }
 
-    public string Name
+    /// <summary>
+    /// The value <paramref name="read"/> returns, or null when libddb has none. A transient error (busy index,
+    /// build in progress, full disk, shutdown: <see cref="DdbErrors.IsTransient"/>) says nothing about the value
+    /// and propagates.
+    /// </summary>
+    private static T? Read<T>(Func<T> read)
     {
-        get
+        try
         {
-            try
-            {
-                return  _manager.Get<string>(NameField);
-            }
-            catch (DdbException)
-            {
-                return null;
-            }
+            return read();
         }
+        catch (DdbException ex) when (!DdbErrors.IsTransient(ex))
+        {
+            return default;
+        }
+    }
+
+    public string? Name
+    {
+        get => Read(() => _manager.Get<string>(NameField));
         set
         {
             if (value == null)
@@ -45,56 +51,20 @@ public class SafeMetaManager
         }
     }
 
-    public int? Entries
-    {
-        get
-        {
-            try
-            {
-                return _manager.Get<int>(ObjectsCountField);
-            }
-            catch (DdbException)
-            {
-                return null;
-            }
-        }
-    }
-
     public Visibility? Visibility
     {
-        get
-        {
-
-            try
-            {
-                return (Visibility)_manager.Get<int>(VisibilityField);
-            }
-            catch (DdbException)
-            {
-                return null;
-            }
-        }
+        get => Read(() => (Visibility?)_manager.Get<int>(VisibilityField));
         set
         {
             if (value == null)
                 throw new ArgumentException("Visibility cannot be null");
-            _manager.Set(VisibilityField, ((int)value).ToString());
+            _manager.Set(VisibilityField, ((int)value).ToString(CultureInfo.InvariantCulture));
         }
     }
 
     public bool? IsPublic
     {
-        get
-        {
-            try
-            {
-                return _manager.Get<bool>(PublicField);
-            }
-            catch (DdbException)
-            {
-                return null;
-            }
-        }
+        get => Read(() => (bool?)_manager.Get<bool>(PublicField));
         set
         {
             if (value == null) throw new InvalidOperationException("Cannot set null value");
@@ -102,50 +72,12 @@ public class SafeMetaManager
         }
     }
 
-    public DateTime? LastUpdate
-    {
-        get
-        {
-            try
-            {
-                var unixTime = _manager.Get<int>(LastUpdateField);
-
-                var dateTimeOffset = DateTimeOffset.FromUnixTimeSeconds(unixTime);
-
-                return dateTimeOffset.LocalDateTime;
-            }
-            catch (DdbException)
-            {
-                return null;
-            }
-        }
-        // Maybe this is not needed
-        set
-        {
-            if (value == null)
-                throw new ArgumentException("LastUpdate cannot be null");
-
-            var val = ((DateTimeOffset)value.Value).ToUnixTimeSeconds().ToString();
-            _manager.Set(LastUpdateField, val);
-        }
-    }
-
     public const string TaglineField = "tagline";
     public const int TaglineMaxLength = 256;
 
-    public string Tagline
+    public string? Tagline
     {
-        get
-        {
-            try
-            {
-                return _manager.Get<string>(TaglineField);
-            }
-            catch (DdbException)
-            {
-                return null;
-            }
-        }
+        get => Read(() => _manager.Get<string>(TaglineField));
         set
         {
             if (value == null)

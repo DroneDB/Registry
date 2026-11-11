@@ -1,19 +1,19 @@
 using System.Collections.Generic;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.DTO;
 
 public class StacCollectionsDto
 {
-    [JsonProperty("collections")]
-    public IEnumerable<object> Collections { get; set; }
+    [JsonPropertyName("collections")]
+    public IEnumerable<object>? Collections { get; set; }
 
-    [JsonProperty("links")]
-    public IEnumerable<StacLinkDto> Links { get; set; }
+    [JsonPropertyName("links")]
+    public IEnumerable<StacLinkDto>? Links { get; set; }
 
-    [JsonProperty("numberMatched")]
+    [JsonPropertyName("numberMatched")]
     public int NumberMatched { get; set; }
 
-    [JsonProperty("numberReturned")]
+    [JsonPropertyName("numberReturned")]
     public int NumberReturned { get; set; }
 }

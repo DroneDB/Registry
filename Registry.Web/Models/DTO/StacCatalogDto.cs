@@ -1,26 +1,26 @@
-﻿using System.Collections.Generic;
-using System.Runtime.InteropServices;
-using Newtonsoft.Json;
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.DTO;
 
 public class StacCatalogDto
 {
-    [JsonProperty("type")]
-    public string Type { get; set; }
+    [JsonPropertyName("type")]
+    public string? Type { get; set; }
     
-    [JsonProperty("stac_version")]
-    public string StacVersion { get; set; }
+    [JsonPropertyName("stac_version")]
+    public string? StacVersion { get; set; }
     
-    [JsonProperty("id")]
-    public string Id { get; set; }
+    [JsonPropertyName("id")]
+    public string? Id { get; set; }
     
-    [JsonProperty("description")]
-    public string Description { get; set; }
+    [JsonPropertyName("description")]
+    public string? Description { get; set; }
     
-    [JsonProperty("links")]
-    public IEnumerable<StacLinkDto> Links { get; set; }
+    [JsonPropertyName("links")]
+    public IEnumerable<StacLinkDto>? Links { get; set; }
 
-    [JsonProperty("conformsTo", NullValueHandling = NullValueHandling.Ignore)]
-    public IEnumerable<string> ConformsTo { get; set; }
+    [JsonPropertyName("conformsTo")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IEnumerable<string>? ConformsTo { get; set; }
 }

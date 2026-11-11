@@ -1,0 +1,15 @@
+{
+  "request": "GET /users/storage",
+  "caller": "anonymous",
+  "status": 401,
+  "contentType": "application/problem+json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.2",
+    "title": "Unauthorized",
+    "status": 401,
+    "detail": "Not signed in",
+    "traceId": "<trace-id>",
+    "noRetry": false
+  }
+}

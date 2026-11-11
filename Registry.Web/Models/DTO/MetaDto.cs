@@ -1,18 +1,19 @@
-﻿using System;
-using Newtonsoft.Json;
-using Registry.Common;
+using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Registry.Ports;
 
 namespace Registry.Web.Models.DTO;
 
 public class MetaDto
 {
-    [JsonProperty("id")]
-    public string Id { get; set; }
+    [JsonPropertyName("id")]
+    public string? Id { get; set; }
 
-    [JsonProperty("data")]
-    public object Data { get; set; }
+    [JsonPropertyName("data")]
+    public JsonElement? Data { get; set; }
 
-    [JsonProperty("mtime")]
+    [JsonPropertyName("mtime")]
     [JsonConverter(typeof(SecondEpochConverter))]
     public DateTime ModifiedTime { get; set; }
 }

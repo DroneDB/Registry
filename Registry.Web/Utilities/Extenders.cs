@@ -1,21 +1,14 @@
-﻿using System;
+using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using Newtonsoft.Json;
-using Registry.Common.Model;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
-using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using SkiaSharp;
@@ -25,16 +18,16 @@ namespace Registry.Web.Utilities;
 
 public static class Extenders
 {
-
-    public static Organization ToEntity(this OrganizationDto organization)
+    /// <summary>The organization a request creates, owned by <paramref name="ownerId"/> and created at <paramref name="creationDate"/>.</summary>
+    public static Organization ToEntity(this OrganizationRequestDto organization, string? ownerId, DateTime creationDate)
     {
         return new Organization
         {
-            Slug = organization.Slug,
-            Name = string.IsNullOrEmpty(organization.Name) ? organization.Slug : organization.Name,
+            Slug = organization.Slug!,
+            Name = string.IsNullOrEmpty(organization.Name) ? organization.Slug! : organization.Name,
             Description = organization.Description,
-            CreationDate = organization.CreationDate,
-            OwnerId = organization.Owner,
+            CreationDate = creationDate,
+            OwnerId = ownerId,
             IsPublic = organization.IsPublic
         };
     }
@@ -52,19 +45,8 @@ public static class Extenders
         };
     }
 
-    /*public static Dataset ToEntity(this DatasetDto dataset)
-    {
-        var entity = new Dataset
-        {
-            Id = dataset.Id,
-            Slug = dataset.Slug,
-            CreationDate = dataset.CreationDate,
-            Name = string.IsNullOrEmpty(dataset.Name) ? dataset.Slug : dataset.Name
-        };
-        return entity;
-    }*/
-
-    public static StampDto ToDto(this Stamp stamp)
+    [return: NotNullIfNotNull(nameof(stamp))]
+    public static StampDto? ToDto(this Stamp? stamp)
     {
         if (stamp == null) return null;
 
@@ -76,7 +58,8 @@ public static class Extenders
         };
     }
 
-    public static MetaDto ToDto(this Meta meta)
+    [return: NotNullIfNotNull(nameof(meta))]
+    public static MetaDto? ToDto(this Meta? meta)
     {
         if (meta == null) return null;
 
@@ -88,7 +71,8 @@ public static class Extenders
         };
     }
 
-    public static MetaListItemDto ToDto(this MetaListItem listItem)
+    [return: NotNullIfNotNull(nameof(listItem))]
+    public static MetaListItemDto? ToDto(this MetaListItem? listItem)
     {
         if (listItem == null) return null;
 
@@ -100,7 +84,8 @@ public static class Extenders
         };
     }
 
-    public static MetaDumpDto ToDto(this MetaDump md)
+    [return: NotNullIfNotNull(nameof(md))]
+    public static MetaDumpDto? ToDto(this MetaDump? md)
     {
         if (md == null) return null;
 
@@ -114,7 +99,8 @@ public static class Extenders
         };
     }
 
-    public static EntryDto ToDto(this Entry entry)
+    [return: NotNullIfNotNull(nameof(entry))]
+    public static EntryDto? ToDto(this Entry? entry)
     {
         if (entry == null) return null;
 
@@ -133,7 +119,8 @@ public static class Extenders
     }
 
     /// <summary>
-    /// Converts a <see cref="Dataset"/> and its root <see cref="Entry"/> into a <see cref="DatasetDto"/>.
+    /// Converts a <see cref="Dataset"/> and its root <see cref="Entry"/> into a <see cref="DatasetDto"/>, without the
+    /// saved map views of its metadata (<see cref="DatasetMeta.WithoutViews"/>).
     /// </summary>
     /// <param name="dataset">The dataset entity to convert.</param>
     /// <param name="entry">The dataset's root entry, providing size and metadata.</param>
@@ -144,91 +131,107 @@ public static class Extenders
         {
             Slug = dataset.Slug,
             CreationDate = dataset.CreationDate,
-            Properties = entry.Properties,
+            Properties = DatasetMeta.WithoutViews(entry.Properties),
             Size = entry.Size
         };
     }
 
     /// <summary>
-    /// Fast validator for slugs.
-    /// Rules:
-    /// - length 1..128
-    /// - first char must be [a-z0-9]
-    /// - allowed chars are [a-z0-9_-]
-    /// - no consecutive dashes ("--") to match ToSlug collapsing behavior
+    /// Validator for slugs: <see cref="SlugRules"/> (length, characters, no consecutive dashes), the one definition
+    /// the routes and the slug generator share.
     /// </summary>
-    public static bool IsValidSlug(this string s)
-    {
-        if (string.IsNullOrEmpty(s)) return false;
-        if (s.Length > 128) return false;
-
-        // first must be [a-z0-9]
-        var first = s[0];
-        var firstIsLower = first >= 'a' && first <= 'z';
-        var firstIsDigit = first >= '0' && first <= '9';
-        if (!(firstIsLower || firstIsDigit)) return false;
-
-        var prevDash = false;
-
-        foreach (var c in s)
-        {
-            switch (c)
-            {
-                // [a-z]
-                case >= 'a' and <= 'z':
-                // [0-9]
-                case >= '0' and <= '9':
-                // underscore
-                case '_':
-                    prevDash = false; continue;
-                // dash (reject if consecutive)
-                case '-' when prevDash:
-                    return false;
-                case '-':
-                    prevDash = true;
-                    continue;
-                default:
-                    // anything else -> invalid
-                    return false;
-            }
-        }
-
-        return true;
-    }
+    public static bool IsValidSlug(this string s) => SlugRules.IsValid(s);
 
     /// <summary>
     /// High-performance slug generator.
-    /// - Uses Unicode normalization (NFD) to strip diacritics.
+    /// - Ignores the whitespace around the name, uses Unicode normalization (NFD) to strip diacritics, and transliterates the letters NFD does not decompose
+    ///   (ø to o, æ to ae, ß to ss, ł to l, FR-ORG-05).
     /// - Emits only ASCII [a-z0-9_-].
     /// - Replaces any non-allowed char with '-' and collapses consecutive dashes.
-    /// - Ensures max length 128 and that slug does not start with '-' or '_'
-    ///   (prefixes '0' if necessary, matching the original behavior).
+    /// - Ensures the length of <see cref="SlugRules"/> (cut to its maximum, a trailing '-' or '_' that the cut or the end of
+    ///   the name leaves removed, padded with '0' to its minimum) and that the slug does not start with '-' or '_'
+    ///   (prefixes '0' if necessary, matching the original behavior): the result is always a valid slug that never
+    ///   ends with '-' or '_' (FR-ORG-14).
+    /// The Hub's <c>slugFromName</c> (libs/slug.js) gives the same result: the shared test cases (<c>toSlug</c>) check both.
     /// </summary>
     public static string ToSlug(this string name)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Cannot make slug from empty string", nameof(name));
 
-        // 1) Normalize to NFD so diacritics become NonSpacingMark and can be dropped
-        var normalized = name.Normalize(NormalizationForm.FormD);
+        return WithFallback(SlugBody(name, legacy: false), legacy: false);
+    }
 
-        // 2) Rent a buffer. Upper bound is min(128, normalized.Length) since we never write more than input length.
-        var capacity = Math.Min(128, normalized.Length);
-        if (capacity == 0) return "0";
+    /// <summary>
+    /// The slug <see cref="ToSlug"/> made before FR-ORG-05 and FR-ORG-14: no trim of the name, no transliteration, and a
+    /// trailing '-' or '_' kept. Only to find what was stored with it (the default organization of a user whose name
+    /// ends with '-', '_', '.', '@' or '+'); never to make a new slug.
+    /// </summary>
+    /// <param name="name">The name.</param>
+    /// <returns>The slug of the former rule.</returns>
+    public static string ToLegacySlug(this string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Cannot make slug from empty string", nameof(name));
 
-        var buffer = ArrayPool<char>.Shared.Rent(capacity);
+        return WithFallback(SlugBody(name, legacy: true), legacy: true);
+    }
+
+    /// <summary>
+    /// Whether the characters <see cref="ToSlug"/> makes from <paramref name="name"/>, before its fallback (the '0'
+    /// it adds at the start or pads with), hold a Latin letter or a digit (D-035).
+    /// </summary>
+    /// <returns>False for a null or blank name.</returns>
+    public static bool SlugHasLatinLetterOrDigit(string? name) =>
+        !string.IsNullOrWhiteSpace(name) && SlugBody(name, legacy: false).Any(c => c is >= 'a' and <= 'z' or >= '0' and <= '9');
+
+    // What the generator writes for the name (at most SlugRules.MaxLength characters), before its fallback
+    private static string SlugBody(string name, bool legacy)
+    {
+        // 1) Normalize to NFD so diacritics become NonSpacingMark and can be dropped (the spaces around the name are not
+        //    part of it: they would only leave a dash at the ends; the former rule kept them)
+        var normalized = (legacy ? name : name.Trim()).Normalize(NormalizationForm.FormD);
+
+        // 2) Rent a buffer: never more than the maximum is written (a transliteration may write two characters)
+        var buffer = ArrayPool<char>.Shared.Rent(SlugRules.MaxLength + 1);
         var w = 0;                // write index
         var prevDash = false;    // used to collapse consecutive dashes
 
+        void Write(char outc)
+        {
+            // Collapse consecutive dashes
+            if (outc == '-')
+            {
+                if (prevDash) return;
+                prevDash = true;
+            }
+            else
+            {
+                prevDash = false;
+            }
+
+            if (w < SlugRules.MaxLength)
+                buffer[w++] = outc;
+        }
+
         try
         {
-            for (var i = 0; i < normalized.Length && w < capacity; i++)
+            for (var i = 0; i < normalized.Length && w < SlugRules.MaxLength; i++)
             {
                 var c = normalized[i];
 
                 // Drop combining marks (diacritics) produced by NFD
                 if (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.NonSpacingMark)
                     continue;
+
+                // The letters NFD leaves whole (FR-ORG-05; the former rule made them '-')
+                var transliteration = legacy ? null : Transliterate(c);
+                if (transliteration != null)
+                {
+                    foreach (var t in transliteration)
+                        Write(t);
+                    continue;
+                }
 
                 // Fast ASCII lowercasing: if 'A'..'Z', map to 'a'..'z'
                 if (c >= 'A' && c <= 'Z') c = (char)(c | 0x20);
@@ -239,37 +242,11 @@ public static class Extenders
                 var isUnderscore = c == '_';
                 var isDash = c == '-';
 
-                var outc = (isLower || isDigit || isUnderscore || isDash) ? c : '-';
-
-                // Collapse consecutive dashes
-                if (outc == '-')
-                {
-                    if (prevDash) continue;
-                    prevDash = true;
-                }
-                else
-                {
-                    prevDash = false;
-                }
-
-                buffer[w++] = outc;
+                Write((isLower || isDigit || isUnderscore || isDash) ? c : '-');
             }
 
             // Build the string from the written portion
-            var slug = new string(buffer, 0, w);
-
-            // If empty (e.g., all were dropped), return "0"
-            if (slug.Length == 0) return "0";
-
-            // If it starts with '-' or '_', prefix '0' (keeps original semantics)
-            if (slug[0] == '-' || slug[0] == '_')
-                slug = "0" + slug;
-
-            // Enforce max length 128 (after potential prefix)
-            if (slug.Length > 128)
-                slug = slug[..128];
-
-            return slug;
+            return new string(buffer, 0, w);
         }
         finally
         {
@@ -277,15 +254,83 @@ public static class Extenders
         }
     }
 
+    /// <summary>
+    /// The slugs the default organization of <paramref name="userName"/> was made with: <see cref="ToSlug"/>, then
+    /// <see cref="ToLegacySlug"/> when it differs (an organization made before FR-ORG-14 keeps its slug).
+    /// </summary>
+    /// <param name="userName">The user name.</param>
+    /// <returns>One or two slugs, the current rule first.</returns>
+    public static string[] DefaultOrganizationSlugs(string userName)
+    {
+        var slug = userName.ToSlug();
+        var legacy = userName.ToLegacySlug();
+        return slug == legacy ? [slug] : [slug, legacy];
+    }
+
+    /// <summary>
+    /// How well <paramref name="slug"/> matches the default organization of <paramref name="userName"/>: 0 for its
+    /// slug, 1 for the slug of the former rule, 2 for either with the suffix "-&lt;n&gt;" a taken slug gets
+    /// (<c>GetFreeOrganizationSlugAsync</c>), null for any other slug.
+    /// </summary>
+    /// <param name="slug">The slug of an organization.</param>
+    /// <param name="userName">The user name.</param>
+    /// <returns>The rank, lower is closer; null when it is not a default slug of the user.</returns>
+    public static int? DefaultOrganizationSlugRank(string slug, string userName)
+    {
+        var slugs = DefaultOrganizationSlugs(userName);
+        for (var i = 0; i < slugs.Length; i++)
+            if (string.Equals(slug, slugs[i], StringComparison.Ordinal))
+                return i;
+
+        foreach (var candidate in slugs)
+            if (slug.Length > candidate.Length + 1 && slug.StartsWith(candidate + "-", StringComparison.Ordinal) &&
+                slug.AsSpan(candidate.Length + 1).IndexOfAnyExceptInRange('0', '9') < 0)
+                return 2;
+
+        return null;
+    }
+
+    // The fallback of the generator: a valid slug from what it wrote
+    private static string WithFallback(string slug, bool legacy)
+    {
+        // If empty (e.g., all were dropped), return "0"
+        if (slug.Length == 0) return "0";
+
+        // If it starts with '-' or '_', prefix '0' (keeps original semantics)
+        if (slug[0] == '-' || slug[0] == '_')
+            slug = "0" + slug;
+
+        // Enforce the length bounds (after potential prefix), then the end: a cut at the maximum or the end of the
+        // name can leave a '-' or '_' there
+        if (slug.Length > SlugRules.MaxLength)
+            slug = slug[..SlugRules.MaxLength];
+
+        if (!legacy)
+            slug = slug.TrimEnd('-', '_');
+        if (slug.Length < SlugRules.MinLength)
+            slug = slug.PadRight(SlugRules.MinLength, '0');
+
+        return slug;
+    }
+
+    // The letters that NFD does not decompose and a slug should still keep as ASCII (ø, æ, ß, ł and their capitals)
+    private static string? Transliterate(char c) => c switch
+    {
+        'ø' or 'Ø' => "o",
+        'æ' or 'Æ' => "ae",
+        'ß' or 'ẞ' => "ss",
+        'ł' or 'Ł' => "l",
+        _ => null
+    };
+
 
     /// <summary>
     /// Converts a string tag (organization/dataset) and checks if valid
     /// </summary>
     /// <param name="tag"></param>
     /// <returns>A TagDto containing the organization and dataset slugs, or null if the tag string is null, empty, or whitespace.</returns>
-    public static TagDto ToTag(this string tag)
+    public static TagDto? ToTag(this string? tag)
     {
-
         if (string.IsNullOrWhiteSpace(tag))
             return null;
 
@@ -305,57 +350,18 @@ public static class Extenders
             throw new FormatException($"Dataset slug is not valid: '{ds}'");
 
         return new TagDto(org, ds);
-
     }
 
-    public static T ToObject<T>(this JsonElement obj)
+    public static T? ToObject<T>(this Dictionary<string, object>? obj)
     {
-        return JsonConvert.DeserializeObject<T>(obj.GetRawText());
+        // The dictionary the configuration binder made (strings, numbers): as the type it describes
+        return JsonSerializer.SerializeToElement(obj, ApiJson.Options).Deserialize<T>(ApiJson.Options);
     }
 
-    public static T ToObject<T>(this Dictionary<string, object> obj)
-    {
-        // Just don't ask please
-        return JsonConvert.DeserializeObject<T>(JsonConvert.SerializeObject(obj));
-    }
-
-    public static string ToErrorString(this IEnumerable<IdentityError> results)
+    public static string ToErrorString(this IEnumerable<IdentityError>? results)
     {
         if (results == null || !results.Any()) return "No error details";
         return string.Join(", ", results.Select(item => $"[{item.Code}: '{item.Description}']"));
-    }
-
-    public static string ToPrintableList(this IEnumerable<string> arr)
-    {
-        return arr == null ? "[]" : $"[{string.Join(", ", arr)}]";
-    }
-
-    public static async Task ErrorResult(this HttpResponse response, string message)
-    {
-        await Result(response, new ErrorResponse(message), StatusCodes.Status500InternalServerError);
-    }
-
-    public static async Task ErrorResult(this HttpResponse response, Exception ex)
-    {
-        await ErrorResult(response, ex.Message);
-    }
-
-    public static async Task Result<T>(this HttpResponse response, T result, int statusCode)
-    {
-        response.StatusCode = statusCode;
-        await response.WriteAsJsonAsync(result);
-    }
-
-    public static byte[] ComputeHash(this HashAlgorithm hashAlgorithm, string inputFile)
-    {
-        using var stream = File.OpenRead(inputFile);
-        return hashAlgorithm.ComputeHash(stream);
-    }
-
-    public static async Task<byte[]> ComputeHashAsync(this HashAlgorithm hashAlgorithm, string inputFile)
-    {
-        await using var stream = File.OpenRead(inputFile);
-        return await hashAlgorithm.ComputeHashAsync(stream);
     }
 
     public static SafeMetaManager GetSafe(this IMetaManager manager)
@@ -363,21 +369,17 @@ public static class Extenders
         return new SafeMetaManager(manager);
     }
 
-    public static bool IsPublicOrUnlisted(this SafeMetaManager meta)
-    {
-        return meta.Visibility is Visibility.Public or Visibility.Unlisted;
-    }
-
     /// <summary>
-    /// Converts an image byte array to WebP format with the specified quality.
+    /// Decodes an image byte array and encodes it again in <paramref name="format"/>.
     /// </summary>
     /// <param name="bytes">The source image byte array.</param>
-    /// <param name="quality">The quality of the WebP image (0-100). Default is 70.</param>
-    /// <returns>A byte array containing the WebP image.</returns>
+    /// <param name="format">The target format (the encoder of SkiaSharp: PNG, JPEG or WebP).</param>
+    /// <param name="quality">The quality of the image (0-100); ignored by lossless PNG.</param>
+    /// <returns>A byte array containing the encoded image.</returns>
     /// <exception cref="ArgumentException"></exception>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     /// <exception cref="InvalidOperationException"></exception>
-    public static byte[] ToWebp(this byte[] bytes, int quality = 70)
+    public static byte[] Encode(this byte[] bytes, SKEncodedImageFormat format, int quality = 70)
     {
         if (bytes == null || bytes.Length == 0)
             throw new ArgumentException("Source image is null or empty.", nameof(bytes));
@@ -387,9 +389,8 @@ public static class Extenders
 
         using var bitmap = SKBitmap.Decode(bytes) ?? throw new InvalidOperationException("Source image could not be decoded.");
         using var image = SKImage.FromBitmap(bitmap) ?? throw new InvalidOperationException("Failed to create image from bitmap.");
-        using var data = image.Encode(SKEncodedImageFormat.Webp, quality) ?? throw new InvalidOperationException("Failed to encode image to WebP format.");
+        using var data = image.Encode(format, quality) ?? throw new InvalidOperationException($"Failed to encode image to {format}.");
 
         return data.ToArray();
     }
-
 }

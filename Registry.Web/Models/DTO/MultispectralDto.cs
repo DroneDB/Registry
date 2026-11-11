@@ -1,5 +1,5 @@
-#nullable enable
 using System.Collections.Generic;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Models.DTO;
 
@@ -46,10 +46,16 @@ public class BandMappingDto
 /// </summary>
 public class MergeMultispectralRequestDto
 {
-    public string[] Paths { get; set; } = [];
+    /// <summary>The single-band rasters, dataset paths (libddb's rule, checked when the body is read).</summary>
+    public DatasetPath?[] Paths { get; set; } = [];
     public string? PreviewBands { get; set; }
     public int? ThumbSize { get; set; }
-    public string? OutputPath { get; set; }
+
+    /// <summary>The merged raster, a dataset path (libddb's rule, checked when the body is read).</summary>
+    public DatasetPath? OutputPath { get; set; }
+
+    /// <summary>Replace the output when it exists; without it an existing output is refused with 409 (D-040).</summary>
+    public bool Overwrite { get; set; }
 }
 
 /// <summary>
@@ -57,8 +63,11 @@ public class MergeMultispectralRequestDto
 /// </summary>
 public class AlignRasterRequestDto
 {
-    public string SourcePath { get; set; } = string.Empty;
-    public string ReferencePath { get; set; } = string.Empty;
+    /// <summary>The raster to align, a dataset path (libddb's rule, checked when the body is read).</summary>
+    public DatasetPath? SourcePath { get; set; }
+
+    /// <summary>The reference raster, a dataset path (libddb's rule, checked when the body is read).</summary>
+    public DatasetPath? ReferencePath { get; set; }
     public string OutputPath { get; set; } = string.Empty;
     public string Mode { get; set; } = "similarity";
 }

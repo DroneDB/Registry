@@ -1,0 +1,498 @@
+{
+  "request": "GET /sys/features",
+  "caller": "anonymous",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "organizationMemberManagement": false,
+    "userManagement": true,
+    "storageLimiter": false,
+    "maxConcurrentDownloadsPerUser": null,
+    "disableAnonymousBulkDownloads": false,
+    "emailEnabled": false,
+    "passwordPolicy": {
+      "minLength": 8,
+      "requireDigit": true,
+      "requireUppercase": false,
+      "requireLowercase": false,
+      "requireNonAlphanumeric": false
+    },
+    "inputRules": {
+      "slug": {
+        "pattern": "^(?!.*--)[a-z0-9][a-z0-9_\\-]{1,127}$",
+        "minLength": 2,
+        "maxLength": 128,
+        "description": "it has 2 to 128 characters (lowercase letters, digits, '_' and '-'), starts with a letter or digit and has no '--'",
+        "message": null
+      },
+      "name": {
+        "pattern": "^[a-z0-9]{1,127}$",
+        "minLength": 1,
+        "maxLength": 127,
+        "description": "1 to 127 characters: lowercase letters (a–z) and digits (0–9)",
+        "message": null
+      },
+      "email": {
+        "pattern": "^[^\\s@]+@[^\\s@]+$",
+        "minLength": null,
+        "maxLength": null,
+        "description": "one address, such as name@example.com",
+        "message": "The e-mail address is not valid: enter one address, such as name@example.com"
+      },
+      "entryName": {
+        "pattern": "^(?![A-Za-z]:)(?!\\.\\.?$)(?!\\s*$)[^\\/\\\\\\u0000]+$",
+        "reservedNames": [
+          ".ddb"
+        ],
+        "rootReservedNames": [
+          ".uploads"
+        ],
+        "description": "a name that is not empty, not '.' or '..', has no '/', '\\' or NUL character, does not start with a drive (such as 'C:') and is not a reserved name"
+      },
+      "nameClash": {
+        "message": "A file or folder named '{name}' already exists in this folder",
+        "caseInsensitive": true
+      },
+      "cron": {
+        "disableWords": [
+          "disabled",
+          "off",
+          "none"
+        ],
+        "minFields": 5,
+        "maxFields": 6,
+        "macros": [
+          "@yearly",
+          "@annually",
+          "@monthly",
+          "@weekly",
+          "@daily",
+          "@midnight",
+          "@hourly",
+          "@every_minute",
+          "@every_second"
+        ],
+        "description": "leave it empty for the default schedule; 'disabled', 'off' or 'none' (any case) turns the job off; a macro such as '@daily' is a schedule; any other value has 5 or 6 fields separated by spaces"
+      },
+      "latinName": {
+        "pattern": "[A-Za-z0-9ØøÆæßẞŁł]",
+        "normalization": "NFD",
+        "description": "the name needs a Latin letter (a–z) or a digit (accents are dropped), unless you enter a slug",
+        "message": "Use at least one Latin letter (a–z) or digit in the name, or enter a slug",
+        "messageWithoutSlug": "Use at least one Latin letter (a–z) or digit"
+      },
+      "displayName": {
+        "pattern": null,
+        "minLength": 1,
+        "maxLength": 256,
+        "description": "1 to 256 characters",
+        "message": "The name is too long: use 1 to 256 characters"
+      },
+      "descriptionText": {
+        "pattern": null,
+        "minLength": null,
+        "maxLength": 2000,
+        "description": "up to 2000 characters",
+        "message": "The description is too long: use up to 2000 characters"
+      }
+    },
+    "systemRoles": [
+      "admin",
+      "deactivated"
+    ],
+    "datasetThumbnailCandidates": [
+      "thumbnail.webp",
+      "thumbnail.jpg",
+      "thumbnail.png",
+      "cover.webp",
+      "cover.jpg",
+      "cover.png"
+    ],
+    "maxExportSizeBytes": 1073741824,
+    "rasterExportWindow": true,
+    "maxWcsCoverageSizePixels": 8192,
+    "bulkDownloadAsyncThresholdBytes": 524288000,
+    "taskTools": [
+      {
+        "id": "build",
+        "version": "1",
+        "title": "Build",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "raster-export",
+        "version": "1",
+        "title": "Export raster (GeoTIFF)",
+        "requiredAccess": "Read",
+        "producesArtifact": true,
+        "resultExtension": "tif",
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "raster-contours",
+        "version": "1",
+        "title": "Contour lines",
+        "requiredAccess": "Read",
+        "producesArtifact": true,
+        "resultExtension": "geojson",
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "photogrammetry",
+        "version": "2",
+        "title": "Photogrammetry (NodeODX)",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "bulk-download",
+        "version": "1",
+        "title": "Download archive (ZIP)",
+        "requiredAccess": "Read",
+        "producesArtifact": true,
+        "resultExtension": "zip",
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "merge-multispectral",
+        "version": "1",
+        "title": "Merge multispectral bands",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "align-raster",
+        "version": "1",
+        "title": "Align GeoTIFF to reference",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "mask-borders",
+        "version": "1",
+        "title": "Mask Borders",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "rescan-index",
+        "version": "1",
+        "title": "Rescan index",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "archive-extract",
+        "version": "1",
+        "title": "Extract archive",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "splat-training-export",
+        "version": "1",
+        "title": "Export splat training data",
+        "requiredAccess": "Read",
+        "producesArtifact": true,
+        "resultExtension": "zip",
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "splat-spz-export",
+        "version": "1",
+        "title": "Export splat as .spz",
+        "requiredAccess": "Read",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "import-dataset",
+        "version": "1",
+        "title": "Import dataset",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
+        "id": "import-file",
+        "version": "1",
+        "title": "Import file from URL",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      }
+    ],
+    "taskStates": [
+      {
+        "value": "Created",
+        "terminal": false
+      },
+      {
+        "value": "Indexing",
+        "terminal": false
+      },
+      {
+        "value": "Enqueued",
+        "terminal": false
+      },
+      {
+        "value": "Scheduled",
+        "terminal": false
+      },
+      {
+        "value": "Processing",
+        "terminal": false
+      },
+      {
+        "value": "Succeeded",
+        "terminal": true
+      },
+      {
+        "value": "Failed",
+        "terminal": true
+      },
+      {
+        "value": "Deleted",
+        "terminal": true
+      }
+    ],
+    "entryTypes": [
+      {
+        "id": 0,
+        "name": "Undefined",
+        "buildable": false,
+        "thumbnail": "none",
+        "sidecarExtensions": [],
+        "roles": []
+      },
+      {
+        "id": 1,
+        "name": "Directory",
+        "buildable": false,
+        "thumbnail": "none",
+        "sidecarExtensions": [],
+        "roles": []
+      },
+      {
+        "id": 2,
+        "name": "Generic",
+        "buildable": false,
+        "thumbnail": "none",
+        "sidecarExtensions": [],
+        "roles": []
+      },
+      {
+        "id": 3,
+        "name": "GeoImage",
+        "buildable": false,
+        "thumbnail": "file",
+        "sidecarExtensions": [],
+        "roles": []
+      },
+      {
+        "id": 4,
+        "name": "GeoRaster",
+        "buildable": true,
+        "thumbnail": "file",
+        "sidecarExtensions": [],
+        "roles": [
+          "raster.cog"
+        ]
+      },
+      {
+        "id": 5,
+        "name": "PointCloud",
+        "buildable": true,
+        "thumbnail": "build",
+        "sidecarExtensions": [],
+        "roles": [
+          "pointcloud.copc",
+          "pointcloud.ept"
+        ]
+      },
+      {
+        "id": 6,
+        "name": "Image",
+        "buildable": false,
+        "thumbnail": "file",
+        "sidecarExtensions": [],
+        "roles": []
+      },
+      {
+        "id": 7,
+        "name": "DroneDB",
+        "buildable": false,
+        "thumbnail": "none",
+        "sidecarExtensions": [],
+        "roles": []
+      },
+      {
+        "id": 8,
+        "name": "Markdown",
+        "buildable": false,
+        "thumbnail": "none",
+        "sidecarExtensions": [],
+        "roles": []
+      },
+      {
+        "id": 9,
+        "name": "Video",
+        "buildable": false,
+        "thumbnail": "none",
+        "sidecarExtensions": [],
+        "roles": []
+      },
+      {
+        "id": 10,
+        "name": "GeoVideo",
+        "buildable": false,
+        "thumbnail": "none",
+        "sidecarExtensions": [],
+        "roles": []
+      },
+      {
+        "id": 11,
+        "name": "Model",
+        "buildable": true,
+        "thumbnail": "none",
+        "sidecarExtensions": [],
+        "roles": [
+          "model.bm3d",
+          "model.nexus",
+          "model.3dtiles"
+        ]
+      },
+      {
+        "id": 12,
+        "name": "Panorama",
+        "buildable": false,
+        "thumbnail": "file",
+        "sidecarExtensions": [],
+        "roles": []
+      },
+      {
+        "id": 13,
+        "name": "GeoPanorama",
+        "buildable": false,
+        "thumbnail": "file",
+        "sidecarExtensions": [],
+        "roles": []
+      },
+      {
+        "id": 14,
+        "name": "Vector",
+        "buildable": true,
+        "thumbnail": "none",
+        "sidecarExtensions": [
+          "cpg",
+          "dbf",
+          "shx",
+          "prj"
+        ],
+        "roles": [
+          "vector.gpkg",
+          "vector.mvt",
+          "vector.local"
+        ]
+      },
+      {
+        "id": 15,
+        "name": "GaussianSplat",
+        "buildable": true,
+        "thumbnail": "build",
+        "sidecarExtensions": [],
+        "roles": [
+          "gsplat.lod",
+          "gsplat.spz",
+          "gsplat.bounds",
+          "gsplat.export"
+        ]
+      },
+      {
+        "id": 16,
+        "name": "Tiles3D",
+        "buildable": true,
+        "thumbnail": "none",
+        "sidecarExtensions": [],
+        "roles": [
+          "model.3dtiles"
+        ]
+      }
+    ],
+    "archiveExtensions": [
+      "tar.gz",
+      "tar.bz2",
+      "tar.xz",
+      "tgz",
+      "tbz2",
+      "txz",
+      "zip",
+      "rar",
+      "7z",
+      "tar",
+      "gz",
+      "bz2",
+      "xz"
+    ],
+    "hubOptions": {
+      "appLogo": "/images/logo-banner.svg",
+      "showRegistrationLink": true,
+      "disableDatasetCreation": false,
+      "disableStorageInfo": false,
+      "disableAccountManagement": false,
+      "readOnlyOrgs": false
+    },
+    "hubVersion": "<version>",
+    "registryVersion": "<version>",
+    "ddbVersion": "<version>",
+    "updateCheckEnabled": true,
+    "instanceHash": "<instance-hash>"
+  }
+}

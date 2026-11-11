@@ -1,4 +1,3 @@
-#nullable enable
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using Registry.Ports.DroneDB;
@@ -27,8 +26,7 @@ public class ImportVerifyResultDto
     public bool Reachable { get; set; }
 
     /// <summary>
-    /// Optional human-readable note (e.g. a size caveat). NOTE: must NOT be named "message" or "error":
-    /// the web client treats any response body containing those fields as an error, even on HTTP 200.
+    /// Optional human-readable note (e.g. a size caveat).
     /// </summary>
     public string? Note { get; set; }
 
@@ -40,6 +38,9 @@ public class ImportVerifyResultDto
 
     /// <summary>Suggested dataset display name derived from the source.</summary>
     public string? SuggestedName { get; set; }
+
+    /// <summary>Suggested dataset tagline derived from the source (the tagline of a remote dataset), when it has one.</summary>
+    public string? SuggestedTagline { get; set; }
 
     /// <summary>Suggested URL-safe dataset slug derived from the source.</summary>
     public string? SuggestedSlug { get; set; }
@@ -60,7 +61,8 @@ public class CreateImportRequestDto
     /// <summary>Desired dataset slug. When omitted it is derived from <see cref="Name"/> or the source.</summary>
     public string? Slug { get; set; }
 
-    /// <summary>Desired dataset display name. When omitted it is derived from the source.</summary>
+    /// <summary>Desired dataset display name, up to 256 characters (FR-ORG-14). When omitted it is derived from the source.</summary>
+    [MaxLength(Utilities.SlugRules.NameMaxLength, ErrorMessage = Utilities.SlugRules.NameTooLongMessage)]
     public string? Name { get; set; }
 
     /// <summary>Desired dataset visibility. Defaults to <see cref="Visibility.Private"/>.</summary>

@@ -8,12 +8,12 @@ namespace Registry.Web.Filters;
 
 /// <summary>
 /// Documents the GET download "path" query parameter as a repeatable string array
-/// (<see cref="ObjectsController.Download"/> reads the raw query, not the string binding).
+/// (<see cref="ObjectDownloadsController.Download"/> reads the raw query, not the string binding).
 /// </summary>
 public class DownloadPathsParameterFilter : IOperationFilter
 {
     private static readonly MethodInfo DownloadMethod =
-        typeof(ObjectsController).GetMethod(nameof(ObjectsController.Download))!;
+        typeof(ObjectDownloadsController).GetMethod(nameof(ObjectDownloadsController.Download))!;
 
     public void Apply(OpenApiOperation operation, OperationFilterContext context)
     {

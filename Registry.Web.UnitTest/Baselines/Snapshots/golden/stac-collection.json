@@ -1,0 +1,82 @@
+{
+  "request": "GET /orgs/golden-org/ds/golden-ds/stac",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "assets": {
+      "a.txt": {
+        "href": "http://localhost/orgs/golden-org/ds/golden-ds/download?path=a.txt",
+        "title": "a.txt"
+      }
+    },
+    "description": "golden-org/golden-ds",
+    "extent": {
+      "spatial": {
+        "bbox": [
+          [
+            8.25,
+            45.15347718317,
+            9.000203550941,
+            46.841
+          ]
+        ]
+      },
+      "temporal": {
+        "interval": [
+          [
+            "<datetime:Z>",
+            "<datetime:Z>"
+          ]
+        ]
+      }
+    },
+    "id": "golden-org/golden-ds",
+    "license": "proprietary",
+    "links": [
+      {
+        "href": "http://localhost/stac",
+        "rel": "root",
+        "type": "application/json"
+      },
+      {
+        "href": "http://localhost/stac",
+        "rel": "parent",
+        "type": "application/json"
+      },
+      {
+        "href": "http://localhost/orgs/golden-org/ds/golden-ds/stac",
+        "rel": "self",
+        "type": "application/json"
+      },
+      {
+        "href": "http://localhost/orgs/golden-org/ds/golden-ds/stac/Y2xvdWQubGFz",
+        "rel": "item",
+        "title": "cloud.las",
+        "type": "application/geo+json"
+      },
+      {
+        "href": "http://localhost/orgs/golden-org/ds/golden-ds/stac/bGF5ZXIuZ2VvanNvbg==",
+        "rel": "item",
+        "title": "layer.geojson",
+        "type": "application/geo+json"
+      },
+      {
+        "href": "http://localhost/orgs/golden-org/ds/golden-ds/stac/b3J0aG8udGlm",
+        "rel": "item",
+        "title": "ortho.tif",
+        "type": "application/geo+json"
+      },
+      {
+        "href": "http://localhost/orgs/golden-org/ds/golden-ds/stac/c3ViL2ltZy5qcGc=",
+        "rel": "item",
+        "title": "sub/img.jpg",
+        "type": "application/geo+json"
+      }
+    ],
+    "stac_version": "1.1.0",
+    "title": "golden-org/golden-ds",
+    "type": "Collection"
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "request": "GET /orgs",
+  "caller": "admin",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": [
+    {
+      "slug": "golden-org",
+      "name": "Golden organization",
+      "description": "Golden JSON contract tests",
+      "creationDate": "<datetime:Z>",
+      "owner": "golden-owner",
+      "isPublic": false,
+      "datasetCount": 1,
+      "lastModified": "<datetime:Z>",
+      "permissions": {
+        "canRead": true,
+        "canWrite": true,
+        "canDelete": true,
+        "canManageMembers": true
+      }
+    },
+    {
+      "slug": "golden-write",
+      "name": "Golden write organization",
+      "description": null,
+      "creationDate": "<datetime:Z>",
+      "owner": "golden-writer",
+      "isPublic": false,
+      "datasetCount": 0,
+      "lastModified": "<datetime:Z>",
+      "permissions": {
+        "canRead": true,
+        "canWrite": true,
+        "canDelete": true,
+        "canManageMembers": true
+      }
+    },
+    {
+      "slug": "public",
+      "name": "Public",
+      "description": "Organization",
+      "creationDate": "<datetime:Z>",
+      "owner": null,
+      "isPublic": true,
+      "datasetCount": 1,
+      "lastModified": "<datetime:Z>",
+      "permissions": {
+        "canRead": true,
+        "canWrite": true,
+        "canDelete": true,
+        "canManageMembers": true
+      }
+    },
+    {
+      "slug": "admin",
+      "name": "admin organization",
+      "description": null,
+      "creationDate": "<datetime:Z>",
+      "owner": "admin",
+      "isPublic": false,
+      "datasetCount": 0,
+      "lastModified": "<datetime:Z>",
+      "permissions": {
+        "canRead": true,
+        "canWrite": true,
+        "canDelete": true,
+        "canManageMembers": true
+      }
+    }
+  ]
+}

@@ -1,9 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
-using Hangfire.States;
 using Registry.Web.Models;
 
 namespace Registry.Web.Services.Ports;
@@ -13,42 +11,34 @@ namespace Registry.Web.Services.Ports;
 /// </summary>
 public interface IBackgroundJobsProcessor
 {
-    public string Enqueue(Expression<Action> methodCall);
-    public string Enqueue(Expression<Func<Task>> methodCall);
-    public string Enqueue<T>(Expression<Action<T>> methodCall);
     public string Enqueue<T>(Expression<Func<T, Task>> methodCall);
-
-    public string Schedule(Expression<Action> methodCall, TimeSpan delay);
-    public string Schedule(Expression<Func<Task>> methodCall, TimeSpan delay);
     public string Schedule<T>(Expression<Action<T>> methodCall, TimeSpan delay);
     public string Schedule<T>(Expression<Func<T, Task>> methodCall, TimeSpan delay);
 
     public bool Delete(string jobId);
+
+    /// <summary>
+    /// Deletes the job only while it is in the state <paramref name="fromState"/>: the check and the change are one
+    /// atomic state change of the storage, so a job deleted from a waiting state was never started by a worker.
+    /// </summary>
+    /// <returns>True when the job was in <paramref name="fromState"/> and is deleted.</returns>
+    public bool Delete(string jobId, string fromState);
     public bool Requeue(string jobId);
 
     public JobStatus GetJobStatus(string jobId);
 
-    public string ContinueJobWith(string parentId, Expression<Action> methodCall, BackgroundJobContinuationOptions options = BackgroundJobContinuationOptions.OnlyOnSucceededState);
-    public string ContinueJobWith<T>(string parentId, Expression<Action<T>> methodCall, BackgroundJobContinuationOptions options = BackgroundJobContinuationOptions.OnlyOnSucceededState);
+    /// <summary>The method and arguments of a stored job, or null when the store has no such job or cannot read it.</summary>
+    public StoredJob? GetStoredJob(string jobId);
 
-    // New indexed job methods
-    public string EnqueueIndexed(Expression<Action> methodCall, IndexPayload meta);
-    public string EnqueueIndexed(Expression<Func<Task>> methodCall, IndexPayload meta);
+    /// <summary>A parameter of a stored job (as <c>PublishedOutputMarker</c> sets it), or null.</summary>
+    public string? GetJobParameter(string jobId, string name);
     public string EnqueueIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta);
     public string EnqueueIndexed<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta);
-
-    // Indexed scheduled (delayed) jobs - tracked in the JobIndex like EnqueueIndexed
-    public string ScheduleIndexed(Expression<Action> methodCall, IndexPayload meta, TimeSpan delay);
-    public string ScheduleIndexed(Expression<Func<Task>> methodCall, IndexPayload meta, TimeSpan delay);
     public string ScheduleIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta, TimeSpan delay);
-    public string ScheduleIndexed<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta, TimeSpan delay);
 }
 
-public enum BackgroundJobContinuationOptions
-{
-    OnAnyFinishedState,
-    OnlyOnSucceededState,
-}
+/// <summary>A job as the job store keeps it: the class and method it runs and their arguments.</summary>
+public sealed record StoredJob(Type Type, string Method, IReadOnlyList<object?> Args);
 
 public enum JobStatus
 {
