@@ -72,8 +72,8 @@
     <PropertyGroup>
         <DdbSource>release</DdbSource>
         <DdbVersion>2.4.1</DdbVersion>
-        <DdbDebSha256>SHA256_OF_ddb_2.4.1_amd64.deb</DdbDebSha256>
-        <DdbWindowsZipSha256>SHA256_OF_ddb-2.4.1-Windows.zip</DdbWindowsZipSha256>
+        <DdbDebSha256>95484a26d92f79d5c74ab2172020c8b0c1b04691b9b82a4e645d2cf412505e03</DdbDebSha256>
+        <DdbWindowsZipSha256>0ca9194a55ff1abb0cd7617395a1da03fe8bc1b339761f39084908dc0dd32d7e</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
