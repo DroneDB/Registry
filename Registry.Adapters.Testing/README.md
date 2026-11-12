@@ -186,3 +186,11 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   tiles-ex tile (`NativeDdbWrapper.GenerateMemoryTileEx`) instead of `DDBMemoryTileEx` and `DDBMemoryTileEx2`, which
   it no longer declares, and no longer decodes a PNG to encode it again. `DdbAbi.Minor` is 5. No schema, other fixture
   or vector changed.
+* 2026-11-12: DroneDB `d89f51cb8e75bbe8d237287ea0be6151fc28ecc2` (libddb 2.5.0, ABI 2.5, a local commit of DroneDB
+  that is not released yet: vendor again from the v2.5.0 release commit before this merges). Since `58f75a0`:
+  `capabilities` lists `DDBRenderRasterRegionEx2` and `DDBRenderRasterIndexEx` in `symbols` and `cancellable`, and
+  the 2.5.0 entry of `Contract/README.md` describes them. They are the region and index renders with a
+  `DDBRenderOptions` (an opaque background the image is composited over) and the format `rgba` (the pixels of a
+  render); Registry calls them for every render (`NativeDdbWrapper.RenderRasterRegion`, `RenderRasterIndex`,
+  `RenderRasterRegionPixels` and `RenderRasterIndexPixels`) instead of `DDBRenderRasterRegionEx` and
+  `DDBRenderRasterIndex`, which it no longer declares. No schema, other fixture or vector changed.

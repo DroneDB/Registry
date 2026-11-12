@@ -60,7 +60,7 @@ public class NativeCancellationTests : TestBase
                      nameof(NativeDdb.DDBBuild), nameof(NativeDdb.DDBBuildEx), nameof(NativeDdb.DDBExportRaster), nameof(NativeDdb.DDBExportRaster2),
                      nameof(NativeDdb.DDBGenerateMemoryThumbnail), nameof(NativeDdb.DDBGenerateMemoryThumbnailEx),
                      nameof(NativeDdb.DDBMemoryTileEx3), nameof(NativeDdb.DDBMemoryTileFmt),
-                     nameof(NativeDdb.DDBRenderRasterIndex), nameof(NativeDdb.DDBRenderRasterRegionEx),
+                     nameof(NativeDdb.DDBRenderRasterIndexEx), nameof(NativeDdb.DDBRenderRasterRegionEx2),
                      nameof(NativeDdb.DDBExportSplatSpz), nameof(NativeDdb.DDBExportSplatTrainingData)
                  })
             capabilities.IsCancellable(export).ShouldBeTrue(export);

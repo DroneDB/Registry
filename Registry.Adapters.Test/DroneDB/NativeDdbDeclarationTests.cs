@@ -96,8 +96,9 @@ public class NativeDdbDeclarationTests
     /// libddb 2.5 is the only libddb the Registry runs: every export it calls since 2.0 is required by the startup
     /// handshake (ABI 2.5), with no optional export and no fallback for an older library: the Ex variants of align, merge
     /// and mask, the raster value exports with a <c>DDBRasterOptions</c>, the renders and the export with options
-    /// (U-202, U-406), the build and the contours with progress (FR-PRC-42, U-413) and the visualization tile encoded
-    /// by libddb in the format asked for (<c>DDBMemoryTileEx3</c>, ABI 2.5), the only tile-ex export Registry calls.
+    /// (U-202, U-406), the build and the contours with progress (FR-PRC-42, U-413), the visualization tile encoded
+    /// by libddb in the format asked for (<c>DDBMemoryTileEx3</c>, ABI 2.5), the only tile-ex export Registry calls, and
+    /// the region and index renders with options (<c>DDBRenderRasterRegionEx2</c>, <c>DDBRenderRasterIndexEx</c>).
     /// </summary>
     [Test]
     public void TheExportsOfLibddb25_AreRequired_WithTheRequiredAbi25()
@@ -111,6 +112,12 @@ public class NativeDdbDeclarationTests
         // Registry no longer calls the tile-ex exports that render a PNG only: it would decode and encode it again
         DdbAbi.RequiredSymbols.ShouldNotContain("DDBMemoryTileEx");
         DdbAbi.RequiredSymbols.ShouldNotContain("DDBMemoryTileEx2");
+        // The region and index renders with a background or as their pixels (ABI 2.5), the only render exports Registry
+        // calls: a render it composited in managed code was a PNG it decoded
+        DdbAbi.RequiredSymbols.ShouldContain("DDBRenderRasterRegionEx2");
+        DdbAbi.RequiredSymbols.ShouldContain("DDBRenderRasterIndexEx");
+        DdbAbi.RequiredSymbols.ShouldNotContain("DDBRenderRasterRegionEx");
+        DdbAbi.RequiredSymbols.ShouldNotContain("DDBRenderRasterIndex");
         DdbAbi.RequiredSymbols.ShouldContain("DDBGetRasterValueInfoEx");
         DdbAbi.RequiredSymbols.ShouldContain("DDBResolveBuildFile");
         typeof(NativeDdb).Assembly.GetType("Registry.Adapters.DroneDB.NativeDdbOptional").ShouldBeNull();

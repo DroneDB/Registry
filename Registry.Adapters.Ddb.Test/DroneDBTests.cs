@@ -515,6 +515,61 @@ public class NativeDdbWrapperTests : TestBase
             92370, 256, true, false, "", null, "1,2,3", null, null, null, null, null, "bmp"));
     }
 
+    // The Brighton orthophoto (EPSG:32615) in Web Mercator, with a margin outside it
+    private static readonly double[] BrightonView = [-10240846, 5916324, -10240590, 5916516];
+
+    // The pixels of a region render are straight RGBA, and the render over a background is those pixels composited
+    // with the rounding of Skia: what WMS serves for one layer, without compositing it in managed code
+    [Test]
+    public void RenderRasterRegion_OverABackground_IsItsPixelsComposited()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+        byte[] pixels = [];
+        DdbWrapper.RenderRasterRegionPixels(tempFile.FilePath, BrightonView, "EPSG:3857", 128, 96,
+            rgba => pixels = rgba.ToArray());
+
+        var over = DdbWrapper.RenderRasterRegion(tempFile.FilePath, BrightonView, "EPSG:3857", 128, 96, "rgba",
+            background: 0x336699);
+
+        pixels.Length.ShouldBe(128 * 96 * 4);
+        pixels.Where((_, i) => i % 4 == 3).Count(a => a == 0).ShouldBeGreaterThan(0, "the margin is transparent");
+        byte[] background = [0x33, 0x66, 0x99];
+        var expected = new byte[pixels.Length];
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            int alpha = pixels[i + 3];
+            for (var c = 0; c < 3; c++)
+                expected[i + c] = (byte)((pixels[i + c] * alpha + 127) / 255 + ((background[c] * (255 - alpha) + 255) >> 8));
+            expected[i + 3] = 255;
+        }
+
+        over.ShouldBe(expected);
+        DdbWrapper.RenderRasterRegion(tempFile.FilePath, BrightonView, "EPSG:3857", 128, 96, "jpeg", background: 0)
+            .Take(2).ShouldBe(new byte[] { 0xFF, 0xD8 });
+    }
+
+    [Test]
+    public void RenderRasterRegion_OfAGeoTiffOverABackground_IsAnArgumentError()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+
+        Should.Throw<DdbInvalidArgumentsException>(() => DdbWrapper.RenderRasterRegion(tempFile.FilePath, BrightonView,
+            "EPSG:3857", 64, 48, "image/tiff", background: 0xFFFFFF));
+    }
+
+    // The pixels of an index the raster cannot render (an RGB orthophoto has no NIR) are refused with the reason, and
+    // the reader is not called
+    [Test]
+    public void RenderRasterIndexPixels_OfAnIndexTheRasterCannotRender_IsAnArgumentError()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+        var read = false;
+
+        Should.Throw<DdbInvalidArgumentsException>(() => DdbWrapper.RenderRasterIndexPixels(tempFile.FilePath, "NDVI",
+            BrightonView, "EPSG:3857", 64, 48, _ => read = true));
+        read.ShouldBeFalse();
+    }
+
     [Test]
     public void Stamp_HappyPath_Ok()
     {

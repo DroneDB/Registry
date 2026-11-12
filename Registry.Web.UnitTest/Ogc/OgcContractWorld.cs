@@ -107,7 +107,8 @@ internal sealed class OgcContractWorld
             $"{{\"width\":{NativeWidth},\"height\":{NativeHeight},\"bandCount\":3,\"crs\":\"EPSG:32615\"," +
             "\"bands\":[{\"name\":\"red\"},{\"name\":\"green\"},{\"name\":\"blue\"}]}");
         Wrapper.Setup(w => w.RenderRasterRegion(It.IsAny<string>(), It.IsAny<double[]>(), It.IsAny<string>(),
-            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int[]?>(), It.IsAny<string?>())).Returns(Tiff);
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(),
+            It.IsAny<int[]?>(), It.IsAny<string?>(), It.IsAny<uint?>())).Returns(Tiff);
 
         IDistributedCache store = TestCaches.MemoryStore();
         Records = TestCaches.Records(store);

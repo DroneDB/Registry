@@ -494,10 +494,17 @@ public class FakeDdbWrapper : IDdbWrapper
         bool overwrite = false) => throw Unsupported();
 
     public virtual byte[] RenderRasterRegion(string inputPath, double[] bbox, string bboxSrs,
-        int width, int height, string format, int[]? bands = null, string? outputCrs = null) => throw Unsupported();
+        int width, int height, string format, int[]? bands = null, string? outputCrs = null, uint? background = null) =>
+        throw Unsupported();
 
     public virtual byte[] RenderRasterIndex(string inputPath, string indexName, double[] bbox,
-        string bboxSrs, int width, int height, string format) => throw Unsupported();
+        string bboxSrs, int width, int height, string format, uint? background = null) => throw Unsupported();
+
+    public virtual void RenderRasterRegionPixels(string inputPath, double[] bbox, string bboxSrs, int width,
+        int height, RasterPixelsReader read) => throw Unsupported();
+
+    public virtual void RenderRasterIndexPixels(string inputPath, string indexName, double[] bbox, string bboxSrs,
+        int width, int height, RasterPixelsReader read) => throw Unsupported();
 
     public virtual string QueryRasterPoint(string inputPath, double x, double y, string? srs = null) =>
         throw Unsupported();

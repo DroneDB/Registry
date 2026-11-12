@@ -2,6 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Text.Json;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Adapters.DroneDB;
@@ -185,6 +186,32 @@ internal static class NativeCall
             var bytes = new byte[size];
             Marshal.Copy(buffer, bytes, 0, size);
             return bytes;
+        }
+        finally
+        {
+            if (buffer != IntPtr.Zero)
+                NativeDdb.DDBVSIFree(buffer);
+        }
+    }
+
+    /// <summary>
+    /// A render whose output is its RGBA pixels (<paramref name="width"/> x <paramref name="height"/> x 4 bytes), read
+    /// in place with <paramref name="read"/> before libddb's buffer is freed: no managed copy.
+    /// </summary>
+    internal static unsafe void InvokePixels(string operation, BufferCall call, int width, int height,
+        RasterPixelsReader read)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        var buffer = IntPtr.Zero;
+        try
+        {
+            int size;
+            using (var cancellation = Begin(operation))
+                Check(call(out buffer, out size), operation, null, cancellation.Token);
+            if (buffer == IntPtr.Zero || size != (long)width * height * 4)
+                throw new DdbException($"{operation} returned {size} bytes, not the {width} x {height} RGBA pixels");
+
+            read(new ReadOnlySpan<byte>((void*)buffer, size));
         }
         finally
         {

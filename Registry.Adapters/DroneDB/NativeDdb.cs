@@ -424,14 +424,20 @@ internal static unsafe partial class NativeDdb
 
     // ------------------------------------------------------------------ OGC
 
+    /// <summary>
+    /// <c>DDBRenderRasterRegionEx2</c> (ABI 2.5): the region render with <see cref="DdbRenderOptions"/> (a background
+    /// the image is composited over), in an image format or as its RGBA pixels (<c>"rgba"</c>).
+    /// </summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBRenderRasterRegionEx(string inputPath, double[] bbox, string bboxSrs,
-        string outputCrs, int[] bands, int bandCount, int width, int height, string format, out IntPtr outBuffer,
-        out int outBufferSize);
+    internal static partial DdbResult DDBRenderRasterRegionEx2(string inputPath, double[] bbox, string bboxSrs,
+        string outputCrs, int[] bands, int bandCount, int width, int height, string format, in DdbRenderOptions options,
+        out IntPtr outBuffer, out int outBufferSize);
 
+    /// <summary><c>DDBRenderRasterIndexEx</c> (ABI 2.5): the index render with <see cref="DdbRenderOptions"/>.</summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBRenderRasterIndex(string inputPath, string indexName, double[] bbox,
-        string bboxSrs, int width, int height, string format, out IntPtr outBuffer, out int outBufferSize);
+    internal static partial DdbResult DDBRenderRasterIndexEx(string inputPath, string indexName, double[] bbox,
+        string bboxSrs, int width, int height, string format, in DdbRenderOptions options, out IntPtr outBuffer,
+        out int outBufferSize);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBQueryRasterPoint(string inputPath, double x, double y, string srs,
@@ -490,6 +496,29 @@ internal struct DdbOverwriteOptions
     {
         StructSize = 8,
         Overwrite = overwrite ? (byte)1 : (byte)0
+    };
+}
+
+/// <summary>
+/// <c>DDBRenderOptions</c> (ABI 2.5): 16 bytes, <c>structSize</c> at 0, <c>flags</c> at 4, <c>background</c> (0xRRGGBB,
+/// with <see cref="FlagBackground"/>) at 8, <c>reserved</c> (0) at 12. Blittable.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct DdbRenderOptions
+{
+    internal const uint FlagBackground = 0x1;
+
+    internal uint StructSize;
+    internal uint Flags;
+    internal uint Background;
+    internal uint Reserved;
+
+    /// <summary>The options of a render over <paramref name="background"/> (0xRRGGBB), or of none for null.</summary>
+    internal static DdbRenderOptions Create(uint? background) => new()
+    {
+        StructSize = 16,
+        Flags = background is null ? 0 : FlagBackground,
+        Background = background ?? 0
     };
 }
 

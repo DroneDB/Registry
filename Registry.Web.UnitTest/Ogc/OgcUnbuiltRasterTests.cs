@@ -89,7 +89,8 @@ public class OgcUnbuiltRasterTests
 
         _wrapper = new Mock<IDdbWrapper>();
         _wrapper.Setup(w => w.RenderRasterRegion(It.IsAny<string>(), It.IsAny<double[]>(), It.IsAny<string>(),
-            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int[]?>(), It.IsAny<string?>())).Returns(RenderedPng);
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(),
+            It.IsAny<int[]?>(), It.IsAny<string?>(), It.IsAny<uint?>())).Returns(RenderedPng);
 
         IDistributedCache store = TestCaches.MemoryStore();
         var catalog = new OgcLayerCatalog(ddbManager.Object, utils.Object, TestCaches.Records(store), _artifacts.Object,
@@ -153,7 +154,8 @@ public class OgcUnbuiltRasterTests
         _wrapper.Invocations.Where(i => i.Arguments.OfType<string>().Any(a => a.Contains("raw.tif"))).ShouldBeEmpty();
         TiledFiles().ShouldNotContain("raw.tif");
         _wrapper.Verify(w => w.RenderRasterRegion(It.IsAny<string>(), It.IsAny<double[]>(), It.IsAny<string>(),
-            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int[]?>(), It.IsAny<string?>()), Times.Never);
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(),
+            It.IsAny<int[]?>(), It.IsAny<string?>(), It.IsAny<uint?>()), Times.Never);
     }
 
     [Test]
@@ -200,7 +202,7 @@ public class OgcUnbuiltRasterTests
         (await GetMap("built.tif")).ShouldBe(RenderedPng);
 
         _wrapper.Verify(w => w.RenderRasterRegion(BuiltCog, It.IsAny<double[]>(), "EPSG:3857", 1024, 768, "image/png",
-            It.IsAny<int[]?>(), It.IsAny<string?>()), Times.Once);
+            It.IsAny<int[]?>(), It.IsAny<string?>(), It.IsAny<uint?>()), Times.Once);
     }
 
     [Test]

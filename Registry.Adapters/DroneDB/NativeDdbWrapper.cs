@@ -942,35 +942,61 @@ public class NativeDdbWrapper : IDdbWrapper
 
     // ---------------------------------------------------------------- OGC
 
+    // The format of libddb that is the pixels of a render instead of an encoded image
+    private const string RgbaPixels = "rgba";
+
     public byte[] RenderRasterRegion(string inputPath, double[] bbox, string bboxSrs,
                                      int width, int height, string format,
-                                     int[]? bands = null, string? outputCrs = null)
+                                     int[]? bands = null, string? outputCrs = null, uint? background = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(format);
+        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBRenderRasterRegionEx2),
+            RegionCall(inputPath, bbox, bboxSrs, width, height, format, bands, outputCrs, background));
+    }
+
+    public byte[] RenderRasterIndex(string inputPath, string indexName, double[] bbox,
+                                    string bboxSrs, int width, int height, string format, uint? background = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(format);
+        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBRenderRasterIndexEx),
+            IndexCall(inputPath, indexName, bbox, bboxSrs, width, height, format, background));
+    }
+
+    public void RenderRasterRegionPixels(string inputPath, double[] bbox, string bboxSrs, int width, int height,
+                                         RasterPixelsReader read) =>
+        NativeCall.InvokePixels(nameof(NativeDdb.DDBRenderRasterRegionEx2),
+            RegionCall(inputPath, bbox, bboxSrs, width, height, RgbaPixels, null, null, null), width, height, read);
+
+    public void RenderRasterIndexPixels(string inputPath, string indexName, double[] bbox, string bboxSrs, int width,
+                                        int height, RasterPixelsReader read) =>
+        NativeCall.InvokePixels(nameof(NativeDdb.DDBRenderRasterIndexEx),
+            IndexCall(inputPath, indexName, bbox, bboxSrs, width, height, RgbaPixels, null), width, height, read);
+
+    // The region render of every caller (the encoded image and the pixels): the Ex2 entry point, so the OGC WCS
+    // callers (band subset, output CRS) and WMS (background, pixels) share one path
+    private static NativeCall.BufferCall RegionCall(string inputPath, double[] bbox, string bboxSrs, int width,
+        int height, string format, int[]? bands, string? outputCrs, uint? background)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputPath);
         RequireBbox(bbox);
         RequireSize(width, height);
-        ArgumentException.ThrowIfNullOrWhiteSpace(format);
-
-        // Always the Ex entry point, so legacy and OGC WCS callers (band subset, output CRS) share one path
         var bandArray = bands ?? [];
-        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBRenderRasterRegionEx),
-            (out IntPtr buffer, out int length) => NativeDdb.DDBRenderRasterRegionEx(inputPath, bbox,
-                bboxSrs ?? string.Empty, outputCrs ?? string.Empty, bandArray, bandArray.Length, width, height,
-                format, out buffer, out length));
+        var options = DdbRenderOptions.Create(background);
+        return (out IntPtr buffer, out int length) => NativeDdb.DDBRenderRasterRegionEx2(inputPath, bbox,
+            bboxSrs ?? string.Empty, outputCrs ?? string.Empty, bandArray, bandArray.Length, width, height, format,
+            in options, out buffer, out length);
     }
 
-    public byte[] RenderRasterIndex(string inputPath, string indexName, double[] bbox,
-                                    string bboxSrs, int width, int height, string format)
+    private static NativeCall.BufferCall IndexCall(string inputPath, string indexName, double[] bbox, string bboxSrs,
+        int width, int height, string format, uint? background)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(indexName);
         RequireBbox(bbox);
         RequireSize(width, height);
-        ArgumentException.ThrowIfNullOrWhiteSpace(format);
-
-        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBRenderRasterIndex),
-            (out IntPtr buffer, out int length) => NativeDdb.DDBRenderRasterIndex(inputPath, indexName, bbox,
-                bboxSrs ?? string.Empty, width, height, format, out buffer, out length));
+        var options = DdbRenderOptions.Create(background);
+        return (out IntPtr buffer, out int length) => NativeDdb.DDBRenderRasterIndexEx(inputPath, indexName, bbox,
+            bboxSrs ?? string.Empty, width, height, format, in options, out buffer, out length);
     }
 
     public string QueryRasterPoint(string inputPath, double x, double y, string? srs = null)
