@@ -11,6 +11,7 @@ using System.Xml;
 using Microsoft.Extensions.Logging;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
+using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities.Ogc;
 
@@ -270,8 +271,8 @@ public class WmtsManager : OgcManagerBase
         var wantJpeg = string.Equals(format, "image/jpeg", StringComparison.OrdinalIgnoreCase);
         try
         {
-            return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer, cog, z, x, y, wantJpeg ? "jpeg" : "png",
-                ct);
+            return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer, cog, z, x, y,
+                wantJpeg ? TileFormat.Jpeg : TileFormat.Png, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

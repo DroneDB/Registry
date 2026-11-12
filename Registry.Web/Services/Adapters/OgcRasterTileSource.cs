@@ -1,18 +1,18 @@
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models.DTO.Ogc;
+using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Serves OGC raster tiles through the cache of the Registry tile endpoint
-/// (<see cref="MagicStrings.TileCacheSeed"/>, dataset category): concurrent requests for a tile
-/// render it once, entries expire with the other tiles and a dataset invalidation clears them.
-/// The format is part of the key: the tile endpoint caches one entry per format too.
+/// Serves OGC raster tiles through the cache of the Registry tile endpoint (<see cref="PlainTileCache"/>, dataset
+/// category): concurrent requests for a tile render it once, entries expire with the other tiles and a dataset
+/// invalidation clears them. A tile asked through an OGC service and through the tile endpoint is one entry: the
+/// same hash, tile, retina flag (false: OGC tiles are 256 px) and media type.
 /// </summary>
 public class OgcRasterTileSource : IOgcRasterTileSource
 {
@@ -26,13 +26,7 @@ public class OgcRasterTileSource : IOgcRasterTileSource
     }
 
     public Task<byte[]> GetTileAsync(string orgSlug, string dsSlug, IDDB ddb, OgcLayerDto layer, string cogPath,
-        int z, int x, int y, string outputFormat, CancellationToken ct = default)
-    {
-        // The render runs with the cache flight's token: it stops when every request for the tile has gone
-        return _cacheManager.GetAsync(MagicStrings.TileCacheSeed, CacheCategories.ForDataset(orgSlug, dsSlug), ct,
-            layer.EntryHash, x, y, z, false, outputFormat,
-            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles, () => ddb.GenerateTile(
-                cogPath, z, x, y, retina: false, inputPathHash: layer.EntryHash, outputFormat: outputFormat),
-                token)));
-    }
+        int z, int x, int y, TileFormat format, CancellationToken ct = default) =>
+        PlainTileCache.GetAsync(_cacheManager, _gate, orgSlug, dsSlug, ddb, cogPath, layer.EntryHash, z, x, y,
+            retina: false, format, ct);
 }

@@ -23,6 +23,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 using Shouldly;
+using Registry.Web.Services.Objects;
 
 namespace Registry.Web.Test.Baselines;
 
@@ -159,7 +160,7 @@ public sealed class CancellationResponseTests
         var log = new CapturingLogger<WmtsManager>();
         var tiles = new Mock<IOgcRasterTileSource>();
         tiles.Setup(t => t.GetTileAsync(Org, Ds, It.IsAny<IDDB>(), It.IsAny<OgcLayerDto>(), It.IsAny<string>(), 3, 1,
-                2, "png", It.IsAny<CancellationToken>()))
+                2, TileFormat.Png, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new DdbCanceledException("Canceled by the cancel token"));
         var wmts = new WmtsManager(OgcDependencies(), log, tiles.Object);
 

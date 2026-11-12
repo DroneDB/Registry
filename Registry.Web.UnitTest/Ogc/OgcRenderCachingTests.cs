@@ -18,6 +18,9 @@ using Registry.Adapters.Testing;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
+using Registry.Web.Data;
+using Registry.Web.Models;
+using Registry.Web.Services.Objects;
 using Registry.Web.Models.DTO.Ogc;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
@@ -210,12 +213,94 @@ public class OgcRenderCachingTests
         _ddb.Setup(d => d.GenerateTile(cog, 18, 5, 7, false, "h1", "png")).Returns(RenderedPng);
         var source = new OgcRasterTileSource(_cacheManager);
 
-        (await source.GetTileAsync(Org, Ds, _ddb.Object, layer, cog, 18, 5, 7, "png")).ShouldBe(RenderedPng);
-        (await source.GetTileAsync(Org, Ds, _ddb.Object, layer, cog, 18, 5, 7, "png")).ShouldBe(RenderedPng);
+        (await source.GetTileAsync(Org, Ds, _ddb.Object, layer, cog, 18, 5, 7, TileFormat.Png)).ShouldBe(RenderedPng);
+        (await source.GetTileAsync(Org, Ds, _ddb.Object, layer, cog, 18, 5, 7, TileFormat.Png)).ShouldBe(RenderedPng);
 
         _ddb.Verify(d => d.GenerateTile(cog, 18, 5, 7, false, "h1", "png"), Times.Once);
         // Stored under the tile seed and the dataset category, so dataset invalidation clears it
-        (await _cache.GetAsync($":{MagicStrings.TileCacheSeed}:{Org}/{Ds}:h1-5-7-18-False-png")).ShouldBe(RenderedPng);
+        (await _cache.GetAsync(TileKey("h1", 18, 5, 7, false, TileFormat.Png))).ShouldBe(RenderedPng);
+    }
+
+    // The key of a plain tile in the shared tile cache: hash, x, y, z, retina, media type
+    private static string TileKey(string hash, int z, int x, int y, bool retina, TileFormat format) =>
+        $":{MagicStrings.TileCacheSeed}:{Org}/{Ds}:{hash}-{x}-{y}-{z}-{retina}-{format.MediaType}";
+
+    private static readonly OgcLayerDto OrthoLayer =
+        new() { Name = "ortho", EntryType = EntryType.GeoRaster, EntryPath = "ortho.tif", EntryHash = "h1" };
+
+    // What the tile endpoint resolves for the same entry: its hash and the COG of its build, relative to the dataset
+    private ReadableObject OrthoObject() =>
+        new(Org, Ds, "ortho.tif", "h1", ".ddb/build/h1/cog/cog.tif", _ddb.Object);
+
+    private IObjectRenderService Renders() =>
+        new ObjectServicesBuilder(TestDb.CreateContext<RegistryContext>()).WithCacheManager(_cacheManager).Build().Renders;
+
+    private void RenderAnyPlainTile() =>
+        _ddb.Setup(d => d.GenerateTile(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(),
+            It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>())).Returns(RenderedPng);
+
+    private int PlainTileRenders() => _ddb.Invocations.Count(i => i.Method.Name == nameof(IDDB.GenerateTile));
+
+    // The tile endpoint and the OGC services (WMTS, OGC API Tiles) number the rows of a tile alike (from the top) and
+    // pass them to libddb unchanged: the same tile asked through both is one cache entry and one render, at the
+    // corners of a zoom level too
+    [TestCase(0, 0, 0, "png")]
+    [TestCase(1, 0, 1, "png")]
+    [TestCase(1, 1, 0, "jpg")]
+    [TestCase(18, 5, 7, "png")]
+    [TestCase(18, 262143, 262143, "jpg")]
+    [TestCase(18, 0, 262143, "png")]
+    public async Task APlainTile_ThroughTheTileEndpointAndAnOgcService_IsRenderedAndCachedOnce(int z, int x, int y,
+        string extension)
+    {
+        var format = TileFormat.FromExtension(extension);
+        RenderAnyPlainTile();
+
+        var endpoint = await Renders().GenerateTileDataAsync(OrthoObject(), z, x, y, retina: false, format);
+        var ogc = await new OgcRasterTileSource(_cacheManager).GetTileAsync(Org, Ds, _ddb.Object, OrthoLayer,
+            "/data/ortho-cog.tif", z, x, y, format);
+
+        ogc.ShouldBe(endpoint.Data);
+        PlainTileRenders().ShouldBe(1);
+        _ddb.Verify(d => d.GenerateTile(It.IsAny<string>(), z, x, y, false, "h1", format.DdbName), Times.Once);
+        (await _cache.GetAsync(TileKey("h1", z, x, y, false, format))).ShouldBe(RenderedPng);
+    }
+
+    [Test]
+    public async Task APlainTile_ThroughAnOgcServiceFirst_IsServedToTheTileEndpointFromTheCache()
+    {
+        RenderAnyPlainTile();
+
+        await new OgcRasterTileSource(_cacheManager).GetTileAsync(Org, Ds, _ddb.Object, OrthoLayer,
+            "/data/ortho-cog.tif", 18, 5, 7, TileFormat.Jpeg);
+        var endpoint = await Renders().GenerateTileDataAsync(OrthoObject(), 18, 5, 7, retina: false, TileFormat.Jpeg);
+
+        endpoint.Data.ShouldBe(RenderedPng);
+        endpoint.ContentType.ShouldBe("image/jpeg");
+        PlainTileRenders().ShouldBe(1);
+    }
+
+    // What the key keeps apart stays apart: a retina tile (512 px, which no OGC service asks for), another format, the
+    // other row of the same column (no flip of the row makes two tiles one)
+    [Test]
+    public async Task TilesThatDiffer_InRetina_FormatOrRow_AreSeparateEntries()
+    {
+        RenderAnyPlainTile();
+        var renders = Renders();
+        var ogc = new OgcRasterTileSource(_cacheManager);
+
+        await ogc.GetTileAsync(Org, Ds, _ddb.Object, OrthoLayer, "/data/ortho-cog.tif", 1, 0, 0, TileFormat.Png);
+        await renders.GenerateTileDataAsync(OrthoObject(), 1, 0, 0, retina: true, TileFormat.Png);
+        await ogc.GetTileAsync(Org, Ds, _ddb.Object, OrthoLayer, "/data/ortho-cog.tif", 1, 0, 0, TileFormat.Jpeg);
+        await renders.GenerateTileDataAsync(OrthoObject(), 1, 0, 1, retina: false, TileFormat.Png);
+
+        PlainTileRenders().ShouldBe(4);
+        foreach (var (y, retina, format) in new[]
+                 {
+                     (0, false, TileFormat.Png), (0, true, TileFormat.Png), (0, false, TileFormat.Jpeg),
+                     (1, false, TileFormat.Png)
+                 })
+            (await _cache.GetAsync(TileKey("h1", 1, 0, y, retina, format))).ShouldNotBeNull();
     }
 
     [Test]
