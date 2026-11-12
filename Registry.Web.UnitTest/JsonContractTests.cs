@@ -51,6 +51,7 @@ public sealed class JsonContractTests
     private static readonly HashSet<string> Excluded =
     [
         "Registry.Web.Models.DTO.FileStreamDescriptor", "Registry.Web.Models.DTO.StreamableFileDescriptor",
+        "Registry.Web.Models.StorageStreamDto",
         "Registry.Web.Models.DTO.TagConverter", "Registry.Web.Models.ControllerBaseEx", "Registry.Web.Models.JwtDescriptor",
         "Registry.Web.Models.DatasetScope", "Registry.Web.Models.ReadableObject", "Registry.Web.Models.DatasetListQuery",
         "Registry.Web.Models.IndexPayload", "Registry.Web.Models.RescanFilter", "Registry.Web.Models.DTO.IsBatchReadyResult",
