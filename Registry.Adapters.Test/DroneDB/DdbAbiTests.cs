@@ -6,32 +6,34 @@ namespace Registry.Adapters.Test.DroneDB;
 
 /// <summary>
 /// The ABI rule of the startup handshake. DroneDB has one version and the ABI follows it, so
-/// Registry runs on libddb 2.x from 2.4 (ABI major 2, minor at least 4: every export it calls) and refuses a 1.x,
-/// 2.0 or any 2.x before 2.4 (the 2.3 builds included) with a message that says which library it needs.
+/// Registry runs on libddb 2.x from 2.5 (ABI major 2, minor at least 5: every export it calls) and refuses a 1.x,
+/// 2.0 or any 2.x before 2.5 (the 2.4 builds included, which have no visualization tile in a chosen format) with a
+/// message that says which library it needs.
 /// </summary>
 [TestFixture]
 public class DdbAbiTests
 {
     private static uint Abi(int major, int minor) => (uint)((major << 16) | minor);
 
-    [TestCase(2, 4)]
     [TestCase(2, 5)]
+    [TestCase(2, 6)]
     [TestCase(2, 17)]
-    public void RequireAbi_AcceptsLibddb2x_From24(int major, int minor)
+    public void RequireAbi_AcceptsLibddb2x_From25(int major, int minor)
     {
-        DdbAbi.RequireAbi("2.4.0", Abi(major, minor)).ShouldBe((major, minor));
+        DdbAbi.RequireAbi("2.5.0", Abi(major, minor)).ShouldBe((major, minor));
     }
 
     [TestCase("2.0.1", 0)]
     [TestCase("2.1.0", 1)]
     [TestCase("2.2.0", 2)]
     [TestCase("2.3.0", 3)]
+    [TestCase("2.4.1", 4)]
     public void RequireAbi_RejectsAnOlderMinor_NamingTheMinorItNeeds(string version, int minor)
     {
         var ex = Should.Throw<DdbAbiMismatchException>(() => DdbAbi.RequireAbi(version, Abi(2, minor)));
 
         ex.Message.ShouldContain($"libddb {version} has ABI 2.{minor}");
-        ex.Message.ShouldContain("(ABI 2.x with x >= 4)");
+        ex.Message.ShouldContain("(ABI 2.x with x >= 5)");
     }
 
     [TestCase(1, 0)]
@@ -52,8 +54,8 @@ public class DdbAbiTests
     public void Decode_SplitsMajorAndMinor()
     {
         DdbAbi.Decode(Abi(2, 0)).ShouldBe((2, 0));
-        DdbAbi.Decode(Abi(2, 4)).ShouldBe((2, 4));
+        DdbAbi.Decode(Abi(2, 5)).ShouldBe((2, 5));
         DdbAbi.Major.ShouldBe(2);
-        DdbAbi.Minor.ShouldBe(4);
+        DdbAbi.Minor.ShouldBe(5);
     }
 }

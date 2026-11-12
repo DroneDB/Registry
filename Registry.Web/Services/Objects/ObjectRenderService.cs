@@ -133,14 +133,14 @@ public sealed class ObjectRenderService : IObjectRenderService
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
         var v = Checked(visualization);
 
-        // libddb renders a visualization tile as a PNG: the other formats are encoded from it
+        // libddb encodes the visualization tile once in the format asked for, so its bytes are served (and cached
+        // under that format) as they come, without a decode and a second encode here
         return await CachedTileAsync(ty, format, () => _cache.GetAsync(MagicStrings.TileCacheSeed,
             ForDataset(orgSlug, dsSlug), ct, source.Entry.FileHash(), tx, ty, tz, retina, v.CacheKey, format.MediaType,
-            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles, () => (v.Options is null
-                ? source.Ddb.GenerateTileEx(source.SourcePath, tz, tx, ty, retina, source.Entry.FileHash(), v.Preset,
-                    v.Bands, v.Formula, v.BandFilter, v.Colormap, v.Rescale)
-                : source.Ddb.GenerateTileEx(source.SourcePath, tz, tx, ty, retina, source.Entry.FileHash(), v.Preset,
-                    v.Bands, v.Formula, v.BandFilter, v.Colormap, v.Rescale, v.Options)).InFormat(format), token))));
+            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles,
+                () => source.Ddb.GenerateTileEx(source.SourcePath, tz, tx, ty, retina, source.Entry.FileHash(),
+                    v.Preset, v.Bands, v.Formula, v.BandFilter, v.Colormap, v.Rescale, v.Options, format.DdbName),
+                token))));
     }
 
     // The NoData value is a finite number and the unit of the rescale one libddb knows (400s), before any native work

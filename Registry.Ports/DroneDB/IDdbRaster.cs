@@ -48,27 +48,14 @@ public interface IDdbRaster
         string? bandFilter, string? colormap, string? rescale, RasterAnalysisOptions? options);
 
     /// <summary>
-    /// Generate tile with extended visualization params
-    /// </summary>
-    byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
-        string? preset = null, string? bands = null, string? formula = null,
-        string? bandFilter = null, string? colormap = null, string? rescale = null);
-
-    /// <summary>
-    /// Generate tile with extended visualization params and a NoData value that replaces the one of the bands
-    /// (FR-RAS-31).
+    /// Generate a tile with extended visualization params and the options of the render: the NoData value and the unit
+    /// of the rescale of a thermal formula (<see cref="RasterAnalysisOptions.RescaleUnit"/>), null for none. libddb
+    /// encodes the tile once in <paramref name="format"/> (<c>png</c>, <c>jpeg</c>, <c>webp</c>, as
+    /// <see cref="GenerateTile"/> takes it), so the bytes are served as they come.
     /// </summary>
     byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
         string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
-        double? nodata);
-
-    /// <summary>
-    /// Generate tile with extended visualization params and the options of the render: the NoData value (FR-RAS-31)
-    /// and the unit of the rescale of a thermal formula (<see cref="RasterAnalysisOptions.RescaleUnit"/>, D-022).
-    /// </summary>
-    byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
-        string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
-        RasterAnalysisOptions? options);
+        RasterAnalysisOptions? options, string format);
 
     /// <summary>
     /// Validate merge-multispectral inputs

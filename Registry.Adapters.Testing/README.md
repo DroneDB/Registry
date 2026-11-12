@@ -178,3 +178,11 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   area statistics and the thermal fallbacks read the raster in windows, so a large raster no longer exhausts the
   memory; the raw thermal data of a GDAL raster of more than 4 megapixels is refused). No export, schema, fixture or
   vector changed and no adapter change.
+* 2026-11-12: DroneDB `58f75a0a95899ab7b97f9629f7c6633f9ded0893` (libddb 2.5.0, ABI 2.5, a local commit of DroneDB
+  that is not released yet: vendor again from the v2.5.0 release commit before this merges). Since `cbc4bff`:
+  `capabilities` has `abi.minor` 5 and lists `DDBMemoryTileEx3` in `symbols` and `cancellable`, and
+  `Contract/README.md` has a 2.5.0 entry. `DDBMemoryTileEx3` is `DDBMemoryTileEx2` with an `outputFormat`, so the
+  visualization tile is encoded once by libddb in the format the tile URL asks for; Registry calls it for every
+  tiles-ex tile (`NativeDdbWrapper.GenerateMemoryTileEx`) instead of `DDBMemoryTileEx` and `DDBMemoryTileEx2`, which
+  it no longer declares, and no longer decodes a PNG to encode it again. `DdbAbi.Minor` is 5. No schema, other fixture
+  or vector changed.

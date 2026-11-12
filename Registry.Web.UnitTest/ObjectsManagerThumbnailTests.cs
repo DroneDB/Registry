@@ -668,9 +668,9 @@ public class ObjectsManagerThumbnailTests : TestBase
         SetupEntry("thermal.jpg", EntryType.GeoImage, "rjpeg1");
         RasterAnalysisOptions? sent = null;
         _ddbMock.Setup(x => x.GenerateTileEx("thermal.jpg", 18, 1, 2, false, "rjpeg1", null, null, "KELVIN", null,
-                "ironbow", "7,37", It.IsAny<RasterAnalysisOptions?>()))
+                "ironbow", "7,37", It.IsAny<RasterAnalysisOptions?>(), "png"))
             .Callback((string _, int _, int _, int _, bool _, string _, string? _, string? _, string? _, string? _,
-                string? _, string? _, RasterAnalysisOptions? o) => sent = o)
+                string? _, string? _, RasterAnalysisOptions? o, string _) => sent = o)
             .Returns(PngBytes());
 
         await CreateManager().Renders.GenerateTileDataExAsync(OrgSlug, DsSlug, "thermal.jpg", 18,

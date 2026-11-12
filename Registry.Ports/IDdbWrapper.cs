@@ -243,30 +243,14 @@ public interface IDdbWrapper
         string? bandFilter, string? colormap, string? rescale, Registry.Ports.DroneDB.RasterAnalysisOptions? options);
 
     /// <summary>
-    /// Generate tile with extended visualization params and a NoData value that replaces the one of the bands
-    /// (FR-RAS-31)
+    /// Generate a tile with extended visualization params and the options of the render (the NoData value and the unit
+    /// of the rescale of a thermal formula; null for none), encoded once by libddb in <paramref name="outputFormat"/>
+    /// (<c>png</c>, <c>jpeg</c>, <c>webp</c>), so the bytes are served as they come.
     /// </summary>
     public byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
         int tileSize, bool tms, bool forceRecreate, string inputPathHash,
         string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
-        double? nodata);
-
-    /// <summary>
-    /// Generate tile with extended visualization params and the options of the render: the NoData value (FR-RAS-31) and,
-    /// the unit of the rescale of a thermal formula (D-022)
-    /// </summary>
-    public byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
-        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
-        string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
-        Registry.Ports.DroneDB.RasterAnalysisOptions? options);
-
-    /// <summary>
-    /// Generate tile with extended visualization params
-    /// </summary>
-    public byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
-        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
-        string? preset = null, string? bands = null, string? formula = null,
-        string? bandFilter = null, string? colormap = null, string? rescale = null);
+        Registry.Ports.DroneDB.RasterAnalysisOptions? options, string outputFormat);
 
     /// <summary>
     /// Validate merge-multispectral inputs

@@ -486,6 +486,35 @@ public class NativeDdbWrapperTests : TestBase
             System.Text.Encoding.ASCII.GetString(buffer, 8, 4).ShouldBe("WEBP");
     }
 
+    // A visualization tile (DDBMemoryTileEx3) is encoded by libddb in the format asked for, with or without the options
+    // of the render: the tiles-ex endpoints serve these bytes as they come, without encoding them again
+    [TestCase("png", new byte[] { 0x89, 0x50, 0x4E, 0x47 })]
+    [TestCase("jpeg", new byte[] { 0xFF, 0xD8 })]
+    [TestCase("webp", new byte[] { (byte)'R', (byte)'I', (byte)'F', (byte)'F' })]
+    public void GenerateMemoryTileEx_InTheFormatAsked_IsThatFormat(string format, byte[] signature)
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+
+        foreach (var options in new[] { null, new RasterAnalysisOptions(Nodata: 0) })
+        {
+            var buffer = DdbWrapper.GenerateMemoryTileEx(tempFile.FilePath, 18, 64083, 92370, 256, true, false, "",
+                null, "1,2,3", null, null, null, null, options, format);
+
+            buffer.Take(signature.Length).ShouldBe(signature);
+            if (format == "webp")
+                System.Text.Encoding.ASCII.GetString(buffer, 8, 4).ShouldBe("WEBP");
+        }
+    }
+
+    [Test]
+    public void GenerateMemoryTileEx_InAFormatLibddbDoesNotEncode_IsAnArgumentError()
+    {
+        using var tempFile = new TempFile(TestGeoTiffUrl, BaseTestFolder);
+
+        Should.Throw<DdbInvalidArgumentsException>(() => DdbWrapper.GenerateMemoryTileEx(tempFile.FilePath, 18, 64083,
+            92370, 256, true, false, "", null, "1,2,3", null, null, null, null, null, "bmp"));
+    }
+
     [Test]
     public void Stamp_HappyPath_Ok()
     {

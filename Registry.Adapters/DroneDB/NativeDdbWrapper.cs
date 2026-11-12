@@ -488,18 +488,6 @@ public class NativeDdbWrapper : IDdbWrapper
                 out length, tileSize, tms, forceRecreate, inputPathHash ?? string.Empty, outputFormat ?? "png"));
     }
 
-    public byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
-        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
-        string? preset = null, string? bands = null, string? formula = null,
-        string? bandFilter = null, string? colormap = null, string? rescale = null)
-    {
-        ArgumentNullException.ThrowIfNull(inputPath);
-        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBMemoryTileEx),
-            (out IntPtr buffer, out int length) => NativeDdb.DDBMemoryTileEx(inputPath, tz, tx, ty, tileSize, tms,
-                forceRecreate, inputPathHash ?? string.Empty, preset, bands, formula, bandFilter, colormap, rescale,
-                out buffer, out length));
-    }
-
     public byte[] GenerateThumbnailEx(string filePath, int size, string? preset, string? bands, string? formula,
         string? bandFilter, string? colormap, string? rescale, double? nodata) =>
         GenerateThumbnailEx(filePath, size, preset, bands, formula, bandFilter, colormap, rescale,
@@ -524,29 +512,23 @@ public class NativeDdbWrapper : IDdbWrapper
             $"file: '{filePath}', size: {size}");
     }
 
-    public byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
-        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
-        string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
-        double? nodata) =>
-        GenerateMemoryTileEx(inputPath, tz, tx, ty, tileSize, tms, forceRecreate, inputPathHash, preset, bands, formula,
-            bandFilter, colormap, rescale, new RasterAnalysisOptions(nodata));
-
     /// <summary>
-    /// <c>DDBMemoryTileEx2</c> with the options of a render: the NoData value and the unit of the rescale (ABI 2.4). The
-    /// formula of the render is the argument; the formula and the window of the options are not sent.
+    /// <c>DDBMemoryTileEx3</c> with the options of a render: the NoData value and the unit of the rescale, and the tile
+    /// encoded once by libddb in <paramref name="outputFormat"/> (ABI 2.5). The formula of the render is the argument;
+    /// the formula and the window of the options are not sent. Null options send no options pointer.
     /// </summary>
     public unsafe byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
         int tileSize, bool tms, bool forceRecreate, string inputPathHash,
         string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
-        RasterAnalysisOptions? options)
+        RasterAnalysisOptions? options, string outputFormat)
     {
         ArgumentNullException.ThrowIfNull(inputPath);
         using var nativeOptions = RenderOptions(options);
         var native = nativeOptions.Pointer;
-        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBMemoryTileEx2),
-            (out IntPtr buffer, out int length) => NativeDdb.DDBMemoryTileEx2(inputPath, tz, tx, ty, tileSize, tms,
+        return NativeCall.InvokeBuffer(nameof(NativeDdb.DDBMemoryTileEx3),
+            (out IntPtr buffer, out int length) => NativeDdb.DDBMemoryTileEx3(inputPath, tz, tx, ty, tileSize, tms,
                 forceRecreate, inputPathHash ?? string.Empty, preset, bands, formula, bandFilter, colormap, rescale,
-                native, out buffer, out length));
+                native, outputFormat ?? "png", out buffer, out length));
     }
 
     // The options a tile or a thumbnail takes: the NoData value and the unit of the rescale

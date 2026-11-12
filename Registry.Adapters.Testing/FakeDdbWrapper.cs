@@ -407,17 +407,7 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
         int tileSize, bool tms, bool forceRecreate, string inputPathHash,
         string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
-        double? nodata) => throw Unsupported();
-
-    public virtual byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
-        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
-        string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
-        RasterAnalysisOptions? options) => throw Unsupported();
-
-    public virtual byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
-        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
-        string? preset = null, string? bands = null, string? formula = null,
-        string? bandFilter = null, string? colormap = null, string? rescale = null) => throw Unsupported();
+        RasterAnalysisOptions? options, string outputFormat) => throw Unsupported();
 
     public virtual string ValidateMergeMultispectral(string[] paths) => throw Unsupported();
 

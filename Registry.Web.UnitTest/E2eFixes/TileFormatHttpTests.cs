@@ -21,9 +21,10 @@ namespace Registry.Web.Test.E2eFixes;
 /// End-to-end check: <c>GET tiles/{z}/{x}/{y}.png</c> answered WebP
 /// bytes (<c>image/webp</c>, a <c>.webp</c> download name): the render service hardcoded the format. The
 /// extension of the URL chooses the format now (<c>.png</c> a real PNG, <c>.webp</c> WebP, <c>.jpg</c> JPEG), the
-/// <c>Content-Type</c> and the file name match the bytes, libddb's format-aware export renders them
-/// (<c>DDBMemoryTileFmt</c>; the visualization tiles, which libddb renders as PNG, are encoded in the format
-/// asked for) and the format is part of the cache key and of the ETag, so a PNG is never served for a WebP.
+/// <c>Content-Type</c> and the file name match the bytes, libddb's format-aware exports encode them once
+/// (<c>DDBMemoryTileFmt</c> for a plain tile, <c>DDBMemoryTileEx3</c> for a visualization tile, whose bytes Registry
+/// serves as they come, without a decode and a second encode) and the format is part of the cache key and of the
+/// ETag, so a PNG is never served for a WebP.
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~TileFormatHttpTests"
 /// </summary>
 [TestFixture]
@@ -73,31 +74,37 @@ public sealed class TileFormatHttpTests : IDisposable
     public void SetUp()
     {
         _factory.DdbWrapper.Invocations.Clear();
-        // libddb renders the format it is asked for: the bytes say which
+        // libddb encodes the format it is asked for: the bytes say which
         _factory.DdbWrapper.Setup(d => d.GenerateMemoryTile(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string>(),
                 It.IsAny<string>()))
             .Returns((string _, int _, int _, int _, int _, bool _, bool _, string _, string format) =>
-                format switch
-                {
-                    "png" => [.. PngSignature, 1],
-                    "webp" => "RIFF\0\0\0\0WEBP"u8.ToArray(),
-                    "jpeg" => [.. JpegSignature, 2],
-                    _ => throw new DdbException($"Unsupported image format: {format}")
-                });
+                Encoded(format, PlainMarker));
         _factory.DdbWrapper.Setup(d => d.GenerateMemoryTileEx(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(),
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string>(),
                 It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<string?>()))
-            .Returns(() => SolidPng());
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<RasterAnalysisOptions?>(), It.IsAny<string>()))
+            .Returns((string _, int _, int _, int _, int _, bool _, bool _, string _, string? _, string? _, string? _,
+                string? _, string? _, string? _, RasterAnalysisOptions? _, string format) =>
+                Encoded(format, VisualizationMarker));
     }
 
-    private static byte[] SolidPng()
+    private const string PlainMarker = "plain tile";
+    private const string VisualizationMarker = "visualization tile";
+
+    // What the fake libddb returns for a format: its signature and a marker, which no image decoder reads, so a
+    // response with exactly these bytes was served as libddb encoded it (a decode and a second encode would fail or
+    // give other bytes)
+    private static byte[] Encoded(string format, string marker)
     {
-        using var bitmap = new SKBitmap(8, 8);
-        bitmap.Erase(SKColors.CornflowerBlue);
-        using var image = SKImage.FromBitmap(bitmap);
-        return image.Encode(SKEncodedImageFormat.Png, 100).ToArray();
+        var tail = System.Text.Encoding.ASCII.GetBytes(marker);
+        return format switch
+        {
+            "png" => [.. PngSignature, .. tail],
+            "webp" => [.. "RIFF\0\0\0\0WEBP"u8, .. tail],
+            "jpeg" => [.. JpegSignature, .. tail],
+            _ => throw new DdbException($"Unsupported image format: {format}")
+        };
     }
 
     private async Task<HttpResponseMessage> GetAsync(string url)
@@ -162,10 +169,11 @@ public sealed class TileFormatHttpTests : IDisposable
             It.IsAny<string>()), Times.Never);
     }
 
-    [TestCase("png", "image/png", 6)]
-    [TestCase("webp", "image/webp", 7)]
-    [TestCase("jpg", "image/jpeg", 8)]
-    public async Task VisualizationTile_IsEncodedInTheFormatOfItsExtension(string extension, string mediaType, int row)
+    [TestCase("png", "image/png", "png", 6)]
+    [TestCase("webp", "image/webp", "webp", 7)]
+    [TestCase("jpg", "image/jpeg", "jpeg", 8)]
+    public async Task VisualizationTile_IsTheBytesLibddbEncodedInTheFormatOfItsExtension(string extension,
+        string mediaType, string ddbFormat, int row)
     {
         using var response = await GetAsync(
             $"/orgs/{Org}/ds/{Ds}/tiles-ex/18/4/{row}.{extension}?path={Raster}&colormap=viridis");
@@ -173,7 +181,42 @@ public sealed class TileFormatHttpTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         response.Content.Headers.ContentType!.MediaType.ShouldBe(mediaType);
         response.Content.Headers.ContentDisposition!.FileName.ShouldBe($"{row}.{extension}");
-        ShouldBeLike(await response.Content.ReadAsByteArrayAsync(), extension);
+        // Byte for byte what libddb returned: Registry asks libddb for the format and does not encode the tile again
+        (await response.Content.ReadAsByteArrayAsync()).ShouldBe(Encoded(ddbFormat, VisualizationMarker));
+        _factory.DdbWrapper.Verify(d => d.GenerateMemoryTileEx(It.IsAny<string>(), 18, 4, row, It.IsAny<int>(),
+            It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(),
+            It.IsAny<string?>(), It.IsAny<string?>(), "viridis", It.IsAny<string?>(), It.IsAny<RasterAnalysisOptions?>(),
+            ddbFormat), Times.Once);
+    }
+
+    // The premise of the test above: the bytes the fake libddb returns are not an image, so serving them unchanged is
+    // the only way to answer 200 with them
+    [TestCase("png")]
+    [TestCase("webp")]
+    [TestCase("jpeg")]
+    public void TheFakeLibddbTile_IsNotADecodableImage(string format)
+    {
+        using var data = SKData.CreateCopy(Encoded(format, VisualizationMarker));
+        SKCodec.Create(data).ShouldBeNull("no image codec reads the bytes");
+    }
+
+    [Test]
+    public async Task VisualizationTile_TheFormatIsPartOfTheCacheKey()
+    {
+        var url = $"/orgs/{Org}/ds/{Ds}/tiles-ex/19/8/10";
+
+        using var png = await GetAsync($"{url}.png?path={Raster}&colormap=viridis");
+        using var webp = await GetAsync($"{url}.webp?path={Raster}&colormap=viridis");
+        using var pngAgain = await GetAsync($"{url}.png?path={Raster}&colormap=viridis");
+
+        (await png.Content.ReadAsByteArrayAsync()).ShouldBe(Encoded("png", VisualizationMarker));
+        (await webp.Content.ReadAsByteArrayAsync()).ShouldBe(Encoded("webp", VisualizationMarker));
+        (await pngAgain.Content.ReadAsByteArrayAsync()).ShouldBe(Encoded("png", VisualizationMarker));
+        foreach (var format in new[] { "png", "webp" })
+            _factory.DdbWrapper.Verify(d => d.GenerateMemoryTileEx(It.IsAny<string>(), 19, 8, 10, It.IsAny<int>(),
+                It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<RasterAnalysisOptions?>(), format), Times.Once, $"one {format} render; the second PNG is a cache hit");
     }
 
     // FR-RAS-10: a rescale that is not "min,max" with min below max is a 400 at the rescale member, not a failure of the
@@ -199,7 +242,8 @@ public sealed class TileFormatHttpTests : IDisposable
         _factory.DdbWrapper.Verify(d => d.GenerateMemoryTileEx(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(),
             It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string>(),
             It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
-            It.IsAny<string?>(), It.IsAny<string?>()), Times.Never);
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<RasterAnalysisOptions?>(), It.IsAny<string>()),
+            Times.Never);
     }
 
     [TestCase("0,255")]
