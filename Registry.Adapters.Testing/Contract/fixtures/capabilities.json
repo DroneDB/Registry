@@ -10,7 +10,7 @@
   "output": {
     "abi": {
       "major": 2,
-      "minor": 4
+      "minor": 6
     },
     "cancellable": [
       "DDBApplyDelta",
@@ -50,10 +50,13 @@
       "DDBMemoryTile",
       "DDBMemoryTileEx",
       "DDBMemoryTileEx2",
+      "DDBMemoryTileEx3",
       "DDBMemoryTileFmt",
       "DDBRenderRasterIndex",
+      "DDBRenderRasterIndexEx",
       "DDBRenderRasterRegion",
       "DDBRenderRasterRegionEx",
+      "DDBRenderRasterRegionEx2",
       "DDBTile"
     ],
     "errorCodes": {
@@ -155,6 +158,7 @@
       "DDBMemoryTile",
       "DDBMemoryTileEx",
       "DDBMemoryTileEx2",
+      "DDBMemoryTileEx3",
       "DDBMemoryTileFmt",
       "DDBMergeMultispectral",
       "DDBMergeMultispectralEx",
@@ -176,8 +180,10 @@
       "DDBReleaseConnections",
       "DDBRemove",
       "DDBRenderRasterIndex",
+      "DDBRenderRasterIndexEx",
       "DDBRenderRasterRegion",
       "DDBRenderRasterRegionEx",
+      "DDBRenderRasterRegionEx2",
       "DDBRescan",
       "DDBRescanEx",
       "DDBResolveBuildFile",

@@ -178,3 +178,9 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   area statistics and the thermal fallbacks read the raster in windows, so a large raster no longer exhausts the
   memory; the raw thermal data of a GDAL raster of more than 4 megapixels is refused). No export, schema, fixture or
   vector changed and no adapter change.
+* 2026-11-14: DroneDB `8950c1f4624da12869b981d948f75e46b53efa77` (the DroneDB v2.6.0 release, the pinned build, libddb
+  ABI 2.6: `DdbAbi.Minor` is 6). `capabilities` has `abi.minor` 6 and the exports of ABI 2.5 (`DDBMemoryTileEx3`,
+  `DDBRenderRasterRegionEx2`, `DDBRenderRasterIndexEx`, not called by the Registry); `effective-config` has
+  `artefactCacheMb` (integer, the bound in MiB of libddb's artefact cache, 0 for none), which the Registry sends as
+  `Ddb:ArtefactCacheMb` and reads back in `DdbEffectiveConfig.ArtefactCacheMb`; `Contract/README.md` has the 2.5.0 and
+  2.6.0 entries. No other fixture, schema or vector changed.
