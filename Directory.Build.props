@@ -60,20 +60,18 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-11-11): the DroneDB v2.4.1 release (ABI 2.4 unchanged; the handshake requires
-        ABI 2.4: DdbAbi.Minor, which stays 4). It adds the area statistics and the thermal fallbacks
-        that read windows to 2.4.0, the first libddb 2.x the Registry runs (after 2.0.1) and the
-        only line it supports; 2.4 has: the output options of align, merge multispectral and mask borders,
-        the raster value exports with DDBRasterOptions (NoData, the unit of the rescale of a
-        thermal formula), the build key, the build and the contours with progress (DDBBuildEx2,
-        DDBGenerateContoursEx2) and the window of DDBExportRaster3. The SHA256 values are those of
+        Pinned now (2026-11-15): the DroneDB v2.6.0 release (ABI 2.6; the handshake requires ABI 2.6:
+        DdbAbi.Minor 6). 2.6 adds the DDBConfigure setting artefactCacheMb (Ddb:ArtefactCacheMb), the
+        bound of libddb's artefact cache, which an older libddb refuses; its tiles, thumbnails and
+        COG and COPC builds come from ddb-tilers. 2.5 added DDBMemoryTileEx3, DDBRenderRasterRegionEx2
+        and DDBRenderRasterIndexEx, which the Registry does not call. The SHA256 values are those of
         the release's SHA256SUMS.
     -->
     <PropertyGroup>
         <DdbSource>release</DdbSource>
-        <DdbVersion>2.4.1</DdbVersion>
-        <DdbDebSha256>95484a26d92f79d5c74ab2172020c8b0c1b04691b9b82a4e645d2cf412505e03</DdbDebSha256>
-        <DdbWindowsZipSha256>0ca9194a55ff1abb0cd7617395a1da03fe8bc1b339761f39084908dc0dd32d7e</DdbWindowsZipSha256>
+        <DdbVersion>2.6.0</DdbVersion>
+        <DdbDebSha256>fb51c19278754e86e6713b5b6f61bd7e8e40b7b8fb06db1484fd141ff616232b</DdbDebSha256>
+        <DdbWindowsZipSha256>fe1b53018697eb2e2e18c082d084f5a44c35641d61412bf7f8ea825b12194c19</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
