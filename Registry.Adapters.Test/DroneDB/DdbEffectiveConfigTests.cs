@@ -10,22 +10,25 @@ namespace Registry.Adapters.Test.DroneDB;
 public class DdbEffectiveConfigTests
 {
     [Test]
-    public void Parse_ReadsEverySetting_TheGdalCacheIncluded()
+    public void Parse_ReadsEverySetting_TheCachesIncluded()
     {
         var config = DdbEffectiveConfig.Parse("""
             {"hardwareThreads": 8,
-             "settings": {"cacheDir": "/c", "cpuPoolSize": 3, "gdalCacheMb": 256, "ioThreads": 2, "minFreeDiskMb": 512},
+             "settings": {"artefactCacheMb": 4096, "cacheDir": "/c", "cpuPoolSize": 3, "gdalCacheMb": 256, "ioThreads": 2,
+                          "minFreeDiskMb": 512},
              "sources": {"gdalCacheMb": "configure"}}
             """);
 
-        config.ShouldBe(new DdbEffectiveConfig(512, 3, 2, "/c", 256));
+        config.ShouldBe(new DdbEffectiveConfig(512, 3, 2, "/c", 256, 4096));
     }
 
-    /// <summary>A libddb from before the setting does not report it: 0, not a failure.</summary>
+    /// <summary>A libddb from before the settings does not report them: 0, not a failure.</summary>
     [Test]
-    public void Parse_WithoutTheGdalCache_Reports0()
+    public void Parse_WithoutTheCaches_Reports0()
     {
-        DdbEffectiveConfig.Parse("""{"settings": {"minFreeDiskMb": 512}}""").GdalCacheMb.ShouldBe(0);
+        var config = DdbEffectiveConfig.Parse("""{"settings": {"minFreeDiskMb": 512}}""");
+        config.GdalCacheMb.ShouldBe(0);
+        config.ArtefactCacheMb.ShouldBe(0);
     }
 
     [Test]

@@ -13,8 +13,9 @@ namespace Registry.Ports.DroneDB;
 /// <param name="IoThreads">Threads of one disk-bound section.</param>
 /// <param name="CacheDir">libddb's cache folder.</param>
 /// <param name="GdalCacheMb">Size in MiB of GDAL's block cache (0: a libddb that does not report it).</param>
+/// <param name="ArtefactCacheMb">Bound in MiB of the artefact cache (0: no bound, or a libddb that does not report it).</param>
 public sealed record DdbEffectiveConfig(long MinFreeDiskMb, int CpuPoolSize, int IoThreads, string? CacheDir,
-    int GdalCacheMb = 0)
+    int GdalCacheMb = 0, long ArtefactCacheMb = 0)
 {
     /// <summary>Parses the <c>DDBGetEffectiveConfig()</c> JSON (unknown fields are ignored).</summary>
     /// <exception cref="FormatException">The JSON has no <c>settings</c> object or no <c>minFreeDiskMb</c>.</exception>
@@ -32,7 +33,8 @@ public sealed record DdbEffectiveConfig(long MinFreeDiskMb, int CpuPoolSize, int
             (int?)Number<long>(settings, "cpuPoolSize") ?? 0,
             (int?)Number<long>(settings, "ioThreads") ?? 0,
             settings.TryGetProperty("cacheDir", out var cacheDir) && cacheDir.ValueKind == JsonValueKind.String ? cacheDir.GetString() : null,
-            (int?)Number<long>(settings, "gdalCacheMb") ?? 0);
+            (int?)Number<long>(settings, "gdalCacheMb") ?? 0,
+            Number<long>(settings, "artefactCacheMb") ?? 0);
     }
 
     private static T? Number<T>(JsonElement parent, string field) where T : struct, System.Numerics.INumber<T> =>

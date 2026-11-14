@@ -58,11 +58,17 @@ public class BuildProgressNativeTests : TestBase
         reports.ShouldNotBeEmpty();
         reports[0].ShouldBe((-1d, "georaster"));
         reports[^1].ShouldBe((1d, (string?)null));
-        // The UTM raster is warped to the tile grid: the phases of a COG build, in this order (a 20 x 20 raster has no
-        // overview level, so it has no "overviews" phase); "statistics" (libddb 2.4.0) is the exact one-pass statistics,
-        // after the compressing and before the publishing
+        // The UTM raster is warped to the tile grid: the phases of a COG build, in their order. libddb names the phase
+        // after the fraction of the build, which advances by the full-resolution rows of the raster: a 20 x 20 raster is
+        // one row, so the fraction can pass over "overviews" and "compressing" in one step. The warp is announced when
+        // it starts and the statistics (libddb 2.4.0, the exact one-pass statistics) come before the publishing.
         var phases = reports.Select(r => r.Phase).Where(p => p != null).Distinct().ToList();
-        phases.ShouldBe(new List<string?> { "georaster", "warping", "compressing", "statistics", "publishing" });
+        string?[] order = ["georaster", "warping", "overviews", "compressing", "statistics", "publishing"];
+        phases.ShouldBeSubsetOf(order);
+        phases.Select(p => Array.IndexOf(order, p)).ShouldBeInOrder(SortDirection.Ascending);
+        phases.ShouldContain("warping");
+        phases.ShouldContain("statistics");
+        phases[^1].ShouldBe("publishing");
         var measured = reports.Select(r => r.Fraction).SkipWhile(f => f < 0).ToList();
         measured.ShouldAllBe(f => f >= 0 && f <= 1);
         measured.Zip(measured.Skip(1)).ShouldAllBe(pair => pair.Second >= pair.First);

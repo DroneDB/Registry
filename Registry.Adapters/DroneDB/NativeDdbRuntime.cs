@@ -40,6 +40,8 @@ public sealed unsafe class NativeDdbRuntime : IDdbRuntime
             json["minFreeDiskMb"] = minFreeDiskMb;
         if (settings.GdalCacheMb is { } gdalCacheMb)
             json["gdalCacheMb"] = gdalCacheMb;
+        if (settings.ArtefactCacheMb is { } artefactCacheMb)
+            json["artefactCacheMb"] = artefactCacheMb;
         if (!string.IsNullOrEmpty(settings.CacheDir))
             json["cacheDir"] = settings.CacheDir;
         return json.ToJsonString(NativeJson.Options);

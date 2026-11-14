@@ -152,6 +152,50 @@ public class DdbRuntimeTests
         runtime.Settings!.GdalCacheMb.ShouldBeNull();
     }
 
+    /// <summary>The artefact cache bound is validated against libddb's range at the start (0: no bound).</summary>
+    [TestCase("-1")]
+    [TestCase("10000000000001")]
+    public void ArtefactCacheMb_OutsideLibddbsRange_FailsTheStart(string megabytes)
+    {
+        using var factory = new RegistryWebFactory(new System.Collections.Generic.Dictionary<string, string>
+        {
+            ["Ddb:ArtefactCacheMb"] = megabytes
+        });
+
+        Should.Throw<OptionsValidationException>(() => factory.CreateClient()).Message.ShouldContain("ArtefactCacheMb");
+    }
+
+    [TestCase("0")]
+    [TestCase("2048")]
+    [TestCase("10000000000000")]
+    public async Task ArtefactCacheMb_InsideTheRange_ReachesLibddbConfigure(string megabytes)
+    {
+        var factory = new RegistryWebFactory(new System.Collections.Generic.Dictionary<string, string>
+        {
+            ["Ddb:ArtefactCacheMb"] = megabytes
+        });
+        try
+        {
+            using var client = factory.CreateClient();
+
+            factory.DdbRuntime.Settings!.ArtefactCacheMb.ShouldBe(long.Parse(megabytes, CultureInfo.InvariantCulture));
+        }
+        finally
+        {
+            await factory.DisposeAsync();
+        }
+    }
+
+    [Test]
+    public async Task ArtefactCacheMb_LeftOut_IsNotSent_SoLibddbKeepsItsDefault()
+    {
+        var runtime = new FakeDdbRuntime();
+
+        await Service(runtime).StartingAsync(CancellationToken.None);
+
+        runtime.Settings!.ArtefactCacheMb.ShouldBeNull();
+    }
+
     [TestCase(null, "/data/temp", "/data/temp/ddb-cache")]
     [TestCase("/var/cache/ddb", "/data/temp", "/var/cache/ddb")]
     [TestCase(null, null, null)]

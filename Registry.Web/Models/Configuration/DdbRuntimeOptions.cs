@@ -6,7 +6,7 @@ namespace Registry.Web.Models.Configuration;
 /// The libddb process configuration (configuration section <c>Ddb</c>), handed to libddb with
 /// <c>DDBConfigure</c> before <c>DDBRegisterProcess</c>. A value left out is not sent:
 /// libddb uses its environment variable (<c>DDB_CPU_POOL_SIZE</c>, <c>DDB_IO_THREADS</c>,
-/// <c>DDB_MIN_FREE_DISK_MB</c>, <c>DDB_GDAL_CACHE_MB</c>) or its default. The effective values are logged at startup.
+/// <c>DDB_MIN_FREE_DISK_MB</c>, <c>DDB_GDAL_CACHE_MB</c>, <c>DDB_ARTEFACT_CACHE_MB</c>) or its default. The effective values are logged at startup.
 /// <para>
 /// An explicit value here always wins. Left out, <see cref="CpuPoolSize"/> and <see cref="IoThreads"/>
 /// come from the host budget when one is declared (<see cref="HostBudgetSettings"/>; computed by
@@ -40,6 +40,16 @@ public sealed class DdbRuntimeOptions
     /// </summary>
     [Range(16, 1_048_576)]
     public int? GdalCacheMb { get; set; }
+
+    /// <summary>
+    /// Bound in MiB of libddb's artefact cache (<see cref="CacheDir"/>/artefacts): the COG libddb makes for the map
+    /// tiles of each photo or raster that is viewed, and the normalized copies of rasters. When a new one takes the
+    /// cache past the bound, the least recently used files are removed (never one used in the last 5 minutes);
+    /// 0: no bound (files not used for 5 days are removed either way). Left out, libddb uses
+    /// <c>DDB_ARTEFACT_CACHE_MB</c> or its default (4096).
+    /// </summary>
+    [Range(0L, 10_000_000_000_000L)]
+    public long? ArtefactCacheMb { get; set; }
 
     /// <summary>
     /// Where libddb caches thumbnails, tiles, index templates and DSM tiles. Default:

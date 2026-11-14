@@ -34,7 +34,6 @@ The image also contains programs that Registry runs as separate processes. They 
 | `metadata-util` (image metadata helper, uses Exiv2) | GPL-2.0-or-later | The source archive of the metadata-util release that DroneDB pins: <https://github.com/DroneDB/metadata-util/releases> |
 | `bm3d` (3D model builder, derived from Nexus, vcglib and corto) | GPL-3.0 | The source archive of the bm3d release that DroneDB pins: <https://github.com/DroneDB/bm3d/releases> |
 | `Obj2Tiles` (3D Tiles builder) | AGPL-3.0 | <https://github.com/OpenDroneMap/Obj2Tiles> |
-| `untwine` (point cloud indexer) | GPL-3.0-only | <https://github.com/hobuinc/untwine> |
 | `dwg2dxf` (LibreDWG, DWG to DXF converter) | GPL-3.0-or-later | <https://www.gnu.org/software/libredwg/> |
 | `build-lod` (Gaussian splat levels of detail, from Spark) | MIT | <https://github.com/sparkjsdev/spark> |
 

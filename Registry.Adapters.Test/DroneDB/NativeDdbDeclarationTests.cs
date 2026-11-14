@@ -93,15 +93,15 @@ public class NativeDdbDeclarationTests
     }
 
     /// <summary>
-    /// libddb 2.4 is the only libddb the Registry runs: every export it calls since 2.0 is required by the startup
-    /// handshake (ABI 2.4), with no optional export and no fallback for an older library: the Ex variants of align, merge
+    /// libddb 2.6 is the only libddb the Registry runs: every export it calls since 2.0 is required by the startup
+    /// handshake (ABI 2.6), with no optional export and no fallback for an older library: the Ex variants of align, merge
     /// and mask, the raster value exports with a <c>DDBRasterOptions</c>, the renders and the export with options
     /// (U-202, U-406), the build and the contours with progress (FR-PRC-42, U-413).
     /// </summary>
     [Test]
-    public void TheExportsOfLibddb24_AreRequired_WithTheRequiredAbi24()
+    public void TheExportsOfLibddb24_AreRequired_WithTheRequiredAbi26()
     {
-        DdbAbi.Minor.ShouldBe(4);
+        DdbAbi.Minor.ShouldBe(6);
         DdbAbi.RequiredSymbols.ShouldContain("DDBBuildEx2");
         DdbAbi.RequiredSymbols.ShouldContain("DDBGenerateContoursEx2");
         DdbAbi.RequiredSymbols.ShouldContain("DDBExportRaster3");
@@ -159,6 +159,8 @@ public class NativeDdbDeclarationTests
             .ShouldBe("""{"cpuPoolSize":3,"ioThreads":2,"minFreeDiskMb":256,"cacheDir":"/data/temp/ddb-cache"}""");
         NativeDdbRuntime.ToConfigureJson(new Ports.DroneDB.DdbProcessSettings(GdalCacheMb: 512))
             .ShouldBe("""{"gdalCacheMb":512}""");
+        NativeDdbRuntime.ToConfigureJson(new Ports.DroneDB.DdbProcessSettings(ArtefactCacheMb: 0))
+            .ShouldBe("""{"artefactCacheMb":0}""");
         NativeDdbRuntime.ToConfigureJson(new Ports.DroneDB.DdbProcessSettings(IoThreads: 8)).ShouldBe("""{"ioThreads":8}""");
     }
 }

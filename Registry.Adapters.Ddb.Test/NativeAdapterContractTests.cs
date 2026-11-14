@@ -159,6 +159,32 @@ public class NativeAdapterContractTests : TestBase
         DdbEffectiveConfig.Parse(Runtime.GetEffectiveConfig()).GdalCacheMb.ShouldBe(before);
     }
 
+    /// <summary>
+    /// The artefact cache bound of the host is what libddb reports as its effective setting (0: no bound), and what
+    /// null puts back.
+    /// </summary>
+    [Test]
+    public void Configure_ArtefactCacheMb_IsLibddbsEffectiveSetting_UntilItIsPutBack()
+    {
+        var before = DdbEffectiveConfig.Parse(Runtime.GetEffectiveConfig()).ArtefactCacheMb;
+
+        Runtime.Configure(new DdbProcessSettings(ArtefactCacheMb: 640));
+        try
+        {
+            DdbEffectiveConfig.Parse(Runtime.GetEffectiveConfig()).ArtefactCacheMb.ShouldBe(640);
+            Runtime.Configure(new DdbProcessSettings(ArtefactCacheMb: 0));
+            DdbEffectiveConfig.Parse(Runtime.GetEffectiveConfig()).ArtefactCacheMb.ShouldBe(0, "0 is no bound");
+            Should.Throw<DdbInvalidArgumentsException>(() => Runtime.Configure(new DdbProcessSettings(ArtefactCacheMb: -1)));
+            DdbEffectiveConfig.Parse(Runtime.GetEffectiveConfig()).ArtefactCacheMb.ShouldBe(0, "a refused value changes nothing");
+        }
+        finally
+        {
+            Ok(NativeDdb.DDBConfigure("""{"artefactCacheMb": null}"""), "DDBConfigure(reset)");
+        }
+
+        DdbEffectiveConfig.Parse(Runtime.GetEffectiveConfig()).ArtefactCacheMb.ShouldBe(before);
+    }
+
     [Test]
     public void EntryTypes_AreLibddbs()
     {

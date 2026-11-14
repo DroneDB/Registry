@@ -192,7 +192,7 @@ public unsafe class LibddbContractTests : TestBase
     }
 
     /// <summary>
-    /// The loaded libddb is the one the Registry runs (ABI 2.4): it reports the ABI the handshake requires and lists the
+    /// The loaded libddb is the one the Registry runs (ABI 2.6): it reports the ABI the handshake requires and lists the
     /// exports that report progress, which the wrapper always calls.
     /// </summary>
     [Test]
@@ -736,7 +736,8 @@ public unsafe class LibddbContractTests : TestBase
 
         Ok(NativeDdb.DDBConfigure(new JObject
         {
-            ["cacheDir"] = cache, ["cpuPoolSize"] = 3, ["gdalCacheMb"] = 256, ["ioThreads"] = 2, ["minFreeDiskMb"] = 256
+            ["artefactCacheMb"] = 2048, ["cacheDir"] = cache, ["cpuPoolSize"] = 3, ["gdalCacheMb"] = 256, ["ioThreads"] = 2,
+            ["minFreeDiskMb"] = 256
         }.ToString(Formatting.None)), "DDBConfigure");
         try
         {
@@ -749,10 +750,10 @@ public unsafe class LibddbContractTests : TestBase
             ShouldEqualJson(config, ParseJson("""
                 {
                   "hardwareThreads": 0,
-                  "settings": {"cacheDir": "<cache>", "cpuPoolSize": 3, "gdalCacheMb": 256, "ioThreads": 2,
-                               "minFreeDiskMb": 256},
-                  "sources": {"cacheDir": "configure", "cpuPoolSize": "configure", "gdalCacheMb": "configure",
-                              "ioThreads": "configure", "minFreeDiskMb": "configure"}
+                  "settings": {"artefactCacheMb": 2048, "cacheDir": "<cache>", "cpuPoolSize": 3, "gdalCacheMb": 256,
+                               "ioThreads": 2, "minFreeDiskMb": 256},
+                  "sources": {"artefactCacheMb": "configure", "cacheDir": "configure", "cpuPoolSize": "configure",
+                              "gdalCacheMb": "configure", "ioThreads": "configure", "minFreeDiskMb": "configure"}
                 }
                 """));
 
@@ -761,7 +762,8 @@ public unsafe class LibddbContractTests : TestBase
                      {
                          null, "[]", "not json", """{"cpuPoolSizee": 1}""", """{"ioThreads": 0}""",
                          """{"cpuPoolSize": 1, "minFreeDiskMb": -1}""", """{"cacheDir": "relative/folder"}""",
-                         """{"gdalCacheMb": 15}""", """{"gdalCacheMb": 1048577}""", """{"gdalCacheMb": "256"}"""
+                         """{"gdalCacheMb": 15}""", """{"gdalCacheMb": 1048577}""", """{"gdalCacheMb": "256"}""",
+                         """{"artefactCacheMb": -1}""", """{"artefactCacheMb": "512"}"""
                      })
                 Fails(NativeDdb.DDBConfigure(invalid), DdbResult.InvalidArgs, $"DDBConfigure({invalid ?? "NULL"})");
             ShouldEqualJson(EffectiveConfig(), before, "an invalid DDBConfigure changes nothing");
@@ -769,7 +771,7 @@ public unsafe class LibddbContractTests : TestBase
         finally
         {
             Ok(NativeDdb.DDBConfigure(
-                """{"cacheDir": null, "cpuPoolSize": null, "gdalCacheMb": null, "ioThreads": null, "minFreeDiskMb": null}"""),
+                """{"artefactCacheMb": null, "cacheDir": null, "cpuPoolSize": null, "gdalCacheMb": null, "ioThreads": null, "minFreeDiskMb": null}"""),
                 "DDBConfigure(reset)");
         }
 
@@ -965,7 +967,7 @@ public unsafe class LibddbContractTests : TestBase
     /// The libddb entry points Registry.Adapters declares: every [DllImport("ddb")] method of the
     /// assembly, the ones LibraryImport generates included.
     /// </summary>
-    // The exports Registry requires (ABI 2.4)
+    // The exports Registry requires (ABI 2.6)
     private static string[] DeclaredExports() =>
         typeof(NativeDdbWrapper).Assembly.GetTypes()
             .SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic |

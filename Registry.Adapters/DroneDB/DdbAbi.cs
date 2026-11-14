@@ -24,7 +24,8 @@ public static class DdbAbi
     public const int Major = 2;
 
     /// <summary>
-    /// <c>DDB_ABI_MINOR</c> Registry needs at least: 4 (DroneDB 2.4.0, the only libddb 2.x the Registry runs). ABI 2.4
+    /// <c>DDB_ABI_MINOR</c> Registry needs at least: 6 (DroneDB 2.6.0). ABI 2.6 adds no export but the
+    /// <c>DDBConfigure</c> setting <c>artefactCacheMb</c> (<c>Ddb:ArtefactCacheMb</c>), which an older libddb refuses. ABI 2.4
     /// has every export <see cref="NativeDdb"/> declares: the output options of align, merge multispectral and mask
     /// borders (<c>DDBAlignRasterEx</c>, <c>DDBMergeMultispectralEx</c>, <c>DDBMaskBordersEx</c>), the raster value
     /// exports with a <c>DDBRasterOptions</c> (with the unit of the rescale, <c>rescaleUnit</c>), the build key
@@ -32,7 +33,7 @@ public static class DdbAbi
     /// and the contours with progress (<c>DDBBuildEx2</c>, <c>DDBGenerateContoursEx2</c>) and the window of
     /// <c>DDBExportRaster3</c>; an older libddb is refused, so no code path depends on the ABI minor.
     /// </summary>
-    public const int Minor = 4;
+    public const int Minor = 6;
 
     private const string Library = "ddb";
 

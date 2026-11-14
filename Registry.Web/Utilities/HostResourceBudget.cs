@@ -122,7 +122,7 @@ public sealed class HostResourceBudget
 
         return new HostResourceBudget(role, share, machine, process, processing,
             lanes.TilesFor(process.Cores), lanes.HeavyFor(process.Cores),
-            new DdbProcessSettings(cpuPool, ioThreads, ddb.MinFreeDiskMb, ddb.CacheDir, ddb.GdalCacheMb), declared,
+            new DdbProcessSettings(cpuPool, ioThreads, ddb.MinFreeDiskMb, ddb.CacheDir, ddb.GdalCacheMb, ddb.ArtefactCacheMb), declared,
             options, ddb, environment);
     }
 
@@ -167,7 +167,7 @@ public sealed class HostResourceBudget
         $"{Role}: {Share:P0} of {Machine.Cores} core(s) and {Machine.MemoryBytes / BytesPerMiB} MiB" +
         $"{(Declared ? "" : " (no host budget declared: the whole machine)")} = {Process.Cores} core(s), " +
         $"{Process.MemoryBytes / BytesPerMiB} MiB; render lanes {RenderTiles} tiles / {RenderHeavy} heavy; " +
-        $"libddb cpuPoolSize {Describe(Ddb.CpuPoolSize)}, ioThreads {Describe(Ddb.IoThreads)}, gdalCacheMb {Describe(Ddb.GdalCacheMb)}" +
+        $"libddb cpuPoolSize {Describe(Ddb.CpuPoolSize)}, ioThreads {Describe(Ddb.IoThreads)}, gdalCacheMb {Describe(Ddb.GdalCacheMb)}, artefactCacheMb {Describe(Ddb.ArtefactCacheMb)}" +
         (Processing is { } p ? $"; jobs {p}" : "");
 
     private static int Count(InstanceType role, InstanceType counted, int declared) =>
@@ -176,6 +176,6 @@ public sealed class HostResourceBudget
     private static bool IsUnset(Func<string, string?> environment, string name) =>
         string.IsNullOrEmpty(environment(name));
 
-    private static string Describe(int? value) =>
+    private static string Describe(long? value) =>
         value?.ToString(CultureInfo.InvariantCulture) ?? "libddb default";
 }
