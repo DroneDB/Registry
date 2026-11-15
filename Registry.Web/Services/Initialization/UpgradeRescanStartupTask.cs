@@ -38,10 +38,10 @@ namespace Registry.Web.Services.Initialization;
 /// step a later release registers runs for every dataset.
 /// </para>
 /// <para>
-/// The loaded libddb has the build key and the WGS 84 vector footprints (the startup handshake requires libddb 2.4,
-/// <c>DdbAbi</c>), so every registered step runs. One instance runs the job: it holds
-/// <see cref="MagicStrings.UpgradeRescansLockFileName"/> open; another instance on the same storage skips it and tries
-/// again at its next start.
+/// The loaded libddb has the build key and the WGS 84 vector footprints (the startup handshake requires the ABI of
+/// DroneDB 2.6, <c>DdbAbi</c>), so every registered step runs. One instance runs the job: it holds the lock of
+/// <see cref="UpgradeRescanProgress"/> open; another instance on the same storage skips it and tries again at its next
+/// start.
 /// </para>
 /// </summary>
 internal sealed class UpgradeRescanStartupTask : IBackgroundStartupTask
@@ -51,23 +51,20 @@ internal sealed class UpgradeRescanStartupTask : IBackgroundStartupTask
     private readonly IEnumerable<IUpgradeRescanStep> _steps;
     private readonly IDdbManager _ddbManager;
     private readonly BuildScheduler _builds;
-    private readonly StorageDocument<UpgradeRescanState> _state;
-    private readonly string _lockPath;
+    private readonly UpgradeRescanProgress _progress;
     private readonly ILogger<UpgradeRescanStartupTask> _logger;
 
     public UpgradeRescanStartupTask(RegistryContext context, IndexRescanService rescans,
         IEnumerable<IUpgradeRescanStep> steps, IDdbManager ddbManager, BuildScheduler builds,
-        IOptions<StorageOptions> storage, IFileSystem fs, ILogger<UpgradeRescanStartupTask> logger)
+        UpgradeRescanProgress progress, ILogger<UpgradeRescanStartupTask> logger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _rescans = rescans ?? throw new ArgumentNullException(nameof(rescans));
         _steps = steps ?? throw new ArgumentNullException(nameof(steps));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _builds = builds ?? throw new ArgumentNullException(nameof(builds));
+        _progress = progress ?? throw new ArgumentNullException(nameof(progress));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        ArgumentNullException.ThrowIfNull(storage);
-        _state = new StorageDocument<UpgradeRescanState>(storage, fs, MagicStrings.UpgradeRescansFileName, logger);
-        _lockPath = Path.Combine(storage.Value.StoragePath ?? ".", MagicStrings.UpgradeRescansLockFileName);
     }
 
     public async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -76,12 +73,12 @@ internal sealed class UpgradeRescanStartupTask : IBackgroundStartupTask
         if (steps.Length == 0)
             return;
 
-        using var lease = TryLock();
+        using var lease = _progress.TryLock();
         if (lease == null)
             return;
 
         // Read under the lock: another instance may have recorded progress since
-        var state = (_state.Read() ?? new UpgradeRescanState()).Normalize();
+        var state = _progress.Read();
         var pendingSteps = steps.Where(s => !state.Step(s.Id).Completed).ToArray();
         if (pendingSteps.Length == 0)
             return;
@@ -151,30 +148,6 @@ internal sealed class UpgradeRescanStartupTask : IBackgroundStartupTask
             _logger.LogWarning("Upgrade rescans: {Failed} dataset(s) failed, the next start tries them again", failed);
     }
 
-    /// <summary>
-    /// Opens the lock file for this instance alone (an exclusive lock the OS releases if the process dies); null when
-    /// another instance holds it, or it cannot be opened: the job is skipped and the next start tries again.
-    /// </summary>
-    private FileStream? TryLock()
-    {
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(_lockPath))!);
-            return new FileStream(_lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-        }
-        catch (IOException ex)
-        {
-            _logger.LogInformation("Upgrade rescans skipped: another instance runs them ({Path}: {Error}); " +
-                                   "the next start tries again", _lockPath, ex.Message);
-            return null;
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            _logger.LogWarning(ex, "Upgrade rescans skipped: cannot open {Path}; the next start tries again", _lockPath);
-            return null;
-        }
-    }
-
     private void Save(UpgradeRescanState state, Dictionary<string, HashSet<string>> done, bool completed)
     {
         foreach (var (id, datasets) in done)
@@ -185,15 +158,7 @@ internal sealed class UpgradeRescanStartupTask : IBackgroundStartupTask
                 step.Completed = true;
         }
 
-        try
-        {
-            _state.Write(state);
-        }
-        catch (StorageDocumentException ex)
-        {
-            // Not recorded: the dataset is rescanned again at the next start, which is harmless
-            _logger.LogWarning(ex, "Cannot record the upgrade rescans done");
-        }
+        _progress.Write(state);
     }
 
     private static string Key(Guid internalRef) => internalRef.ToString("N");

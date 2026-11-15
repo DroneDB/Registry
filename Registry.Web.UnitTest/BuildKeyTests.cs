@@ -278,8 +278,10 @@ public class BuildKeyTests
                 NullLogger<IndexRescanService>.Instance);
             return new UpgradeRescanStartupTask(Context, service, steps.Length == 0 ? [new BuildKeyRescanStep()] : steps,
                 manager.Object, TestJobs.Scheduler(jobs.Object),
-                Microsoft.Extensions.Options.Options.Create(new StorageOptions { StoragePath = _storage }),
-                new Registry.Adapters.FileSystem(), NullLogger<UpgradeRescanStartupTask>.Instance);
+                new UpgradeRescanProgress(
+                    Microsoft.Extensions.Options.Options.Create(new StorageOptions { StoragePath = _storage }),
+                    new Registry.Adapters.FileSystem(), NullLogger<UpgradeRescanProgress>.Instance),
+                NullLogger<UpgradeRescanStartupTask>.Instance);
         }
 
         public int RescansOf(string org, string ds) =>
