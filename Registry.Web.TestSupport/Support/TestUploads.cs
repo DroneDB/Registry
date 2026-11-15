@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Registry.Ports;
+using Registry.Web.Data;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Builds;
@@ -33,4 +34,13 @@ public static class TestUploads
 
         return new UploadManager(auth, access, quota, tracker, indexer, files, committer);
     }
+
+    /// <summary>
+    /// The quota guard of the upload pipeline over <paramref name="ledger"/> and <paramref name="quota"/>, counting the
+    /// open chunked uploads in <paramref name="store"/> (a new one without) and the organizations in
+    /// <paramref name="context"/> (a new empty database without).
+    /// </summary>
+    public static UploadQuotaGuard Guard(UploadQuotaLedger ledger, IStorageQuota quota, ChunkStore? store = null,
+        RegistryContext? context = null) =>
+        new(ledger, quota, store ?? new ChunkStore(), context ?? TestDb.CreateContext<RegistryContext>());
 }

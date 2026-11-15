@@ -820,7 +820,7 @@ public class PendingRecoveryIntegrationTests
                 TestPaths.Policy),
             new FileSystem(), TestSettings.Options<ThumbnailOptions>(settings),
             TestSettings.Options<ImportSettings>(settings), scope.ServiceProvider.GetRequiredService<BuildScheduler>(),
-            new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), quota.Object),
+            TestUploads.Guard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), quota.Object),
             Mock.Of<IDatasetChangeCoalescer>());
         using var ctx = await uploads.BeginAsync(Org, ds);
         var file = await uploads.StreamAsync(ctx, new MemoryStream(Encoding.UTF8.GetBytes(text)));

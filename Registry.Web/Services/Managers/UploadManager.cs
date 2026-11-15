@@ -48,7 +48,7 @@ public sealed partial class UploadManager
     public static bool IsValidUploadId(string? uploadId) => uploadId != null && UploadIdPattern().IsMatch(uploadId);
 
     /// <summary>
-    /// Resolves the dataset, checks write access, reserves <paramref name="expectedBytes"/> of quota
+    /// Resolves the dataset, checks write access, reserves <paramref name="expectedBytes"/> of quota (beside the open chunked uploads)
     /// and registers the upload: everything that can refuse it before its first byte. With an
     /// <paramref name="uploadId"/> whose upload is already done, <see cref="UploadRequestContext.Receipt"/>
     /// holds its results and nothing else must be done.
@@ -73,9 +73,11 @@ public sealed partial class UploadManager
             if (!await _receipts.BeginAsync(ctx))
                 return ctx;
 
-            // Content-Length is known at byte 0: refuse an upload over quota before it is sent
+            // Content-Length is known at byte 0: refuse an upload over quota before it is sent, counting the room that
+            // the open chunked uploads of the owner hold (as the first chunk of another one does)
             if (expectedBytes is > 0)
-                ctx.Reservation = await _quota.ReserveAsync(ctx.QuotaOwnerId, expectedBytes.Value);
+                ctx.Reservation = await _quota.ReserveBesideOpenUploadsAsync(ddb, ctx.QuotaOwnerId, expectedBytes.Value,
+                    user?.Id, null, ct);
 
             ctx.Ticket = _indexer.BeginUpload(ctx);
 

@@ -128,7 +128,7 @@ public class UploadManagerTests
         return TestUploads.Create(_auth.Object,
             new DatasetAccessResolver(_utils.Object, _auth.Object, ddbManager.Object, TestPaths.Policy),
             new Registry.Adapters.FileSystem(), TestSettings.Options<ThumbnailOptions>(options), TestSettings.Options<ImportSettings>(options), TestJobs.Scheduler(jobs, buildPending, userId: "u"),
-            new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _quota.Object), _changes.Object,
+            TestUploads.Guard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _quota.Object), _changes.Object,
             _receipts, _queue.Object);
     }
 
@@ -371,9 +371,12 @@ public class UploadManagerTests
 
     // ---- resumable chunked uploads (E.5)
 
-    private ChunkedUploadManager CreateChunks(UploadManager uploads) =>
-        new(uploads, new ChunkStore(), new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _quota.Object),
-            TestScratch.Provider, TestDb.CreateContext<RegistryContext>());
+    private ChunkedUploadManager CreateChunks(UploadManager uploads)
+    {
+        var store = new ChunkStore();
+        return new(uploads, store, TestUploads.Guard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _quota.Object, store),
+            TestScratch.Provider);
+    }
 
     private static ChunkRequest Chunk(int index, string path = "big.bin") => new("big-file-0001", index, 3, 25, 10, path);
 

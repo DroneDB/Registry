@@ -143,7 +143,7 @@ public class HashOnceTests
             new DatasetAccessResolver(utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper,
             TestJobs.Scheduler(jobs.Object, TestJobs.BuildPendingService(db, ddbManager.Object, jobs.Object, cache.Object)),
             Microsoft.Extensions.Options.Options.Create(new ImportSettings()), fileSystem, new PushSessionStore(fileSystem),
-            new UploadQuotaGuard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), Mock.Of<IStorageQuota>()), TestPaths.Policy,
+            TestUploads.Guard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), Mock.Of<IStorageQuota>()), TestPaths.Policy,
             TestScratch.Provider);
     }
 

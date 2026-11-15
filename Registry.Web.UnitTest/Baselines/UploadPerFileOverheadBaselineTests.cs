@@ -144,7 +144,7 @@ public class UploadPerFileOverheadBaselineTests : TestBase
 
         var uploads = TestUploads.Create(_auth.Object,
             new DatasetAccessResolver(_utils.Object, _auth.Object, _ddbManager.Object, TestPaths.Policy), new Registry.Adapters.FileSystem(), TestSettings.Options<ThumbnailOptions>(settings), TestSettings.Options<ImportSettings>(settings), TestJobs.Scheduler(jobs.Object, buildPending),
-            new UploadQuotaGuard(new UploadQuotaLedger(TestSettings.Options<UploadSettings>(settings)), _quota.Object), changes, thumbnails: thumbnails);
+            TestUploads.Guard(new UploadQuotaLedger(TestSettings.Options<UploadSettings>(settings)), _quota.Object), changes, thumbnails: thumbnails);
         return (uploads, changes, thumbnails);
     }
 

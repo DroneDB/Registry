@@ -5,10 +5,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using Registry.Common;
 using Registry.Ports.DroneDB;
-using Registry.Web.Data;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
@@ -30,7 +28,7 @@ namespace Registry.Web.Services.Managers;
 /// the last-modified time of the file, so the same file selected again after a reload has the same id.
 /// </remarks>
 public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store, UploadQuotaGuard quota,
-    ScratchFileProvider scratch, RegistryContext context)
+    ScratchFileProvider scratch)
 {
     /// <summary>Folder of the chunked uploads of a dataset, under its uploads folder.</summary>
     public static string ChunksRoot(IDDB ddb) =>
@@ -98,12 +96,10 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
     private async Task<IDisposable?> AdmitAsync(UploadRequestContext ctx, ChunkRequest chunk, string key,
         CancellationToken ct)
     {
-        var reservation = await quota.ReserveAsync(ctx.QuotaOwnerId, chunk.TotalFileSize);
+        var reservation = await quota.ReserveBesideOpenUploadsAsync(ctx.Ddb, ctx.QuotaOwnerId, chunk.TotalFileSize,
+            ctx.User?.Id, chunk.FileId, ct);
         try
         {
-            reservation.Resize(chunk.TotalFileSize +
-                               await OpenUploadBytesAsync(ctx.Ddb, ctx.QuotaOwnerId, ctx.User?.Id, chunk.FileId, ct));
-
             // The same file sent again after a commit has the same id: the receipt of the earlier one must not answer
             // the commit of this one
             await uploads.ForgetReceiptAsync(ctx.OrgSlug, ctx.DsSlug, key);
@@ -114,49 +110,6 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
             reservation.Dispose();
             throw;
         }
-    }
-
-    /// <summary>
-    /// The size of the files of the open chunked uploads of every user in the organizations of the owner
-    /// <paramref name="ownerId"/> (every dataset folder of each of them; the organization of <paramref name="ddb"/> is one):
-    /// the storage that they hold, in the quota of the owner, which the upload ledger reserves per owner, until they are
-    /// committed or removed, which the storage use of the owner does not count yet. The session of
-    /// <paramref name="userId"/> and <paramref name="fileId"/> in <paramref name="ddb"/> is not counted: it is the upload
-    /// being checked (two first chunks of one file sent at once: the second must not count the session the first one
-    /// just started). Without an owner no limit applies: 0.
-    /// </summary>
-    private async Task<long> OpenUploadBytesAsync(IDDB ddb, string ownerId, string? userId, string fileId,
-        CancellationToken ct)
-    {
-        // No limit (no owner, limiter off, administrator owner): nothing to count, and no folder scan on every first chunk
-        if (string.IsNullOrEmpty(ownerId) || !await quota.LimitAppliesAsync(ownerId, ct))
-            return 0;
-
-        // The folder of a dataset is <datasets>/<organization slug>/<dataset> (DdbManager.GetDatasetFolder)
-        var dataset = Path.GetFullPath(ddb.DatasetFolderPath);
-        var organization = Path.GetDirectoryName(dataset);
-        var datasets = organization == null ? null : Path.GetDirectoryName(organization);
-        if (organization == null || datasets == null)
-            return 0;
-
-        var owned = await context.Organizations.AsNoTracking()
-            .Where(org => org.OwnerId == ownerId)
-            .Select(org => org.Slug)
-            .ToListAsync(ct);
-        var organizations = owned.Select(slug => Path.GetFullPath(Path.Combine(datasets, slug)))
-            .Append(organization)
-            .Distinct(PathComparison.Comparer)
-            .Where(Directory.Exists);
-
-        // In one dataset the session of a user and a file id is one folder (SessionKey): its manifest has both
-        bool Current(string folder, ChunkStatus s) =>
-            s.Manifest.FileId == fileId && s.Manifest.UserId == userId && Path.GetFullPath(folder) == dataset;
-
-        return organizations
-            .SelectMany(Directory.EnumerateDirectories)
-            .SelectMany(folder => store.List(Path.Combine(folder, IDDB.UploadsFolderName, DatasetUploads.ChunksFolderName))
-                .Where(s => !Current(folder, s)))
-            .Sum(s => s.Manifest.TotalSize);
     }
 
     /// <summary>The state of an upload of the caller.</summary>
@@ -212,9 +165,11 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
 
     /// <summary>
     /// Adds the finished file to the dataset; again for a committed upload, returns its entry. The name is checked
-    /// again (another upload may have written it since the first chunk) before the chunks are taken, so a refused
-    /// commit keeps them: the same commit with <paramref name="overwrite"/> (the user chose to replace) adds them
-    /// without sending them again.
+    /// again (another upload may have written it since the first chunk) and the size is reserved in the quota of the
+    /// owner before the chunks are taken, so a commit refused for its name, its quota or missing chunks keeps them: the
+    /// same commit with <paramref name="overwrite"/> (the user chose to replace) or after room was made adds them
+    /// without sending them again. Once the file is taken it is moved into place and indexed by this request alone: a
+    /// failure there deletes it, the receipt records the failure and the chunks must be sent again.
     /// </summary>
     /// <param name="orgSlug">The organization.</param>
     /// <param name="dsSlug">The dataset.</param>
@@ -242,6 +197,10 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
             var replace = overwrite || status.Manifest.Overwrite;
             if (status.Complete)
                 uploads.ResolveTarget(ctx, status.Manifest.Path, replace);
+
+            // The quota is decided while the session is intact: a refusal (507) leaves the chunks in place, and the
+            // committer only resizes this reservation to the size on disk
+            ctx.Reservation = await quota.ReserveAsync(ctx.QuotaOwnerId, status.Manifest.TotalSize);
 
             // The chunks were written into one file: taking it is a rename onto the dataset volume
             using var temp = scratch.CreateForDataset(ctx.Ddb.DatasetFolderPath, DatasetUploads.TempFileExtension);

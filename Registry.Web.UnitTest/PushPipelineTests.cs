@@ -151,7 +151,7 @@ public class PushPipelineTests : TestBase
         return TestPush.Manager(_utils.Object, ddbManager.Object, Mock.Of<IDatasetsManager>(),
             auth.Object, new DatasetAccessResolver(_utils.Object, auth.Object, ddbManager.Object, TestPaths.Policy), _wrapper.Object,
             TestJobs.Scheduler(_jobs.Object, buildPending, userId: "u"), TestSettings.Options<ImportSettings>(settings), fileSystem,
-            new PushSessionStore(fileSystem), new UploadQuotaGuard(_ledger, _storageQuota.Object), TestPaths.Policy, TestScratch.Provider,
+            new PushSessionStore(fileSystem), TestUploads.Guard(_ledger, _storageQuota.Object), TestPaths.Policy, TestScratch.Provider,
             _listings.Object);
     }
 

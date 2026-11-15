@@ -145,7 +145,7 @@ public sealed class ObjectServicesBuilder
         services.AddSingleton(_jobIndexWriter ?? Mock.Of<IJobIndexWriter>());
         services.AddSingleton<UploadManager>(TestUploads.Create(authManager, access, fileSystem, thumbnails,
             TestSettings.Options<ImportSettings>(settings), scheduler,
-            new UploadQuotaGuard(new UploadQuotaLedger(TestSettings.Options<UploadSettings>(settings)), quota),
+            TestUploads.Guard(new UploadQuotaLedger(TestSettings.Options<UploadSettings>(settings)), quota),
             new DatasetChangeCoalescer(TestJobs.OgcCacheKeys(), cacheManager, thumbnails.Value.Candidates,
                 TimeSpan.Zero, NullLogger<DatasetChangeCoalescer>.Instance),
             indexQueue: _indexQueue));

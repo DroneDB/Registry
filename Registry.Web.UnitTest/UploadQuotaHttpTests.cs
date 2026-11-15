@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Globalization;
 using System.IO;
 using System.Net;
@@ -59,6 +61,24 @@ public sealed class UploadQuotaHttpTests : IDisposable
         // An empty index: the name rule of an upload (D-040) lists the target folder
         _factory.DdbWrapper.Setup(d => d.ListEntrySummaries(It.IsAny<string>(), It.Is<EntryQuery>(q => !q.Recursive)))
             .Returns([]);
+        // A commit that fits adds the file: the index answers one added entry for each file
+        _factory.DdbWrapper
+            .Setup(d => d.AddWithHints(It.IsAny<string>(), It.IsAny<IReadOnlyList<AddItem>>(), It.IsAny<bool>()))
+            .Returns((string ddbPath, IReadOnlyList<AddItem> items, bool _) => new BatchAddResult
+            {
+                Entries = items.Select(i => new BatchAddedEntry
+                {
+                    Path = Path.GetRelativePath(ddbPath, i.Path).Replace('\\', '/'),
+                    Hash = i.Hint?.Sha256 ?? string.Empty,
+                    Size = i.Hint?.Size ?? 0,
+                    Type = EntryType.Generic,
+                    Status = "added"
+                }).ToList()
+            });
+        _factory.DdbWrapper.Setup(d => d.GetBuildArtifacts(It.IsAny<string>(), It.IsAny<string[]>()))
+            .Returns((string _, string[] paths) => paths
+                .Select(p => new EntryBuildArtifacts { Path = p, Exists = true, Hash = "h", Type = EntryType.Generic })
+                .ToArray());
         _client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
         var owner = await _factory.CreateUserAsync(Owner);
@@ -99,6 +119,14 @@ public sealed class UploadQuotaHttpTests : IDisposable
         var response = await _client.SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();
         return (response, body.TrimStart().StartsWith('{') ? JsonNode.Parse(body)!.AsObject() : []);
+    }
+
+    private async Task<JsonObject> GetAsync(string url)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url).AsUser(Owner);
+        var response = await _client.SendAsync(request);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return JsonNode.Parse(await response.Content.ReadAsStringAsync())!.AsObject();
     }
 
     private static void ShouldBeQuotaProblem(HttpResponseMessage response, JsonObject problem)
@@ -206,6 +234,60 @@ public sealed class UploadQuotaHttpTests : IDisposable
         var (response, problem) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj/chunk/quota-commit-0001/commit");
 
         ShouldBeQuotaProblem(response, problem);
+    }
+
+    // The quota is decided before the chunks are taken: a commit refused for it leaves the session as it was, complete
+    // and resumable, and the same commit adds the file once there is room (the file is not sent again)
+    [Test]
+    public async Task Commit_RefusedForTheQuota_KeepsTheChunksAndTheSameCommitAddsThemWhenThereIsRoom()
+    {
+        const string fileId = "quota-keeps-0001";
+        foreach (var index in new[] { 0, 1 })
+        {
+            var (stored, _) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj/chunk",
+                Chunk(fileId, "kept-after-507.bin", index, 2));
+            stored.StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        _quota.Limit = new UserStorageInfo { Total = 1, Used = 0 };
+        var (refused, problem) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj/chunk/{fileId}/commit");
+        ShouldBeQuotaProblem(refused, problem);
+
+        var status = await GetAsync($"/orgs/{Org}/ds/{Ds}/obj/chunk/{fileId}");
+        status["complete"]!.GetValue<bool>().ShouldBeTrue("the refused commit left the chunks in place");
+
+        _quota.Limit = null;
+        var (created, _) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj/chunk/{fileId}/commit");
+        created.StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
+    // The room that an open chunked upload holds counts against a plain upload as against the first chunk of another
+    // chunked one: a file that does not fit beside it is refused before its first byte
+    [Test]
+    public async Task PlainUpload_ThatDoesNotFitBesideAnOpenChunkedUpload_Is507ProblemDetails()
+    {
+        const long gib = 1024L * 1024 * 1024;
+        const int mib = 1024 * 1024;
+        var chunks = Path.Combine(_folder, IDDB.UploadsFolderName, "chunks");
+        if (Directory.Exists(chunks)) Directory.Delete(chunks, true);
+        // 9 GiB and 100 bytes left: the open upload holds 9 GiB, so the plain file (a few hundred bytes with its
+        // multipart framing) fits alone but not beside it
+        _quota.Limit = new UserStorageInfo { Total = 20 * gib, Used = 11 * gib - 100 };
+
+        try
+        {
+            var (first, _) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj/chunk",
+                Chunk("quota-plain-open-0001", "open-9gib.bin", 0, 9216, mib, 9 * gib));
+            first.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+            var (response, problem) = await PostAsync($"/orgs/{Org}/ds/{Ds}/obj", File("plain-beside-open.bin"));
+
+            ShouldBeQuotaProblem(response, problem);
+        }
+        finally
+        {
+            if (Directory.Exists(chunks)) Directory.Delete(chunks, true);
+        }
     }
 
     // FR-UPL-04: an open chunked upload holds room for its whole file until it is committed or removed (7 days), so the
