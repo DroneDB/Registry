@@ -46,12 +46,19 @@ public static class CacheCategories
     /// <summary>The generation of every STAC listing (landing page, collections): one for the whole catalog.</summary>
     public const string StacGeneration = "stac-gen";
 
-    /// <summary>The STAC landing page of a caller in a STAC generation.</summary>
-    public static string StacLanding(string generation, string userName) => $"stac-landing-g{generation}-{userName}";
+    /// <summary>
+    /// Who asks for a STAC listing, and at which address: the user id (not the name, which an anonymous caller and a
+    /// user called <c>anonymous</c> would share) or <c>anon</c>, then the host the links of the listing point to (the same
+    /// listing asked at another address has other links). The part of a listing key that is not the generation.
+    /// </summary>
+    public static string StacCaller(string? userId, string host) => $"{(userId == null ? "anon" : "u:" + userId)}@{host}";
 
-    /// <summary>A page of the STAC collections listing of a caller in a STAC generation.</summary>
-    public static string StacCollections(string generation, string userName, int limit, int offset) =>
-        $"stac-collections-g{generation}-{userName}-{limit}-{offset}";
+    /// <summary>The STAC landing page of a caller (<see cref="StacCaller"/>) in a STAC generation.</summary>
+    public static string StacLanding(string generation, string caller) => $"stac-landing-g{generation}-{caller}";
+
+    /// <summary>A page of the STAC collections listing of a caller (<see cref="StacCaller"/>) in a STAC generation.</summary>
+    public static string StacCollections(string generation, string caller, int limit, int offset) =>
+        $"stac-collections-g{generation}-{caller}-{limit}-{offset}";
 
     /// <summary>The read-only lookup of a dataset by its slugs (with its organization's members).</summary>
     public static string DatasetLookup(string orgSlug, string dsSlug) => $"ds-lookup:{orgSlug}/{dsSlug}";

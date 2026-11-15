@@ -166,7 +166,7 @@ public class StacManagerTest : TestBase
         var cache = new MemoryDistributedCache(
             Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
         var catalog = new StacCatalog(context, _authManagerMock.Object, TestCaches.WithDatasetVisibility(cache),
-            _ddbManagerMock.Object, TestCaches.Records(cache), TestCaches.Generations(cache));
+            _ddbManagerMock.Object, TestCaches.Records(cache), TestCaches.Generations(cache), urlsMock.Object);
 
         return (new StacManager(
             new DatasetAccessResolver(utilsMock.Object, _authManagerMock.Object, _ddbManagerMock.Object, TestPaths.Policy),

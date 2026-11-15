@@ -52,6 +52,9 @@ public sealed class DatasetVisibilityWorld : IDisposable
     public User Outsider { get; } = new() { Id = "outsider-id", UserName = "outsider" };
     public User Administrator { get; } = new() { Id = "admin-id", UserName = "administrator" };
 
+    /// <summary>A read-only member of the private organization whose user name is the one an anonymous caller is logged as.</summary>
+    public User NamedAnonymous { get; } = new() { Id = "named-anonymous-id", UserName = MagicStrings.AnonymousUserName };
+
     private readonly Mock<UserManager<User>> _users;
     private readonly IDistributedCache _store =
         new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
@@ -100,7 +103,7 @@ public sealed class DatasetVisibilityWorld : IDisposable
                     : System.Text.Encoding.UTF8.GetBytes(Names[(Guid)args[1]]));
 
         _users = new Mock<UserManager<User>>(new Mock<IUserStore<User>>().Object, null!, null!, null!, null!, null!, null!, null!, null!);
-        var everyone = new[] { Owner, Member, Outsider, Administrator };
+        var everyone = new[] { Owner, Member, Outsider, Administrator, NamedAnonymous };
         _users.Setup(u => u.FindByIdAsync(It.IsAny<string>()))
             .ReturnsAsync((string id) => everyone.FirstOrDefault(u => u.Id == id));
         _users.Setup(u => u.IsInRoleAsync(Administrator, ApplicationDbContext.AdminRoleName)).ReturnsAsync(true);
@@ -146,13 +149,13 @@ public sealed class DatasetVisibilityWorld : IDisposable
     }
 
     /// <summary>The STAC catalog for <paramref name="caller"/>; the listings it caches are kept per caller.</summary>
-    public StacManager Stac(User? caller)
+    public StacManager Stac(User? caller, string host = "http://localhost")
     {
         var auth = Auth(caller);
         var urls = new Mock<IUrlBuilder>();
-        urls.Setup(o => o.GetLocalHost(It.IsAny<bool>())).Returns("http://localhost");
+        urls.Setup(o => o.GetLocalHost(It.IsAny<bool>())).Returns(host);
         var catalog = new StacCatalog(Context, auth, Cache.Object, DdbManager.Object, TestCaches.Records(_store),
-            TestCaches.Generations(_store));
+            TestCaches.Generations(_store), urls.Object);
         return new StacManager(Access(auth), DdbManager.Object, catalog, new StacUrls(urls.Object),
             NullLogger<StacManager>.Instance);
     }

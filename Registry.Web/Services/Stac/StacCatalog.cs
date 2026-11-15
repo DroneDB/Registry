@@ -31,10 +31,12 @@ public sealed class StacCatalog
     private readonly IDdbManager _ddbManager;
     private readonly IRecordCache _records;
     private readonly CacheGenerations _generations;
+    private readonly IUrlBuilder _urls;
 
     public StacCatalog(RegistryContext context, IAuthManager authManager, ICacheManager cacheManager,
-        IDdbManager ddbManager, IRecordCache records, CacheGenerations generations)
+        IDdbManager ddbManager, IRecordCache records, CacheGenerations generations, IUrlBuilder urls)
     {
+        _urls = urls;
         _context = context;
         _authManager = authManager;
         _cacheManager = cacheManager;
@@ -82,14 +84,16 @@ public sealed class StacCatalog
 
     /// <summary>
     /// A listing of the current caller, cached in the current STAC generation under the key
-    /// <paramref name="keyOf"/> makes of the generation and the caller's name. <paramref name="create"/> gets the
-    /// shared computation's token (canceled once no caller waits for the listing).
+    /// <paramref name="keyOf"/> makes of the generation and of who asks and at which address
+    /// (<see cref="CacheCategories.StacCaller"/>): the user id, never the name, and the host the links of the listing point
+    /// to. <paramref name="create"/> gets the shared computation's token (canceled once no caller waits for the listing).
     /// </summary>
     public async Task<T> ListingAsync<T>(Func<string, string, string> keyOf, Func<CancellationToken, Task<T>> create,
         CancellationToken ct = default)
     {
         var generation = await _generations.CurrentAsync(CacheCategories.StacGeneration, ct);
-        var key = keyOf(generation, await _authManager.SafeGetCurrentUserName());
+        var caller = CacheCategories.StacCaller(await _authManager.GetCurrentUserId(), _urls.GetLocalHost());
+        var key = keyOf(generation, caller);
         return await _records.GetOrCreateRecordAsync(key, create, ListingCache, ct);
     }
 }

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using Registry.Common;
 using Registry.Web.Data.Models;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.DTO;
@@ -121,5 +122,33 @@ public class DatasetListingVisibilityTests
         var dataset = _world.Context.Datasets.Single(d => d.InternalRef == _world.Refs[PublicOrg + "/c-private"]);
         (await _world.Auth(null).RequestAccess(dataset, AccessType.Read)).ShouldBeFalse();
         (await _world.Auth(null).CanListDataset(dataset)).ShouldBeFalse();
+    }
+    [Test]
+    public async Task AUserCalledAnonymous_AndAnAnonymousCaller_DoNotShareTheirStacListings()
+    {
+        // A read-only member of the private organization, whose user name is the one an anonymous caller is logged as
+        _world.Context.Organizations.Single(o => o.Slug == PrivateOrg).Users!.Add(new OrganizationUser
+        {
+            OrganizationSlug = PrivateOrg, UserId = _world.NamedAnonymous.Id,
+            Permissions = OrganizationPermissions.ReadOnly, GrantedAt = DateTime.UtcNow, GrantedBy = _world.Owner.Id
+        });
+        await _world.Context.SaveChangesAsync();
+
+        // The member's listings are cached first; the anonymous caller must not be served them
+        (await LandingPage(_world.NamedAnonymous)).ShouldContain(PrivateOrg + "/c-private");
+        (await Collections(_world.NamedAnonymous)).ShouldContain(PrivateOrg + "/c-private");
+
+        (await LandingPage(null)).ShouldNotContain(PrivateOrg + "/c-private");
+        (await Collections(null)).ShouldNotContain(PrivateOrg + "/c-private");
+    }
+
+    [Test]
+    public async Task TheStacListings_AreKeptPerAddress_BecauseTheirLinksPointThere()
+    {
+        var first = (await _world.Stac(null, "http://first.example").GetLandingPage()).Links!.Single(l => l.Relationship == "self");
+        var second = (await _world.Stac(null, "http://second.example").GetLandingPage()).Links!.Single(l => l.Relationship == "self");
+
+        first.Href.ShouldStartWith("http://first.example");
+        second.Href.ShouldStartWith("http://second.example");
     }
 }
