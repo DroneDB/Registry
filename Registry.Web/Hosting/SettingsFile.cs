@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using Microsoft.Extensions.Configuration;
@@ -18,7 +19,8 @@ namespace Registry.Web.Hosting;
 /// <summary>
 /// The storage folder's <c>appsettings.json</c>. A first start creates it from the embedded
 /// defaults; every start adds the secrets that are missing (<see cref="GeneratedSecrets"/>) and changes
-/// nothing else, so a normal start does not write the file. Writes are atomic
+/// nothing else, so a normal start does not write the file. A secret is missing when neither the file nor what the
+/// host reads over it (the environment variables, <see cref="HostOverrides"/>) gives it. Writes are atomic
 /// (<see cref="AtomicFile"/>). <c>--check</c> validates the same content the host would read, with the
 /// same rules, without writing.
 /// </summary>
@@ -58,12 +60,29 @@ public static class SettingsFile
         return reader.ReadToEnd();
     }
 
+    /// <summary>What a host reads over the settings file: the environment variables (<c>AppSettings__Secret</c>).</summary>
+    public static IConfiguration HostOverrides() => new ConfigurationBuilder().AddEnvironmentVariables().Build();
+
     /// <summary>
-    /// Creates the file from the defaults when it does not exist, then adds the missing secrets.
+    /// Creates the file from the defaults when it does not exist, then adds the missing secrets
+    /// (<see cref="Prepare(string, IFileSystem, IConfiguration)"/> over <see cref="HostOverrides"/>).
     /// </summary>
+    public static SettingsFileChanges Prepare(string storageFolder, IFileSystem fs) =>
+        Prepare(storageFolder, fs, HostOverrides());
+
+    /// <summary>
+    /// Creates the file from the defaults when it does not exist, then adds the secrets that neither the file nor
+    /// <paramref name="overrides"/> gives: a secret set in the environment is used as it is, and the file is not
+    /// written for it (it can then be read-only).
+    /// </summary>
+    /// <param name="storageFolder">The storage folder.</param>
+    /// <param name="fs">The file system.</param>
+    /// <param name="overrides">What the host reads over the file.</param>
     /// <returns>What was done, for the log.</returns>
     /// <exception cref="JsonException">The file is not valid JSON.</exception>
-    public static SettingsFileChanges Prepare(string storageFolder, IFileSystem fs)
+    /// <exception cref="IOException">A secret is missing and the file cannot be written to keep a generated one: the
+    /// message names the key and the two ways to set it.</exception>
+    public static SettingsFileChanges Prepare(string storageFolder, IFileSystem fs, IConfiguration overrides)
     {
         var atomicFile = new AtomicFile(fs);
         var path = PathIn(storageFolder);
@@ -76,14 +95,34 @@ public static class SettingsFile
         }
 
         var settings = Read(path, fs);
-        var generated = AddMissingSecrets(settings);
+        var generated = AddMissingSecrets(settings, overrides);
         var atomic = true;
 
         if (generated.Count > 0)
-            atomic = atomicFile.WriteAllText(path, settings.ToJsonString(WriteOptions));
+        {
+            try
+            {
+                atomic = atomicFile.WriteAllText(path, settings.ToJsonString(WriteOptions));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                throw NotWritable(path, generated, ex);
+            }
+            catch (IOException ex)
+            {
+                throw NotWritable(path, generated, ex);
+            }
+        }
 
         return new SettingsFileChanges(path, created, generated, atomic);
     }
+
+    // The secrets a start must keep and cannot write: what to set, where
+    private static IOException NotWritable(string path, IReadOnlyList<string> keys, Exception cause) =>
+        new($"{string.Join(" and ", keys.Select(key => $"{RegistryOptions.SectionName}:{key}"))} " +
+            $"{(keys.Count == 1 ? "is" : "are")} not set and '{path}' cannot be written to keep a generated value " +
+            $"({cause.Message}): set {(keys.Count == 1 ? "it" : "them")} in that file, or in the environment " +
+            $"({string.Join(", ", keys.Select(key => $"{RegistryOptions.SectionName}__{key}"))})", cause);
 
     /// <summary>The file's JSON.</summary>
     /// <exception cref="JsonException">The file is not valid JSON or not an object.</exception>
@@ -93,10 +132,13 @@ public static class SettingsFile
 
     /// <summary>
     /// Sets each of <see cref="GeneratedSecrets"/> that is missing or blank in the <c>AppSettings</c>
-    /// object of <paramref name="settings"/> to a new random value; leaves everything else as it is.
+    /// object of <paramref name="settings"/>, and that <paramref name="supplied"/> does not give, to a new random value;
+    /// leaves everything else as it is.
     /// </summary>
+    /// <param name="settings">The JSON of the settings file.</param>
+    /// <param name="supplied">What the host reads over the file; null: nothing.</param>
     /// <returns>The keys that were generated.</returns>
-    public static IReadOnlyList<string> AddMissingSecrets(JsonObject settings)
+    public static IReadOnlyList<string> AddMissingSecrets(JsonObject settings, IConfiguration? supplied = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
@@ -109,7 +151,8 @@ public static class SettingsFile
         var generated = new List<string>();
         foreach (var key in GeneratedSecrets)
         {
-            if (!string.IsNullOrWhiteSpace(Text(section[key])))
+            if (!string.IsNullOrWhiteSpace(Text(section[key])) ||
+                !string.IsNullOrWhiteSpace(supplied?[$"{RegistryOptions.SectionName}:{key}"]))
                 continue;
 
             section[key] = CommonUtils.RandomString(SecretLength);
@@ -144,7 +187,7 @@ public static class SettingsFile
     }
 }
 
-/// <summary>What <see cref="SettingsFile.Prepare"/> did.</summary>
+/// <summary>What <see cref="SettingsFile.Prepare(string, IFileSystem, IConfiguration)"/> did.</summary>
 /// <param name="Path">The settings file.</param>
 /// <param name="Created">True when it was created from the defaults.</param>
 /// <param name="GeneratedSecrets">The secrets that were generated and written.</param>
