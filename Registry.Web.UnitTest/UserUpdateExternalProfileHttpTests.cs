@@ -28,6 +28,9 @@ namespace Registry.Web.Test;
 [NonParallelizable]
 public sealed class UserUpdateExternalProfileHttpTests : IDisposable
 {
+    private static readonly string[] ViewerRole = ["viewer"];
+    private static readonly string[] EditorRole = ["editor"];
+
     private const string Admin = RegistryWebFactory.AdminUserName;
 
     // What the provider of the host manages: a provider that takes the profile from the directory but not the roles
@@ -87,7 +90,7 @@ public sealed class UserUpdateExternalProfileHttpTests : IDisposable
         return $"{user.Email}|{string.Join(',', (await users.GetRolesAsync(user)).OrderBy(r => r))}";
     }
 
-    private async Task<string> DetailOf(HttpResponseMessage response) =>
+    private static async Task<string> DetailOf(HttpResponseMessage response) =>
         JsonNode.Parse(await response.Content.ReadAsStringAsync())!["detail"]!.GetValue<string>();
 
     [Test]
@@ -96,7 +99,7 @@ public sealed class UserUpdateExternalProfileHttpTests : IDisposable
         await _factory.CreateUserAsync("ldapuser", password: "Password1234");
         Provider.Current = ProfileOnly;
 
-        using var response = await PutAsync("ldapuser", new { roles = new[] { "viewer" } });
+        using var response = await PutAsync("ldapuser", new { roles = ViewerRole });
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await StateOf("ldapuser")).ShouldBe("ldapuser@example.com|viewer");
@@ -108,17 +111,17 @@ public sealed class UserUpdateExternalProfileHttpTests : IDisposable
         await _factory.CreateUserAsync("ldapsame", password: "Password1234");
         Provider.Current = ProfileOnly;
 
-        using (var same = await PutAsync("ldapsame", new { email = " ldapsame@example.com ", roles = new[] { "editor" } }))
+        using (var same = await PutAsync("ldapsame", new { email = " ldapsame@example.com ", roles = EditorRole }))
             same.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await StateOf("ldapsame")).ShouldBe("ldapsame@example.com|editor");
 
-        using (var changed = await PutAsync("ldapsame", new { email = "other@example.com", roles = new[] { "viewer" } }))
+        using (var changed = await PutAsync("ldapsame", new { email = "other@example.com", roles = ViewerRole }))
         {
             changed.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
             (await DetailOf(changed)).ShouldBe("Profile data (email) is synchronised from the identity provider and cannot be modified locally.");
         }
 
-        using (var emptied = await PutAsync("ldapsame", new { email = "", roles = new[] { "viewer" } }))
+        using (var emptied = await PutAsync("ldapsame", new { email = "", roles = ViewerRole }))
             emptied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
         (await StateOf("ldapsame")).ShouldBe("ldapsame@example.com|editor");
@@ -130,7 +133,7 @@ public sealed class UserUpdateExternalProfileHttpTests : IDisposable
         await _factory.CreateUserAsync("ldapboth", password: "Password1234");
         Provider.Current = AuthProviderCapabilities.External;
 
-        using var response = await PutAsync("ldapboth", new { roles = new[] { "viewer" } });
+        using var response = await PutAsync("ldapboth", new { roles = ViewerRole });
 
         response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await DetailOf(response)).ShouldContain("Role assignments are managed by the identity provider");
@@ -142,7 +145,7 @@ public sealed class UserUpdateExternalProfileHttpTests : IDisposable
     {
         await _factory.CreateUserAsync("localuser", password: "Password1234");
 
-        using var response = await PutAsync("localuser", new { roles = new[] { "editor" } });
+        using var response = await PutAsync("localuser", new { roles = EditorRole });
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await StateOf("localuser")).ShouldBe("localuser@example.com|editor");

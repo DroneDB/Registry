@@ -35,7 +35,7 @@ public class UserCreatedDateMigrationMariaDbTests
         return migrations[migrations.FindIndex(m => m.EndsWith("_AddUserCreatedDate", StringComparison.Ordinal)) - 1];
     }
 
-    private static Task InsertUserAsync(ApplicationDbContext context, string id) =>
+    private static Task<int> InsertUserAsync(ApplicationDbContext context, string id) =>
         context.Database.ExecuteSqlRawAsync(
             "INSERT INTO AspNetUsers (Id, UserName, Metadata, Preferences, EmailConfirmed, PhoneNumberConfirmed, " +
             "TwoFactorEnabled, LockoutEnabled, AccessFailedCount) VALUES ({0}, {0}, '{{}}', '{{}}', 0, 0, 0, 0, 0)", id);

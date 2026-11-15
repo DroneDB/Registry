@@ -298,7 +298,7 @@ public class HeavyTaskRunnerTests
 
     // ---- Mask Borders is checked like any tool (FR-PRC-12, D-013) ----
 
-    private HeavyTaskSubmitRequest SubmitMask(string path) =>
+    private static HeavyTaskSubmitRequest SubmitMask(string path) =>
         new(Org, Ds, "mask-borders", null, null, JsonSerializer.SerializeToElement(new { path }), false, "user", null);
 
     private void MaskToolOver(string path)

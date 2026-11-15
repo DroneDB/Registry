@@ -18,9 +18,9 @@ namespace Registry.Web.Test;
 [TestFixture]
 public class ConfigurationEffectiveDefaultsTests
 {
-    private static ConfigurationFieldDataDto FieldOf(IConfigurationSectionBuilder builder, string section, string key) =>
+    private static ConfigurationFieldDataDto FieldOf(ProcessingSections builder, string section, string key) =>
         builder.Build().Select(p => p.Section).First(s => s.Name == section && s.Title != "Tool Gating")
-            .Fields.Single(f => f.Key == key);
+            .Fields.ShouldNotBeNull().Single(f => f.Key == key);
 
     private static ProcessingSections Processing(Dictionary<string, string?> settings)
     {

@@ -120,7 +120,7 @@ public class ArchiveUrlImportSourceTests
         var probe = await source.ProbeAsync(Params(), CancellationToken.None);
 
         probe.Reachable.ShouldBeFalse();
-        probe.Message.ShouldContain("404");
+        probe.Message.ShouldNotBeNull().ShouldContain("404");
     }
 
     private sealed class Handler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler

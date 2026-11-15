@@ -40,6 +40,8 @@ namespace Registry.Web.Test;
 [TestFixture]
 public class PhotogrammetryNewDatasetTests
 {
+    private static readonly string[] SourceImages = ["a.jpg", "b.jpg"];
+
     private const string SlugRuleText =
         "Dataset slug is invalid: it has 2 to 128 characters (lowercase letters, digits, '_' and '-'), " +
         "starts with a letter or digit and has no '--'";
@@ -145,7 +147,8 @@ public class PhotogrammetryNewDatasetTests
     {
         var source = new Mock<IDDB>();
         source.SetupGet(d => d.DatasetFolderPath).Returns(Path.Combine(_dir, "source"));
-        var images = new[] { "a.jpg", "b.jpg" }.Select(p => new Registry.Ports.DroneDB.Entry { Path = p, Type = EntryType.Image, Size = 100 }).ToList();
+        var images = SourceImages
+            .Select(p => new Registry.Ports.DroneDB.Entry { Path = p, Type = EntryType.Image, Size = 100 }).ToList();
         source.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns(images);
         source.Setup(d => d.GetLocalPath(It.IsAny<string>())).Returns<string>(p => Path.Combine(_dir, "source", p));
         return source;

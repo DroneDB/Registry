@@ -345,7 +345,7 @@ public class PendingBuildCoordinationTests
         {
             await _service.StartIfRetryableAsync(AddTarget);
             // A coordinator enqueued now runs at once and ends; a scheduled one waits for its time
-            foreach (var id in _statuses.Keys.Where(k => k.StartsWith("sweep-")).ToArray())
+            foreach (var id in _statuses.Keys.Where(k => k.StartsWith("sweep-", StringComparison.Ordinal)).ToArray())
                 _statuses[id] = JobStatus.Succeeded;
         }
 

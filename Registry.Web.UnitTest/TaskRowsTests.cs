@@ -233,7 +233,7 @@ public class TaskRowsTests
             .GetStatusAsync(Org, Ds, "cancelled");
 
         status.CancelledBy.ShouldBe("admin");
-        status.LogTail.Last().ShouldEndWith("Cancelled by admin");
+        status.LogTail[^1].ShouldEndWith("Cancelled by admin");
         status.Actions.ShouldBe(["viewLog", "delete"]);
     }
 
@@ -509,8 +509,8 @@ public class TaskRowsTests
             It.IsAny<CancellationToken>())).ReturnsAsync([]);
         client.Setup(c => c.DownloadAssetAsync(It.IsAny<NodeOdxEndpoint>(), "uuid-1", "all.zip", It.IsAny<string>(),
                 It.IsAny<CancellationToken>()))
-            .Returns<NodeOdxEndpoint, string, string, string, CancellationToken>((_, _, _, path, _) =>
-                System.IO.File.WriteAllBytesAsync(path, [1]));
+            .Returns<NodeOdxEndpoint, string, string, string, CancellationToken>((_, _, _, path, ct) =>
+                System.IO.File.WriteAllBytesAsync(path, [1], ct));
         var platform = TestSettings.Options<ProcessingPlatformSettings>(new AppSettings
         {
             ProcessingPlatform = new ProcessingPlatformSettings { RemoteNodePollIntervalSeconds = 1 }

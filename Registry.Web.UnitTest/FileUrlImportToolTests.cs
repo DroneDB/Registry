@@ -27,6 +27,8 @@ namespace Registry.Web.Test;
 [TestFixture]
 public class FileUrlImportToolTests
 {
+    private static readonly string[] CloudOnly = ["cloud.laz"];
+
     private static FileUrlImportTool CreateTool(ImportSettings? settings = null, IHttpClientFactory? http = null)
     {
         settings ??= new ImportSettings { SsrfAllowPrivateNetworks = true };
@@ -202,7 +204,7 @@ public class FileUrlImportToolTests
             await tool.ValidateAsync(req, ctx.Object, CancellationToken.None);
             await tool.ExecuteAsync(req, ctx.Object, new Progress<HeavyToolProgress>(), CancellationToken.None);
 
-            ddb.Verify(d => d.AddRawBatch(It.Is<IReadOnlyList<string>>(p => p.SequenceEqual(new[] { "cloud.laz" }))), Times.Once);
+            ddb.Verify(d => d.AddRawBatch(It.Is<IReadOnlyList<string>>(p => p.SequenceEqual(CloudOnly))), Times.Once);
             ctx.Verify(c => c.MarkOutputPublished(It.IsAny<string>()), Times.Never);
         }
         finally

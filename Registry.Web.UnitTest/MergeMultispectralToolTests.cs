@@ -71,7 +71,7 @@ public class MergeMultispectralToolTests
         _h.Ddb.Setup(d => d.Remove(It.IsAny<string>())).Callback<string>(p => _h.Calls.Add("remove " + p));
     }
 
-    private Task Execute(HeavyToolRequest request) =>
+    private Task<HeavyToolArtifact?> Execute(HeavyToolRequest request) =>
         _tool.ExecuteAsync(request, _h.Ctx.Object, new Progress<HeavyToolProgress>(), CancellationToken.None);
 
     // FR-XC-26, D-039: an output that does not fit what the owner of the organization has left fails the task with the 507
