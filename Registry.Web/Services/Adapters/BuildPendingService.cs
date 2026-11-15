@@ -260,9 +260,7 @@ public class BuildPendingService : IPendingBuildFlag, IPendingBuildRetry
         var meta = new IndexPayload(orgSlug, dsSlug, null, MagicStrings.AutoBuildServiceUserId,
                 TargetLabel: BuildTool.PendingBuildsLabel);
         var delay = addedEntry ? AddedEntryDelay(state, DateTime.UtcNow) : null;
-        var jobId = delay is { } wait
-            ? _backgroundJob.ScheduleBuildPending(dataset, meta, wait)
-            : _backgroundJob.EnqueueBuildPending(dataset, meta);
+        var jobId = _backgroundJob.ScheduleBuildPending(dataset, meta, delay);
         if (string.IsNullOrWhiteSpace(jobId))
             throw new InvalidOperationException("Pending coordinator enqueue returned no job ID");
         if (addedEntry)
