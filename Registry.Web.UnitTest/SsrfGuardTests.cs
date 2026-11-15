@@ -30,6 +30,13 @@ public class SsrfGuardTests
     [TestCase("::ffff:10.0.0.1")]            // IPv4-mapped private
     [TestCase("::ffff:127.0.0.1")]           // IPv4-mapped loopback
     [TestCase("::ffff:169.254.169.254")]     // IPv4-mapped cloud metadata
+    [TestCase("0.0.0.0")]                    // "this host" on most systems
+    [TestCase("::")]                         // IPv6 unspecified
+    [TestCase("100.64.0.1")]                 // shared address space (carrier-grade NAT)
+    [TestCase("0.1.2.3")]                    // 0.0.0.0/8
+    [TestCase("64:ff9b::7f00:1")]            // NAT64 of 127.0.0.1
+    [TestCase("2002:7f00:1::")]              // 6to4 of 127.0.0.1
+    [TestCase("224.0.0.1")]                  // multicast
     public async Task AssertAllowed_BlocksPrivateAndReservedAddresses(string host)
     {
         await Should.ThrowAsync<ArgumentException>(

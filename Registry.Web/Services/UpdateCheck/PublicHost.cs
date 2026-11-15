@@ -1,7 +1,6 @@
 using System;
 using System.Net;
-using System.Net.Sockets;
-using Registry.Web.Services.Import;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.UpdateCheck;
 
@@ -31,20 +30,5 @@ public static class PublicHost
                !host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsPublic(IPAddress address)
-    {
-        if (address.IsIPv4MappedToIPv6)
-            address = address.MapToIPv4();
-
-        if (SsrfGuard.IsBlocked(address) || address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any) ||
-            address.Equals(IPAddress.Broadcast) || address.IsIPv6Multicast)
-            return false;
-
-        if (address.AddressFamily != AddressFamily.InterNetwork)
-            return true;
-
-        // 0.0.0.0/8, shared address space 100.64.0.0/10, multicast and reserved 224.0.0.0/3
-        var b = address.GetAddressBytes();
-        return b[0] != 0 && !(b[0] == 100 && (b[1] & 0xC0) == 64) && b[0] < 224;
-    }
+    private static bool IsPublic(IPAddress address) => !ReservedAddresses.IsNonPublic(address);
 }
