@@ -355,6 +355,8 @@ public sealed class DatasetArchiveExtractor
                     staged.Target);
                 if (request.Writes != null)
                     await request.Writes.ForgetAsync(staged.Target, CancellationToken.None);
+                // Its temporary file is not moved: the batch is cleared after this, so it is released here
+                staged.Temp.Dispose();
                 skipped.Add(new ArchiveSkippedEntry(staged.Target, ArchiveSkipReason.KeptExisting));
                 continue;
             }

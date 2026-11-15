@@ -112,6 +112,30 @@ public class DatasetArchiveExtractorTests
         File.ReadAllText(Path.Combine(_dataset, "A", "X.JPG")).ShouldBe(expected);
     }
 
+    // The file of an entry appears after the check and before the move (another writer): the entry is kept as it is and
+    // skipped, and its temporary file in the uploads folder is released, not left there until the sweep of abandoned files
+    [Test]
+    public async Task AnEntryWhoseFileAppearsMeanwhile_IsSkipped_AndLeavesNoTemporaryFile()
+    {
+        Zip(("late.txt", "from the archive"), ("other.txt", "o"));
+        var writes = new Moq.Mock<Registry.Ports.Import.IImportWriteRecord>();
+        writes.Setup(w => w.SaveAsync(Moq.It.IsAny<CancellationToken>())).Returns(() =>
+        {
+            File.WriteAllText(Path.Combine(_dataset, "late.txt"), "from another writer");
+            return Task.CompletedTask;
+        });
+
+        var result = await TestArchives.Extractor(new SharpCompressArchiveExtractor()).ExtractAsync(
+            new ArchiveExtractionRequest(_archive, _dataset, string.Empty, _ => true, _ => false, 0, 0, writes.Object),
+            null, CancellationToken.None);
+
+        result.Extracted.ShouldBe(["other.txt"]);
+        result.Skipped.ShouldBe([new ArchiveSkippedEntry("late.txt", ArchiveSkipReason.KeptExisting)]);
+        File.ReadAllText(Path.Combine(_dataset, "late.txt")).ShouldBe("from another writer");
+        var uploads = Path.Combine(_dataset, IDDB.UploadsFolderName);
+        (Directory.Exists(uploads) ? Directory.GetFileSystemEntries(uploads) : []).ShouldBeEmpty();
+    }
+
     [Test]
     public async Task InBatchesOfOne_EveryEntryIsPlaced_AndADuplicateInALaterBatchWins()
     {
