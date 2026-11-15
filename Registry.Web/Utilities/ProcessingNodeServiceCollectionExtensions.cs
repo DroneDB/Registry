@@ -88,6 +88,7 @@ public static class ProcessingNodeServiceCollectionExtensions
         services.AddScoped<RecurringDatasetCleanupService>();
         services.AddScoped<ArtifactCompletenessCheckerService>();
         services.AddScoped<IndexRescanService>();
+        services.AddScoped<ReconciliationDisk>();
         services.AddScoped<IndexReconciliationService>();
         services.AddScoped<AbandonedShareBatchesService>();
 

@@ -231,6 +231,7 @@ internal static class ExtractionHarness
         });
         var extractor = new SharpCompressArchiveExtractor();
         return new ArchiveExtractTool(Support.TestArchives.Extractor(extractor), Support.TestSettings.Options<ImportSettings>(settings), Support.TestSettings.Options<ProcessingPlatformSettings>(settings),
-            Support.TestPaths.Policy, Support.TestHeadroom.Default, Support.TestJobs.FileIndexer());
+            Support.TestPaths.Policy, Support.TestHeadroom.Default, Support.TestJobs.FileIndexer(),
+            new Registry.Adapters.FileSystem());
     }
 }

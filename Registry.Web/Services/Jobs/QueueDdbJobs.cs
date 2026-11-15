@@ -31,19 +31,17 @@ public static class QueueDdbJobs
         return jobs.EnqueueIndexed<DdbJobs>(j => j.RebuildInBackground(orgSlug, internalRef, path, null), meta);
     }
 
-    /// <summary>Queues the pending-build job.</summary>
-    public static string EnqueueBuildPending(this IBackgroundJobsProcessor jobs, DatasetKey dataset, IndexPayload meta)
-    {
-        var (orgSlug, internalRef) = Target(dataset);
-        return jobs.EnqueueIndexed<DdbJobs>(j => j.BuildPending(orgSlug, internalRef, null), meta);
-    }
-
-    /// <summary>Schedules the pending-build job in <paramref name="delay"/>.</summary>
+    /// <summary>
+    /// Queues the pending-build job: scheduled in <paramref name="delay"/> when one is given, else enqueued now.
+    /// </summary>
+    /// <returns>The job id.</returns>
     public static string ScheduleBuildPending(this IBackgroundJobsProcessor jobs, DatasetKey dataset,
-        IndexPayload meta, TimeSpan delay)
+        IndexPayload meta, TimeSpan? delay)
     {
         var (orgSlug, internalRef) = Target(dataset);
-        return jobs.ScheduleIndexed<DdbJobs>(j => j.BuildPending(orgSlug, internalRef, null), meta, delay);
+        return delay is { } wait
+            ? jobs.ScheduleIndexed<DdbJobs>(j => j.BuildPending(orgSlug, internalRef, null), meta, wait)
+            : jobs.EnqueueIndexed<DdbJobs>(j => j.BuildPending(orgSlug, internalRef, null), meta);
     }
 
     /// <summary>Queues the dataset cleanup (gone entries, orphaned build artifacts).</summary>

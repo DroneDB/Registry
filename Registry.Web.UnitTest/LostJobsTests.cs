@@ -211,7 +211,7 @@ public class CancelTaskTests : IDisposable
         var writer = new JobIndexWriter(_db, NullLogger<JobIndexWriter>.Instance, new Mock<IRecordCache>().Object);
         var artifacts = new TaskArtifactStore(new Registry.Adapters.FileSystem(), TestScratch.Provider,
             NullLogger<TaskArtifactStore>.Instance);
-        return new TaskLifecycle(access, authorizer, processor, writer, artifacts,
+        return new TaskLifecycle(authorizer, processor, writer, artifacts,
             new TaskWriteRecordStore(_db, new Mock<IRecordCache>().Object, NullLogger<TaskWriteRecordStore>.Instance),
             _rollback.Object, NullLogger<TaskLifecycle>.Instance);
     }

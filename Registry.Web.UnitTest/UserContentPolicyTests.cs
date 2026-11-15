@@ -134,13 +134,15 @@ public class UserContentPolicyTests
     }
 
     // The tiles of a legacy EPT dataset (ept-data/*.laz, not built, libddb build_layout.h LegacyEptDataFolder) are
-    // plain LAZ: only a *.copc.laz file or one in a copc/ folder is COPC
+    // plain LAZ: only a *.copc.laz file is COPC, whatever folder it lies in (the folders of a build are libddb's layout,
+    // which says nothing of the type)
     [TestCase("ept/ept-data/0-0-0-0.laz", "application/vnd.laszip")]
     [TestCase("entwine_pointcloud/ept-data/1-0-1-0.LAZ", "application/vnd.laszip")]
     [TestCase("cloud.laz", "application/vnd.laszip")]
+    [TestCase("copc/cloud.laz", "application/vnd.laszip")]
+    [TestCase("COPC\\cloud.laz", "application/vnd.laszip")]
     [TestCase("copc/cloud.copc.laz", "application/vnd.laszip+copc")]
-    [TestCase("copc/cloud.laz", "application/vnd.laszip+copc")]
-    [TestCase("COPC\\cloud.laz", "application/vnd.laszip+copc")]
+    [TestCase("COPC\\cloud.copc.laz", "application/vnd.laszip+copc")]
     [TestCase("scan.copc.laz", "application/vnd.laszip+copc")]
     [TestCase("a/b/scan.COPC.LAZ", "application/vnd.laszip+copc")]
     public void BuildFile_OfALaz_IsCopcOnlyWhenItIsACopcFile(string path, string mediaType)

@@ -262,21 +262,26 @@ public static class JobLogText
             yield return form;
     }
 
-    // fullPath with every link of its folders resolved (realpath); null when it cannot be read
+    // fullPath with every link of its folders resolved (realpath); null when it is not a folder that can be read
     private static string? RealPath(string fullPath)
     {
-        var root = Path.GetPathRoot(fullPath);
-        if (string.IsNullOrEmpty(root) || !Directory.Exists(fullPath)) return null;
+        var folder = new DirectoryInfo(fullPath);
+        if (!folder.Exists) return null;
 
-        var current = root;
-        foreach (var part in fullPath[root.Length..].Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries))
+        // The folders from the root down, each one named under its parent as resolved so far
+        var chain = new Stack<DirectoryInfo>();
+        for (var current = folder; current != null; current = current.Parent)
+            chain.Push(current);
+
+        var resolved = chain.Pop().FullName;
+        while (chain.Count > 0)
         {
-            current = Path.Combine(current, part);
-            if (new DirectoryInfo(current).ResolveLinkTarget(returnFinalTarget: true) is { } target)
-                current = target.FullName;
+            resolved = Path.Combine(resolved, chain.Pop().Name);
+            if (new DirectoryInfo(resolved).ResolveLinkTarget(returnFinalTarget: true) is { } target)
+                resolved = target.FullName;
         }
 
-        return current;
+        return resolved;
     }
 
     // Control characters (a NUL above all) escaped, as InvalidDatasetPathException shows them

@@ -28,27 +28,21 @@ public sealed class TaskNotifier
 {
     private readonly RegistryContext _db;
     private readonly IEmailService _email;
-    private readonly ITaskNotificationLevels _levels;
-    private readonly IUserRecipients _recipients;
-    private readonly IUserDatasetAccess _datasets;
+    private readonly TaskNotificationAudience _audience;
     private readonly ITaskNotificationComposer _composer;
     private readonly BuildNotificationOutbox _outbox;
     private readonly IHeavyToolRegistry? _tools;
-    private readonly TimeProvider _time;
     private readonly ILogger<TaskNotifier> _logger;
 
-    public TaskNotifier(RegistryContext db, IEmailService email, ITaskNotificationLevels levels, IUserRecipients recipients,
-        IUserDatasetAccess datasets, ITaskNotificationComposer composer, BuildNotificationOutbox outbox, TimeProvider time,
-        ILogger<TaskNotifier> logger, IHeavyToolRegistry? tools = null)
+    public TaskNotifier(RegistryContext db, IEmailService email, TaskNotificationAudience audience,
+        ITaskNotificationComposer composer, BuildNotificationOutbox outbox, ILogger<TaskNotifier> logger,
+        IHeavyToolRegistry? tools = null)
     {
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _email = email ?? throw new ArgumentNullException(nameof(email));
-        _levels = levels ?? throw new ArgumentNullException(nameof(levels));
-        _recipients = recipients ?? throw new ArgumentNullException(nameof(recipients));
-        _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
+        _audience = audience ?? throw new ArgumentNullException(nameof(audience));
         _composer = composer ?? throw new ArgumentNullException(nameof(composer));
         _outbox = outbox ?? throw new ArgumentNullException(nameof(outbox));
-        _time = time ?? throw new ArgumentNullException(nameof(time));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _tools = tools;
     }
@@ -77,25 +71,9 @@ public sealed class TaskNotifier
             return false;
 
         var userId = row.UserId!;
-        var level = await _levels.TasksOfAsync(userId, ct).ConfigureAwait(false);
-        if (!level.WantsTask(task.Succeeded))
+        if (await _audience.RecipientAsync(task.JobId, userId, task.Succeeded, row.OrgSlug, row.DsSlug, ct)
+                .ConfigureAwait(false) is not { } recipient)
             return false;
-
-        var recipient = await _recipients.FindAsync(userId, ct).ConfigureAwait(false);
-        if (recipient == null)
-        {
-            _logger.LogInformation("The end of task {TaskId} is not told to user {UserId}: the user cannot be e-mailed",
-                task.JobId, userId);
-            return false;
-        }
-
-        // The slugs, the files and the error of a dataset are not the business of who cannot read it any more
-        if (!await _datasets.CanReadAsync(userId, row.OrgSlug, row.DsSlug, ct).ConfigureAwait(false))
-        {
-            _logger.LogInformation("The end of task {TaskId} is not told to user {UserId}: the user cannot read {Org}/{Ds}",
-                task.JobId, userId, row.OrgSlug, row.DsSlug);
-            return false;
-        }
 
         // The message of the task error (FR-XC-06) is the one the task list shows; one function made it
         var error = task.Succeeded ? null : BuildReport.ShortError(
@@ -115,7 +93,8 @@ public sealed class TaskNotifier
 
         try
         {
-            var end = (task.Succeeded ? row.SucceededAtUtc : row.FailedAtUtc) ?? _time.GetUtcNow().UtcDateTime;
+            // A row without the time of its end ends when its end is recorded (the outbox line, now)
+            var end = (task.Succeeded ? row.SucceededAtUtc : row.FailedAtUtc) ?? line.FinishedAtUtc;
             var duration = row.ProcessingAtUtc is { } start && end >= start ? end - start : (TimeSpan?)null;
             var message = await _composer.ComposeAsync(recipient,
                 new TaskNotificationModel(recipient.DisplayName ?? userId, title, row.TargetLabel, row.OrgSlug, row.DsSlug,

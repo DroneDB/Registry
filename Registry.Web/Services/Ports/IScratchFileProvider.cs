@@ -29,6 +29,17 @@ public sealed class ScratchFile : IDisposable
     public void Release() => _released = true;
 
     /// <summary>
+    /// Moves the complete file into place at <paramref name="destination"/> and releases it: from here it is the
+    /// destination's. Without <paramref name="overwrite"/> a file there is never replaced (an
+    /// <see cref="IOException"/>, and this scratch file still deletes its own).
+    /// </summary>
+    public void MoveTo(string destination, bool overwrite)
+    {
+        _fs.Move(Path, destination, overwrite);
+        Release();
+    }
+
+    /// <summary>
     /// Hands the written file over to a reader: a stream that deletes the file when it is closed (whether the reader
     /// read it all, failed or stopped early). When the file cannot be opened it stays this scratch file's to delete.
     /// </summary>

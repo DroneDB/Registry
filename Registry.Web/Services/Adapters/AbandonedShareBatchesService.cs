@@ -54,12 +54,15 @@ public class AbandonedShareBatchesService
     private readonly DatasetRemoval _removal;
     private readonly IDdbManager _ddbManager;
     private readonly TaskEntryChanges _changes;
+    private readonly IFileSystem _fs;
     private readonly ILogger<AbandonedShareBatchesService> _logger;
     private readonly TimeProvider _time;
 
     public AbandonedShareBatchesService(RegistryContext db, DatasetRemoval removal, IDdbManager ddbManager,
-        TaskEntryChanges changes, ILogger<AbandonedShareBatchesService> logger, TimeProvider? time = null)
+        TaskEntryChanges changes, IFileSystem fs, ILogger<AbandonedShareBatchesService> logger,
+        TimeProvider? time = null)
     {
+        _fs = fs ?? throw new ArgumentNullException(nameof(fs));
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _removal = removal ?? throw new ArgumentNullException(nameof(removal));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
@@ -179,8 +182,8 @@ public class AbandonedShareBatchesService
             }
 
             var local = ddb.GetLocalPath(path);
-            if (File.Exists(local))
-                File.Delete(local);
+            if (_fs.Exists(local))
+                _fs.Delete(local);
         }
 
         await _changes.EntriesLeftAsync(new DatasetKey(orgSlug, internalRef), left);

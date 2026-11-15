@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Ports;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.Jobs;
@@ -21,7 +22,7 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// artifact is produced. The caller (frontend) is responsible for submitting a
 /// separate "build" task for the output file after this task succeeds.
 /// </summary>
-public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<AlignRasterTool.Parameters>
+public sealed class AlignRasterTool(DatasetPathPolicy paths, IFileSystem fs) : HeavyToolBase<AlignRasterTool.Parameters>
 {
     /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
     public sealed record Parameters(string? SourcePath, string? ReferencePath, string? OutputPath, string? Mode,
@@ -91,7 +92,7 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
 
         // An existing output is replaced only when the request says so (409 otherwise, D-040); the output an
         // earlier attempt of this task wrote is its own
-        if (!PublishedOutputMarker.Covers(ctx.Ddb, ctx.PublishedOutput, outputPath))
+        if (!PublishedOutputMarker.Covers(ctx.Ddb, fs, ctx.PublishedOutput, outputPath))
             DatasetEntryLookup.ResolveOutput(ctx.Ddb, outputPath, Overwrite(args, ctx));
 
         return Task.CompletedTask;
@@ -195,7 +196,7 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
         // replaced, and its entry must describe it); the cancel is honoured once it is indexed (FR-XC-27)
         var replaced = false;
         var published = ctx.PublishedOutput;
-        if (PublishedOutputMarker.Covers(ctx.Ddb, published, outputPath))
+        if (PublishedOutputMarker.Covers(ctx.Ddb, fs, published, outputPath))
         {
             // An earlier attempt wrote the output and failed after it (the index was busy): index it, never write again
             outputPath = published!;
@@ -216,29 +217,29 @@ public sealed class AlignRasterTool(DatasetPathPolicy paths) : HeavyToolBase<Ali
             // is complete: a failed run leaves it as it was (FR-PRC-01). Decided before the call: an output the
             // alignment replaces is never recorded (FR-XC-27, FR-XC-07), a rollback must not delete the file that was there
             var outputFullPath = ctx.Ddb.GetLocalPath(outputPath);
-            var replacing = Overwrite(args, ctx) && File.Exists(outputFullPath);
-            if (!replacing && File.Exists(outputFullPath))
+            var replacing = Overwrite(args, ctx) && fs.Exists(outputFullPath);
+            if (!replacing && fs.Exists(outputFullPath))
                 throw new NameClashException(outputPath);
             // What the owner's use counts for the file the alignment replaces, read before the run: only the growth
             // counts (FR-XC-26)
             var replacedBytes = replacing ? WorkerStorageQuota.IndexedBytes(ctx.Ddb, outputPath) : 0;
             var root = ctx.Ddb.DatasetFolderPath;
-            var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, ct);
+            var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, fs, ct);
 
             // A new output (and the folders it needs) is in the saved record before it is written (§8.1)
             if (!replacing)
             {
-                TaskImportWrites.RecordFolders(writes, root, TaskImportWrites.ParentOf(outputPath));
+                TaskImportWrites.RecordFolders(fs, writes, root, TaskImportWrites.ParentOf(outputPath));
                 writes.Record(outputPath);
                 await writes.SaveAsync(ct);
-                TaskImportWrites.CreateFolder(root, TaskImportWrites.ParentOf(outputPath));
+                TaskImportWrites.CreateFolder(fs, root, TaskImportWrites.ParentOf(outputPath));
             }
 
             // A cancel that came meanwhile stops here, before libddb runs
             ct.ThrowIfCancellationRequested();
 
             // Created by another writer while the record was saved: kept, and not the task's
-            if (!replacing && File.Exists(outputFullPath))
+            if (!replacing && fs.Exists(outputFullPath))
             {
                 await writes.ForgetAsync(outputPath, CancellationToken.None);
                 throw new NameClashException(outputPath);

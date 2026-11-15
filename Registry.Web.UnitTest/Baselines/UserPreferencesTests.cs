@@ -1056,8 +1056,9 @@ public sealed class UserPreferencesTests
         });
 
         var provisioning = new UserProvisioning(manager, NewRoleManager(context), context,
-            new Mock<IPasswordPolicyValidator>().Object, TestSettings.Options<AccountOptions>(TestSettings.Mutable()),
-            new Mock<IOrganizationsManager>().Object, NullLogger<UserProvisioning>.Instance);
+            new Mock<IPasswordPolicyValidator>().Object,
+            new NewUserOrganization(TestSettings.Options<AccountOptions>(TestSettings.Mutable()),
+                new Mock<IOrganizationsManager>().Object), NullLogger<UserProvisioning>.Instance);
         var login = new Mock<ILoginManager>();
         login.Setup(l => l.Capabilities).Returns(AuthProviderCapabilities.Local);
         var accounts = new UserAccounts(login.Object, manager, provisioning, auth.Object, context, null!,

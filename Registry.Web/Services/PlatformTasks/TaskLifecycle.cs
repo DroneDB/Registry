@@ -15,7 +15,6 @@ namespace Registry.Web.Services.PlatformTasks;
 /// <summary>Ending a task and clearing the history (out of <c>TasksManager</c>).</summary>
 public sealed class TaskLifecycle
 {
-    private readonly IDatasetAccessResolver _access;
     private readonly TaskAuthorizer _authorizer;
     private readonly IBackgroundJobsProcessor _processor;
     private readonly IJobIndexWriter _writer;
@@ -37,11 +36,9 @@ public sealed class TaskLifecycle
     public const string CommittedMessage =
         "This task can no longer be cancelled: it has already published its result";
 
-    public TaskLifecycle(IDatasetAccessResolver access, TaskAuthorizer authorizer, IBackgroundJobsProcessor processor,
-        IJobIndexWriter writer, TaskArtifactStore artifacts, ITaskWriteRecordStore records, ITaskRollback rollback,
-        ILogger<TaskLifecycle> logger)
+    public TaskLifecycle(TaskAuthorizer authorizer, IBackgroundJobsProcessor processor, IJobIndexWriter writer,
+        TaskArtifactStore artifacts, ITaskWriteRecordStore records, ITaskRollback rollback, ILogger<TaskLifecycle> logger)
     {
-        _access = access;
         _authorizer = authorizer;
         _processor = processor;
         _writer = writer;
@@ -54,7 +51,7 @@ public sealed class TaskLifecycle
     /// <summary>Permanently removes the dataset's concluded tasks (optionally of one tool) and purges their artifacts; the number removed.</summary>
     public async Task<int> ClearAsync(string orgSlug, string dsSlug, string? toolId, CancellationToken ct = default)
     {
-        await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Write, ct: ct);
+        await _authorizer.ResolveDatasetAsync(orgSlug, dsSlug, AccessType.Write, ct);
 
         // Permanently remove concluded (Succeeded/Failed/Deleted) tasks from the history
         // and purge any artifacts they produced, instead of merely flipping them to a

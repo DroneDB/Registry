@@ -167,13 +167,13 @@ public class ReservedPathCallSitesTests
         factory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(() => ClientFor(handler));
 
         var client = new RemoteRegistryClient(factory.Object, new ImportSettings(),
-            TestPaths.Policy, TestScratch.Provider,
+            TestPaths.Policy, TestScratch.Provider, new Registry.Adapters.FileSystem(),
             NullLogger<RemoteRegistryClient>.Instance);
 
         var entries = paths.Select(p => new EntryDto { Path = p, Type = EntryType.Image, Size = 4 }).ToArray();
         var root = Path.Combine(_root, "dataset");
         var writes = await TaskImportWrites.StartAsync(new FakeTaskWriteRecorder(),
-            new DatasetKey("org", Guid.NewGuid()), root, CancellationToken.None);
+            new DatasetKey("org", Guid.NewGuid()), root, new Registry.Adapters.FileSystem(), CancellationToken.None);
 
         await client.DownloadFilesParallelAsync("http://remote.test", null, "src", "ds",
             root, entries, writes, null, CancellationToken.None);

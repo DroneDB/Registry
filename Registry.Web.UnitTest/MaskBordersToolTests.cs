@@ -65,7 +65,7 @@ public class MaskBordersToolTests
             })
             .Returns("build-job");
         _h.Ctx.SetupGet(c => c.BuildQueue).Returns(TestJobs.Scheduler(jobs.Object));
-        _tool = new MaskBordersTool(TestPaths.Policy, TestJobs.FileIndexer());
+        _tool = new MaskBordersTool(TestPaths.Policy, TestJobs.FileIndexer(), new Registry.Adapters.FileSystem());
     }
 
     [TearDown]

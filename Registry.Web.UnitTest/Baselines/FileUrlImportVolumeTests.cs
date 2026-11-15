@@ -213,8 +213,13 @@ public sealed class FileUrlImportVolumeTests
             ProcessingPlatform = new ProcessingPlatformSettings { DiskSafetyMarginBytes = 0 }
         });
 
-        return new FileUrlImportTool(downloader, new ImportCredentials(Mock.Of<IImportCredentialProtector>()),
-            Support.TestJobs.FileIndexer(), TestSettings.Options<ImportSettings>(options), TestSettings.Options<ProcessingPlatformSettings>(options), TestPaths.Policy, TestScratch.Provider);
+        var fs = new Registry.Adapters.FileSystem();
+        var import = TestSettings.Options<ImportSettings>(options);
+        return new FileUrlImportTool(
+            new FileUrlTransfer(downloader, TestScratch.Provider, import,
+                TestSettings.Options<ProcessingPlatformSettings>(options), fs),
+            new ImportCredentials(Mock.Of<IImportCredentialProtector>()), Support.TestJobs.FileIndexer(), import,
+            TestPaths.Policy, fs);
     }
 
     private FakeTaskWriteRecorder Recorder { get; set; } = new();

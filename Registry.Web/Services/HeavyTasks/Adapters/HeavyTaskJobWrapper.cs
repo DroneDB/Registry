@@ -203,19 +203,20 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         if (start == TaskAttemptStart.LostRunRolledBack)
             _log.LogWarning("Task {TaskId} runs again after a run that was lost: what that run wrote was deleted", taskId);
         else if (start == TaskAttemptStart.CommittedLost)
-            throw CommittedLost(taskId, tool, request, ddb);
+            throw CommittedLost(records.Rollback, taskId, tool, request, ddb);
     }
 
     // The sources the tool deletes after its commit that are still in the dataset folder (an indexed entry whose file
-    // is gone was deleted: the tools remove the entry, then the file)
-    private TaskCommittedLostException CommittedLost(string taskId, IHeavyTool tool, HeavyToolRequest request, IDDB ddb)
+    // is gone was deleted: the tools remove the entry, then the file), by the rule of the rollback
+    private TaskCommittedLostException CommittedLost(ITaskRollback rollback, string taskId, IHeavyTool tool,
+        HeavyToolRequest request, IDDB ddb)
     {
         var sources = BestEffort.Get<IReadOnlyList<string>?>(() => tool.SourcesDeletedAfterCommit(request), ex =>
         {
             _log.LogWarning(ex, "Cannot read the sources task {TaskId} deletes after its commit", taskId);
             return null;
         });
-        return sources is null ? new TaskCommittedLostException() : TaskRollback.CommittedLost(sources, ddb, _log, taskId);
+        return sources is null ? new TaskCommittedLostException() : rollback.CommittedLost(taskId, ddb, sources);
     }
 
     // The task did all its work: the buffered records are written, and the record is committed, so a cancel that
@@ -322,10 +323,10 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
                 SourcesAfterCommit(tool, request, taskId))
             : TaskWriteRecorder.Disabled(taskId, dataset, tool.Id);
 
-        var execCtx = new HeavyToolExecutionContext(ddb, dataset, _log,
-            new TaskRun(taskId, workDir), ctx, services.Scheduler, services.Builds,
-            await QueuedBeforeOverwriteRuleAsync(db, taskId, cancellationToken), recorder,
-            await RequestedByAsync(db, taskId, cancellationToken), services.Storage);
+        var run = new TaskRun(taskId, workDir, ctx, recorder, await RequestedByAsync(db, taskId, cancellationToken),
+            await QueuedBeforeOverwriteRuleAsync(db, taskId, cancellationToken));
+        var execCtx = new HeavyToolExecutionContext(ddb, dataset, _log, run, services.Scheduler, services.Builds,
+            services.Storage);
         return new Prepared(tool, request, workDir, ddb, execCtx, recorder);
     }
 

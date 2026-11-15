@@ -148,7 +148,7 @@ internal sealed class OutputToolHarness : IDisposable
 public class AlignRasterToolTests
 {
     private OutputToolHarness _h = null!;
-    private readonly AlignRasterTool _tool = new(TestPaths.Policy);
+    private readonly AlignRasterTool _tool = new(TestPaths.Policy, new Registry.Adapters.FileSystem());
 
     [SetUp]
     public void SetUp()

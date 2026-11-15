@@ -82,6 +82,7 @@ public class TaskNotificationFilterTests
         services.AddSingleton(composer.Object);
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<BuildNotificationOutbox>();
+        services.AddScoped<TaskNotificationAudience>();
         services.AddScoped<TaskNotifier>();
         _provider = services.BuildServiceProvider();
         _filter = new TaskNotificationFilter(_provider.GetRequiredService<IServiceScopeFactory>(),

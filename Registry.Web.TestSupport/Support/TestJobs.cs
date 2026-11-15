@@ -64,7 +64,7 @@ public static class TestJobs
         string orgSlug = "org", System.Guid internalRef = default, string taskId = "task-1", string? workDir = null,
         IBackgroundJobsProcessor? jobs = null, DdbJobs? builds = null) =>
         new(ddb, new DatasetKey(orgSlug, internalRef == default ? System.Guid.NewGuid() : internalRef),
-            NullLogger.Instance, new Services.HeavyTasks.Adapters.TaskRun(taskId, workDir), null!, Scheduler(jobs),
+            NullLogger.Instance, new Services.HeavyTasks.Adapters.TaskRun(taskId, workDir, null!), Scheduler(jobs),
             builds ?? DdbJobs(jobs: jobs));
 
     /// <summary>

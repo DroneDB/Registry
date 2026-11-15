@@ -24,21 +24,21 @@ public sealed class UserProvisioning
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly ApplicationDbContext _applicationDbContext;
     private readonly IPasswordPolicyValidator _passwordPolicyValidator;
-    private readonly AccountOptions _accounts;
-    private readonly IOrganizationsManager _organizations;
+    private readonly NewUserOrganization _newUserOrganization;
     private readonly ILogger<UserProvisioning> _logger;
     private readonly TimeProvider _time;
 
     /// <param name="time">The clock of <see cref="User.CreatedDate"/>; <see cref="TimeProvider.System"/> when null.</param>
-    public UserProvisioning(UserManager<User> userManager, RoleManager<IdentityRole> roleManager, ApplicationDbContext applicationDbContext, IPasswordPolicyValidator passwordPolicyValidator, IOptions<AccountOptions> accounts, IOrganizationsManager organizations, ILogger<UserProvisioning> logger, TimeProvider? time = null)
+    public UserProvisioning(UserManager<User> userManager, RoleManager<IdentityRole> roleManager,
+        ApplicationDbContext applicationDbContext, IPasswordPolicyValidator passwordPolicyValidator,
+        NewUserOrganization newUserOrganization, ILogger<UserProvisioning> logger, TimeProvider? time = null)
     {
         _time = time ?? TimeProvider.System;
         _userManager = userManager;
         _roleManager = roleManager;
         _applicationDbContext = applicationDbContext;
         _passwordPolicyValidator = passwordPolicyValidator;
-        _accounts = accounts.Value;
-        _organizations = organizations;
+        _newUserOrganization = newUserOrganization;
         _logger = logger;
     }
 
@@ -176,8 +176,7 @@ public sealed class UserProvisioning
             throw new BadRequestException("Error in creating user");
         }
 
-        if (_accounts.EnableDefaultUserOrganization)
-            await _organizations.AddUserDefaultAsync(user.Id, user.RequiredUserName());
+        await _newUserOrganization.AddForAsync(user);
 
         await AddUserToRoles(user, roles);
 

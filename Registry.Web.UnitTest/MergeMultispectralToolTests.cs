@@ -25,7 +25,7 @@ namespace Registry.Web.Test;
 public class MergeMultispectralToolTests
 {
     private OutputToolHarness _h = null!;
-    private readonly MergeMultispectralTool _tool = new(TestPaths.Policy);
+    private readonly MergeMultispectralTool _tool = new(TestPaths.Policy, new Registry.Adapters.FileSystem());
 
     [SetUp]
     public void SetUp()

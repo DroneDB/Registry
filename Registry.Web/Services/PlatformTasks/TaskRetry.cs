@@ -21,8 +21,6 @@ public sealed class TaskRetry
     private readonly TaskAuthorizer _authorizer;
     private readonly IBackgroundJobsProcessor _processor;
     private readonly IJobIndexWriter _writer;
-    private readonly IDatasetResolver _datasets;
-    private readonly IDdbManager _ddbManager;
     private readonly ITaskWriteRecordStore _records;
     private readonly ILogger<TaskRetry> _logger;
     private readonly IHeavyTaskRunner? _runner;
@@ -40,14 +38,12 @@ public sealed class TaskRetry
         "Task cannot be retried in its current state or no longer exists in the job store";
 
     public TaskRetry(TaskAuthorizer authorizer, IBackgroundJobsProcessor processor, IJobIndexWriter writer,
-        IDatasetResolver datasets, IDdbManager ddbManager, ITaskWriteRecordStore records, ILogger<TaskRetry> logger,
-        IHeavyTaskRunner? runner = null, IHttpContextAccessor? http = null)
+        ITaskWriteRecordStore records, ILogger<TaskRetry> logger, IHeavyTaskRunner? runner = null,
+        IHttpContextAccessor? http = null)
     {
         _authorizer = authorizer;
         _processor = processor;
         _writer = writer;
-        _datasets = datasets;
-        _ddbManager = ddbManager;
         _records = records;
         _logger = logger;
         _runner = runner;
@@ -205,8 +201,9 @@ public sealed class TaskRetry
     private Task<bool> IsBuildPendingSafeAsync(string orgSlug, string dsSlug, CancellationToken ct) =>
         BestEffort.GetAsync(async () =>
         {
-            var ds = await _datasets.GetRequiredDatasetAsync(orgSlug, dsSlug, ct: ct);
-            return _ddbManager.Get(orgSlug, ds.InternalRef).IsBuildPending();
+            // The retry is authorized for write access already (LoadAsync): the same check, answered from its cache
+            var dataset = await _authorizer.ResolveDatasetAsync(orgSlug, dsSlug, AccessType.Write, ct);
+            return dataset.Ddb.IsBuildPending();
         }, ex =>
         {
             _logger.LogWarning(ex, "Retry: IsBuildPending check failed for {Org}/{Ds}, continuing retry", orgSlug,

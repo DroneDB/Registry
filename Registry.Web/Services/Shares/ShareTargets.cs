@@ -31,21 +31,21 @@ public sealed class ShareTargets
     private readonly RegistryContext _context;
     private readonly IDatasetResolver _datasets;
     private readonly IOrganizationsManager _organizationsManager;
-    private readonly IDatasetsManager _datasetsManager;
+    private readonly ShareDatasetCreation _creation;
     private readonly ShareBatchRollback _rollback;
-    private readonly INameGenerator _nameGenerator;
     private readonly IDatasetAccessResolver _access;
     private readonly ILogger<ShareTargets> _logger;
 
-    public ShareTargets(RegistryContext context, IDatasetResolver datasets, IOrganizationsManager organizationsManager, IDatasetsManager datasetsManager, ShareBatchRollback rollback, INameGenerator nameGenerator, IDatasetAccessResolver access, ILogger<ShareTargets> logger)
+    public ShareTargets(RegistryContext context, IDatasetResolver datasets, IOrganizationsManager organizationsManager,
+        ShareDatasetCreation creation, ShareBatchRollback rollback, IDatasetAccessResolver access,
+        ILogger<ShareTargets> logger)
     {
         _access = access;
         _context = context;
         _datasets = datasets;
         _organizationsManager = organizationsManager;
-        _datasetsManager = datasetsManager;
+        _creation = creation;
         _rollback = rollback;
-        _nameGenerator = nameGenerator;
         _logger = logger;
     }
 
@@ -105,7 +105,7 @@ public sealed class ShareTargets
 
             _logger.LogInformation("Using default user organization '{OrgSlug}'", orgSlug);
 
-            dataset = await CreateNewDatasetAsync(orgSlug, parameters.DatasetName, visibility);
+            dataset = await _creation.CreateNewAsync(orgSlug, parameters.DatasetName, visibility);
 
             _logger.LogInformation("Created new dataset '{DsSlug}', creating batch", dataset.Slug);
         }
@@ -123,7 +123,7 @@ public sealed class ShareTargets
             if (tag.DatasetSlug == null)
             {
                 await EnsureMayCreateInAsync(organization, beforeWrite);
-                dataset = await CreateNewDatasetAsync(tag.OrganizationSlug, parameters.DatasetName, visibility);
+                dataset = await _creation.CreateNewAsync(tag.OrganizationSlug, parameters.DatasetName, visibility);
 
                 _logger.LogInformation("Dataset created");
             }
@@ -138,16 +138,10 @@ public sealed class ShareTargets
                     await EnsureMayCreateInAsync(organization, beforeWrite);
                     _logger.LogInformation("Dataset '{DatasetSlug}' not found, creating it", tag.DatasetSlug);
 
-                    await _datasetsManager.AddNew(tag.OrganizationSlug, new DatasetNewDto
-                    {
-                        Slug = tag.DatasetSlug,
-                        Name = parameters.DatasetName,
-                        Visibility = visibility
-                    });
+                    dataset = await _creation.CreateAsync(tag.OrganizationSlug, tag.DatasetSlug, parameters.DatasetName,
+                        visibility);
 
                     _logger.LogInformation("Dataset created");
-
-                    dataset = await GetTrackedDatasetAsync(tag.OrganizationSlug, tag.DatasetSlug);
                 }
                 else
                 {
@@ -194,69 +188,5 @@ public sealed class ShareTargets
             .ThenBy(match => match.Organization.CreationDate)
             .Select(match => match.Organization)
             .FirstOrDefault();
-    }
-
-    /// <summary>
-    /// Creates a dataset in <paramref name="orgSlug"/> with a slug that <paramref name="name"/> gives (§7.1), or a random
-    /// one without a name. The check for a free slug is not enough: a request that creates the same slug in between is
-    /// answered by the unique index, and this one goes on with the next suffix.
-    /// </summary>
-    private async Task<Dataset> CreateNewDatasetAsync(string orgSlug, string? name, Visibility visibility)
-    {
-        // The slug comes from the name, which then needs a Latin letter or digit (D-035: the request has no slug field)
-        InputRules.EnsureLatinName(name, null, "datasetName", withSlugField: false);
-
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            var random = await GetUniqueDatasetSlugAsync();
-            _logger.LogInformation("Generated unique dataset slug '{DsSlug}'", random);
-
-            await _datasetsManager.AddNew(orgSlug, new DatasetNewDto { Slug = random, Name = name, Visibility = visibility });
-            return await GetTrackedDatasetAsync(orgSlug, random);
-        }
-
-        var baseSlug = SlugSuffix.FromName(name);
-        for (var n = 1; ; n++)
-        {
-            var slug = SlugSuffix.Candidate(baseSlug, n);
-            if (await SlugIsTakenAsync(orgSlug, slug))
-                continue;
-
-            try
-            {
-                await _datasetsManager.AddNew(orgSlug, new DatasetNewDto { Slug = slug, Name = name, Visibility = visibility });
-            }
-            catch (BadRequestException)
-            {
-                // Taken since the check: the next one. A refusal with the slug still free is not a lost race
-                if (await SlugIsTakenAsync(orgSlug, slug))
-                    continue;
-
-                throw;
-            }
-
-            _logger.LogInformation("Created dataset '{DsSlug}' from the name '{DatasetName}'", slug, name);
-            return await GetTrackedDatasetAsync(orgSlug, slug);
-        }
-    }
-
-    private Task<bool> SlugIsTakenAsync(string orgSlug, string slug) =>
-        _context.Datasets.AsNoTracking().AnyAsync(item => item.Slug == slug && item.Organization.Slug == orgSlug);
-
-    // Datasets are identified by organization and slug: the slug alone may match another organization's
-    private Task<Dataset> GetTrackedDatasetAsync(string orgSlug, string dsSlug) =>
-        _datasets.GetRequiredDatasetAsync(orgSlug, dsSlug, withTracking: true);
-
-    private async Task<string> GetUniqueDatasetSlugAsync()
-    {
-        // We are pretty sure this is unique but ALWAYS CHECK
-        string dsSlug;
-        do
-        {
-            // NOTE: We could generate a more language friendly slug, like docker does for its running containers
-            dsSlug = _nameGenerator.GenerateName().ToSlug();
-        } while (await _context.Datasets.AnyAsync(item => item.Slug == dsSlug));
-
-        return dsSlug;
     }
 }

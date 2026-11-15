@@ -103,9 +103,10 @@ public class TaskNotifierTests
     }
 
     private TaskNotifier Notifier(RegistryContext? db = null) =>
-        new(db ?? _db, _email.Object, _levels.Object, _recipients.Object, _access.Object, _composer.Object,
-            new BuildNotificationOutbox(db ?? _db, TimeProvider.System), TimeProvider.System,
-            NullLogger<TaskNotifier>.Instance, _tools.Object);
+        new(db ?? _db, _email.Object,
+            new TaskNotificationAudience(_levels.Object, _recipients.Object, _access.Object,
+                NullLogger<TaskNotificationAudience>.Instance), _composer.Object,
+            new BuildNotificationOutbox(db ?? _db, TimeProvider.System), NullLogger<TaskNotifier>.Instance, _tools.Object);
 
     private static FinishedTask Failed(Exception? error = null, string toolId = "photogrammetry") =>
         new(TaskId, toolId, error ?? new InvalidOperationException("boom"));

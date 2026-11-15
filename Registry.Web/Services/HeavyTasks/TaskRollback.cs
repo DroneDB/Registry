@@ -35,10 +35,11 @@ public sealed class TaskRollback : ITaskRollback
     private readonly IDdbManager _ddbManager;
     private readonly IBackgroundJobsProcessor _processor;
     private readonly TaskEntryChanges _changes;
+    private readonly IFileSystem _fs;
     private readonly ILogger<TaskRollback> _log;
 
     public TaskRollback(ITaskWriteRecordStore store, RegistryContext db, IDdbManager ddbManager,
-        IBackgroundJobsProcessor processor, TaskEntryChanges changes, ILogger<TaskRollback> log)
+        IBackgroundJobsProcessor processor, TaskEntryChanges changes, IFileSystem fs, ILogger<TaskRollback> log)
     {
         _store = store;
         _db = db;
@@ -46,6 +47,7 @@ public sealed class TaskRollback : ITaskRollback
         _processor = processor;
         _log = log;
         _changes = changes;
+        _fs = fs;
     }
 
     public async Task<TaskRollbackOutcome> RollBackAsync(string taskId, IReadOnlyCollection<PendingWrite>? pending = null,
@@ -283,21 +285,19 @@ public sealed class TaskRollback : ITaskRollback
         if (dataset is null)
             return TaskCommittedLostException.For(sources.Paths, _ => false);
 
-        return CommittedLost(sources.Paths, _ddbManager.Get(dataset.Organization.Slug, sources.InternalRef), _log, taskId);
+        return CommittedLost(taskId, _ddbManager.Get(dataset.Organization.Slug, sources.InternalRef), sources.Paths);
     }
 
-    /// <summary>
-    /// The exception of the lost committed task <paramref name="taskId"/>, naming the <paramref name="sources"/> it
-    /// deletes after its commit that remain in the folder of <paramref name="ddb"/>: the one rule of the worker's
-    /// attempt rule and of the end of a lost task. A source whose file cannot be checked is taken as remaining.
-    /// </summary>
-    internal static TaskCommittedLostException CommittedLost(IReadOnlyList<string> sources, IDDB ddb, ILogger log,
-        string taskId) =>
-        TaskCommittedLostException.For(sources, path => BestEffort.Get(() => File.Exists(ddb.GetLocalPath(path)), ex =>
-        {
-            log.LogDebug(ex, "Cannot tell whether source '{Path}' of task {TaskId} remains", path, taskId);
-            return true;
-        }));
+    public TaskCommittedLostException CommittedLost(string taskId, IDDB ddb, IReadOnlyList<string> sources)
+    {
+        ArgumentNullException.ThrowIfNull(ddb);
+        return TaskCommittedLostException.For(sources, path => BestEffort.Get(() => _fs.Exists(ddb.GetLocalPath(path)),
+            ex =>
+            {
+                _log.LogDebug(ex, "Cannot tell whether source '{Path}' of task {TaskId} remains", path, taskId);
+                return true;
+            }));
+    }
 
     private Task<TaskWriteRecordChange> SetAttemptAsync(string taskId, int retryCount, CancellationToken ct) =>
         _store.ChangeAsync(taskId, r =>
@@ -379,8 +379,8 @@ public sealed class TaskRollback : ITaskRollback
             }
 
             var local = ddb.GetLocalPath(path);
-            if (File.Exists(local))
-                File.Delete(local);
+            if (_fs.Exists(local))
+                _fs.Delete(local);
             return true;
         }, ex =>
         {
@@ -394,7 +394,7 @@ public sealed class TaskRollback : ITaskRollback
         {
             var local = ddb.GetLocalPath(folder);
             // A folder that holds anything else (a file another writer put there) stays: it is not only the task's
-            if (!Directory.Exists(local) || Directory.EnumerateFileSystemEntries(local).Any())
+            if (!_fs.FolderExists(local) || _fs.EnumerateFileSystemEntries(local).Any())
                 return true;
 
             var indexed = await WhenNotBusyAsync(() => ddb.EntryExists(folder), ct);
@@ -409,7 +409,7 @@ public sealed class TaskRollback : ITaskRollback
                 left.Add(folder);
             }
 
-            Directory.Delete(local, false);
+            _fs.FolderDelete(local, false);
             return true;
         }, ex =>
         {

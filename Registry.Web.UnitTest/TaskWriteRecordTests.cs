@@ -550,7 +550,7 @@ public class TaskRollbackTests
             .Returns<string, Guid>((_, id) => _datasets[id].Ddb.Object);
         return new TaskRollback(_env.Store, _env.Db, ddbManager.Object, _jobs.Object,
             new TaskEntryChanges(caches ?? Mock.Of<IDatasetCacheInvalidator>(), _env.Db,
-                NullLogger<TaskEntryChanges>.Instance), NullLogger<TaskRollback>.Instance);
+                NullLogger<TaskEntryChanges>.Instance), new Registry.Adapters.FileSystem(), NullLogger<TaskRollback>.Instance);
     }
 
     private static string RecordOf(DatasetKey dataset, IEnumerable<string> paths, IEnumerable<string>? folders = null,
@@ -884,6 +884,22 @@ public class TaskRollbackTests
         _env.Record("1")!.State.ShouldBe(TaskWriteState.Committed);
     }
 
+    // The one rule of a committed task that was lost (the worker's attempt rule and the end of a lost task): the
+    // sources whose file is still in the dataset folder are named, a gone one is not, and one that cannot be checked
+    // is taken as remaining
+    [Test]
+    public void ACommittedLostTask_NamesTheSourcesStillInTheDatasetFolder()
+    {
+        var ds = NewDataset("ds", out _);
+        ds.Write("bands/nir.tif");
+        ds.Ddb.Setup(d => d.GetLocalPath("bands/bad.tif")).Throws(new IOException("unreadable"));
+
+        var lost = Rollback().CommittedLost("1", ds.Ddb.Object, ["bands/red.tif", "bands/nir.tif", "bands/bad.tif"]);
+
+        lost.RemainingSources.ShouldBe(["bands/nir.tif", "bands/bad.tif"]);
+        Rollback().CommittedLost("1", ds.Ddb.Object, []).RemainingSources.ShouldBeEmpty();
+    }
+
     private CreatedDatasetRollbackJob DeleteJob() =>
         new(_env.Store, _env.Db, DdbManager(), new DatasetRemoval(_env.Db, Mock.Of<IDatasetListingInvalidator>(),
             _jobs.Object, NullLogger<DatasetRemoval>.Instance), _jobs.Object,
@@ -989,10 +1005,12 @@ public class TaskRollbackTests
         _env.SeedTask("1", "Processing", new TaskWriteRecord().ToJson());
         using var recorder = Registry.Web.Services.HeavyTasks.Adapters.TaskWriteRecorder.For(_env.Store, "1", key,
             HeavyToolIds.ImportDataset);
-        var writes = await TaskImportWrites.StartAsync(recorder, key, ds.Root, CancellationToken.None);
+        var writes = await TaskImportWrites.StartAsync(recorder, key, ds.Root, new Registry.Adapters.FileSystem(),
+            CancellationToken.None);
         var client = new Registry.Web.Services.Import.RemoteRegistryClient(HttpFactory(new ServingHandler()),
             new Registry.Web.Models.Configuration.ImportSettings { RegistryDownloadMaxRetries = 1 }, TestPaths.Policy,
-            TestScratch.Provider, NullLogger<Registry.Web.Services.Import.RemoteRegistryClient>.Instance);
+            TestScratch.Provider, new Registry.Adapters.FileSystem(),
+            NullLogger<Registry.Web.Services.Import.RemoteRegistryClient>.Instance);
 
         await client.DownloadFilesParallelAsync("http://remote.test", null, "src", "ds", ds.Root,
         [
@@ -1029,7 +1047,8 @@ public class TaskRollbackTests
         using (var recorder = Registry.Web.Services.HeavyTasks.Adapters.TaskWriteRecorder.For(_env.Store, "1", key,
                    "archive-extract"))
         {
-            var writes = await TaskImportWrites.StartAsync(recorder, key, ds.Root, CancellationToken.None);
+            var writes = await TaskImportWrites.StartAsync(recorder, key, ds.Root, new Registry.Adapters.FileSystem(),
+            CancellationToken.None);
             await TestArchives.Extractor(new Registry.Adapters.Archives.SharpCompressArchiveExtractor()).ExtractAsync(
                 new ArchiveExtractionRequest(archive, ds.Root, string.Empty, _ => true, _ => false, 0, 0, writes),
                 null, CancellationToken.None);
@@ -1071,7 +1090,8 @@ public class TaskRollbackTests
         using (var recorder = Registry.Web.Services.HeavyTasks.Adapters.TaskWriteRecorder.For(_env.Store, "1", key,
                    "archive-extract"))
         {
-            var writes = await TaskImportWrites.StartAsync(recorder, key, ds.Root, CancellationToken.None);
+            var writes = await TaskImportWrites.StartAsync(recorder, key, ds.Root, new Registry.Adapters.FileSystem(),
+            CancellationToken.None);
             await extractor.ExtractAsync(
                 new ArchiveExtractionRequest(archive, ds.Root, string.Empty, _ => true, _ => false, 0, 0, writes),
                 null, CancellationToken.None);
@@ -1103,7 +1123,7 @@ public class TaskRollbackTests
                 { sourcePath = "src.tif", referencePath = "ref.tif", outputPath = "out/new.tif" }));
 
         await RunFailingOutputToolAsync(ds, id, "align-raster",
-            new Registry.Web.Services.HeavyTasks.Tools.AlignRasterTool(TestPaths.Policy), request);
+            new Registry.Web.Services.HeavyTasks.Tools.AlignRasterTool(TestPaths.Policy, new Registry.Adapters.FileSystem()), request);
     }
 
     [Test]
@@ -1118,7 +1138,7 @@ public class TaskRollbackTests
                 """{ "paths": ["b1.tif", "b2.tif"], "outputPath": "out/new.tif" }""").RootElement);
 
         await RunFailingOutputToolAsync(ds, id, "merge-multispectral",
-            new Registry.Web.Services.HeavyTasks.Tools.MergeMultispectralTool(TestPaths.Policy), request);
+            new Registry.Web.Services.HeavyTasks.Tools.MergeMultispectralTool(TestPaths.Policy, new Registry.Adapters.FileSystem()), request);
     }
 
     private async Task RunFailingOutputToolAsync(FakeDataset ds, Guid id, string toolId,

@@ -48,7 +48,7 @@ public class RasterContoursToolTests
         _ctx = new Mock<IHeavyToolExecutionContext>();
         _ctx.SetupGet(c => c.Ddb).Returns(_ddb.Object);
         _ctx.SetupGet(c => c.WorkDir).Returns(_work);
-        _tool = new RasterContoursTool(_artifacts.Object);
+        _tool = new RasterContoursTool(_artifacts.Object, new Registry.Adapters.FileSystem());
     }
 
     [TearDown]

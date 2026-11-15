@@ -65,6 +65,8 @@ public static class ImportServiceCollectionExtensions
 
         // SSRF-hardened single-file downloader shared by the verify path and the import-file tool.
         services.AddSingleton<GuardedHttpDownloader>();
+        // The transfer of the import-file tool: the download into place under the task's write record
+        services.AddSingleton<FileUrlTransfer>();
 
         // The remote Registry import job: queued by the web host, run by any job host
         services.AddScoped<ImportDestinations>();

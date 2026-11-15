@@ -42,8 +42,7 @@ public class IndexReconciliationService
     private readonly IDdbManager _ddbManager;
     private readonly IDatasetIndexQueue _indexQueue;
     private readonly ReconciliationSettings _settings;
-    private readonly IFileSystem _fs;
-    private readonly DatasetPathPolicy _paths;
+    private readonly ReconciliationDisk _disk;
     private readonly ILogger<IndexReconciliationService> _logger;
     private readonly ITaskWriteRecordStore? _writeRecords;
 
@@ -52,8 +51,7 @@ public class IndexReconciliationService
         IDdbManager ddbManager,
         IDatasetIndexQueue indexQueue,
         IOptions<ReconciliationSettings> settings,
-        IFileSystem fs,
-        DatasetPathPolicy paths,
+        ReconciliationDisk disk,
         ILogger<IndexReconciliationService> logger,
         ITaskWriteRecordStore? writeRecords = null)
     {
@@ -62,8 +60,7 @@ public class IndexReconciliationService
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _indexQueue = indexQueue ?? throw new ArgumentNullException(nameof(indexQueue));
         _settings = (settings ?? throw new ArgumentNullException(nameof(settings))).Value;
-        _fs = fs ?? throw new ArgumentNullException(nameof(fs));
-        _paths = paths ?? throw new ArgumentNullException(nameof(paths));
+        _disk = disk ?? throw new ArgumentNullException(nameof(disk));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -103,7 +100,7 @@ public class IndexReconciliationService
         //    the reserved folders are pruned during the walk, so the live database
         //    (.ddb at any depth) and the staged/quarantined uploads (the root .uploads) are never
         //    scanned and never count as "unindexed"; a nested ".uploads" is an ordinary user folder.
-        var onDisk = new HashSet<string>(_paths.EnumerateFiles(_fs, root), StringComparer.Ordinal);
+        var onDisk = new HashSet<string>(_disk.Files(root), StringComparer.Ordinal);
 
         // 2. Compare against the index (files only - directories have no on-disk counterpart to diff).
         var indexed = new HashSet<string>(
@@ -144,38 +141,10 @@ public class IndexReconciliationService
         }
 
         // 5. Age out old quarantined files.
-        var quarantineRemoved = AgeOutQuarantine(root, console);
+        var quarantineRemoved = _disk.AgeOutQuarantine(root, console);
 
         sw.Stop();
         return new ReconcileSummary(unindexedPaths.Length, reindexed, missingPaths.Length, quarantineRemoved,
             sw.ElapsedMilliseconds);
-    }
-
-    private int AgeOutQuarantine(string datasetRoot, JobConsole console)
-    {
-        var quarantineDir = Path.Combine(datasetRoot, IDDB.UploadsFolderName, IDDB.QuarantineFolderName);
-        if (!_fs.FolderExists(quarantineDir))
-            return 0;
-
-        var cutoff = DateTime.UtcNow.AddDays(-Math.Max(0, _settings.QuarantineRetentionDays));
-        var removed = 0;
-
-        foreach (var file in _fs.EnumerateFiles(quarantineDir))
-        {
-            try
-            {
-                if (_fs.GetLastWriteTime(file).ToUniversalTime() < cutoff)
-                {
-                    _fs.Delete(file);
-                    removed++;
-                }
-            }
-            catch (Exception ex)
-            {
-                console.Info("Failed to remove aged quarantine file '{File}': {Error}", file, ex.Message);
-            }
-        }
-
-        return removed;
     }
 }

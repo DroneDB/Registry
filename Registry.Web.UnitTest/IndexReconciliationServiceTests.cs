@@ -66,9 +66,9 @@ public class IndexReconciliationServiceTests
 
         var appSettings = Microsoft.Extensions.Options.Options.Create(new AppSettings { Reconciliation = settings ?? new ReconciliationSettings() });
 
-        return new IndexReconciliationService(new DatasetSweep(context), ddbManager.Object, indexQueue.Object, TestSettings.Options<ReconciliationSettings>(appSettings),
-            new FileSystem(),
-            TestPaths.Policy,
+        var reconciliation = TestSettings.Options<ReconciliationSettings>(appSettings);
+        return new IndexReconciliationService(new DatasetSweep(context), ddbManager.Object, indexQueue.Object,
+            reconciliation, new ReconciliationDisk(new FileSystem(), TestPaths.Policy, reconciliation),
             NullLogger<IndexReconciliationService>.Instance, writeRecords);
     }
 

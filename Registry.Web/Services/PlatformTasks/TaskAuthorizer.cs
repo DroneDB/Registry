@@ -35,6 +35,16 @@ public sealed class TaskAuthorizer
             : _tools.All.Where(t => t.RequiredAccess == HeavyToolPermission.Read).Select(t => t.Id).ToHashSet();
 
     /// <summary>
+    /// The dataset of the tasks, once the caller's <paramref name="access"/> to it is checked: the dataset side of the
+    /// authorization of the tasks, for what reads or changes the tasks of a dataset without loading one of them.
+    /// </summary>
+    /// <exception cref="NotFoundException">The dataset does not exist.</exception>
+    /// <exception cref="ForbiddenException">The caller does not have that access to the dataset.</exception>
+    public Task<DatasetAccess> ResolveDatasetAsync(string orgSlug, string dsSlug, AccessType access,
+        CancellationToken ct) =>
+        _access.ResolveAsync(orgSlug, dsSlug, access, ct: ct);
+
+    /// <summary>
     /// Resolves a task after checking dataset access and per-task ownership: the task's owner, the dataset's
     /// owner or an admin, or anybody for a system task.
     /// </summary>

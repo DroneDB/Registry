@@ -279,8 +279,9 @@ public class UserMetadataTests
         var provisioning = new UserProvisioning(
             new Mock<UserManager<User>>(store.Object, null!, null!, null!, null!, null!, null!, null!, null!).Object,
             new Mock<RoleManager<IdentityRole>>(new Mock<IRoleStore<IdentityRole>>().Object, null!, null!, null!, null!).Object,
-            context, new Mock<IPasswordPolicyValidator>().Object, TestSettings.Options<AccountOptions>(TestSettings.Mutable()),
-            new Mock<IOrganizationsManager>().Object, NullLogger<UserProvisioning>.Instance);
+            context, new Mock<IPasswordPolicyValidator>().Object,
+            new NewUserOrganization(TestSettings.Options<AccountOptions>(TestSettings.Mutable()),
+                new Mock<IOrganizationsManager>().Object), NullLogger<UserProvisioning>.Instance);
         var loaded = context.Users.Single(u => u.Id == id);
         counter.Saves = 0;
 

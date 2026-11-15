@@ -175,7 +175,7 @@ public class AbandonedShareBatchesTests
                 NullLogger<DatasetRemoval>.Instance),
             DdbManager(),
             new TaskEntryChanges(Mock.Of<IDatasetCacheInvalidator>(), _context, NullLogger<TaskEntryChanges>.Instance),
-            NullLogger<AbandonedShareBatchesService>.Instance, _time);
+            new Registry.Adapters.FileSystem(), NullLogger<AbandonedShareBatchesService>.Instance, _time);
 
     private Task Run() => Service().RollbackAbandonedAsync(null, CancellationToken.None);
 

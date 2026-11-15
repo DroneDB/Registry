@@ -96,8 +96,9 @@ public class UsersManagerTest : TestBase
         var tokens = TestSettings.Options<AuthTokenOptions>(_settingsOptions);
         var identity = TestSettings.Options<IdentityProviderOptions>(_settingsOptions);
         var provisioning = new UserProvisioning(_userManagerMock.Object, _roleManagerMock.Object, _appContext,
-            _passwordPolicyValidatorMock.Object, TestSettings.Options<AccountOptions>(_settingsOptions),
-            _organizationsManagerMock.Object, NullLogger<UserProvisioning>.Instance);
+            _passwordPolicyValidatorMock.Object,
+            new NewUserOrganization(TestSettings.Options<AccountOptions>(_settingsOptions), _organizationsManagerMock.Object),
+            NullLogger<UserProvisioning>.Instance);
         _usersManager = new UsersManager(
             new UserSessions(_loginManagerMock.Object, _userManagerMock.Object, provisioning,
                 new JwtTokenIssuer(tokens, _userManagerMock.Object, TimeProvider.System), _authManagerMock.Object,

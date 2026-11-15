@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks.Models;
@@ -25,7 +26,7 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// or by libddb's refusal for an entry indexed without it, as <c>RasterAnalysisService</c> does). A cancel stops libddb
 /// at its next checkpoint (the statistics pass, the GDAL generator, each line read back).
 /// </summary>
-public sealed class RasterContoursTool(IBuildArtifactResolver artifacts) : HeavyToolBase<RasterContoursTool.Parameters>
+public sealed class RasterContoursTool(IBuildArtifactResolver artifacts, IFileSystem fs) : HeavyToolBase<RasterContoursTool.Parameters>
 {
     /// <summary>The tool id (kebab-case, as <c>raster-export</c>).</summary>
     public const string ToolId = "raster-contours";
@@ -132,7 +133,7 @@ public sealed class RasterContoursTool(IBuildArtifactResolver artifacts) : Heavy
 
         var bytes = Encoding.UTF8.GetBytes(json);
         var summary = ContourSummary.Read(bytes);
-        await File.WriteAllBytesAsync(outputPath, bytes, ct);
+        await fs.WriteAllBytesAsync(outputPath, bytes, ct);
         var sha = await FileHash.Sha256Async(outputPath, ct);
 
         // A result cut at the cap says so, in the log and in the file (truncated, featureCap): FR-RAS-11

@@ -1,6 +1,6 @@
 using System;
-using System.IO;
 using Hangfire.Server;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Services.Jobs;
@@ -49,15 +49,17 @@ public static class PublishedOutputMarker
     /// ignored: the job writes the output again.
     /// </summary>
     /// <param name="ddb">The dataset of the job.</param>
+    /// <param name="fs">The file system the dataset folder is read from.</param>
     /// <param name="published">The marker (<see cref="Get"/>), or null.</param>
     /// <param name="path">The output of the job.</param>
     /// <returns>True when the job only has to index what the earlier attempt wrote.</returns>
-    public static bool Covers(IDDB ddb, string? published, string path)
+    public static bool Covers(IDDB ddb, IFileSystem fs, string? published, string path)
     {
         ArgumentNullException.ThrowIfNull(ddb);
+        ArgumentNullException.ThrowIfNull(fs);
         if (published is null || !string.Equals(published, path, StringComparison.OrdinalIgnoreCase))
             return false;
         var local = ddb.GetLocalPath(published);
-        return !string.IsNullOrEmpty(local) && File.Exists(local);
+        return !string.IsNullOrEmpty(local) && fs.Exists(local);
     }
 }
