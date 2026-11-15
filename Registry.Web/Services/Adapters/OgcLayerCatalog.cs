@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using Registry.Ports.Json;
@@ -136,7 +137,38 @@ public class OgcLayerCatalog : IOgcLayerCatalog
             }
         }
 
-        return result;
+        return result.Where(IsAdvertisable).ToList();
+    }
+
+    // A layer is named by the path of its entry, and every capabilities document, in any service, writes the name as XML
+    // text: a name with a character XML cannot carry (a control character, a lone surrogate) would make each of them
+    // invalid, and with it the layers beside it. A name cannot be rewritten (the one requested back would not be found),
+    // so the layer is left out here, once per build of the list, for every service.
+    private bool IsAdvertisable(OgcLayerDto layer)
+    {
+        if (IsXmlText(layer.Name) && IsXmlText(layer.Title))
+            return true;
+
+        _logger.LogWarning("Layer '{Layer}' of entry '{Path}' is not offered by the OGC services: its name has a " +
+                           "character that XML cannot carry", layer.Name, layer.EntryPath);
+        return false;
+    }
+
+    private static bool IsXmlText(string text)
+    {
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (XmlConvert.IsXmlChar(text[i]))
+                continue;
+            if (i + 1 < text.Length && XmlConvert.IsXmlSurrogatePair(text[i + 1], text[i]))
+            {
+                i++;
+                continue;
+            }
+            return false;
+        }
+
+        return true;
     }
 
     // Index-time flag set by DroneDB for drawings without a coordinate system.

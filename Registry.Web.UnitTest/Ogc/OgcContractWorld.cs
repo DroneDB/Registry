@@ -137,6 +137,9 @@ internal sealed class OgcContractWorld
     public WmtsManager Wmts() => new(Dependencies, NullLogger<WmtsManager>.Instance,
         new OgcRasterTileSource(NewCacheManager()));
 
+    public WmsManager Wms() => new(Dependencies, NullLogger<WmsManager>.Instance, NewCacheManager(),
+        new RasterIndexCatalog(RasterInfo, NullLogger<RasterIndexCatalog>.Instance));
+
     public WcsCoverageService WcsService(int? maxPixels = null) => new(Dependencies, RasterInfo,
         Microsoft.Extensions.Options.Options.Create(maxPixels is { } max
             ? new DownloadOptions { MaxWcsCoverageSizePixels = max }

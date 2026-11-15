@@ -95,6 +95,40 @@ public class OgcLayerCatalogTests
         result[1].BboxWgs84.ShouldBe([5.0, 6.0, 7.0, 8.0]);
     }
 
+    private static readonly string[] UnsafeAndSafeNames = ["a\u0001.tif", "b.tif", "c\ud800.tif", "d\U0001F600.tif"];
+
+    [Test]
+    public async Task AnEntryWhoseNameXmlCannotCarry_IsLeftOut_AndItsNeighboursStay()
+    {
+        // A control character, a lone surrogate; a surrogate pair is a character XML carries
+        var entries = UnsafeAndSafeNames.Select(path => new Entry
+        {
+            Path = path,
+            Hash = "h-" + path,
+            Type = EntryType.GeoRaster
+        }).ToList();
+        _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns(entries);
+
+        var layers = await _catalog.GetLayersAsync(Org, Ds);
+
+        layers.Select(l => l.Name).ShouldBe(["b.tif", "d\U0001F600.tif"]);
+        (await _catalog.ResolveAsync(Org, Ds, "a\u0001.tif")).ShouldBeNull();
+    }
+
+    [Test]
+    public async Task AnInnerVectorLayerWhoseNameXmlCannotCarry_IsLeftOut_AndTheOtherLayersOfTheFileStay()
+    {
+        var entry = VectorEntry();
+        _ddb.Setup(d => d.Find(It.IsAny<EntryQuery>())).Returns([entry]);
+        _artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), EntryHash, ArtifactRoles.VectorGpkg, null, It.IsAny<string>()))
+            .Returns("/tmp/source.gpkg");
+        _wrapper.Setup(w => w.DescribeVector("/tmp/source.gpkg", null)).Returns(
+            "{\"layers\":[{\"name\":\"roads\\u0002\",\"geometryType\":\"LineString\"}," +
+            "{\"name\":\"poi\",\"geometryType\":\"Point\"}]}");
+
+        (await _catalog.GetLayersAsync(Org, Ds)).Select(l => l.Name).ShouldBe(["layer.geojson:poi"]);
+    }
+
     // ---- local CAD drawings (no CRS) ----
 
     [Test]
