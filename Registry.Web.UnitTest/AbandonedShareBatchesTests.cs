@@ -260,8 +260,9 @@ public class AbandonedShareBatchesTests
         // One file of 10 chunks, no file complete: a chunk every 5 hours for 30 hours (the batch started at 12:00)
         var ds = AddDataset("slow-link");
         var token = AddBatch(ds, TimeSpan.Zero, createdDataset: true);
-        var uploads = new ShareChunkedUploads(Store(), Mock.Of<IStorageQuota>(), new ChunkStore(), TestScratch.Provider,
-            DdbManager(), Mock.Of<IObjectsManager>(), TestPaths.Policy, Mock.Of<IAuthManager>(), NullLogger<ShareChunkedUploads>.Instance);
+        var uploads = new ShareChunkedUploads(Store(), Mock.Of<IStorageQuota>(),
+            new BatchChunkSessions(new ChunkStore(), DdbManager(), Mock.Of<IAuthManager>()), TestScratch.Provider,
+            Mock.Of<IObjectsManager>(), TestPaths.Policy, NullLogger<ShareChunkedUploads>.Instance);
 
         for (var chunk = 0; chunk < 6; chunk++)
         {
@@ -654,8 +655,9 @@ public class AbandonedShareBatchesTests
         PutFile(ds, "Maps/Ortho.TIF");
         var token = AddBatch(ds, TimeSpan.Zero, createdDataset: false);
         var committed = new List<string>();
-        var uploads = new ShareChunkedUploads(Store(), Mock.Of<IStorageQuota>(), new ChunkStore(), TestScratch.Provider,
-            DdbManager(), Objects(ds, committed).Object, TestPaths.Policy, Mock.Of<IAuthManager>(), NullLogger<ShareChunkedUploads>.Instance);
+        var uploads = new ShareChunkedUploads(Store(), Mock.Of<IStorageQuota>(),
+            new BatchChunkSessions(new ChunkStore(), DdbManager(), Mock.Of<IAuthManager>()), TestScratch.Provider,
+            Objects(ds, committed).Object, TestPaths.Policy, NullLogger<ShareChunkedUploads>.Instance);
 
         await using (var body = new MemoryStream("abcd"u8.ToArray()))
         {

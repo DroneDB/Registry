@@ -81,6 +81,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<ShareTargets>();
         services.AddScoped<ShareBatches>();
         services.AddScoped<ShareUploads>();
+        services.AddScoped<BatchChunkSessions>();
         services.AddScoped<ShareChunkedUploads>();
         services.AddScoped<PushManager>();
         services.AddScoped<PushSessions>();

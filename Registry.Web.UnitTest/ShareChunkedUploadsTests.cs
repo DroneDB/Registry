@@ -87,8 +87,9 @@ public class ShareChunkedUploadsTests
         var ddbManager = new Mock<IDdbManager>();
         ddbManager.Setup(m => m.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
 
-        return new ShareChunkedUploads(store, Mock.Of<IStorageQuota>(), _chunks, TestScratch.Provider, ddbManager.Object,
-            Mock.Of<IObjectsManager>(), TestPaths.Policy, auth.Object, NullLogger<ShareChunkedUploads>.Instance);
+        return new ShareChunkedUploads(store, Mock.Of<IStorageQuota>(),
+            new BatchChunkSessions(_chunks, ddbManager.Object, auth.Object), TestScratch.Provider,
+            Mock.Of<IObjectsManager>(), TestPaths.Policy, NullLogger<ShareChunkedUploads>.Instance);
     }
 
     private Task<ChunkUploadResultDto> SendChunk(string fileId, int index, string path = "orthophoto.tif")

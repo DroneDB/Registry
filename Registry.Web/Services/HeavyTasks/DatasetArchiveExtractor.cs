@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.Archives;
 using Registry.Ports.DroneDB;
@@ -458,7 +459,7 @@ public sealed class DatasetArchiveExtractor
             {
                 var f = missing.Pop();
                 if (_recordedFolders.Add(f))
-                    writes?.RecordFolder(Path.GetRelativePath(datasetFolder, f).Replace('\\', '/'));
+                    writes?.RecordFolder(Path.GetRelativePath(datasetFolder, f).ToDdbPath());
             }
 
             // Written by this extraction already (two entries with the same normalized path), or not there: its own.
