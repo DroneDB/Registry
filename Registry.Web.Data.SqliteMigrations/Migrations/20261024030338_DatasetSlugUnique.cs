@@ -16,8 +16,11 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
     /// organization that the database compares as one slug (<c>DatasetSlugRepair</c>, below, is the SQL: window
     /// <c>ROW_NUMBER</c> over the same columns the index covers, so the collation is the index's), the first dataset by
     /// <c>Id</c> keeps its slug, and every other one becomes <c>&lt;slug&gt;_&lt;Id&gt;</c> (cut so the whole fits the 128
-    /// characters of the column; <c>&lt;slug&gt;_&lt;Id&gt;_&lt;Id&gt;</c> when another dataset of the organization already has
-    /// that name). Nothing is deleted: a dataset's data is in the folder named by its <c>InternalRef</c>, not by its slug,
+    /// characters of the column), or, when another dataset of the organization already has that name,
+    /// <c>&lt;slug&gt;_&lt;Id&gt;_&lt;Id&gt;</c>, or, when that is taken too, <c>ds_&lt;Id&gt;</c>. When all three are taken the
+    /// migration stops with an error before it changes anything (SQLite's <c>RAISE</c> takes a literal message, so the error
+    /// cannot name the dataset: the query below lists the duplicates): a dataset the repair does not concern is never
+    /// renamed, and the operator frees one of the names and migrates again. Nothing is deleted: a dataset's data is in the folder named by its <c>InternalRef</c>, not by its slug,
     /// so renaming moves nothing. The rows of <c>JobIndices</c>, which name datasets by slug, are not rewritten: they were
     /// as ambiguous as the lookups before this migration and stay with the dataset that keeps the slug.
     /// </para>
@@ -33,25 +36,40 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
 
         /// <summary>
         /// The repair on SQLite: the new names are computed first into a temporary table (an UPDATE that reads the table it
-        /// writes would see its own renames), then applied. Slugs compare as bytes here, as the index will.
+        /// writes would see its own renames): the first of three candidates that no dataset of the organization has, NULL
+        /// when all three are taken, which the guard turns into an error before anything is renamed (a temporary trigger,
+        /// because RAISE exists only in a trigger). Slugs compare as bytes here, as the index will. The candidates of two
+        /// datasets never meet: they end in the id of their own dataset.
         /// </summary>
         public static readonly string[] DatasetSlugRepair =
         [
             @"CREATE TEMP TABLE DatasetSlugRepair AS
-SELECT c.Id AS Id,
-       CASE WHEN EXISTS (SELECT 1 FROM Datasets e
-                         WHERE e.OrganizationSlug = c.OrganizationSlug
-                           AND e.Slug = SUBSTR(c.Slug, 1, 128 - LENGTH(c.Id) - 1) || '_' || c.Id)
-            THEN SUBSTR(c.Slug, 1, 128 - 2 * LENGTH(c.Id) - 2) || '_' || c.Id || '_' || c.Id
-            ELSE SUBSTR(c.Slug, 1, 128 - LENGTH(c.Id) - 1) || '_' || c.Id
+SELECT n.Id AS Id,
+       CASE WHEN NOT EXISTS (SELECT 1 FROM Datasets e
+                             WHERE e.OrganizationSlug = n.OrganizationSlug AND e.Slug = n.Candidate1) THEN n.Candidate1
+            WHEN NOT EXISTS (SELECT 1 FROM Datasets e
+                             WHERE e.OrganizationSlug = n.OrganizationSlug AND e.Slug = n.Candidate2) THEN n.Candidate2
+            WHEN NOT EXISTS (SELECT 1 FROM Datasets e
+                             WHERE e.OrganizationSlug = n.OrganizationSlug AND e.Slug = n.Candidate3) THEN n.Candidate3
        END AS NewSlug
-FROM (SELECT Id, OrganizationSlug, Slug,
-             ROW_NUMBER() OVER (PARTITION BY OrganizationSlug, Slug ORDER BY Id) AS CopyNo
-      FROM Datasets) c
-WHERE c.CopyNo > 1;",
+FROM (SELECT c.Id AS Id, c.OrganizationSlug AS OrganizationSlug, c.Slug AS Slug,
+             SUBSTR(c.Slug, 1, 128 - LENGTH(c.Id) - 1) || '_' || c.Id AS Candidate1,
+             SUBSTR(c.Slug, 1, 128 - 2 * LENGTH(c.Id) - 2) || '_' || c.Id || '_' || c.Id AS Candidate2,
+             'ds_' || c.Id AS Candidate3
+      FROM (SELECT Id, OrganizationSlug, Slug,
+                   ROW_NUMBER() OVER (PARTITION BY OrganizationSlug, Slug ORDER BY Id) AS CopyNo
+            FROM Datasets) c
+      WHERE c.CopyNo > 1) n;",
+            "CREATE TEMP TABLE DatasetSlugRepairGuard (Id INTEGER);",
+            @"CREATE TEMP TRIGGER DatasetSlugRepairGuard BEFORE INSERT ON DatasetSlugRepairGuard
+BEGIN
+    SELECT RAISE(ABORT, 'Slug repair impossible: a dataset shares its slug with another one and every name it could be given is taken (its slug followed by its id, twice, or ds_ and its id): rename one of the datasets that hold those names and migrate again');
+END;",
+            "INSERT INTO DatasetSlugRepairGuard SELECT Id FROM DatasetSlugRepair WHERE NewSlug IS NULL;",
             @"UPDATE Datasets
 SET Slug = (SELECT r.NewSlug FROM DatasetSlugRepair r WHERE r.Id = Datasets.Id)
 WHERE Id IN (SELECT Id FROM DatasetSlugRepair);",
+            "DROP TABLE DatasetSlugRepairGuard;",
             "DROP TABLE DatasetSlugRepair;"
         ];
 

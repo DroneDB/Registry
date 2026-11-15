@@ -62,6 +62,18 @@ public class DatasetSlugMigrationTests
     }
 
     [Test]
+    public async Task ADuplicateWithoutAFreeName_StopsTheMigrationAndRenamesNothing()
+    {
+        await using var services = Services("unrepairable");
+        using var context = Context(services);
+        await DuplicateDatasetSlugs.SeedUnrepairableAsync(context);
+
+        // SQLite's RAISE takes a literal message: it cannot name the dataset
+        await DuplicateDatasetSlugs.AssertMigrationStopsOnUnrepairableSlugsAsync(context, namesTheDataset: false);
+        await DuplicateDatasetSlugs.AssertMigratesOnceANameIsFreeAsync(context);
+    }
+
+    [Test]
     public async Task ADatabaseWithoutDuplicates_MigratesUnchanged()
     {
         await using var services = Services("clean");

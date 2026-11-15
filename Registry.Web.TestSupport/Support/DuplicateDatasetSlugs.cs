@@ -42,19 +42,67 @@ public static class DuplicateDatasetSlugs
     /// <summary>Migrates an empty database to <see cref="PreviousMigration"/> and writes the rows.</summary>
     public static async Task SeedAsync(RegistryContext context)
     {
+        await InsertAsync(context, Rows);
+
+        foreach (var (jobId, org, slug) in Jobs)
+            await Execute(context,
+                $"INSERT INTO JobIndices (JobId, OrgSlug, DsSlug, CurrentState, CreatedAtUtc, ToolId, ToolVersion) VALUES ('{jobId}', '{org}', '{slug}', 'Succeeded', '2024-01-05 00:00:00', 'build', '1')");
+    }
+
+    private static async Task InsertAsync(RegistryContext context, (int Id, string Org, string Slug)[] rows)
+    {
         await context.GetService<IMigrator>().MigrateAsync(PreviousMigration(context));
 
         foreach (var org in new[] { Alpha, Beta, Gamma })
             await Execute(context, $"INSERT INTO Organizations (Slug, Name, CreationDate, IsPublic) VALUES ('{org}', '{org}', '2024-01-01 00:00:00', 1)");
 
-        // (Id, organization, slug)
-        foreach (var (id, org, slug) in Rows)
+        foreach (var (id, org, slug) in rows)
             await Execute(context,
                 $"INSERT INTO Datasets (Id, CreationDate, InternalRef, OrganizationSlug, Slug) VALUES ({id}, '2024-01-0{id % 9 + 1} 00:00:00', '00000000-0000-0000-0000-{id:D12}', '{org}', '{slug}')");
+    }
 
-        foreach (var (jobId, org, slug) in Jobs)
-            await Execute(context,
-                $"INSERT INTO JobIndices (JobId, OrgSlug, DsSlug, CurrentState, CreatedAtUtc, ToolId, ToolVersion) VALUES ('{jobId}', '{org}', '{slug}', 'Succeeded', '2024-01-05 00:00:00', 'build', '1')");
+    // Dataset 2 is a copy of dataset 1's slug, and the three names it could be given belong to datasets 3 to 5; dataset 6
+    // is a copy that has a free name
+    private static readonly (int Id, string Org, string Slug)[] UnrepairableRows =
+    [
+        (1, Alpha, "x"), (2, Alpha, "x"), (3, Alpha, "x_2"), (4, Alpha, "x_2_2"), (5, Alpha, "ds_2"),
+        (6, Alpha, "y"), (7, Alpha, "y")
+    ];
+
+    /// <summary>Migrates an empty database to <see cref="PreviousMigration"/> and writes rows no repair can make unique.</summary>
+    public static Task SeedUnrepairableAsync(RegistryContext context) => InsertAsync(context, UnrepairableRows);
+
+    /// <summary>
+    /// The migration stops with an error, before it renames anything (not even the dataset that has a free name) and
+    /// before it adds the index. Where the engine can put the dataset into the message
+    /// (<paramref name="namesTheDataset"/>), it is dataset 2.
+    /// </summary>
+    public static async Task AssertMigrationStopsOnUnrepairableSlugsAsync(RegistryContext context, bool namesTheDataset)
+    {
+        var migrate = () => context.GetService<IMigrator>().MigrateAsync();
+
+        var error = await migrate.ShouldThrowAsync<Exception>("no free name for dataset 2");
+
+        var message = string.Join(" ", new[] { error }.Concat(error.InnerException is null ? [] : [error.InnerException]).Select(e => e.Message));
+        message.ShouldContain("Slug repair impossible");
+        if (namesTheDataset)
+            message.ShouldContain("dataset 2 (alpha/x)");
+
+        (await context.Database.SqlQueryRaw<string>("SELECT Slug AS Value FROM Datasets ORDER BY Id").ToListAsync())
+            .ShouldBe(UnrepairableRows.Select(r => r.Slug), "nothing is renamed, a dataset the repair does not concern least of all");
+        (await IndexNamesAsync(context, "Datasets")).ShouldNotContain("IX_Datasets_OrganizationSlug_Slug");
+    }
+
+    /// <summary>After <see cref="AssertMigrationStopsOnUnrepairableSlugsAsync"/>: one of the names is freed and the migration runs.</summary>
+    public static async Task AssertMigratesOnceANameIsFreeAsync(RegistryContext context)
+    {
+        await Execute(context, "UPDATE Datasets SET Slug = 'freed' WHERE Id = 5");
+
+        await context.GetService<IMigrator>().MigrateAsync();
+
+        (await context.Database.SqlQueryRaw<string>("SELECT Slug AS Value FROM Datasets ORDER BY Id").ToListAsync())
+            .ShouldBe(["x", "ds_2", "x_2", "x_2_2", "freed", "y", "y_7"]);
+        (await IndexNamesAsync(context, "Datasets")).ShouldContain("IX_Datasets_OrganizationSlug_Slug");
     }
 
     // The jobs name their dataset by slug, so those of a slug that three datasets shared (alpha/survey) cannot say which
@@ -74,10 +122,13 @@ public static class DuplicateDatasetSlugs
         (5, Beta, "orthophoto"), (6, Beta, "dsm"),
         // Case: one slug for a case-insensitive collation (MariaDB), two for SQLite's default
         (7, Gamma, "Plot"), (8, Gamma, "plot"),
-        // A copy whose repaired name is taken by another dataset: the second pass renames it again
+        // A copy whose repaired name is taken by another dataset (11) gets its second name, and its third (ds_10) when
+        // the second is taken too (14, below)
         (9, Gamma, "x"), (10, Gamma, "x"), (11, Gamma, "x_10"),
         // A long slug: the repaired name still fits the 128 characters of the column
-        (12, Gamma, new string('l', 128)), (13, Gamma, new string('l', 128))
+        (12, Gamma, new string('l', 128)), (13, Gamma, new string('l', 128)),
+        // The second name of dataset 10
+        (14, Gamma, "x_10_10")
     ];
 
     /// <summary>The slugs by id after the migration, for an engine that compares slugs <paramref name="caseInsensitive"/>ly.</summary>
@@ -87,8 +138,9 @@ public static class DuplicateDatasetSlugs
         [4] = Survey,
         [5] = "orthophoto", [6] = "dsm",
         [7] = "Plot", [8] = caseInsensitive ? "plot_8" : "plot",
-        [9] = "x", [10] = "x_10_10", [11] = "x_10",
-        [12] = new string('l', 128), [13] = new string('l', 128 - "_13".Length) + "_13"
+        [9] = "x", [10] = "ds_10", [11] = "x_10",
+        [12] = new string('l', 128), [13] = new string('l', 128 - "_13".Length) + "_13",
+        [14] = "x_10_10"
     };
 
     /// <summary>What the migration did: every row is there, repaired as in <see cref="Expected"/>, nothing else changed.</summary>

@@ -52,6 +52,19 @@ public class DatasetSlugMigrationMariaDbTests
     }
 
     [Test]
+    public async Task ADuplicateWithoutAFreeName_StopsTheMigrationNamingTheDatasetAndRenamesNothing()
+    {
+        await using var database = await _server.CreateDatabaseAsync("slugmig_stuck");
+        await using var services = HostDbContexts.Build<RegistryContext>(DbProvider.Mysql, database.ConnectionString);
+        using var context = Context(services);
+        await DuplicateDatasetSlugs.SeedUnrepairableAsync(context);
+
+        await DuplicateDatasetSlugs.AssertMigrationStopsOnUnrepairableSlugsAsync(context, namesTheDataset: true);
+
+        await DuplicateDatasetSlugs.AssertMigratesOnceANameIsFreeAsync(context);
+    }
+
+    [Test]
     public async Task AnEmptyDatabase_MigratesToTheLatest()
     {
         await using var database = await _server.CreateDatabaseAsync("datasetslugmigrationmariadb_empty");
