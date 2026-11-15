@@ -4,6 +4,7 @@ using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
 using Registry.Web.Services.Adapters;
 
@@ -22,20 +23,34 @@ public static class RateLimitPolicies
 
     public const int UploadProbePermitsPerMinute = 28;
 
-    public static IServiceCollection AddRegistryRateLimiting(this IServiceCollection services) =>
+    /// <summary>Detail of the body of a request the rate limiter refused.</summary>
+    public const string TooManyRequestsMessage = "Too many requests, try again later";
+
+    public static IServiceCollection AddRegistryRateLimiting(this IServiceCollection services)
+    {
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-            options.OnRejected = (context, _) =>
-            {
-                if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
-                    context.HttpContext.Response.Headers.RetryAfter =
-                        Math.Ceiling(retryAfter.TotalSeconds).ToString(CultureInfo.InvariantCulture);
-                return default;
-            };
-
             options.AddPolicy(UploadProbe, UploadProbePartition);
         });
+
+        // A refusal answers like every other error of the API: ProblemDetails, with Retry-After
+        services.AddOptions<RateLimiterOptions>().Configure<ApiErrorResponder, IProblemDetailsService>(
+            (options, responder, problemDetails) =>
+                options.OnRejected = async (context, ct) =>
+                {
+                    var httpContext = context.HttpContext;
+                    if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+                        httpContext.Response.Headers.RetryAfter =
+                            Math.Ceiling(retryAfter.TotalSeconds).ToString(CultureInfo.InvariantCulture);
+
+                    var problem = responder.Create(httpContext, StatusCodes.Status429TooManyRequests,
+                        TooManyRequestsMessage, noRetry: false);
+                    await ApiErrorResponder.WriteAsync(httpContext, problemDetails, problem, ct: ct);
+                });
+
+        return services;
+    }
 
     /// <summary>The partition (one fixed window per user) of <see cref="UploadProbe"/>.</summary>
     public static RateLimitPartition<string> UploadProbePartition(HttpContext context) =>
@@ -49,7 +64,7 @@ public static class RateLimitPolicies
     // Authenticated requests share one budget per user, anonymous ones one per client address
     // (the forwarded one behind a known proxy, see ClientIpResolver)
     private static string PartitionKey(HttpContext context) =>
-        context.User.FindFirstValue(ClaimTypes.NameIdentifier) is { Length: > 0 } userId
+        context.User.FindFirstValue(ClaimTypes.Name) is { Length: > 0 } userId
             ? "u:" + userId
             : ClientAddressKey(context);
 

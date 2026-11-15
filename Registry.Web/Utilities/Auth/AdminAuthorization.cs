@@ -142,8 +142,6 @@ public sealed class RegistryAuthorizationResultHandler : IAuthorizationMiddlewar
 
         var problem = _responder.Create(context, status, detail, noRetry);
         context.Response.StatusCode = status;
-        if (!await _problemDetails.TryWriteAsync(new ProblemDetailsContext { HttpContext = context, ProblemDetails = problem }))
-            await context.Response.WriteAsJsonAsync(problem, (System.Text.Json.JsonSerializerOptions?)null,
-                ApiErrorResponder.ProblemJsonContentType);
+        await ApiErrorResponder.WriteAsync(context, _problemDetails, problem);
     }
 }

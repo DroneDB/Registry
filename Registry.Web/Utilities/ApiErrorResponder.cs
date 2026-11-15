@@ -90,6 +90,26 @@ public sealed class ApiErrorResponder
     }
 
     /// <summary>
+    /// Writes <paramref name="problem"/> as the response body through ASP.NET Core's problem-details writers; when none
+    /// accepts the request's <c>Accept</c> header (e.g. a browser navigation asking for HTML) it is written as
+    /// <c>application/problem+json</c> anyway, so an error never reaches the client as an empty body.
+    /// </summary>
+    public static async Task WriteAsync(HttpContext httpContext, IProblemDetailsService problemDetails,
+        ProblemDetails problem, Exception? exception = null, System.Threading.CancellationToken ct = default)
+    {
+        var written = await problemDetails.TryWriteAsync(new ProblemDetailsContext
+        {
+            HttpContext = httpContext,
+            ProblemDetails = problem,
+            Exception = exception
+        });
+
+        if (!written)
+            await httpContext.Response.WriteAsJsonAsync(problem, (JsonSerializerOptions?)null,
+                ProblemJsonContentType, ct);
+    }
+
+    /// <summary>
     /// The body of a refusal that concerns single input fields (D-047): a ValidationProblemDetails with
     /// <c>errors</c> keyed by the request member, the status of <paramref name="descriptor"/> and its message as
     /// <c>detail</c>.

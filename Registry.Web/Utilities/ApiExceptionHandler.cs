@@ -33,18 +33,9 @@ public sealed class ApiExceptionHandler : IExceptionHandler
         if (problem is null)
             return true;
 
-        var written = await _problemDetails.TryWriteAsync(new ProblemDetailsContext
-        {
-            HttpContext = httpContext,
-            ProblemDetails = problem,
-            Exception = exception
-        });
-
-        // No writer accepts the request's Accept header (e.g. a browser navigation asking for HTML):
-        // answer with the same body anyway rather than letting the exception escape the pipeline
-        if (!written)
-            await httpContext.Response.WriteAsJsonAsync(problem, (System.Text.Json.JsonSerializerOptions?)null,
-                ApiErrorResponder.ProblemJsonContentType, cancellationToken);
+        // No writer may accept the request's Accept header: the body is written anyway rather than
+        // letting the exception escape the pipeline
+        await ApiErrorResponder.WriteAsync(httpContext, _problemDetails, problem, exception, cancellationToken);
 
         return true;
     }
