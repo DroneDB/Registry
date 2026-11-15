@@ -34,10 +34,11 @@ public sealed class TaskRollback : ITaskRollback
     private readonly IDdbManager _ddbManager;
     private readonly IBackgroundJobsProcessor _processor;
     private readonly TaskEntryChanges _changes;
+    private readonly IFileSystem _fs;
     private readonly ILogger<TaskRollback> _log;
 
     public TaskRollback(ITaskWriteRecordStore store, RegistryContext db, IDdbManager ddbManager,
-        IBackgroundJobsProcessor processor, TaskEntryChanges changes, ILogger<TaskRollback> log)
+        IBackgroundJobsProcessor processor, TaskEntryChanges changes, IFileSystem fs, ILogger<TaskRollback> log)
     {
         _store = store;
         _db = db;
@@ -45,6 +46,7 @@ public sealed class TaskRollback : ITaskRollback
         _processor = processor;
         _log = log;
         _changes = changes;
+        _fs = fs;
     }
 
     public async Task<TaskRollbackOutcome> RollBackAsync(string taskId, IReadOnlyCollection<PendingWrite>? pending = null,
@@ -298,12 +300,17 @@ public sealed class TaskRollback : ITaskRollback
         if (dataset is null)
             return TaskCommittedLostException.For(sources.Paths, _ => false);
 
-        var ddb = _ddbManager.Get(dataset.Organization.Slug, sources.InternalRef);
-        return TaskCommittedLostException.For(sources.Paths, path =>
+        return CommittedLost(taskId, _ddbManager.Get(dataset.Organization.Slug, sources.InternalRef), sources.Paths);
+    }
+
+    public TaskCommittedLostException CommittedLost(string taskId, IDDB ddb, IReadOnlyList<string> sources)
+    {
+        ArgumentNullException.ThrowIfNull(ddb);
+        return TaskCommittedLostException.For(sources, path =>
         {
             try
             {
-                return File.Exists(ddb.GetLocalPath(path));
+                return _fs.Exists(ddb.GetLocalPath(path));
             }
             catch (Exception ex)
             {
@@ -394,8 +401,8 @@ public sealed class TaskRollback : ITaskRollback
             }
 
             var local = ddb.GetLocalPath(path);
-            if (File.Exists(local))
-                File.Delete(local);
+            if (_fs.Exists(local))
+                _fs.Delete(local);
             return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -412,7 +419,7 @@ public sealed class TaskRollback : ITaskRollback
         {
             var local = ddb.GetLocalPath(folder);
             // A folder that holds anything else (a file another writer put there) stays: it is not only the task's
-            if (!Directory.Exists(local) || Directory.EnumerateFileSystemEntries(local).Any())
+            if (!_fs.FolderExists(local) || _fs.EnumerateFileSystemEntries(local).Any())
                 return true;
 
             var indexed = await WhenNotBusyAsync(() => ddb.EntryExists(folder), ct);
@@ -427,7 +434,7 @@ public sealed class TaskRollback : ITaskRollback
                 left.Add(folder);
             }
 
-            Directory.Delete(local, false);
+            _fs.FolderDelete(local, false);
             return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

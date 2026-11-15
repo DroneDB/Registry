@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Ports.DroneDB;
 using Registry.Web.Services.HeavyTasks;
 
 namespace Registry.Web.Services.Ports;
@@ -78,6 +79,13 @@ public interface ITaskRollback
     /// record is not committed.
     /// </summary>
     Task<TaskCommittedLostException?> CommittedLostAsync(string taskId, CancellationToken ct = default);
+
+    /// <summary>
+    /// The exception of a committed task that deletes <paramref name="sources"/> of <paramref name="ddb"/> after its
+    /// commit, naming those still in the dataset folder (a source whose file cannot be checked is taken as remaining):
+    /// the one rule of the worker's attempt rule and of <see cref="CommittedLostAsync"/>.
+    /// </summary>
+    TaskCommittedLostException CommittedLost(string taskId, IDDB ddb, IReadOnlyList<string> sources);
 }
 
 /// <summary>

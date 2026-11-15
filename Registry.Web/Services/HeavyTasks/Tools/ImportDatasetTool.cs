@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
+using Registry.Ports;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Ports.Import;
@@ -57,6 +58,7 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
 
     private readonly ImportSourceCatalog _sources;
     private readonly ImportCredentials _credentials;
+    private readonly IFileSystem _fs;
     private readonly TaskFileIndexer _indexer;
     private readonly ImportSettings _settings;
     private readonly long _diskSafetyMarginBytes;
@@ -71,13 +73,16 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
     /// <param name="importSettings">The import settings.</param>
     /// <param name="platformSettings">The processing platform settings (size cap, disk safety margin).</param>
     /// <param name="headroom">The disk head-room of the dataset volume.</param>
+    /// <param name="fs">The file system the dataset folder is written through.</param>
     public ImportDatasetTool(
         ImportSourceCatalog sources,
         ImportCredentials credentials,
         TaskFileIndexer indexer,
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
-        VolumeHeadroom headroom)
+        VolumeHeadroom headroom,
+        IFileSystem fs)
     {
+        _fs = fs;
         _headroom = headroom;
         _sources = sources;
         _credentials = credentials;
@@ -151,12 +156,12 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
 
         var root = ctx.Ddb.DatasetFolderPath;
 
-        Directory.CreateDirectory(root);
+        _fs.FolderCreate(root);
 
         // What the source creates is recorded before it is written (FR-XC-27): a breach of the budget, the timeout, a
         // cancel or any failure ends the task, and the task deletes what its record holds, and only that. A retry
         // finds the files of the earlier attempts in the record.
-        var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, ct);
+        var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, _fs, ct);
 
         // Effective cap = the tightest of: what the owner of the organization may still store, read now, when the import
         // starts to write (FR-XC-26, D-039: never a value kept from the submit), a cap the request sets (budgetBytes), the
@@ -247,7 +252,7 @@ public sealed class ImportDatasetTool : HeavyToolBase<ImportDatasetTool.Paramete
         // folder; queue the builds of the buildable files (children of this task), invalidate the caches
         var recorded = await ctx.WriteRecord.RecordedPathsAsync(ctx.Dataset, ct);
         var allFiles = recorded.Concat(writes.Created).Distinct(StringComparer.Ordinal)
-            .Where(f => File.Exists(DatasetPathPolicy.ToLocalPath(root, f))).Order(StringComparer.Ordinal).ToList();
+            .Where(f => _fs.Exists(DatasetPathPolicy.ToLocalPath(root, f))).Order(StringComparer.Ordinal).ToList();
         await _indexer.IndexAsync(new TaskFiles(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug, allFiles,
             ctx.BuildQueue, ctx.TaskId, "imported files"), progress, ct);
 

@@ -90,6 +90,10 @@ public class HeavyTaskRollbackTriggerTests
             .ReturnsAsync(TaskAttemptStart.Fresh);
         _rollback.Setup(r => r.RollBackAsync(TaskId, It.IsAny<IReadOnlyCollection<PendingWrite>?>(),
             It.IsAny<CancellationToken>())).ReturnsAsync(TaskRollbackOutcome.RolledBack);
+        // The rule of the rollback (TaskRollback.CommittedLost): the sources whose file is still in the dataset folder
+        _rollback.Setup(r => r.CommittedLost(TaskId, It.IsAny<IDDB>(), It.IsAny<IReadOnlyList<string>>()))
+            .Returns<string, IDDB, IReadOnlyList<string>>((_, ddb, sources) =>
+                TaskCommittedLostException.For(sources, path => File.Exists(ddb.GetLocalPath(path))));
         _store = new Mock<ITaskWriteRecordStore>();
         _store.Setup(s => s.RecordAsync(TaskId, It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyCollection<string>>(),
                 It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>(),

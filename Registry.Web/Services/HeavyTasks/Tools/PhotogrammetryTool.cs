@@ -70,28 +70,24 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         """);
 
     private readonly NodeOdxTaskRunner _node;
-    private readonly DatasetArchiveExtractor _archives;
+    private readonly PhotogrammetryResultsImport _results;
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ProcessingPlatformSettings _settings;
-    private readonly ImportSettings _importSettings;
     private readonly DatasetPathPolicy _paths;
-    private readonly TaskFileIndexer _indexer;
 
+    /// <param name="node">Runs the task on a NodeODX node and downloads its result bundle.</param>
+    /// <param name="results">Extracts the result bundle into the target dataset and indexes it.</param>
+    /// <param name="scopeFactory">Resolves the scoped services of a dataset the results go into.</param>
+    /// <param name="paths">The dataset path rule (image folder, destination folder).</param>
     public PhotogrammetryTool(
         NodeOdxTaskRunner node,
-        DatasetArchiveExtractor archives,
+        PhotogrammetryResultsImport results,
         IServiceScopeFactory scopeFactory,
-        IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
-        DatasetPathPolicy paths,
-        TaskFileIndexer indexer)
+        DatasetPathPolicy paths)
     {
         _node = node;
         _paths = paths;
-        _archives = archives;
+        _results = results;
         _scopeFactory = scopeFactory;
-        _settings = platformSettings.Value;
-        _importSettings = importSettings.Value;
-        _indexer = indexer;
     }
 
     public override string Id => "photogrammetry";
@@ -304,7 +300,6 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         var createNewDataset = args.CreateNewDataset ?? false;
         var targetDdb = ctx.Ddb;
         var targetDataset = ctx.Dataset;
-        var targetRoot = ctx.Ddb.DatasetFolderPath;
         var targetOrgSlug = request.OrgSlug;
         var targetDsSlug = request.DsSlug;
         var destPath = _paths.NormalizeFolder(args.DestPath);
@@ -381,7 +376,6 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
                 var ddbManager = scope.ServiceProvider.GetRequiredService<IDdbManager>();
                 targetDdb = ddbManager.Get(newDatasetOrgSlug, internalRef);
                 targetDataset = new DatasetKey(newDatasetOrgSlug, internalRef);
-                targetRoot = targetDdb.DatasetFolderPath;
             }
 
             // For a new dataset, extract to root (no subfolder).
@@ -389,68 +383,13 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
         }
 
         // --- Step 3: Extract archive into target dataset ---
-        await ExtractArchiveIntoDataset(
-            tempZipPath, destPath, targetDdb, targetDataset, targetRoot, targetOrgSlug, targetDsSlug,
-            ctx, progress, ct);
+        await _results.ImportAsync(
+            tempZipPath, destPath, targetDdb, targetDataset, targetOrgSlug, targetDsSlug, ctx, progress, ct);
 
         progress.Report(new HeavyToolProgress(1, "done",
             LogChunk: $"Photogrammetry complete. Results extracted to '{destPath}' in dataset '{targetDsSlug}'."));
 
         return null;
-    }
-
-    /// <summary>
-    /// Extracts a downloaded archive into a dataset, indexes files, and enqueues build jobs.
-    /// Reuses the same pattern as ArchiveExtractTool.
-    /// </summary>
-    private async Task ExtractArchiveIntoDataset(
-        string archivePath, string destPath, IDDB ddb, DatasetKey dataset, string root,
-        string orgSlug, string dsSlug,
-        IHeavyToolExecutionContext ctx,
-        IProgress<HeavyToolProgress> progress, CancellationToken ct)
-    {
-        // The shared extractor: the path rule decides every entry, the budget every chunk, existing
-        // files are kept (no overwrite for photogrammetry output), any failure leaves the dataset as it
-        // was, and every result is recorded in the task's write record of the target dataset before it is
-        // written (FR-XC-27)
-        var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, dataset, root, ct);
-
-        // The cap is the smaller of the archive limit and what the owner of the target organization may still store, read
-        // now, when the results are written (FR-PRC-08, D-039): when they do not fit the task fails with the 507 text, and
-        // the write record rolls back what was written. The internal folders of the bundle are not imported (FR-PRC-41)
-        var (maxBytes, maxBytesMessage) = await WorkerStorageQuota.CapAsync(ctx.Storage, orgSlug,
-            _settings.MaxArchiveExtractSizeBytes, replacedBytes: null, ct);
-        var extraction = await _archives.ExtractAsync(
-            new ArchiveExtractionRequest(archivePath, root, destPath, _importSettings.IsExtensionAllowed,
-                target => !writes.MayWrite(target), maxBytes,
-                _settings.DiskSafetyMarginBytes, writes, Exclude: ExcludedResultEntry(destPath),
-                MaxBytesMessage: maxBytesMessage),
-            new CallbackProgress<ArchiveExtractionProgress>(p => ReportProgress(progress, p)), ct);
-        var extractedPaths = extraction.Extracted.ToList();
-
-        ct.ThrowIfCancellationRequested();
-
-        // Index, queue the builds of the buildable results (children of this task), invalidate the caches
-        await _indexer.IndexAsync(new TaskFiles(ddb, dataset, orgSlug, dsSlug, extractedPaths, ctx.BuildQueue, ctx.TaskId,
-            "photogrammetry results", ProgressFrom: 0.97, ProgressTo: 0.99), progress, ct);
-
-        progress.Report(new HeavyToolProgress(0.99, "extracting", LogChunk: string.Join('\n', extraction.LogLines())));
-    }
-
-    // The entries of the result bundle that are not imported: the dataset path is under the folder the results go to, the
-    // prefix is read relative to the bundle (FR-PRC-41)
-    private Func<string, bool> ExcludedResultEntry(string destPath)
-    {
-        var prefixes = _settings.PhotogrammetryExcludedFoldersOrDefault();
-        var root = destPath.Length == 0 ? string.Empty : destPath.TrimEnd('/') + "/";
-        return target =>
-        {
-            var inBundle = root.Length > 0 && target.StartsWith(root, StringComparison.OrdinalIgnoreCase)
-                ? target[root.Length..]
-                : target;
-            return prefixes.Any(prefix => !string.IsNullOrEmpty(prefix) &&
-                                          inBundle.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
-        };
     }
 
     private List<Entry> CollectImageEntries(HeavyToolRequest request, Parameters args, IDDB ddb)
@@ -477,27 +416,4 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
                 .Where(e => e.Type is EntryType.Image or EntryType.GeoImage)
         ];
     }
-
-    // The extraction is the 0.96..0.98 slice of the task
-    private static void ReportProgress(IProgress<HeavyToolProgress> progress, ArchiveExtractionProgress p)
-    {
-        if (p.Done == 0)
-        {
-            progress.Report(new HeavyToolProgress(p.Total > 0 ? 0.96 : -1, "extracting",
-                LogChunk: p.Total > 0
-                    ? $"Extracting {p.Total} file(s) from photogrammetry results"
-                    : "Extracting photogrammetry results"));
-            return;
-        }
-
-        var fraction = p.Total > 0 ? 0.96 + 0.02 * p.Done / p.Total : -1;
-        progress.Report(new HeavyToolProgress(fraction, "extracting", Message: p.Key.Length > 0 ? p.Key : null));
-    }
-
-    // Reports inline (System.Progress<T> posts to the thread pool)
-    private sealed class CallbackProgress<T>(Action<T> report) : IProgress<T>
-    {
-        public void Report(T value) => report(value);
-    }
-
 }

@@ -137,7 +137,7 @@ public class DdbJobs : DdbRetriedJob
 
         console.Debug("In MaskBorders({Dataset}, {Path})", ddb.DatasetFolderPath, inputPath);
 
-        if (PublishedOutputMarker.Covers(ddb, PublishedOutputMarker.Get(context), outputPath))
+        if (PublishedOutputMarker.Covers(ddb, _fs, PublishedOutputMarker.Get(context), outputPath))
             console.Debug("The masked file was written by an earlier attempt");
         else
         {
@@ -148,13 +148,13 @@ public class DdbJobs : DdbRetriedJob
             // cancelled job leaves it as it was (FR-PRC-01). The replace is decided now, for the file that is there:
             // an output that appears while libddb runs (another writer) is refused, never replaced
             var outputFullPath = ddb.GetLocalPath(outputPath);
-            var replacing = overwrite && File.Exists(outputFullPath);
+            var replacing = overwrite && _fs.Exists(outputFullPath);
             console.Debug("Running mask borders");
             try
             {
                 ddb.MaskBorders(inputPath, outputPath, nearDist, white, replacing);
             }
-            catch (DdbException) when (!replacing && File.Exists(outputFullPath))
+            catch (DdbException) when (!replacing && _fs.Exists(outputFullPath))
             {
                 // Created by another writer since the check: kept, and refused as any existing output
                 throw new NameClashException(outputPath);

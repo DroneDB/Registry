@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Registry.Common;
+using Registry.Ports;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
@@ -60,40 +61,36 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
         }
         """);
 
-    private readonly GuardedHttpDownloader _downloader;
+    private readonly FileUrlTransfer _transfer;
     private readonly ImportCredentials _credentials;
     private readonly TaskFileIndexer _indexer;
     private readonly ImportSettings _importSettings;
-    private readonly long _diskSafetyMarginBytes;
     private readonly DatasetPathPolicy _paths;
-    private readonly ScratchFileProvider _scratch;
+    private readonly IFileSystem _fs;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="FileUrlImportTool"/> class.
     /// </summary>
-    /// <param name="downloader">The SSRF-hardened, budget-guarded downloader (it also pre-validates the host at submit time).</param>
+    /// <param name="transfer">Downloads the file into place (it also pre-validates the host at submit time).</param>
     /// <param name="credentials">Decrypts the basic-auth password.</param>
     /// <param name="indexer">Indexes the imported file, queues its build and invalidates the dataset's caches.</param>
-    /// <param name="importSettings">The import settings.</param>
-    /// <param name="platformSettings">The processing platform settings (size cap, disk safety margin).</param>
+    /// <param name="importSettings">The import settings (the extension policy).</param>
     /// <param name="paths">The dataset path rule (destination folder and file).</param>
-    /// <param name="scratch">Where the download is written: the dataset's volume, so the move into place is a rename.</param>
+    /// <param name="fs">The file system the dataset folder is read from.</param>
     public FileUrlImportTool(
-        GuardedHttpDownloader downloader,
+        FileUrlTransfer transfer,
         ImportCredentials credentials,
         TaskFileIndexer indexer,
-        IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
+        IOptions<ImportSettings> importSettings,
         DatasetPathPolicy paths,
-        ScratchFileProvider scratch)
+        IFileSystem fs)
     {
-        _scratch = scratch;
-        _downloader = downloader;
+        _transfer = transfer;
         _paths = paths;
         _credentials = credentials;
         _indexer = indexer;
         _importSettings = importSettings.Value;
-        _diskSafetyMarginBytes =
-            platformSettings.Value.DiskSafetyMarginBytes;
+        _fs = fs;
     }
 
     /// <inheritdoc />
@@ -124,7 +121,7 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
         var uri = FileImportPolicy.ParseHttpUrl(args.Url);
 
         // Fast SSRF rejection at submit time (re-validated at connect time during download).
-        await _downloader.AssertHostAllowedAsync(uri.Host, ct);
+        await _transfer.AssertHostAllowedAsync(uri.Host, ct);
 
         var fileName = FileImportPolicy.SanitizeFileName(args.FileName);
         if (!_importSettings.IsExtensionAllowed(fileName))
@@ -134,7 +131,7 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
 
         // An existing file is replaced only when the request says so (409 otherwise, D-040); the file an
         // earlier attempt of this task moved into place is its own
-        if (!PublishedOutputMarker.Covers(ctx.Ddb, ctx.PublishedOutput, target))
+        if (!PublishedOutputMarker.Covers(ctx.Ddb, _fs, ctx.PublishedOutput, target))
             DatasetEntryLookup.ResolveOutput(ctx.Ddb, target, args.Overwrite == true);
     }
 
@@ -169,7 +166,7 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
         var target = TargetPath(args.Folder, fileName);
 
         var published = ctx.PublishedOutput;
-        if (PublishedOutputMarker.Covers(ctx.Ddb, published, target))
+        if (PublishedOutputMarker.Covers(ctx.Ddb, _fs, published, target))
         {
             // An earlier attempt moved the file into place and failed after it: index it, never download it again
             target = published!;
@@ -181,7 +178,8 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
             // Checked again on the worker: a file may have appeared since the submit. A name that differs only in
             // letter case is the existing file (D-040)
             target = DatasetEntryLookup.ResolveOutput(ctx.Ddb, target, args.Overwrite == true);
-            await DownloadIntoPlaceAsync(request, uri, fileName, target, args, ctx, progress, ct);
+            await _transfer.DownloadIntoPlaceAsync(new FileUrlDownload(uri, fileName, target, args.Overwrite == true,
+                args.Username, DecryptPassword(args.Password)), request.OrgSlug, ctx, progress, ct);
         }
 
         // Index it, queue its build when libddb reports it buildable (a child of the task), invalidate the
@@ -191,106 +189,6 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
 
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: $"Imported {target}"));
         return null;
-    }
-
-    // Downloads the file to a scratch path on the dataset volume, then moves it to target (a rename) and marks it
-    // written: from the move on, a later attempt of the task only indexes it
-    private async Task DownloadIntoPlaceAsync(HeavyToolRequest request, Uri uri, string fileName, string target, Parameters args,
-        IHeavyToolExecutionContext ctx, IProgress<HeavyToolProgress> progress, CancellationToken ct)
-    {
-        var username = args.Username;
-        var password = DecryptPassword(args.Password);
-        var cap = _importSettings.EffectiveFileImportCapBytes();
-
-        // The smaller of the size limit and what the owner of the organization may still store, read now, when the file is
-        // about to be written (FR-XC-26, D-039): a file that does not fit fails the task with the 507 text, and nothing of
-        // it stays (the download is a scratch file until it is moved into place)
-        string? capMessage = null;
-        if (await ctx.Storage.RemainingBytesOfOrganizationAsync(request.OrgSlug, ct) is { } left)
-        {
-            if (left <= 0)
-                throw QuotaExceededException.OwnerOverQuota(left);
-            if (cap <= 0 || left < cap)
-            {
-                cap = left;
-                capMessage = QuotaExceededException.OwnerOverQuotaMessage(left);
-            }
-        }
-
-        // The download goes to the dataset's uploads folder: never indexed, and on the dataset's volume,
-        // so the disk guard measures the volume it fills and the move into place is a rename, not a
-        // full copy from /tmp. Deleted on any failure (Dispose), kept once moved.
-        using var scratch = _scratch.CreateForDataset(ctx.Ddb.DatasetFolderPath);
-
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var transferTimeout = _importSettings.TransferTimeoutSeconds;
-        if (transferTimeout > 0)
-            linkedCts.CancelAfter(TimeSpan.FromSeconds(transferTimeout));
-
-        progress.Report(new HeavyToolProgress(-1, "downloading",
-            LogChunk: $"Downloading {fileName} from {uri.Host}"));
-
-        var sink = new CallbackProgress<FileDownloadProgress>(p =>
-            progress.Report(new HeavyToolProgress(p.Fraction, "downloading",
-                p.TotalBytes is > 0
-                    ? $"Downloaded {CommonUtils.GetBytesReadable(p.BytesSoFar)} / {CommonUtils.GetBytesReadable(p.TotalBytes.Value)}"
-                    : $"Downloaded {CommonUtils.GetBytesReadable(p.BytesSoFar)}")));
-
-        long downloaded;
-        try
-        {
-            downloaded = await _downloader.DownloadAsync(uri, scratch.Path, username, password,
-                cap, _importSettings.MinDownloadSpeedBytesPerSec, _importSettings.LowSpeedGraceSeconds,
-                _diskSafetyMarginBytes, sink, linkedCts.Token, capMessage);
-        }
-        catch (OperationCanceledException)
-            when (transferTimeout > 0 && linkedCts.IsCancellationRequested && !ct.IsCancellationRequested)
-        {
-            throw new TimeoutException(
-                $"The download exceeded the configured transfer timeout of {transferTimeout}s.");
-        }
-
-        var localTarget = ctx.Ddb.GetLocalPath(target);
-        var root = ctx.Ddb.DatasetFolderPath;
-
-        progress.Report(new HeavyToolProgress(-1, "indexing",
-            LogChunk: $"Adding {fileName} ({CommonUtils.GetBytesReadable(downloaded)}) to the dataset"));
-
-        // What the task creates is recorded before it is created (FR-XC-27): the folders and the file, which is complete
-        // and stamped here, in its scratch file. Decided before the move: a file the request replaces (overwrite,
-        // FR-XC-07) is never recorded, a rollback must not delete the file that was there.
-        var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, ct);
-        var replacing = args.Overwrite == true && File.Exists(localTarget);
-        if (args.Overwrite != true && File.Exists(localTarget))
-            throw new NameClashException(target);
-        // Saved before the folders and the file exist (§8.1): a process lost after the move leaves a record that rolls
-        // it back
-        TaskImportWrites.RecordFolders(writes, root, TaskImportWrites.ParentOf(target));
-        if (!replacing)
-        {
-            writes.Record(target);
-            writes.Written(target, scratch.Path);
-        }
-
-        await writes.SaveAsync(ct);
-        TaskImportWrites.CreateFolder(root, TaskImportWrites.ParentOf(target));
-
-        // Overwrite was already checked (ResolveOutput). A new file never replaces one that appeared meanwhile; a
-        // replaced one is moved over (a rename on the same volume, atomic over an existing file)
-        try
-        {
-            File.Move(scratch.Path, localTarget, overwrite: replacing);
-        }
-        catch (IOException) when (!replacing && File.Exists(localTarget))
-        {
-            await writes.ForgetAsync(target, CancellationToken.None);
-            throw new NameClashException(target);
-        }
-
-        // The very next step after the move: from here a later attempt indexes the file. NOTE: a process crash
-        // between the move and this line leaves the file without the marker (the retry then refuses it as existing)
-        ctx.MarkOutputPublished(target);
-        scratch.Release();
     }
 
     // The dataset path of the (already sanitized) file name in the optional folder: libddb's path
@@ -303,9 +201,4 @@ public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Paramete
 
     private string DecryptPassword(string? raw) =>
         string.IsNullOrEmpty(raw) ? string.Empty : _credentials.Open(raw);
-
-    private sealed class CallbackProgress<T>(Action<T> callback) : IProgress<T>
-    {
-        public void Report(T value) => callback(value);
-    }
 }

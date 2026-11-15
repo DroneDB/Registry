@@ -73,7 +73,7 @@ public class ImportDatasetToolTests
             new ImportCredentials(Mock.Of<IImportCredentialProtector>()),
             TestJobs.FileIndexer(), settings,
             Microsoft.Extensions.Options.Options.Create(new ProcessingPlatformSettings { DiskSafetyMarginBytes = 0 }),
-            TestHeadroom.WithFree(1L << 40, floorMb: 0));
+            TestHeadroom.WithFree(1L << 40, floorMb: 0), new Registry.Adapters.FileSystem());
     }
 
     private static HeavyToolRequest Request(long? budgetBytes = null) => new("import-dataset", "1", "org", "ds", null,

@@ -58,7 +58,7 @@ public class ImportWriteRecordSaveTests
             .Returns(() => new HttpClient(new DataHandler(), false));
         return new RemoteRegistryClient(factory.Object,
             new ImportSettings { RegistryDownloadConcurrency = 1, RegistryDownloadMaxRetries = 1 },
-            TestPaths.Policy, TestScratch.Provider, NullLogger<RemoteRegistryClient>.Instance)
+            TestPaths.Policy, TestScratch.Provider, new Registry.Adapters.FileSystem(), NullLogger<RemoteRegistryClient>.Instance)
         {
             PlaceBatchSize = batchSize
         };
@@ -173,7 +173,7 @@ public class ImportWriteRecordSaveTests
     {
         var recorder = new FakeTaskWriteRecorder();
         var own = await TaskImportWrites.StartAsync(recorder,
-            new DatasetKey("org", Guid.NewGuid()), _dataset, CancellationToken.None);
+            new DatasetKey("org", Guid.NewGuid()), _dataset, new Registry.Adapters.FileSystem(), CancellationToken.None);
 
         await RecordAndSaveAsync(own, "a.jpg", () => recorder.SavedPaths.ShouldBeEmpty("recorded, not saved yet"));
 

@@ -134,11 +134,11 @@ public class PhotogrammetryNewDatasetTests
         var runner = new NodeOdxTaskRunner(_node.Object, new NodeOdxNodeRegistry(platform),
             TestScratch.For(Path.Combine(_dir, "scratch")), platform);
 
-        return new PhotogrammetryTool(
-            runner, TestArchives.Extractor(new SharpCompressArchiveExtractor()),
-            provider.GetRequiredService<IServiceScopeFactory>(),
-            TestSettings.Options<ImportSettings>(Microsoft.Extensions.Options.Options.Create(settings)), platform,
-            TestPaths.Policy, TestJobs.FileIndexer());
+        var results = new PhotogrammetryResultsImport(TestArchives.Extractor(new SharpCompressArchiveExtractor()),
+            TestJobs.FileIndexer(), TestSettings.Options<ImportSettings>(Microsoft.Extensions.Options.Options.Create(settings)),
+            platform, new Registry.Adapters.FileSystem());
+        return new PhotogrammetryTool(runner, results, provider.GetRequiredService<IServiceScopeFactory>(),
+            TestPaths.Policy);
     }
 
     private Mock<IDDB> SourceDdb()

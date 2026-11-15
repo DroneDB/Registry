@@ -49,6 +49,9 @@ public static class ProcessingPlatformServiceCollectionExtensions
         // What a task does with the files it wrote: index, queue their builds, invalidate the caches
         services.AddSingleton<TaskFileIndexer>();
 
+        // The extraction of a photogrammetry result bundle into its dataset (the last step of the photogrammetry tool)
+        services.AddSingleton<PhotogrammetryResultsImport>();
+
         // What a rescan rebuilds, shared by the rescan-index tool and the rescan endpoint.
         services.AddScoped<RescanRebuild>();
 

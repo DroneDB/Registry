@@ -66,7 +66,7 @@ public class ArchiveExtractToolTests
             TestArchives.Extractor(extractor), TestSettings.Options<ImportSettings>(Microsoft.Extensions.Options.Options.Create(settings)), TestSettings.Options<ProcessingPlatformSettings>(Microsoft.Extensions.Options.Options.Create(settings)),
             TestPaths.Policy,
             TestHeadroom.Default,
-            TestJobs.FileIndexer());
+            TestJobs.FileIndexer(), new Registry.Adapters.FileSystem());
 
         return (tool, storage);
     }

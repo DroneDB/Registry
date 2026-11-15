@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks.Models;
@@ -22,7 +23,7 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// the organization has storage left (<see cref="AddsDatasetFiles"/>, FR-XC-26). An existing output is replaced only
 /// with <c>overwrite</c> (409 otherwise, D-040). <c>POST …/mask-borders</c> keeps working for existing clients.
 /// </summary>
-public sealed class MaskBordersTool(DatasetPathPolicy paths, TaskFileIndexer indexer)
+public sealed class MaskBordersTool(DatasetPathPolicy paths, TaskFileIndexer indexer, IFileSystem fs)
     : HeavyToolBase<MaskBordersTool.Parameters>
 {
     /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
@@ -101,7 +102,7 @@ public sealed class MaskBordersTool(DatasetPathPolicy paths, TaskFileIndexer ind
         // An existing copy is replaced only when the request says so (409 otherwise, D-040); the output an earlier
         // attempt of this task wrote is its own
         var outputPath = MaskedOutputPath(path);
-        if (!PublishedOutputMarker.Covers(ctx.Ddb, ctx.PublishedOutput, outputPath))
+        if (!PublishedOutputMarker.Covers(ctx.Ddb, fs, ctx.PublishedOutput, outputPath))
             DatasetEntryLookup.ResolveOutput(ctx.Ddb, outputPath, Overwrite(args));
 
         return Task.CompletedTask;
@@ -180,7 +181,7 @@ public sealed class MaskBordersTool(DatasetPathPolicy paths, TaskFileIndexer ind
         // replaced, and its entry must describe it); the cancel is honoured once it is indexed (FR-XC-27)
         var indexCt = ct;
         var published = ctx.PublishedOutput;
-        if (PublishedOutputMarker.Covers(ctx.Ddb, published, outputPath))
+        if (PublishedOutputMarker.Covers(ctx.Ddb, fs, published, outputPath))
         {
             // An earlier attempt wrote the output and failed after it (the index was busy): index it, never write again
             outputPath = published!;
@@ -200,14 +201,14 @@ public sealed class MaskBordersTool(DatasetPathPolicy paths, TaskFileIndexer ind
             // run leaves it as it was (FR-PRC-01). Decided before the call: an output the mask replaces is never
             // recorded (FR-XC-27, FR-XC-07), a rollback must not delete the file that was there
             var outputFullPath = ctx.Ddb.GetLocalPath(outputPath);
-            var replacing = Overwrite(args) && File.Exists(outputFullPath);
-            if (!replacing && File.Exists(outputFullPath))
+            var replacing = Overwrite(args) && fs.Exists(outputFullPath);
+            if (!replacing && fs.Exists(outputFullPath))
                 throw new NameClashException(outputPath);
             // What the owner's use counts for the file the mask replaces, read before the run: only the growth counts
             // (FR-XC-26)
             var replacedBytes = replacing ? WorkerStorageQuota.IndexedBytes(ctx.Ddb, outputPath) : 0;
             var root = ctx.Ddb.DatasetFolderPath;
-            var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, ct);
+            var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, fs, ct);
 
             // The mask sidecar libddb may write next to the output (GDAL's .msk)
             var sidecarPath = outputPath + MaskSidecarExtension;
@@ -216,22 +217,22 @@ public sealed class MaskBordersTool(DatasetPathPolicy paths, TaskFileIndexer ind
             // A new output (and the folders it needs) is in the saved record before it is written (§8.1), with its
             // sidecar unless that is there already (a rollback never deletes a path that existed before the task,
             // FR-XC-07): a failed or cancelled run leaves no orphan sidecar
-            var recordsSidecar = !replacing && !File.Exists(sidecarFullPath);
+            var recordsSidecar = !replacing && !fs.Exists(sidecarFullPath);
             if (!replacing)
             {
-                TaskImportWrites.RecordFolders(writes, root, TaskImportWrites.ParentOf(outputPath));
+                TaskImportWrites.RecordFolders(fs, writes, root, TaskImportWrites.ParentOf(outputPath));
                 writes.Record(outputPath);
                 if (recordsSidecar)
                     writes.Record(sidecarPath);
                 await writes.SaveAsync(ct);
-                TaskImportWrites.CreateFolder(root, TaskImportWrites.ParentOf(outputPath));
+                TaskImportWrites.CreateFolder(fs, root, TaskImportWrites.ParentOf(outputPath));
             }
 
             // A cancel that came meanwhile stops here, before libddb runs
             ct.ThrowIfCancellationRequested();
 
             // Created by another writer while the record was saved: kept, and not the task's
-            if (!replacing && File.Exists(outputFullPath))
+            if (!replacing && fs.Exists(outputFullPath))
             {
                 await writes.ForgetAsync(outputPath, CancellationToken.None);
                 if (recordsSidecar)
@@ -273,7 +274,7 @@ public sealed class MaskBordersTool(DatasetPathPolicy paths, TaskFileIndexer ind
 
             if (!replacing)
                 writes.Written(outputPath);
-            if (recordsSidecar && File.Exists(sidecarFullPath))
+            if (recordsSidecar && fs.Exists(sidecarFullPath))
                 writes.Written(sidecarPath);
 
             // The very next step after the write: from here a later attempt indexes the output, and no cancellation

@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using Registry.Ports;
 using Registry.Ports.Json;
 using Registry.Web.Utilities;
 using Registry.Common;
@@ -32,6 +33,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
     private readonly ImportSettings _settings;
     private readonly DatasetPathPolicy _paths;
     private readonly ScratchFileProvider _scratch;
+    private readonly IFileSystem _fs;
     private readonly ILogger<RemoteRegistryClient> _logger;
 
     /// <summary>
@@ -41,14 +43,16 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
     /// <param name="settings">The import settings (download concurrency / retry policy).</param>
     /// <param name="paths">The dataset path policy (the untrusted paths of a remote listing).</param>
     /// <param name="scratch">Where a file is downloaded before it is moved into the dataset.</param>
+    /// <param name="fs">The file system the dataset folder is written through.</param>
     /// <param name="logger">The logger.</param>
     public RemoteRegistryClient(IHttpClientFactory httpClientFactory, ImportSettings settings,
-        DatasetPathPolicy paths, ScratchFileProvider scratch, ILogger<RemoteRegistryClient> logger)
+        DatasetPathPolicy paths, ScratchFileProvider scratch, IFileSystem fs, ILogger<RemoteRegistryClient> logger)
     {
         _httpClientFactory = httpClientFactory;
         _settings = settings;
         _paths = paths;
         _scratch = scratch;
+        _fs = fs;
         _logger = logger;
     }
 
@@ -120,7 +124,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         IProgress<ImportProgress>? progress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(writes);
-        Directory.CreateDirectory(destFolder);
+        _fs.FolderCreate(destFolder);
 
         // The remote registry is untrusted: every path is validated up front (rooted/".." paths fail
         // the import before anything is downloaded, so a malicious/compromised remote cannot write
@@ -236,7 +240,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         string sourceDs, string destFolder, EntryDto entry, string path, string localPath, IImportWriteRecord writes,
         CancellationToken ct)
     {
-        if (File.Exists(localPath))
+        if (_fs.Exists(localPath))
         {
             if (!writes.MayWrite(path))
             {
@@ -245,11 +249,11 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
             }
 
             // Resumability: a file this task wrote before, already at the expected size, is complete
-            if (new FileInfo(localPath).Length == entry.Size)
+            if (_fs.GetFileSize(localPath) == entry.Size)
                 return new FetchedFile(path, localPath, null, entry.Size);
 
             // The task's own, incomplete or different: written again
-            File.Delete(localPath);
+            _fs.Delete(localPath);
         }
 
         var temp = _scratch.CreateForDataset(destFolder);
@@ -302,7 +306,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
                 continue;
             }
 
-            TaskImportWrites.RecordFolders(writes, destFolder, TaskImportWrites.ParentOf(file.Path), folders);
+            TaskImportWrites.RecordFolders(_fs, writes, destFolder, TaskImportWrites.ParentOf(file.Path), folders);
             writes.Record(file.Path);
             writes.Written(file.Path, file.Temp.Path);
             toMove.Add(file);
@@ -318,14 +322,13 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
 
         foreach (var file in toMove)
         {
-            TaskImportWrites.CreateFolder(destFolder, TaskImportWrites.ParentOf(file.Path));
+            TaskImportWrites.CreateFolder(_fs, destFolder, TaskImportWrites.ParentOf(file.Path));
             try
             {
-                File.Move(file.Temp!.Path, file.LocalPath, overwrite: false);
-                file.Temp.Release();
+                file.Temp!.MoveTo(file.LocalPath, overwrite: false);
                 moved.Add(file.LocalPath);
             }
-            catch (IOException) when (File.Exists(file.LocalPath))
+            catch (IOException) when (_fs.Exists(file.LocalPath))
             {
                 // Created between the check and the move: never replaced. Not the task's, unless this run moved it
                 // there (the same file under another letter case): a file the task wrote stays in its record
@@ -338,14 +341,14 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
 
     // Whether the file at localPath is one this run moved. On a file system that ignores letter case the path can name
     // a file moved under another letter case: its exact name is then not in its folder
-    private static bool MovedByThisRun(string localPath, HashSet<string> moved)
+    private bool MovedByThisRun(string localPath, HashSet<string> moved)
     {
         if (moved.Contains(localPath))
             return true;
 
         var folder = Path.GetDirectoryName(localPath);
         var name = Path.GetFileName(localPath);
-        if (string.IsNullOrEmpty(folder) || Directory.EnumerateFileSystemEntries(folder)
+        if (string.IsNullOrEmpty(folder) || _fs.EnumerateFileSystemEntries(folder)
                 .Any(e => string.Equals(Path.GetFileName(e), name, StringComparison.Ordinal)))
             return false;
 

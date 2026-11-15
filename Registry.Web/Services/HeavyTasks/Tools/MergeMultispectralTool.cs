@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks.Models;
@@ -21,7 +22,7 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// Mirrors the legacy <c>ObjectsManager.MergeMultispectral</c> behaviour exactly. With <c>deleteSources</c> it deletes
 /// the band files itself, only after the output is published, indexed and opens as a raster (FR-PRC-02).
 /// </summary>
-public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : HeavyToolBase<MergeMultispectralTool.Parameters>
+public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy, IFileSystem fs) : HeavyToolBase<MergeMultispectralTool.Parameters>
 {
     /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
     public sealed record Parameters(string[]? Paths, string? OutputPath, bool? Overwrite, bool? DeleteSources);
@@ -100,7 +101,7 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
 
         // An existing output is replaced only when the request says so (409 otherwise, D-040); the output an
         // earlier attempt of this task wrote is its own
-        if (!PublishedOutputMarker.Covers(ctx.Ddb, ctx.PublishedOutput, outputPath))
+        if (!PublishedOutputMarker.Covers(ctx.Ddb, fs, ctx.PublishedOutput, outputPath))
             DatasetEntryLookup.ResolveOutput(ctx.Ddb, outputPath, args.Overwrite ?? ctx.QueuedBeforeOverwriteRule);
 
         return Task.CompletedTask;
@@ -176,7 +177,7 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
         // replaced, and its entry must describe it); the cancel is honoured once it is indexed (FR-XC-27)
         var replaced = false;
         var published = ctx.PublishedOutput;
-        if (PublishedOutputMarker.Covers(ctx.Ddb, published, outputPath))
+        if (PublishedOutputMarker.Covers(ctx.Ddb, fs, published, outputPath))
         {
             // An earlier attempt wrote the output and failed after it (the index was busy): index it, never write again
             outputPath = published!;
@@ -196,29 +197,29 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
             // is complete: a failed run leaves it as it was (FR-PRC-01). Decided before the call: an output the merge
             // replaces is never recorded (FR-XC-27, FR-XC-07), a rollback must not delete the file that was there
             var outputFullPath = ctx.Ddb.GetLocalPath(outputPath);
-            var replacing = (args.Overwrite ?? ctx.QueuedBeforeOverwriteRule) && File.Exists(outputFullPath);
-            if (!replacing && File.Exists(outputFullPath))
+            var replacing = (args.Overwrite ?? ctx.QueuedBeforeOverwriteRule) && fs.Exists(outputFullPath);
+            if (!replacing && fs.Exists(outputFullPath))
                 throw new NameClashException(outputPath);
             // What the owner's use counts for the file the merge replaces, read before the run: only the growth counts
             // (FR-XC-26)
             var replacedBytes = replacing ? WorkerStorageQuota.IndexedBytes(ctx.Ddb, outputPath) : 0;
             var root = ctx.Ddb.DatasetFolderPath;
-            var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, ct);
+            var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, root, fs, ct);
 
             // A new output (and the folders it needs) is in the saved record before it is written (§8.1)
             if (!replacing)
             {
-                TaskImportWrites.RecordFolders(writes, root, TaskImportWrites.ParentOf(outputPath));
+                TaskImportWrites.RecordFolders(fs, writes, root, TaskImportWrites.ParentOf(outputPath));
                 writes.Record(outputPath);
                 await writes.SaveAsync(ct);
-                TaskImportWrites.CreateFolder(root, TaskImportWrites.ParentOf(outputPath));
+                TaskImportWrites.CreateFolder(fs, root, TaskImportWrites.ParentOf(outputPath));
             }
 
             // A cancel that came meanwhile stops here, before libddb runs
             ct.ThrowIfCancellationRequested();
 
             // Created by another writer while the record was saved: kept, and not the task's
-            if (!replacing && File.Exists(outputFullPath))
+            if (!replacing && fs.Exists(outputFullPath))
             {
                 await writes.ForgetAsync(outputPath, CancellationToken.None);
                 throw new NameClashException(outputPath);
@@ -294,7 +295,7 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
     /// file) is logged and left, as the delete of entries does: the merge itself succeeded.
     /// The bands that left the dataset are told to it as a rollback does (<see cref="ITaskWriteRecorder.EntriesLeftAsync"/>).
     /// </summary>
-    private static async Task DeleteSourcesAsync(IHeavyToolExecutionContext ctx, string[] paths, string outputPath,
+    private async Task DeleteSourcesAsync(IHeavyToolExecutionContext ctx, string[] paths, string outputPath,
         IProgress<HeavyToolProgress> progress, CancellationToken ct)
     {
         var ddb = ctx.Ddb;
@@ -325,8 +326,8 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
                 if (ddb.EntryExists(band.Path))
                     ddb.Remove(band.Path);
                 var local = ddb.GetLocalPath(band.Path);
-                if (File.Exists(local))
-                    File.Delete(local);
+                if (fs.Exists(local))
+                    fs.Delete(local);
                 left.Add(band.Path);
             }
             catch (Exception ex)

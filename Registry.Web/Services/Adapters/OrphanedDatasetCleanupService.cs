@@ -9,6 +9,7 @@ using Hangfire.Server;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Jobs;
@@ -29,15 +30,18 @@ public class OrphanedDatasetCleanupService
 {
     private readonly RegistryContext _context;
     private readonly StorageOptions _settings;
+    private readonly IFileSystem _fs;
     private readonly ILogger<OrphanedDatasetCleanupService> _logger;
 
     public OrphanedDatasetCleanupService(
         RegistryContext context,
         IOptions<StorageOptions> settings,
+        IFileSystem fs,
         ILogger<OrphanedDatasetCleanupService> logger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
+        _fs = fs ?? throw new ArgumentNullException(nameof(fs));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -57,7 +61,7 @@ public class OrphanedDatasetCleanupService
 
         var datasetsPath = _settings.DatasetsPath;
 
-        if (string.IsNullOrWhiteSpace(datasetsPath) || !Directory.Exists(datasetsPath))
+        if (string.IsNullOrWhiteSpace(datasetsPath) || !_fs.FolderExists(datasetsPath))
         {
             console.Info("Datasets path '{DatasetsPath}' does not exist, skipping orphaned folder cleanup", datasetsPath);
             return;
@@ -84,7 +88,7 @@ public class OrphanedDatasetCleanupService
                 g => new HashSet<Guid>(g.Select(x => x.InternalRef)));
 
         // Scan each organization folder
-        foreach (var orgDir in Directory.EnumerateDirectories(datasetsPath))
+        foreach (var orgDir in _fs.EnumerateDirectories(datasetsPath))
         {
             var orgSlug = Path.GetFileName(orgDir);
 
@@ -92,7 +96,7 @@ public class OrphanedDatasetCleanupService
             var validRefs = validFolders.GetValueOrDefault(orgSlug) ?? [];
 
             // Scan dataset folders within this organization
-            foreach (var datasetDir in Directory.EnumerateDirectories(orgDir))
+            foreach (var datasetDir in _fs.EnumerateDirectories(orgDir))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var folderName = Path.GetFileName(datasetDir);
@@ -116,7 +120,7 @@ public class OrphanedDatasetCleanupService
 
                 try
                 {
-                    Directory.Delete(datasetDir, recursive: true);
+                    _fs.FolderDelete(datasetDir, recursive: true);
                     totalDeleted++;
                     console.Info("Deleted orphaned folder: {Folder}", datasetDir);
                 }
@@ -132,7 +136,7 @@ public class OrphanedDatasetCleanupService
             {
                 try
                 {
-                    Directory.Delete(orgDir);
+                    _fs.FolderDelete(orgDir, recursive: false);
                     console.Info("Deleted empty organization folder: {Folder}", orgDir);
                 }
                 catch (Exception ex)
@@ -146,8 +150,8 @@ public class OrphanedDatasetCleanupService
             totalOrphaned, totalDeleted, totalFailed);
     }
 
-    private static bool IsDirectoryEmpty(string path)
+    private bool IsDirectoryEmpty(string path)
     {
-        return !Directory.EnumerateFileSystemEntries(path).Any();
+        return !_fs.EnumerateFileSystemEntries(path).Any();
     }
 }

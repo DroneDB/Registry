@@ -41,8 +41,13 @@ public class FileUrlImportToolTests
             ProcessingPlatform = new ProcessingPlatformSettings()
         });
 
-        return new FileUrlImportTool(downloader, new ImportCredentials(Mock.Of<IImportCredentialProtector>()),
-            TestJobs.FileIndexer(), TestSettings.Options<ImportSettings>(options), TestSettings.Options<ProcessingPlatformSettings>(options), TestPaths.Policy, TestScratch.Provider);
+        var fs = new Registry.Adapters.FileSystem();
+        var import = TestSettings.Options<ImportSettings>(options);
+        return new FileUrlImportTool(
+            new FileUrlTransfer(downloader, TestScratch.Provider, import,
+                TestSettings.Options<ProcessingPlatformSettings>(options), fs),
+            new ImportCredentials(Mock.Of<IImportCredentialProtector>()), TestJobs.FileIndexer(), import,
+            TestPaths.Policy, fs);
     }
 
     private static IHeavyToolValidationContext Ctx(bool entryExists = false)

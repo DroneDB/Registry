@@ -62,14 +62,14 @@ public class RemoteRegistryClientImportTests
         factory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(() => new HttpClient(handler, false));
         return new RemoteRegistryClient(factory.Object,
             new ImportSettings { RegistryDownloadConcurrency = concurrency, RegistryDownloadMaxRetries = 1 },
-            TestPaths.Policy, TestScratch.Provider, NullLogger<RemoteRegistryClient>.Instance)
+            TestPaths.Policy, TestScratch.Provider, new Registry.Adapters.FileSystem(), NullLogger<RemoteRegistryClient>.Instance)
         {
             PlaceBatchSize = batchSize
         };
     }
 
     private Task<TaskImportWrites> WritesAsync() =>
-        TaskImportWrites.StartAsync(_recorder, Dataset, _dataset, CancellationToken.None);
+        TaskImportWrites.StartAsync(_recorder, Dataset, _dataset, new Registry.Adapters.FileSystem(), CancellationToken.None);
 
     private string[] FilesInDataset() =>
     [

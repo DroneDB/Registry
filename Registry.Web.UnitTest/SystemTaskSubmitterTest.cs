@@ -83,7 +83,8 @@ public class SystemTaskSubmitterTest
     [Test]
     public async Task SubmitAsync_StoresTheOutputPathsAndTheLabelOfTheTool()
     {
-        var merge = new Registry.Web.Services.HeavyTasks.Tools.MergeMultispectralTool(Support.TestPaths.Policy);
+        var merge = new Registry.Web.Services.HeavyTasks.Tools.MergeMultispectralTool(Support.TestPaths.Policy,
+            new Registry.Adapters.FileSystem());
         _registry.Setup(r => r.Resolve("merge-multispectral", null)).Returns(merge);
         var prms = JsonSerializer.SerializeToElement(new { paths = new[] { "b1.tif", "b2.tif" }, outputPath = "m.tif" });
 

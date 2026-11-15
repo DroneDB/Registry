@@ -535,9 +535,7 @@ public class TaskRowsTests
     [Test]
     public void APhotogrammetryRun_IsLabelledByItsName_Folder_Output_AndProfile()
     {
-        var tool = new PhotogrammetryTool(null!, null!, null!,
-            TestSettings.Options<ImportSettings>(new AppSettings()),
-            TestSettings.Options<ProcessingPlatformSettings>(new AppSettings()), TestPaths.Policy, null!);
+        var tool = new PhotogrammetryTool(null!, null!, null!, TestPaths.Policy);
 
         tool.Label(Request("photogrammetry", null, new
         {

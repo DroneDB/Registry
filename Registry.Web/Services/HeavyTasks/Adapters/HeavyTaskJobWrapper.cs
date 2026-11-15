@@ -199,16 +199,18 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
     private async Task StartAttemptAsync(IServiceProvider sp, string taskId, PerformContext ctx, IHeavyTool tool,
         HeavyToolRequest request, IDDB ddb, CancellationToken ct)
     {
-        var start = await sp.GetRequiredService<ITaskRollback>().StartAttemptAsync(taskId, RetryCountOf(ctx), ct);
+        var rollback = sp.GetRequiredService<ITaskRollback>();
+        var start = await rollback.StartAttemptAsync(taskId, RetryCountOf(ctx), ct);
         if (start == TaskAttemptStart.LostRunRolledBack)
             _log.LogWarning("Task {TaskId} runs again after a run that was lost: what that run wrote was deleted", taskId);
         else if (start == TaskAttemptStart.CommittedLost)
-            throw CommittedLost(taskId, tool, request, ddb);
+            throw CommittedLost(rollback, taskId, tool, request, ddb);
     }
 
     // The sources the tool deletes after its commit that are still in the dataset folder (an indexed entry whose file
-    // is gone was deleted: the tools remove the entry, then the file)
-    private TaskCommittedLostException CommittedLost(string taskId, IHeavyTool tool, HeavyToolRequest request, IDDB ddb)
+    // is gone was deleted: the tools remove the entry, then the file), by the rule of the rollback
+    private TaskCommittedLostException CommittedLost(ITaskRollback rollback, string taskId, IHeavyTool tool,
+        HeavyToolRequest request, IDDB ddb)
     {
         IReadOnlyList<string> sources;
         try
@@ -221,18 +223,7 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
             return new TaskCommittedLostException();
         }
 
-        return TaskCommittedLostException.For(sources, path =>
-        {
-            try
-            {
-                return File.Exists(ddb.GetLocalPath(path));
-            }
-            catch (Exception ex)
-            {
-                _log.LogDebug(ex, "Cannot tell whether source '{Path}' of task {TaskId} remains", path, taskId);
-                return true;
-            }
-        });
+        return rollback.CommittedLost(taskId, ddb, sources);
     }
 
     // The task did all its work: the buffered records are written, and the record is committed, so a cancel that

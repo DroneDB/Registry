@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
+using Registry.Ports;
 using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
@@ -59,6 +60,7 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
     private readonly ImportSettings _importSettings;
     private readonly DatasetPathPolicy _paths;
     private readonly VolumeHeadroom _headroom;
+    private readonly IFileSystem _fs;
     private readonly TaskFileIndexer _indexer;
 
     public ArchiveExtractTool(
@@ -66,8 +68,10 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
         IOptions<ImportSettings> importSettings, IOptions<ProcessingPlatformSettings> platformSettings,
         DatasetPathPolicy paths,
         VolumeHeadroom headroom,
-        TaskFileIndexer indexer)
+        TaskFileIndexer indexer,
+        IFileSystem fs)
     {
+        _fs = fs;
         _headroom = headroom;
         _indexer = indexer;
         _archives = archives;
@@ -119,7 +123,7 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
         var localArchive = ctx.Ddb.GetLocalPath(sourcePath);
         var archiveSize = entry.Size > 0
             ? entry.Size
-            : (File.Exists(localArchive) ? new FileInfo(localArchive).Length : 0);
+            : (_fs.Exists(localArchive) ? _fs.GetFileSize(localArchive) : 0);
 
         if (_settings.MaxArchiveExtractSizeBytes > 0 && archiveSize > _settings.MaxArchiveExtractSizeBytes)
             throw new ArgumentException(
@@ -228,7 +232,7 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
 
         // What the extraction creates is recorded before it is written (FR-XC-27): a cancelled or failed task deletes it,
         // and only it; a file it replaces (overwrite) is not recorded
-        var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, ctx.Ddb.DatasetFolderPath, ct);
+        var writes = await TaskImportWrites.StartAsync(ctx.WriteRecord, ctx.Dataset, ctx.Ddb.DatasetFolderPath, _fs, ct);
 
         // One streaming pass through the shared extractor: the path rule decides every entry, the
         // budget (cap, then disk head-room with libddb's floor) every chunk - compressed tarballs have
@@ -266,8 +270,8 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
             try
             {
                 ctx.Ddb.Remove(sourcePath);
-                if (File.Exists(localArchive))
-                    File.Delete(localArchive);
+                if (_fs.Exists(localArchive))
+                    _fs.Delete(localArchive);
                 await ctx.WriteRecord.EntriesLeftAsync(ctx.Dataset, [sourcePath]);
                 progress.Report(new HeavyToolProgress(1, "cleanup",
                     LogChunk: $"Deleted source archive '{sourcePath}'"));

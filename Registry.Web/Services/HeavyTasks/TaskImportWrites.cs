@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Ports;
 using Registry.Ports.Import;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
@@ -30,28 +30,32 @@ public sealed class TaskImportWrites : IImportWriteRecord
     private readonly ITaskWriteRecorder _recorder;
     private readonly DatasetKey _dataset;
     private readonly string _root;
+    private readonly IFileSystem _fs;
     private readonly IReadOnlySet<string> _earlier;
     private readonly object _lock = new();
     private readonly List<string> _written = [];
     private readonly HashSet<string> _writtenSet = new(StringComparer.Ordinal);
 
-    private TaskImportWrites(ITaskWriteRecorder recorder, DatasetKey dataset, string root, IReadOnlySet<string> earlier)
+    private TaskImportWrites(ITaskWriteRecorder recorder, DatasetKey dataset, string root, IFileSystem fs,
+        IReadOnlySet<string> earlier)
     {
         _recorder = recorder;
         _dataset = dataset;
         _root = root;
+        _fs = fs;
         _earlier = earlier;
     }
 
     /// <summary>
-    /// The writes of the task into <paramref name="dataset"/> (its folder <paramref name="root"/>); the paths an earlier
-    /// attempt recorded are the task's own.
+    /// The writes of the task into <paramref name="dataset"/> (its folder <paramref name="root"/>, read through
+    /// <paramref name="fs"/>); the paths an earlier attempt recorded are the task's own.
     /// </summary>
     public static async Task<TaskImportWrites> StartAsync(ITaskWriteRecorder recorder, DatasetKey dataset, string root,
-        CancellationToken ct)
+        IFileSystem fs, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(recorder);
-        return new TaskImportWrites(recorder, dataset, root, await recorder.RecordedPathsAsync(dataset, ct));
+        ArgumentNullException.ThrowIfNull(fs);
+        return new TaskImportWrites(recorder, dataset, root, fs, await recorder.RecordedPathsAsync(dataset, ct));
     }
 
     /// <summary>The files the task created, in the order it recorded them, each once.</summary>
@@ -69,7 +73,7 @@ public sealed class TaskImportWrites : IImportWriteRecord
         if (_earlier.Contains(path))
             return true;
         var local = DatasetPathPolicy.ToLocalPath(_root, path);
-        return !File.Exists(local) && !Directory.Exists(local);
+        return !_fs.Exists(local) && !_fs.FolderExists(local);
     }
 
     public void Record(string path)
@@ -105,12 +109,13 @@ public sealed class TaskImportWrites : IImportWriteRecord
     /// <see cref="CreateFolder"/> creates once the record is saved; those in <paramref name="recorded"/> (the folders
     /// of a batch recorded already) are not recorded again, and the others are added to it. The folders recorded.
     /// </summary>
-    public static IReadOnlyList<string> RecordFolders(IImportWriteRecord writes, string root, string folder,
-        ISet<string>? recorded = null)
+    public static IReadOnlyList<string> RecordFolders(IFileSystem fs, IImportWriteRecord writes, string root,
+        string folder, ISet<string>? recorded = null)
     {
+        ArgumentNullException.ThrowIfNull(fs);
         ArgumentNullException.ThrowIfNull(writes);
         var missing = new Stack<string>();
-        for (var f = folder.Trim('/'); f.Length > 0 && !Directory.Exists(DatasetPathPolicy.ToLocalPath(root, f));
+        for (var f = folder.Trim('/'); f.Length > 0 && !fs.FolderExists(DatasetPathPolicy.ToLocalPath(root, f));
              f = f.Contains('/') ? f[..f.LastIndexOf('/')] : string.Empty)
             missing.Push(f);
 
@@ -131,11 +136,12 @@ public sealed class TaskImportWrites : IImportWriteRecord
     /// Creates the folder <paramref name="folder"/> (dataset-relative) and its missing parents, which
     /// <see cref="RecordFolders"/> recorded and the record saved.
     /// </summary>
-    public static void CreateFolder(string root, string folder)
+    public static void CreateFolder(IFileSystem fs, string root, string folder)
     {
+        ArgumentNullException.ThrowIfNull(fs);
         var f = folder.Trim('/');
         if (f.Length > 0)
-            Directory.CreateDirectory(DatasetPathPolicy.ToLocalPath(root, f));
+            fs.FolderCreate(DatasetPathPolicy.ToLocalPath(root, f));
     }
 
     /// <summary>The parent folder of a dataset path ("" at the root).</summary>

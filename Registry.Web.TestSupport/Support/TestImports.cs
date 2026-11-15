@@ -22,7 +22,7 @@ public static class TestImports
     {
         settings ??= new ImportSettings();
         var fileSystem = new FileSystem();
-        var remote = new RemoteRegistryClient(http, settings, TestPaths.Policy, TestScratch.Provider,
+        var remote = new RemoteRegistryClient(http, settings, TestPaths.Policy, TestScratch.Provider, fileSystem,
             NullLogger<RemoteRegistryClient>.Instance);
         var destinations = new ImportDestinations(context, ddbManager, fileSystem, builds ?? TestJobs.Scheduler(),
             TimeProvider.System, NullLogger<ImportDestinations>.Instance);

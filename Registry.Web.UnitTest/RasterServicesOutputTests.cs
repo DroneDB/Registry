@@ -100,7 +100,8 @@ public class RasterServicesOutputTests
         ddbManager.Setup(m => m.Get(Org, dataset.InternalRef)).Returns(_ddb.Object);
 
         _fs = new Mock<IFileSystem>();
-        _fs.Setup(f => f.Exists(It.IsAny<string>())).Returns(true);
+        // The dataset folder of the tests is on disk (OnDisk): the file system answers from it
+        _fs.Setup(f => f.Exists(It.IsAny<string>())).Returns<string>(File.Exists);
 
         _jobs = new Mock<IBackgroundJobsProcessor>();
         _jobs.Setup(j => j.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()))

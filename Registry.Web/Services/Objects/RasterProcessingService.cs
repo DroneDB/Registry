@@ -27,12 +27,15 @@ public sealed class RasterProcessingService
     private readonly INativeWorkGate _gate;
     private readonly EntryJobs _jobs;
     private readonly IStorageQuota _quota;
+    private readonly IFileSystem _fs;
     private readonly ILogger<RasterProcessingService> _logger;
 
     public RasterProcessingService(IDatasetAccessResolver access, DatasetPathPolicy paths,
-        INativeWorkGate gate, EntryJobs jobs, IStorageQuota quota, ILogger<RasterProcessingService> logger)
+        INativeWorkGate gate, EntryJobs jobs, IStorageQuota quota, IFileSystem fs,
+        ILogger<RasterProcessingService> logger)
     {
         _quota = quota;
+        _fs = fs;
         _access = access;
         _paths = paths;
         _gate = gate;
@@ -92,14 +95,14 @@ public sealed class RasterProcessingService
         // it was (FR-PRC-01). The replace is decided now, for the file that is there: an output that did not exist
         // and appears while the merge waits or runs (another writer) is refused by libddb, never replaced
         var outputFullPath = ddb.GetLocalPath(outputPath);
-        var replacing = overwrite && File.Exists(outputFullPath);
+        var replacing = overwrite && _fs.Exists(outputFullPath);
 
         _logger.LogInformation("Merging multispectral for '{OutputPath}'", outputPath);
         try
         {
             await _gate.RunAsync(NativeLane.Heavy, () => ddb.MergeMultispectral(paths, outputPath, replacing), ct);
         }
-        catch (DdbException) when (!replacing && File.Exists(outputFullPath))
+        catch (DdbException) when (!replacing && _fs.Exists(outputFullPath))
         {
             // Created by another writer since the request: kept, and refused as any existing output (409)
             throw new NameClashException(outputPath);

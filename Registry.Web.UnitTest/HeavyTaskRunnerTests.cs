@@ -306,7 +306,7 @@ public class HeavyTaskRunnerTests
         var ddb = new Mock<IDDB>();
         ddb.Setup(d => d.GetEntry(path)).Returns(new Registry.Ports.DroneDB.Entry { Path = path, Type = EntryType.GeoRaster, Size = 10 });
         _dataset = ddb.Object;
-        _tools["mask-borders"] = new MaskBordersTool(TestPaths.Policy, TestJobs.FileIndexer());
+        _tools["mask-borders"] = new MaskBordersTool(TestPaths.Policy, TestJobs.FileIndexer(), new Registry.Adapters.FileSystem());
     }
 
     [Test]
