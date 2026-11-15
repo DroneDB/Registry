@@ -166,4 +166,23 @@ public sealed class PasswordChangeAccessHttpTests : IDisposable
 
         (await SignInAsync(user, "Third-Pass-77")).ShouldBe(HttpStatusCode.OK);
     }
+
+    // The admin route called by an administrator on their own account rotates the security stamp, so the token of the
+    // caller stops being accepted: the new password signs in at once and the old one does not, whichever way it was set
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task AnAdministrator_ChangingTheirOwnPassword_CanSignInWithTheNewOneRightAfter(bool withCurrentPassword)
+    {
+        var name = $"pwadmin{++_users}";
+        await _factory.CreateUserAsync(name, isAdmin: true, password: Password);
+        var stampBefore = await WithUserAsync(name, (_, user) => Task.FromResult(user.SecurityStamp));
+
+        using (var change = await ChangeAsync(name, name, withCurrentPassword ? Password : null, isAdmin: true))
+            change.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await WithUserAsync(name, (_, user) => Task.FromResult(user.SecurityStamp))).ShouldNotBe(stampBefore,
+            "the earlier tokens of the account are invalidated");
+        (await SignInAsync(name, NewPassword)).ShouldBe(HttpStatusCode.OK);
+        (await SignInAsync(name, Password)).ShouldBe(HttpStatusCode.Unauthorized);
+    }
 }
