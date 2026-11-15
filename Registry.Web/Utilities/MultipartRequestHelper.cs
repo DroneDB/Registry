@@ -11,6 +11,16 @@ using Registry.Web.Exceptions;
 namespace Registry.Web.Utilities;
 // Ref https://docs.microsoft.com/it-IT/aspnet/core/mvc/models/file-uploads?view=aspnetcore-3.1#upload-large-files-with-streaming
 
+/// <summary>The bounds of the text fields of a streamed multipart upload: they are read into memory, whatever the body says.</summary>
+public static class MultipartLimits
+{
+    /// <summary>The most characters of one text field (a path, a flag): an upload field is a short value.</summary>
+    public const int MaxFieldBytes = 64 * 1024;
+
+    /// <summary>The most text fields of one upload.</summary>
+    public const int MaxFields = 1000;
+}
+
 public static class MultipartRequestHelper
 {
     // Content-Type: multipart/form-data; boundary="----WebKitFormBoundarymx2fSWqWSd0OxQqq"
@@ -90,8 +100,9 @@ public static class MultipartRequestHelper
     /// so the destination can be checked before the first byte of the file is written. The form fields are collected whatever
     /// their order. On failure every file already written is handed to <paramref name="discard"/>.
     /// </summary>
-    /// <exception cref="BadRequestException">The body has more than <paramref name="maxFiles"/> file parts, or a
-    /// form field without a name.</exception>
+    /// <exception cref="BadRequestException">The body has more than <paramref name="maxFiles"/> file parts, a form field
+    /// without a name, a text field longer than <see cref="MultipartLimits.MaxFieldBytes"/> or more than
+    /// <see cref="MultipartLimits.MaxFields"/> text fields.</exception>
     public static async Task<StreamedMultipartFiles<TFile>> ReadFilesFormAsync<TFile>(HttpRequest request,
         int boundaryLengthLimit, int maxFiles, Func<MultipartFilePart, Task<TFile>> streamFile,
         Action<TFile> discard)
@@ -102,6 +113,7 @@ public static class MultipartRequestHelper
         string? pendingPath = null;
         // Each file of a bundle has its own flag: one file's overwrite never reaches the next
         string? pendingOverwrite = null;
+        var fieldCount = 0;
 
         try
         {
@@ -129,8 +141,11 @@ public static class MultipartRequestHelper
                     var key = HeaderUtilities.RemoveQuotes(contentDisposition.Name).Value;
                     if (string.IsNullOrEmpty(key))
                         throw new BadRequestException("A form field of the upload has no name");
-                    using var sr = new StreamReader(section.Body, Encoding.UTF8);
-                    var value = await sr.ReadToEndAsync();
+                    if (++fieldCount > MultipartLimits.MaxFields)
+                        throw new BadRequestException(
+                            $"At most {MultipartLimits.MaxFields} form fields are allowed per upload");
+
+                    var value = await ReadFieldAsync(section.Body, key);
                     form.Fields[key] = value;
                     if (string.Equals(key, "path", StringComparison.OrdinalIgnoreCase))
                         pendingPath = value;
@@ -147,6 +162,19 @@ public static class MultipartRequestHelper
         }
 
         return form;
+    }
+
+    // The text of a form field, read up to the limit: a field that goes on is refused instead of read into memory
+    private static async Task<string> ReadFieldAsync(Stream body, string name)
+    {
+        using var reader = new StreamReader(body, Encoding.UTF8);
+        var buffer = new char[MultipartLimits.MaxFieldBytes + 1];
+        var read = await reader.ReadBlockAsync(buffer);
+        if (read > MultipartLimits.MaxFieldBytes)
+            throw new BadRequestException(
+                $"The form field '{name}' is longer than {MultipartLimits.MaxFieldBytes} characters");
+
+        return new string(buffer, 0, read);
     }
 }
 

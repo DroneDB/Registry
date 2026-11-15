@@ -284,6 +284,40 @@ public class UploadPipelineComponentTests
         temps.ShouldAllBe(t => !File.Exists(t));
     }
 
+    // The text fields are read into memory: a field longer than the limit, or more fields than the limit, is a 400 before
+    // the memory goes, whatever the body says
+    [Test]
+    public async Task ReadFilesFormAsync_AFieldOfTwoMebibytes_IsABadRequest()
+    {
+        var ex = await Should.ThrowAsync<BadRequestException>(() => MultipartRequestHelper.ReadFilesFormAsync(
+            Multipart(("path", null, new string('a', 2 * 1024 * 1024)), ("file", "1.jpg", "one")),
+            70, 8, part => Task.FromResult("file"), _ => { }));
+
+        ex.Message.ShouldContain("'path' is longer than 65536 characters");
+    }
+
+    [Test]
+    public async Task ReadFilesFormAsync_AFieldAtTheLimit_IsRead()
+    {
+        var value = new string('a', MultipartLimits.MaxFieldBytes);
+        var form = await MultipartRequestHelper.ReadFilesFormAsync(Multipart(("path", null, value)),
+            70, 8, part => Task.FromResult("file"), _ => { });
+
+        form.GetField("path").ShouldBe(value);
+    }
+
+    [Test]
+    public async Task ReadFilesFormAsync_MoreFieldsThanTheLimit_IsABadRequest()
+    {
+        var fields = Enumerable.Range(0, MultipartLimits.MaxFields + 1)
+            .Select(i => ((string?)$"f{i}", (string?)null, "v")).ToArray();
+
+        var ex = await Should.ThrowAsync<BadRequestException>(() => MultipartRequestHelper.ReadFilesFormAsync(
+            Multipart(fields), 70, 8, part => Task.FromResult("file"), _ => { }));
+
+        ex.Message.ShouldContain("At most 1000 form fields");
+    }
+
     // ---- native work gate
 
     [Test]
