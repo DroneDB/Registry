@@ -152,6 +152,9 @@ public class AuthManager : IAuthManager
 
     public async Task<bool> CanListDataset(Dataset dataset) =>
         await _datasetAccess.CanListDataset(dataset, await _currentUserIdLazy.Value);
+
+    public Task<bool> IsReadableAnonymously(Dataset dataset) =>
+        _datasetAccess.CanAccessDataset(dataset, AccessType.Read, userId: null);
 }
 
 // Enum for different access levels

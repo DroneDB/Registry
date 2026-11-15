@@ -48,6 +48,13 @@ public interface IAuthManager
     public Task<bool> CanListDataset(Dataset dataset);
 
     /// <summary>
+    /// Whether anyone, signed in or not, may read <paramref name="dataset"/> (the rule of an anonymous caller: it is
+    /// public or unlisted and its owner is active), whoever the current user is: a response about it may then be
+    /// stored by a shared cache.
+    /// </summary>
+    public Task<bool> IsReadableAnonymously(Dataset dataset);
+
+    /// <summary>
     /// Whether the owner <paramref name="ownerId"/> of a resource exists and is not deactivated: the rule that lets
     /// those who are not members read and list a Public organization (false for null).
     /// </summary>
