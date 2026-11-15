@@ -71,6 +71,12 @@ public sealed class ProcessingSections : IConfigurationSectionBuilder
                     pp?.MaxArchiveExtractSizeBytes ?? dp.MaxArchiveExtractSizeBytes,
                     dp.MaxArchiveExtractSizeBytes, unit: "bytes"),
 
+                NumberField("MaxArchiveEntries", "Max Archive Entries",
+                    "Maximum number of files in an archive extracted into a dataset (archive-extract, photogrammetry " +
+                    "results, archive URL imports). At least 1.",
+                    pp?.MaxArchiveEntries ?? dp.MaxArchiveEntries,
+                    dp.MaxArchiveEntries, minValue: 1),
+
                 NumberField("DiskSafetyMarginBytes", "Disk Safety Margin",
                     "Disk head-room kept free during archive extraction. 0 to disable.",
                     pp?.DiskSafetyMarginBytes ?? dp.DiskSafetyMarginBytes,

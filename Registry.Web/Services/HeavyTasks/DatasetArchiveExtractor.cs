@@ -5,9 +5,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Registry.Ports;
 using Registry.Ports.Archives;
 using Registry.Ports.DroneDB;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -129,6 +131,8 @@ public sealed record ArchiveExtractionResult(IReadOnlyList<string> Extracted, IR
 /// path (".ddb", the root ".uploads") is skipped, every written file is inside the dataset.</item>
 /// <item>Every byte goes through the budget (<see cref="VolumeHeadroom.CreateBudget"/>): the cap, then
 /// the disk head-room with libddb's free-disk floor.</item>
+/// <item>An archive with more file entries than <see cref="ProcessingPlatformSettings.MaxArchiveEntries"/> is refused,
+/// before its first entry when the count is known without decompressing, else at the entry over it.</item>
 /// <item>All or nothing: until the last entry is written nothing is committed. Any failure
 /// (cancellation, the budget, an unsafe entry, an I/O error) removes every file written, puts back
 /// every file replaced and removes every folder created. A replaced file is moved aside into the
@@ -143,16 +147,19 @@ public sealed class DatasetArchiveExtractor
     private readonly ScratchFileProvider _scratch;
     private readonly IFileSystem _fs;
     private readonly VolumeHeadroom _headroom;
+    private readonly IOptions<ProcessingPlatformSettings> _settings;
     private readonly ILogger<DatasetArchiveExtractor> _logger;
 
     public DatasetArchiveExtractor(IArchiveExtractor archives, DatasetPathPolicy paths, ScratchFileProvider scratch,
-        IFileSystem fs, VolumeHeadroom headroom, ILogger<DatasetArchiveExtractor> logger)
+        IFileSystem fs, VolumeHeadroom headroom, IOptions<ProcessingPlatformSettings> settings,
+        ILogger<DatasetArchiveExtractor> logger)
     {
         _archives = archives;
         _paths = paths;
         _scratch = scratch;
         _fs = fs;
         _headroom = headroom;
+        _settings = settings;
         _logger = logger;
     }
 
@@ -178,21 +185,17 @@ public sealed class DatasetArchiveExtractor
     /// through); an entry without a dataset path is not counted (the extraction skips or refuses it).
     /// </summary>
     /// <exception cref="Exception">The archive cannot be opened or read.</exception>
+    /// <exception cref="Exceptions.QuotaExceededException">The archive has more file entries than the limit.</exception>
     public long ReplacedBytes(ArchiveExtractionRequest request, Func<string, long> existingBytes)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(existingBytes);
 
-        using var session = _archives.Open(request.ArchivePath);
+        using var session = OpenSession(request.ArchivePath);
         var seen = new HashSet<string>(Common.PathComparison.Comparer);
         long total = 0;
-        foreach (var entry in session.Entries())
+        foreach (var (_, target) in FileEntries(session, request.DestinationFolder, CancellationToken.None))
         {
-            if (entry.IsDirectory)
-                continue;
-
-            var name = _paths.NormalizeArchiveKey(entry.Key);
-            var target = name.Path == null ? name : _paths.CheckIn(request.DestinationFolder, name.Path);
             if (target.Rejected != null || target.Path is not { } path || !seen.Add(path))
                 continue;
 
@@ -207,7 +210,8 @@ public sealed class DatasetArchiveExtractor
 
     /// <summary>Extracts the archive of <paramref name="request"/> into its dataset; on failure the dataset is left as it was.</summary>
     /// <exception cref="Exceptions.InvalidDatasetPathException">An entry name is unsafe (zip-slip).</exception>
-    /// <exception cref="Exceptions.QuotaExceededException">The cap or the disk head-room was reached.</exception>
+    /// <exception cref="Exceptions.QuotaExceededException">The cap, the disk head-room or the limit on the file entries
+    /// was reached.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="ct"/> was canceled.</exception>
     public async Task<ArchiveExtractionResult> ExtractAsync(ArchiveExtractionRequest request,
         IProgress<ArchiveExtractionProgress>? progress, CancellationToken ct)
@@ -255,19 +259,15 @@ public sealed class DatasetArchiveExtractor
         {
             // The session (and its file handle) is closed when the loop ends, before the caller deletes
             // or indexes anything
-            using (var session = _archives.Open(request.ArchivePath))
+            using (var session = OpenSession(request.ArchivePath))
             {
                 var total = session.FastFileEntryCount ?? 0;
                 progress?.Report(new ArchiveExtractionProgress(0, total, string.Empty, 0));
 
-                foreach (var entry in session.Entries())
+                foreach (var (entry, path) in FileEntries(session, request.DestinationFolder, ct))
                 {
-                    ct.ThrowIfCancellationRequested();
-                    if (entry.IsDirectory)
-                        continue;
-
                     var skippedBefore = skipped.Count;
-                    var target = Target(request, entry.Key, skipped);
+                    var target = Target(entry.Key, path, skipped);
                     if (target != null && Skip(request, target) is { } reason)
                     {
                         skipped.Add(new ArchiveSkippedEntry(target, reason));
@@ -348,12 +348,49 @@ public sealed class DatasetArchiveExtractor
         }
     }
 
+    // The archive, refused when it says without decompressing that it has more file entries than the limit
+    private IArchiveReadSession OpenSession(string archivePath)
+    {
+        var session = _archives.Open(archivePath);
+        if (session.FastFileEntryCount is { } count && count > MaxEntries)
+        {
+            session.Dispose();
+            throw TooManyEntries();
+        }
+
+        return session;
+    }
+
+    private int MaxEntries => _settings.Value.MaxArchiveEntries;
+
+    private Exceptions.QuotaExceededException TooManyEntries() =>
+        new($"The archive has too many files to extract: it has more than {MaxEntries} (the maximum allowed).");
+
+    // The file entries of the archive (a folder entry holds no file), each with its dataset path under the destination
+    // folder (the zip-slip rule: the name alone, then joined to the folder), in archive order: the one walk over the
+    // entries of the estimate and of the extraction. The entry after the last one the limit allows fails it, for an
+    // archive whose count was not known up front
+    private IEnumerable<(ArchiveEntry Entry, NormalizedEntryPath Path)> FileEntries(IArchiveReadSession session,
+        string destinationFolder, CancellationToken ct)
+    {
+        var count = 0;
+        foreach (var entry in session.Entries())
+        {
+            ct.ThrowIfCancellationRequested();
+            if (entry.IsDirectory)
+                continue;
+            if (++count > MaxEntries)
+                throw TooManyEntries();
+
+            var name = _paths.NormalizeArchiveKey(entry.Key);
+            yield return (entry, name.Path == null ? name : _paths.CheckIn(destinationFolder, name.Path));
+        }
+    }
+
     // The dataset path of an entry, or null when it has none: a folder entry without a name, which holds no file, and a
     // reserved path, which is skipped and listed (FR-PRC-30)
-    private string? Target(ArchiveExtractionRequest request, string key, List<ArchiveSkippedEntry> skipped)
+    private string? Target(string key, NormalizedEntryPath target, List<ArchiveSkippedEntry> skipped)
     {
-        var name = _paths.NormalizeArchiveKey(key);
-        var target = name.Path == null ? name : _paths.CheckIn(request.DestinationFolder, name.Path);
         switch (target.Rejected)
         {
             case null:

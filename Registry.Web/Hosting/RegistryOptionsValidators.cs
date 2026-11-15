@@ -217,6 +217,16 @@ internal sealed class BuildNotificationOptionsValidator : IValidateOptions<Build
         .Result();
 }
 
+/// <summary>The processing platform: an archive is extracted with at least one file entry allowed.</summary>
+internal sealed class ProcessingPlatformSettingsValidator : IValidateOptions<ProcessingPlatformSettings>
+{
+    public ValidateOptionsResult Validate(string? name, ProcessingPlatformSettings options) => new OptionsFailures()
+        .Check(options.MaxArchiveEntries >= 1,
+            $"{OptionsFailures.Key("ProcessingPlatform")}:{nameof(ProcessingPlatformSettings.MaxArchiveEntries)} is not " +
+            "valid (must be greater than 0)")
+        .Result();
+}
+
 /// <summary>The reverse proxies whose forwarded headers are trusted (<see cref="HttpHostOptions"/>).</summary>
 public static class TrustedProxies
 {

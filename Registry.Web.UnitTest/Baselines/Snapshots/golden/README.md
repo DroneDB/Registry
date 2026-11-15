@@ -211,6 +211,8 @@ after the scheme's own challenge: production's JWT scheme adds `WWW-Authenticate
   `RasterExportWindowHttpTests`).
 * `tasks-tools`: the `rescaleUnit` and `bbox` members of `raster-export` no longer say "Needs libddb 2.3 or later" (libddb
   2.4 is the only libddb the Registry runs); no member changed.
+* `sys-config`: the Processing Platform section has `MaxArchiveEntries` (the most files an archive extracted into a
+  dataset may have, at least 1), additive.
 * `sys-config`: a cron field of the Cron Jobs section carries the schedule its job runs when it is empty as `defaultValue`
   (`JobScheduleOptions.DefaultCrons`, FR-ADM-13; it was `null`) (`ConfigurationCronDefaultsTests`).
 * Organizations: `datasetCount` and `lastModified` (the newest write to the index of one of its datasets, its creation date when none can

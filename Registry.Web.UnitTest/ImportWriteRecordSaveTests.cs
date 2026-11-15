@@ -69,7 +69,8 @@ public class ImportWriteRecordSaveTests
 
     private static DatasetArchiveExtractor Extractor(int batchSize) =>
         new(new Registry.Adapters.Archives.SharpCompressArchiveExtractor(), TestPaths.Policy, TestScratch.Provider,
-            new Registry.Adapters.FileSystem(), TestHeadroom.Default, NullLogger<DatasetArchiveExtractor>.Instance)
+            new Registry.Adapters.FileSystem(), TestHeadroom.Default, TestArchives.Settings(),
+            NullLogger<DatasetArchiveExtractor>.Instance)
         {
             PlaceBatchSize = batchSize
         };

@@ -27,6 +27,16 @@ public class ProcessingPlatformSettings
     public long MaxArchiveExtractSizeBytes { get; set; } = 5L * 1024 * 1024 * 1024;
 
     /// <summary>
+    /// Hard cap on the number of file entries of an archive that is extracted into a dataset (the <c>archive-extract</c>
+    /// tool, a photogrammetry result, an archive URL import), the entries skipped or excluded included: each one costs a
+    /// temporary file, a record of the task's writes and an index entry, which the byte caps do not bound (an archive of
+    /// many empty files). An archive with more is refused before its first entry when the count is known without
+    /// decompressing (zip, rar, 7z, tar), else when the extraction reaches the entry over it, and nothing is left of it.
+    /// At least 1. Default 100000.
+    /// </summary>
+    public int MaxArchiveEntries { get; set; } = 100_000;
+
+    /// <summary>
     /// Disk head-room (bytes) kept free on the dataset volume while extracting an archive or importing
     /// a dataset. The streaming guard aborts (and rolls back) before the projected size would eat into
     /// this margin, so a decompression bomb cannot fill the volume. Set to <c>0</c> to disable the
