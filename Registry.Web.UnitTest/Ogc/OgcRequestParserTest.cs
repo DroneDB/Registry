@@ -100,6 +100,18 @@ public class OgcRequestParserTest
         Should.Throw<OgcException>(() => OgcRequestParser.ParseBbox("10,45,9,44", null, "1.1.1"));
     }
 
+    [TestCase("NaN,0,1,1")]
+    [TestCase("0,NaN,1,1")]
+    [TestCase("-Infinity,0,Infinity,1")]
+    [TestCase("0,0,1,Infinity")]
+    public void ParseBbox_NonFiniteValue_IsRefused(string bbox)
+    {
+        // "NaN" and "Infinity" parse as numbers, and no min/max comparison with them fails
+        var error = Should.Throw<OgcException>(() => OgcRequestParser.ParseBbox(bbox, "EPSG:3857", "1.3.0"));
+        error.Code.ShouldBe("InvalidParameterValue");
+        error.Locator.ShouldBe("BBOX");
+    }
+
     [Test]
     public void NegotiateWmsVersion()
     {

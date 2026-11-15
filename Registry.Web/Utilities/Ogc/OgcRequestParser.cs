@@ -91,8 +91,11 @@ public static class OgcRequestParser
         var raw = new double[4];
         for (var i = 0; i < 4; i++)
         {
-            if (!double.TryParse(parts[i], NumberStyles.Float, CultureInfo.InvariantCulture, out raw[i]))
-                throw new OgcException("InvalidParameterValue", $"BBOX value '{parts[i]}' is not a number", 400, "BBOX");
+            // "NaN" and "Infinity" parse as numbers but are no coordinate: they would reach the renderer and its cache key
+            if (!double.TryParse(parts[i], NumberStyles.Float, CultureInfo.InvariantCulture, out raw[i]) ||
+                !double.IsFinite(raw[i]))
+                throw new OgcException("InvalidParameterValue", $"BBOX value '{parts[i]}' is not a finite number", 400,
+                    "BBOX");
         }
 
         var crs = crsOverride;
