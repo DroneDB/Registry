@@ -57,19 +57,21 @@ public static class RateLimitPolicies
 
     /// <summary>The partition (one fixed window per client address, signed in or not) of <see cref="Login"/>.</summary>
     public static RateLimitPartition<string> LoginPartition(HttpContext context) =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            context.RequestServices.GetRequiredService<ClientIpResolver>().AnonymousKey(context),
-            _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = LoginPermitsPerMinute,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0
-            });
+        RateLimitPartition.GetFixedWindowLimiter(ClientAddressKey(context), _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = LoginPermitsPerMinute,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        });
 
     // Authenticated requests share one budget per user, anonymous ones one per client address
     // (the forwarded one behind a known proxy, see ClientIpResolver)
     private static string PartitionKey(HttpContext context) =>
         context.User.FindFirstValue(ClaimTypes.NameIdentifier) is { Length: > 0 } userId
             ? "u:" + userId
-            : context.RequestServices.GetRequiredService<ClientIpResolver>().AnonymousKey(context);
+            : ClientAddressKey(context);
+
+    // The client address (the forwarded one behind a known proxy, see ClientIpResolver)
+    private static string ClientAddressKey(HttpContext context) =>
+        context.RequestServices.GetRequiredService<ClientIpResolver>().AnonymousKey(context);
 }
