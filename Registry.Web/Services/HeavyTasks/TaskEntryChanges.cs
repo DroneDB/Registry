@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Web.Data;
 using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
@@ -38,18 +39,14 @@ public sealed class TaskEntryChanges
         if (paths.Count == 0)
             return;
 
-        try
+        await BestEffort.RunAsync(async () =>
         {
             var dsSlug = await _db.Datasets.AsNoTracking().Where(d => d.InternalRef == dataset.InternalRef)
                 .Select(d => d.Slug).FirstOrDefaultAsync();
             if (dsSlug != null)
                 await EntriesLeftAsync(dataset.OrgSlug, dsSlug, paths);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "Cannot announce the {Count} entries that left {OrgSlug}/{InternalRef}", paths.Count,
-                dataset.OrgSlug, dataset.InternalRef);
-        }
+        }, ex => _log.LogWarning(ex, "Cannot announce the {Count} entries that left {OrgSlug}/{InternalRef}", paths.Count,
+            dataset.OrgSlug, dataset.InternalRef));
     }
 
     /// <summary>Entries at <paramref name="paths"/> left the dataset <paramref name="orgSlug"/>/<paramref name="dsSlug"/>.</summary>
@@ -58,17 +55,11 @@ public sealed class TaskEntryChanges
         if (paths.Count == 0)
             return;
 
-        try
-        {
-            if (_changes != null)
-                await _changes.EntriesLeftAsync(orgSlug, dsSlug, paths);
-            else
-                await _caches.InvalidateAllDatasetCachesAsync(orgSlug, dsSlug);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "Cannot announce the {Count} entries that left {OrgSlug}/{DsSlug}", paths.Count,
-                orgSlug, dsSlug);
-        }
+        await BestEffort.RunAsync(
+            () => _changes != null
+                ? _changes.EntriesLeftAsync(orgSlug, dsSlug, paths)
+                : _caches.InvalidateAllDatasetCachesAsync(orgSlug, dsSlug),
+            ex => _log.LogWarning(ex, "Cannot announce the {Count} entries that left {OrgSlug}/{DsSlug}", paths.Count,
+                orgSlug, dsSlug));
     }
 }

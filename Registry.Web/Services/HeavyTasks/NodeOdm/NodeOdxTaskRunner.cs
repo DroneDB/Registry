@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
+using Registry.Common;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
@@ -154,50 +155,32 @@ public sealed partial class NodeOdxTaskRunner
     private Task RemoveUnlessKeptAsync(NodeOdxEndpoint node, string uuid) =>
         _keepFailedTasks ? Task.CompletedTask : RemoveAsync(node, uuid);
 
-    /// <summary>Removes the task from the node, best effort.</summary>
-    private async Task RemoveAsync(NodeOdxEndpoint node, string uuid)
-    {
-        try
-        {
-            await _client.RemoveTaskAsync(node, uuid, CancellationToken.None);
-        }
-        catch (Exception)
-        {
-            // Best effort: a node that cannot be reached cannot be cleaned
-        }
-    }
+    /// <summary>Removes the task from the node, best effort: a node that cannot be reached cannot be cleaned.</summary>
+    private Task RemoveAsync(NodeOdxEndpoint node, string uuid) =>
+        BestEffort.RunAsync(() => _client.RemoveTaskAsync(node, uuid, CancellationToken.None), NodeUnreachable);
 
     /// <summary>Asks the node to stop the task, best effort: the run ends canceled either way.</summary>
-    private async Task CancelOnNodeAsync(NodeOdxEndpoint node, string uuid)
+    private Task CancelOnNodeAsync(NodeOdxEndpoint node, string uuid) =>
+        BestEffort.RunAsync(() => _client.CancelTaskAsync(node, uuid, CancellationToken.None), NodeUnreachable);
+
+    // A node that fails one of these calls is left as it is: the run ends either way (the client logs a cancel or a
+    // remove that failed)
+    private static void NodeUnreachable(Exception _)
     {
-        try
-        {
-            await _client.CancelTaskAsync(node, uuid, CancellationToken.None);
-        }
-        catch (Exception)
-        {
-            // Best effort (see above)
-        }
     }
 
     /// <summary>
     /// Copies the output the node printed since the last poll to the log (once, after a cancel; FR-PRC-36), best
     /// effort: the run ends canceled either way.
     /// </summary>
-    private async Task CopyLastOutputAsync(NodeOdxEndpoint node, string uuid, PollState poll, IProgress<HeavyToolProgress> progress)
-    {
-        try
+    private Task CopyLastOutputAsync(NodeOdxEndpoint node, string uuid, PollState poll, IProgress<HeavyToolProgress> progress) =>
+        BestEffort.RunAsync(async () =>
         {
             var lines = await _client.GetTaskOutputAsync(node, uuid, poll.OutputLine, CancellationToken.None);
             poll.OutputLine += lines.Count;
             foreach (var line in lines)
                 progress.Report(new HeavyToolProgress(poll.Fraction, poll.Phase, LogChunk: line));
-        }
-        catch (Exception)
-        {
-            // Best effort (see above)
-        }
-    }
+        }, NodeUnreachable);
 
     private async Task PollUntilDoneAsync(NodeOdxEndpoint node, string uuid, PollState poll,
         IProgress<HeavyToolProgress> progress, CancellationToken ct)

@@ -116,6 +116,7 @@ public class PhotogrammetryNewDatasetTests
         services.AddScoped(_ => _db.NewContext());
         services.AddSingleton(_ddbManager.Object);
         services.AddScoped<DatasetCreation>();
+        services.AddScoped<Registry.Web.Services.HeavyTasks.ResultsDatasetServices>();
         // Every job host registers it (AddBuildNotifications): the access of a given user, without a request
         services.AddSingleton(_users.Object);
         // The processing node has no user: it registers no access resolver

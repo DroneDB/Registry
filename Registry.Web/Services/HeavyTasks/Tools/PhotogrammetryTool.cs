@@ -222,12 +222,11 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
 
     // The worker's check of the access of the user the task runs for (D-031): the rules of the API for that user, read
     // without a request (IUserDatasetAccess). A task with no requesting user has nobody whose access holds
-    private static async Task EnsureRequesterMayCreateAsync(IServiceProvider services, string? requestedBy,
+    private static async Task EnsureRequesterMayCreateAsync(IUserDatasetAccess access, string? requestedBy,
         string orgSlug, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(requestedBy) ||
-            !await services.GetRequiredService<IUserDatasetAccess>()
-                .CanAccessOrganizationAsync(requestedBy, orgSlug, AccessType.Write, ct))
+            !await access.CanAccessOrganizationAsync(requestedBy, orgSlug, AccessType.Write, ct))
             throw new ForbiddenException(NoWriteAccessMessage(orgSlug));
     }
 
@@ -329,12 +328,13 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
             // whose access is checked again here (D-031). Nothing was created before this point
             using (var scope = _scopeFactory.CreateScope())
             {
-                var creation = scope.ServiceProvider.GetRequiredService<DatasetCreation>();
+                var results = scope.ServiceProvider.GetRequiredService<ResultsDatasetServices>();
+                var creation = results.Creation;
 
                 // The requester may have lost the write access to the organization during the run: the task fails and
                 // creates nothing. Checked with the rules of the API for that user, also when the dataset exists
                 // already (a re-run writes into it on the user's behalf)
-                await EnsureRequesterMayCreateAsync(scope.ServiceProvider, ctx.RequestedBy, newDatasetOrgSlug, ct);
+                await EnsureRequesterMayCreateAsync(results.RequesterAccess, ctx.RequestedBy, newDatasetOrgSlug, ct);
 
                 // A re-run of this task (a Retry, a lost run run again) finds the dataset an earlier run created in
                 // the record: it imports into it again (the attempt rule deleted what that run wrote), instead of
@@ -378,8 +378,7 @@ public sealed class PhotogrammetryTool : HeavyToolBase<PhotogrammetryTool.Parame
                 }
 
                 // Resolve the DDB for the new dataset.
-                var ddbManager = scope.ServiceProvider.GetRequiredService<IDdbManager>();
-                targetDdb = ddbManager.Get(newDatasetOrgSlug, internalRef);
+                targetDdb = results.DdbManager.Get(newDatasetOrgSlug, internalRef);
                 targetDataset = new DatasetKey(newDatasetOrgSlug, internalRef);
                 targetRoot = targetDdb.DatasetFolderPath;
             }
