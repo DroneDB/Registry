@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,8 +17,8 @@ using Shouldly;
 namespace Registry.Web.Test.UpdateCheck;
 
 /// <summary>
-/// The middleware that remembers the public URL: a request never fails because the disk would not take the note, and a
-/// bug is not hidden.
+/// The middleware that remembers the public URL: only an authenticated request records it, a request never fails because
+/// the disk would not take the note, and a bug is not hidden.
 /// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~ObservedBaseUrlMiddlewareTests"
 /// </summary>
 [TestFixture]
@@ -35,7 +36,7 @@ public class ObservedBaseUrlMiddlewareTests
         _urls.Setup(u => u.GetLocalHost(It.IsAny<bool>())).Returns("https://hub.example.org");
     }
 
-    private async Task<bool> Invoke(string? externalUrl = null)
+    private async Task<bool> Invoke(string? externalUrl = null, bool authenticated = true)
     {
         var store = new ObservedBaseUrlStore(UpdateCheckTestKit.Storage("/storage"), _fs.Object, TimeProvider.System,
             NullLogger<ObservedBaseUrlStore>.Instance);
@@ -43,8 +44,11 @@ public class ObservedBaseUrlMiddlewareTests
             Microsoft.Extensions.Options.Options.Create(new HttpHostOptions { ExternalUrlOverride = externalUrl }), NullLogger<ObservedBaseUrlMiddleware>.Instance);
 
         var reachedNext = false;
-        await middleware.InvokeAsync(new DefaultHttpContext(), _ =>
+        await middleware.InvokeAsync(new DefaultHttpContext(), context =>
         {
+            // The authentication of the pipeline after the middleware
+            if (authenticated)
+                context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, "alice")], "Test"));
             reachedNext = true;
             return Task.CompletedTask;
         });
@@ -68,6 +72,24 @@ public class ObservedBaseUrlMiddlewareTests
 
         _fs.Verify(f => f.FolderCreate(It.IsAny<string>()), Times.Never);
         _fs.Verify(f => f.ReadAllText(It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
+    public async Task AnAnonymousRequest_RecordsNothing()
+    {
+        (await Invoke(authenticated: false)).ShouldBeTrue();
+
+        _urls.Verify(u => u.GetLocalHost(It.IsAny<bool>()), Times.Never);
+        _fs.Verify(f => f.ReadAllText(It.IsAny<string>()), Times.Never);
+        _fs.Verify(f => f.FolderCreate(It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
+    public async Task AnAuthenticatedRequest_RecordsTheUrl()
+    {
+        (await Invoke()).ShouldBeTrue();
+
+        _fs.Verify(f => f.FolderCreate(It.IsAny<string>()), Times.Once);
     }
 
     [Test]
