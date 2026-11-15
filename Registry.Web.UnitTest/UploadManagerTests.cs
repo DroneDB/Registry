@@ -434,6 +434,60 @@ public class UploadManagerTests
         Directory.Exists(Path.Combine(_root, IDDB.UploadsFolderName, "chunks", "big-file-0001")).ShouldBeFalse();
     }
 
+    // Two first chunks of two files that do not fit together, at once: the first one is held right before its session
+    // is created (where it forgets an earlier receipt of its id), and the second one arrives then. The first file must
+    // still count against the quota, so the second one is refused
+    [Test]
+    public async Task Chunked_FirstChunksOfTwoFilesAtOnce_ThatDoNotFitTogether_AdmitOnlyOne()
+    {
+        _limit = 40;
+        var cache = new GatedCache();
+        _receipts = new DistributedUploadReceiptStore(cache,
+            TestSettings.Options<UploadSettings>(Microsoft.Extensions.Options.Options.Create(_settings)));
+        var chunks = CreateChunks(CreateManager());
+
+        var first = chunks.WriteChunkAsync(Org, Ds, Chunk(0), Body(0));
+        await cache.Reached.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        await Should.ThrowAsync<QuotaExceededException>(() => chunks.WriteChunkAsync(Org, Ds,
+            new ChunkRequest("other-file-0001", 0, 3, 25, 10, "other.bin"), Body(0)));
+
+        cache.Release.SetResult();
+        (await first).Received.ShouldBe([0]);
+        Directory.GetDirectories(Path.Combine(_root, IDDB.UploadsFolderName, "chunks")).Length.ShouldBe(1);
+    }
+
+    /// <summary>A distributed cache whose first removal waits for <see cref="Release"/>.</summary>
+    private sealed class GatedCache : IDistributedCache
+    {
+        private readonly MemoryDistributedCache _inner =
+            new(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
+        private int _removals;
+
+        public TaskCompletionSource Reached { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task RemoveAsync(string key, CancellationToken token = default)
+        {
+            if (Interlocked.Increment(ref _removals) == 1)
+            {
+                Reached.SetResult();
+                await Release.Task;
+            }
+
+            await _inner.RemoveAsync(key, token);
+        }
+
+        public byte[]? Get(string key) => _inner.Get(key);
+        public Task<byte[]?> GetAsync(string key, CancellationToken token = default) => _inner.GetAsync(key, token);
+        public void Set(string key, byte[] value, DistributedCacheEntryOptions options) => _inner.Set(key, value, options);
+        public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options,
+            CancellationToken token = default) => _inner.SetAsync(key, value, options, token);
+        public void Refresh(string key) => _inner.Refresh(key);
+        public Task RefreshAsync(string key, CancellationToken token = default) => _inner.RefreshAsync(key, token);
+        public void Remove(string key) => _inner.Remove(key);
+    }
+
     // ---- names that exist (FR-UPL-03, D-040)
 
     [Test]

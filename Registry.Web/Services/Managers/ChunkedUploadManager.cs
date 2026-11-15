@@ -70,14 +70,9 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
             // of the owner hold room for their whole files, in the quota of the owner, until they are committed or
             // removed (7 days): the new one must fit with them (FR-XC-26, D-039)
             uploads.ResolveTarget(ctx, chunk.Path, chunk.Overwrite);
-            var open = await OpenUploadBytesAsync(ctx.Ddb, ctx.QuotaOwnerId, ctx.User?.Id, chunk.FileId, ct);
-            using (await quota.ReserveAsync(ctx.QuotaOwnerId, chunk.TotalFileSize + open)) { }
-
-            // The same file sent again after a commit has the same id: the receipt of the earlier one must not answer
-            // the commit of this one
-            await uploads.ForgetReceiptAsync(orgSlug, dsSlug, key);
-            await store.OpenAsync(root, key, new ChunkManifest(chunk.Path, chunk.TotalFileSize, chunk.TotalChunks, chunk.ChunkSize,
-                ctx.User?.Id, chunk.Overwrite, chunk.FileId, chunk.SourceFileName, chunk.LastModified));
+            await store.OpenAsync(root, key, new ChunkManifest(chunk.Path, chunk.TotalFileSize, chunk.TotalChunks,
+                    chunk.ChunkSize, ctx.User?.Id, chunk.Overwrite, chunk.FileId, chunk.SourceFileName, chunk.LastModified),
+                () => AdmitAsync(ctx, chunk, key, ct));
         }
         else
         {
@@ -89,6 +84,36 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
         }
 
         return ToDto(await store.WriteAsync(root, key, chunk.ChunkIndex, body, ct));
+    }
+
+    /// <summary>
+    /// Admits a new session (the store runs it under the session's lock, so two first chunks of one file admit it once):
+    /// reserves its file in the quota of the owner, then counts the open uploads of the owner against it, and keeps the
+    /// reservation until the store has created the session. A first chunk of another file of the owner therefore always
+    /// counts this one: in flight when it reserves before this session exists, on disk when it reserves after (its count
+    /// runs after its reservation). Both can count it for that moment, which refuses near the limit but never lets two
+    /// files through over it.
+    /// </summary>
+    /// <exception cref="Registry.Web.Exceptions.QuotaExceededException">The file does not fit with the open uploads.</exception>
+    private async Task<IDisposable?> AdmitAsync(UploadRequestContext ctx, ChunkRequest chunk, string key,
+        CancellationToken ct)
+    {
+        var reservation = await quota.ReserveAsync(ctx.QuotaOwnerId, chunk.TotalFileSize);
+        try
+        {
+            reservation.Resize(chunk.TotalFileSize +
+                               await OpenUploadBytesAsync(ctx.Ddb, ctx.QuotaOwnerId, ctx.User?.Id, chunk.FileId, ct));
+
+            // The same file sent again after a commit has the same id: the receipt of the earlier one must not answer
+            // the commit of this one
+            await uploads.ForgetReceiptAsync(ctx.OrgSlug, ctx.DsSlug, key);
+            return reservation;
+        }
+        catch
+        {
+            reservation.Dispose();
+            throw;
+        }
     }
 
     /// <summary>

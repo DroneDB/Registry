@@ -63,8 +63,17 @@ public sealed partial class ChunkStore
     /// manifest. A folder without a manifest (an upload whose start or removal was interrupted) starts empty: its chunk
     /// markers are dropped, so no chunk of another upload counts as stored.
     /// </summary>
+    /// <param name="root">The chunks folder.</param>
+    /// <param name="fileId">The name of the upload in it.</param>
+    /// <param name="manifest">What defines the upload.</param>
+    /// <param name="admit">
+    /// Runs for a new upload only, under the upload's lock and before anything is stored, so two starts of one upload
+    /// admit it once; it refuses the upload by throwing. What it returns (a quota reservation) is disposed once the
+    /// upload exists, or when the start fails.
+    /// </param>
     /// <exception cref="Registry.Web.Exceptions.ConflictException">The id exists with another manifest.</exception>
-    public async Task<ChunkStatus> OpenAsync(string root, string fileId, ChunkManifest manifest)
+    public async Task<ChunkStatus> OpenAsync(string root, string fileId, ChunkManifest manifest,
+        Func<Task<IDisposable?>>? admit = null)
     {
         Validate(manifest);
         var folder = Folder(root, fileId);
@@ -82,6 +91,8 @@ public sealed partial class ChunkStore
         {
             if (TryResume(folder, fileId, manifest) is { } started)
                 return started;
+
+            using var admission = admit == null ? null : await admit();
 
             var received = Path.Combine(folder, ReceivedFolderName);
             if (Directory.Exists(received))

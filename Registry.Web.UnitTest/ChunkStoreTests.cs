@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using Registry.Web.Exceptions;
@@ -286,6 +287,56 @@ public class ChunkStoreTests
         (await delete).ShouldBeTrue();
         Directory.Exists(Path.Combine(_root, "file-0001")).ShouldBeFalse();
         store.GetStatus(_root, "file-0001").ShouldBeNull();
+    }
+
+    // Two starts of one new upload at once (two of its chunks sent in parallel): it is admitted once, by the first, which
+    // holds what its admission returned (a quota reservation) until the upload exists; the second resumes it
+    [Test]
+    public async Task Open_TwiceAtOnce_AdmitsTheUploadOnce_AndReleasesTheAdmissionOnceItExists()
+    {
+        var store = new ChunkStore();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var admitted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var admissions = 0;
+        var reservation = new Admission(() => File.Exists(Path.Combine(_root, "file-0001", ChunkStore.ManifestFileName)));
+
+        async Task<IDisposable?> Admit()
+        {
+            Interlocked.Increment(ref admissions);
+            admitted.TrySetResult();
+            await gate.Task;
+            return reservation;
+        }
+
+        var first = store.OpenAsync(_root, "file-0001", _manifest, Admit);
+        await admitted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var second = store.OpenAsync(_root, "file-0001", _manifest, Admit);
+        second.IsCompleted.ShouldBeFalse("the first start holds the upload");
+        gate.SetResult();
+
+        (await first).Received.ShouldBeEmpty();
+        (await second).Received.ShouldBeEmpty();
+        admissions.ShouldBe(1);
+        reservation.DisposedOnceTheUploadExisted.ShouldBe(true);
+    }
+
+    // An admission refused leaves nothing of the upload
+    [Test]
+    public async Task Open_RefusedByItsAdmission_StoresNothing()
+    {
+        var store = new ChunkStore();
+
+        await Should.ThrowAsync<QuotaExceededException>(() => store.OpenAsync(_root, "file-0001", _manifest,
+            () => throw QuotaExceededException.OwnerOverQuota(0)));
+
+        store.GetStatus(_root, "file-0001").ShouldBeNull();
+        Directory.Exists(Path.Combine(_root, "file-0001", ChunkStore.ReceivedFolderName)).ShouldBeFalse();
+    }
+
+    private sealed class Admission(Func<bool> uploadExists) : IDisposable
+    {
+        public bool? DisposedOnceTheUploadExisted { get; private set; }
+        public void Dispose() => DisposedOnceTheUploadExisted = uploadExists();
     }
 
     // A start that must wait for the upload's lock (here held by the first chunk of an upload whose manifest is gone, as
