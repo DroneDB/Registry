@@ -47,6 +47,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
 
         services.AddScoped<UsersManager>();
         services.AddScoped<JwtTokenIssuer>();
+        services.AddScoped<NewUserOrganization>();
         services.AddScoped<UserProvisioning>();
         services.AddScoped<IUserSessions, UserSessions>();
         services.AddScoped<UserAccounts>();
@@ -76,6 +77,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<ShareManager>();
         services.AddScoped<ShareBatchStore>();
         services.AddScoped<ShareBatchRollback>();
+        services.AddScoped<ShareDatasetCreation>();
         services.AddScoped<ShareTargets>();
         services.AddScoped<ShareBatches>();
         services.AddScoped<ShareUploads>();

@@ -66,8 +66,8 @@ public class UserRolesTests
         var policy = new Mock<IPasswordPolicyValidator>();
         policy.Setup(p => p.Validate(It.IsAny<string>())).Returns(PasswordValidationResult.Success());
         _provisioning = new UserProvisioning(_users, _roleManager, context, policy.Object,
-            TestSettings.Options<AccountOptions>(TestSettings.Default),
-            new Mock<IOrganizationsManager>().Object, NullLogger<UserProvisioning>.Instance);
+            new NewUserOrganization(TestSettings.Options<AccountOptions>(TestSettings.Default),
+                new Mock<IOrganizationsManager>().Object), NullLogger<UserProvisioning>.Instance);
         _roles = new UserRoles(_login.Object, _users, _roleManager, _provisioning, _auth.Object);
         _accounts = new UserAccounts(_login.Object, _users, _provisioning, _auth.Object, context, null!,
             NullLogger<UserAccounts>.Instance);
