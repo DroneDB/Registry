@@ -278,8 +278,8 @@ public class ChunkStoreTests
 
         var write = store.WriteAsync(_root, "file-0001", 0, body);
         await body.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        // The removal waits for the lock without blocking: it returns at once, not completed
         var delete = store.DeleteAsync(_root, "file-0001");
-        await Task.Delay(100);
         delete.IsCompleted.ShouldBeFalse("the chunk being stored holds the upload");
         body.Release.SetResult();
 

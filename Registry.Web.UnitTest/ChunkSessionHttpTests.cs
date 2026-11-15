@@ -243,12 +243,27 @@ public sealed class ChunkSessionHttpTests : IDisposable
         var body = new GatedBody([5, 6, 7, 8]);
         var content = Chunk(FileId, "cancelled.bin", 2, 3, body: body);
 
-        var write = Send(HttpMethod.Post, "/obj/chunk", Owner, content);
-        await body.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        await Task.Delay(300); // the server is storing the chunk: it has the first byte and waits for the rest
-        var (deleted, _) = await Send(HttpMethod.Delete, $"/obj/chunk/{FileId}", Owner);
-        body.Release.SetResult();
-        var (written, problem) = await write;
+        // The DELETE is sent once the server is storing the chunk: it has read the manifest of the session, and the
+        // gated body keeps the chunk from completing until the DELETE is answered
+        var store = _factory.Services.GetRequiredService<Registry.Web.Services.Adapters.ChunkStore>();
+        var manifestRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        store.AfterManifestRead = _ => manifestRead.TrySetResult();
+        (HttpStatusCode Status, JsonNode? Body) deletion, chunk;
+        try
+        {
+            var write = Send(HttpMethod.Post, "/obj/chunk", Owner, content);
+            await manifestRead.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            deletion = await Send(HttpMethod.Delete, $"/obj/chunk/{FileId}", Owner);
+            body.Release.SetResult();
+            chunk = await write;
+        }
+        finally
+        {
+            store.AfterManifestRead = null;
+        }
+
+        var (deleted, _) = deletion;
+        var (written, problem) = chunk;
 
         deleted.ShouldBe(HttpStatusCode.NoContent);
         written.ShouldBe(HttpStatusCode.NotFound);
@@ -298,16 +313,12 @@ public sealed class ChunkSessionHttpTests : IDisposable
     private sealed class GatedBody(byte[] content) : Stream
     {
         private int _position;
-        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, System.Threading.CancellationToken ct = default)
         {
             if (_position == 1)
-            {
-                Started.TrySetResult();
                 await Release.Task.WaitAsync(ct);
-            }
 
             if (_position >= content.Length || buffer.Length == 0) return 0;
             var count = _position == 0 ? 1 : Math.Min(buffer.Length, content.Length - _position);
