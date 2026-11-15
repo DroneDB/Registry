@@ -151,15 +151,16 @@ public class PendingRecoveryIntegrationTests
         // Each invocation queries the real index after the production wrapper
         // has acquired its dataset lock. Only the barrier is test-controlled.
         var query = new Mock<IJobIndexQuery>();
-        query.Setup(x => x.GetByOrgDsAsync(It.IsAny<string>(), It.IsAny<string>(), 0, int.MaxValue,
-                It.IsAny<CancellationToken>()))
-            .Returns<string, string, int, int, CancellationToken>(async (org, ds, skip, take, ct) =>
-            {
-                _gate.BeforeSnapshot(ds);
-                using var scope = _provider.CreateScope();
-                return await new JobIndexQuery(scope.ServiceProvider.GetRequiredService<RegistryContext>())
-                    .GetByOrgDsAsync(org, ds, skip, take, ct);
-            });
+        query.Setup(x => x.GetLatestJobsByPathAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<System.Collections.Generic.IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()))
+            .Returns<string, string, string, System.Collections.Generic.IReadOnlyCollection<string>, CancellationToken>(
+                async (org, ds, tool, paths, ct) =>
+                {
+                    _gate.BeforeSnapshot(ds);
+                    using var scope = _provider.CreateScope();
+                    return await new JobIndexQuery(scope.ServiceProvider.GetRequiredService<RegistryContext>())
+                        .GetLatestJobsByPathAsync(org, ds, tool, paths, ct);
+                });
         // The completeness sweep asks which entries already have a build job: the real index answers
         query.Setup(x => x.GetActivePathsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<System.Collections.Generic.IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()))

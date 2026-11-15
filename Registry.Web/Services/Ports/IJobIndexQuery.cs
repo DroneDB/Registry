@@ -30,11 +30,12 @@ public interface IJobIndexQuery
         IReadOnlyCollection<string> paths, CancellationToken ct = default);
 
     /// <summary>
-    /// State of the most recent <paramref name="toolId"/> job of each given path that has one.
-    /// Reads only the jobs of those paths, never the whole dataset history.
+    /// The most recent <paramref name="toolId"/> job of each given path that has one: its id, state and method text.
+    /// Reads only those columns of the jobs of those paths, never the whole dataset history.
     /// </summary>
-    Task<Dictionary<string, string>> GetLatestStatesByPathAsync(string orgSlug, string dsSlug, string toolId,
+    Task<IReadOnlyDictionary<string, LatestJob>> GetLatestJobsByPathAsync(string orgSlug, string dsSlug, string toolId,
         IReadOnlyCollection<string> paths, CancellationToken ct = default);
+
     Task<JobIndex[]> GetByStateAsync(string state, int skip = 0, int take = 1000, CancellationToken ct = default);
 
     /// <summary>Flexible TaskHistory query filtered by tool/state/path/user/workflow.</summary>
@@ -84,6 +85,9 @@ public interface IJobIndexQuery
 
 /// <summary>The files an unfinished task writes: its id, its tool and its declared output paths.</summary>
 public sealed record ActiveTaskOutputs(string JobId, string ToolId, IReadOnlyList<string> Paths);
+
+/// <summary>The newest job of an entry: its Hangfire job id, its state in the index and the method text of its row.</summary>
+public readonly record struct LatestJob(string JobId, string State, string? MethodDisplay);
 
 /// <summary>A job of an entry that has not finished: its Hangfire state and the method text of its row.</summary>
 public readonly record struct ActiveJob(string Path, string State, string? MethodDisplay);

@@ -436,8 +436,7 @@ public class DdbJobsTests
             row.JobId = client.Create(Hangfire.Common.Job.FromExpression<HealthCheckJob>(j => j.Ping(null)),
                 row.CurrentState == "Enqueued" ? new Hangfire.States.EnqueuedState() : new SnapshotState(row.CurrentState));
         var q = new Mock<IJobIndexQuery>();
-        q.Setup(x => x.GetByOrgDsAsync(Org, Ds, 0, int.MaxValue, It.IsAny<CancellationToken>())).ReturnsAsync(rows);
-        return q;
+        return q.WithLatestJobsFrom(Org, Ds, rows);
     }
 
     private sealed class SnapshotState(string name) : Hangfire.States.IState
@@ -617,8 +616,9 @@ public class DdbJobsTests
         Pending(MockJobs(enqueued).Object, index.Object).Run(_ddb.Object, Org, Ds, Console());
 
         enqueued.ShouldBeEmpty();
-        index.Verify(x => x.GetByOrgDsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(),
-            It.IsAny<CancellationToken>()), Times.Never);
+        index.Verify(x => x.GetLatestJobsByPathAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()), Times.Never);
+        index.VerifyHistoryNeverRead();
         Logged.ShouldContain(m => m.Contains("Pending builds: 2; enqueued 0; skipped 2"));
         Logged.ShouldContain(m => m.Contains("Done build pending"));
     }

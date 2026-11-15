@@ -100,11 +100,11 @@ public class BuildStatusService : IBuildStatusService
         if (unfinished.Count == 0)
             return;
 
-        var latestStateByPath = await _jobIndexQuery.GetLatestStatesByPathAsync(orgSlug, dsSlug, BuildToolId,
+        var latestJobByPath = await _jobIndexQuery.GetLatestJobsByPathAsync(orgSlug, dsSlug, BuildToolId,
             unfinished.Select(e => e.Path).ToArray());
 
         foreach (var entry in unfinished)
-            entry.BuildStatus = latestStateByPath.TryGetValue(entry.Path, out var state) && state == "Failed"
+            entry.BuildStatus = latestJobByPath.TryGetValue(entry.Path, out var latest) && latest.State == "Failed"
                 ? EntryBuildStatuses.Failed
                 : EntryBuildStatuses.Queued;
     }

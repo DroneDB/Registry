@@ -115,8 +115,8 @@ public sealed class ArtifactLinksTests
         var service = new BuildStatusService(Mock.Of<IJobIndexQuery>(q =>
                 q.GetActiveJobsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
                     It.IsAny<IReadOnlyCollection<string>>(), default) == Task.FromResult<IReadOnlyList<ActiveJob>>(System.Array.Empty<ActiveJob>()) &&
-                q.GetLatestStatesByPathAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
-                    It.IsAny<IReadOnlyCollection<string>>(), default) == Task.FromResult(new Dictionary<string, string>())),
+                q.GetLatestJobsByPathAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+                    It.IsAny<IReadOnlyCollection<string>>(), default) == Task.FromResult<IReadOnlyDictionary<string, LatestJob>>(new Dictionary<string, LatestJob>())),
             TestPorts.Artifacts(), Urls,
             NullLogger<BuildStatusService>.Instance);
 

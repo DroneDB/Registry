@@ -79,7 +79,7 @@ public class JobIndexQueryPathScopedTests
     }
 
     [Test]
-    public async Task GetLatestStatesByPath_PicksMostRecentJobPerPath()
+    public async Task GetLatestJobsByPath_PicksMostRecentJobPerPath_WithItsIdStateAndMethodText()
     {
         Add("a1", "a.tif", "Failed", minutesAgo: 10);
         Add("a2", "a.tif", "Succeeded", minutesAgo: 5);
@@ -88,12 +88,14 @@ public class JobIndexQueryPathScopedTests
         Add("c1", "c.tif", "Failed", tool: "raster-export");
         Add("d1", "d.tif", "Failed", ds: "other");
         await _context.SaveChangesAsync();
+        (await _context.JobIndices.FindAsync("b2"))!.MethodDisplay = "DdbJobs.RebuildInBackground";
+        await _context.SaveChangesAsync();
 
-        var latest = await _query.GetLatestStatesByPathAsync("org", "ds", "build",
+        var latest = await _query.GetLatestJobsByPathAsync("org", "ds", "build",
             ["a.tif", "b.tif", "c.tif", "d.tif", "a.tif"]);
 
         latest.Count.ShouldBe(2);
-        latest["a.tif"].ShouldBe("Succeeded");
-        latest["b.tif"].ShouldBe("Failed");
+        latest["a.tif"].ShouldBe(new LatestJob("a2", "Succeeded", null));
+        latest["b.tif"].ShouldBe(new LatestJob("b2", "Failed", "DdbJobs.RebuildInBackground"));
     }
 }

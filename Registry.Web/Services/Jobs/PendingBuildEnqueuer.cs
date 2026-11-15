@@ -123,9 +123,9 @@ public sealed class PendingBuildEnqueuer
             var due = withPath.Where(p => !p.AwaitingFiles && now >= p.RetryAfter).ToArray();
             var notDue = withPath.Length - awaiting - due.Length;
 
-            IReadOnlyList<JobIndex> buildJobs = due.Length == 0
-                ? []
-                : BuildJobsOf(orgSlug, dsSlug, due.Select(p => p.Path).ToHashSet());
+            IReadOnlyDictionary<string, LatestJob> buildJobs = due.Length == 0
+                ? new Dictionary<string, LatestJob>()
+                : LatestBuildJobs(orgSlug, dsSlug, due.Select(p => p.Path).ToArray());
             var activePaths = ActiveBuildPaths(buildJobs, connection);
 
             var toEnqueue = new List<PendingBuildInfo>(due.Length);
@@ -210,26 +210,28 @@ public sealed class PendingBuildEnqueuer
     }
 
     // Whether the latest build job of each entry that has one was a background rebuild: the origin of the pending
-    // work (the failed job left the marker this job found). The rows of a job that is not a dataset build (another
-    // tool's, or one stored without its method) say nothing about it.
-    private static Dictionary<string, bool> OriginsOf(IEnumerable<JobIndex> buildJobs) =>
-        buildJobs
-            .Select(j => (j.Path, j.CreatedAtUtc, Job: DdbJobDescriptor.OfDisplay(j.MethodDisplay)))
-            .Where(j => j.Job is { BuildsEntry: true })
-            .GroupBy(j => j.Path!, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.MaxBy(j => j.CreatedAtUtc).Job!.Value.IsBackgroundRebuild,
-                StringComparer.Ordinal);
+    // work (the failed job left the marker this job found). The row of a job that is not a dataset build (stored
+    // without its method, or another method) says nothing about it.
+    private static Dictionary<string, bool> OriginsOf(IReadOnlyDictionary<string, LatestJob> buildJobs)
+    {
+        var origins = new Dictionary<string, bool>(StringComparer.Ordinal);
+        foreach (var (path, job) in buildJobs)
+            if (DdbJobDescriptor.OfDisplay(job.MethodDisplay) is { BuildsEntry: true } build)
+                origins[path] = build.IsBackgroundRebuild;
+        return origins;
+    }
 
-    // The build jobs the job index has of the given entries, whatever their state
-    private JobIndex[] BuildJobsOf(string orgSlug, string dsSlug, HashSet<string> paths) =>
-        _jobIndex.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue).GetAwaiter().GetResult()
-            .Where(j => j.ToolId == HeavyToolIds.Build && j.Path != null && paths.Contains(j.Path))
-            .ToArray();
+    // The latest build job the job index has of each of the given entries, whatever its state
+    private IReadOnlyDictionary<string, LatestJob> LatestBuildJobs(string orgSlug, string dsSlug,
+        IReadOnlyCollection<string> paths) =>
+        _jobIndex.GetLatestJobsByPathAsync(orgSlug, dsSlug, HeavyToolIds.Build, paths).GetAwaiter().GetResult();
 
     // Hangfire is authoritative: a missing/terminal job cannot suppress a pending entry forever
     // through a stale Created/Indexing index row, while a live Indexing job (publication in progress
-    // or awaiting recovery) is active and blocks a duplicate build.
-    private HashSet<string> ActiveBuildPaths(IReadOnlyList<JobIndex> buildJobs, IStorageConnection? connection)
+    // or awaiting recovery) is active and blocks a duplicate build. Only the latest job of an entry can be that
+    // live one: a build is not queued for an entry while one is active.
+    private HashSet<string> ActiveBuildPaths(IReadOnlyDictionary<string, LatestJob> buildJobs,
+        IStorageConnection? connection)
     {
         var active = new HashSet<string>();
         if (buildJobs.Count == 0)
@@ -237,11 +239,11 @@ public sealed class PendingBuildEnqueuer
 
         using var owned = connection == null ? _storage.GetConnection() : null;
         var states = connection ?? owned!;
-        foreach (var row in buildJobs)
+        foreach (var (path, job) in buildJobs)
         {
-            var actualState = states.GetStateData(row.JobId)?.Name;
+            var actualState = states.GetStateData(job.JobId)?.Name;
             if (actualState != null && TaskStateCatalog.Active.Contains(actualState))
-                active.Add(row.Path!);
+                active.Add(path);
         }
 
         return active;

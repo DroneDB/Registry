@@ -525,7 +525,7 @@ public class PendingBuildCoordinationTests
 
         // ... and when it runs, it queues the entry again as a background rebuild, which stays on its queue
         var index = new Mock<IJobIndexQuery>();
-        index.Setup(x => x.GetByOrgDsAsync(Org, Ds, 0, int.MaxValue, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        index.WithLatestJobsFrom(Org, Ds);
         Enqueuer(_jobs.Object, index.Object, _storage).Run(_ddb.Object, Org, Ds, NoConsole);
 
         var retried = enqueued.ShouldHaveSingleItem();
@@ -555,8 +555,7 @@ public class PendingBuildCoordinationTests
             .Callback<Expression<Action<DdbJobs>>, IndexPayload>((job, _) => queued = job)
             .Returns("retry-job");
         var index = new Mock<IJobIndexQuery>();
-        index.Setup(x => x.GetByOrgDsAsync(Org, Ds, 0, int.MaxValue, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(failedJobs);
+        index.WithLatestJobsFrom(Org, Ds, failedJobs);
 
         Enqueuer(_jobs.Object, index.Object, _storage).Run(_ddb.Object, Org, Ds, NoConsole);
 
@@ -666,8 +665,7 @@ public class PendingBuildCoordinationTests
             return [PendingMarkers.Of("model.obj", "hash")];
         });
         var index = new Mock<IJobIndexQuery>();
-        index.Setup(x => x.GetByOrgDsAsync(Org, Ds, 0, int.MaxValue, It.IsAny<CancellationToken>()))
-            .Returns(() => Task.FromResult(rows.ToArray()));
+        index.WithLatestJobsFrom(Org, Ds, () => rows.ToArray());
         var count = 0;
         var jobs = new Mock<IBackgroundJobsProcessor>();
         jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()))
@@ -747,8 +745,9 @@ public class PendingBuildCoordinationTests
         Should.Throw<PendingBuildCoordinatorContentionException>(() =>
             Enqueuer(_jobs.Object, index.Object, storage.Object).Run(_ddb.Object, Org, Ds, NoConsole));
         _ddb.Verify(x => x.GetPendingBuildInfo(), Times.Never);
-        index.Verify(x => x.GetByOrgDsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(),
-            It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        index.VerifyHistoryNeverRead();
+        index.Verify(x => x.GetLatestJobsByPathAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()), Times.Never);
         _jobs.Verify(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()), Times.Never);
     }
 
@@ -757,7 +756,7 @@ public class PendingBuildCoordinationTests
     {
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingMarkers.Of("model.obj", "h")]);
         var index = new Mock<IJobIndexQuery>();
-        index.Setup(x => x.GetByOrgDsAsync(Org, Ds, 0, int.MaxValue, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        index.WithLatestJobsFrom(Org, Ds);
         _jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()))
             .Throws(new InvalidOperationException("index storage unavailable"));
         Should.Throw<InvalidOperationException>(() => Enqueuer(_jobs.Object, index.Object, _storage).Run(_ddb.Object, Org, Ds, NoConsole));
@@ -867,6 +866,34 @@ public class PendingBuildCoordinationTests
         _enqueued.ShouldBe(0);
     }
 
+    [Test]
+    public void TheEnqueuePathReadsTheLatestBuildJobOfEachDueEntry_NotTheHistoryOfTheDataset()
+    {
+        // A dataset with a long build history: the strict index answers only the latest job of the asked entries, and
+        // the storage is asked the state of those jobs only
+        var connection = new Mock<IStorageConnection>();
+        connection.Setup(x => x.AcquireDistributedLock(It.IsAny<string>(), It.IsAny<TimeSpan>())).Returns(Mock.Of<IDisposable>());
+        connection.Setup(x => x.GetStateData(It.IsAny<string>()))
+            .Returns(new StateData { Name = "Succeeded", Data = new Dictionary<string, string>() });
+        var storage = new Mock<JobStorage>();
+        storage.Setup(x => x.GetConnection()).Returns(connection.Object);
+        _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingMarkers.Of("a.obj", "ha"), PendingMarkers.Of("b.obj", "hb")]);
+        var history = Enumerable.Range(0, 300).Select(i => new JobIndex
+        {
+            JobId = i < 298 ? $"old-{i}" : $"latest-{i}", OrgSlug = Org, DsSlug = Ds, Path = i % 2 == 0 ? "a.obj" : "b.obj",
+            ToolId = "build", CurrentState = "Failed", CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMinutes(i)
+        }).ToArray();
+        var index = new Mock<IJobIndexQuery>(MockBehavior.Strict).WithLatestJobsFrom(Org, Ds, history);
+
+        Enqueuer(_jobs.Object, index.Object, storage.Object).Run(_ddb.Object, Org, Ds, NoConsole);
+
+        _enqueued.ShouldBe(2);
+        index.VerifyHistoryNeverRead();
+        connection.Verify(x => x.GetStateData(It.IsAny<string>()), Times.Exactly(2));
+        connection.Verify(x => x.GetStateData("latest-298"), Times.Once);
+        connection.Verify(x => x.GetStateData("latest-299"), Times.Once);
+    }
+
     private void RunPendingBuildWithLiveState(string actualState, string rowState)
     {
         var storage = new Mock<JobStorage>();
@@ -877,9 +904,8 @@ public class PendingBuildCoordinationTests
         storage.Setup(x => x.GetConnection()).Returns(connection.Object);
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingMarkers.Of("model.obj", "h")]);
         var index = new Mock<IJobIndexQuery>();
-        index.Setup(x => x.GetByOrgDsAsync(Org, Ds, 0, int.MaxValue, It.IsAny<CancellationToken>())).ReturnsAsync([
-            new JobIndex { JobId = "stale-job", OrgSlug = Org, DsSlug = Ds, Path = "model.obj", ToolId = "build", CurrentState = rowState }
-        ]);
+        index.WithLatestJobsFrom(Org, Ds,
+            new JobIndex { JobId = "stale-job", OrgSlug = Org, DsSlug = Ds, Path = "model.obj", ToolId = "build", CurrentState = rowState });
         Enqueuer(_jobs.Object, index.Object, storage.Object).Run(_ddb.Object, Org, Ds, NoConsole);
     }
 

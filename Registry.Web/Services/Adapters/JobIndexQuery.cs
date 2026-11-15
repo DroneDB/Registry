@@ -51,24 +51,24 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
         return result;
     }
 
-    public async Task<Dictionary<string, string>> GetLatestStatesByPathAsync(string orgSlug, string dsSlug,
+    public async Task<IReadOnlyDictionary<string, LatestJob>> GetLatestJobsByPathAsync(string orgSlug, string dsSlug,
         string toolId, IReadOnlyCollection<string> paths, CancellationToken ct = default)
     {
-        var result = new Dictionary<string, string>();
+        var result = new Dictionary<string, LatestJob>();
 
         foreach (var chunk in paths.Distinct().Chunk(PathChunkSize))
         {
-            // Three narrow columns of the listed paths' jobs; the latest per path is picked here
+            // The few columns of the listed paths' jobs; the latest per path is picked here
             var jobs = await db.JobIndices
                 .AsNoTracking()
                 .Where(x => x.OrgSlug == orgSlug && x.DsSlug == dsSlug && x.ToolId == toolId &&
                             chunk.Contains(x.Path!))
-                .Select(x => new { Path = x.Path!, x.CurrentState, x.CreatedAtUtc })
+                .Select(x => new { Path = x.Path!, x.JobId, x.CurrentState, x.MethodDisplay, x.CreatedAtUtc })
                 .ToArrayAsync(ct);
 
             foreach (var latest in jobs.GroupBy(x => x.Path)
                          .Select(g => g.MaxBy(x => x.CreatedAtUtc)!))
-                result[latest.Path] = latest.CurrentState;
+                result[latest.Path] = new LatestJob(latest.JobId, latest.CurrentState, latest.MethodDisplay);
         }
 
         return result;
