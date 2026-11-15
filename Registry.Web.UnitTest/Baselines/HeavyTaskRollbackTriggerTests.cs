@@ -92,12 +92,14 @@ public class HeavyTaskRollbackTriggerTests
             It.IsAny<CancellationToken>())).ReturnsAsync(TaskRollbackOutcome.RolledBack);
         _store = new Mock<ITaskWriteRecordStore>();
         _store.Setup(s => s.RecordAsync(TaskId, It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyCollection<string>>(),
-                It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>(),
-                It.IsAny<IReadOnlyDictionary<string, string>?>()))
-            .Callback<string, DatasetKey, IReadOnlyCollection<string>, IReadOnlyCollection<string>, CancellationToken,
-                IReadOnlyDictionary<string, string>?>((_, _, paths, _, _, _) => _flushed.AddRange(paths))
+                It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<IReadOnlyDictionary<string, string>?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, DatasetKey, IReadOnlyCollection<string>, IReadOnlyCollection<string>,
+                IReadOnlyDictionary<string, string>?, CancellationToken>((_, _, paths, _, _, _) =>
+                _flushed.AddRange(paths))
             .Returns(Task.CompletedTask);
-        _store.Setup(s => s.MarkCommittedAsync(TaskId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        _store.Setup(s => s.MarkCommittedAsync(TaskId, It.IsAny<TaskCommittedSources?>(),
+            It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
         var ddb = new Mock<IDDB>();
         ddb.SetupGet(x => x.DatasetFolderPath).Returns(Path.Combine(_temp, "ds"));
@@ -292,7 +294,8 @@ public class HeavyTaskRollbackTriggerTests
         await Wrapper(tool).Run("w", "1", Request(), Context(retryCount: 2), CancellationToken.None);
 
         _flushed.ShouldBe(["out/a.tif"]);
-        _store.Verify(s => s.MarkCommittedAsync(TaskId, It.IsAny<CancellationToken>()), Times.Once);
+        _store.Verify(s => s.MarkCommittedAsync(TaskId, It.IsAny<TaskCommittedSources?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
         _rollback.Verify(r => r.StartAttemptAsync(TaskId, 2, It.IsAny<CancellationToken>()), Times.Once);
         VerifyNotRolledBack();
     }
@@ -344,7 +347,8 @@ public class HeavyTaskRollbackTriggerTests
     {
         // The cancel was requested (the record is cancelRequested) and its job is not deleted yet: the wrapper deletes
         // it from Processing, so the task ends cancelled (Deleted), not failed with a Retry
-        _store.Setup(s => s.MarkCommittedAsync(TaskId, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        _store.Setup(s => s.MarkCommittedAsync(TaskId, It.IsAny<TaskCommittedSources?>(),
+            It.IsAny<CancellationToken>())).ReturnsAsync(false);
         DeleteFromProcessingEndsTheJob();
         var tool = new WritingTool(_ => { });
         var wrapper = Wrapper(tool);
@@ -380,9 +384,9 @@ public class HeavyTaskRollbackTriggerTests
     public async Task TheCommit_WritesTheSourcesTheTaskDeletesAfterIt_ForALostTask()
     {
         TaskCommittedSources? written = null;
-        _store.Setup(s => s.MarkCommittedAsync(TaskId, It.IsAny<CancellationToken>(),
-                It.IsAny<TaskCommittedSources?>()))
-            .Callback<string, CancellationToken, TaskCommittedSources?>((_, _, sources) => written = sources)
+        _store.Setup(s => s.MarkCommittedAsync(TaskId, It.IsAny<TaskCommittedSources?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, TaskCommittedSources?, CancellationToken>((_, sources, _) => written = sources)
             .ReturnsAsync(true);
         var tool = new WritingTool(_ => { }, sourcesDeletedAfterCommit: ["bands/red.tif", "bands/nir.tif"]);
 
@@ -397,7 +401,8 @@ public class HeavyTaskRollbackTriggerTests
     [Test]
     public async Task ACommitRefusedAfterTheJobWasDeleted_IsACancel_NotAFailure()
     {
-        _store.Setup(s => s.MarkCommittedAsync(TaskId, It.IsAny<CancellationToken>()))
+        _store.Setup(s => s.MarkCommittedAsync(TaskId, It.IsAny<TaskCommittedSources?>(),
+            It.IsAny<CancellationToken>()))
             .Callback(() => _jobs.Setup(j => j.GetJobStatus(TaskId)).Returns(JobStatus.Deleted))
             .ReturnsAsync(false);
         var tool = new WritingTool(_ => { });

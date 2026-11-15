@@ -10,9 +10,9 @@ namespace Registry.Web.Utilities.Ogc;
 /// <summary>
 /// Parses the WCS 2.0 Scaling extension of a GetCoverage KVP request (OGC 12-039): <c>SCALEFACTOR=f</c>,
 /// <c>SCALEAXES=axis(f),axis(f)</c> and <c>SCALESIZE=axis(n),axis(n)</c>. It returns the size, in pixels, of the output
-/// of a region of <paramref name="native"/> pixels; the check against the limit is not its job
-/// (<see cref="WcsCoverageService.EnsureWithinLimit"/>). At most one of the three may be present; an axis the request
-/// does not name keeps its native size.
+/// of a region of <c>native</c> pixels (the argument of <see cref="Parse"/>); the check against the limit is not its
+/// job (<see cref="WcsCoverageService.EnsureWithinLimit"/>). At most one of the three may be present; an axis the
+/// request does not name keeps its native size.
 /// <para>
 /// The errors are those of Table 7 of OGC 12-039 (HTTP 404): <c>InvalidScaleFactor</c> for a factor that is not a number
 /// or is not positive, <c>ScaleAxisUndefined</c> for an axis the coverage does not have. The standard has no code for

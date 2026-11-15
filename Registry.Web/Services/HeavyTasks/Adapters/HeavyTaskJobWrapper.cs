@@ -243,8 +243,8 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         CancellationToken ct)
     {
         await recorder.FlushAsync(ct);
-        if (await sp.GetRequiredService<ITaskWriteRecordStore>().MarkCommittedAsync(taskId, CancellationToken.None,
-                recorder.CommittedSources))
+        if (await sp.GetRequiredService<ITaskWriteRecordStore>().MarkCommittedAsync(taskId,
+                recorder.CommittedSources, CancellationToken.None))
             return;
 
         _log.LogInformation("Task {TaskId} finished after a cancel request: it is not committed, and is rolled back",

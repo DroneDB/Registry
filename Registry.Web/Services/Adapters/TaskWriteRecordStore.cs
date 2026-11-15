@@ -82,8 +82,8 @@ public sealed class TaskWriteRecordStore(RegistryContext db, IRecordCache cache,
     }
 
     public async Task RecordAsync(string taskId, DatasetKey dataset, IReadOnlyCollection<string> paths,
-        IReadOnlyCollection<string> folders, CancellationToken ct = default,
-        IReadOnlyDictionary<string, string>? stamps = null)
+        IReadOnlyCollection<string> folders, IReadOnlyDictionary<string, string>? stamps = null,
+        CancellationToken ct = default)
     {
         if (paths.Count == 0 && folders.Count == 0 && stamps is not { Count: > 0 })
             return;
@@ -127,8 +127,8 @@ public sealed class TaskWriteRecordStore(RegistryContext db, IRecordCache cache,
             throw TaskWriteRecordClosedException.RollingBack(taskId);
     }
 
-    public async Task<bool> MarkCommittedAsync(string taskId, CancellationToken ct = default,
-        TaskCommittedSources? sources = null)
+    public async Task<bool> MarkCommittedAsync(string taskId, TaskCommittedSources? sources = null,
+        CancellationToken ct = default)
     {
         var result = await ChangeAsync(taskId, record =>
         {
