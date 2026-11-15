@@ -182,13 +182,27 @@ BUILD_LAYOUT='"(cog|copc|ept|vec|mvt|nxs|bm3d|gsplat|3dtiles)"|(cog\.tif|cloud\.
 # in the build folder, so that file is not counted (model.bm3d there is the role, not the layout).
 ROLE_IDS_FILE=':(exclude)Registry.Ports/DroneDB/ArtifactRoles.cs'
 
-# The native raster calls of the objects slice: all of them, and those made through INativeWorkGate
-# (RunAsync(NativeLane.X, () => ...), or a service's own RunAsync(() => ...) over the gate).
+# The native raster calls of the objects slice: all of them, and those made through INativeWorkGate: anywhere in the
+# lambda of RunAsync(NativeLane.X, () => ...) or of a service's own RunAsync(() => ...) over the gate (a call, a
+# block, a conditional between two calls), or in the reader lambda given to RasterAnalysisService's OnSourceAsync,
+# which runs it only through its RunAsync. The argument list of the call is matched with balanced parentheses.
 NATIVE_RASTER='(?:GetRaster\w+|CalculateVolume|DetectStockpile|DetectAllStockpiles|GenerateContours|ExportRaster|MergeMultispectral|ValidateMergeMultispectral|PreviewMergeMultispectral|ValidateAlignRaster|GenerateThumbnailEx|GenerateTileEx|GenerateTile)'
+NATIVE_CALL="\\b(?:\\w+\\.)*[Dd]db\\.$NATIVE_RASTER\\("
+gated_native_calls() {
+    list_files | CALL="$NATIVE_CALL" xargs -0 -r perl -0777 -ne '
+        BEGIN { $c = 0 }
+        while (/\b(RunAsync|OnSourceAsync)(\((?:[^()]++|(?2))*\))/g) {
+            my ($name, $args) = ($1, $2);
+            next if $name eq "RunAsync" && $args !~ /^\((?:NativeLane\.\w+,\s*)?\(\)\s*=>/;
+            $c += () = $args =~ /$ENV{CALL}/g;
+        }
+        END { print $c + 0, "\n" }' |
+        awk '{ s += $1 } END { print s + 0 }'
+}
 ungated_native_calls() {
     local all gated
-    all="$(slice | multiline "\\b(?:\\w+\\.)*[Dd]db\\.$NATIVE_RASTER\\(")"
-    gated="$(slice | multiline "RunAsync\\((?:NativeLane\\.\\w+,\\s*)?\\(\\)\\s*=>\\s*(?:\\w+\\.)*[Dd]db\\.$NATIVE_RASTER\\(")"
+    all="$(slice | multiline "$NATIVE_CALL")"
+    gated="$(slice | gated_native_calls)"
     echo $((all - gated))
 }
 
