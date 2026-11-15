@@ -144,6 +144,7 @@ field, `detail` with the joined field messages). 401 only for anonymous callers.
 |---|---|---|---|---|
 | error-400-invalid-slug | POST /orgs/{org}/ds slug="Not A Slug!" | owner | 400 | manager `BadRequestException` |
 | error-400-model-validation | POST …/meta/remove without `id` | owner | 400 | model validation |
+| error-429-login | POST /users/authenticate, the eleventh attempt of one address within a minute | anonymous | 429 | `SignInThrottle` (`TooManyRequestsException`), with `Retry-After` |
 | error-401-anonymous-gate | GET /users/storage | anonymous | 401 | `[Authorize]` challenge: "Not signed in" (`RegistryAuthorizationResultHandler`) |
 | error-401-anonymous-private-org | GET /orgs/{org}/ds | anonymous | 401 | manager `ForbiddenException`, anonymous caller |
 | error-403-non-member | GET /orgs/{org}/ds/{ds} | user | 403 | manager `ForbiddenException`, authenticated caller |

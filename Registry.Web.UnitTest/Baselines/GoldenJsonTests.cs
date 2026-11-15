@@ -94,6 +94,9 @@ public sealed class GoldenJsonTests : IDisposable
         /// <summary>The request changes state: it runs on a host of its own.</summary>
         public bool Isolated { get; init; }
 
+        /// <summary>The request is sent this many times (a limit that answers only once spent); the last answer is the golden.</summary>
+        public int Attempts { get; init; } = 1;
+
         /// <summary>Runs on the scrubbed body: sorts arrays whose server order is not part of the contract.</summary>
         public Action<JsonNode?>? Normalise { get; init; }
 
@@ -261,6 +264,13 @@ public sealed class GoldenJsonTests : IDisposable
         {
             Form = new Dictionary<string, string>()
         };
+        // the eleventh sign-in attempt of one address within a minute (the first ten are 401)
+        yield return new("error-429-login", Caller.Anonymous, post, "/users/authenticate", 429)
+        {
+            Form = new Dictionary<string, string> { ["username"] = "nobody", ["password"] = "wrong" },
+            Isolated = true,
+            Attempts = 11
+        };
         yield return new("error-401-anonymous-gate", Caller.Anonymous, get, "/users/storage", 401);
         yield return new("error-401-anonymous-private-org", Caller.Anonymous, get, $"/orgs/{Org}/ds", 401);
         // an authenticated user without access gets 403
@@ -385,6 +395,12 @@ public sealed class GoldenJsonTests : IDisposable
         /// <summary>Sends the case, checks its status and renders its golden form.</summary>
         public async Task<string> RenderAsync(GoldenCase golden)
         {
+            for (var earlier = 1; earlier < golden.Attempts; earlier++)
+            {
+                using var preceding = BuildRequest(golden);
+                using var _ = await _client.SendAsync(preceding);
+            }
+
             using var request = BuildRequest(golden);
             using var timeout = new CancellationTokenSource(RequestTimeout);
             using var response = await _client.SendAsync(request, timeout.Token);

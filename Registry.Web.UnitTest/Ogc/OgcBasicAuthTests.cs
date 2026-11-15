@@ -84,6 +84,8 @@ public class OgcBasicAuthTests
             .AddSingleton(Mock.Of<IDdbManager>())
             .AddScoped<IDatasetAccessResolver, DatasetAccessResolver>()
             .AddSingleton(TestPaths.Policy)
+            .AddSingleton(new ClientIpResolver())
+            .AddSingleton<Registry.Web.Services.Users.SignInThrottle>()
             .AddScoped<BasicAuthFilter>()
             .AddScoped<OgcAuthorizationFilter>()
             .BuildServiceProvider();

@@ -22,7 +22,9 @@ namespace Registry.Web.Filters;
 /// matching user. It runs as an authorization filter, declared with
 /// <see cref="BasicAuthenticationAttribute"/>, so that the user is known before any access check
 /// (<c>OgcAuthorizationFilter</c>, the action's own checks). Missing or wrong credentials leave
-/// the request anonymous: what an anonymous user may read stays readable. Every 401 these endpoints
+/// the request anonymous: what an anonymous user may read stays readable, and wrong credentials count against
+/// the sign-in attempts of the client address (<see cref="SignInThrottle"/>; beyond them the request is refused with
+/// 429 and <c>Retry-After</c>, as the sign-in is). Every 401 these endpoints
 /// answer (an anonymous caller denied access, from the error model or a filter) carries the Basic
 /// challenge, so OGC clients prompt for credentials; a signed-in caller who lacks access gets a 403
 /// without one.
@@ -32,10 +34,13 @@ public class BasicAuthFilter : IAsyncAuthorizationFilter, IAlwaysRunResultFilter
     private readonly IUserSessions _sessions;
     private readonly UserManager<User> _userManager;
     private readonly AuthTokenOptions _settings;
+    private readonly SignInThrottle _throttle;
 
-    public BasicAuthFilter(IUserSessions sessions, UserManager<User> userManager, IOptions<AuthTokenOptions> settings)
+    public BasicAuthFilter(IUserSessions sessions, UserManager<User> userManager, IOptions<AuthTokenOptions> settings,
+        SignInThrottle throttle)
     {
         _sessions = sessions;
+        _throttle = throttle;
         _userManager = userManager;
         _settings = settings.Value;
     }
@@ -73,9 +78,15 @@ public class BasicAuthFilter : IAsyncAuthorizationFilter, IAlwaysRunResultFilter
         if (!TryReadCredentials(httpContext.Request.Headers.Authorization, out var username, out var password))
             return;
 
+        // Credentials are tried only while the address has attempts left; a right password never uses one up
+        // (OGC clients send it with every request), a wrong one does
+        _throttle.EnsureAllowed(httpContext);
         var res = await _sessions.Authenticate(username, password);
         if (res == null)
+        {
+            _throttle.CountAttempt(httpContext);
             return;
+        }
 
         var user = await _userManager.FindByNameAsync(res.Username);
         if (user == null)

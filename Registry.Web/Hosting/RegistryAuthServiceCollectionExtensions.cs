@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Registry.Web.Filters;
+using Registry.Web.Services.Users;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Middlewares;
@@ -84,7 +85,9 @@ public static class RegistryAuthServiceCollectionExtensions
         services.AddTransient<JwtInCookieMiddleware>();
         services.AddTransient<UserEnrichmentMiddleware>();
         services.AddTransient<ITokenManager, TokenManager>();
+        services.AddSingleton<SignInThrottle>();
         services.AddScoped<BasicAuthFilter>();
+        services.AddScoped<SignInAttemptFilter>();
 
         services.AddSingleton<UserAuthSnapshotCache>();
         services.AddScoped<IUserAuthSnapshotProvider, UserAuthSnapshotProvider>();

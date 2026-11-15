@@ -37,7 +37,7 @@ public class LocalLoginManager : ILoginManager
     /// Checks the password under Identity's lockout: a wrong password is a failed access, the account is locked after
     /// the configured number of failures (5, for 5 minutes) and a locked account is refused with 429 and Retry-After,
     /// even with its right password, until the lockout ends; a right password clears the failures. The sign-in route
-    /// also limits the attempts of each client address (RateLimitPolicies.Login), which a lockout alone does not.
+    /// also limits the attempts of each client address (SignInThrottle), which a lockout alone does not.
     /// </summary>
     /// <exception cref="TooManyRequestsException">The account is locked out.</exception>
     public async Task<LoginResultDto> CheckAccess(string userName, string password)

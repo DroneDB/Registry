@@ -5,12 +5,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Attributes;
 using Registry.Web.Exceptions;
+using Registry.Web.Filters;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Managers;
@@ -47,7 +47,7 @@ public class UsersController : ControllerBaseEx
     /// <returns>The authentication response with JWT token.</returns>
     [AllowAnonymous]
     [HttpPost("authenticate", Name = nameof(Authenticate))]
-    [EnableRateLimiting(RateLimitPolicies.Login)]
+    [CountSignInAttempt]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
