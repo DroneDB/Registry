@@ -18,6 +18,8 @@ public interface IOgcRasterTileSource
     /// </summary>
     /// <param name="cogPath">The COG of the layer's build the caller resolved: the tile never reads the entry's own
     /// file, which is what a user uploaded.</param>
+    /// <param name="cogVersion">The version of <paramref name="cogPath"/> (its write time, <see cref="Registry.Web.Utilities.FileVersion"/>):
+    /// a tile rendered from a COG that a rebuild has replaced is not served for the new one.</param>
     Task<byte[]> GetTileAsync(string orgSlug, string dsSlug, IDDB ddb, OgcLayerDto layer, string cogPath,
-        int z, int x, int y, TileFormat format, CancellationToken ct = default);
+        long cogVersion, int z, int x, int y, TileFormat format, CancellationToken ct = default);
 }

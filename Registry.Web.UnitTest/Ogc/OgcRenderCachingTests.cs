@@ -219,17 +219,68 @@ public class OgcRenderCachingTests
         _ddb.Setup(d => d.GenerateTile(cog, 18, 5, 7, false, "h1", "png")).Returns(RenderedPng);
         var source = new OgcRasterTileSource(_cacheManager);
 
-        (await source.GetTileAsync(Org, Ds, _ddb.Object, layer, cog, 18, 5, 7, TileFormat.Png)).ShouldBe(RenderedPng);
-        (await source.GetTileAsync(Org, Ds, _ddb.Object, layer, cog, 18, 5, 7, TileFormat.Png)).ShouldBe(RenderedPng);
+        (await source.GetTileAsync(Org, Ds, _ddb.Object, layer, cog, 42, 18, 5, 7, TileFormat.Png)).ShouldBe(RenderedPng);
+        (await source.GetTileAsync(Org, Ds, _ddb.Object, layer, cog, 42, 18, 5, 7, TileFormat.Png)).ShouldBe(RenderedPng);
 
         _ddb.Verify(d => d.GenerateTile(cog, 18, 5, 7, false, "h1", "png"), Times.Once);
         // Stored under the tile seed and the dataset category, so dataset invalidation clears it
-        (await _cache.GetAsync(TileKey("h1", 18, 5, 7, false, TileFormat.Png))).ShouldBe(RenderedPng);
+        (await _cache.GetAsync(TileKey("h1", 42, 18, 5, 7, false, TileFormat.Png))).ShouldBe(RenderedPng);
     }
 
-    // The key of a plain tile in the shared tile cache: hash, x, y, z, retina, media type
-    private static string TileKey(string hash, int z, int x, int y, bool retina, TileFormat format) =>
-        $":{MagicStrings.TileCacheSeed}:{Org}/{Ds}:{hash}-{x}-{y}-{z}-{retina}-{format.MediaType}";
+    // The same hash and tile, a COG a rebuild has rewritten (another write time): the tile is rendered from the new file
+    [Test]
+    public async Task Wmts_GetTile_OfARewrittenCogWithTheSameHash_RendersAgain()
+    {
+        var layer = new OgcLayerDto { Name = "ortho", EntryType = EntryType.GeoRaster, EntryPath = "ortho.tif", EntryHash = "h1" };
+        const string cog = "/data/ortho-cog.tif";
+        _ddb.Setup(d => d.GenerateTile(cog, 18, 5, 7, false, "h1", "png")).Returns(RenderedPng);
+        var source = new OgcRasterTileSource(_cacheManager);
+
+        await source.GetTileAsync(Org, Ds, _ddb.Object, layer, cog, 1, 18, 5, 7, TileFormat.Png);
+        await source.GetTileAsync(Org, Ds, _ddb.Object, layer, cog, 1, 18, 5, 7, TileFormat.Png);
+        _ddb.Verify(d => d.GenerateTile(cog, 18, 5, 7, false, "h1", "png"), Times.Once);
+
+        await source.GetTileAsync(Org, Ds, _ddb.Object, layer, cog, 2, 18, 5, 7, TileFormat.Png);
+        _ddb.Verify(d => d.GenerateTile(cog, 18, 5, 7, false, "h1", "png"), Times.Exactly(2));
+    }
+
+    // The key of a plain tile in the shared tile cache: hash, version, x, y, z, retina, media type
+    private static string TileKey(string hash, long version, int z, int x, int y, bool retina, TileFormat format) =>
+        $":{MagicStrings.TileCacheSeed}:{Org}/{Ds}:{hash}-{version}-{x}-{y}-{z}-{retina}-{format.MediaType}";
+
+    // The Registry tile endpoint and the OGC services read the COG through one key: a tile of the endpoint is a hit of WMTS
+    [Test]
+    public async Task TheTileEndpointAndWmts_ShareTheEntryOfAnUnchangedCog()
+    {
+        var layer = OrthoLayer;
+        const string cog = ".ddb/build/h1/cog/cog.tif";
+        _ddb.Setup(d => d.GenerateTile(cog, 18, 5, 7, false, "h1", "png")).Returns(RenderedPng);
+        var sourceFile = new OgcRasterTileSource(_cacheManager);
+        var obj = OrthoObject() with { SourceVersion = 42 };
+
+        await PlainTileCache.GetAsync(_cacheManager, NativeWorkGate.Default, Org, Ds, _ddb.Object, obj.SourcePath,
+            obj.Hash, obj.SourceVersion, 18, 5, 7, false, TileFormat.Png, default);
+        await sourceFile.GetTileAsync(Org, Ds, _ddb.Object, layer, cog, 42, 18, 5, 7, TileFormat.Png);
+
+        _ddb.Verify(d => d.GenerateTile(cog, 18, 5, 7, false, "h1", "png"), Times.Once);
+    }
+
+    // The COG of a layer is rewritten by a rebuild under the same hash: the GetMap of the same view renders it again
+    [Test]
+    public async Task GetMap_OfARewrittenCogWithTheSameHash_RendersAgain()
+    {
+        long version = 1;
+        _artifacts.Setup(a => a.GetFileVersion("/data/cog.tif")).Returns(() => version);
+        var wms = CreateWms();
+
+        await GetMap(wms, View);
+        await GetMap(wms, View);
+        NativeRenders().ShouldBe(1);
+
+        version = 2;
+        await GetMap(wms, View);
+        NativeRenders().ShouldBe(2);
+    }
 
     private static readonly OgcLayerDto OrthoLayer =
         new() { Name = "ortho", EntryType = EntryType.GeoRaster, EntryPath = "ortho.tif", EntryHash = "h1" };
@@ -264,12 +315,12 @@ public class OgcRenderCachingTests
 
         var endpoint = await Renders().GenerateTileDataAsync(OrthoObject(), z, x, y, retina: false, format);
         var ogc = await new OgcRasterTileSource(_cacheManager).GetTileAsync(Org, Ds, _ddb.Object, OrthoLayer,
-            "/data/ortho-cog.tif", z, x, y, format);
+            "/data/ortho-cog.tif", 0, z, x, y, format);
 
         ogc.ShouldBe(endpoint.Data);
         PlainTileRenders().ShouldBe(1);
         _ddb.Verify(d => d.GenerateTile(It.IsAny<string>(), z, x, y, false, "h1", format.DdbName), Times.Once);
-        (await _cache.GetAsync(TileKey("h1", z, x, y, false, format))).ShouldBe(RenderedPng);
+        (await _cache.GetAsync(TileKey("h1", 0, z, x, y, false, format))).ShouldBe(RenderedPng);
     }
 
     [Test]
@@ -278,7 +329,7 @@ public class OgcRenderCachingTests
         RenderAnyPlainTile();
 
         await new OgcRasterTileSource(_cacheManager).GetTileAsync(Org, Ds, _ddb.Object, OrthoLayer,
-            "/data/ortho-cog.tif", 18, 5, 7, TileFormat.Jpeg);
+            "/data/ortho-cog.tif", 0, 18, 5, 7, TileFormat.Jpeg);
         var endpoint = await Renders().GenerateTileDataAsync(OrthoObject(), 18, 5, 7, retina: false, TileFormat.Jpeg);
 
         endpoint.Data.ShouldBe(RenderedPng);
@@ -295,9 +346,9 @@ public class OgcRenderCachingTests
         var renders = Renders();
         var ogc = new OgcRasterTileSource(_cacheManager);
 
-        await ogc.GetTileAsync(Org, Ds, _ddb.Object, OrthoLayer, "/data/ortho-cog.tif", 1, 0, 0, TileFormat.Png);
+        await ogc.GetTileAsync(Org, Ds, _ddb.Object, OrthoLayer, "/data/ortho-cog.tif", 0, 1, 0, 0, TileFormat.Png);
         await renders.GenerateTileDataAsync(OrthoObject(), 1, 0, 0, retina: true, TileFormat.Png);
-        await ogc.GetTileAsync(Org, Ds, _ddb.Object, OrthoLayer, "/data/ortho-cog.tif", 1, 0, 0, TileFormat.Jpeg);
+        await ogc.GetTileAsync(Org, Ds, _ddb.Object, OrthoLayer, "/data/ortho-cog.tif", 0, 1, 0, 0, TileFormat.Jpeg);
         await renders.GenerateTileDataAsync(OrthoObject(), 1, 0, 1, retina: false, TileFormat.Png);
 
         PlainTileRenders().ShouldBe(4);
@@ -306,7 +357,7 @@ public class OgcRenderCachingTests
                      (0, false, TileFormat.Png), (0, true, TileFormat.Png), (0, false, TileFormat.Jpeg),
                      (1, false, TileFormat.Png)
                  })
-            (await _cache.GetAsync(TileKey("h1", 1, 0, y, retina, format))).ShouldNotBeNull();
+            (await _cache.GetAsync(TileKey("h1", 0, 1, 0, y, retina, format))).ShouldNotBeNull();
     }
 
     [Test]
@@ -396,10 +447,10 @@ public class OgcRenderCachingTests
 public class WmsRenderKeyTests
 {
     private static readonly double[] View = [1000.0, 2000.0, 1512.0, 2384.0]; // 0.5 m/px at 1024 x 768
-    private static readonly (string, string)[] Layers = [("h1", "")];
+    private static readonly (string, long, string)[] Layers = [("h1", 1L, "")];
 
     private static WmsRenderKey Key(double[] bbox, int width = 1024, int height = 768, string format = "image/png",
-        (string, string)[]? layers = null, string crs = "EPSG:3857") =>
+        (string, long, string)[]? layers = null, string crs = "EPSG:3857") =>
         WmsRenderKey.Build(bbox, crs, width, height, format, true, null, layers ?? Layers);
 
     private static double[] Shift(double[] bbox, double dx, double dy) =>
@@ -434,8 +485,9 @@ public class WmsRenderKeyTests
             Key(Shift(View, 1, 0)).Key,          // two pixels
             Key(View, 512, 384).Key,             // another resolution
             Key(View, format: "image/jpeg").Key,
-            Key(View, layers: [("h2", "")]).Key, // rebuilt raster
-            Key(View, layers: [("h1", "NDVI")]).Key,
+            Key(View, layers: [("h2", 1L, "")]).Key, // another raster
+            Key(View, layers: [("h1", 2L, "")]).Key, // the COG of the raster rewritten by a rebuild
+            Key(View, layers: [("h1", 1L, "NDVI")]).Key,
             Key(View, crs: "EPSG:4326").Key
         };
         keys.Distinct().Count().ShouldBe(keys.Length);

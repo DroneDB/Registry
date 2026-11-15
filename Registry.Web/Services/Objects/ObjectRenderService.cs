@@ -17,8 +17,8 @@ using static Registry.Web.Services.CacheCategories;
 namespace Registry.Web.Services.Objects;
 
 /// <summary>
-/// Default <see cref="IObjectRenderService"/>: renders are cached per entry hash (the dataset thumbnail per
-/// candidate path) and every native render runs through <see cref="INativeWorkGate"/> (tiles on the tiles
+/// Default <see cref="IObjectRenderService"/>: renders are cached per entry hash and version of the rendered file
+/// (<see cref="RenderCacheKeys"/>; the dataset thumbnail per candidate path) and every native render runs through <see cref="INativeWorkGate"/> (tiles on the tiles
 /// lane, thumbnails on the heavy lane, through the gated thumbnail generator). A render runs with the cache
 /// flight's token: it stops when every request waiting for it has gone.
 /// </summary>
@@ -67,11 +67,11 @@ public sealed class ObjectRenderService : IObjectRenderService
 
         if (recreate)
         {
-            var pixels = size ?? _options.DefaultThumbnailSize;
+            var pixels = ClampSize(size);
             _logger.LogDebug("Removing cached thumbnail for {OrgSlug}/{DsSlug}, hash: {Hash}, size: {Size}",
                 orgSlug, dsSlug, obj.Hash, pixels);
-            // Same key parts as the read below, otherwise nothing is removed
-            await _cache.RemoveAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug), obj.Hash, pixels);
+            // The key of the read below, otherwise nothing is removed
+            await _cache.RemoveAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug), ThumbnailKey(obj, pixels));
         }
 
         return await GenerateThumbnailDataAsync(obj, size, ct);
@@ -81,10 +81,10 @@ public sealed class ObjectRenderService : IObjectRenderService
         CancellationToken ct = default)
     {
         var localPath = obj.Ddb.GetLocalPath(obj.SourcePath);
-        var pixels = size ?? _options.DefaultThumbnailSize;
+        var pixels = ClampSize(size);
 
         var data = await _cache.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(obj.OrgSlug, obj.DsSlug), ct,
-            obj.Hash, pixels, new Func<CancellationToken, Task<byte[]>>(token => RenderThumbnailAsync(localPath, pixels, token)));
+            ThumbnailKey(obj, pixels).WithRender(token => RenderThumbnailAsync(localPath, pixels, token)));
 
         var extension = MimeUtility.GetExtensions(_ddbWrapper.ThumbnailMimeType)?.FirstOrDefault() ?? "webp";
 
@@ -99,22 +99,22 @@ public sealed class ObjectRenderService : IObjectRenderService
     public Task<StorageDataDto> GenerateTileDataAsync(ReadableObject obj, int tz, int tx, int ty, bool retina,
         TileFormat format, CancellationToken ct = default) =>
         CachedTileAsync(ty, format, () => PlainTileCache.GetAsync(_cache, _gate, obj.OrgSlug, obj.DsSlug, obj.Ddb,
-            obj.SourcePath, obj.Hash, tz, tx, ty, retina, format, ct));
+            obj.SourcePath, obj.Hash, obj.SourceVersion, tz, tx, ty, retina, format, ct));
 
     public async Task<StorageDataDto> GenerateThumbnailDataExAsync(string orgSlug, string dsSlug, string path,
         int? size, RasterVisualization visualization, CancellationToken ct = default)
     {
         var source = await _sources.ResolveAsync(orgSlug, dsSlug, path, ct);
-        var pixels = size ?? _options.DefaultThumbnailSize;
+        var pixels = ClampSize(size);
         var v = Checked(visualization);
 
         var data = await _cache.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(orgSlug, dsSlug), ct,
-            source.Entry.FileHash(), pixels, v.CacheKey,
-            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Heavy, () => v.Options is null
-                ? source.Ddb.GenerateThumbnailEx(source.SourcePath, pixels, v.Preset, v.Bands, v.Formula, v.BandFilter,
-                    v.Colormap, v.Rescale)
-                : source.Ddb.GenerateThumbnailEx(source.SourcePath, pixels, v.Preset, v.Bands, v.Formula, v.BandFilter,
-                    v.Colormap, v.Rescale, v.Options), token)));
+            RenderCacheKeys.ThumbnailEx(source.Entry.FileHash(), source.Version, pixels, v.CacheKey).WithRender(token =>
+                _gate.RunAsync(NativeLane.Heavy, () => v.Options is null
+                    ? source.Ddb.GenerateThumbnailEx(source.SourcePath, pixels, v.Preset, v.Bands, v.Formula,
+                        v.BandFilter, v.Colormap, v.Rescale)
+                    : source.Ddb.GenerateThumbnailEx(source.SourcePath, pixels, v.Preset, v.Bands, v.Formula,
+                        v.BandFilter, v.Colormap, v.Rescale, v.Options), token)));
 
         return new StorageDataDto
         {
@@ -134,12 +134,23 @@ public sealed class ObjectRenderService : IObjectRenderService
         // libddb encodes the visualization tile once in the format asked for, so its bytes are served (and cached
         // under that format) as they come, without a decode and a second encode here
         return await CachedTileAsync(ty, format, () => _cache.GetAsync(MagicStrings.TileCacheSeed,
-            ForDataset(orgSlug, dsSlug), ct, source.Entry.FileHash(), tx, ty, tz, retina, v.CacheKey, format.MediaType,
-            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles,
+            ForDataset(orgSlug, dsSlug), ct,
+            RenderCacheKeys.TileEx(source.Entry.FileHash(), source.Version, tx, ty, tz, retina, v.CacheKey,
+                format.MediaType).WithRender(token => _gate.RunAsync(NativeLane.Tiles,
                 () => source.Ddb.GenerateTileEx(source.SourcePath, tz, tx, ty, retina, source.Entry.FileHash(),
                     v.Preset, v.Bands, v.Formula, v.BandFilter, v.Colormap, v.Rescale, v.Options, format.DdbName),
                 token))));
     }
+
+    // The size of a thumbnail asked for (the default when none): never above what the Hub asks for at most, so that a
+    // request cannot make the server render, cache and send an image of any size. Every thumbnail path takes its size
+    // here, so a size above the bound shares the entry of the bound.
+    private int ClampSize(int? size) => Math.Min(size ?? _options.DefaultThumbnailSize,
+        ThumbnailOptions.MaxThumbnailSizePixels);
+
+    // The one key of the plain thumbnail of an entry, for the read and for the removal that precedes a recreate
+    private static object[] ThumbnailKey(ReadableObject obj, int pixels) =>
+        RenderCacheKeys.Thumbnail(obj.Hash, obj.SourceVersion, pixels);
 
     // The NoData value is a finite number and the unit of the rescale one libddb knows (400s), before any native work
     private static RasterVisualization Checked(RasterVisualization visualization)
@@ -176,7 +187,7 @@ public sealed class ObjectRenderService : IObjectRenderService
         if (thumbnailPath == null)
             return null;
 
-        var pixels = size ?? _options.DefaultThumbnailSize;
+        var pixels = ClampSize(size);
         var category = ForDatasetThumbnail(orgSlug, dsSlug);
 
         if (recreate)

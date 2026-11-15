@@ -8,6 +8,7 @@ using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters;
 
@@ -161,6 +162,8 @@ public sealed class BuildArtifactResolver : IBuildArtifactResolver, IDisposable
             : located.LocalPath;
         return _fs.Exists(file) ? file : null;
     }
+
+    public long GetFileVersion(string localPath) => FileVersion.Of(_fs, localPath);
 
     private LocatedArtifact? FindArtifact(IDDB ddb, string hash, string role, string? entryPath)
     {

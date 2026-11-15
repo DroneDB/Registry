@@ -7,6 +7,7 @@ using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
@@ -17,6 +18,9 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Caching;
+using Registry.Web.Utilities;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
@@ -110,14 +114,14 @@ public class ObjectsManagerThumbnailTests : TestBase
 
     // The build-pending service is the builder default: a real one on the SUT context and these mocks. The libddb is the
     // recorded one.
-    private ObjectServices CreateManager() =>
+    private ObjectServices CreateManager(ICacheManager? cache = null) =>
         new ObjectServicesBuilder(TestDb.CreateContext<RegistryContext>())
             .WithLogger(_logger)
             .WithSettings(_settingsOptions)
             .WithDdbManager(_ddbManagerMock.Object)
             .WithDatasets(_utilsMock.Object)
             .WithAuthManager(_authManagerMock.Object)
-            .WithCacheManager(_cacheManagerMock.Object)
+            .WithCacheManager(cache ?? _cacheManagerMock.Object)
             .WithFileSystem(_fsMock.Object)
             .WithBackgroundJobs(_backgroundJobMock.Object)
             .WithDdbWrapper(_ddbWrapperMock.Object)
@@ -242,6 +246,192 @@ public class ObjectsManagerThumbnailTests : TestBase
         read.ShouldNotBeNull();
         // Delegates are not part of the cache key.
         removed.ShouldBe(read.Where(p => p is not Delegate).ToArray());
+    }
+
+    // The cache of the server renders, as the host registers it: what is stored stays until it expires or is removed
+    private static CacheManager RealRenderCache()
+    {
+        var cache = new CacheManager(TestCaches.MemoryStore(), NullLogger<CacheManager>.Instance,
+            new NullCacheKeyScanner(NullLogger<NullCacheKeyScanner>.Instance));
+        cache.Register(MagicStrings.ThumbnailCacheSeed, CacheProviderFactories.CreatePassThroughProvider(),
+            TimeSpan.FromMinutes(10));
+        cache.Register(MagicStrings.TileCacheSeed, CacheProviderFactories.CreatePassThroughProvider(),
+            TimeSpan.FromMinutes(10));
+        return cache;
+    }
+
+    // The write time of every file: what a build changes when it rewrites an artifact and keeps the entry hash
+    private DateTime _writtenAt = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    private void FilesAreWrittenAtTheTimeOf() =>
+        _fsMock.Setup(f => f.GetLastWriteTime(It.IsAny<string>())).Returns(() => _writtenAt);
+
+    private void TheFileIsRewritten() => _writtenAt = _writtenAt.AddMinutes(5);
+
+    [Test]
+    public async Task AThumbnail_OfAFileRewrittenUnderTheSameHash_IsRenderedAgain()
+    {
+        SetupEntry("photo.jpg", EntryType.GeoImage, "img1");
+        FilesAreWrittenAtTheTimeOf();
+        var renders = CreateManager(RealRenderCache()).Renders;
+
+        await renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "photo.jpg", 256);
+        await renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "photo.jpg", 256);
+        ThumbnailRenders().ShouldBe(1, "the same file is rendered once");
+
+        TheFileIsRewritten();
+        await renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "photo.jpg", 256);
+        ThumbnailRenders().ShouldBe(2, "the rewritten file is not served the render of the old one");
+    }
+
+    [Test]
+    public async Task ARecreatedThumbnail_RemovesTheEntryTheReadsUse()
+    {
+        SetupEntry("photo.jpg", EntryType.GeoImage, "img1");
+        FilesAreWrittenAtTheTimeOf();
+        var renders = CreateManager(RealRenderCache()).Renders;
+
+        await renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "photo.jpg", 256);
+        await renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "photo.jpg", 256, recreate: true);
+
+        ThumbnailRenders().ShouldBe(2, "the removal reached the entry the read stored");
+    }
+
+    [Test]
+    public async Task ATile_OfAFileRewrittenUnderTheSameHash_IsRenderedAgain()
+    {
+        SetupEntry("photo.jpg", EntryType.GeoImage, "img1");
+        FilesAreWrittenAtTheTimeOf();
+        var renders = CreateManager(RealRenderCache()).Renders;
+        var obj = await renders.ResolveReadableObjectAsync(OrgSlug, DsSlug, "photo.jpg");
+
+        await renders.GenerateTileDataAsync(obj, 18, 5, 7, false, TileFormat.Png);
+        await renders.GenerateTileDataAsync(obj, 18, 5, 7, false, TileFormat.Png);
+        TileRenders().ShouldBe(1);
+
+        TheFileIsRewritten();
+        var rewritten = await renders.ResolveReadableObjectAsync(OrgSlug, DsSlug, "photo.jpg");
+        await renders.GenerateTileDataAsync(rewritten, 18, 5, 7, false, TileFormat.Png);
+        TileRenders().ShouldBe(2);
+    }
+
+    [Test]
+    public async Task AVisualizedTile_OfAFileRewrittenUnderTheSameHash_IsRenderedAgain()
+    {
+        SetupEntry("photo.jpg", EntryType.GeoImage, "img1");
+        FilesAreWrittenAtTheTimeOf();
+        _ddbMock.Setup(x => x.GenerateTileEx(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(),
+            It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<RasterAnalysisOptions?>(),
+            It.IsAny<string>())).Returns(ThumbBytes);
+        var renders = CreateManager(RealRenderCache()).Renders;
+        var style = new RasterVisualization(Colormap: "ironbow");
+
+        await renders.GenerateTileDataExAsync(OrgSlug, DsSlug, "photo.jpg", 18, 5, 7, false, style, TileFormat.Png);
+        await renders.GenerateTileDataExAsync(OrgSlug, DsSlug, "photo.jpg", 18, 5, 7, false, style, TileFormat.Png);
+        _ddbMock.Invocations.Count(i => i.Method.Name == nameof(IDDB.GenerateTileEx)).ShouldBe(1);
+
+        TheFileIsRewritten();
+        await renders.GenerateTileDataExAsync(OrgSlug, DsSlug, "photo.jpg", 18, 5, 7, false, style, TileFormat.Png);
+        _ddbMock.Invocations.Count(i => i.Method.Name == nameof(IDDB.GenerateTileEx)).ShouldBe(2);
+    }
+
+    [Test]
+    public async Task AVisualizedThumbnail_OfAFileRewrittenUnderTheSameHash_IsRenderedAgain()
+    {
+        SetupEntry("photo.jpg", EntryType.GeoImage, "img1");
+        FilesAreWrittenAtTheTimeOf();
+        _ddbMock.Setup(x => x.GenerateThumbnailEx(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string?>(),
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Returns(ThumbBytes);
+        var renders = CreateManager(RealRenderCache()).Renders;
+        var style = new RasterVisualization(Colormap: "ironbow");
+
+        await renders.GenerateThumbnailDataExAsync(OrgSlug, DsSlug, "photo.jpg", 256, style);
+        await renders.GenerateThumbnailDataExAsync(OrgSlug, DsSlug, "photo.jpg", 256, style);
+        _ddbMock.Invocations.Count(i => i.Method.Name == nameof(IDDB.GenerateThumbnailEx)).ShouldBe(1);
+
+        TheFileIsRewritten();
+        await renders.GenerateThumbnailDataExAsync(OrgSlug, DsSlug, "photo.jpg", 256, style);
+        _ddbMock.Invocations.Count(i => i.Method.Name == nameof(IDDB.GenerateThumbnailEx)).ShouldBe(2);
+    }
+
+    // The thumbnail made at upload time is the entry the first view reads, or it is made twice
+    [Test]
+    public async Task TheThumbnailMadeAtUpload_IsTheEntryTheViewReads()
+    {
+        SetupEntry("photo.jpg", EntryType.GeoImage, "img1");
+        FilesAreWrittenAtTheTimeOf();
+        var real = RealRenderCache();
+        var stored = new TaskCompletionSource();
+        var cache = new Mock<ICacheManager>();
+        cache.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(),
+                It.IsAny<object[]>()))
+            .Returns<string, string, CancellationToken, object[]>(async (seed, category, ct, key) =>
+            {
+                var data = await real.GetAsync(seed, category, ct, key);
+                stored.TrySetResult();
+                return data;
+            });
+        using var queue = new ThumbnailPrecomputeQueue(cache.Object, _fsMock.Object, _thumbsMock.Object,
+            new UploadSettings(), NullLogger<ThumbnailPrecomputeQueue>.Instance);
+
+        queue.TryEnqueue(new ThumbnailPrecomputeRequest(OrgSlug, DsSlug, "img1",
+            Path.Combine(DatasetFolder, "photo.jpg"), 128)).ShouldBeTrue();
+        await stored.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await CreateManager(cache.Object).Renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "photo.jpg", null);
+
+        ThumbnailRenders().ShouldBe(1);
+        await queue.StopAsync(default);
+    }
+
+    private int ThumbnailRenders() => _thumbsMock.Invocations.Count(i => i.Method.Name ==
+                                                                       nameof(IThumbnailGenerator.GenerateThumbnailAsync));
+
+    private int TileRenders() => _ddbMock.Invocations.Count(i => i.Method.Name == nameof(IDDB.GenerateTile));
+
+    // A request cannot make the server render, cache and send an image of any size: the sizes above the bound are the bound
+    [Test]
+    public async Task AThumbnailSizeAboveTheBound_IsRenderedAtTheBound_AndSharesItsEntry()
+    {
+        SetupEntry("photo.jpg", EntryType.GeoImage, "img1");
+        FilesAreWrittenAtTheTimeOf();
+        var renders = CreateManager(RealRenderCache()).Renders;
+
+        await renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "photo.jpg", 100_000);
+        await renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, "photo.jpg", ThumbnailOptions.MaxThumbnailSizePixels);
+
+        ThumbnailOptions.MaxThumbnailSizePixels.ShouldBe(4096);
+        _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.IsAny<string>(), ThumbnailOptions.MaxThumbnailSizePixels,
+            It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Once);
+        _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.IsAny<string>(), It.Is<int>(n => n > 4096),
+            It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task AVisualizedThumbnailSizeAboveTheBound_IsRenderedAtTheBound()
+    {
+        SetupEntry("photo.jpg", EntryType.GeoImage, "img1");
+        _ddbMock.Setup(x => x.GenerateThumbnailEx(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string?>(),
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Returns(ThumbBytes);
+
+        await CreateManager().Renders.GenerateThumbnailDataExAsync(OrgSlug, DsSlug, "photo.jpg", 100_000,
+            new RasterVisualization(Colormap: "ironbow"));
+
+        _ddbMock.Verify(x => x.GenerateThumbnailEx("photo.jpg", 4096, It.IsAny<string?>(), It.IsAny<string?>(),
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Test]
+    public async Task ADatasetThumbnailSizeAboveTheBound_IsRenderedAtTheBound()
+    {
+        _ddbMock.Setup(x => x.EntryExists("thumbnail.webp")).Returns(true);
+
+        await CreateManager().Renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, null, 100_000);
+
+        _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.IsAny<string>(), 4096, It.IsAny<Stream>(),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]

@@ -264,7 +264,7 @@ public class WmtsManager : OgcManagerBase
 
         RequireBuiltRaster(layer, "layer");
         // Resolved before the render's fallback below: a COG gone since the layer list was cached is the same error
-        var cog = ResolveRasterArtifact(ddb, layer, "layer");
+        var cog = ResolveRasterSource(ddb, layer, "layer");
 
         // Raster: delegate to ddb.GenerateTile on the COG, passing the requested output format so the
         // returned bytes match the WMTS Content-Type. Out-of-range tiles return a graceful
@@ -274,7 +274,7 @@ public class WmtsManager : OgcManagerBase
         var wantJpeg = string.Equals(format, "image/jpeg", StringComparison.OrdinalIgnoreCase);
         try
         {
-            return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer, cog, z, x, y,
+            return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer, cog.Path, cog.Version, z, x, y,
                 wantJpeg ? TileFormat.Jpeg : TileFormat.Png, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException && !DdbErrors.IsTransient(ex))

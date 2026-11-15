@@ -9,7 +9,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Ports;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 using static Registry.Web.Services.CacheCategories;
 
 namespace Registry.Web.Services.Adapters;
@@ -21,6 +23,7 @@ namespace Registry.Web.Services.Adapters;
 public sealed class ThumbnailPrecomputeQueue : IHostedService, IDisposable
 {
     private readonly ICacheManager _cache;
+    private readonly IFileSystem _fs;
     private readonly IThumbnailGenerator _generator;
     private readonly ILogger<ThumbnailPrecomputeQueue> _logger;
     private readonly Channel<ThumbnailPrecomputeRequest> _channel;
@@ -29,16 +32,17 @@ public sealed class ThumbnailPrecomputeQueue : IHostedService, IDisposable
     private Task[] _running = [];
     private int _started;
 
-    public ThumbnailPrecomputeQueue(ICacheManager cache, IThumbnailGenerator generator,
+    public ThumbnailPrecomputeQueue(ICacheManager cache, IFileSystem fs, IThumbnailGenerator generator,
         IOptions<UploadSettings> settings, ILogger<ThumbnailPrecomputeQueue> logger)
-        : this(cache, generator, settings.Value, logger)
+        : this(cache, fs, generator, settings.Value, logger)
     {
     }
 
-    public ThumbnailPrecomputeQueue(ICacheManager cache, IThumbnailGenerator generator, UploadSettings settings,
-        ILogger<ThumbnailPrecomputeQueue> logger)
+    public ThumbnailPrecomputeQueue(ICacheManager cache, IFileSystem fs, IThumbnailGenerator generator,
+        UploadSettings settings, ILogger<ThumbnailPrecomputeQueue> logger)
     {
         _cache = cache;
+        _fs = fs;
         _generator = generator;
         _logger = logger;
         _workers = Math.Max(1, settings.ThumbnailPrecomputeWorkers);
@@ -91,9 +95,9 @@ public sealed class ThumbnailPrecomputeQueue : IHostedService, IDisposable
         try
         {
             // The queue's stop token: a pre-generation still running at shutdown stops
+            // The key of the view of this thumbnail (the file's own version, as the view reads it), or it is never a hit
             await _cache.GetAsync(MagicStrings.ThumbnailCacheSeed, ForDataset(r.OrgSlug, r.DsSlug), _stop.Token,
-                r.Hash, r.Size,
-                new Func<CancellationToken, Task<byte[]>>(async token =>
+                RenderCacheKeys.Thumbnail(r.Hash, FileVersion.Of(_fs, r.LocalPath), r.Size).WithRender(async token =>
                 {
                     using var s = new MemoryStream();
                     await _generator.GenerateThumbnailAsync(r.LocalPath, r.Size, s, token);

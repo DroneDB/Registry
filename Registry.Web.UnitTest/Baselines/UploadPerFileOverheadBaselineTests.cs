@@ -139,7 +139,7 @@ public class UploadPerFileOverheadBaselineTests : TestBase
 
         var changes = new DatasetChangeCoalescer(_ogcKeys.Object, _cache.Object, [], TimeSpan.FromMinutes(1),
             NullLogger<DatasetChangeCoalescer>.Instance);
-        var thumbnails = new ThumbnailPrecomputeQueue(_cache.Object, _thumbs.Object, new UploadSettings(),
+        var thumbnails = new ThumbnailPrecomputeQueue(_cache.Object, new Registry.Adapters.FileSystem(), _thumbs.Object, new UploadSettings(),
             NullLogger<ThumbnailPrecomputeQueue>.Instance);
 
         var uploads = TestUploads.Create(_auth.Object,

@@ -31,9 +31,10 @@ public sealed class WmsRenderKey
     }
 
     /// <param name="bbox">Requested BBOX, x/east first (as parsed by OgcRequestParser).</param>
-    /// <param name="layers">Identity of each layer in drawing order: its content hash and style.</param>
+    /// <param name="layers">Identity of each layer in drawing order: its content hash, the version of the COG it is
+    /// rendered from (a rebuilt COG has the same hash) and its style.</param>
     public static WmsRenderKey Build(double[] bbox, string crs, int width, int height, string format,
-        bool transparent, string? bgColor, IEnumerable<(string Hash, string Style)> layers)
+        bool transparent, string? bgColor, IEnumerable<(string Hash, long Version, string Style)> layers)
     {
         ArgumentNullException.ThrowIfNull(bbox);
         if (bbox.Length < 4 || width <= 0 || height <= 0)
@@ -46,7 +47,8 @@ public sealed class WmsRenderKey
 
         var snapped = new[] { col * resX, row * resY, col * resX + width * resX, row * resY + height * resY };
 
-        var layerKey = string.Join(",", layers.Select(l => $"{l.Hash}~{(l.Style ?? string.Empty).ToUpperInvariant()}"));
+        var layerKey = string.Join(",", layers.Select(l =>
+            $"{l.Hash}@{l.Version.ToString(CultureInfo.InvariantCulture)}~{(l.Style ?? string.Empty).ToUpperInvariant()}"));
         var key = string.Join("|",
             crs.ToUpperInvariant(),
             Format(resX), Format(resY), Format(col), Format(row),

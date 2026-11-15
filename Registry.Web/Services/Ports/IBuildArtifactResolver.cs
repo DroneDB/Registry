@@ -76,6 +76,13 @@ public interface IBuildArtifactResolver
     string? FindArtifactFile(IDDB ddb, string hash, string role, string? relativePath = null, string? entryPath = null);
 
     /// <summary>
+    /// The version of a file this resolver returned (<see cref="FindArtifactFile"/>): its write time
+    /// (<see cref="Registry.Web.Utilities.FileVersion"/>), 0 when it cannot be read. A build rewrites its artifact under
+    /// the same hash, so the render caches key their entries by it too.
+    /// </summary>
+    long GetFileVersion(string localPath);
+
+    /// <summary>
     /// A file of a build (an artifact or a file below a directory artifact), containment-checked by libddb, with its
     /// absolute path and the manifest's media type when libddb gives one; null when the file is not one of the
     /// build's files.

@@ -379,7 +379,7 @@ public class UploadPipelineComponentTests
             .Returns<string, string, CancellationToken, object[]>(async (_, _, ct, ps) =>
                 await ps.OfType<Func<CancellationToken, Task<byte[]>>>().Single()(ct));
 
-        var queue = new ThumbnailPrecomputeQueue(cache.Object, generator.Object,
+        var queue = new ThumbnailPrecomputeQueue(cache.Object, Mock.Of<IFileSystem>(), generator.Object,
             new UploadSettings { ThumbnailPrecomputeWorkers = 2, ThumbnailPrecomputeCapacity = 3 },
             NullLogger<ThumbnailPrecomputeQueue>.Instance);
 

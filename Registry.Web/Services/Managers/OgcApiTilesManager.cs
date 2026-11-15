@@ -62,7 +62,8 @@ public class OgcApiTilesManager : OgcManagerBase
             return path != null ? await File.ReadAllBytesAsync(path, ct) : null;
         }
         RequireBuiltRaster(layer, "collectionId");
-        return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer,
-            ResolveRasterArtifact(ddb, layer, "collectionId"), z, x, y, TileFormat.Png, ct);
+        var cog = ResolveRasterSource(ddb, layer, "collectionId");
+        return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer, cog.Path, cog.Version, z, x, y,
+            TileFormat.Png, ct);
     }
 }

@@ -224,7 +224,7 @@ public class WmsManager : OgcManagerBase
         // Identical (and sub-pixel jittered) requests share one render; the render uses the
         // snapped BBOX so that a cached image is what a fresh render returns
         var renderKey = WmsRenderKey.Build(bbox, crs, width, height, format, transparent, bgColor,
-            rasters.Select(r => (r.Layer.EntryHash, r.Style)));
+            rasters.Select(r => (r.Layer.EntryHash, CogVersion(ddb, r.Layer), r.Style)));
         try
         {
             // The render runs with the cache flight's token: it stops when every request for it has gone
@@ -239,6 +239,10 @@ public class WmsManager : OgcManagerBase
             return ex.Image;
         }
     }
+
+    // The version of the COG a layer is rendered from; 0 for one gone since the layer list was cached: the render finds
+    // that out and answers as any failed render does, and nothing is kept of it
+    private long CogVersion(IDDB ddb, OgcLayerDto layer) => TryResolveRasterSource(ddb, layer)?.Version ?? 0;
 
     /// <summary>The spectral indices libddb renders from a raster layer (its COG, <paramref name="source"/>), empty when none.</summary>
     private Task<IReadOnlyList<string>> GetIndexesAsync(OgcLayerDto layer, RasterSource source, CancellationToken ct) =>

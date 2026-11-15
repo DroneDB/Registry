@@ -159,8 +159,8 @@ public sealed class CancellationResponseTests
     {
         var log = new CapturingLogger<WmtsManager>();
         var tiles = new Mock<IOgcRasterTileSource>();
-        tiles.Setup(t => t.GetTileAsync(Org, Ds, It.IsAny<IDDB>(), It.IsAny<OgcLayerDto>(), It.IsAny<string>(), 3, 1,
-                2, TileFormat.Png, It.IsAny<CancellationToken>()))
+        tiles.Setup(t => t.GetTileAsync(Org, Ds, It.IsAny<IDDB>(), It.IsAny<OgcLayerDto>(), It.IsAny<string>(),
+                It.IsAny<long>(), 3, 1, 2, TileFormat.Png, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new DdbCanceledException("Canceled by the cancel token"));
         var wmts = new WmtsManager(OgcDependencies(), log, tiles.Object);
 

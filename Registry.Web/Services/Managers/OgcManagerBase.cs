@@ -132,7 +132,7 @@ public abstract class OgcManagerBase
     /// </summary>
     protected RasterSource? TryResolveRasterSource(IDDB ddb, OgcLayerDto layer) =>
         Builds.FindArtifactFile(ddb, layer.EntryHash, ArtifactRoles.RasterCog, entryPath: layer.EntryPath) is { } cog
-            ? new RasterSource(cog, ArtifactRoles.RasterCog)
+            ? new RasterSource(cog, ArtifactRoles.RasterCog, Builds.GetFileVersion(cog))
             : null;
 
     /// <summary>
@@ -224,5 +224,8 @@ public abstract class OgcManagerBase
     }
 }
 
-/// <summary>The file a raster layer reads and what it is: the role of the build artifact.</summary>
-public sealed record RasterSource(string Path, string Source);
+/// <summary>
+/// The file a raster layer reads, what it is (the role of the build artifact) and its version (its write time, 0 when
+/// unknown: a rebuilt COG has the same hash and another version).
+/// </summary>
+public sealed record RasterSource(string Path, string Source, long Version = 0);

@@ -8,6 +8,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 using Entry = Registry.Ports.DroneDB.Entry;
 
 namespace Registry.Web.Services.Objects;
@@ -73,8 +74,8 @@ public sealed class RenderSources
         if (thumbnail && !_artifacts.HasThumbnail(entry.Type))
             throw new NotFoundException($"'{normalized}' has no thumbnail ({entry.Type} entries have none)");
 
-        return new RenderSource(entry, access.Ddb, normalized,
-            await SourceOfAsync(orgSlug, dsSlug, entry, access.Ddb, normalized));
+        var sourcePath = await SourceOfAsync(orgSlug, dsSlug, entry, access.Ddb, normalized);
+        return new RenderSource(entry, access.Ddb, normalized, sourcePath, VersionOf(access.Ddb, sourcePath));
     }
 
     /// <summary>
@@ -101,6 +102,12 @@ public sealed class RenderSources
         return new RenderSource(entry, access.Ddb, normalized, entry.Path);
     }
 
+    // The write time of the file a renderer reads, 0 when it cannot be read: part of every render cache key and of
+    // the validator of a response, since a rebuild rewrites the artifact and keeps the entry hash
+    private long VersionOf(IDDB ddb, string sourcePath) =>
+        FileVersion.Of(_fs, ddb.GetLocalPath(sourcePath),
+            ex => _logger.LogDebug(ex, "Cannot read the write time of '{SourcePath}'", sourcePath));
+
     /// <summary>
     /// <see cref="ResolveAsync(string, string, string?, CancellationToken)"/> with the version of the rendered file: a rebuild rewrites the artifact
     /// but keeps the entry hash, its write time tells them apart.
@@ -120,18 +127,8 @@ public sealed class RenderSources
     {
         var source = await ResolveAsync(orgSlug, dsSlug, path, thumbnail, ct);
 
-        long version = 0;
-        try
-        {
-            version = _fs.GetLastWriteTime(source.Ddb.GetLocalPath(source.SourcePath)).ToUniversalTime().Ticks;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Cannot read the write time of '{SourcePath}'", source.SourcePath);
-        }
-
         return new ReadableObject(orgSlug, dsSlug, source.Path, source.Entry.FileHash(), source.SourcePath, source.Ddb,
-            version);
+            source.Version);
     }
 
     private async Task<string> SourceOfAsync(string orgSlug, string dsSlug, Entry entry, IDDB ddb,
@@ -154,5 +151,8 @@ public sealed class RenderSources
     }
 }
 
-/// <summary>The entry of a read request, its index, the normalized request path and the file to read.</summary>
-public sealed record RenderSource(Entry Entry, IDDB Ddb, string Path, string SourcePath);
+/// <summary>
+/// The entry of a read request, its index, the normalized request path, the file to read and its version
+/// (<see cref="FileVersion"/>: its write time, 0 when unknown).
+/// </summary>
+public sealed record RenderSource(Entry Entry, IDDB Ddb, string Path, string SourcePath, long Version = 0);

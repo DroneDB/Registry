@@ -5,6 +5,9 @@ public sealed class ThumbnailOptions : IHasConfigurationDefaults
 {
     public const int DefaultThumbnailSizePixels = 512;
 
+    /// <summary>The largest thumbnail the server renders, in pixels: the largest step of the Hub; a larger size is served at this one.</summary>
+    public const int MaxThumbnailSizePixels = 4096;
+
     /// <summary>The dataset thumbnail candidates used when <see cref="DatasetThumbnailCandidates"/> is not set.</summary>
     public static readonly string[] DefaultDatasetThumbnailCandidates =
     [
