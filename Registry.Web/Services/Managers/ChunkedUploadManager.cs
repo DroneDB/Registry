@@ -76,7 +76,7 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
             // The same file sent again after a commit has the same id: the receipt of the earlier one must not answer
             // the commit of this one
             await uploads.ForgetReceiptAsync(orgSlug, dsSlug, key);
-            store.Open(root, key, new ChunkManifest(chunk.Path, chunk.TotalFileSize, chunk.TotalChunks, chunk.ChunkSize,
+            await store.OpenAsync(root, key, new ChunkManifest(chunk.Path, chunk.TotalFileSize, chunk.TotalChunks, chunk.ChunkSize,
                 ctx.User?.Id, chunk.Overwrite, chunk.FileId, chunk.SourceFileName, chunk.LastModified));
         }
         else

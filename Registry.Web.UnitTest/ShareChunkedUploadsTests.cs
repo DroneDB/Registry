@@ -137,7 +137,7 @@ public class ShareChunkedUploadsTests
     {
         // A dataset chunk upload of alice, complete, named in the chunks folder by its session key
         var key = ChunkedUploadManager.SessionKey(IdOf("alice"), "client-file-01");
-        _chunks.Open(ChunksRoot, key, new ChunkManifest("data.bin", 4, 1, 4, IdOf("alice"), FileId: "client-file-01"));
+        await _chunks.OpenAsync(ChunksRoot, key, new ChunkManifest("data.bin", 4, 1, 4, IdOf("alice"), FileId: "client-file-01"));
         await _chunks.WriteAsync(ChunksRoot, key, 0, new MemoryStream("abcd"u8.ToArray()));
 
         _user = "bob";

@@ -90,7 +90,7 @@ public sealed class ShareChunkedUploads
 
         // The session is the caller's, named as the dataset chunk uploads name theirs: another user that sends the same
         // file id (or the name of a session of the dataset chunk uploads) reaches a session of their own, never this one
-        _chunks.Open(root, key, new ChunkManifest(chunkInfo.Path, chunkInfo.TotalFileSize,
+        await _chunks.OpenAsync(root, key, new ChunkManifest(chunkInfo.Path, chunkInfo.TotalFileSize,
             chunkInfo.TotalChunks, chunkSize, userId));
         var status = await _chunks.WriteAsync(root, key, chunkInfo.ChunkIndex, chunkStream, ct);
 

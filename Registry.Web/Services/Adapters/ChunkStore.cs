@@ -64,7 +64,7 @@ public sealed partial class ChunkStore
     /// markers are dropped, so no chunk of another upload counts as stored.
     /// </summary>
     /// <exception cref="Registry.Web.Exceptions.ConflictException">The id exists with another manifest.</exception>
-    public ChunkStatus Open(string root, string fileId, ChunkManifest manifest)
+    public async Task<ChunkStatus> OpenAsync(string root, string fileId, ChunkManifest manifest)
     {
         Validate(manifest);
         var folder = Folder(root, fileId);
@@ -77,7 +77,7 @@ public sealed partial class ChunkStore
         PruneRemoved();
 
         // Under the upload's lock: a removal (Delete) or another start of the same upload is not half-way
-        var upload = Lock(Key(folder));
+        var upload = await LockAsync(Key(folder));
         try
         {
             if (TryResume(folder, fileId, manifest) is { } started)
@@ -196,7 +196,9 @@ public sealed partial class ChunkStore
     /// <returns>Whether the folder was removed.</returns>
     public bool RemoveAbandoned(string folder, Func<string, bool> abandoned)
     {
-        var upload = Lock(Key(folder));
+        // An upload whose lock a request holds is in use, so not abandoned: the cleanup does not wait for it
+        if (TryLock(Key(folder)) is not { } upload)
+            return false;
         try
         {
             if (!Directory.Exists(folder) || !abandoned(folder))
@@ -490,20 +492,23 @@ public sealed partial class ChunkStore
         upload.Hash = null;
     }
 
-    // The state of `key`, locked. A state dropped while this call waited for its lock is no longer the upload's: the
-    // current one is locked instead, so two callers never hold two states of one upload.
-    private Upload Lock(string key)
+    // The state of `key`, locked when no one holds it; null when a request holds it. A state dropped meanwhile is no
+    // longer the upload's: the current one is tried instead, so two callers never hold two states of one upload.
+    private Upload? TryLock(string key)
     {
         while (true)
         {
             var upload = _uploads.GetOrAdd(key, _ => new Upload());
-            upload.Lock.Wait();
+            if (!upload.Lock.Wait(0))
+                return null;
             if (_uploads.TryGetValue(key, out var live) && ReferenceEquals(live, upload))
                 return upload;
             upload.Lock.Release();
         }
     }
 
+    // The state of `key`, locked. A state dropped while this call waited for its lock is no longer the upload's: the
+    // current one is locked instead, so two callers never hold two states of one upload.
     private async Task<Upload> LockAsync(string key)
     {
         while (true)

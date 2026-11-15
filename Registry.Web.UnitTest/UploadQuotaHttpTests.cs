@@ -334,8 +334,9 @@ public sealed class UploadQuotaHttpTests : IDisposable
                 {
                     // The other request's first chunk starts the session now
                     started = true;
-                    store.Open(chunks, Registry.Web.Services.Managers.ChunkedUploadManager.SessionKey(_ownerId, fileId),
-                        new ChunkManifest(path, 9 * gib, 9216, mib, _ownerId, Overwrite: false, FileId: fileId));
+                    store.OpenAsync(chunks, Registry.Web.Services.Managers.ChunkedUploadManager.SessionKey(_ownerId, fileId),
+                            new ChunkManifest(path, 9 * gib, 9216, mib, _ownerId, Overwrite: false, FileId: fileId))
+                        .GetAwaiter().GetResult();
                 }
 
                 return [];
