@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,17 +41,25 @@ public static class BudgetedCopy
         ArgumentNullException.ThrowIfNull(budget);
         read ??= (buffer, token) => source.ReadAsync(buffer, token);
 
-        var chunk = new byte[BufferSize];
-        long copied = 0;
-        int count;
-        while ((count = await read(chunk, ct)) > 0)
+        // Pooled: an extraction copies thousands of small entries, each of which would otherwise allocate a buffer of 1 MiB
+        var chunk = ArrayPool<byte>.Shared.Rent(BufferSize);
+        try
         {
-            budget.Account(count);
-            await destination.WriteAsync(chunk.AsMemory(0, count), ct);
-            copied += count;
-            chunkWritten?.Invoke(copied);
-        }
+            long copied = 0;
+            int count;
+            while ((count = await read(chunk, ct)) > 0)
+            {
+                budget.Account(count);
+                await destination.WriteAsync(chunk.AsMemory(0, count), ct);
+                copied += count;
+                chunkWritten?.Invoke(copied);
+            }
 
-        return copied;
+            return copied;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(chunk);
+        }
     }
 }
