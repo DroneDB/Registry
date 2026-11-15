@@ -34,7 +34,9 @@ public static class RegistryApiServiceCollectionExtensions
         });
 
         // {orgSlug:slug} and {dsSlug:slug}: the slug rules decide what routes, as they decide what is created
+        // (a slug in any letter case routes; the middleware lowercases it, as slugs are stored)
         services.Configure<RouteOptions>(o => o.ConstraintMap[RoutesHelper.SlugConstraint] = typeof(SlugRouteConstraint));
+        services.AddTransient<Middlewares.LowercaseSlugRouteValuesMiddleware>();
 
         // One error model: RFC 9457 ProblemDetails written by ApiErrorResponder from the MVC
         // filter, the model-state factory below and the pipeline-wide exception handler

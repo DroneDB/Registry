@@ -119,6 +119,10 @@ public class Startup
 
         app.UseRouting();
 
+        // The slugs of the route in lowercase, as they are stored, before anything (the authorization, the filters, the
+        // model binding) reads them
+        app.UseMiddleware<LowercaseSlugRouteValuesMiddleware>();
+
         if (http.Value.AllowedOrigins is { Length: > 0 } allowedOrigins)
         {
             app.UseCors(cors => cors
@@ -223,8 +227,9 @@ public class Startup
             builder.UseSpaStaticFiles(hubStaticFiles);
 
             // The Hub's pages are read, never posted to: a request with another method that no endpoint
-            // matched is a 404 (the SPA default page answers GET and HEAD only and throws for the others)
-            builder.UseWhen(context => !IsPageRead(context.Request.Method),
+            // matched is a 404 (the SPA default page answers GET and HEAD only and throws for the others); and
+            // a path of the API that no endpoint matched is a 404 of the API, not the Hub's page, whatever the method
+            builder.UseWhen(context => !IsPageRead(context.Request.Method) || RoutesHelper.IsApiPath(context.Request.Path),
                 unmatched => unmatched.Run(context =>
                     throw new NotFoundException($"No endpoint answers {context.Request.Method} {context.Request.Path}")
                     {
