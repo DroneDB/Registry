@@ -178,7 +178,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
                     async (i, token) =>
                     {
                         var (entry, localPath) = batch[i];
-                        var path = Path.GetRelativePath(destFolder, localPath).Replace('\\', '/');
+                        var path = Path.GetRelativePath(destFolder, localPath).ToDdbPath();
 
                         fetched[i] = await FetchFileAsync(registryUrl, authToken, sourceOrg, sourceDs, destFolder, entry,
                             path, localPath, writes, token);

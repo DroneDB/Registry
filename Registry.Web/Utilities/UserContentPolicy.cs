@@ -2,7 +2,6 @@ using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 
 namespace Registry.Web.Utilities;
 
@@ -33,28 +32,28 @@ public static class UserContentPolicy
     // fetch or as image sources, never shown as a document
     private static readonly KeyValuePair<string, string>[] BuildTypes =
     [
-        new("json", "application/json"),
-        new("gltf", "model/gltf+json"),
-        new("glb", "model/gltf-binary"),
-        new("b3dm", OctetStream),
-        new("i3dm", OctetStream),
-        new("pnts", OctetStream),
-        new("cmpt", OctetStream),
-        new("bin", OctetStream),
-        new("subtree", OctetStream),
-        new("basis", OctetStream),
-        new("jpg", "image/jpeg"),
-        new("jpeg", "image/jpeg"),
-        new("png", "image/png"),
-        new("webp", "image/webp"),
-        new("ktx2", "image/ktx2"),
-        new("avif", "image/avif"),
-        new("gif", "image/gif"),
-        new("tif", "image/tiff"),
-        new("tiff", "image/tiff"),
+        new(".json", "application/json"),
+        new(".gltf", "model/gltf+json"),
+        new(".glb", "model/gltf-binary"),
+        new(".b3dm", OctetStream),
+        new(".i3dm", OctetStream),
+        new(".pnts", OctetStream),
+        new(".cmpt", OctetStream),
+        new(".bin", OctetStream),
+        new(".subtree", OctetStream),
+        new(".basis", OctetStream),
+        new(".jpg", "image/jpeg"),
+        new(".jpeg", "image/jpeg"),
+        new(".png", "image/png"),
+        new(".webp", "image/webp"),
+        new(".ktx2", "image/ktx2"),
+        new(".avif", "image/avif"),
+        new(".gif", "image/gif"),
+        new(".tif", "image/tiff"),
+        new(".tiff", "image/tiff"),
     ];
 
-    /// <summary>The type of the COPC point cloud of a build (<c>copc/cloud.copc.laz</c>).</summary>
+    /// <summary>The type of the COPC point cloud of a build (a <c>*.copc.laz</c> file).</summary>
     public const string CopcMediaType = "application/vnd.laszip+copc";
 
     /// <summary>The type of a plain LAZ file of a build: the tiles of a legacy EPT dataset (<c>ept-data/*.laz</c>).</summary>
@@ -62,13 +61,13 @@ public static class UserContentPolicy
 
     // The files only a build makes, with the types libddb declares for its artifacts (FR-DEV-15): a raw file with the
     // same extension is not one of them (a .laz a user uploaded is not COPC), so they are not in the raw-file list.
-    // Only a COPC file is COPC (IsCopcPath): any other .laz of a build, a tile of a legacy EPT dataset, is plain LAZ.
+    // Only a COPC file is COPC (IsCopcFile): any other .laz of a build, a tile of a legacy EPT dataset, is plain LAZ.
     // bm3d is served sandboxed like every build file
     private static readonly KeyValuePair<string, string>[] BuildOnlyTypes =
     [
-        new("laz", LazMediaType),
-        new("gpkg", "application/geopackage+sqlite3"),
-        new("bm3d", "application/vnd.dronedb.bm3d"),
+        new(".laz", LazMediaType),
+        new(".gpkg", "application/geopackage+sqlite3"),
+        new(".bm3d", "application/vnd.dronedb.bm3d"),
     ];
 
     // What the Hub shows in place in a tab, a lightbox or a viewer: images, PDF, audio and video, text. Every
@@ -76,28 +75,28 @@ public static class UserContentPolicy
     // download URL and opens a photo or a video in a tab
     private static readonly KeyValuePair<string, string>[] EntryOnlyTypes =
     [
-        new("bmp", "image/bmp"),
-        new("dng", "image/x-adobe-dng"),
-        new("jp2", "image/jp2"),
-        new("j2k", "image/j2c"),
-        new("pdf", "application/pdf"),
-        new("mp4", "video/mp4"),
-        new("m4v", "video/mp4"),
-        new("webm", "video/webm"),
-        new("mov", "video/quicktime"),
-        new("mkv", "video/x-matroska"),
-        new("avi", "video/x-msvideo"),
-        new("ogv", "video/ogg"),
-        new("mp3", "audio/mpeg"),
-        new("wav", "audio/wav"),
-        new("ogg", "audio/ogg"),
-        new("m4a", "audio/mp4"),
-        new("flac", "audio/flac"),
-        new("txt", "text/plain"),
-        new("log", "text/plain"),
-        new("csv", "text/plain"),
-        new("md", "text/plain"),
-        new("geojson", "application/json"),
+        new(".bmp", "image/bmp"),
+        new(".dng", "image/x-adobe-dng"),
+        new(".jp2", "image/jp2"),
+        new(".j2k", "image/j2c"),
+        new(".pdf", "application/pdf"),
+        new(".mp4", "video/mp4"),
+        new(".m4v", "video/mp4"),
+        new(".webm", "video/webm"),
+        new(".mov", "video/quicktime"),
+        new(".mkv", "video/x-matroska"),
+        new(".avi", "video/x-msvideo"),
+        new(".ogv", "video/ogg"),
+        new(".mp3", "audio/mpeg"),
+        new(".wav", "audio/wav"),
+        new(".ogg", "audio/ogg"),
+        new(".m4a", "audio/mp4"),
+        new(".flac", "audio/flac"),
+        new(".txt", "text/plain"),
+        new(".log", "text/plain"),
+        new(".csv", "text/plain"),
+        new(".md", "text/plain"),
+        new(".geojson", "application/json"),
     ];
 
     private static readonly FrozenDictionary<string, string> BuildFileTypes = ByExtension([.. BuildTypes, .. BuildOnlyTypes]);
@@ -111,20 +110,17 @@ public static class UserContentPolicy
     /// </summary>
     public static ServedContent ForBuildFile(string path, string? declaredMediaType = null) =>
         Resolve(BuildFileTypes, path, declaredMediaType, alwaysSandboxed: true,
-            extensionMediaType: IsCopcPath(path) ? CopcMediaType : null);
+            extensionMediaType: IsCopcFile(path) ? CopcMediaType : null);
 
     /// <summary>
-    /// Whether a .laz file of a build is COPC: it is named <c>*.copc.laz</c> or lies in a <c>copc/</c> folder. The
-    /// other .laz files of a build are the tiles of an EPT dataset, which are plain LAZ.
+    /// Whether a .laz file of a build is COPC: its name has the suffix of the COPC format (<c>*.copc.laz</c>), as the
+    /// file of every COPC artifact of libddb has. The folder it lies in says nothing (the layout of a build is
+    /// libddb's): the other .laz files of a build are the tiles of an EPT dataset, which are plain LAZ.
     /// </summary>
-    private static bool IsCopcPath(string path)
-    {
-        var segments = path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length == 0 || !segments[^1].EndsWith(".laz", StringComparison.OrdinalIgnoreCase)) return false;
+    private static bool IsCopcFile(string path) => path.EndsWith(CopcSuffix, StringComparison.OrdinalIgnoreCase);
 
-        return segments[^1].EndsWith(".copc.laz", StringComparison.OrdinalIgnoreCase)
-               || segments[..^1].Any(s => string.Equals(s, "copc", StringComparison.OrdinalIgnoreCase));
-    }
+    // The suffix of a COPC file name: a LAZ file with the COPC layout
+    private const string CopcSuffix = ".copc.laz";
 
     /// <summary>The media type and disposition of a raw file of a dataset.</summary>
     public static ServedContent ForEntry(string path) =>
@@ -140,7 +136,7 @@ public static class UserContentPolicy
     private static ServedContent Resolve(FrozenDictionary<string, string> allowed, string path,
         string? declaredMediaType, bool alwaysSandboxed, string? extensionMediaType = null)
     {
-        var extension = Path.GetExtension(path).TrimStart('.');
+        var extension = Path.GetExtension(path);
         if (!allowed.TryGetValue(extension, out var mediaType))
             return new ServedContent(OctetStream, Inline: false, Sandbox);
 

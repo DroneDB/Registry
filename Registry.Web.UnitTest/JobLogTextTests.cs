@@ -56,6 +56,35 @@ public class JobLogTextTests
             .ShouldBe($"Cannot open {JobLogText.DatasetPlaceholder}{Path.DirectorySeparatorChar}a.tif: not a raster");
     }
 
+    // libddb may print the folder with its links resolved: a dataset folder reached through a linked folder (a data
+    // volume mounted by a link) is the dataset in that form too
+    [Test]
+    public void TheFormOfTheFolderWithItsLinksResolved_IsTheDatasetToo()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ddb-user-message-" + Guid.NewGuid().ToString("N"));
+        var real = Path.Combine(root, "volume", "datasets");
+        Directory.CreateDirectory(Path.Combine(real, "org", "ds"));
+        try
+        {
+            var link = Path.Combine(root, "data");
+            Directory.CreateSymbolicLink(link, real);
+            var given = Path.Combine(link, "org", "ds");
+
+            JobLogText.UserMessage($"Cannot open {Path.Combine(real, "org", "ds", "a.tif")}: not a raster", given)
+                .ShouldBe($"Cannot open {JobLogText.DatasetPlaceholder}{Path.DirectorySeparatorChar}a.tif: not a raster");
+            JobLogText.UserMessage($"Cannot open {Path.Combine(given, "a.tif")}: not a raster", given)
+                .ShouldBe($"Cannot open {JobLogText.DatasetPlaceholder}{Path.DirectorySeparatorChar}a.tif: not a raster");
+        }
+        catch (IOException) when (OperatingSystem.IsWindows())
+        {
+            Assert.Ignore("Creating a symbolic link needs a privilege this account does not have");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Test]
     public void AnyOtherAbsolutePath_IsAServerPath()
     {
