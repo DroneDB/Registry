@@ -20,6 +20,8 @@ namespace Registry.Web.Test;
 [TestFixture]
 public class SystemTaskSubmitterTest
 {
+    private static readonly string[] Bands = ["b1.tif", "b2.tif"];
+
     private Mock<IHeavyTool> _tool = null!;
     private Mock<IHeavyToolRegistry> _registry = null!;
     private Mock<IBackgroundJobsProcessor> _processor = null!;
@@ -85,7 +87,7 @@ public class SystemTaskSubmitterTest
     {
         var merge = new Registry.Web.Services.HeavyTasks.Tools.MergeMultispectralTool(Support.TestPaths.Policy);
         _registry.Setup(r => r.Resolve("merge-multispectral", null)).Returns(merge);
-        var prms = JsonSerializer.SerializeToElement(new { paths = new[] { "b1.tif", "b2.tif" }, outputPath = "m.tif" });
+        var prms = JsonSerializer.SerializeToElement(new { paths = Bands, outputPath = "m.tif" });
 
         await CreateSubmitter().SubmitAsync("merge-multispectral", "org", "ds", Mock.Of<IDDB>(), null, prms);
 

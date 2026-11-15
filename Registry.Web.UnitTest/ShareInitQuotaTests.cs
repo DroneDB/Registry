@@ -68,13 +68,15 @@ public class ShareInitQuotaTests
         _datasets.Setup(d => d.AddNew(It.IsAny<string>(), It.IsAny<DatasetNewDto>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string orgSlug, DatasetNewDto dto, CancellationToken _) =>
             {
+                // The share names the dataset it creates
+                var slug = dto.Slug.ShouldNotBeNull();
                 _context.Datasets.Add(new Dataset
                 {
-                    Slug = dto.Slug, Organization = _context.Organizations.Single(o => o.Slug == orgSlug),
+                    Slug = slug, Organization = _context.Organizations.Single(o => o.Slug == orgSlug),
                     InternalRef = Guid.NewGuid(), CreationDate = DateTime.UtcNow
                 });
                 _context.SaveChanges();
-                return new DatasetDto { Slug = dto.Slug };
+                return new DatasetDto { Slug = slug };
             });
 
         var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings());

@@ -48,11 +48,11 @@ SELECT c.Id AS Id,
 FROM (SELECT Id, OrganizationSlug, Slug,
              ROW_NUMBER() OVER (PARTITION BY OrganizationSlug, Slug ORDER BY Id) AS CopyNo
       FROM Datasets) c
-WHERE c.CopyNo > 1",
+WHERE c.CopyNo > 1;",
             @"UPDATE Datasets
 SET Slug = (SELECT r.NewSlug FROM DatasetSlugRepair r WHERE r.Id = Datasets.Id)
-WHERE Id IN (SELECT Id FROM DatasetSlugRepair)",
-            "DROP TABLE DatasetSlugRepair"
+WHERE Id IN (SELECT Id FROM DatasetSlugRepair);",
+            "DROP TABLE DatasetSlugRepair;"
         ];
 
         /// <inheritdoc />

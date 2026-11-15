@@ -348,9 +348,9 @@ public class RemoteRegistryClientImportTests
                 Downloaded.Add(path);
 
             if (stallExcept != null && path != stallExcept)
-                await Task.Delay(Timeout.Infinite, ct);
+                await ct.WhenCancelled();
             if (Interlocked.Increment(ref _served) > stallFrom)
-                await Task.Delay(Timeout.Infinite, ct);
+                await ct.WhenCancelled();
 
             onDownload?.Invoke(path);
             return new HttpResponseMessage(status) { Content = new ByteArrayContent("data"u8.ToArray()) };

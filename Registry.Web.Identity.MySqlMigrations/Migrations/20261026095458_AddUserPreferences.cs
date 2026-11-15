@@ -26,7 +26,7 @@ namespace Registry.Web.Identity.MySqlMigrations.Migrations
                 nullable: true)
                 .Annotation("MySql:CharSet", "utf8mb4");
 
-            migrationBuilder.Sql($"UPDATE `AspNetUsers` SET `Preferences` = '{EmptyPreferences}'");
+            migrationBuilder.Sql($"UPDATE `AspNetUsers` SET `Preferences` = '{EmptyPreferences}';");
 
             migrationBuilder.AlterColumn<string>(
                 name: "Preferences",

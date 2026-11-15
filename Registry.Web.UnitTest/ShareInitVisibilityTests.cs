@@ -72,13 +72,15 @@ public class ShareInitVisibilityTests
             .ReturnsAsync((string orgSlug, DatasetNewDto dto, CancellationToken _) =>
             {
                 _created.Add(dto);
+                // The share names the dataset it creates
+                var slug = dto.Slug.ShouldNotBeNull();
                 _context.Datasets.Add(new Dataset
                 {
-                    Slug = dto.Slug, Organization = _context.Organizations.Single(o => o.Slug == orgSlug),
+                    Slug = slug, Organization = _context.Organizations.Single(o => o.Slug == orgSlug),
                     InternalRef = Guid.NewGuid(), CreationDate = DateTime.UtcNow
                 });
                 _context.SaveChanges();
-                return new DatasetDto { Slug = dto.Slug };
+                return new DatasetDto { Slug = slug };
             });
         _datasets.Setup(d => d.Delete(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns((string orgSlug, string dsSlug, CancellationToken _) =>
@@ -183,8 +185,9 @@ public class ShareInitVisibilityTests
         await _manager.Initialize(new ShareInitDto { OrgSlug = Org, DatasetName = longName });
 
         var dto = _created.ShouldHaveSingleItem();
-        dto.Slug.ShouldBe(new string('a', 126) + "-2");
-        dto.Slug.Length.ShouldBe(128);
+        var slug = dto.Slug.ShouldNotBeNull();
+        slug.ShouldBe(new string('a', 126) + "-2");
+        slug.Length.ShouldBe(128);
     }
 
     [Test]

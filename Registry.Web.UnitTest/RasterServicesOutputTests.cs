@@ -39,6 +39,8 @@ namespace Registry.Web.Test;
 [TestFixture]
 public class RasterServicesOutputTests
 {
+    private static readonly string[] Bands = ["b1.tif", "b2.tif"];
+
     private const string Org = "org";
     private const string Ds = "ds";
     private const string Folder = "/datasets/org/ds";
@@ -184,7 +186,7 @@ public class RasterServicesOutputTests
 
         await _services.Processing.MergeMultispectralAsync(Org, Ds, ["b1.tif", "b2.tif"], "merged.tif", overwrite: true);
 
-        _ddb.Verify(d => d.MergeMultispectral(new[] { "b1.tif", "b2.tif" }, "Merged.tif", true), Times.Once);
+        _ddb.Verify(d => d.MergeMultispectral(Bands, "Merged.tif", true), Times.Once);
         _ddb.Verify(d => d.AddRaw("Merged.tif"), Times.Once);
         // libddb replaces it once the merge is complete (FR-PRC-01): nothing deletes it before
         _fs.Verify(f => f.Delete(It.IsAny<string>()), Times.Never);
@@ -234,7 +236,7 @@ public class RasterServicesOutputTests
         await _services.Processing.MergeMultispectralAsync(Org, Ds, ["b1.tif", "b2.tif"], "merged.tif", overwrite: true);
 
         // Nothing to replace: libddb refuses a file that another writer creates meanwhile
-        _ddb.Verify(d => d.MergeMultispectral(new[] { "b1.tif", "b2.tif" }, "merged.tif", false), Times.Once);
+        _ddb.Verify(d => d.MergeMultispectral(Bands, "merged.tif", false), Times.Once);
         _ddb.Verify(d => d.MergeMultispectral(It.IsAny<string[]>(), It.IsAny<string>(), true), Times.Never);
         _ddb.Verify(d => d.AddRaw("merged.tif"), Times.Once);
     }

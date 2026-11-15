@@ -25,6 +25,8 @@ namespace Registry.Web.Test;
 [TestFixture]
 public class NodeOdxProgressTests
 {
+    private static readonly string[] QualityChoices = ["ultra", "high", "medium"];
+
     private static readonly NodeOdxEndpoint Node = new("n1", "http://node", null, null);
 
     private sealed class Reports : IProgress<HeavyToolProgress>
@@ -49,8 +51,8 @@ public class NodeOdxProgressTests
             It.IsAny<CancellationToken>())).ReturnsAsync(() => lines.MoveNext() ? lines.Current : []);
         client.Setup(c => c.DownloadAssetAsync(It.IsAny<NodeOdxEndpoint>(), "uuid-1", "all.zip", It.IsAny<string>(),
                 It.IsAny<CancellationToken>()))
-            .Returns<NodeOdxEndpoint, string, string, string, CancellationToken>((_, _, _, path, _) =>
-                System.IO.File.WriteAllBytesAsync(path, [1]));
+            .Returns<NodeOdxEndpoint, string, string, string, CancellationToken>((_, _, _, path, ct) =>
+                System.IO.File.WriteAllBytesAsync(path, [1], ct));
         var platform = TestSettings.Options<ProcessingPlatformSettings>(new AppSettings
         {
             ProcessingPlatform = new ProcessingPlatformSettings
@@ -291,7 +293,8 @@ public class NodeOdxProgressTests
     {
         var (runner, client) = Runner(Done, [[]]);
         client.Setup(c => c.DownloadAssetAsync(It.IsAny<NodeOdxEndpoint>(), "uuid-1", "all.zip", It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Returns<NodeOdxEndpoint, string, string, string, CancellationToken>((_, _, _, path, _) => System.IO.File.WriteAllBytesAsync(path, []));
+            .Returns<NodeOdxEndpoint, string, string, string, CancellationToken>((_, _, _, path, ct) =>
+                System.IO.File.WriteAllBytesAsync(path, [], ct));
 
         var ex = await Should.ThrowAsync<InvalidOperationException>(() =>
             runner.RunAsync(Node, "run", ["a.jpg", "b.jpg"], null, new Reports(), CancellationToken.None));
@@ -376,7 +379,7 @@ public class NodeOdxProgressTests
         var client = new Mock<INodeOdxClient>();
         client.Setup(c => c.GetOptionsAsync(It.IsAny<NodeOdxEndpoint>(), It.IsAny<CancellationToken>())).ReturnsAsync(
         [
-            new NodeOdxOption("feature-quality", "enum", new[] { "ultra", "high", "medium" },
+            new NodeOdxOption("feature-quality", "enum", QualityChoices,
                 "Quality: %(choices)s. Default: %(default)s", "high"),
             new NodeOdxOption("orthophoto-resolution", "float", "cm/pixel", "Resolution (default %(default)s) {default}", 5.0),
             new NodeOdxOption("dsm", "bool", null, "Build a DSM: %(default)s", false),

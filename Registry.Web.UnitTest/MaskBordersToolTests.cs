@@ -78,7 +78,7 @@ public class MaskBordersToolTests
     private static HeavyToolRequest Overwrite(string path = "ortho/black.tif") =>
         Request(new { path, overwrite = true });
 
-    private Task Execute(HeavyToolRequest request) =>
+    private Task<HeavyToolArtifact?> Execute(HeavyToolRequest request) =>
         _tool.ExecuteAsync(request, _h.Ctx.Object, new Progress<HeavyToolProgress>(), CancellationToken.None);
 
     [Test]

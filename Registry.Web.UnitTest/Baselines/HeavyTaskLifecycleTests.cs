@@ -1,3 +1,4 @@
+using System.Globalization;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -137,7 +138,7 @@ public class HeavyTaskLifecycleTests
     private static PerformContext Context(int retryCount)
     {
         var connection = new Mock<IStorageConnection>();
-        connection.Setup(c => c.GetJobParameter(TaskId, "RetryCount")).Returns(retryCount.ToString());
+        connection.Setup(c => c.GetJobParameter(TaskId, "RetryCount")).Returns(retryCount.ToString(CultureInfo.InvariantCulture));
         return new(null, connection.Object,
             new BackgroundJob(TaskId, Job.FromExpression<HealthCheckJob>(j => j.Ping(null)), DateTime.UtcNow),
             Mock.Of<IJobCancellationToken>());

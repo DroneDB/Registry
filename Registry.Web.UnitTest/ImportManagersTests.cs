@@ -83,7 +83,7 @@ public class ImportManagersTests
 
         _datasetsManager = new Mock<IDatasetsManager>();
         _datasetsManager.Setup(m => m.AddNew(Org, It.IsAny<DatasetNewDto>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((string _, DatasetNewDto d, CancellationToken _) => new DatasetDto { Slug = d.Slug });
+            .ReturnsAsync((string _, DatasetNewDto d, CancellationToken _) => new DatasetDto { Slug = d.Slug.ShouldNotBeNull() });
 
         _datasets = new Mock<IDatasetResolver>();
         _datasets.Setup(d => d.GetDatasetAsync(Org, It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))

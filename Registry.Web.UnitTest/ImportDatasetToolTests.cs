@@ -29,6 +29,9 @@ namespace Registry.Web.Test;
 [TestFixture]
 public class ImportDatasetToolTests
 {
+    private static readonly string[] FirstImport = ["a.jpg"];
+    private static readonly string[] SecondImport = ["b.jpg", "earlier.jpg"];
+
     private string _dataset = null!;
     private FakeTaskWriteRecorder _recorder = null!;
     private Mock<IDDB> _ddb = null!;
@@ -79,7 +82,7 @@ public class ImportDatasetToolTests
     private static HeavyToolRequest Request(long? budgetBytes = null) => new("import-dataset", "1", "org", "ds", null,
         JsonSerializer.SerializeToElement(new { sourceType = "registry", budgetBytes, @params = new { } }));
 
-    private Task Execute(ImportDatasetTool tool, CancellationToken ct = default) =>
+    private Task<HeavyToolArtifact?> Execute(ImportDatasetTool tool, CancellationToken ct = default) =>
         tool.ExecuteAsync(Request(), _ctx, new Progress<HeavyToolProgress>(), ct);
 
     [Test]
@@ -98,7 +101,7 @@ public class ImportDatasetToolTests
 
         await Execute(ToolFor(source));
 
-        _ddb.Verify(d => d.AddRawBatch(It.Is<IReadOnlyList<string>>(p => p.SequenceEqual(new[] { "a.jpg" }))), Times.Once);
+        _ddb.Verify(d => d.AddRawBatch(It.Is<IReadOnlyList<string>>(p => p.SequenceEqual(FirstImport))), Times.Once);
         _recorder.Paths.ShouldBe(["a.jpg"]);
     }
 
@@ -117,7 +120,7 @@ public class ImportDatasetToolTests
         await Execute(ToolFor(source));
 
         _ddb.Verify(d => d.AddRawBatch(It.Is<IReadOnlyList<string>>(p =>
-            p.SequenceEqual(new[] { "b.jpg", "earlier.jpg" }))), Times.Once);
+            p.SequenceEqual(SecondImport))), Times.Once);
     }
 
     [Test]

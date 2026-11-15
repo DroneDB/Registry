@@ -143,7 +143,7 @@ public sealed class OpenApiTests : IDisposable
             .SelectMany(o => o.Operation["responses"]!.AsObject()
                 .Where(r => int.Parse(r.Key, System.Globalization.CultureInfo.InvariantCulture) >= 400 &&
                             r.Value!["content"] is JsonObject content && content.ContainsKey("application/json") &&
-                            content["application/json"]!["schema"]?["$ref"]?.GetValue<string>().EndsWith("ProblemDetails") == true)
+                            content["application/json"]!["schema"]?["$ref"]?.GetValue<string>().EndsWith("ProblemDetails", StringComparison.Ordinal) == true)
                 .Select(r => $"{o.Key} {r.Key}"))
             .ToList();
 

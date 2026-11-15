@@ -35,6 +35,8 @@ namespace Registry.Web.Test;
 [NonParallelizable]
 public sealed class UserRolesHttpTests : IDisposable
 {
+    private static readonly string[] ViewerRole = ["viewer"];
+
     private const string Admin = RegistryWebFactory.AdminUserName;
     private const string Password = "Password1234";
     private static readonly string[] DeactivatedOnly = [ApplicationDbContext.DeactivatedRoleName];
@@ -210,7 +212,7 @@ public sealed class UserRolesHttpTests : IDisposable
         const string user = "noaddress";
         await _factory.CreateUserAsync(user, password: Password);
 
-        using (var omitted = await SendAsync(HttpMethod.Put, $"/users/{user}", content: JsonContent.Create(new { roles = new[] { "viewer" } })))
+        using (var omitted = await SendAsync(HttpMethod.Put, $"/users/{user}", content: JsonContent.Create(new { roles = ViewerRole })))
             omitted.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await FindUser(user)).Email.ShouldBe($"{user}@example.com");
         (await RolesOf(user)).ShouldBe(["viewer"]);

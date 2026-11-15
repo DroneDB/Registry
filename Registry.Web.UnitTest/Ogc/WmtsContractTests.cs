@@ -1,3 +1,4 @@
+using System.Globalization;
 using System;
 using System.Linq;
 using System.Reflection;
@@ -52,8 +53,11 @@ public class WmtsContractTests
         var url = template.Replace("{Style}", "default").Replace("{TileMatrixSet}", "GoogleMapsCompatible")
             .Replace("{TileMatrix}", "3").Replace("{TileRow}", "2").Replace("{TileCol}", "1");
         var parts = url[(url.IndexOf("/wmts/1.0.0/", StringComparison.Ordinal) + "/wmts/1.0.0/".Length)..].Split('/');
+        parts.Length.ShouldBe(6);
         var file = parts[5].Split('.');
-        return (parts[0], parts[1], parts[2], int.Parse(parts[3]), int.Parse(parts[4]), int.Parse(file[0]), file[1]);
+        file.Length.ShouldBe(2);
+        return (parts[0], parts[1], parts[2], int.Parse(parts[3], CultureInfo.InvariantCulture),
+            int.Parse(parts[4], CultureInfo.InvariantCulture), int.Parse(file[0], CultureInfo.InvariantCulture), file[1]);
     }
 
     private static string PngTemplateOf(string capabilities) =>
@@ -64,7 +68,8 @@ public class WmtsContractTests
         var (layer, style, tms, z, y, x, ext) = RouteOf(template);
         var result = await new WmtsController(world.Wmts()).Restful("org", "ds", layer, style, tms, z, y, x, ext, default);
         result.ShouldBeOfType<FileContentResult>().ContentType.ShouldBe("image/png");
-        var cogs = world.Ddb.Invocations.Where(i => i.Method.Name == "GenerateTile").Select(i => (string)i.Arguments[0]).ToList();
+        var cogs = world.Ddb.Invocations.Where(i => i.Method.Name == "GenerateTile")
+            .Select(i => i.Arguments[0].ShouldBeOfType<string>()).ToList();
         return cogs.Single();
     }
 
@@ -198,19 +203,13 @@ public class WmtsContractTests
         var capabilities = await world.Wmts().GetCapabilitiesAsync("org", "ds");
         var template = ResourceUrls(capabilities).First(u => (string?)u.Attribute("format") == "image/png")
             .Attribute("template")!.Value;
-        var url = template.Replace("{Style}", "default").Replace("{TileMatrixSet}", "GoogleMapsCompatible")
-            .Replace("{TileMatrix}", "3").Replace("{TileRow}", "2").Replace("{TileCol}", "1");
 
         // The route is the template of the capabilities: layer/style/matrix set/matrix/row/column.extension
         typeof(WmtsController).GetMethod(nameof(WmtsController.Restful))!.GetCustomAttribute<HttpGetAttribute>()!
             .Template!.ShouldStartWith("wmts/1.0.0/{layer}/{style}/{tms}/{z:int}/{y:int}/{x:int}.");
-        var parts = url[(url.IndexOf("/wmts/1.0.0/", StringComparison.Ordinal) + "/wmts/1.0.0/".Length)..].Split('/');
-        parts.Length.ShouldBe(6);
-        var file = parts[5].Split('.');
-        file.Length.ShouldBe(2);
+        var (layer, style, tms, z, y, x, ext) = RouteOf(template);
 
-        var result = await new WmtsController(world.Wmts()).Restful("org", "ds", parts[0], parts[1],
-            parts[2], int.Parse(parts[3]), int.Parse(parts[4]), int.Parse(file[0]), file[1], default);
+        var result = await new WmtsController(world.Wmts()).Restful("org", "ds", layer, style, tms, z, y, x, ext, default);
 
         result.ShouldBeOfType<FileContentResult>().ContentType.ShouldBe("image/png");
     }

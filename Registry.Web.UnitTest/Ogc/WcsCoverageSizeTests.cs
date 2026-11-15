@@ -1,3 +1,4 @@
+using System.Globalization;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -28,7 +29,7 @@ public class WcsCoverageSizeTests
     private const double Dx = 1.0 / OgcContractWorld.NativeWidth;
     private const double Dy = 1.0 / OgcContractWorld.NativeHeight;
 
-    private static IQueryCollection Query(params (string Key, string Value)[] pairs) =>
+    private static QueryCollection Query(params (string Key, string Value)[] pairs) =>
         new QueryCollection(pairs.GroupBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => new StringValues(g.Select(p => p.Value).ToArray()), StringComparer.OrdinalIgnoreCase));
 
@@ -37,14 +38,14 @@ public class WcsCoverageSizeTests
     private static string Lat(int pixels) => FormattableString.Invariant($"{41 - pixels * Dy:R}");
 
     // A request for the part of the coverage that is the top-left <width> x <height> pixels
-    private static IQueryCollection Version20(int width, int height, params (string Key, string Value)[] more) =>
+    private static QueryCollection Version20(int width, int height, params (string Key, string Value)[] more) =>
         Query([("COVERAGEID", Layer), ("FORMAT", "image/tiff"),
             ("SUBSET", $"Long(10,{Lon(width)})"), .. more, ("SUBSET", $"Lat({Lat(height)},41)")]);
 
     private static (int Width, int Height) RenderedSize(OgcContractWorld world)
     {
         var call = world.Wrapper.Invocations.Single(i => i.Method.Name == "RenderRasterRegion");
-        return ((int)call.Arguments[3], (int)call.Arguments[4]);
+        return (call.Arguments[3].ShouldBeOfType<int>(), call.Arguments[4].ShouldBeOfType<int>());
     }
 
     // ---- GetCoverage without a subset: the grid DescribeCoverage gives (or the exception above the limit) ----
@@ -198,8 +199,8 @@ public class WcsCoverageSizeTests
     public async Task Wcs10_WidthAbove4096_IsHonoured_AndAbove8192IsAnException()
     {
         var world = new OgcContractWorld();
-        IQueryCollection Asked(int width) => Query(("COVERAGE", Layer), ("FORMAT", "GeoTIFF"), ("CRS", "EPSG:4326"),
-            ("BBOX", "10,40,11,41"), ("WIDTH", width.ToString()), ("HEIGHT", "100"));
+        QueryCollection Asked(int width) => Query(("COVERAGE", Layer), ("FORMAT", "GeoTIFF"), ("CRS", "EPSG:4326"),
+            ("BBOX", "10,40,11,41"), ("WIDTH", width.ToString(CultureInfo.InvariantCulture)), ("HEIGHT", "100"));
 
         await world.Wcs().GetCoverageAsync("org", "ds", "1.0.0", Asked(8000));
         RenderedSize(world).ShouldBe((8000, 100));

@@ -64,8 +64,8 @@ public interface ITaskWriteRecordStore
     /// <summary>Appends paths and folders the task is about to create in <paramref name="dataset"/>.</summary>
     /// <exception cref="TaskWriteRecordClosedException">A rollback claimed the record.</exception>
     Task RecordAsync(string taskId, DatasetKey dataset, IReadOnlyCollection<string> paths,
-        IReadOnlyCollection<string> folders, CancellationToken ct = default,
-        IReadOnlyDictionary<string, string>? stamps = null);
+        IReadOnlyCollection<string> folders, IReadOnlyDictionary<string, string>? stamps = null,
+        CancellationToken ct = default);
 
     /// <summary>Records the dataset the task created (photogrammetry creates it in the worker).</summary>
     /// <exception cref="TaskWriteRecordClosedException">A rollback claimed the record.</exception>
@@ -75,7 +75,7 @@ public interface ITaskWriteRecordStore
     /// open → committed (already committed: true); false when a cancel was requested or a rollback claimed it. The
     /// sources the task deletes after its commit (<paramref name="sources"/>) are written with the commit.
     /// </summary>
-    Task<bool> MarkCommittedAsync(string taskId, CancellationToken ct = default, TaskCommittedSources? sources = null);
+    Task<bool> MarkCommittedAsync(string taskId, TaskCommittedSources? sources = null, CancellationToken ct = default);
 
     /// <summary>
     /// open → cancelRequested; refused (<see cref="TaskCancelRequestResult.Committed"/>) for a committed record. A record

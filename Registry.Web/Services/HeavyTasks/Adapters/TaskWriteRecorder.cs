@@ -134,9 +134,9 @@ public sealed class TaskWriteRecorder : ITaskWriteRecorder, IDisposable
                 foreach (var dataset in batch.Select(p => p.Dataset).Concat(stamps.Select(s => s.Dataset)).Distinct())
                     await _store.RecordAsync(_taskId, dataset,
                         [.. batch.Where(p => p.Dataset == dataset && !p.IsFolder).Select(p => p.Path)],
-                        [.. batch.Where(p => p.Dataset == dataset && p.IsFolder).Select(p => p.Path)], ct,
+                        [.. batch.Where(p => p.Dataset == dataset && p.IsFolder).Select(p => p.Path)],
                         stamps.Where(s => s.Dataset == dataset)
-                            .GroupBy(s => s.Path).ToDictionary(g => g.Key, g => g.Last().Stamp));
+                            .GroupBy(s => s.Path).ToDictionary(g => g.Key, g => g.Last().Stamp), ct);
 
                 // Removed once written: a failed write leaves them for the rollback
                 lock (_lock)
@@ -157,7 +157,7 @@ public sealed class TaskWriteRecorder : ITaskWriteRecorder, IDisposable
     {
         var store = Store();
         await FlushAsync(ct);
-        if (!await store.MarkCommittedAsync(_taskId, ct, CommittedSources))
+        if (!await store.MarkCommittedAsync(_taskId, CommittedSources, ct))
             throw TaskWriteRecordClosedException.Cancelled(_taskId);
     }
 

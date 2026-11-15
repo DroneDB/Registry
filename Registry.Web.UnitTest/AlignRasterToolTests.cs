@@ -177,7 +177,7 @@ public class AlignRasterToolTests
             ["overwrite"] = overwrite
         }.Where(kv => kv.Value != null).ToDictionary()));
 
-    private Task Execute(HeavyToolRequest request) =>
+    private Task<HeavyToolArtifact?> Execute(HeavyToolRequest request) =>
         _tool.ExecuteAsync(request, _h.Ctx.Object, new Progress<HeavyToolProgress>(), CancellationToken.None);
 
     // FR-PRC-06: the validation of libddb refuses rasters that do not overlap (after reprojection when their CRS

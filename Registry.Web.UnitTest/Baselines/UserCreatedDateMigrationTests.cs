@@ -60,7 +60,7 @@ public class UserCreatedDateMigrationTests
     private static string PreviousMigration(DbContext context) =>
         context.Database.GetMigrations().TakeWhile(m => m != Migration(context)).Last();
 
-    private static Task InsertUserAsync(ApplicationDbContext context, string id) =>
+    private static Task<int> InsertUserAsync(ApplicationDbContext context, string id) =>
         context.Database.ExecuteSqlRawAsync(
             "INSERT INTO AspNetUsers (Id, UserName, Metadata, Preferences, EmailConfirmed, PhoneNumberConfirmed, " +
             "TwoFactorEnabled, LockoutEnabled, AccessFailedCount) VALUES ({0}, {0}, '{{}}', '{{}}', 0, 0, 0, 0, 0)", id);

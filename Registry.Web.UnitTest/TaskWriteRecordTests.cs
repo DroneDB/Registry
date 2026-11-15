@@ -1234,7 +1234,7 @@ public class TaskRollbackTests
         // The worker's message for the same task (HeavyTaskJobWrapper, on a re-run)
         row.ErrorMessage.ShouldBe(TaskCommittedLostException
             .For(["bands/red.tif", "bands/nir.tif"], p => p == "bands/nir.tif").Message);
-        row.ErrorMessage.ShouldContain("'bands/nir.tif'");
+        row.ErrorMessage.ShouldNotBeNull().ShouldContain("'bands/nir.tif'");
         ds.Exists("merged.tif").ShouldBeTrue("the output of a committed task stays");
         _env.Record("1")!.State.ShouldBe(TaskWriteState.Committed);
     }

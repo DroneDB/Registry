@@ -50,7 +50,7 @@ JOIN (
           FROM Datasets) c
     WHERE c.CopyNo > 1
 ) r ON r.Id = d.Id
-SET d.Slug = r.NewSlug";
+SET d.Slug = r.NewSlug;";
 
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
