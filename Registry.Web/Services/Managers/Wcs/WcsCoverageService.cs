@@ -33,13 +33,14 @@ public class WcsCoverageService : OgcManagerBase
     internal const int FallbackGridSize = 1024;
 
     public WcsCoverageService(OgcManagerDependencies dependencies, RasterInfoCache rasterInfo,
-        ILogger<WcsCoverageService> logger, INativeWorkGate? gate = null, IOptions<DownloadOptions>? downloads = null)
+        IOptions<DownloadOptions> downloads, ILogger<WcsCoverageService> logger, INativeWorkGate? gate = null)
         : base(dependencies)
     {
+        ArgumentNullException.ThrowIfNull(downloads);
         _logger = logger;
         _rasterInfo = rasterInfo;
         _gate = gate ?? Services.Adapters.NativeWorkGate.Default;
-        _downloads = downloads?.Value ?? new DownloadOptions();
+        _downloads = downloads.Value;
     }
 
     /// <summary>
