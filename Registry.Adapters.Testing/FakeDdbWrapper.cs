@@ -407,17 +407,7 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
         int tileSize, bool tms, bool forceRecreate, string inputPathHash,
         string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
-        double? nodata) => throw Unsupported();
-
-    public virtual byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
-        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
-        string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
-        RasterAnalysisOptions? options) => throw Unsupported();
-
-    public virtual byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
-        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
-        string? preset = null, string? bands = null, string? formula = null,
-        string? bandFilter = null, string? colormap = null, string? rescale = null) => throw Unsupported();
+        RasterAnalysisOptions? options, string outputFormat) => throw Unsupported();
 
     public virtual string ValidateMergeMultispectral(string[] paths) => throw Unsupported();
 
@@ -504,10 +494,17 @@ public class FakeDdbWrapper : IDdbWrapper
         bool overwrite = false) => throw Unsupported();
 
     public virtual byte[] RenderRasterRegion(string inputPath, double[] bbox, string bboxSrs,
-        int width, int height, string format, int[]? bands = null, string? outputCrs = null) => throw Unsupported();
+        int width, int height, string format, int[]? bands = null, string? outputCrs = null, uint? background = null) =>
+        throw Unsupported();
 
     public virtual byte[] RenderRasterIndex(string inputPath, string indexName, double[] bbox,
-        string bboxSrs, int width, int height, string format) => throw Unsupported();
+        string bboxSrs, int width, int height, string format, uint? background = null) => throw Unsupported();
+
+    public virtual void RenderRasterRegionPixels(string inputPath, double[] bbox, string bboxSrs, int width,
+        int height, RasterPixelsReader read) => throw Unsupported();
+
+    public virtual void RenderRasterIndexPixels(string inputPath, string indexName, double[] bbox, string bboxSrs,
+        int width, int height, RasterPixelsReader read) => throw Unsupported();
 
     public virtual string QueryRasterPoint(string inputPath, double x, double y, string? srs = null) =>
         throw Unsupported();

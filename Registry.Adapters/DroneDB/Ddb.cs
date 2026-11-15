@@ -501,37 +501,13 @@ public class DDB : IDDB
 
     public byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
         string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
-        RasterAnalysisOptions? options)
+        RasterAnalysisOptions? options, string format)
     {
         return Wrap(() =>
         {
             var fullPath = GetLocalPath(inputPath);
             return Wrapper.GenerateMemoryTileEx(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
-                inputPathHash, preset, bands, formula, bandFilter, colormap, rescale, options);
-        }, ex => $"Cannot generate tile ex of '{inputPath}'");
-    }
-
-    public byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
-        string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
-        double? nodata)
-    {
-        return Wrap(() =>
-        {
-            var fullPath = GetLocalPath(inputPath);
-            return Wrapper.GenerateMemoryTileEx(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
-                inputPathHash, preset, bands, formula, bandFilter, colormap, rescale, nodata);
-        }, ex => $"Cannot generate tile ex of '{inputPath}'");
-    }
-
-    public byte[] GenerateTileEx(string inputPath, int tz, int tx, int ty, bool retina, string inputPathHash,
-        string? preset = null, string? bands = null, string? formula = null,
-        string? bandFilter = null, string? colormap = null, string? rescale = null)
-    {
-        return Wrap(() =>
-        {
-            var fullPath = GetLocalPath(inputPath);
-            return Wrapper.GenerateMemoryTileEx(fullPath, tz, tx, ty, retina ? 512 : 256, true, false,
-                inputPathHash, preset, bands, formula, bandFilter, colormap, rescale);
+                inputPathHash, preset, bands, formula, bandFilter, colormap, rescale, options, format);
         }, ex => $"Cannot generate tile ex of '{inputPath}'");
     }
 

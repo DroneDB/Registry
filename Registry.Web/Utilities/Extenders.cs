@@ -11,7 +11,6 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Data.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
-using SkiaSharp;
 using Entry = Registry.Ports.DroneDB.Entry;
 
 namespace Registry.Web.Utilities;
@@ -367,30 +366,5 @@ public static class Extenders
     public static SafeMetaManager GetSafe(this IMetaManager manager)
     {
         return new SafeMetaManager(manager);
-    }
-
-    /// <summary>
-    /// Decodes an image byte array and encodes it again in <paramref name="format"/>.
-    /// </summary>
-    /// <param name="bytes">The source image byte array.</param>
-    /// <param name="format">The target format (the encoder of SkiaSharp: PNG, JPEG or WebP).</param>
-    /// <param name="quality">The quality of the image (0-100); ignored by lossless PNG.</param>
-    /// <returns>A byte array containing the encoded image.</returns>
-    /// <exception cref="ArgumentException"></exception>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
-    /// <exception cref="InvalidOperationException"></exception>
-    public static byte[] Encode(this byte[] bytes, SKEncodedImageFormat format, int quality = 70)
-    {
-        if (bytes == null || bytes.Length == 0)
-            throw new ArgumentException("Source image is null or empty.", nameof(bytes));
-
-        if (quality is < 0 or > 100)
-            throw new ArgumentOutOfRangeException(nameof(quality), "Quality must be between 0 and 100.");
-
-        using var bitmap = SKBitmap.Decode(bytes) ?? throw new InvalidOperationException("Source image could not be decoded.");
-        using var image = SKImage.FromBitmap(bitmap) ?? throw new InvalidOperationException("Failed to create image from bitmap.");
-        using var data = image.Encode(format, quality) ?? throw new InvalidOperationException($"Failed to encode image to {format}.");
-
-        return data.ToArray();
     }
 }

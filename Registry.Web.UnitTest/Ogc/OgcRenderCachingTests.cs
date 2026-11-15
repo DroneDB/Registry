@@ -84,7 +84,8 @@ public class OgcRenderCachingTests
 
         _wrapper = new Mock<IDdbWrapper>();
         _wrapper.Setup(w => w.RenderRasterRegion(It.IsAny<string>(), It.IsAny<double[]>(), It.IsAny<string>(),
-                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int[]?>(), It.IsAny<string?>()))
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int[]?>(), It.IsAny<string?>(),
+                It.IsAny<uint?>()))
             .Returns(RenderedPng);
 
         _cache = new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(new MemoryDistributedCacheOptions()));
@@ -161,10 +162,14 @@ public class OgcRenderCachingTests
     public async Task GetMap_FailedLayer_IsNotCached()
     {
         _wrapper.SetupSequence(w => w.RenderRasterRegion(It.IsAny<string>(), It.IsAny<double[]>(), It.IsAny<string>(),
-                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int[]?>(), It.IsAny<string?>()))
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int[]?>(), It.IsAny<string?>(),
+                It.IsAny<uint?>()))
             .Throws(new InvalidOperationException("warp failed")) // native single-layer render
-            .Throws(new InvalidOperationException("warp failed")) // composite retry
             .Returns(RenderedPng);
+        // The composite the failed render falls back to reads the pixels of the layer: they fail too
+        _wrapper.Setup(w => w.RenderRasterRegionPixels(It.IsAny<string>(), It.IsAny<double[]>(), It.IsAny<string>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<RasterPixelsReader>()))
+            .Throws(new InvalidOperationException("warp failed"));
         var wms = CreateWms();
 
         var degraded = await GetMap(wms, View);
@@ -174,7 +179,8 @@ public class OgcRenderCachingTests
 
         recovered.ShouldBe(RenderedPng);
         cached.ShouldBe(RenderedPng);
-        NativeRenders().ShouldBe(3);
+        NativeRenders().ShouldBe(2);
+        _wrapper.Invocations.Count(i => i.Method.Name == nameof(IDdbWrapper.RenderRasterRegionPixels)).ShouldBe(1);
     }
 
     [Test]

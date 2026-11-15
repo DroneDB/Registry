@@ -95,7 +95,8 @@ public class WmsIndexStylesTests
         _wrapper.Setup(w => w.RenderRasterIndex(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<double[]>(),
             It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>())).Returns(IndexPng);
         _wrapper.Setup(w => w.RenderRasterRegion(It.IsAny<string>(), It.IsAny<double[]>(), It.IsAny<string>(),
-            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int[]?>(), It.IsAny<string?>())).Returns(RegionPng);
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(),
+            It.IsAny<int[]?>(), It.IsAny<string?>(), It.IsAny<uint?>())).Returns(RegionPng);
 
         IDistributedCache store = TestCaches.MemoryStore();
         var cacheManager = new CacheManager(store, NullLogger<CacheManager>.Instance,

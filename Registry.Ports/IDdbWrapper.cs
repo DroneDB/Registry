@@ -243,30 +243,14 @@ public interface IDdbWrapper
         string? bandFilter, string? colormap, string? rescale, Registry.Ports.DroneDB.RasterAnalysisOptions? options);
 
     /// <summary>
-    /// Generate tile with extended visualization params and a NoData value that replaces the one of the bands
-    /// (FR-RAS-31)
+    /// Generate a tile with extended visualization params and the options of the render (the NoData value and the unit
+    /// of the rescale of a thermal formula; null for none), encoded once by libddb in <paramref name="outputFormat"/>
+    /// (<c>png</c>, <c>jpeg</c>, <c>webp</c>), so the bytes are served as they come.
     /// </summary>
     public byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
         int tileSize, bool tms, bool forceRecreate, string inputPathHash,
         string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
-        double? nodata);
-
-    /// <summary>
-    /// Generate tile with extended visualization params and the options of the render: the NoData value (FR-RAS-31) and,
-    /// the unit of the rescale of a thermal formula (D-022)
-    /// </summary>
-    public byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
-        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
-        string? preset, string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
-        Registry.Ports.DroneDB.RasterAnalysisOptions? options);
-
-    /// <summary>
-    /// Generate tile with extended visualization params
-    /// </summary>
-    public byte[] GenerateMemoryTileEx(string inputPath, int tz, int tx, int ty,
-        int tileSize, bool tms, bool forceRecreate, string inputPathHash,
-        string? preset = null, string? bands = null, string? formula = null,
-        string? bandFilter = null, string? colormap = null, string? rescale = null);
+        Registry.Ports.DroneDB.RasterAnalysisOptions? options, string outputFormat);
 
     /// <summary>
     /// Validate merge-multispectral inputs
@@ -511,10 +495,14 @@ public interface IDdbWrapper
     /// order and no alpha channel is appended.</param>
     /// <param name="outputCrs">Optional target CRS authority code (WCS OutputCRS).
     /// Null/empty means "same as <paramref name="bboxSrs"/>" (legacy behaviour).</param>
+    /// <param name="background">Optional opaque colour (0xRRGGBB) the image is composited over, with the rounding of
+    /// Skia's 8-bit compositing: the image has no transparent pixel (PNG and WebP without alpha, a JPEG with that
+    /// colour instead of white where the raster has no data). Null: the transparency of the render. Not for a
+    /// GeoTIFF.</param>
     /// <returns>Encoded image bytes.</returns>
     public byte[] RenderRasterRegion(string inputPath, double[] bbox, string bboxSrs,
                                      int width, int height, string format,
-                                     int[]? bands = null, string? outputCrs = null);
+                                     int[]? bands = null, string? outputCrs = null, uint? background = null);
 
     /// <summary>
     /// Render a spectral index (NDVI / NDRE / NDWI / EVI / SAVI) over a raster
@@ -528,8 +516,24 @@ public interface IDdbWrapper
     /// <param name="width">Output width (1..4096).</param>
     /// <param name="height">Output height (1..4096).</param>
     /// <param name="format">MIME type or shortcut ("image/png" / "png" / etc.).</param>
+    /// <param name="background">Optional opaque colour (0xRRGGBB) under the image, as for
+    /// <see cref="RenderRasterRegion"/>.</param>
     public byte[] RenderRasterIndex(string inputPath, string indexName, double[] bbox,
-                                    string bboxSrs, int width, int height, string format);
+                                    string bboxSrs, int width, int height, string format, uint? background = null);
+
+    /// <summary>
+    /// The pixels of <see cref="RenderRasterRegion"/> (the natural render, every band of the raster as the map shows
+    /// it) instead of an encoded image: RGBA, 8 bits a channel, <paramref name="width"/> x <paramref name="height"/>
+    /// x 4 bytes, rows top to bottom, straight (not premultiplied) alpha, what the PNG of the same render decodes to.
+    /// For a host that composites several renders: no encode and decode per render. The pixels are valid while
+    /// <paramref name="read"/> runs only (they are libddb's).
+    /// </summary>
+    public void RenderRasterRegionPixels(string inputPath, double[] bbox, string bboxSrs, int width, int height,
+                                         RasterPixelsReader read);
+
+    /// <summary>The pixels of <see cref="RenderRasterIndex"/>, as <see cref="RenderRasterRegionPixels"/> gives them.</summary>
+    public void RenderRasterIndexPixels(string inputPath, string indexName, double[] bbox, string bboxSrs, int width,
+                                        int height, RasterPixelsReader read);
 
     /// <summary>
     /// Sample a georeferenced raster at a geographic point (WMS GetFeatureInfo /

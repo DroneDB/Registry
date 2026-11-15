@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace Registry.Adapters.DroneDB;
 
 /// <summary>
-/// The libddb C ABI as Registry calls it (ddb.h of DroneDB 2.4.0, ABI 2.4): the only place an export
+/// The libddb C ABI as Registry calls it (ddb.h of DroneDB 2.5.0, ABI 2.5): the only place an export
 /// is declared. Every declaration is a source-generated
 /// <see cref="LibraryImportAttribute"/> stub named exactly like its export, so
 /// <see cref="DdbAbi.RequiredSymbols"/> (the startup check) is derived from this class.
@@ -260,24 +260,23 @@ internal static unsafe partial class NativeDdb
         out int outBufferSize, int tileSize, [MarshalAs(UnmanagedType.U1)] bool tms,
         [MarshalAs(UnmanagedType.U1)] bool forceRecreate, string inputPathHash, string outputFormat);
 
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBMemoryTileEx(string inputPath, int tz, int tx, int ty, int tileSize,
-        [MarshalAs(UnmanagedType.U1)] bool tms, [MarshalAs(UnmanagedType.U1)] bool forceRecreate,
-        string inputPathHash, string? preset, string? bands, string? formula, string? bandFilter, string? colormap,
-        string? rescale, out IntPtr outBuffer, out int outBufferSize);
-
     /// <summary>DDBGenerateMemoryThumbnailEx with a <c>DDBRasterOptions</c> (ABI 2.4).</summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBGenerateMemoryThumbnailEx2(string filePath, int size, string? preset,
         string? bands, string? formula, string? bandFilter, string? colormap, string? rescale,
         NativeRasterOptions* options, out IntPtr outBuffer, out int outBufferSize);
 
-    /// <summary>DDBMemoryTileEx with a <c>DDBRasterOptions</c> (ABI 2.4).</summary>
+    /// <summary>
+    /// The visualization tile with a <c>DDBRasterOptions</c>, encoded once by libddb in <paramref name="outputFormat"/>
+    /// (<c>png</c>, <c>jpeg</c>, <c>webp</c>; null or empty is PNG) as <c>DDBMemoryTileFmt</c> encodes a plain tile
+    /// (ABI 2.5).
+    /// </summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBMemoryTileEx2(string inputPath, int tz, int tx, int ty, int tileSize,
+    internal static partial DdbResult DDBMemoryTileEx3(string inputPath, int tz, int tx, int ty, int tileSize,
         [MarshalAs(UnmanagedType.U1)] bool tms, [MarshalAs(UnmanagedType.U1)] bool forceRecreate,
         string inputPathHash, string? preset, string? bands, string? formula, string? bandFilter, string? colormap,
-        string? rescale, NativeRasterOptions* options, out IntPtr outBuffer, out int outBufferSize);
+        string? rescale, NativeRasterOptions* options, string? outputFormat, out IntPtr outBuffer,
+        out int outBufferSize);
 
     // ------------------------------------------------------------------ rasters
 
@@ -425,14 +424,20 @@ internal static unsafe partial class NativeDdb
 
     // ------------------------------------------------------------------ OGC
 
+    /// <summary>
+    /// <c>DDBRenderRasterRegionEx2</c> (ABI 2.5): the region render with <see cref="DdbRenderOptions"/> (a background
+    /// the image is composited over), in an image format or as its RGBA pixels (<c>"rgba"</c>).
+    /// </summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBRenderRasterRegionEx(string inputPath, double[] bbox, string bboxSrs,
-        string outputCrs, int[] bands, int bandCount, int width, int height, string format, out IntPtr outBuffer,
-        out int outBufferSize);
+    internal static partial DdbResult DDBRenderRasterRegionEx2(string inputPath, double[] bbox, string bboxSrs,
+        string outputCrs, int[] bands, int bandCount, int width, int height, string format, in DdbRenderOptions options,
+        out IntPtr outBuffer, out int outBufferSize);
 
+    /// <summary><c>DDBRenderRasterIndexEx</c> (ABI 2.5): the index render with <see cref="DdbRenderOptions"/>.</summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBRenderRasterIndex(string inputPath, string indexName, double[] bbox,
-        string bboxSrs, int width, int height, string format, out IntPtr outBuffer, out int outBufferSize);
+    internal static partial DdbResult DDBRenderRasterIndexEx(string inputPath, string indexName, double[] bbox,
+        string bboxSrs, int width, int height, string format, in DdbRenderOptions options, out IntPtr outBuffer,
+        out int outBufferSize);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBQueryRasterPoint(string inputPath, double x, double y, string srs,
@@ -491,6 +496,29 @@ internal struct DdbOverwriteOptions
     {
         StructSize = 8,
         Overwrite = overwrite ? (byte)1 : (byte)0
+    };
+}
+
+/// <summary>
+/// <c>DDBRenderOptions</c> (ABI 2.5): 16 bytes, <c>structSize</c> at 0, <c>flags</c> at 4, <c>background</c> (0xRRGGBB,
+/// with <see cref="FlagBackground"/>) at 8, <c>reserved</c> (0) at 12. Blittable.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct DdbRenderOptions
+{
+    internal const uint FlagBackground = 0x1;
+
+    internal uint StructSize;
+    internal uint Flags;
+    internal uint Background;
+    internal uint Reserved;
+
+    /// <summary>The options of a render over <paramref name="background"/> (0xRRGGBB), or of none for null.</summary>
+    internal static DdbRenderOptions Create(uint? background) => new()
+    {
+        StructSize = 16,
+        Flags = background is null ? 0 : FlagBackground,
+        Background = background ?? 0
     };
 }
 

@@ -284,13 +284,14 @@ public class WmsManager : OgcManagerBase
     {
         var (_, mime) = MapFormat(format);
 
-        // One layer whose native render is already the requested image: no decode, composite
-        // and re-encode in managed code
-        if (rasters.Count == 1 && NativeRenderMatches(mime, bgColor, transparent))
+        // One layer is rendered by libddb in the requested image, over the background when it has one: no decode,
+        // composite and re-encode in managed code
+        if (rasters.Count == 1)
         {
             try
             {
-                var bytes = RenderLayer(ddb, rasters[0], bbox, crs, width, height, mime);
+                var bytes = RenderLayer(ddb, rasters[0], bbox, crs, width, height, mime,
+                    LayerBackground(mime, bgColor, transparent));
                 if (bytes.Length > 0)
                     return bytes;
             }
@@ -305,38 +306,56 @@ public class WmsManager : OgcManagerBase
     }
 
     /// <summary>
-    /// True when the native render of a single layer equals the composited image: PNG/WebP keep
-    /// the layer's transparency (TRANSPARENT=TRUE); JPEG has none and the native renderer fills
-    /// nodata with white, the default BGCOLOR.
+    /// The opaque colour (0xRRGGBB) under the image of a single layer, as <see cref="Composite"/> paints it: none for
+    /// TRANSPARENT=TRUE, BGCOLOR (white when absent or invalid) otherwise. A JPEG has no transparency: TRANSPARENT=TRUE
+    /// is black, the colours of the composite with its alpha dropped (premultiplied), which is what JPEG showed.
     /// </summary>
-    private static bool NativeRenderMatches(string mime, string? bgColor, bool transparent)
+    private static uint? LayerBackground(string mime, string? bgColor, bool transparent)
     {
-        if (mime == "image/jpeg")
-            return !transparent && ParseBackground(bgColor) == SKColors.White;
-        return transparent;
+        if (!transparent)
+        {
+            var color = ParseBackground(bgColor);
+            return ((uint)color.Red << 16) | ((uint)color.Green << 8) | color.Blue;
+        }
+
+        return mime == "image/jpeg" ? 0x000000u : null;
     }
 
     private byte[] RenderLayer(IDDB ddb, (OgcLayerDto Layer, string Style) raster, double[] bbox, string crs,
-        int width, int height, string mime)
+        int width, int height, string mime, uint? background)
     {
         var src = ResolveRasterArtifact(ddb, raster.Layer);
         return raster.Style.Length > 0
-            ? DdbWrapper.RenderRasterIndex(src, raster.Style, bbox, crs, width, height, mime)
-            : DdbWrapper.RenderRasterRegion(src, bbox, crs, width, height, mime);
+            ? DdbWrapper.RenderRasterIndex(src, raster.Style, bbox, crs, width, height, mime, background)
+            : DdbWrapper.RenderRasterRegion(src, bbox, crs, width, height, mime, background: background);
+    }
+
+    /// <summary>The RGBA pixels of a layer, read by <paramref name="read"/> while they are valid.</summary>
+    private void RenderLayerPixels(IDDB ddb, (OgcLayerDto Layer, string Style) raster, double[] bbox, string crs,
+        int width, int height, RasterPixelsReader read)
+    {
+        var src = ResolveRasterArtifact(ddb, raster.Layer);
+        if (raster.Style.Length > 0)
+            DdbWrapper.RenderRasterIndexPixels(src, raster.Style, bbox, crs, width, height, read);
+        else
+            DdbWrapper.RenderRasterRegionPixels(src, bbox, crs, width, height, read);
     }
 
     /// <summary>
-    /// Renders each layer in declaration order and alpha-blends them top-down with SkiaSharp.
+    /// Renders each layer in declaration order as its RGBA pixels and alpha-blends them top-down with SkiaSharp.
     /// Throws <see cref="DegradedRenderException"/> (carrying the image) when a layer failed.
     /// </summary>
     private byte[] Composite(IDDB ddb, List<(OgcLayerDto Layer, string Style)> rasters, double[] bbox, string crs,
         int width, int height, string format, string? bgColor, bool transparent)
     {
         var failed = false;
+        // The pixels of libddb are straight RGBA: Skia premultiplies them as it draws them
+        var layerInfo = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
         using var canvas = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
         using (var surface = SKSurface.Create(canvas.Info, canvas.GetPixels(), canvas.RowBytes))
         {
             surface.Canvas.Clear(transparent ? SKColors.Transparent : ParseBackground(bgColor));
+            using var paint = new SKPaint { BlendMode = SKBlendMode.SrcOver };
 
             foreach (var raster in rasters)
             {
@@ -345,10 +364,14 @@ public class WmsManager : OgcManagerBase
                 // surface as HTTP 500. The WMS 1.3 spec requires GetMap to return a valid
                 // image whenever parameters are syntactically valid; a layer that cannot be
                 // rendered for the requested area is simply drawn as fully transparent.
-                byte[]? layerBytes = null;
                 try
                 {
-                    layerBytes = RenderLayer(ddb, raster, bbox, crs, width, height, "image/png");
+                    RenderLayerPixels(ddb, raster, bbox, crs, width, height, rgba =>
+                    {
+                        using var layer = SKImage.FromPixelCopy(layerInfo, rgba, layerInfo.RowBytes);
+                        // Every layer is rendered at width x height, so it is drawn 1:1: the sampling never resamples.
+                        surface.Canvas.DrawImage(layer, new SKRect(0, 0, width, height), SKSamplingOptions.Default, paint);
+                    });
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -356,16 +379,6 @@ public class WmsManager : OgcManagerBase
                     _logger.LogWarning(ex, "WMS layer '{Layer}' render failed for bbox=[{B}] crs={Crs} {W}x{H}; treating as transparent",
                         raster.Layer.Name, string.Join(',', bbox), crs, width, height);
                 }
-
-                if (layerBytes == null || layerBytes.Length == 0)
-                    continue;
-
-                using var bmp = SKBitmap.Decode(layerBytes);
-                if (bmp == null)
-                    continue;
-                using var paint = new SKPaint { BlendMode = SKBlendMode.SrcOver };
-                // Every layer is rendered at width x height, so it is drawn 1:1: the sampling never resamples.
-                surface.Canvas.DrawBitmap(bmp, new SKRect(0, 0, width, height), SKSamplingOptions.Default, paint);
             }
 
             surface.Canvas.Flush();
