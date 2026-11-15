@@ -1059,6 +1059,7 @@ POST /users/authenticate
   200 application/json AuthenticateResponse
   400 application/problem+json ProblemDetails
   401 application/problem+json ProblemDetails
+  429 application/problem+json ProblemDetails
 POST /users/authenticate/refresh
   200 application/json AuthenticateResponse
   401 application/problem+json ProblemDetails

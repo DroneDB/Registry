@@ -131,7 +131,7 @@ public sealed class PasswordChangeAccessHttpTests : IDisposable
         }
 
         (await WithUserAsync(user, (users, u) => users.CheckPasswordAsync(u, Password))).ShouldBeTrue();
-        (await SignInAsync(user, Password)).ShouldBe(HttpStatusCode.Unauthorized);
+        (await SignInAsync(user, Password)).ShouldBe(HttpStatusCode.TooManyRequests);
     }
 
     [Test]

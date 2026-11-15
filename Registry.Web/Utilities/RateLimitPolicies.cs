@@ -22,6 +22,14 @@ public static class RateLimitPolicies
 
     public const int UploadProbePermitsPerMinute = 28;
 
+    /// <summary>
+    /// The sign-in (<c>POST /users/authenticate</c>): a few attempts per minute per client address, so passwords cannot
+    /// be tried there without limit, whatever account they are tried on (the lockout of each account counts its own).
+    /// </summary>
+    public const string Login = "login";
+
+    public const int LoginPermitsPerMinute = 10;
+
     public static IServiceCollection AddRegistryRateLimiting(this IServiceCollection services) =>
         services.AddRateLimiter(options =>
         {
@@ -35,6 +43,7 @@ public static class RateLimitPolicies
             };
 
             options.AddPolicy(UploadProbe, UploadProbePartition);
+            options.AddPolicy(Login, LoginPartition);
         });
 
     /// <summary>The partition (one fixed window per user) of <see cref="UploadProbe"/>.</summary>
@@ -45,6 +54,17 @@ public static class RateLimitPolicies
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0
         });
+
+    /// <summary>The partition (one fixed window per client address, signed in or not) of <see cref="Login"/>.</summary>
+    public static RateLimitPartition<string> LoginPartition(HttpContext context) =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.RequestServices.GetRequiredService<ClientIpResolver>().AnonymousKey(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = LoginPermitsPerMinute,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
 
     // Authenticated requests share one budget per user, anonymous ones one per client address
     // (the forwarded one behind a known proxy, see ClientIpResolver)

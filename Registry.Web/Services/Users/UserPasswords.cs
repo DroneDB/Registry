@@ -200,22 +200,18 @@ public sealed class UserPasswords
     private async Task<IdentityResult> ChangeOwnPasswordAsync(User user, string currentPassword, string newPassword)
     {
         if (await _userManager.IsLockedOutAsync(user))
-            throw LockedOut(await _userManager.GetLockoutEndDateAsync(user));
+            throw TooManyRequestsException.AccountLockedOut(await _userManager.GetLockoutEndDateAsync(user));
 
         var res = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
         if (res.Errors.Any(e => e.Code == nameof(IdentityErrorDescriber.PasswordMismatch)))
         {
             await _userManager.AccessFailedAsync(user);
             if (await _userManager.IsLockedOutAsync(user))
-                throw LockedOut(await _userManager.GetLockoutEndDateAsync(user));
+                throw TooManyRequestsException.AccountLockedOut(await _userManager.GetLockoutEndDateAsync(user));
         }
         else if (await _userManager.GetAccessFailedCountAsync(user) > 0)
             await _userManager.ResetAccessFailedCountAsync(user);
 
         return res;
     }
-
-    private static TooManyRequestsException LockedOut(DateTimeOffset? end) =>
-        new("Too many wrong passwords: the account is locked, try again later",
-            Math.Max(1, (int)Math.Ceiling(((end ?? DateTimeOffset.UtcNow) - DateTimeOffset.UtcNow).TotalSeconds)));
 }

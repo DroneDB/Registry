@@ -1,3 +1,4 @@
+using System;
 using Microsoft.AspNetCore.Http;
 
 namespace Registry.Web.Exceptions;
@@ -18,4 +19,12 @@ public class TooManyRequestsException : RegistryException
 
     /// <inheritdoc />
     public override int? RetryAfterSeconds => _retryAfterSeconds;
+
+    /// <summary>
+    /// The refusal of an account that Identity's lockout locked after too many wrong passwords (at the sign-in or at
+    /// the change of one's own password), until <paramref name="lockoutEnd"/>: the same answer wherever it is checked.
+    /// </summary>
+    public static TooManyRequestsException AccountLockedOut(DateTimeOffset? lockoutEnd) =>
+        new("Too many wrong passwords: the account is locked, try again later",
+            Math.Max(1, (int)Math.Ceiling(((lockoutEnd ?? DateTimeOffset.UtcNow) - DateTimeOffset.UtcNow).TotalSeconds)));
 }
