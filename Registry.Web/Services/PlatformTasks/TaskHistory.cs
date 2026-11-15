@@ -28,7 +28,6 @@ public sealed class TaskHistory
     // The canonical first page lives a minute: JobIndexWriter removes it on every change of the dataset's tasks
     private static readonly RecordCacheOptions TasksListCacheOptions = RecordCacheOptions.For(TimeSpan.FromSeconds(60));
 
-    private readonly IDatasetAccessResolver _access;
     private readonly IJobIndexQuery _query;
     private readonly IRecordCache _cache;
     private readonly TaskAuthorizer _authorizer;
@@ -37,11 +36,10 @@ public sealed class TaskHistory
     private readonly ProcessingPlatformSettings _settings;
     private readonly TaskUserNames? _userNames;
 
-    public TaskHistory(IDatasetAccessResolver access, IJobIndexQuery query, IRecordCache cache,
-        TaskAuthorizer authorizer, TaskArtifactStore artifacts, BuildTaskWaits waits,
-        IOptions<ProcessingPlatformSettings> platformSettings, TaskUserNames? userNames = null)
+    public TaskHistory(IJobIndexQuery query, IRecordCache cache, TaskAuthorizer authorizer,
+        TaskArtifactStore artifacts, BuildTaskWaits waits, IOptions<ProcessingPlatformSettings> platformSettings,
+        TaskUserNames? userNames = null)
     {
-        _access = access;
         _query = query;
         _cache = cache;
         _authorizer = authorizer;
@@ -55,7 +53,7 @@ public sealed class TaskHistory
     public async Task<TaskListPage> ListPageAsync(string orgSlug, string dsSlug, string? toolId, string? state,
         int skip, int take, CancellationToken ct = default)
     {
-        var dataset = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
+        var dataset = await _authorizer.ResolveDatasetAsync(orgSlug, dsSlug, AccessType.Read, ct);
         // The actions of a row are the caller's (D-024): they are added after the cache, which every reader of the
         // dataset shares, and the entity tag is that of the page the caller gets
         var caller = await _authorizer.CallerAsync(dataset.Dataset);
@@ -112,7 +110,7 @@ public sealed class TaskHistory
     {
         var job = await _authorizer.LoadAsync(orgSlug, dsSlug, id, AccessType.Read, ct);
         var missing = await MissingFilesOfAsync(job, orgSlug, dsSlug, ct);
-        var dataset = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
+        var dataset = await _authorizer.ResolveDatasetAsync(orgSlug, dsSlug, AccessType.Read, ct);
         var caller = await _authorizer.CallerAsync(dataset.Dataset);
         var cancelledBy = await CancelledByAsync(job, ct);
 
@@ -165,7 +163,7 @@ public sealed class TaskHistory
         if (!BuildTaskWaits.CanWait(job))
             return null;
 
-        var dataset = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
+        var dataset = await _authorizer.ResolveDatasetAsync(orgSlug, dsSlug, AccessType.Read, ct);
         return _waits.Find([job], () => dataset.Ddb).MissingFilesOf(job.JobId);
     }
 

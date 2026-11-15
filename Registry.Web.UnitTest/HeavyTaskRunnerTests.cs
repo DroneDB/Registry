@@ -148,10 +148,11 @@ public class HeavyTaskRunnerTests
         var options = TestSettings.Options<ProcessingPlatformSettings>(
             Microsoft.Extensions.Options.Options.Create(new AppSettings { ProcessingPlatform = _settings }));
 
-        return new HeavyTaskRunner(registry.Object, datasets.Object, ddbManager.Object,
-            new HeavyTaskQuota(quotaIndex ?? _index.Object, options), _ownerStorage.Object, new HeavyTaskDedup(_index.Object, options),
-            _index.Object, submitLock ?? new HeavyTaskSubmitLock(_storage), _processor.Object,
-            NullLogger<HeavyTaskRunner>.Instance);
+        var admission = new HeavyTaskAdmissionChecks(new HeavyTaskDedup(_index.Object, options), _index.Object,
+            _ownerStorage.Object, new HeavyTaskQuota(quotaIndex ?? _index.Object, options),
+            NullLogger<HeavyTaskAdmissionChecks>.Instance);
+        return new HeavyTaskRunner(registry.Object, datasets.Object, ddbManager.Object, admission,
+            submitLock ?? new HeavyTaskSubmitLock(_storage), _processor.Object, NullLogger<HeavyTaskRunner>.Instance);
     }
 
     private static HeavyTaskSubmitRequest Submit(string tool, string? input, string? output, string? user = "user") =>
@@ -655,7 +656,7 @@ public class HeavyTaskRunnerTests
             });
 
         return (new TaskRetry(new TaskAuthorizer(access.Object, _index.Object, auth.Object), _processor.Object,
-            writer.Object, Mock.Of<IDatasetResolver>(), Mock.Of<IDdbManager>(), _records.Object,
+            writer.Object, _records.Object,
             NullLogger<TaskRetry>.Instance, Runner()), writer);
     }
 

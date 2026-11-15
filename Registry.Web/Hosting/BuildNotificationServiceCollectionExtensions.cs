@@ -35,6 +35,7 @@ public static class BuildNotificationServiceCollectionExtensions
         services.AddScoped<BuildNotificationCleanup>();
 
         // The e-mail about a heavy task that ended (FR-PRC-40)
+        services.AddScoped<TaskNotificationAudience>();
         services.AddScoped<TaskNotifier>();
 
         // The job class, registered like the others so a missing dependency fails the container validation

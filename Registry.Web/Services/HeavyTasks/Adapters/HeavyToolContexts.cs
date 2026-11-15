@@ -40,8 +40,13 @@ public sealed class HeavyToolValidationContext : IHeavyToolValidationContext
     public bool QueuedBeforeOverwriteRule => false;
 }
 
-/// <summary>The task being executed: its id and its work folder (null when the tool produces no artifact).</summary>
-public sealed record TaskRun(string TaskId, string? WorkDir);
+/// <summary>
+/// The run of the task being executed: its id, its Hangfire job, its work folder (null when the tool produces no
+/// artifact), its write record (none: a record that refuses every write), the user it runs for (null for a task of the
+/// system) and whether its request was queued before the overwrite rule.
+/// </summary>
+public sealed record TaskRun(string TaskId, string? WorkDir, PerformContext Hangfire,
+    ITaskWriteRecorder? WriteRecord = null, string? RequestedBy = null, bool QueuedBeforeOverwriteRule = false);
 
 /// <summary>
 /// Concrete execution context handed to a tool during <c>ExecuteAsync</c>. A job host has no HTTP caller:
@@ -51,20 +56,15 @@ public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
 {
     private readonly TaskRun _run;
 
-    public HeavyToolExecutionContext(
-        IDDB ddb, DatasetKey dataset, ILogger logger, TaskRun run, PerformContext hangfire,
-        BuildScheduler buildQueue, DdbJobs builds, bool queuedBeforeOverwriteRule = false,
-        ITaskWriteRecorder? writeRecord = null, string? requestedBy = null, IStorageQuota? storage = null)
+    public HeavyToolExecutionContext(IDDB ddb, DatasetKey dataset, ILogger logger, TaskRun run,
+        BuildScheduler buildQueue, DdbJobs builds, IStorageQuota? storage = null)
     {
         Storage = storage ?? UnlimitedStorageQuota.Instance;
-        RequestedBy = requestedBy;
-        QueuedBeforeOverwriteRule = queuedBeforeOverwriteRule;
-        WriteRecord = writeRecord ?? TaskWriteRecorder.Disabled(run.TaskId, dataset, "unknown");
+        WriteRecord = run.WriteRecord ?? TaskWriteRecorder.Disabled(run.TaskId, dataset, "unknown");
         Ddb = ddb;
         Dataset = dataset;
         Logger = logger;
         _run = run;
-        Hangfire = hangfire;
         BuildQueue = buildQueue;
         Builds = builds;
     }
@@ -77,7 +77,7 @@ public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
     public ClaimsPrincipal? Caller => null;
 
     /// <inheritdoc />
-    public string? RequestedBy { get; }
+    public string? RequestedBy => _run.RequestedBy;
 
     /// <inheritdoc />
     public IStorageQuota Storage { get; }
@@ -85,13 +85,13 @@ public sealed class HeavyToolExecutionContext : IHeavyToolExecutionContext
     public ILogger Logger { get; }
     public string TaskId => _run.TaskId;
     public string? WorkDir => _run.WorkDir;
-    public PerformContext Hangfire { get; }
+    public PerformContext Hangfire => _run.Hangfire;
 
     /// <inheritdoc />
     public string? PublishedOutput => PublishedOutputMarker.Get(Hangfire);
 
     /// <inheritdoc />
-    public bool QueuedBeforeOverwriteRule { get; }
+    public bool QueuedBeforeOverwriteRule => _run.QueuedBeforeOverwriteRule;
 
     /// <inheritdoc />
     public void MarkOutputPublished(string path) => PublishedOutputMarker.Set(Hangfire, path);

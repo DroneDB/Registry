@@ -353,10 +353,11 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
                 sp.GetRequiredService<TaskEntryChanges>(), SourcesAfterCommit(tool, request, taskId))
             : TaskWriteRecorder.Disabled(taskId, dataset, tool.Id);
 
-        var execCtx = new HeavyToolExecutionContext(ddb, dataset, _log,
-            new TaskRun(taskId, workDir), ctx, sp.GetRequiredService<BuildScheduler>(), builds,
-            await QueuedBeforeOverwriteRuleAsync(db, taskId, cancellationToken), recorder,
-            await RequestedByAsync(db, taskId, cancellationToken), sp.GetRequiredService<IStorageQuota>());
+        var queuedBeforeOverwriteRule = await QueuedBeforeOverwriteRuleAsync(db, taskId, cancellationToken);
+        var run = new TaskRun(taskId, workDir, ctx, recorder, await RequestedByAsync(db, taskId, cancellationToken),
+            queuedBeforeOverwriteRule);
+        var execCtx = new HeavyToolExecutionContext(ddb, dataset, _log, run, sp.GetRequiredService<BuildScheduler>(),
+            builds, sp.GetRequiredService<IStorageQuota>());
         return new Prepared(tool, request, workDir, ddb, execCtx, recorder);
     }
 

@@ -53,7 +53,7 @@ public class TaskHistoryBackgroundTests
         var access = new Mock<IDatasetAccessResolver>();
         access.Setup(a => a.ResolveAsync("org", "ds", AccessType.Read, null, It.IsAny<System.Threading.CancellationToken>()))
             .ReturnsAsync(() => new DatasetAccess(new Dataset { Slug = "ds" }, Mock.Of<Registry.Ports.DroneDB.IDDB>));
-        var history = new TaskHistory(access.Object, new JobIndexQuery(_db),
+        var history = new TaskHistory(new JobIndexQuery(_db),
             Mock.Of<IRecordCache>(), new TaskAuthorizer(access.Object, new JobIndexQuery(_db), Mock.Of<IAuthManager>()),
             null!, TestJobs.BuildTaskWaits(_db), TestSettings.Options<ProcessingPlatformSettings>(new AppSettings()));
 

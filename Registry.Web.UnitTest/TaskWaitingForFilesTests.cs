@@ -97,7 +97,7 @@ public class TaskWaitingForFilesTests
                     return _ddb.Object;
                 }));
         var auth = new Mock<IAuthManager>();
-        return new TaskHistory(access.Object, new JobIndexQuery(_db), cache ?? Mock.Of<IRecordCache>(),
+        return new TaskHistory(new JobIndexQuery(_db), cache ?? Mock.Of<IRecordCache>(),
             new TaskAuthorizer(access.Object, new JobIndexQuery(_db), auth.Object), null!, Waits(),
             TestSettings.Options<ProcessingPlatformSettings>(new AppSettings()));
     }

@@ -56,7 +56,7 @@ public class TaskHistoryErrorTests
         access.Setup(a => a.ResolveAsync("org", "ds", AccessType.Read, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => new DatasetAccess(
                 new Dataset { Slug = "ds", Organization = new Organization { Slug = "org" } }, () => ddb.Object));
-        return new TaskHistory(access.Object, new JobIndexQuery(_db), Mock.Of<IRecordCache>(),
+        return new TaskHistory(new JobIndexQuery(_db), Mock.Of<IRecordCache>(),
             new TaskAuthorizer(access.Object, new JobIndexQuery(_db), Mock.Of<IAuthManager>()), null!,
             TestJobs.BuildTaskWaits(_db), TestSettings.Options<ProcessingPlatformSettings>(new AppSettings()));
     }

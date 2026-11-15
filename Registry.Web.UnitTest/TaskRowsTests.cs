@@ -142,7 +142,7 @@ public class TaskRowsTests
         // The canonical page is cached, for every reader of the dataset: the actions are the caller's all the same
         var cache = new ServiceCollection().AddLogging().AddDistributedMemoryCache().AddRecordCache()
             .BuildServiceProvider().GetRequiredService<IRecordCache>();
-        return new TaskHistory(access.Object, new JobIndexQuery(_db), cache,
+        return new TaskHistory(new JobIndexQuery(_db), cache,
             new TaskAuthorizer(access.Object, new JobIndexQuery(_db), auth.Object), null!,
             TestJobs.BuildTaskWaits(_db), TestSettings.Options<ProcessingPlatformSettings>(new AppSettings()), names);
     }
@@ -414,7 +414,7 @@ public class TaskRowsTests
         var auth = new Mock<IAuthManager>();
         auth.Setup(a => a.GetCurrentUser()).ReturnsAsync(new User { Id = userId });
         auth.Setup(a => a.IsOwnerOrAdmin(It.IsAny<Dataset>())).ReturnsAsync(true);
-        return new TaskLifecycle(access.Object, new TaskAuthorizer(access.Object, new JobIndexQuery(_db), auth.Object),
+        return new TaskLifecycle(new TaskAuthorizer(access.Object, new JobIndexQuery(_db), auth.Object),
             processor.Object, Writer(), null!,
             new TaskWriteRecordStore(_db, Mock.Of<IRecordCache>(), NullLogger<TaskWriteRecordStore>.Instance),
             Mock.Of<ITaskRollback>(), NullLogger<TaskLifecycle>.Instance);
