@@ -142,7 +142,9 @@ public class UsersController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Changes a user's password. Admins can change any user's password without the current password.
+    /// Changes a user's password. Admins can change any user's password without the current password; any other user
+    /// changes only their own (403 for another user), and a wrong current password counts toward the lockout of the
+    /// account as a failed sign-in does (429 while it is locked out).
     /// </summary>
     /// <param name="userName">The username of the user whose password to change.</param>
     /// <param name="model">The password change request containing current and new password.</param>
@@ -151,6 +153,8 @@ public class UsersController : ControllerBaseEx
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> ChangePassword(
         [FromRoute, Required] string userName,
         [FromBody, Required] ChangeUserPasswordRequestDto model, CancellationToken ct)

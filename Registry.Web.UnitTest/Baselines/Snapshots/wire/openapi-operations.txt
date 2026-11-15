@@ -1129,6 +1129,8 @@ PUT /users/{userName}/changepwd
   200
   400 application/problem+json ProblemDetails
   401 application/problem+json ProblemDetails
+  403 application/problem+json ProblemDetails
+  429 application/problem+json ProblemDetails
 POST /users/{userName}/disable
   204
   400 application/problem+json ProblemDetails
