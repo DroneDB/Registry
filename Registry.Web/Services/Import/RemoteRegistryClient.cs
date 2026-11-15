@@ -374,10 +374,9 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         string.IsNullOrWhiteSpace(authToken) ? [] : new() { ["Authorization"] = $"Bearer {authToken}" };
 
     /// <inheritdoc />
-    public async Task<RemoteDatasetInfo?> GetDatasetInfoAsync(string registryUrl, string? authToken, string orgSlug,
-        string dsSlug, CancellationToken ct)
-    {
-        try
+    public Task<RemoteDatasetInfo?> GetDatasetInfoAsync(string registryUrl, string? authToken, string orgSlug,
+        string dsSlug, CancellationToken ct) =>
+        BestEffort.GetAsync<RemoteDatasetInfo?>(async () =>
         {
             var client = CreateClient();
             if (!string.IsNullOrWhiteSpace(authToken))
@@ -393,14 +392,12 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
 
             using var dataset = JsonDocument.Parse(await ReadJsonAsync(response, registryUrl, ct));
             return MetaOf(dataset.RootElement);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        }, ex =>
         {
             // The name is a convenience: the import goes on with the slug
             _logger.LogInformation(ex, "Could not read the remote dataset info of '{OrgSlug}/{DsSlug}'", orgSlug, dsSlug);
             return null;
-        }
-    }
+        }, ct);
 
     /// <inheritdoc />
     public async Task<RemoteBrowseItem[]> ListOrganizationsAsync(string registryUrl, string? authToken,

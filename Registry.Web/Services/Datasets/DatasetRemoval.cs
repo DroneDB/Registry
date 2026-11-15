@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Services.Adapters;
@@ -71,18 +72,14 @@ public sealed class DatasetRemoval
         await _listings.ListingChangedAsync(orgSlug, internalRef, CancellationToken.None);
 
         // Schedule background cleanup job for: cancelling active jobs, removing JobIndex entries, deleting filesystem
-        string? jobId = null;
-        try
-        {
-            jobId = _backgroundJob.Enqueue<DatasetCleanupService>(
-                service => service.CleanupDeletedAsync(orgSlug, internalRef, null));
-        }
-        catch (Exception ex)
+        var jobId = BestEffort.Get<string?>(() => _backgroundJob.Enqueue<DatasetCleanupService>(
+            service => service.CleanupDeletedAsync(orgSlug, internalRef, null)), ex =>
         {
             _logger.LogError(ex,
                 "Failed to enqueue cleanup job for dataset {OrgSlug}/{DsSlug} with internalRef {InternalRef}",
                 orgSlug, dsSlug, internalRef);
-        }
+            return null;
+        });
 
         if (string.IsNullOrEmpty(jobId))
         {

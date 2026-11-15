@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
@@ -56,17 +57,13 @@ public sealed class EntryCommandService : IEntryCommandService
 
         // The entry as indexed, with its real mtime (FR-DEV-13); now when the index cannot give it back. The folder
         // exists by now: a failed read must not turn the creation into an error (a retry would be a 409). Any
-        // failure counts (Ddb wraps only a plain DdbException; its subclasses and others pass through), except
-        // cancellation
-        Entry? indexed = null;
-        try
-        {
-            indexed = ddb.GetEntry(folder);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        // failure counts (Ddb wraps only a plain DdbException; its subclasses and others pass through), except a
+        // cancellation of the request
+        var indexed = BestEffort.Get(() => ddb.GetEntry(folder), ex =>
         {
             _logger.LogWarning(ex, "Cannot read back folder '{Path}' of '{OrgSlug}/{DsSlug}'", folder, orgSlug, dsSlug);
-        }
+            return null;
+        }, ct);
 
         return indexed.ToDto() ??
                new EntryDto { Path = folder, Type = EntryType.Directory, Size = 0, ModifiedTime = WholeSecondsNow() };
@@ -187,22 +184,21 @@ public sealed class EntryCommandService : IEntryCommandService
             }
 
             var path = check.Path;
-            try
+            BestEffort.Run(() =>
             {
                 if (!ddb.EntryExists(path))
                 {
                     failed[requested] = "Path not found in dataset";
-                    continue;
+                    return;
                 }
 
                 RemoveEntry(ddb, path);
                 deleted.Add(path);
-            }
-            catch (Exception ex)
+            }, ex =>
             {
                 _logger.LogWarning("Failed to delete {ObjPath}: {Reason}", path, ex.Message);
                 failed[requested] = ex.Message;
-            }
+            }, CancellationToken.None);
         }
 
         if (deleted.Count > 0)
@@ -231,16 +227,12 @@ public sealed class EntryCommandService : IEntryCommandService
         foreach (var file in files)
         {
             var local = ddb.GetLocalPath(file.Path);
-            try
+            BestEffort.Run(() =>
             {
                 if (!_fs.RemoveEntry(local, isFolder: false))
                     _logger.LogWarning("Cannot delete local file {ObjPath}: {Reason}", local,
                         $"Cannot find local file '{local}' for object '{file.Path}'");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning("Cannot delete local file {ObjPath}: {Reason}", local, ex.Message);
-            }
+            }, ex => _logger.LogWarning("Cannot delete local file {ObjPath}: {Reason}", local, ex.Message));
         }
     }
 }

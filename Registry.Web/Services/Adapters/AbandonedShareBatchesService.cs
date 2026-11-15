@@ -9,6 +9,7 @@ using Hangfire;
 using Hangfire.Server;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
@@ -83,16 +84,13 @@ public class AbandonedShareBatchesService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            try
-            {
-                if (await RollbackAsync(token, cutoff, cancellationToken))
-                    rolledBack++;
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                failed++;
-                console.Error(ex, "Cannot roll back the abandoned share batch {Token}", token);
-            }
+            if (await BestEffort.GetAsync(() => RollbackAsync(token, cutoff, cancellationToken), ex =>
+                {
+                    failed++;
+                    console.Error(ex, "Cannot roll back the abandoned share batch {Token}", token);
+                    return false;
+                }, cancellationToken))
+                rolledBack++;
         }
 
         console.Info("Abandoned share batches: {RolledBack} rolled back, {Failed} failed, {Found} found", rolledBack,
