@@ -23,7 +23,7 @@ namespace Registry.Web.Hosting;
 /// <summary>The HTTP API of the web host: MVC, the error model, OpenAPI, caching, compression, rate limits and the HTTP edge.</summary>
 public static class RegistryApiServiceCollectionExtensions
 {
-    /// <summary>MVC with the ProblemDetails error model, the OpenAPI document, response caching and compression, rate limiting.</summary>
+    /// <summary>MVC with the ProblemDetails error model, the OpenAPI document, compression, rate limiting.</summary>
     public static IServiceCollection AddRegistryApi(this IServiceCollection services)
     {
         services.AddControllers(o =>
@@ -116,13 +116,6 @@ public static class RegistryApiServiceCollectionExtensions
             ApiJson.Configure(options.JsonSerializerOptions, paths));
         services.AddOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>().Configure<DatasetPathPolicy>((options, paths) =>
             ApiJson.Configure(options.SerializerOptions, paths));
-
-        services.AddResponseCaching(options =>
-        {
-            options.MaximumBodySize = 8 * 1024 * 1024; // 8MB
-            options.SizeLimit = 10 * 1024 * 1024; // 10MB
-            options.UseCaseSensitivePaths = true;
-        });
 
         // Dynamic compression for API responses (the Hub's static files are precompressed at build
         // time); also behind TLS termination. ZIP downloads are already compressed. Responses that

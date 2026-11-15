@@ -1,17 +1,27 @@
 using Registry.Web.Test.Support;
+using System;
+using System.IO;
+using System.Net;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
 using Registry.Ports.DroneDB;
 using Registry.Web.Controllers;
 using Registry.Web.Models;
+using Registry.Web.Data;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Caching;
+using Registry.Web.Services.Ports;
 using Registry.Web.Services.Objects;
 using Registry.Web.Utilities;
+using Registry.Web.Utilities.Ogc;
 using Shouldly;
 
 
@@ -221,5 +231,58 @@ public class TileHttpCachingTests
         var response = new DefaultHttpContext().Response;
         policy.Apply(response);
         return response.Headers.ETag.ToString();
+    }
+    // A tile that a shared cache may keep ("public": anyone may read the dataset) must not outlive the dataset being made
+    // private: the access check runs on every request, and no cache in the process answers before it
+    [Test]
+    public async Task ATileOfAPublicDataset_IsRefusedToAnonymousCallers_OnceTheDatasetIsPrivate()
+    {
+        const string url = "/orgs/tile-org/ds/tile-ds/mvt/abc/1/2/3.pbf";
+        var visibility = Registry.Ports.DroneDB.Visibility.Public;
+        var tile = Path.Combine(Path.GetTempPath(), "mvt-tile-" + Guid.NewGuid().ToString("N") + ".pbf");
+        await File.WriteAllBytesAsync(tile, [1, 2, 3]);
+        try
+        {
+            using var factory = new RegistryWebFactory(configureServices: services =>
+            {
+                var artifacts = new Mock<IBuildArtifactResolver>();
+                artifacts.Setup(a => a.FindArtifactFile(It.IsAny<IDDB>(), "abc", ArtifactRoles.VectorMvt,
+                    MvtTiles.Tile(1, 2, 3), It.IsAny<string?>())).Returns(tile);
+                services.RemoveAll<IBuildArtifactResolver>();
+                services.AddSingleton(artifacts.Object);
+            });
+            factory.DdbWrapper.Setup(d => d.MetaGet(It.IsAny<string>(), "visibility", It.IsAny<string?>()))
+                .Returns(() => $$"""{"data":{{(int)visibility}},"id":"visibility","mtime":0}""");
+
+            // Anonymous callers read a public dataset only while its owner is active
+            var owner = await factory.CreateUserAsync("tile-owner");
+            Guid internalRef;
+            using (var scope = factory.Services.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<RegistryContext>();
+                var org = Seed.Organization(context, "tile-org", ownerId: owner.Id);
+                internalRef = Seed.Dataset(context, org, "tile-ds").InternalRef;
+                await context.SaveChangesAsync();
+            }
+
+            using var client = factory.CreateClient();
+            using (var anonymous = await client.GetAsync(url))
+            {
+                anonymous.StatusCode.ShouldBe(HttpStatusCode.OK);
+                anonymous.Headers.CacheControl.ShouldNotBeNull().Public.ShouldBeTrue();
+            }
+
+            // What the change of the visibility does: the cached visibility goes, the next read asks the index
+            visibility = Registry.Ports.DroneDB.Visibility.Private;
+            await factory.Services.GetRequiredService<IDatasetListingInvalidator>()
+                .VisibilityChangedAsync("tile-org", internalRef);
+
+            using var refused = await client.GetAsync(url);
+            refused.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        }
+        finally
+        {
+            File.Delete(tile);
+        }
     }
 }

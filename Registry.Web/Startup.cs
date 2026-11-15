@@ -156,7 +156,6 @@ public class Startup
         // Not for responses that carry tokens (BREACH, CompressionPolicy)
         app.UseWhen(context => !CompressionPolicy.CarriesSecrets(context.Request.Path),
             compressed => compressed.UseResponseCompression());
-        app.UseResponseCaching();
 
         app.UseMiddleware<TokenManagerMiddleware>();
         app.UseMiddleware<UserEnrichmentMiddleware>();
