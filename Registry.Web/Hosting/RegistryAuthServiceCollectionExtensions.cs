@@ -68,6 +68,7 @@ public static class RegistryAuthServiceCollectionExtensions
             {
                 jwt.RequireHttpsMetadata = false;
                 jwt.SaveToken = true;
+                jwt.EventsType = typeof(SecurityStampJwtEvents);
                 jwt.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
@@ -78,6 +79,7 @@ public static class RegistryAuthServiceCollectionExtensions
             });
 
         services.AddAuthorization(options => options.AddRegistryPolicies());
+        services.AddScoped<SecurityStampJwtEvents>();
         services.AddScoped<IAuthorizationHandler, AdminAuthorizationHandler>();
         services.AddSingleton<IAuthorizationMiddlewareResultHandler, RegistryAuthorizationResultHandler>();
 

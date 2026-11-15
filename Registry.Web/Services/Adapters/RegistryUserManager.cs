@@ -10,8 +10,9 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// <see cref="UserManager{TUser}"/> that drops the user's cached authorization snapshot
-/// after every role change and deletion, whichever code path makes it (admin API, LDAP
-/// sync, deactivation, start-up seeding).
+/// after every role change, deletion and update of the user (a new password and so a new security stamp, a new
+/// name, a lockout), whichever code path makes it (admin API, LDAP sync, deactivation, start-up seeding, a
+/// password change or reset), so that a change applies at once and not when the snapshot expires.
 /// </summary>
 public class RegistryUserManager : UserManager<User>
 {
@@ -48,6 +49,11 @@ public class RegistryUserManager : UserManager<User>
 
     public override async Task<IdentityResult> DeleteAsync(User user)
         => Invalidated(user, await base.DeleteAsync(user));
+
+    // Every change of the user row goes through here: the password hash and the security stamp
+    // (ChangePasswordAsync, ResetPasswordAsync, AddPasswordAsync, UpdateSecurityStampAsync), the name, the lockout
+    protected override async Task<IdentityResult> UpdateUserAsync(User user)
+        => Invalidated(user, await base.UpdateUserAsync(user));
 
     // After the store call: a snapshot loaded before the change is discarded (see
     // UserAuthSnapshotCache), one loaded after it reads the new roles.

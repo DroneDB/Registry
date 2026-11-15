@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -10,6 +11,7 @@ using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Utilities.Auth;
 
 namespace Registry.Web.Services.Users;
 
@@ -28,7 +30,7 @@ public sealed class JwtTokenIssuer
     }
 
     /// <summary>
-    /// A token for <paramref name="user"/>: their id as the name claim, whether they are an administrator, signed with
+    /// A token for <paramref name="user"/>: their id as the name claim, whether they are an administrator, their security stamp (which a password change replaces, ending the sessions of the tokens issued before), signed with
     /// <see cref="AuthTokenOptions.Secret"/>, valid <see cref="AuthTokenOptions.TokenExpirationInDays"/> days.
     /// </summary>
     public async Task<JwtDescriptor> IssueAsync(User user)
@@ -40,14 +42,19 @@ public sealed class JwtTokenIssuer
         var key = Encoding.ASCII.GetBytes(_tokens.Secret!);
         var expiresOn = _time.GetUtcNow().UtcDateTime.AddDays(_tokens.TokenExpirationInDays);
         var isAdmin = await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName);
+        var stamp = user.SecurityStamp;
+
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.Name, user.Id),
+            new(ApplicationDbContext.AdminRoleName.ToLowerInvariant(), isAdmin.ToString(), ClaimValueTypes.Boolean)
+        };
+        if (!string.IsNullOrEmpty(stamp))
+            claims.Add(new Claim(Policies.SecurityStampClaimType, stamp));
 
         var token = tokenHandler.CreateToken(new SecurityTokenDescriptor
         {
-            Subject = new ClaimsIdentity([
-                new Claim(ClaimTypes.Name, user.Id),
-                new Claim(ApplicationDbContext.AdminRoleName.ToLowerInvariant(), isAdmin.ToString(),
-                    ClaimValueTypes.Boolean)
-            ]),
+            Subject = new ClaimsIdentity(claims),
             Expires = expiresOn,
             SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key),
                 SecurityAlgorithms.HmacSha256Signature)

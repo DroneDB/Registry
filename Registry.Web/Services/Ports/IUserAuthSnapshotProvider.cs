@@ -9,7 +9,8 @@ namespace Registry.Web.Services.Ports;
 /// <param name="UserName">User name (null when the user does not exist).</param>
 /// <param name="IsAdmin">The user has the admin role.</param>
 /// <param name="IsDeactivated">The user has the deactivated role.</param>
-public sealed record UserAuthSnapshot(bool Exists, string? UserName, bool IsAdmin, bool IsDeactivated)
+/// <param name="SecurityStamp">The Identity security stamp, which a password change replaces (null when the user does not exist).</param>
+public sealed record UserAuthSnapshot(bool Exists, string? UserName, bool IsAdmin, bool IsDeactivated, string? SecurityStamp = null)
 {
     public static readonly UserAuthSnapshot Missing = new(false, null, false, false);
 

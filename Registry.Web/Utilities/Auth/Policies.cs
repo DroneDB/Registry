@@ -24,6 +24,14 @@ public static class Policies
     public static readonly string AdminClaimType = ApplicationDbContext.AdminRoleName.ToLowerInvariant();
 
     /// <summary>
+    /// Type of the claim that carries the Identity security stamp of the user at the moment the JWT was issued. The stamp
+    /// changes with the password, so a token whose stamp is not the user's current one is refused
+    /// (<see cref="SecurityStampJwtEvents"/>); a token without the claim (issued before it existed) is accepted until it
+    /// expires.
+    /// </summary>
+    public const string SecurityStampClaimType = "sstamp";
+
+    /// <summary>
     /// True when <paramref name="user"/> is authenticated and its admin claim is "true" in any case:
     /// the JWT carries "true", <c>BasicAuthFilter</c> issues <see cref="bool.ToString()"/> ("True").
     /// </summary>

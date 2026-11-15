@@ -46,6 +46,7 @@ public class UserAuthSnapshotProvider : IUserAuthSnapshotProvider
             true,
             user.UserName,
             await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName),
-            await _userManager.IsInRoleAsync(user, ApplicationDbContext.DeactivatedRoleName));
+            await _userManager.IsInRoleAsync(user, ApplicationDbContext.DeactivatedRoleName),
+            user.SecurityStamp);
     }
 }

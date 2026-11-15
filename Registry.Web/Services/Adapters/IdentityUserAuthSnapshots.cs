@@ -31,10 +31,10 @@ public sealed class IdentityUserAuthSnapshots : IUserAuthSnapshotProvider
 
         var user = await _identity.Users.AsNoTracking()
             .Where(u => u.Id == userId)
-            .Select(u => new { u.UserName, IsAdmin = admins.Contains(u.Id), IsDeactivated = deactivated.Contains(u.Id) })
+            .Select(u => new { u.UserName, u.SecurityStamp, IsAdmin = admins.Contains(u.Id), IsDeactivated = deactivated.Contains(u.Id) })
             .FirstOrDefaultAsync()
             .ConfigureAwait(false);
 
-        return user == null ? UserAuthSnapshot.Missing : new UserAuthSnapshot(true, user.UserName, user.IsAdmin, user.IsDeactivated);
+        return user == null ? UserAuthSnapshot.Missing : new UserAuthSnapshot(true, user.UserName, user.IsAdmin, user.IsDeactivated, user.SecurityStamp);
     }
 }
