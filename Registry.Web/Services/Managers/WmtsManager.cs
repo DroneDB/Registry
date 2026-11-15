@@ -220,8 +220,11 @@ public class WmtsManager : OgcManagerBase
         {
             throw;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException && !DdbErrors.IsTransient(ex))
         {
+            // A failure that can pass (libddb busy, disk full, shutting down) is not turned into a picture: it answers
+            // 503 + Retry-After (OgcExceptionFilter), which the client can act on, and no tile is kept of it.
+            //
             // WMTS Annex A.2.3 / WMTS implementations are expected to return either a valid tile
             // or a ServiceExceptionReport. Under heavy concurrent load (CITE issues hundreds of
             // parallel tile requests) transient native errors must NOT bubble up as HTTP 500/404.
@@ -274,7 +277,7 @@ public class WmtsManager : OgcManagerBase
             return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer, cog, z, x, y,
                 wantJpeg ? TileFormat.Jpeg : TileFormat.Png, ct);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException && !DdbErrors.IsTransient(ex))
         {
             _logger.LogError(ex, "WMTS tile generation failed for {Layer} z={Z} x={X} y={Y}; returning fallback {Fmt}",
                 layerName, z, x, y, format);

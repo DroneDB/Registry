@@ -5,9 +5,17 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Routing;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using NUnit.Framework;
+using Registry.Ports.DroneDB;
 using Registry.Web.Controllers.Ogc;
 using Registry.Web.Exceptions;
 using Registry.Web.Utilities.Ogc;
@@ -212,5 +220,42 @@ public class WmtsContractTests
         var result = await new WmtsController(world.Wmts()).Restful("org", "ds", layer, style, tms, z, y, x, ext, default);
 
         result.ShouldBeOfType<FileContentResult>().ContentType.ShouldBe("image/png");
+    }
+
+    // libddb could not answer now (busy, disk full, shutting down): the client is told to retry, as a WMS map is,
+    // instead of being given an empty tile that it would keep
+    [TestCase(typeof(DdbBusyException))]
+    [TestCase(typeof(DdbRetryableException))]
+    [TestCase(typeof(DdbShutdownException))]
+    public async Task GetTile_WhenLibddbCanBeRetried_Is503_NotAnEmptyTile(Type failure)
+    {
+        var world = new OgcContractWorld();
+        world.Ddb.Setup(d => d.GenerateTile(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(),
+            It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Throws((Exception)Activator.CreateInstance(failure, "busy")!);
+
+        var thrown = await Should.ThrowAsync<Exception>(() => world.Wmts().GetTileAsync("org", "ds", "ortho.tif",
+            "default", "GoogleMapsCompatible", 3, 1, 2, "image/png"));
+
+        thrown.ShouldBeOfType(failure);
+        var http = new DefaultHttpContext();
+        http.Request.Path = "/orgs/org/ds/ds/wmts";
+        var context = new ExceptionContext(new ActionContext(http, new RouteData(), new ActionDescriptor()),
+            new List<IFilterMetadata>()) { Exception = thrown };
+        new OgcExceptionFilter(NullLogger<OgcExceptionFilter>.Instance).OnException(context);
+        context.Result.ShouldBeOfType<ContentResult>().StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+    }
+
+    [Test]
+    public async Task GetTile_WhenLibddbFailsForGood_IsStillAnEmptyTile()
+    {
+        var world = new OgcContractWorld();
+        world.Ddb.Setup(d => d.GenerateTile(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(),
+            It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>())).Throws(new DdbException("the file is corrupt"));
+
+        var tile = await world.Wmts().GetTileAsync("org", "ds", "ortho.tif", "default", "GoogleMapsCompatible", 3, 1, 2,
+            "image/png");
+
+        tile.Take(4).ShouldBe([0x89, 0x50, 0x4E, 0x47]);
     }
 }
