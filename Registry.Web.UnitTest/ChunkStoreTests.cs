@@ -217,6 +217,29 @@ public class ChunkStoreTests
         Directory.Exists(expired).ShouldBeFalse("a session with a file id goes after 7 days");
     }
 
+    // The rename onto the dataset volume keeps the write time of the last chunk: a file taken from a session whose last
+    // chunk is old would be swept as an abandoned temp file while its commit is moving it, so the taken file is dated now
+    [Test]
+    public async Task TakenFile_OfAnOldSession_IsNotSweptAsAbandoned()
+    {
+        var dataset = Path.Combine(_root, "dataset");
+        var chunks = Path.Combine(dataset, ".uploads", "chunks");
+        var store = new ChunkStore();
+        await store.OpenAsync(chunks, "file-0001", _manifest);
+        for (var i = 0; i < 4; i++)
+            await store.WriteAsync(chunks, "file-0001", i, Chunk(i));
+        File.SetLastWriteTimeUtc(Path.Combine(chunks, "file-0001", ChunkStore.DataFileName), DateTime.UtcNow.AddDays(-2));
+
+        var taken = Path.Combine(dataset, ".uploads", "taken.tmp");
+        var hint = await store.TakeAsync(chunks, "file-0001", taken);
+
+        (DateTime.UtcNow - File.GetLastWriteTimeUtc(taken)).ShouldBeLessThan(TimeSpan.FromMinutes(1));
+        hint.ModifiedUtc.ShouldBe(File.GetLastWriteTimeUtc(taken), "the hint is the write time the file has");
+        Registry.Web.Utilities.DatasetUploads.RemoveAbandoned(new Registry.Adapters.FileSystem(), dataset,
+            DateTime.UtcNow, TimeSpan.FromHours(24)).ShouldBe(0);
+        File.Exists(taken).ShouldBeTrue();
+    }
+
     // A chunk session folder (manifest, data file, one marker) whose last write is `lastWrite`
     private string Session(string chunks, string name, string? fileId, DateTime lastWrite)
     {

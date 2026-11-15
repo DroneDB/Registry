@@ -383,7 +383,10 @@ public sealed partial class ChunkStore
 
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             File.Move(Path.Combine(folder, DataFileName), destination, overwrite: true);
-            var info = new FileInfo(destination);
+            // The rename keeps the write time of the last chunk, which may be days old (a resumed upload): the sweep of
+            // abandoned temp files would take the file while its commit is moving it. It is a new file now, and the hint
+            // below (read after this) is the time it has
+            var info = new FileInfo(destination) { LastWriteTimeUtc = DateTime.UtcNow };
             Forget(folder);
             return new FileHashHint(sha256, info.Length, info.LastWriteTimeUtc);
         }
