@@ -125,7 +125,8 @@ public static class RegistryJobsServiceCollectionExtensions
         typeof(JobIndexStateFilter), typeof(BuildJobFailureFilter), typeof(BuildLogCaptureFilter),
         typeof(BuildRetrySchedulerFilter), typeof(BuildNotificationFilter), typeof(TaskNotificationFilter),
         typeof(BuildOgcCacheFilter),
-        typeof(BuildQueueRoutingFilter), typeof(JobOperationFilter), typeof(OneRunAtATimeFilter)
+        typeof(BuildQueueRoutingFilter), typeof(JobOperationFilter), typeof(OneRunAtATimeFilter),
+        typeof(FetchedJobHeartbeat)
     ];
 
     /// <summary>
