@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Hangfire;
 using Hangfire.Storage;
@@ -64,6 +65,29 @@ public class BackgroundJobsProcessorTest
         _processor.Requeue(jobId).ShouldBe(accepted);
         _client.Verify(x => x.ChangeState(jobId, It.IsAny<EnqueuedState>(), FailedState.StateName),
             accepted ? Times.Once() : Times.Never());
+    }
+
+    // An id of the earlier numbering in a GUID store (or the other way round): the store throws, the job is not there
+    [Test]
+    public void Reads_AnIdTheStoreCannotReadIsAJobTheStoreDoesNotHave()
+    {
+        const string jobId = "not-a-number";
+        _connection.Setup(x => x.GetStateData(jobId)).Throws(new FormatException("not a number"));
+        _connection.Setup(x => x.GetJobData(jobId)).Throws(new ArgumentException("not a key"));
+        _connection.Setup(x => x.GetJobParameter(jobId, "p")).Throws(new InvalidOperationException("type not loaded"));
+
+        _processor.GetJobStatus(jobId).ShouldBe(JobStatus.Unknown);
+        _processor.GetStoredJob(jobId).ShouldBeNull();
+        _processor.GetJobParameter(jobId, "p").ShouldBeNull();
+    }
+
+    // A store that fails for another reason (down, refused) is not answered for: the failure is the caller's to see
+    [Test]
+    public void Reads_AStoreFailureIsThrown()
+    {
+        _connection.Setup(x => x.GetStateData("1")).Throws(new TimeoutException("store down"));
+
+        Should.Throw<TimeoutException>(() => _processor.GetJobStatus("1"));
     }
 
     [Test]

@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Hangfire.States;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Exceptions;
@@ -134,17 +135,9 @@ public sealed class TaskLifecycle
     }
 
     // The task is cancelled whatever the rollback does: one that fails is logged, and the startup sweep finishes it
-    private async Task RollBackAsync(string jobId)
-    {
-        try
-        {
-            await _rollback.RollBackAsync(jobId, null, CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Cannot roll back the cancelled task {JobId}", jobId);
-        }
-    }
+    private Task RollBackAsync(string jobId) =>
+        BestEffort.RunAsync(() => _rollback.RollBackAsync(jobId, null, CancellationToken.None),
+            ex => _logger.LogError(ex, "Cannot roll back the cancelled task {JobId}", jobId));
 
     // True when the job was in one of the states and is deleted
     private bool DeleteJob(string jobId, string[] fromStates)
@@ -169,24 +162,8 @@ public sealed class TaskLifecycle
     }
 
     // Whether the store has no such job (or a deleted one); a job id the store cannot read (a number of the earlier
-    // numbering in a GUID store) is not there either
-    private bool JobLost(string jobId)
-    {
-        try
-        {
-            return _processor.GetJobStatus(jobId) is JobStatus.Unknown or JobStatus.Deleted;
-        }
-        catch (FormatException ex)
-        {
-            _logger.LogDebug(ex, "Job id {JobId} is not one of the job store", jobId);
-            return true;
-        }
-        catch (ArgumentException ex)
-        {
-            _logger.LogDebug(ex, "Job id {JobId} is not one of the job store", jobId);
-            return true;
-        }
-    }
+    // numbering in a GUID store) is not there either (Unknown)
+    private bool JobLost(string jobId) => _processor.GetJobStatus(jobId) is JobStatus.Unknown or JobStatus.Deleted;
 
     /// <summary>Removes one concluded task from the history and purges its artifacts.</summary>
     /// <exception cref="BadRequestException">The task has not concluded.</exception>

@@ -102,21 +102,11 @@ public sealed class CreatedDatasetRollbackJob
 
     // The live state of the task's job when it waits or runs (a retry re-queued it), else null; a job the storage
     // cannot read is not running
-    private string? JobRunsAgain(string taskId)
-    {
-        try
-        {
-            var status = _jobs.GetJobStatus(taskId);
-            return status is JobStatus.Enqueued or JobStatus.Scheduled or JobStatus.Processing or JobStatus.Awaiting
-                ? status.ToString()
-                : null;
-        }
-        catch (Exception ex) when (ex is FormatException or ArgumentException or InvalidOperationException)
-        {
-            _log.LogDebug(ex, "Cannot read the state of the job of task {TaskId}", taskId);
-            return null;
-        }
-    }
+    private string? JobRunsAgain(string taskId) =>
+        _jobs.GetJobStatus(taskId) is var status and (JobStatus.Enqueued or JobStatus.Scheduled or JobStatus.Processing
+            or JobStatus.Awaiting)
+            ? status.ToString()
+            : null;
 
     /// <summary>Whether anything is indexed in the dataset.</summary>
     internal static bool HasEntries(IDDB ddb) => ddb.FindSummaries(new EntryQuery(Recursive: false)) is { Count: > 0 };

@@ -106,6 +106,14 @@ public class HeavyTaskLifecycleTests
         services.AddSingleton(_jobs.Object);
         services.AddScoped(_ => TestJobs.DdbJobs(manager.Object));
         services.AddScoped<Registry.Web.Services.Builds.BuildScheduler>(_ => TestJobs.Scheduler(_jobs.Object));
+        // The tools of these tests add no dataset files: their write record and rollback are never used
+        services.AddSingleton(Mock.Of<ITaskRollback>());
+        services.AddSingleton(Mock.Of<ITaskWriteRecordStore>());
+        services.AddScoped(sp => new Registry.Web.Services.HeavyTasks.TaskEntryChanges(
+            Mock.Of<Registry.Web.Services.Ports.IDatasetCacheInvalidator>(), sp.GetRequiredService<RegistryContext>(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<Registry.Web.Services.HeavyTasks.TaskEntryChanges>.Instance));
+        services.AddScoped<HeavyTaskRecords>();
+        services.AddScoped<HeavyTaskDatasetServices>();
         _provider = services.BuildServiceProvider();
     }
 

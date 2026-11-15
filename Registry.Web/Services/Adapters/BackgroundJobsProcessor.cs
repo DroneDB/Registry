@@ -3,6 +3,7 @@ using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Hangfire;
 using Hangfire.States;
+using Hangfire.Storage;
 using Registry.Web.Models;
 using Registry.Web.Services.Ports;
 
@@ -54,39 +55,41 @@ public class BackgroundJobsProcessor : IBackgroundJobsProcessor
         return _client.Requeue(jobId, stateName); // BackgroundJobClientExtensions.Requeue
     }
 
-    public JobStatus GetJobStatus(string jobId)
-    {
-        using var connection = _storage.GetConnection();
-        var stateName = connection.GetStateData(jobId)?.Name;
-        return Enum.TryParse(stateName, out JobStatus state) ? state : JobStatus.Unknown;
-    }
+    public JobStatus GetJobStatus(string jobId) =>
+        ReadStore(connection => Enum.TryParse(connection.GetStateData(jobId)?.Name, out JobStatus state)
+            ? state
+            : JobStatus.Unknown, JobStatus.Unknown);
 
-    public StoredJob? GetStoredJob(string jobId)
+    public StoredJob? GetStoredJob(string jobId) =>
+        ReadStore(connection => connection.GetJobData(jobId)?.Job is { } job
+            ? new StoredJob(job.Type, job.Method.Name, job.Args)
+            : null, null);
+
+    public string? GetJobParameter(string jobId, string name) =>
+        ReadStore(connection => connection.GetJobParameter(jobId, name) is { } value && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : null, null);
+
+    // A read of the job store. An id the store cannot read (a number of the earlier numbering in a GUID store, or the
+    // other way round) or a stored job whose type cannot be loaded gives the answer of a job the store does not have
+    private T ReadStore<T>(Func<IStorageConnection, T> read, T notThere)
     {
         try
         {
             using var connection = _storage.GetConnection();
-            var job = connection.GetJobData(jobId)?.Job;
-            return job is null ? null : new StoredJob(job.Type, job.Method.Name, job.Args);
+            return read(connection);
         }
-        catch (Exception ex) when (ex is FormatException or ArgumentException or InvalidOperationException)
+        catch (FormatException)
         {
-            // An id the store cannot read (another numbering), or a job whose type cannot be loaded
-            return null;
+            return notThere;
         }
-    }
-
-    public string? GetJobParameter(string jobId, string name)
-    {
-        try
+        catch (ArgumentException)
         {
-            using var connection = _storage.GetConnection();
-            var value = connection.GetJobParameter(jobId, name);
-            return string.IsNullOrWhiteSpace(value) ? null : value;
+            return notThere;
         }
-        catch (Exception ex) when (ex is FormatException or ArgumentException)
+        catch (InvalidOperationException)
         {
-            return null;
+            return notThere;
         }
     }
 

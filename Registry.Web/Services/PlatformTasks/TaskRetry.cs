@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Hangfire.States;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Web.Services.Managers;
 using Registry.Ports;
 using Registry.Web.Exceptions;
@@ -156,18 +157,7 @@ public sealed class TaskRetry
     }
 
     // The live state of the job in the job store; a job the store cannot read is Unknown
-    private JobStatus LiveStatus(string jobId)
-    {
-        try
-        {
-            return _processor.GetJobStatus(jobId);
-        }
-        catch (Exception ex) when (ex is FormatException or ArgumentException or InvalidOperationException)
-        {
-            _logger.LogDebug(ex, "Cannot read the state of the job of task {JobId}", jobId);
-            return JobStatus.Unknown;
-        }
-    }
+    private JobStatus LiveStatus(string jobId) => _processor.GetJobStatus(jobId);
 
     // The re-run writes into the dataset an earlier run created (photogrammetry reuses it): the delayed delete that the
     // rollback of the failed run scheduled is cancelled while it still waits. One that started meanwhile reads the record,
@@ -177,17 +167,14 @@ public sealed class TaskRetry
         if (TaskWriteRecord.Parse(recordBefore)?.CreatedDatasetDeleteJob is not { } deleteJob)
             return;
 
-        try
+        BestEffort.Run(() =>
         {
             if (_processor.Delete(deleteJob, ScheduledState.StateName))
                 _logger.LogInformation("Retry of task {JobId}: the delayed delete {DeleteJob} of the dataset it created " +
                                        "is cancelled", jobId, deleteJob);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogWarning(ex, "Retry of task {JobId}: cannot cancel the delayed delete {DeleteJob} of the dataset " +
-                                   "it created; that job keeps the dataset of a task that runs again", jobId, deleteJob);
-        }
+        }, ex => _logger.LogWarning(ex, "Retry of task {JobId}: cannot cancel the delayed delete {DeleteJob} of the " +
+                                        "dataset it created; that job keeps the dataset of a task that runs again",
+            jobId, deleteJob));
     }
 
     // The record of the re-queued run (TaskWriteRecord.ForRequeue); the record before and after, when it changed
@@ -204,37 +191,26 @@ public sealed class TaskRetry
     }
 
     // The re-queue was rejected: the record goes back to what it was, unless something changed it since
-    private async Task RestoreWriteRecordAsync(string jobId, string before, string after)
-    {
-        try
-        {
-            await _records.ChangeAsync(jobId, r => r?.ToJson() == after ? TaskWriteRecord.Parse(before) : null,
-                CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cannot put back the write record of task {JobId} after a rejected retry", jobId);
-        }
-    }
+    private Task RestoreWriteRecordAsync(string jobId, string before, string after) =>
+        BestEffort.RunAsync(
+            () => _records.ChangeAsync(jobId, r => r?.ToJson() == after ? TaskWriteRecord.Parse(before) : null,
+                CancellationToken.None),
+            ex => _logger.LogWarning(ex, "Cannot put back the write record of task {JobId} after a rejected retry", jobId));
 
     /// <summary>
     /// Asks libddb whether the dataset has deferred builds (those the
     /// DroneDB build rethrow left for a retry). Any failure returns false so that a ddb
     /// availability hiccup never blocks the user-initiated retry.
     /// </summary>
-    private async Task<bool> IsBuildPendingSafeAsync(string orgSlug, string dsSlug, CancellationToken ct)
-    {
-        try
+    private Task<bool> IsBuildPendingSafeAsync(string orgSlug, string dsSlug, CancellationToken ct) =>
+        BestEffort.GetAsync(async () =>
         {
             var ds = await _datasets.GetRequiredDatasetAsync(orgSlug, dsSlug, ct: ct);
-            var ddb = _ddbManager.Get(orgSlug, ds.InternalRef);
-            return ddb.IsBuildPending();
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+            return _ddbManager.Get(orgSlug, ds.InternalRef).IsBuildPending();
+        }, ex =>
         {
             _logger.LogWarning(ex, "Retry: IsBuildPending check failed for {Org}/{Ds}, continuing retry", orgSlug,
                 dsSlug);
             return false;
-        }
-    }
+        }, ct);
 }
