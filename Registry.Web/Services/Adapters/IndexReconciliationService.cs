@@ -28,11 +28,11 @@ namespace Registry.Web.Services.Adapters;
 /// <remarks>
 /// One run at a time across the hosts: the hourly sweep walks every dataset folder and can outlast
 /// the hour on the HDD RAID5; a second run would queue the same unindexed files from another host.
-/// Timeout 0: the run in progress does the work, the next tick picks up the rest. Not retried as a
+/// A second run ends at once: the run in progress does the work, the next tick picks up the rest. Not retried as a
 /// whole: the next scheduled run is the retry for a failure in a single dataset.
 /// </remarks>
 [AutomaticRetry(Attempts = 0)]
-[DisableConcurrentExecution(timeoutInSeconds: 0)]
+[OneRunAtATime]
 public class IndexReconciliationService
 {
     private readonly record struct ReconcileSummary(

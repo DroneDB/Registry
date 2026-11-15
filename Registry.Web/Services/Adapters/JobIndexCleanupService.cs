@@ -19,10 +19,10 @@ namespace Registry.Web.Services.Adapters;
 /// </summary>
 /// <remarks>
 /// One run at a time across the hosts: two would run the same DELETE (harmless but wasted on a
-/// large table). Timeout 0: the run in progress does the work.
+/// large table). A second run ends at once: the run in progress does the work.
 /// </remarks>
 [AutomaticRetry(Attempts = 1)]
-[DisableConcurrentExecution(timeoutInSeconds: 0)]
+[OneRunAtATime]
 public class JobIndexCleanupService
 {
     private readonly IJobIndexWriter _jobIndexWriter;

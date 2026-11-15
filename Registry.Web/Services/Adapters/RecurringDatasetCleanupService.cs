@@ -18,10 +18,10 @@ namespace Registry.Web.Services.Adapters;
 /// </summary>
 /// <remarks>
 /// One run at a time across the hosts: a second one would clean the same datasets in parallel
-/// (libddb serializes them as busy). Timeout 0: the run in progress does the work.
+/// (libddb serializes them as busy). A second run ends at once: the run in progress does the work.
 /// </remarks>
 [AutomaticRetry(Attempts = 1)]
-[DisableConcurrentExecution(timeoutInSeconds: 0)]
+[OneRunAtATime]
 public class RecurringDatasetCleanupService
 {
     private readonly DatasetSweep _sweep;

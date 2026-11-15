@@ -266,6 +266,8 @@ public class JobInfrastructureTests
                 services.AddLogging();
                 services.AddSingleton(Mock.Of<IHeavyToolRegistry>());
                 services.AddSingleton(Mock.Of<IOgcCacheKeys>());
+                services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(
+                    new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
                 foreach (var type in RegistryJobsServiceCollectionExtensions.JobFilterTypes)
                     services.AddSingleton(type);
                 return services.BuildServiceProvider();
@@ -306,12 +308,12 @@ public class JobInfrastructureTests
     public void RecurringJobs_ThatCanOverlapAcrossHosts_RunOneAtATime()
     {
         // The recovery pass is built to overlap (idempotent, bounded) and the expired-jobs sweep is a
-        // short idempotent daily run; every other sweep holds the lock of its job with timeout 0
-        foreach (var type in RecurringServices)
+        // short idempotent daily run; every other sweep is marked, so a second run ends without running. The
+        // marker is the filter's, not Hangfire's DisableConcurrentExecution, whose zero-timeout lock excludes nothing
+        foreach (var type in RecurringServices.Append(typeof(AbandonedShareBatchesService)))
         {
-            var attribute = type.GetCustomAttributes(typeof(DisableConcurrentExecutionAttribute), true)
-                .Cast<DisableConcurrentExecutionAttribute>().SingleOrDefault();
-            attribute.ShouldNotBeNull(type.Name);
+            type.GetCustomAttributes(typeof(OneRunAtATimeAttribute), true).ShouldHaveSingleItem(type.Name);
+            type.GetCustomAttributes(typeof(DisableConcurrentExecutionAttribute), true).ShouldBeEmpty(type.Name);
         }
     }
 

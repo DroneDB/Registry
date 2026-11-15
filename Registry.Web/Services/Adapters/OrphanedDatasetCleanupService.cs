@@ -22,10 +22,10 @@ namespace Registry.Web.Services.Adapters;
 /// </summary>
 /// <remarks>
 /// One run at a time across the hosts: two would delete the same folders in parallel and report
-/// each other's deletions as failures. Timeout 0: the run in progress does the work.
+/// each other's deletions as failures. A second run ends at once: the run in progress does the work.
 /// </remarks>
 [AutomaticRetry(Attempts = 1)]
-[DisableConcurrentExecution(timeoutInSeconds: 0)]
+[OneRunAtATime]
 public class OrphanedDatasetCleanupService
 {
     private readonly RegistryContext _context;

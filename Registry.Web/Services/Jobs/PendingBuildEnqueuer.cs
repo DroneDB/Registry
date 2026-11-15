@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Hangfire;
-using Hangfire.MySql;
 using Hangfire.Server;
 using Hangfire.Storage;
 using Microsoft.Extensions.Configuration;
@@ -48,9 +47,7 @@ public sealed class PendingBuildEnqueuer
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _time = time ?? throw new ArgumentNullException(nameof(time));
-        _mysqlConnectionString = storage is MySqlStorage
-            ? configuration?.GetConnectionString(MagicStrings.HangfireConnectionName)
-            : null;
+        _mysqlConnectionString = HangfireMySql.ConnectionString(storage, configuration);
     }
 
     /// <summary>

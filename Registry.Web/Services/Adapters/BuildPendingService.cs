@@ -34,11 +34,11 @@ namespace Registry.Web.Services.Adapters;
 /// The recurring sweep (<see cref="ProcessPendingBuilds(PerformContext, CancellationToken)"/>) is not
 /// retried: it runs again later. Its success records are noise and expire quickly. One sweep at a
 /// time across the hosts: the per-dataset coordinator lock keeps two from enqueueing twice, but
-/// both would scan every dataset. Timeout 0: the sweep in progress does the work.
+/// both would scan every dataset. A second run ends at once: the sweep in progress does the work.
 /// </remarks>
 [AutomaticRetry(Attempts = 0)]
 [JobExpiration(ExpirationTimeoutInMinutes = 60)]
-[DisableConcurrentExecution(timeoutInSeconds: 0)]
+[OneRunAtATime]
 public class BuildPendingService : IPendingBuildFlag, IPendingBuildRetry
 {
     private readonly DatasetSweep _sweep;

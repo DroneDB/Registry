@@ -124,6 +124,32 @@ public sealed class MariaDbServer
         return await command.ExecuteScalarAsync();
     }
 
+    /// <summary>
+    /// Drops the tables whose name starts with <paramref name="tablesPrefix"/> (a Hangfire test's own random prefix)
+    /// from the database of <paramref name="connectionString"/>.
+    /// </summary>
+    public static async Task DropTablesOfPrefixAsync(string connectionString, string tablesPrefix)
+    {
+        await using var connection = new MySqlConnection(connectionString);
+        await connection.OpenAsync();
+        var tables = new System.Collections.Generic.List<string>();
+        await using (var query = connection.CreateCommand())
+        {
+            query.CommandText = "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE()";
+            await using var reader = await query.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                if (reader.GetString(0).StartsWith(tablesPrefix, StringComparison.Ordinal))
+                    tables.Add(reader.GetString(0));
+        }
+
+        foreach (var table in tables)
+        {
+            await using var drop = connection.CreateCommand();
+            drop.CommandText = "SET FOREIGN_KEY_CHECKS=0; DROP TABLE `" + table.Replace("`", "``") + "`; SET FOREIGN_KEY_CHECKS=1;";
+            await drop.ExecuteNonQueryAsync();
+        }
+    }
+
     private static bool IsCi =>
         string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase);
 

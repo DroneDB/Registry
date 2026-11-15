@@ -37,11 +37,11 @@ namespace Registry.Web.Services.Adapters;
 /// needs only the services of every job host.
 /// </summary>
 /// <remarks>
-/// One run at a time across the hosts (timeout 0: the run in progress does the work). A batch that cannot be rolled back
+/// One run at a time across the hosts (a second run ends at once: the run in progress does the work). A batch that cannot be rolled back
 /// stays Running and is tried again at the next run.
 /// </remarks>
 [AutomaticRetry(Attempts = 0)]
-[DisableConcurrentExecution(timeoutInSeconds: 0)]
+[OneRunAtATime]
 public class AbandonedShareBatchesService
 {
     /// <summary>The time without an upload after which a batch is abandoned: a constant, not a setting (§8.3).</summary>

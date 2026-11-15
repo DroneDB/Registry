@@ -36,11 +36,11 @@ namespace Registry.Web.Services.Adapters;
 /// </summary>
 /// <remarks>
 /// One run at a time across the hosts (the nightly run and the admin trigger of
-/// <c>check-artifact-completeness</c>): two would queue the same rebuilds. Timeout 0: the run in
+/// <c>check-artifact-completeness</c>): two would queue the same rebuilds. A second run ends at once: the run in
 /// progress does the work.
 /// </remarks>
 [AutomaticRetry(Attempts = 0)]
-[DisableConcurrentExecution(timeoutInSeconds: 0)]
+[OneRunAtATime]
 public class ArtifactCompletenessCheckerService
 {
     // Small pacing delay between entries; keeps the scan effectively

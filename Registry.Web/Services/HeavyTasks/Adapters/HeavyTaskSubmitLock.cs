@@ -1,6 +1,5 @@
 using System;
 using Hangfire;
-using Hangfire.MySql;
 using Microsoft.Extensions.Configuration;
 using Registry.Web.Exceptions;
 using Registry.Web.Utilities;
@@ -28,9 +27,7 @@ public class HeavyTaskSubmitLock
     public HeavyTaskSubmitLock(JobStorage storage, IConfiguration? configuration = null)
     {
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
-        _mysqlConnectionString = storage is MySqlStorage
-            ? configuration?.GetConnectionString(MagicStrings.HangfireConnectionName)
-            : null;
+        _mysqlConnectionString = HangfireMySql.ConnectionString(storage, configuration);
     }
 
     /// <summary>

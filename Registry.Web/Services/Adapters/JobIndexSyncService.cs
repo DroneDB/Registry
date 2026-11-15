@@ -21,12 +21,12 @@ namespace Registry.Web.Services.Adapters;
 /// </summary>
 /// <remarks>
 /// One run at a time across the hosts: an hourly run over many rows can outlast the hour, and two
-/// would read and write the same rows (the writes are guarded, the work is wasted). Timeout 0: the
+/// would read and write the same rows (the writes are guarded, the work is wasted). A second run ends at once: the
 /// run in progress does the work.
 /// </remarks>
 [JobExpiration(ExpirationTimeoutInMinutes = 60)]
 [AutomaticRetry(Attempts = 1)]
-[DisableConcurrentExecution(timeoutInSeconds: 0)]
+[OneRunAtATime]
 public class JobIndexSyncService
 {
     /// <summary>
