@@ -64,7 +64,7 @@ public sealed class OneRunAtATimeFilter(IConfiguration configuration, ILogger<On
 
         var connectionString = HangfireMySql.ConnectionString(context.Storage, configuration)
             ?? throw new InvalidOperationException("One run at a time requires the configured Hangfire MySQL connection string");
-        return MySqlSessionLock.TryAcquire(connectionString, resource, KeyPrefix, TimeSpan.Zero);
+        return MySqlSessionLock.TryAcquire(connectionString, resource, KeyPrefix, TimeSpan.Zero, log);
     }
 
     private sealed class SemaphoreRelease(SemaphoreSlim semaphore) : IDisposable
