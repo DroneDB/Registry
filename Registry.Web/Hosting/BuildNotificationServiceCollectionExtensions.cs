@@ -21,10 +21,10 @@ public static class BuildNotificationServiceCollectionExtensions
 
         services.AddSingleton<IBuildOutcomeClassifier, BuildOutcomeClassifier>();
         services.AddScoped<IBuildRequesterResolver, BuildRequesterResolver>();
-        // From the identity database every host that runs jobs shares (no UserManager needed)
-        services.AddScoped<IdentityBuildNotificationLevels>();
-        services.AddScoped<IBuildNotificationLevels>(sp => sp.GetRequiredService<IdentityBuildNotificationLevels>());
-        services.AddScoped<ITaskNotificationLevels>(sp => sp.GetRequiredService<IdentityBuildNotificationLevels>());
+        // From the identity database every host that runs jobs shares (no UserManager needed). The reader keeps no
+        // state of its own, so each port has its own instance over the scope's identity database
+        services.AddScoped<IBuildNotificationLevels, IdentityBuildNotificationLevels>();
+        services.AddScoped<ITaskNotificationLevels, IdentityBuildNotificationLevels>();
         // Which datasets a user may still read when the digest is sent, by the API's rules (no request needed)
         services.AddScoped<IUserDatasetAccess, IdentityUserDatasetAccess>();
         services.AddScoped<BuildNotificationAudience>();
