@@ -15,6 +15,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Hosting;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Test.Support;
+using Registry.Web.Utilities;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -70,6 +71,45 @@ public class DatasetArchiveExtractorTests
 
         result.Extracted.ShouldBe(["a/b.txt"]);
         File.ReadAllText(Path.Combine(_dataset, "a", "b.txt")).ShouldBe("second");
+    }
+
+    // The name rule: names that differ only in letter case are one name, so the second entry of an archive that holds
+    // x.jpg and X.JPG is skipped, not written beside the first (on a case-sensitive file system, as a second file)
+    [Test]
+    public async Task TwoEntriesThatDifferOnlyInLetterCase_ExtractTheFirstAndSkipTheSecond()
+    {
+        Zip(("x.jpg", "first"), ("X.JPG", "second"));
+
+        var result = await ExtractAsync();
+
+        result.Extracted.ShouldBe(["x.jpg"]);
+        result.Skipped.ShouldBe([new ArchiveSkippedEntry("X.JPG", ArchiveSkipReason.KeptExisting)]);
+        Directory.GetFiles(_dataset).Select(Path.GetFileName).ShouldBe(["x.jpg"]);
+        File.ReadAllText(Path.Combine(_dataset, "x.jpg")).ShouldBe("first");
+    }
+
+    // An entry goes to the path of the existing entry that holds its name, in that entry's letter case, and the existing
+    // entry decides whether it is kept
+    [TestCase(false, "old")]
+    [TestCase(true, "new")]
+    public async Task AnEntryThatDiffersFromAnExistingNameOnlyInLetterCase_IsKeptOrReplacedInPlace(bool overwrite,
+        string expected)
+    {
+        Directory.CreateDirectory(Path.Combine(_dataset, "A"));
+        File.WriteAllText(Path.Combine(_dataset, "A", "X.JPG"), "old");
+        Zip(("a/x.jpg", "new"));
+        var ddb = new Moq.Mock<IDDB>();
+        ddb.Setup(d => d.GetLocalPath(Moq.It.IsAny<string>())).Returns((string p) => Path.Combine(_dataset, p));
+
+        var result = await ExtractAsync(
+            keepExisting: location => location.Existing != null && !overwrite,
+            locate: path => DatasetEntryLookup.Locate(ddb.Object, path));
+
+        result.Extracted.ShouldBe(overwrite ? ["A/X.JPG"] : []);
+        result.Skipped.Count.ShouldBe(overwrite ? 0 : 1);
+        Directory.GetDirectories(_dataset).Select(Path.GetFileName).Where(n => n != IDDB.UploadsFolderName).ShouldBe(["A"], "no folder in another letter case");
+        Directory.GetFiles(Path.Combine(_dataset, "A")).Select(Path.GetFileName).ShouldBe(["X.JPG"]);
+        File.ReadAllText(Path.Combine(_dataset, "A", "X.JPG")).ShouldBe(expected);
     }
 
     [Test]
@@ -139,7 +179,7 @@ public class DatasetArchiveExtractorTests
         Zip(("good.txt", "g"), ("vectors/tool.exe", "x"), ("keep.txt", "new"), (".ddb/x", "x"));
 
         var result = await ExtractAsync(isExtensionAllowed: path => !path.EndsWith(".exe", StringComparison.Ordinal),
-            keepExisting: path => path == "keep.txt");
+            keepExisting: location => location.Path == "keep.txt");
 
         result.Extracted.ShouldBe(["good.txt"]);
         result.Skipped.ShouldBe(
@@ -313,11 +353,13 @@ public class DatasetArchiveExtractorTests
 
     private Task<ArchiveExtractionResult> ExtractAsync(VolumeHeadroom? headroom = null, long safetyMargin = 0,
         IProgress<ArchiveExtractionProgress>? progress = null, Func<string, bool>? isExtensionAllowed = null,
-        Func<string, bool>? keepExisting = null, Func<string, bool>? exclude = null, long maxBytes = 0,
-        string? maxBytesMessage = null, ProcessingPlatformSettings? settings = null) =>
+        Func<EntryLocation, bool>? keepExisting = null, Func<string, bool>? exclude = null, long maxBytes = 0,
+        string? maxBytesMessage = null, ProcessingPlatformSettings? settings = null,
+        Func<string, EntryLocation>? locate = null) =>
         TestArchives.Extractor(new SharpCompressArchiveExtractor(), headroom, settings).ExtractAsync(
             new ArchiveExtractionRequest(_archive, _dataset, string.Empty, isExtensionAllowed ?? (_ => true),
-                keepExisting ?? (_ => false), maxBytes, safetyMargin, Exclude: exclude, MaxBytesMessage: maxBytesMessage),
+                keepExisting ?? (_ => false), maxBytes, safetyMargin, Exclude: exclude, MaxBytesMessage: maxBytesMessage,
+                Locate: locate),
             progress, CancellationToken.None);
 
     private void Zip(params (string Name, string Content)[] entries)

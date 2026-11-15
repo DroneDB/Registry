@@ -62,7 +62,7 @@ public sealed class PhotogrammetryResultsImport
             _settings.MaxArchiveExtractSizeBytes, replacedBytes: null, ct);
         var extraction = await _archives.ExtractAsync(
             new ArchiveExtractionRequest(archivePath, root, destPath, _importSettings.IsExtensionAllowed,
-                target => !writes.MayWrite(target), maxBytes,
+                location => !writes.MayWrite(location.Path), maxBytes,
                 _settings.DiskSafetyMarginBytes, writes, Exclude: ExcludedResultEntry(destPath),
                 MaxBytesMessage: maxBytesMessage),
             new CallbackProgress<ArchiveExtractionProgress>(p => ReportProgress(progress, p)), ct);

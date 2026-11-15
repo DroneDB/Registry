@@ -206,6 +206,14 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
             DefaultFileName: null, ContentType: null, ReplacedBytes: replaced);
     }
 
+    // Where a dataset path is under the name rule: names clash without regard to letter case, so an entry goes to the
+    // path of the existing entry that holds its name
+    private static Func<string, EntryLocation> LocateIn(IDDB ddb) => path => DatasetEntryLookup.Locate(ddb, path);
+
+    // Whether an entry that holds the name is kept: always without overwrite, and a folder always (a file never replaces it)
+    private static Func<EntryLocation, bool> KeepsExisting(bool overwrite) =>
+        location => location.Existing is { } existing && (!overwrite || existing.IsFolder);
+
     // The size the owner's use counts now for the files that an extraction of the archive into destPath replaces (their
     // index entries): none without overwrite, which keeps every existing file
     private long ReplacedBytes(IDDB ddb, string localArchive, string destPath, bool overwrite) =>
@@ -213,7 +221,8 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
             ? 0
             : _archives.ReplacedBytes(
                 new ArchiveExtractionRequest(localArchive, ddb.DatasetFolderPath, destPath,
-                    _importSettings.IsExtensionAllowed, _ => false, MaxBytes: 0, SafetyMarginBytes: 0),
+                    _importSettings.IsExtensionAllowed, KeepsExisting(overwrite: true), MaxBytes: 0, SafetyMarginBytes: 0,
+                    Locate: LocateIn(ddb)),
                 path => WorkerStorageQuota.IndexedBytes(ddb, path));
 
     protected override async Task<HeavyToolArtifact?> ExecuteAsync(
@@ -250,8 +259,9 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
         var extraction = await _archives.ExtractAsync(
             new ArchiveExtractionRequest(localArchive, ctx.Ddb.DatasetFolderPath, destPath,
                 _importSettings.IsExtensionAllowed,
-                target => !overwrite && ctx.Ddb.EntryExists(target),
-                maxBytes, _settings.DiskSafetyMarginBytes, writes, MaxBytesMessage: maxBytesMessage),
+                KeepsExisting(overwrite),
+                maxBytes, _settings.DiskSafetyMarginBytes, writes, MaxBytesMessage: maxBytesMessage,
+                Locate: LocateIn(ctx.Ddb)),
             new CallbackProgress<ArchiveExtractionProgress>(p => ReportProgress(progress, p, sourcePath)), ct);
         var extractedPaths = extraction.Extracted.ToList();
 

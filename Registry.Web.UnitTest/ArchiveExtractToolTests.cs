@@ -477,6 +477,30 @@ public class ArchiveExtractToolTests
         File.ReadAllText(Path.Combine(_dir, "a.txt")).ShouldBe("old");
     }
 
+    // The name rule: a file named a/x.jpg in an archive and A/X.JPG in the dataset are one name. Without overwrite the
+    // existing file is kept, with it the file is replaced in the letter case of the existing entry: no second file or
+    // folder in another letter case appears
+    [TestCase(false, "old")]
+    [TestCase(true, "new")]
+    public async Task ExecuteAsync_AnEntryThatDiffersFromAnExistingNameOnlyInLetterCase_IsKeptOrReplacedInPlace(
+        bool overwrite, string expected)
+    {
+        var local = Path.Combine(_dir, "flight.zip");
+        CreateZip(local, "a/x.jpg", "new");
+        Directory.CreateDirectory(Path.Combine(_dir, "A"));
+        File.WriteAllText(Path.Combine(_dir, "A", "X.JPG"), "old");
+        var ddb = MockDdb("flight.zip", local);
+        ddb.Setup(d => d.GetLocalPath(It.IsAny<string>())).Returns((string p) => Path.Combine(_dir, p));
+        var (tool, _) = CreateTool();
+
+        await tool.ExecuteAsync(Request(new { sourcePath = "flight.zip", overwrite }), ExecutionContext(ddb).Object,
+            new Progress<HeavyToolProgress>(), CancellationToken.None);
+
+        Directory.GetDirectories(_dir).Select(Path.GetFileName).Where(n => n != IDDB.UploadsFolderName).ShouldBe(["A"]);
+        Directory.GetFiles(Path.Combine(_dir, "A")).Select(Path.GetFileName).ShouldBe(["X.JPG"]);
+        File.ReadAllText(Path.Combine(_dir, "A", "X.JPG")).ShouldBe(expected);
+    }
+
     // FR-PRC-30: the log names the entries that were skipped with the reason, apart from the extracted ones
     [Test]
     public async Task ExecuteAsync_LogsTheSkippedEntriesWithTheirReason()

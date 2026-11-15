@@ -141,7 +141,7 @@ public sealed class ArchiveUrlImportSource : IImportSource
     {
         await _archives.ExtractAsync(
             new ArchiveExtractionRequest(scratch, destFolder, string.Empty, _settings.IsExtensionAllowed,
-                target => !writes.MayWrite(target), _maxImportSizeBytes, _diskSafetyMarginBytes, writes),
+                location => !writes.MayWrite(location.Path), _maxImportSizeBytes, _diskSafetyMarginBytes, writes),
             new CallbackProgress<ArchiveExtractionProgress>(p =>
             {
                 if (p.Done == 0) return;
