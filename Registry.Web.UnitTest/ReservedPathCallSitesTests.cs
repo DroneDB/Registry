@@ -167,7 +167,7 @@ public class ReservedPathCallSitesTests
         factory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(() => ClientFor(handler));
 
         var client = new RemoteRegistryClient(factory.Object, new ImportSettings(),
-            TestPaths.Policy, TestScratch.Provider, new Registry.Adapters.FileSystem(),
+            TestImports.Budgets, TestPaths.Policy, TestScratch.Provider, new Registry.Adapters.FileSystem(),
             NullLogger<RemoteRegistryClient>.Instance);
 
         var entries = paths.Select(p => new EntryDto { Path = p, Type = EntryType.Image, Size = 4 }).ToArray();

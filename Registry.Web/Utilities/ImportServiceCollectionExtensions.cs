@@ -55,6 +55,7 @@ public static class ImportServiceCollectionExtensions
                     TimeSpan.FromSeconds(importSettings.ConnectTimeoutSeconds)));
         services.AddSingleton<IImportCredentialProtector, ImportCredentialProtector>();
         services.AddSingleton<ImportCredentials>();
+        services.AddSingleton<ImportBudgets>();
         services.AddSingleton<IRemoteRegistryClient, RemoteRegistryClient>();
 
         // One source per type (open-closed: add a new source = one line here).

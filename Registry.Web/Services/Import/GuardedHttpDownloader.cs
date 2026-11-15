@@ -37,8 +37,6 @@ public sealed record FileDownloadProgress(double Fraction, long BytesSoFar, long
 /// </summary>
 public sealed class GuardedHttpDownloader
 {
-    private const int CopyBufferSize = 1024 * 1024;
-
     private readonly SsrfGuard _ssrfGuard;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly VolumeHeadroom _headroom;
@@ -253,63 +251,51 @@ public sealed class GuardedHttpDownloader
         await using var http = await response.Content.ReadAsStreamAsync(ct);
         await using var file = File.Create(destFile);
 
-        var buffer = new byte[CopyBufferSize];
-        long downloaded = 0;
-
         var lowSpeedOn = minSpeedBytesPerSec > 0 && lowSpeedGraceSeconds > 0;
         var windowStart = _time.GetTimestamp();
         long windowStartBytes = 0;
 
-        while (true)
+        // Every chunk is accounted before it is written (the size cap, then the disk head-room); the reads are guarded
+        // against a stall, and after each chunk the rolling low-speed guard and the progress run
+        return await BudgetedCopy.CopyAsync(http, file, budget, ct,
+            read: lowSpeedOn ? (buffer, token) => ReadWithStallGuardAsync(http, buffer, lowSpeedGraceSeconds, token) : null,
+            chunkWritten: downloaded =>
+            {
+                // At each grace boundary the window's average speed must meet the minimum, otherwise the transfer is
+                // aborted
+                var windowElapsed = _time.GetElapsedTime(windowStart);
+                if (lowSpeedOn && windowElapsed.TotalSeconds >= lowSpeedGraceSeconds)
+                {
+                    var windowBytes = downloaded - windowStartBytes;
+                    var speed = windowBytes / windowElapsed.TotalSeconds;
+                    if (speed < minSpeedBytesPerSec)
+                        throw new TimeoutException(
+                            $"The download is too slow ({speed:F0} B/s is below the required " +
+                            $"{minSpeedBytesPerSec} B/s over {lowSpeedGraceSeconds}s).");
+
+                    windowStart = _time.GetTimestamp();
+                    windowStartBytes = downloaded;
+                }
+
+                progress?.Report(new FileDownloadProgress(
+                    total is > 0 ? Math.Min(1.0, (double)downloaded / total.Value) : -1, downloaded, total));
+            });
+    }
+
+    // Hard stall guard: a single read that outlasts the grace window means ~0 B/s
+    private async ValueTask<int> ReadWithStallGuardAsync(Stream http, Memory<byte> buffer, int graceSeconds,
+        CancellationToken ct)
+    {
+        using var stall = new CancellationTokenSource(TimeSpan.FromSeconds(graceSeconds + 5), _time);
+        using var readCts = CancellationTokenSource.CreateLinkedTokenSource(ct, stall.Token);
+        try
         {
-            int read;
-            if (lowSpeedOn)
-            {
-                // Hard stall guard: a single read that outlasts the grace window means ~0 B/s.
-                using var stall = new CancellationTokenSource(TimeSpan.FromSeconds(lowSpeedGraceSeconds + 5), _time);
-                using var readCts = CancellationTokenSource.CreateLinkedTokenSource(ct, stall.Token);
-                try
-                {
-                    read = await http.ReadAsync(buffer, readCts.Token);
-                }
-                catch (OperationCanceledException) when (stall.IsCancellationRequested && !ct.IsCancellationRequested)
-                {
-                    throw new TimeoutException("The download stalled (no data received).");
-                }
-            }
-            else
-            {
-                read = await http.ReadAsync(buffer, ct);
-            }
-
-            if (read <= 0) break;
-
-            // Enforce the size cap + disk head-room BEFORE writing the chunk.
-            budget.Account(read);
-            await file.WriteAsync(buffer.AsMemory(0, read), ct);
-            downloaded += read;
-
-            // Rolling low-speed guard: at each grace boundary the window's average speed must meet
-            // the minimum, otherwise the transfer is aborted.
-            var windowElapsed = _time.GetElapsedTime(windowStart);
-            if (lowSpeedOn && windowElapsed.TotalSeconds >= lowSpeedGraceSeconds)
-            {
-                var windowBytes = downloaded - windowStartBytes;
-                var speed = windowBytes / windowElapsed.TotalSeconds;
-                if (speed < minSpeedBytesPerSec)
-                    throw new TimeoutException(
-                        $"The download is too slow ({speed:F0} B/s is below the required " +
-                        $"{minSpeedBytesPerSec} B/s over {lowSpeedGraceSeconds}s).");
-
-                windowStart = _time.GetTimestamp();
-                windowStartBytes = downloaded;
-            }
-
-            progress?.Report(new FileDownloadProgress(
-                total is > 0 ? Math.Min(1.0, (double)downloaded / total.Value) : -1, downloaded, total));
+            return await http.ReadAsync(buffer, readCts.Token);
         }
-
-        return downloaded;
+        catch (OperationCanceledException) when (stall.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            throw new TimeoutException("The download stalled (no data received).");
+        }
     }
 
     private static UrlProbeResult Reachable(HttpResponseMessage response)

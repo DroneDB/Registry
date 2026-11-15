@@ -31,6 +31,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ImportSettings _settings;
+    private readonly ImportBudgets _budgets;
     private readonly DatasetPathPolicy _paths;
     private readonly ScratchFileProvider _scratch;
     private readonly IFileSystem _fs;
@@ -40,16 +41,18 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
     /// Initializes a new instance of the <see cref="RemoteRegistryClient"/> class.
     /// </summary>
     /// <param name="httpClientFactory">The HTTP client factory.</param>
-    /// <param name="settings">The import settings (download concurrency / retry policy).</param>
+    /// <param name="settings">The import settings (download concurrency / retry policy, the size ceiling).</param>
+    /// <param name="budgets">The budget of a file downloaded to disk: the size cap, then the disk head-room.</param>
     /// <param name="paths">The dataset path policy (the untrusted paths of a remote listing).</param>
     /// <param name="scratch">Where a file is downloaded before it is moved into the dataset.</param>
     /// <param name="fs">The file system the dataset folder is written through.</param>
     /// <param name="logger">The logger.</param>
-    public RemoteRegistryClient(IHttpClientFactory httpClientFactory, ImportSettings settings,
+    public RemoteRegistryClient(IHttpClientFactory httpClientFactory, ImportSettings settings, ImportBudgets budgets,
         DatasetPathPolicy paths, ScratchFileProvider scratch, IFileSystem fs, ILogger<RemoteRegistryClient> logger)
     {
         _httpClientFactory = httpClientFactory;
         _settings = settings;
+        _budgets = budgets;
         _paths = paths;
         _scratch = scratch;
         _fs = fs;
@@ -259,7 +262,7 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
         var temp = _scratch.CreateForDataset(destFolder);
         try
         {
-            var result = await DownloadFileAsync(registryUrl, authToken, sourceOrg, sourceDs, entry.Path, temp.Path, ct);
+            var result = await DownloadFileAsync(registryUrl, authToken, sourceOrg, sourceDs, entry, temp.Path, ct);
 
             // HttpHelper.DownloadFileWithRetryAsync reports a cancellation as a failure: a cancel (the user's, the quota
             // stop of D-039) is a cancellation, not an I/O error of this file
@@ -356,11 +359,40 @@ public sealed class RemoteRegistryClient : IRemoteRegistryClient
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The body is copied through the budget of the file (<see cref="BudgetedCopy"/>): no more than the size the remote
+    /// registry listed for it (a listing without a size, 0, sets none) and the import size ceiling, and never into the
+    /// disk head-room, so a remote that sends more than it listed stops at the cap instead of filling the volume. Each
+    /// attempt of the retry starts a new budget; a breach is not retried.
+    /// </remarks>
     public Task<HttpHelper.DownloadResult> DownloadFileAsync(string registryUrl, string? authToken, string orgSlug,
-        string dsSlug, string entryPath, string localPath, CancellationToken ct) =>
-        HttpHelper.DownloadFileWithRetryAsync(
-            $"{DatasetUrl(registryUrl, orgSlug, dsSlug)}/download?path={Uri.EscapeDataString(entryPath)}&inline=1",
-            localPath, BearerHeaders(authToken), Math.Max(1, _settings.RegistryDownloadMaxRetries), CreateClient(), ct);
+        string dsSlug, EntryDto entry, string localPath, CancellationToken ct)
+    {
+        var (cap, message) = FileBudget(entry);
+        var folder = Path.GetDirectoryName(Path.GetFullPath(localPath))!;
+
+        return HttpHelper.DownloadFileWithRetryAsync(
+            $"{DatasetUrl(registryUrl, orgSlug, dsSlug)}/download?path={Uri.EscapeDataString(entry.Path)}&inline=1",
+            localPath, BearerHeaders(authToken), Math.Max(1, _settings.RegistryDownloadMaxRetries), CreateClient(),
+            copyBody: (source, destination, token) => BudgetedCopy.CopyAsync(source, destination,
+                _budgets.For(cap, folder, message), token),
+            isRetryable: failure => failure is not QuotaExceededException,
+            cancellationToken: ct);
+    }
+
+    // The most bytes of a file of the remote, and the text of the failure when it sends more: what the remote listed for it
+    // (0 or less: not said), or the import size ceiling when that is smaller; no cap (0) when neither applies
+    private (long Cap, string? Message) FileBudget(EntryDto entry)
+    {
+        var ceiling = _settings.MaxImportSizeBytes;
+        if (entry.Size > 0 && (ceiling <= 0 || entry.Size <= ceiling))
+            return (entry.Size,
+                $"The remote registry sent more than the {CommonUtils.GetBytesReadable(entry.Size)} it listed for '{entry.Path}'.");
+
+        return ceiling > 0
+            ? (ceiling, $"'{entry.Path}' is larger than the maximum import size ({CommonUtils.GetBytesReadable(ceiling)}).")
+            : (0, null);
+    }
 
     /// <inheritdoc />
     public Task DownloadArchiveAsync(string registryUrl, string? authToken, string orgSlug, string dsSlug,

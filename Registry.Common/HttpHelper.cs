@@ -82,6 +82,12 @@ public static class HttpHelper
     }
 
     /// <summary>
+    /// Copies the body of a response to the file of a download, and returns the bytes copied. A caller that bounds the
+    /// download (a size cap, a disk head-room) copies through its own guard; each attempt of a retried download calls it.
+    /// </summary>
+    public delegate Task<long> BodyCopy(Stream source, Stream destination, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Result of a file download operation with retry support
     /// </summary>
     public class DownloadResult
@@ -102,6 +108,9 @@ public static class HttpHelper
     /// <param name="maxRetries">Maximum number of retry attempts (default: 3)</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <param name="httpClient">Optional client to use (e.g. an SSRF-hardened one); falls back to the shared static client.</param>
+    /// <param name="copyBody">Copies the body of the response to the file, in every attempt; null: an unbounded copy.</param>
+    /// <param name="isRetryable">Whether a failure of an attempt is worth another one; null: every failure but a cancellation
+    /// is. A breach of a limit of <paramref name="copyBody"/> is not: the next attempt would breach it again.</param>
     /// <returns>Download result with success status and any error details</returns>
     public static async Task<DownloadResult> DownloadFileWithRetryAsync(
         string uri,
@@ -109,6 +118,8 @@ public static class HttpHelper
         Dictionary<string, string>? headers = null,
         int maxRetries = 3,
         HttpClient? httpClient = null,
+        BodyCopy? copyBody = null,
+        Func<Exception, bool>? isRetryable = null,
         CancellationToken cancellationToken = default)
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out _))
@@ -121,6 +132,9 @@ public static class HttpHelper
             .AddRetry(new RetryStrategyOptions
             {
                 MaxRetryAttempts = maxRetries,
+                ShouldHandle = args => ValueTask.FromResult(
+                    args.Outcome.Exception is { } failure and not OperationCanceledException &&
+                    (isRetryable?.Invoke(failure) ?? true)),
                 BackoffType = DelayBackoffType.Exponential,
                 UseJitter = true,
                 Delay = TimeSpan.FromSeconds(2),
@@ -182,15 +196,7 @@ public static class HttpHelper
                 await using var fileStream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None,
                     bufferSize: BufferSize, useAsync: true);
 
-                var buffer = new byte[BufferSize];
-                int bytesRead;
-                bytesDownloaded = 0;
-
-                while ((bytesRead = await sourceStream.ReadAsync(buffer, ct)) > 0)
-                {
-                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), ct);
-                    bytesDownloaded += bytesRead;
-                }
+                bytesDownloaded = await (copyBody ?? CopyUnboundedAsync)(sourceStream, fileStream, ct);
             }, cancellationToken);
 
             return new DownloadResult
@@ -228,6 +234,20 @@ public static class HttpHelper
                 RetryCount = retryCount
             };
         }
+    }
+
+    private static async Task<long> CopyUnboundedAsync(Stream source, Stream destination, CancellationToken ct)
+    {
+        var buffer = new byte[BufferSize];
+        long copied = 0;
+        int read;
+        while ((read = await source.ReadAsync(buffer, ct)) > 0)
+        {
+            await destination.WriteAsync(buffer.AsMemory(0, read), ct);
+            copied += read;
+        }
+
+        return copied;
     }
 
     // Status codes worth retrying: rate limiting and transient upstream failures.

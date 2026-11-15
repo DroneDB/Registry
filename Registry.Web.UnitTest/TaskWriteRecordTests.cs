@@ -1008,7 +1008,7 @@ public class TaskRollbackTests
         var writes = await TaskImportWrites.StartAsync(recorder, key, ds.Root, new Registry.Adapters.FileSystem(),
             CancellationToken.None);
         var client = new Registry.Web.Services.Import.RemoteRegistryClient(HttpFactory(new ServingHandler()),
-            new Registry.Web.Models.Configuration.ImportSettings { RegistryDownloadMaxRetries = 1 }, TestPaths.Policy,
+            new Registry.Web.Models.Configuration.ImportSettings { RegistryDownloadMaxRetries = 1 }, TestImports.Budgets, TestPaths.Policy,
             TestScratch.Provider, new Registry.Adapters.FileSystem(),
             NullLogger<Registry.Web.Services.Import.RemoteRegistryClient>.Instance);
 

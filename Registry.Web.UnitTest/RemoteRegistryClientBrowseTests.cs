@@ -40,7 +40,7 @@ public class RemoteRegistryClientBrowseTests
         var factory = new Mock<IHttpClientFactory>();
         factory.Setup(f => f.CreateClient(It.IsAny<string>()))
             .Returns(() => new HttpClient(new Handler(answer), false));
-        return new RemoteRegistryClient(factory.Object, new ImportSettings(), TestPaths.Policy, TestScratch.Provider, new Registry.Adapters.FileSystem(),
+        return new RemoteRegistryClient(factory.Object, new ImportSettings(), TestImports.Budgets, TestPaths.Policy, TestScratch.Provider, new Registry.Adapters.FileSystem(),
             NullLogger<RemoteRegistryClient>.Instance);
     }
 

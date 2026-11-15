@@ -14,6 +14,9 @@ namespace Registry.Web.Test.Support;
 /// <summary>The remote Registry import as the job host builds it, over test doubles.</summary>
 public static class TestImports
 {
+    /// <summary>The budget of the files an import writes: the real volume of each path, the fixture's floor.</summary>
+    public static ImportBudgets Budgets { get; } = new(TestHeadroom.Default, TestArchives.Settings());
+
     /// <summary>
     /// <see cref="RemoteRegistryImporter"/> with both strategies, its HTTP calls through <paramref name="http"/>.
     /// </summary>
@@ -22,7 +25,7 @@ public static class TestImports
     {
         settings ??= new ImportSettings();
         var fileSystem = new FileSystem();
-        var remote = new RemoteRegistryClient(http, settings, TestPaths.Policy, TestScratch.Provider, fileSystem,
+        var remote = new RemoteRegistryClient(http, settings, Budgets, TestPaths.Policy, TestScratch.Provider, fileSystem,
             NullLogger<RemoteRegistryClient>.Instance);
         var destinations = new ImportDestinations(context, ddbManager, fileSystem, builds ?? TestJobs.Scheduler(),
             TimeProvider.System, NullLogger<ImportDestinations>.Instance);

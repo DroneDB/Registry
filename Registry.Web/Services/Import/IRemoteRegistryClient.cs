@@ -77,10 +77,11 @@ public interface IRemoteRegistryClient
     /// <summary>
     /// Downloads one file of a remote dataset to <paramref name="localPath"/>, retrying transient failures
     /// (<see cref="Models.Configuration.ImportSettings.RegistryDownloadMaxRetries"/>, honouring <c>Retry-After</c>).
-    /// A failure is reported in the result, not thrown; cancellation throws.
+    /// A failure is reported in the result, not thrown; cancellation throws. The copy is bounded while it runs: a remote
+    /// that sends more than the size it listed for <paramref name="entry"/> fails the download.
     /// </summary>
     Task<HttpHelper.DownloadResult> DownloadFileAsync(string registryUrl, string? authToken, string orgSlug,
-        string dsSlug, string entryPath, string localPath, CancellationToken ct);
+        string dsSlug, EntryDto entry, string localPath, CancellationToken ct);
 
     /// <summary>
     /// Downloads a whole remote dataset as the ZIP archive of its download route (index included) to

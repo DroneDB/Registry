@@ -91,7 +91,7 @@ public sealed class ParallelFilesImportStrategy : IRemoteImportStrategy
         }
 
         var result = await _remote.DownloadFileAsync(transfer.Dataset.RegistryUrl, transfer.Dataset.AuthToken,
-            transfer.Dataset.SourceOrganization, transfer.Dataset.SourceDataset, entry.Path, localPath, ct);
+            transfer.Dataset.SourceOrganization, transfer.Dataset.SourceDataset, entry, localPath, ct);
 
         // The download reports a cancellation as a failure: the import stops, it does not report every file
         ct.ThrowIfCancellationRequested();

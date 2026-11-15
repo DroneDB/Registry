@@ -62,7 +62,7 @@ public class RemoteRegistryClientImportTests
         factory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(() => new HttpClient(handler, false));
         return new RemoteRegistryClient(factory.Object,
             new ImportSettings { RegistryDownloadConcurrency = concurrency, RegistryDownloadMaxRetries = 1 },
-            TestPaths.Policy, TestScratch.Provider, new Registry.Adapters.FileSystem(), NullLogger<RemoteRegistryClient>.Instance)
+            TestImports.Budgets, TestPaths.Policy, TestScratch.Provider, new Registry.Adapters.FileSystem(), NullLogger<RemoteRegistryClient>.Instance)
         {
             PlaceBatchSize = batchSize
         };
@@ -183,6 +183,25 @@ public class RemoteRegistryClientImportTests
         File.ReadAllText(target).ShouldBe("somebody else's");
         _recorder.Paths.ShouldBeEmpty();
         writes.Created.ShouldBeEmpty();
+        LeftInUploads().ShouldBeEmpty();
+    }
+
+    // The copy is bounded while it runs: a remote that sends more than the size it listed fails the file with the size
+    // message (never retried: it would send the same again), and nothing of it stays in the dataset or the uploads folder
+    [Test]
+    public async Task AFileThatTheRemoteSendsLargerThanListed_FailsWithTheSizeMessage_AndLeavesNothing()
+    {
+        var handler = new SizedHandler(("big.jpg", 900));
+        var client = ClientFor(handler);
+        var writes = await WritesAsync();
+        var entries = new[] { new EntryDto { Path = "big.jpg", Type = EntryType.Image, Size = 100 } };
+
+        var ex = await Should.ThrowAsync<IOException>(() => client.DownloadFilesParallelAsync("http://remote.test", null,
+            "src", "ds", _dataset, entries, writes, null, CancellationToken.None));
+
+        ex.Message.ShouldContain("sent more than the 100 B it listed for 'big.jpg'");
+        handler.Requests.ShouldBe(1, "a breach of the cap is not retried");
+        FilesInDataset().ShouldBeEmpty();
         LeftInUploads().ShouldBeEmpty();
     }
 
@@ -360,8 +379,13 @@ public class RemoteRegistryClientImportTests
     // Serves each file with a body of the size given for its path
     private sealed class SizedHandler(params (string Path, int Size)[] sizes) : HttpMessageHandler
     {
+        private int _requests;
+
+        public int Requests => Volatile.Read(ref _requests);
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
+            Interlocked.Increment(ref _requests);
             var path = Uri.UnescapeDataString(request.RequestUri!.Query.TrimStart('?').Split('&')
                 .Select(kv => kv.Split('=', 2)).Single(kv => kv[0] == "path")[1]);
             var size = sizes.Single(s => s.Path == path).Size;

@@ -20,7 +20,6 @@ public sealed class ExtractionBudget
     // Re-sample free disk space at most once per this many bytes written: bounds the number of
     // syscalls while still reacting to space consumed by other processes during a long extraction.
     private const long ResampleEveryBytes = 256L * 1024 * 1024;
-    private const int CopyBufferSize = 1024 * 1024;
 
     private readonly long _maxBytes;          // 0 => no cap
     private readonly string? _maxBytesMessage; // the text of reaching the cap; null => the archive-size text
@@ -64,20 +63,8 @@ public sealed class ExtractionBudget
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The number of bytes written for this entry.</returns>
     /// <exception cref="QuotaExceededException">The cap or the disk-space margin would be breached.</exception>
-    public async Task<long> CopyGuardedAsync(Stream source, Stream destination, CancellationToken ct)
-    {
-        var buffer = new byte[CopyBufferSize];
-        long written = 0;
-        int read;
-        while ((read = await source.ReadAsync(buffer, ct)) > 0)
-        {
-            Account(read);
-            await destination.WriteAsync(buffer.AsMemory(0, read), ct);
-            written += read;
-        }
-
-        return written;
-    }
+    public Task<long> CopyGuardedAsync(Stream source, Stream destination, CancellationToken ct) =>
+        Import.BudgetedCopy.CopyAsync(source, destination, this, ct);
 
     /// <summary>
     /// Accounts for <paramref name="additionalBytes"/> about to be written, throwing

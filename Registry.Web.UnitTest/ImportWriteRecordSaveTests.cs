@@ -58,7 +58,7 @@ public class ImportWriteRecordSaveTests
             .Returns(() => new HttpClient(new DataHandler(), false));
         return new RemoteRegistryClient(factory.Object,
             new ImportSettings { RegistryDownloadConcurrency = 1, RegistryDownloadMaxRetries = 1 },
-            TestPaths.Policy, TestScratch.Provider, new Registry.Adapters.FileSystem(), NullLogger<RemoteRegistryClient>.Instance)
+            TestImports.Budgets, TestPaths.Policy, TestScratch.Provider, new Registry.Adapters.FileSystem(), NullLogger<RemoteRegistryClient>.Instance)
         {
             PlaceBatchSize = batchSize
         };

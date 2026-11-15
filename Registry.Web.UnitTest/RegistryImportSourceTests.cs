@@ -207,7 +207,7 @@ public class RegistryImportSourceUrlTests
         var factory = new Mock<IHttpClientFactory>();
         factory.Setup(f => f.CreateClient(It.IsAny<string>()))
             .Returns(() => new HttpClient(new HtmlHandler()));
-        var client = new RemoteRegistryClient(factory.Object, new ImportSettings(), null!, TestScratch.Provider, new Registry.Adapters.FileSystem(),
+        var client = new RemoteRegistryClient(factory.Object, new ImportSettings(), TestImports.Budgets, null!, TestScratch.Provider, new Registry.Adapters.FileSystem(),
             NullLogger<RemoteRegistryClient>.Instance);
 
         var ex = await Should.ThrowAsync<BadRequestException>(() =>
