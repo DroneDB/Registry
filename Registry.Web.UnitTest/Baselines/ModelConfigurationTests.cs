@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Registry.Test.Common;
@@ -66,6 +67,14 @@ public class ModelConfigurationTests
             .SetName("Identity, MySql");
     }
 
+    // The context the EF tools build with the design-time factory of a migrations project
+    private static DbContext CreateDesignTimeContext(Type factoryType)
+    {
+        var instance = Activator.CreateInstance(factoryType)!;
+        var create = factoryType.GetMethod(nameof(IDesignTimeDbContextFactory<DbContext>.CreateDbContext))!;
+        return (DbContext)create.Invoke(instance, [Array.Empty<string>()])!;
+    }
+
     [TestCaseSource(nameof(Factories))]
     public void TheDesignTimeFactory_BuildsItsContext_OnItsProvider_WithItsMigrationsAssembly(Type factoryType,
         DbProvider provider)
@@ -73,9 +82,7 @@ public class ModelConfigurationTests
         var contextType = factoryType.GetInterfaces().Single(i => i.GetGenericTypeDefinition() == typeof(IDesignTimeDbContextFactory<>))
             .GetGenericArguments()[0];
 
-        var instance = Activator.CreateInstance(factoryType)!;
-        var create = factoryType.GetMethod(nameof(IDesignTimeDbContextFactory<DbContext>.CreateDbContext))!;
-        using var context = (DbContext)create.Invoke(instance, [Array.Empty<string>()])!;
+        using var context = CreateDesignTimeContext(factoryType);
 
         context.GetType().ShouldBe(contextType);
         var database = contextType == typeof(RegistryContext) ? "Data" : "Identity";
@@ -128,5 +135,25 @@ public class ModelConfigurationTests
         {
             Environment.SetEnvironmentVariable(DesignTimeContexts.MySqlVersionEnvironmentVariable, saved);
         }
+    }
+
+    // EF Core writes the SQL of migrationBuilder.Sql into a generated script (dotnet ef migrations script) as given, with
+    // no terminator of its own: a statement without its ';' runs into the next one, a syntax error for a DBA who applies
+    // the script with the mysql or sqlite3 client
+    [TestCaseSource(nameof(Factories))]
+    public void EveryRawSqlStatementOfAMigration_EndsWithASemicolon(Type factoryType, DbProvider _)
+    {
+        using var context = CreateDesignTimeContext(factoryType);
+        var migrations = context.GetService<IMigrationsAssembly>();
+        var activeProvider = context.Database.ProviderName.ShouldNotBeNull();
+
+        var unterminated = migrations.Migrations.Values
+            .Select(type => migrations.CreateMigration(type, activeProvider))
+            .SelectMany(m => m.UpOperations.Concat(m.DownOperations).OfType<SqlOperation>()
+                .Where(op => !op.Sql.TrimEnd().EndsWith(';'))
+                .Select(op => $"{m.GetType().Name}: {op.Sql.Trim()}"))
+            .ToList();
+
+        unterminated.ShouldBeEmpty();
     }
 }
