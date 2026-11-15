@@ -1660,6 +1660,20 @@
             "unit": "bytes"
           },
           {
+            "key": "MaxArchiveEntries",
+            "displayName": "Max Archive Entries",
+            "currentValue": "100000",
+            "defaultValue": "100000",
+            "isSet": false,
+            "description": "Maximum number of files in an archive extracted into a dataset (archive-extract, photogrammetry results, archive URL imports). At least 1.",
+            "fieldType": "number",
+            "enumOptions": null,
+            "sensitive": false,
+            "minValue": 1,
+            "maxValue": null,
+            "unit": null
+          },
+          {
             "key": "DiskSafetyMarginBytes",
             "displayName": "Disk Safety Margin",
             "currentValue": "268435456",

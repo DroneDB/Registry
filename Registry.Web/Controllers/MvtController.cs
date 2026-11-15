@@ -29,13 +29,18 @@ namespace Registry.Web.Controllers;
 [Tags("MVT")]
 public class MvtController : ControllerBaseEx
 {
+    /// <summary>How long a tile of a build may be reused: it never changes (its URL names the build).</summary>
+    private const string TileFreshness = "max-age=31536000, immutable";
+
     private readonly IDatasetAccessResolver _access;
     private readonly IBuildArtifactResolver _artifacts;
+    private readonly IAuthManager _auth;
 
-    public MvtController(IDatasetAccessResolver access, IBuildArtifactResolver artifacts)
+    public MvtController(IDatasetAccessResolver access, IBuildArtifactResolver artifacts, IAuthManager auth)
     {
         _access = access;
         _artifacts = artifacts;
+        _auth = auth;
     }
 
     /// <summary>A vector tile of a vector file's build (gzip-compressed Mapbox Vector Tile).</summary>
@@ -54,15 +59,17 @@ public class MvtController : ControllerBaseEx
             throw new BadRequestException("Invalid tile coordinates");
 
         // The filter granted read access: the resolver reuses the grant
-        var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct)).Ddb;
-        var tilePath = _artifacts.FindArtifactFile(ddb, hash, ArtifactRoles.VectorMvt, MvtTiles.Tile(z, x, y));
+        var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
+        var tilePath = _artifacts.FindArtifactFile(access.Ddb, hash, ArtifactRoles.VectorMvt, MvtTiles.Tile(z, x, y));
         if (tilePath == null)
             return NotFound();
 
         // Tiles are already gzip-compressed (COMPRESS=YES in MVT driver). The tag names the tile of a build: it never
-        // changes, so a client that has it gets a 304
+        // changes, so a client that has it gets a 304. A shared cache may keep it only when anyone may read the dataset:
+        // a tile of a private dataset is the caller's only
         Response.Headers.ContentEncoding = "gzip";
-        Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+        Response.Headers.CacheControl =
+            (await _auth.IsReadableAnonymously(access.Dataset) ? "public, " : "private, ") + TileFreshness;
         return ValidatedPhysicalFile(tilePath, "application/vnd.mapbox-vector-tile", $"\"{hash}-{z}-{x}-{y}\"");
     }
 

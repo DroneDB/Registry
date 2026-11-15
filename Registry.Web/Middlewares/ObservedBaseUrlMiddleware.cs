@@ -15,6 +15,11 @@ namespace Registry.Web.Middlewares;
 /// runs on a node that serves no request. The URL is the one <see cref="IUrlBuilder"/> gives, so there is one rule for it.
 /// Not needed, and not written, when an external URL is configured: that wins.
 /// </summary>
+/// <remarks>
+/// Only an authenticated request records it, once the pipeline after this middleware (authentication included) has run:
+/// the Host header of a request is the client's own, and an anonymous client must not choose the URL the update check
+/// reports and its licence link points to.
+/// </remarks>
 public sealed class ObservedBaseUrlMiddleware : IMiddleware
 {
     private readonly IUrlBuilder _urls;
@@ -31,9 +36,11 @@ public sealed class ObservedBaseUrlMiddleware : IMiddleware
         _logger = logger;
     }
 
-    public Task InvokeAsync(HttpContext context, RequestDelegate next)
+    public async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
-        if (string.IsNullOrWhiteSpace(_http.ExternalUrlOverride))
+        await next(context);
+
+        if (string.IsNullOrWhiteSpace(_http.ExternalUrlOverride) && context.User.Identity?.IsAuthenticated == true)
         {
             try
             {
@@ -45,7 +52,5 @@ public sealed class ObservedBaseUrlMiddleware : IMiddleware
                 _logger.LogDebug(ex, "Cannot record the public URL of the deployment");
             }
         }
-
-        return next(context);
     }
 }

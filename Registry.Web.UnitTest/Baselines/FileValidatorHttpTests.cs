@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -149,14 +150,19 @@ public sealed class FileValidatorHttpTests : IDisposable
         (await response.Content.ReadAsByteArrayAsync()).ShouldBe(Content);
     }
 
+    // The dataset is private: its tile is kept a year by the caller's browser, never by a shared cache
     [Test]
-    public async Task TheTile_KeepsItsCachingHeaders()
+    public async Task TheTile_KeepsItsCachingHeaders_PrivateForAPrivateDataset()
     {
         using var response = await GetAsync(TileUrl);
 
         response.Content.Headers.ContentEncoding.ShouldBe(["gzip"]);
         response.Content.Headers.ContentType!.MediaType.ShouldBe("application/vnd.mapbox-vector-tile");
-        response.Headers.CacheControl!.ToString().ShouldBe("public, max-age=31536000, immutable");
+        var cacheControl = response.Headers.CacheControl!;
+        cacheControl.Private.ShouldBeTrue();
+        cacheControl.Public.ShouldBeFalse();
+        cacheControl.MaxAge.ShouldBe(TimeSpan.FromDays(365));
+        cacheControl.Extensions.Select(e => e.Name).ShouldContain("immutable");
     }
 
     [Test]

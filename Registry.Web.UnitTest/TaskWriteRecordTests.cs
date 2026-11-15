@@ -1067,7 +1067,7 @@ public class TaskRollbackTests
 
         var extractor = new DatasetArchiveExtractor(new Registry.Adapters.Archives.SharpCompressArchiveExtractor(),
             TestPaths.Policy, TestScratch.Provider, new Registry.Adapters.FileSystem(), TestHeadroom.Default,
-            NullLogger<DatasetArchiveExtractor>.Instance) { PlaceBatchSize = 1 };
+            TestArchives.Settings(), NullLogger<DatasetArchiveExtractor>.Instance) { PlaceBatchSize = 1 };
         using (var recorder = Registry.Web.Services.HeavyTasks.Adapters.TaskWriteRecorder.For(_env.Store, "1", key,
                    "archive-extract"))
         {

@@ -160,11 +160,14 @@ public class ObservedBaseUrlTests : IDisposable
         new InstanceBaseUrl(Microsoft.Extensions.Options.Options.Create(new HttpHostOptions { ExternalUrlOverride = "https://exa mple.org" }), NewStore()).Current().ShouldBeNull();
     }
 
-    private static async Task<RegistryWebFactory> Request(string host, IDictionary<string, string>? settings = null)
+    private static async Task<RegistryWebFactory> Request(string host, IDictionary<string, string>? settings = null,
+        bool authenticated = true)
     {
         var factory = new RegistryWebFactory(settings);
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, "/sys/features");
+        if (authenticated)
+            request.AsUser(RegistryWebFactory.AdminUserName, isAdmin: true);
         request.Headers.Host = host;
         using var response = await client.SendAsync(request);
         response.EnsureSuccessStatusCode();
@@ -179,6 +182,15 @@ public class ObservedBaseUrlTests : IDisposable
         var file = Path.Combine(factory.StoragePath, MagicStrings.ObservedBaseUrlFileName);
         using var json = JsonDocument.Parse(await File.ReadAllTextAsync(file));
         json.RootElement.GetProperty("baseUrl").GetString().ShouldBe("http://registry.acme-survey.com");
+    }
+
+    [Test]
+    public async Task AnAnonymousRequest_RecordsNothing_WhateverItsHost()
+    {
+        // The Host header is the client's: an anonymous one must not choose the URL the update check reports
+        using var factory = await Request("attacker.example.net", authenticated: false);
+
+        File.Exists(Path.Combine(factory.StoragePath, MagicStrings.ObservedBaseUrlFileName)).ShouldBeFalse();
     }
 
     [TestCase("localhost:5000")]

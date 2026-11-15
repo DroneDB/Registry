@@ -81,7 +81,7 @@ public static class RegistryOptions
         Add<HostResourceOptions, HostResourceOptionsValidator>(services, configuration);
         Add<UpdateCheckOptions, UpdateCheckOptionsValidator>(services, configuration);
         Add<ImportSettings>(services, configuration);
-        Add<ProcessingPlatformSettings>(services, configuration);
+        Add<ProcessingPlatformSettings, ProcessingPlatformSettingsValidator>(services, configuration);
         Add<UploadSettings>(services, configuration);
         Add<IndexQueueSettings>(services, configuration);
         Add<ReconciliationSettings>(services, configuration);

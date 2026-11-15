@@ -26,9 +26,10 @@ public sealed class ShareChunkedUploads
     private readonly IDdbManager _ddbManager;
     private readonly IObjectsManager _objectsManager;
     private readonly DatasetPathPolicy _paths;
+    private readonly IAuthManager _authManager;
     private readonly ILogger<ShareChunkedUploads> _logger;
 
-    public ShareChunkedUploads(ShareBatchStore batches, IStorageQuota quota, ChunkStore chunks, ScratchFileProvider scratch, IDdbManager ddbManager, IObjectsManager objectsManager, DatasetPathPolicy paths, ILogger<ShareChunkedUploads> logger)
+    public ShareChunkedUploads(ShareBatchStore batches, IStorageQuota quota, ChunkStore chunks, ScratchFileProvider scratch, IDdbManager ddbManager, IObjectsManager objectsManager, DatasetPathPolicy paths, IAuthManager authManager, ILogger<ShareChunkedUploads> logger)
     {
         _batches = batches;
         _quota = quota;
@@ -37,6 +38,7 @@ public sealed class ShareChunkedUploads
         _ddbManager = ddbManager;
         _objectsManager = objectsManager;
         _paths = paths;
+        _authManager = authManager;
         _logger = logger;
     }
 
@@ -67,11 +69,16 @@ public sealed class ShareChunkedUploads
             throw new BadRequestException($"Path '{chunkInfo.Path}' is not allowed in this batch");
 
         var root = ChunksRoot(batch);
-        if (_chunks.GetStatus(root, chunkInfo.FileId) == null)
+        var userId = await _authManager.GetCurrentUserId();
+        var key = ChunkedUploadManager.SessionKey(userId, chunkInfo.FileId);
+        var existing = _chunks.GetStatus(root, key);
+        if (existing == null)
         {
             // A new upload: check the owner of the organization has room for the whole file before its first byte (FR-XC-26)
             await _quota.CheckOwnerStorageAsync(batch.Dataset.Organization.OwnerId, chunkInfo.TotalFileSize, ct);
         }
+        else
+            ChunkedUploadManager.EnsureOwner(userId, existing.Manifest, chunkInfo.FileId);
 
         _logger.LogDebug("Processing chunk {ChunkIndex}/{TotalChunks} for file {FileName} (FileId: {FileId})",
             chunkInfo.ChunkIndex, chunkInfo.TotalChunks, chunkInfo.FileName, chunkInfo.FileId);
@@ -81,9 +88,11 @@ public sealed class ShareChunkedUploads
             ? chunkInfo.TotalFileSize
             : throw new BadRequestException("ChunkSize is required when a file is sent in more than one chunk"));
 
-        _chunks.Open(root, chunkInfo.FileId, new ChunkManifest(chunkInfo.Path, chunkInfo.TotalFileSize,
-            chunkInfo.TotalChunks, chunkSize, null));
-        var status = await _chunks.WriteAsync(root, chunkInfo.FileId, chunkInfo.ChunkIndex, chunkStream, ct);
+        // The session is the caller's, named as the dataset chunk uploads name theirs: another user that sends the same
+        // file id (or the name of a session of the dataset chunk uploads) reaches a session of their own, never this one
+        await _chunks.OpenAsync(root, key, new ChunkManifest(chunkInfo.Path, chunkInfo.TotalFileSize,
+            chunkInfo.TotalChunks, chunkSize, userId));
+        var status = await _chunks.WriteAsync(root, key, chunkInfo.ChunkIndex, chunkStream, ct);
 
         // A large file is uploading: the batch is not abandoned while its chunks arrive (D-049)
         await _batches.TouchAsync(token, ct);
@@ -130,8 +139,13 @@ public sealed class ShareChunkedUploads
         // The chunks were written into one file at their offsets: taking it is a rename, and its
         // hash was computed as the chunks arrived
         var root = ChunkedUploadManager.ChunksRoot(ddb);
+        var userId = await _authManager.GetCurrentUserId();
+        var key = ChunkedUploadManager.SessionKey(userId, fileId);
+        var status = _chunks.GetStatus(root, key) ?? throw new NotFoundException($"Unknown upload '{fileId}'");
+        ChunkedUploadManager.EnsureOwner(userId, status.Manifest, fileId);
+
         using var temp = _scratch.CreateForDataset(ddb.DatasetFolderPath, DatasetUploads.TempFileExtension);
-        var hint = await _chunks.TakeAsync(root, fileId, temp.Path);
+        var hint = await _chunks.TakeAsync(root, key, temp.Path);
         temp.Release(); // the commit moves it into place or deletes it
 
         var added = await _objectsManager.CommitStreamedAsync(orgSlug, dsSlug, target.Path,

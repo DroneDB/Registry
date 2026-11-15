@@ -1,14 +1,18 @@
 using System;
 using System.IO;
+using System.Formats.Tar;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using NUnit.Framework;
 using Registry.Adapters.Archives;
 using Registry.Ports.DroneDB;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Exceptions;
+using Registry.Web.Hosting;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Test.Support;
 using Shouldly;
@@ -73,7 +77,7 @@ public class DatasetArchiveExtractorTests
     {
         Zip(("a/b.txt", "first"), ("c.txt", "c"), (@"a\b.txt", "second"));
         var extractor = new DatasetArchiveExtractor(new SharpCompressArchiveExtractor(), TestPaths.Policy,
-            TestScratch.Provider, new Registry.Adapters.FileSystem(), TestHeadroom.Default,
+            TestScratch.Provider, new Registry.Adapters.FileSystem(), TestHeadroom.Default, TestArchives.Settings(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<DatasetArchiveExtractor>.Instance)
         {
             PlaceBatchSize = 1
@@ -219,11 +223,99 @@ public class DatasetArchiveExtractorTests
         Directory.GetFiles(_dataset, "*", SearchOption.AllDirectories).ShouldBeEmpty("no file of the extraction stays");
     }
 
+    // ---- the limit on the number of files of an archive
+
+    private static ProcessingPlatformSettings MaxEntries(int max) => new() { MaxArchiveEntries = max };
+
+    [Test]
+    public async Task AnArchiveWithMoreFilesThanTheLimit_IsRefusedBeforeItsFirstEntry()
+    {
+        Zip(("a.txt", "a"), ("b.txt", "b"), ("c.txt", "c"));
+        var reported = 0;
+
+        var ex = await Should.ThrowAsync<QuotaExceededException>(() =>
+            ExtractAsync(progress: new SyncProgress(_ => reported++), settings: MaxEntries(2)));
+
+        ex.Message.ShouldContain("too many files");
+        reported.ShouldBe(0, "the count of a zip is known before the first entry");
+        Directory.GetFileSystemEntries(_dataset).ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task AnArchiveAtTheLimit_IsExtracted_AndItsFolderEntriesDoNotCount()
+    {
+        Zip(("photos/", ""), ("photos/a.txt", "a"), ("docs/", ""), ("docs/b.txt", "b"));
+
+        var result = await ExtractAsync(settings: MaxEntries(2));
+
+        result.Extracted.ShouldBe(["photos/a.txt", "docs/b.txt"]);
+    }
+
+    [Test]
+    public async Task ACompressedTarballWithMoreFilesThanTheLimit_FailsAtTheEntryOverIt_AndNothingStays()
+    {
+        var tarball = Path.ChangeExtension(_archive, ".tar.gz");
+        try
+        {
+            using (var file = File.Create(tarball))
+            using (var gzip = new GZipStream(file, CompressionLevel.Fastest))
+            using (var tar = new TarWriter(gzip))
+                foreach (var name in new[] { "a.txt", "b.txt", "c.txt" })
+                    tar.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, name)
+                        { DataStream = new MemoryStream(Encoding.UTF8.GetBytes(name)) });
+            var done = 0;
+
+            await Should.ThrowAsync<QuotaExceededException>(() => TestArchives
+                .Extractor(new SharpCompressArchiveExtractor(), settings: MaxEntries(2))
+                .ExtractAsync(new ArchiveExtractionRequest(tarball, _dataset, string.Empty, _ => true, _ => false, 0, 0),
+                    new SyncProgress(p => done = p.Done), CancellationToken.None));
+
+            done.ShouldBe(2, "the count of a compressed tarball is not known up front");
+            Directory.GetFiles(_dataset, "*", SearchOption.AllDirectories).ShouldBeEmpty("no file of the extraction stays");
+        }
+        finally
+        {
+            File.Delete(tarball);
+        }
+    }
+
+    [Test]
+    public void TheEstimateOfTheReplacedFiles_RefusesAnArchiveWithMoreFilesThanTheLimit()
+    {
+        Zip(("a.txt", "a"), ("b.txt", "b"), ("c.txt", "c"));
+        var extractor = TestArchives.Extractor(new SharpCompressArchiveExtractor(), settings: MaxEntries(2));
+        var request = new ArchiveExtractionRequest(_archive, _dataset, string.Empty, _ => true, _ => false, 0, 0);
+
+        Should.Throw<QuotaExceededException>(() => extractor.ReplacedBytes(request, _ => 1));
+        TestArchives.Extractor(new SharpCompressArchiveExtractor(), settings: MaxEntries(3))
+            .ReplacedBytes(request, _ => 1).ShouldBe(3);
+    }
+
+    [TestCase(null, true)]
+    [TestCase("1", true)]
+    [TestCase("0", false)]
+    [TestCase("-3", false)]
+    public void TheLimit_IsAtLeastOne(string? configured, bool valid)
+    {
+        const string key = "AppSettings:ProcessingPlatform:MaxArchiveEntries";
+        var settings = new System.Collections.Generic.Dictionary<string, string?>();
+        if (configured != null)
+            settings[key] = configured;
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings)
+            .Build();
+
+        RegistryOptions.Validate(configuration, InstanceType.WebServer)
+            .Where(f => f.Contains("MaxArchiveEntries", StringComparison.Ordinal))
+            .ShouldBe(valid ? [] : [$"{key} is not valid (must be greater than 0)"]);
+        if (configured == null)
+            configuration.GetRegistryOptions<ProcessingPlatformSettings>().MaxArchiveEntries.ShouldBe(100_000);
+    }
+
     private Task<ArchiveExtractionResult> ExtractAsync(VolumeHeadroom? headroom = null, long safetyMargin = 0,
         IProgress<ArchiveExtractionProgress>? progress = null, Func<string, bool>? isExtensionAllowed = null,
         Func<string, bool>? keepExisting = null, Func<string, bool>? exclude = null, long maxBytes = 0,
-        string? maxBytesMessage = null) =>
-        TestArchives.Extractor(new SharpCompressArchiveExtractor(), headroom).ExtractAsync(
+        string? maxBytesMessage = null, ProcessingPlatformSettings? settings = null) =>
+        TestArchives.Extractor(new SharpCompressArchiveExtractor(), headroom, settings).ExtractAsync(
             new ArchiveExtractionRequest(_archive, _dataset, string.Empty, isExtensionAllowed ?? (_ => true),
                 keepExisting ?? (_ => false), maxBytes, safetyMargin, Exclude: exclude, MaxBytesMessage: maxBytesMessage),
             progress, CancellationToken.None);
