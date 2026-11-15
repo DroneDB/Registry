@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Web.Hosting;
 using Registry.Web.Services.Ports;
 
@@ -28,15 +29,8 @@ internal sealed class TaskRollbackStartupTask : IStartupTask
 
     public int Order => StartupTaskOrder.TaskRollbacks;
 
-    public async Task ExecuteAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _rollback.SweepAsync(cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _log.LogError(ex, "The rollback sweep of the ended tasks failed: it runs again at the next start");
-        }
-    }
+    public Task ExecuteAsync(CancellationToken cancellationToken) =>
+        BestEffort.RunAsync(() => _rollback.SweepAsync(cancellationToken),
+            ex => _log.LogError(ex, "The rollback sweep of the ended tasks failed: it runs again at the next start"),
+            cancellationToken);
 }

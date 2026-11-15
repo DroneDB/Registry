@@ -7,6 +7,7 @@ using Hangfire.Console;
 using Hangfire.Server;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.Ports;
 
@@ -174,39 +175,21 @@ public sealed class HangfireProgressSink : IProgress<HeavyToolProgress>, IAsyncD
             await WriteWaitingAsync(change.Waiting, change.AtUtc);
 
         foreach (var line in lines)
-        {
-            try { _ctx?.WriteLine(line); }
-            catch (Exception ex) { _log.LogDebug(ex, "Cannot write to the console of task {TaskId}", _taskId); }
-        }
+            BestEffort.Run(() => _ctx?.WriteLine(line),
+                ex => _log.LogDebug(ex, "Cannot write to the console of task {TaskId}", _taskId));
 
         if (snapshot != null)
             await WriteAsync(snapshot);
     }
 
     // The wait on a processing node (D-024): when it ends, the processing starts (FR-PRC-37)
-    private async Task WriteWaitingAsync(bool waiting, DateTime atUtc)
-    {
-        try
-        {
-            await _writer.SetWaitingForNodeAsync(_taskId, waiting, atUtc, CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            _log.LogDebug(ex, "Cannot write the node wait of task {TaskId}", _taskId);
-        }
-    }
+    private Task WriteWaitingAsync(bool waiting, DateTime atUtc) =>
+        BestEffort.RunAsync(() => _writer.SetWaitingForNodeAsync(_taskId, waiting, atUtc, CancellationToken.None),
+            ex => _log.LogDebug(ex, "Cannot write the node wait of task {TaskId}", _taskId));
 
     // Progress is telemetry: a failed write is logged and never fails the tool
-    private async Task WriteAsync(Snapshot snapshot)
-    {
-        try
-        {
-            await _writer.UpdateProgressAsync(_taskId, snapshot.Percent, snapshot.Phase, snapshot.LogTailJson,
-                DateTime.UtcNow, CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            _log.LogDebug(ex, "Cannot write the progress of task {TaskId}", _taskId);
-        }
-    }
+    private Task WriteAsync(Snapshot snapshot) =>
+        BestEffort.RunAsync(() => _writer.UpdateProgressAsync(_taskId, snapshot.Percent, snapshot.Phase,
+                snapshot.LogTailJson, DateTime.UtcNow, CancellationToken.None),
+            ex => _log.LogDebug(ex, "Cannot write the progress of task {TaskId}", _taskId));
 }

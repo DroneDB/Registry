@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
@@ -58,43 +59,33 @@ public sealed class UploadReceiptTracker
     public async Task SetStateAsync(UploadRequestContext ctx, UploadReceiptState state,
         IReadOnlyList<UploadPartResultDto>? results)
     {
-        if (ctx.UploadId == null || _receipts == null)
+        if (ctx.UploadId is not { } uploadId || _receipts is not { } receipts)
             return;
 
-        try
-        {
-            await _receipts.SetAsync(ctx.OrgSlug, ctx.DsSlug, ctx.UploadId,
-                new UploadReceipt(state, results, null, null, DateTime.UtcNow));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cannot record upload {UploadId} as {State}", ctx.UploadId, state);
-        }
+        await BestEffort.RunAsync(() => receipts.SetAsync(ctx.OrgSlug, ctx.DsSlug, uploadId,
+                new UploadReceipt(state, results, null, null, DateTime.UtcNow)),
+            ex => _logger.LogWarning(ex, "Cannot record upload {UploadId} as {State}", uploadId, state));
     }
 
     /// <summary>Records that the request failed: a client that went away sends the file again (the attempt is forgotten), any other failure is kept with its status.</summary>
     public async Task FailAsync(UploadRequestContext ctx, Exception cause)
     {
-        if (ctx.UploadId == null || _receipts == null)
+        if (ctx.UploadId is not { } uploadId || _receipts is not { } receipts)
             return;
 
-        try
+        await BestEffort.RunAsync(async () =>
         {
             // A client that went away sends the file again: forget the attempt
             if (cause is OperationCanceledException or IOException or BadHttpRequestException)
             {
-                await _receipts.RemoveAsync(ctx.OrgSlug, ctx.DsSlug, ctx.UploadId);
+                await receipts.RemoveAsync(ctx.OrgSlug, ctx.DsSlug, uploadId);
                 return;
             }
 
             var d = ApiExceptionClassifier.Classify(cause, authenticated: ctx.User != null);
-            await _receipts.SetAsync(ctx.OrgSlug, ctx.DsSlug, ctx.UploadId,
+            await receipts.SetAsync(ctx.OrgSlug, ctx.DsSlug, uploadId,
                 new UploadReceipt(UploadReceiptState.Failed, null, d.StatusCode, d.Message, DateTime.UtcNow));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cannot record the failure of upload {UploadId}", ctx.UploadId);
-        }
+        }, ex => _logger.LogWarning(ex, "Cannot record the failure of upload {UploadId}", uploadId));
     }
 
     /// <summary>
@@ -103,17 +94,11 @@ public sealed class UploadReceiptTracker
     /// </summary>
     public async Task ForgetAsync(string orgSlug, string dsSlug, string uploadId)
     {
-        if (_receipts == null)
+        if (_receipts is not { } receipts)
             return;
 
-        try
-        {
-            await _receipts.RemoveAsync(orgSlug, dsSlug, uploadId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cannot forget the receipt of upload {UploadId}", uploadId);
-        }
+        await BestEffort.RunAsync(() => receipts.RemoveAsync(orgSlug, dsSlug, uploadId),
+            ex => _logger.LogWarning(ex, "Cannot forget the receipt of upload {UploadId}", uploadId));
     }
 
     /// <summary>The receipt of upload <paramref name="uploadId"/> of the dataset, or null.</summary>

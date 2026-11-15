@@ -78,8 +78,10 @@ public static class ProcessingPlatformServiceCollectionExtensions
         // The work folder of a task that produces an artifact
         services.AddSingleton<TaskWorkDirectories>();
 
-        // Hangfire activates the wrapper from DI on the worker host.
+        // Hangfire activates the wrapper from DI on the worker host; a run resolves what it keeps from its own scope.
         services.AddScoped<HeavyTaskJobWrapper>();
+        services.AddScoped<HeavyTaskRecords>();
+        services.AddScoped<HeavyTaskDatasetServices>();
 
         // The write record of a task and its one rollback (FR-XC-27, D-045), wherever a task runs or is cancelled: the
         // delayed system delete of a dataset a rolled-back task created, the removal it shares with the user delete,
@@ -91,6 +93,7 @@ public static class ProcessingPlatformServiceCollectionExtensions
         services.AddScoped<DatasetRemoval>();
         // The system creation of the dataset a task makes for its results (photogrammetry, D-031)
         services.AddScoped<DatasetCreation>();
+        services.AddScoped<ResultsDatasetServices>();
         services.AddScoped<IDatasetListingInvalidator, DatasetListingInvalidator>();
         services.AddStartupTask<TaskRollbackStartupTask>();
 

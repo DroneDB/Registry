@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
+using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
@@ -166,33 +167,32 @@ public sealed class RasterExportTool : HeavyToolBase<RasterExportTool.Parameters
     /// </summary>
     private static void ValidateFormula(IDDB ddb, string path, string formula, string? bandFilter, CancellationToken ct)
     {
-        string metadata;
+        if (FormulaMetadata(ddb, path, formula, bandFilter, ct) is { } metadata &&
+            ListedRefusal(metadata, formula) is { } refusal)
+            throw new ArgumentException(refusal);
+    }
+
+    // The raster-metadata of the raster with the formula, or its list of formulas when libddb fails the formula as a
+    // plain error (2.0); null when the formula renders anyway or nothing can be read (left to the export)
+    private static string? FormulaMetadata(IDDB ddb, string path, string formula, string? bandFilter,
+        CancellationToken ct)
+    {
         try
         {
-            metadata = ddb.GetRasterMetadata(path, formula, bandFilter);
+            return ddb.GetRasterMetadata(path, formula, bandFilter);
         }
         catch (DdbInvalidArgumentsException ex)
         {
             if (RendersAnyway(formula, ex.Message))
-                return;
+                return null;
             throw new ArgumentException(FormulaRefusal(formula, ex.Message), ex);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // libddb 2.0: the formula fails as a plain error; its list of formulas says why
             ct.ThrowIfCancellationRequested();
-            try
-            {
-                metadata = ddb.GetRasterMetadata(path, null, bandFilter);
-            }
-            catch (Exception listEx) when (listEx is not OperationCanceledException)
-            {
-                return;
-            }
+            return BestEffort.Get<string?>(() => ddb.GetRasterMetadata(path, null, bandFilter), _ => null, ct);
         }
-
-        if (ListedRefusal(metadata, formula) is { } refusal)
-            throw new ArgumentException(refusal);
     }
 
     // The temperature formulas read the single band of a DEM or of a thermal raster without a sensor profile: libddb's

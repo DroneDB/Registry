@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Common;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.HeavyTasks.Models;
@@ -230,9 +231,9 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
             replaced = replacing;
 
             // The owner of the organization must have room for the growth of the output (FR-XC-26): the task fails with
-            // the 507 text
-            await EnsureOutputFitsAsync(ctx, request.OrgSlug, outputPath, outputFullPath, replacedBytes, replacing, progress,
-                replacing ? CancellationToken.None : ct);
+            // the 507 text. An output that replaced a file stays, indexed again
+            await WorkerStorageQuota.EnsureToolOutputFitsAsync(ctx, request.OrgSlug, outputPath, [outputFullPath],
+                replacedBytes, replacing, progress, replacing ? CancellationToken.None : ct);
 
             if (!replacing)
                 writes.Written(outputPath);
@@ -257,33 +258,6 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
         return null;
     }
 
-    // The storage quota of the owner of the organization against the growth of the merged output, read when it is
-    // written. An output that replaced a file is never deleted (FR-XC-27: a rollback never deletes a path that existed
-    // before the task, FR-XC-07): it stays, and it is indexed so that the entry describes the file on disk
-    private static async Task EnsureOutputFitsAsync(IHeavyToolExecutionContext ctx, string orgSlug, string outputPath,
-        string outputFullPath, long replacedBytes, bool replacing, IProgress<HeavyToolProgress> progress, CancellationToken ct)
-    {
-        try
-        {
-            await WorkerStorageQuota.EnsureOutputFitsAsync(ctx.Storage, orgSlug, outputFullPath, replacedBytes, ct);
-        }
-        catch (QuotaExceededException) when (replacing)
-        {
-            // The 507 is the reason the task stops: an index error here must not replace it (a busy index
-            // would make the job retry and write the output again). The rescan corrects the entry later.
-            try
-            {
-                ctx.Ddb.AddRaw(outputPath);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                progress.Report(new HeavyToolProgress(-1, "indexing",
-                        LogChunk: $"Could not index the replaced output {outputPath} again: {ex.Message}"));
-            }
-            throw;
-        }
-    }
-
     /// <summary>
     /// Deletes the band files (index entry, then file) once the merged output opens as a raster (GDAL): a failed
     /// open throws and keeps every band (the task is rolled back: the output is deleted). Then the task commits
@@ -302,10 +276,14 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
         {
             ddb.GetRasterInfo(outputPath);
         }
-        catch (Exception ex)
+        catch (DdbException ex)
         {
-            throw new InvalidOperationException(
-                $"The merged output '{outputPath}' cannot be opened as a raster: the source bands were kept ({ex.Message})", ex);
+            throw NotARaster(outputPath, ex);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // libddb's plain error, as the index adapter reports it
+            throw NotARaster(outputPath, ex);
         }
 
         // Commits before the first delete: a cancel that came first refuses it (the exception ends the task, which is
@@ -320,7 +298,7 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
             if (DatasetEntryLookup.Locate(ddb, path).Existing is not { IsFolder: false } band)
                 continue;
 
-            try
+            BestEffort.Run(() =>
             {
                 if (ddb.EntryExists(band.Path))
                     ddb.Remove(band.Path);
@@ -328,17 +306,17 @@ public sealed class MergeMultispectralTool(DatasetPathPolicy pathPolicy) : Heavy
                 if (File.Exists(local))
                     File.Delete(local);
                 left.Add(band.Path);
-            }
-            catch (Exception ex)
-            {
-                progress.Report(new HeavyToolProgress(-1, "cleanup",
-                    LogChunk: $"Could not delete source band '{band.Path}': {ex.Message}"));
-            }
+            }, ex => progress.Report(new HeavyToolProgress(-1, "cleanup",
+                LogChunk: $"Could not delete source band '{band.Path}': {ex.Message}")), CancellationToken.None);
         }
 
         if (left.Count > 0)
             await ctx.WriteRecord.EntriesLeftAsync(ctx.Dataset, left);
     }
+
+    private static InvalidOperationException NotARaster(string outputPath, Exception cause) =>
+        new($"The merged output '{outputPath}' cannot be opened as a raster: the source bands were kept ({cause.Message})",
+            cause);
 
     private static string[] ReadErrors(JsonElement root)
     {

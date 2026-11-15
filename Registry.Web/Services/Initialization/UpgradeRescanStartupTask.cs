@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
@@ -107,7 +108,7 @@ internal sealed class UpgradeRescanStartupTask : IBackgroundStartupTask
         {
             stoppingToken.ThrowIfCancellationRequested();
             var name = $"{dataset.OrgSlug}/{dataset.Slug}";
-            try
+            await BestEffort.RunAsync(async () =>
             {
                 var target = new BuildTarget(_ddbManager.Get(dataset.OrgSlug, dataset.InternalRef),
                     new DatasetKey(dataset.OrgSlug, dataset.InternalRef), dataset.OrgSlug, dataset.Slug);
@@ -121,7 +122,7 @@ internal sealed class UpgradeRescanStartupTask : IBackgroundStartupTask
                     _logger.LogWarning("Upgrade rescan of {Dataset} incomplete: {Unreadable} unreadable entries, " +
                                        "{RebuildFailures} rebuild(s) not queued; the next start tries it again",
                         name, outcome.Unreadable, outcome.RebuildFailures);
-                    continue;
+                    return;
                 }
 
                 foreach (var step in datasetSteps)
@@ -129,17 +130,12 @@ internal sealed class UpgradeRescanStartupTask : IBackgroundStartupTask
                 Save(state, done, completed: false);
                 _logger.LogInformation("Upgrade rescan of {Dataset} done: {Rescanned} entries, {Rebuilt} rebuild(s) queued",
                     name, outcome.Rescanned, outcome.Rebuilt);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
+            }, ex =>
             {
                 // The others go on; the next start tries this one again
                 failed++;
                 _logger.LogError(ex, "Upgrade rescan of {Dataset} failed: {Error}", name, ex.Message);
-            }
+            }, stoppingToken);
         }
 
         if (failed == 0)

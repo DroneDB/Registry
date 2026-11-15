@@ -80,7 +80,11 @@ public class SimpleBackgroundJobsProcessor : IBackgroundJobsProcessor
 
     public JobStatus GetJobStatus(string jobId)
     {
-        return !_jobs.TryGetValue(int.Parse(jobId, CultureInfo.InvariantCulture), out var status) ? JobStatus.Unknown : status;
+        // An id this store cannot read is a job it does not have, as for the Hangfire store
+        return int.TryParse(jobId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) &&
+               _jobs.TryGetValue(id, out var status)
+            ? status
+            : JobStatus.Unknown;
     }
 
     // Nothing is stored but the status: no job has a method, arguments or parameters to read

@@ -336,7 +336,9 @@ public class OgcRenderCachingTests
     }
 
     private WcsCoverageService CreateWcs(IRecordCache records) => new(Dependencies(records),
-        new RasterInfoCache(_wrapper.Object, records), NullLogger<WcsCoverageService>.Instance);
+        new RasterInfoCache(_wrapper.Object, records),
+        Microsoft.Extensions.Options.Options.Create(new Registry.Web.Models.Configuration.DownloadOptions()),
+        NullLogger<WcsCoverageService>.Instance);
 
     // WMS (the spectral indices) and WCS (size, bands) read the same libddb document of a raster
     [TestCase(true, TestName = "Wms_AndWcs_ShareOneNativeRasterInfoRead_WmsFirst")]

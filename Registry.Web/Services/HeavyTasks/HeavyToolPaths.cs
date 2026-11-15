@@ -54,7 +54,11 @@ public static class HeavyToolPaths
         {
             return Declared(tool, request);
         }
-        catch (Exception ex) when (ex is ArgumentException or BadRequestException)
+        catch (ArgumentException)
+        {
+            return null;
+        }
+        catch (BadRequestException)
         {
             return null;
         }

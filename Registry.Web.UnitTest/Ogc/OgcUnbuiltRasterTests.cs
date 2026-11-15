@@ -122,6 +122,7 @@ public class OgcUnbuiltRasterTests
     private OgcApiTilesManager CreateOgcApiTiles() => new(_dependencies, _tiles);
 
     private WcsCoverageService CreateWcs() => new(_dependencies, new RasterInfoCache(_wrapper.Object, TestCaches.Records()),
+        Microsoft.Extensions.Options.Options.Create(new Registry.Web.Models.Configuration.DownloadOptions()),
         NullLogger<WcsCoverageService>.Instance);
 
     private static IEnumerable<string> Values(string xml, string localName) =>

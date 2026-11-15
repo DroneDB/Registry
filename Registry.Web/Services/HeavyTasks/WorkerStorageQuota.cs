@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Registry.Common;
 using Registry.Web.Exceptions;
+using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.HeavyTasks;
@@ -81,6 +83,32 @@ public static class WorkerStorageQuota
 
         if (any && GrowthBytes(written, replacedBytes) > left)
             throw QuotaExceededException.OwnerOverQuota(left);
+    }
+
+    /// <summary>
+    /// <see cref="EnsureOutputFitsAsync(IStorageQuota, string, IReadOnlyList{string}, long, CancellationToken)"/> for the
+    /// output <paramref name="outputPath"/> (its dataset path) that a tool wrote to <paramref name="outputFullPaths"/>
+    /// (the file and those written with it). An output that replaced a file (<paramref name="replacing"/>) is never
+    /// deleted (a rollback never deletes a path that existed before the task): when it does not fit it stays, and it is
+    /// indexed again so that its entry describes the file on disk before the 507 stops the task. An index error then is
+    /// written to the task's log and does not replace the 507 (a busy index would make the job retry and write the output
+    /// again); the rescan corrects the entry later.
+    /// </summary>
+    /// <exception cref="QuotaExceededException">The growth does not fit.</exception>
+    public static async Task EnsureToolOutputFitsAsync(IHeavyToolExecutionContext ctx, string orgSlug, string outputPath,
+        IReadOnlyList<string> outputFullPaths, long replacedBytes, bool replacing, IProgress<HeavyToolProgress> progress,
+        CancellationToken ct)
+    {
+        try
+        {
+            await EnsureOutputFitsAsync(ctx.Storage, orgSlug, outputFullPaths, replacedBytes, ct);
+        }
+        catch (QuotaExceededException) when (replacing)
+        {
+            BestEffort.Run(() => ctx.Ddb.AddRaw(outputPath), ex => progress.Report(new HeavyToolProgress(-1, "indexing",
+                LogChunk: $"Could not index the replaced output {outputPath} again: {ex.Message}")), CancellationToken.None);
+            throw;
+        }
     }
 
     /// <summary>What writing <paramref name="newBytes"/> over a file the owner's use counts as <paramref name="replacedBytes"/> adds to it: never below 0.</summary>

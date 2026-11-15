@@ -130,9 +130,18 @@ public static class DatasetUploads
         {
             return fs.Exists(manifest) && ApiJson.Deserialize<ChunkManifest>(fs.ReadAllText(manifest))?.FileId != null;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        // Removed meanwhile or unreadable: not a session a client can resume
+        catch (IOException)
         {
-            return false; // removed meanwhile or unreadable: not a session a client can resume
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
         }
     }
 }

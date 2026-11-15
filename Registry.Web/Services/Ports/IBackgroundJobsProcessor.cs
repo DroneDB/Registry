@@ -25,12 +25,16 @@ public interface IBackgroundJobsProcessor
     public bool Delete(string jobId, string fromState);
     public bool Requeue(string jobId);
 
+    /// <summary>
+    /// The state of a stored job: <see cref="JobStatus.Unknown"/> when the store has no such job or cannot read its id
+    /// (a number of the earlier numbering in a GUID store, or the other way round).
+    /// </summary>
     public JobStatus GetJobStatus(string jobId);
 
     /// <summary>The method and arguments of a stored job, or null when the store has no such job or cannot read it.</summary>
     public StoredJob? GetStoredJob(string jobId);
 
-    /// <summary>A parameter of a stored job (as <c>PublishedOutputMarker</c> sets it), or null.</summary>
+    /// <summary>A parameter of a stored job (as <c>PublishedOutputMarker</c> sets it), or null (no such job, or an id the store cannot read).</summary>
     public string? GetJobParameter(string jobId, string name);
     public string EnqueueIndexed<T>(Expression<Action<T>> methodCall, IndexPayload meta);
     public string EnqueueIndexed<T>(Expression<Func<T, Task>> methodCall, IndexPayload meta);

@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
@@ -152,15 +153,12 @@ public sealed class TaskRollback : ITaskRollback
         foreach (var taskId in await _store.EndedWithCreatedDatasetDeleteAsync(ct))
         {
             ct.ThrowIfCancellationRequested();
-            try
-            {
-                if (await RescheduleLostCreatedDatasetDeleteAsync(taskId, ct))
-                    rescheduled++;
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _log.LogError(ex, "Cannot schedule again the delete of the dataset task {TaskId} created", taskId);
-            }
+            if (await BestEffort.GetAsync(() => RescheduleLostCreatedDatasetDeleteAsync(taskId, ct), ex =>
+                {
+                    _log.LogError(ex, "Cannot schedule again the delete of the dataset task {TaskId} created", taskId);
+                    return false;
+                }, ct))
+                rescheduled++;
         }
 
         if (rescheduled > 0)
@@ -171,15 +169,12 @@ public sealed class TaskRollback : ITaskRollback
         foreach (var taskId in await _store.EndedWithOpenRecordAsync(ct))
         {
             ct.ThrowIfCancellationRequested();
-            try
-            {
-                if (await RollBackAsync(taskId, null, ct) == TaskRollbackOutcome.RolledBack)
-                    rolledBack++;
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _log.LogError(ex, "Cannot roll back task {TaskId}", taskId);
-            }
+            if (await BestEffort.GetAsync(() => RollBackAsync(taskId, null, ct), ex =>
+                {
+                    _log.LogError(ex, "Cannot roll back task {TaskId}", taskId);
+                    return TaskRollbackOutcome.Incomplete;
+                }, ct) == TaskRollbackOutcome.RolledBack)
+                rolledBack++;
         }
 
         if (rolledBack > 0)
@@ -202,20 +197,10 @@ public sealed class TaskRollback : ITaskRollback
         return await ScheduleCreatedDatasetDeleteAsync(taskId, created, null, ct) != null;
     }
 
-    // Whether the job is still to run (or running); a job the storage does not have (or cannot read) is not
-    private bool JobWaits(string jobId)
-    {
-        try
-        {
-            return _processor.GetJobStatus(jobId) is JobStatus.Scheduled or JobStatus.Enqueued or JobStatus.Processing
-                or JobStatus.Awaiting;
-        }
-        catch (Exception ex) when (ex is FormatException or ArgumentException or InvalidOperationException)
-        {
-            _log.LogDebug(ex, "Cannot read the state of job {JobId}", jobId);
-            return false;
-        }
-    }
+    // Whether the job is still to run (or running); a job the storage does not have (or cannot read: Unknown) is not
+    private bool JobWaits(string jobId) =>
+        _processor.GetJobStatus(jobId) is JobStatus.Scheduled or JobStatus.Enqueued or JobStatus.Processing
+            or JobStatus.Awaiting;
 
     /// <summary>
     /// The dataset of an import task that has no write record (NULL: queued or running at the upgrade, §8.3): every
@@ -298,20 +283,21 @@ public sealed class TaskRollback : ITaskRollback
         if (dataset is null)
             return TaskCommittedLostException.For(sources.Paths, _ => false);
 
-        var ddb = _ddbManager.Get(dataset.Organization.Slug, sources.InternalRef);
-        return TaskCommittedLostException.For(sources.Paths, path =>
-        {
-            try
-            {
-                return File.Exists(ddb.GetLocalPath(path));
-            }
-            catch (Exception ex)
-            {
-                _log.LogDebug(ex, "Cannot tell whether source '{Path}' of task {TaskId} remains", path, taskId);
-                return true;
-            }
-        });
+        return CommittedLost(sources.Paths, _ddbManager.Get(dataset.Organization.Slug, sources.InternalRef), _log, taskId);
     }
+
+    /// <summary>
+    /// The exception of the lost committed task <paramref name="taskId"/>, naming the <paramref name="sources"/> it
+    /// deletes after its commit that remain in the folder of <paramref name="ddb"/>: the one rule of the worker's
+    /// attempt rule and of the end of a lost task. A source whose file cannot be checked is taken as remaining.
+    /// </summary>
+    internal static TaskCommittedLostException CommittedLost(IReadOnlyList<string> sources, IDDB ddb, ILogger log,
+        string taskId) =>
+        TaskCommittedLostException.For(sources, path => BestEffort.Get(() => File.Exists(ddb.GetLocalPath(path)), ex =>
+        {
+            log.LogDebug(ex, "Cannot tell whether source '{Path}' of task {TaskId} remains", path, taskId);
+            return true;
+        }));
 
     private Task<TaskWriteRecordChange> SetAttemptAsync(string taskId, int retryCount, CancellationToken ct) =>
         _store.ChangeAsync(taskId, r =>
@@ -370,10 +356,9 @@ public sealed class TaskRollback : ITaskRollback
         return complete;
     }
 
-    private async Task<bool> DeletePathAsync(string taskId, IDDB ddb, string path, string? stamp, List<string> left,
-        CancellationToken ct)
-    {
-        try
+    private Task<bool> DeletePathAsync(string taskId, IDDB ddb, string path, string? stamp, List<string> left,
+        CancellationToken ct) =>
+        BestEffort.GetAsync(async () =>
         {
             // Written by the task, then replaced by somebody else (an upload with overwrite): it is theirs now
             if (stamp != null && TaskWriteRecord.StampOf(ddb.GetLocalPath(path)) is { } now && now != stamp)
@@ -397,18 +382,15 @@ public sealed class TaskRollback : ITaskRollback
             if (File.Exists(local))
                 File.Delete(local);
             return true;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        }, ex =>
         {
             _log.LogWarning(ex, "The rollback of task {TaskId} cannot delete '{Path}'", taskId, path);
             return false;
-        }
-    }
+        }, ct);
 
-    private async Task<bool> DeleteFolderIfEmptyAsync(string taskId, IDDB ddb, string folder, List<string> left,
-        CancellationToken ct)
-    {
-        try
+    private Task<bool> DeleteFolderIfEmptyAsync(string taskId, IDDB ddb, string folder, List<string> left,
+        CancellationToken ct) =>
+        BestEffort.GetAsync(async () =>
         {
             var local = ddb.GetLocalPath(folder);
             // A folder that holds anything else (a file another writer put there) stays: it is not only the task's
@@ -429,13 +411,11 @@ public sealed class TaskRollback : ITaskRollback
 
             Directory.Delete(local, false);
             return true;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        }, ex =>
         {
             _log.LogWarning(ex, "The rollback of task {TaskId} cannot delete the folder '{Folder}'", taskId, folder);
             return false;
-        }
-    }
+        }, ct);
 
     // The index of a dataset may be busy for a moment (another writer): a few short waits before the rollback gives up
     private static async Task<T> WhenNotBusyAsync<T>(Func<T> action, CancellationToken ct)

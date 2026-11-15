@@ -250,26 +250,8 @@ public sealed class MaskBordersTool(DatasetPathPolicy paths, TaskFileIndexer ind
             // The owner of the organization must have room for the growth of the output and its sidecar (FR-XC-26): the
             // task fails with the 507 text. An output that replaced a file is never deleted (FR-XC-27): it stays, and it
             // is indexed so that the entry describes the file
-            try
-            {
-                await WorkerStorageQuota.EnsureOutputFitsAsync(ctx.Storage, request.OrgSlug,
-                    [outputFullPath, sidecarFullPath], replacedBytes, indexCt);
-            }
-            catch (QuotaExceededException) when (replacing)
-            {
-                // The 507 is the reason the task stops: an index error here must not replace it (a busy index would make
-                // the job retry and write the output again). The rescan corrects the entry later.
-                try
-                {
-                    ctx.Ddb.AddRaw(outputPath);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    progress.Report(new HeavyToolProgress(-1, "indexing",
-                        LogChunk: $"Could not index the replaced output {outputPath} again: {ex.Message}"));
-                }
-                throw;
-            }
+            await WorkerStorageQuota.EnsureToolOutputFitsAsync(ctx, request.OrgSlug, outputPath,
+                [outputFullPath, sidecarFullPath], replacedBytes, replacing, progress, indexCt);
 
             if (!replacing)
                 writes.Written(outputPath);

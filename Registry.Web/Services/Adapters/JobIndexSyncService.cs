@@ -7,6 +7,7 @@ using Hangfire.Server;
 using Hangfire.States;
 using Hangfire.Storage;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Web.Attributes;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Jobs;
@@ -99,49 +100,69 @@ public class JobIndexSyncService
         {
             ct.ThrowIfCancellationRequested();
 
-            try
-            {
-                var jobDetails = monitoringApi.JobDetails(jobIndex.JobId);
-
-                if (jobDetails?.History != null && jobDetails.History.Count > 0)
-                {
-                    var latestHistoryEntry = jobDetails.History[0];
-                    var currentState = latestHistoryEntry.StateName;
-
-                    if (currentState == jobIndex.CurrentState)
-                        continue;
-
-                    // The timestamp of Hangfire's state history, not now
-                    var stateTimestamp = latestHistoryEntry.CreatedAt;
-
-                    _logger.LogDebug("Updating job {JobId} from '{RowState}' to '{CurrentState}' with timestamp {Timestamp}",
-                        jobIndex.JobId, jobIndex.CurrentState, currentState, stateTimestamp);
-
-                    if (await _jobIndexWriter.UpdateStateIfCurrentAsync(jobIndex.JobId, SyncedStates,
-                            currentState, stateTimestamp, ct))
-                        updated++;
-                    else
-                        skipped++;
-                }
-                else
-                {
-                    // Not in Hangfire any more (deleted or expired): Deleted, at the time it was found missing
-                    _logger.LogDebug("Job {JobId} not found in Hangfire, marking as deleted", jobIndex.JobId);
-
-                    // It never ran: a dataset created for it goes (FR-XC-27)
-                    if (await EndLostAsync(jobIndex.JobId, SyncedStates, ct))
-                        notFound++;
-                    else
-                        skipped++;
-                }
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            // A row that fails is left as it is: the next run reads it again
+            var outcome = await BestEffort.GetAsync(() => SyncRowAsync(monitoringApi, jobIndex, ct), ex =>
             {
                 _logger.LogWarning(ex, "Error processing job {JobId}", jobIndex.JobId);
+                return RowSync.Unchanged;
+            }, ct);
+            switch (outcome)
+            {
+                case RowSync.Updated:
+                    updated++;
+                    break;
+                case RowSync.NotFound:
+                    notFound++;
+                    break;
+                case RowSync.Skipped:
+                    skipped++;
+                    break;
             }
         }
 
         return new SyncResult(updated, notFound, skipped);
+    }
+
+    private enum RowSync
+    {
+        Unchanged,
+        Updated,
+        NotFound,
+        Skipped
+    }
+
+    // One row against the live state of its job: written when it differs, Deleted (or Failed) when the job is gone, and
+    // left (Skipped) when a concurrent writer changed it meanwhile
+    private async Task<RowSync> SyncRowAsync(IMonitoringApi monitoringApi, Data.Models.JobIndex jobIndex,
+        CancellationToken ct)
+    {
+        var jobDetails = monitoringApi.JobDetails(jobIndex.JobId);
+
+        if (jobDetails?.History is not { Count: > 0 } history)
+        {
+            // Not in Hangfire any more (deleted or expired): Deleted, at the time it was found missing
+            _logger.LogDebug("Job {JobId} not found in Hangfire, marking as deleted", jobIndex.JobId);
+
+            // It never ran: a dataset created for it goes (FR-XC-27)
+            return await EndLostAsync(jobIndex.JobId, SyncedStates, ct) ? RowSync.NotFound : RowSync.Skipped;
+        }
+
+        var latestHistoryEntry = history[0];
+        var currentState = latestHistoryEntry.StateName;
+
+        if (currentState == jobIndex.CurrentState)
+            return RowSync.Unchanged;
+
+        // The timestamp of Hangfire's state history, not now
+        var stateTimestamp = latestHistoryEntry.CreatedAt;
+
+        _logger.LogDebug("Updating job {JobId} from '{RowState}' to '{CurrentState}' with timestamp {Timestamp}",
+            jobIndex.JobId, jobIndex.CurrentState, currentState, stateTimestamp);
+
+        return await _jobIndexWriter.UpdateStateIfCurrentAsync(jobIndex.JobId, SyncedStates, currentState,
+            stateTimestamp, ct)
+            ? RowSync.Updated
+            : RowSync.Skipped;
     }
 
     /// <summary>
@@ -199,18 +220,18 @@ public class JobIndexSyncService
     private async Task<bool> EndLostAsync(string jobId, IReadOnlyCollection<string> fromStates, CancellationToken ct)
     {
         TaskCommittedLostException? lost = null;
-        if (_rollback != null)
+        if (_rollback is { } rollback)
         {
-            try
-            {
-                lost = await _rollback.CommittedLostAsync(jobId, ct);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            var readable = true;
+            lost = await BestEffort.GetAsync(() => rollback.CommittedLostAsync(jobId, ct), ex =>
             {
                 // Kept as it is: the next start reads its record again
                 _logger.LogError(ex, "Cannot read the write record of the lost task {JobId}", jobId);
+                readable = false;
+                return null;
+            }, ct);
+            if (!readable)
                 return false;
-            }
         }
 
         if (lost != null)
@@ -237,18 +258,14 @@ public class JobIndexSyncService
     // committed after the check of EndLostAsync is not rolled back: the task ends Failed (its message first)
     private async Task RollBackLostAsync(string jobId, CancellationToken ct)
     {
-        if (_rollback is null)
+        if (_rollback is not { } rollback)
             return;
 
-        try
+        await BestEffort.RunAsync(async () =>
         {
-            if (await _rollback.RollBackAsync(jobId, null, ct) == TaskRollbackOutcome.Committed)
+            if (await rollback.RollBackAsync(jobId, null, ct) == TaskRollbackOutcome.Committed)
                 await FailCommittedLostAsync(jobId, ct);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogError(ex, "Cannot roll back the lost task {JobId}", jobId);
-        }
+        }, ex => _logger.LogError(ex, "Cannot roll back the lost task {JobId}", jobId), ct);
     }
 
     private async Task FailCommittedLostAsync(string jobId, CancellationToken ct)

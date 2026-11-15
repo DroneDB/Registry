@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 
 namespace Registry.Web.Services.Caching;
 
@@ -12,19 +13,13 @@ namespace Registry.Web.Services.Caching;
 /// </summary>
 internal static class FailOpen
 {
-    public static async Task<T> RunAsync<T>(Func<Task<T>> call, T fallback, ILogger logger, string what, string key,
-        CancellationToken ct = default)
-    {
-        try
-        {
-            return await call();
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+    public static Task<T> RunAsync<T>(Func<Task<T>> call, T fallback, ILogger logger, string what, string key,
+        CancellationToken ct = default) =>
+        BestEffort.GetAsync(call, ex =>
         {
             logger.LogWarning(ex, "Cache: {What} failed for {Key}", what, key);
             return fallback;
-        }
-    }
+        }, ct);
 
     public static Task RunAsync(Func<Task> call, ILogger logger, string what, string key, CancellationToken ct = default) =>
         RunAsync(async () =>

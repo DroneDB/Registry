@@ -4,6 +4,7 @@ using Hangfire.States;
 using Hangfire.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Services.Adapters;
@@ -72,23 +73,18 @@ public sealed class BuildJobFailureFilter(
 
     // The folder of the dataset the build job worked on, so its error names files relative to it; null when the job
     // does not say (JobLogText.UserMessage then removes every server path all the same)
-    private string? DatasetFolderOf(Job job, string orgSlug, IServiceProvider services)
-    {
-        try
+    private string? DatasetFolderOf(Job job, string orgSlug, IServiceProvider services) =>
+        BestEffort.Get(() => job.Args switch
         {
             // DdbJobs: (orgSlug, internalRef, ...); the jobs of earlier releases: (IDDB ddb, ...)
-            if (job.Args is [IDDB ddb, ..])
-                return ddb.DatasetFolderPath;
-            if (job.Args is [_, Guid internalRef, ..])
-                return services.GetService<IDdbManager>()?.GetDatasetFolder(orgSlug, internalRef);
-        }
-        catch (Exception ex)
+            [IDDB ddb, ..] => ddb.DatasetFolderPath,
+            [_, Guid internalRef, ..] => services.GetService<IDdbManager>()?.GetDatasetFolder(orgSlug, internalRef),
+            _ => null
+        }, ex =>
         {
             log.LogDebug(ex, "BuildJobFailureFilter: cannot tell the dataset folder of a failed build");
-        }
-
-        return null;
-    }
+            return null;
+        });
 
     public void OnStateUnapplied(ApplyStateContext context, IWriteOnlyTransaction transaction)
     {
