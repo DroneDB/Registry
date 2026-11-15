@@ -261,7 +261,7 @@ public class AbandonedShareBatchesTests
         var ds = AddDataset("slow-link");
         var token = AddBatch(ds, TimeSpan.Zero, createdDataset: true);
         var uploads = new ShareChunkedUploads(Store(), Mock.Of<IStorageQuota>(), new ChunkStore(), TestScratch.Provider,
-            DdbManager(), Mock.Of<IObjectsManager>(), TestPaths.Policy, NullLogger<ShareChunkedUploads>.Instance);
+            DdbManager(), Mock.Of<IObjectsManager>(), TestPaths.Policy, Mock.Of<IAuthManager>(), NullLogger<ShareChunkedUploads>.Instance);
 
         for (var chunk = 0; chunk < 6; chunk++)
         {
@@ -655,7 +655,7 @@ public class AbandonedShareBatchesTests
         var token = AddBatch(ds, TimeSpan.Zero, createdDataset: false);
         var committed = new List<string>();
         var uploads = new ShareChunkedUploads(Store(), Mock.Of<IStorageQuota>(), new ChunkStore(), TestScratch.Provider,
-            DdbManager(), Objects(ds, committed).Object, TestPaths.Policy, NullLogger<ShareChunkedUploads>.Instance);
+            DdbManager(), Objects(ds, committed).Object, TestPaths.Policy, Mock.Of<IAuthManager>(), NullLogger<ShareChunkedUploads>.Instance);
 
         await using (var body = new MemoryStream("abcd"u8.ToArray()))
         {

@@ -82,7 +82,7 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
         else
         {
             // A session that exists is not started again: one removed meanwhile (its Cancel) refuses the chunk (404)
-            EnsureOwner(ctx, status.Manifest, chunk.FileId);
+            EnsureOwner(ctx.User?.Id, status.Manifest, chunk.FileId);
             if (status.Manifest.TotalSize != chunk.TotalFileSize || status.Manifest.TotalChunks != chunk.TotalChunks ||
                 status.Manifest.ChunkSize != chunk.ChunkSize)
                 throw new ConflictException($"Upload '{chunk.FileId}' exists with another file or owner");
@@ -142,7 +142,7 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
         using var ctx = await uploads.BeginAsync(orgSlug, dsSlug, ct: ct);
         var status = store.GetStatus(ChunksRoot(ctx.Ddb), SessionKey(ctx.User?.Id, fileId))
                      ?? throw new NotFoundException($"Unknown upload '{fileId}'");
-        EnsureOwner(ctx, status.Manifest, fileId);
+        EnsureOwner(ctx.User?.Id, status.Manifest, fileId);
         return ToDto(status);
     }
 
@@ -178,7 +178,7 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
         var root = ChunksRoot(ctx.Ddb);
         var key = SessionKey(ctx.User?.Id, fileId);
         var status = store.GetStatus(root, key) ?? throw new NotFoundException($"Unknown upload '{fileId}'");
-        EnsureOwner(ctx, status.Manifest, fileId);
+        EnsureOwner(ctx.User?.Id, status.Manifest, fileId);
 
         if (!await store.DeleteAsync(root, key))
             throw new NotFoundException($"Unknown upload '{fileId}'");
@@ -213,7 +213,7 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
             var root = ChunksRoot(ctx.Ddb);
             var key = ctx.UploadId!;
             var status = store.GetStatus(root, key) ?? throw new NotFoundException($"Unknown upload '{fileId}'");
-            EnsureOwner(ctx, status.Manifest, fileId);
+            EnsureOwner(ctx.User?.Id, status.Manifest, fileId);
             var replace = overwrite || status.Manifest.Overwrite;
             if (status.Complete)
                 uploads.ResolveTarget(ctx, status.Manifest.Path, replace);
@@ -233,10 +233,14 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
         }
     }
 
-    private static void EnsureOwner(UploadRequestContext ctx, ChunkManifest manifest, string fileId)
+    /// <summary>
+    /// Refuses a session of another user than <paramref name="userId"/> as unknown: it does not exist for the caller
+    /// (§7.1). The dataset chunk uploads and the chunk uploads of a share batch both check it.
+    /// </summary>
+    /// <exception cref="Registry.Web.Exceptions.NotFoundException">The session is another user's.</exception>
+    public static void EnsureOwner(string? userId, ChunkManifest manifest, string fileId)
     {
-        // A session of another user does not exist for the caller (§7.1)
-        if (manifest.UserId != ctx.User?.Id)
+        if (manifest.UserId != userId)
             throw new NotFoundException($"Unknown upload '{fileId}'");
     }
 

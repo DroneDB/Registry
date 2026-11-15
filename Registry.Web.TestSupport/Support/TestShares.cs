@@ -34,7 +34,7 @@ public static class TestShares
             new ShareBatches(store, rollback, targets, authManager, quota, NullLogger<ShareBatches>.Instance),
             new ShareUploads(store, objects, fileSystem, ddbManager, TestPaths.Policy, NullLogger<ShareUploads>.Instance),
             new ShareChunkedUploads(store, quota, chunks ?? new ChunkStore(), scratch, ddbManager,
-                objects, TestPaths.Policy, NullLogger<ShareChunkedUploads>.Instance));
+                objects, TestPaths.Policy, authManager, NullLogger<ShareChunkedUploads>.Instance));
     }
 
     // Every dataset is empty and holds no file: nothing is replaced, a dataset that a batch created holds only its files
