@@ -145,8 +145,7 @@ public sealed class ObjectRenderService : IObjectRenderService
     // The size of a thumbnail asked for (the default when none): never above what the Hub asks for at most, so that a
     // request cannot make the server render, cache and send an image of any size. Every thumbnail path takes its size
     // here, so a size above the bound shares the entry of the bound.
-    private int ClampSize(int? size) => Math.Min(size ?? _options.DefaultThumbnailSize,
-        ThumbnailOptions.MaxThumbnailSizePixels);
+    private int ClampSize(int? size) => ThumbnailOptions.Bounded(size ?? _options.DefaultThumbnailSize);
 
     // The one key of the plain thumbnail of an entry, for the read and for the removal that precedes a recreate
     private static object[] ThumbnailKey(ReadableObject obj, int pixels) =>

@@ -209,4 +209,18 @@ public sealed class NativeGateHeavyLaneTests : IDisposable
 
         ShouldHaveRunInTheHeavyLane(calls: 4);
     }
+
+    [Test]
+    public async Task MergePreview_SizeAboveTheBound_RendersAtTheBound()
+    {
+        string[] bands = ["b1.tif", "b2.tif"];
+        Native(d => d.PreviewMergeMultispectral(It.IsAny<string[]>(), It.IsAny<string?>(), It.IsAny<int>()), [1, 2]);
+
+        await _services.Processing.PreviewMergeMultispectralAsync(OrgSlug, DsSlug, bands, thumbSize: 100_000);
+        await _services.Processing.PreviewMergeMultispectralAsync(OrgSlug, DsSlug, bands, thumbSize: 300);
+
+        _ddb.Verify(d => d.PreviewMergeMultispectral(It.IsAny<string[]>(), It.IsAny<string?>(),
+            ThumbnailOptions.MaxThumbnailSizePixels), Times.Once);
+        _ddb.Verify(d => d.PreviewMergeMultispectral(It.IsAny<string[]>(), It.IsAny<string?>(), 300), Times.Once);
+    }
 }

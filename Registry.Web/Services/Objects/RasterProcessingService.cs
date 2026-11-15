@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.Managers;
@@ -62,7 +63,8 @@ public sealed class RasterProcessingService
         var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct)).Ddb;
         paths = NormalizeAll(paths);
 
-        return await _gate.RunAsync(NativeLane.Heavy, () => ddb.PreviewMergeMultispectral(paths, previewBands, thumbSize),
+        var size = ThumbnailOptions.Bounded(thumbSize);
+        return await _gate.RunAsync(NativeLane.Heavy, () => ddb.PreviewMergeMultispectral(paths, previewBands, size),
             ct);
     }
 

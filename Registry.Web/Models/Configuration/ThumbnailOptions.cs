@@ -1,3 +1,5 @@
+using System;
+
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>Thumbnails: the generator and the defaults (keys of the <c>AppSettings</c> section).</summary>
@@ -7,6 +9,12 @@ public sealed class ThumbnailOptions : IHasConfigurationDefaults
 
     /// <summary>The largest thumbnail the server renders, in pixels: the largest step of the Hub; a larger size is served at this one.</summary>
     public const int MaxThumbnailSizePixels = 4096;
+
+    /// <summary>
+    /// <paramref name="size"/> within <see cref="MaxThumbnailSizePixels"/>: every rendered preview (thumbnails and the
+    /// preview of a merge) takes its size here, so a request cannot make the server render an image of any size.
+    /// </summary>
+    public static int Bounded(int size) => Math.Min(size, MaxThumbnailSizePixels);
 
     /// <summary>The dataset thumbnail candidates used when <see cref="DatasetThumbnailCandidates"/> is not set.</summary>
     public static readonly string[] DefaultDatasetThumbnailCandidates =
