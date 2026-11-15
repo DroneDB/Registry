@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,16 +24,22 @@ public sealed partial class NodeOdxTaskRunner
     private readonly NodeOdxNodeRegistry _nodes;
     private readonly ScratchFileProvider _scratch;
     private readonly TimeSpan _pollInterval;
+    private readonly TimeSpan _maxBackoff;
+    private readonly TimeSpan _unreachableLimit;
     private readonly bool _keepFailedTasks;
+    private readonly TimeProvider _time;
 
     public NodeOdxTaskRunner(INodeOdxClient client, NodeOdxNodeRegistry nodes, ScratchFileProvider scratch,
-        IOptions<ProcessingPlatformSettings> platformSettings)
+        IOptions<ProcessingPlatformSettings> platformSettings, TimeProvider? time = null)
     {
         _client = client;
         _nodes = nodes;
         _scratch = scratch;
         _pollInterval = TimeSpan.FromSeconds(Math.Max(1, platformSettings.Value.RemoteNodePollIntervalSeconds));
+        _maxBackoff = TimeSpan.FromSeconds(Math.Max(1, platformSettings.Value.RemoteNodePollMaxBackoffSeconds));
+        _unreachableLimit = TimeSpan.FromSeconds(Math.Max(1, platformSettings.Value.RemoteNodeRequestTimeoutSeconds));
         _keepFailedTasks = platformSettings.Value.KeepFailedNodeTasks;
+        _time = time ?? TimeProvider.System;
     }
 
     /// <summary>Whether any node is configured.</summary>
@@ -49,7 +56,8 @@ public sealed partial class NodeOdxTaskRunner
     /// output it printed is in the task's log by then.
     /// </summary>
     /// <exception cref="InvalidOperationException">The node's task failed, or produced no result bundle.</exception>
-    /// <exception cref="TimeoutException">The node did not answer a request in time (not a cancel: the node task stays).</exception>
+    /// <exception cref="TimeoutException">The node did not answer a request in time, or could not be reached for longer than
+    /// the request timeout (not a cancel: the node task stays).</exception>
     /// <exception cref="OperationCanceledException">The task was canceled (here or on the node).</exception>
     public async Task<ScratchFile> RunAsync(NodeOdxEndpoint node, string taskName, IReadOnlyList<string> imagePaths,
         string? optionsJson, IProgress<HeavyToolProgress> progress, CancellationToken ct)
@@ -189,15 +197,37 @@ public sealed partial class NodeOdxTaskRunner
         var stageIndex = -1;
         double? lastNodeProgress = null;
         var reported = 0.0;
+        var unreachable = new Unreachable();
         while (true)
         {
             ct.ThrowIfCancellationRequested();
 
-            var info = await _client.GetTaskInfoAsync(node, uuid, ct);
+            NodeOdxTaskInfo info;
+            IReadOnlyList<string> lines;
+            try
+            {
+                info = await _client.GetTaskInfoAsync(node, uuid, ct);
+                lines = await _client.GetTaskOutputAsync(node, uuid, poll.OutputLine, ct);
+            }
+            catch (HttpRequestException ex) when (IsTransient(ex))
+            {
+                // A node that restarts or sits behind a proxy that hiccups fails a poll now and then, and the run has
+                // hours behind it: the poll goes on with growing waits until the node has been unreachable for longer
+                // than a request may take, which fails the run as a request that timed out does
+                var wait = unreachable.Failed(_time, _pollInterval, _maxBackoff);
+                if (_time.GetElapsedTime(unreachable.Since) >= _unreachableLimit)
+                    throw NoAnswer(node, ex);
+
+                progress.Report(new HeavyToolProgress(poll.Fraction, poll.Phase, LogChunk:
+                    $"NodeODX node '{node.Id}' did not answer ({ex.Message}); trying again in {wait.TotalSeconds:0} s"));
+                await Task.Delay(wait, _time, ct);
+                continue;
+            }
+
+            unreachable.Answered();
             var fraction = Math.Clamp(info.Progress / 100.0, 0, 1);
             var waiting = info.StatusCode == NodeOdxTaskStatusCode.Queued;
 
-            var lines = await _client.GetTaskOutputAsync(node, uuid, poll.OutputLine, ct);
             poll.OutputLine += lines.Count;
             foreach (var line in lines)
                 if (StageOf(line) is { } found && (found.Explicit || found.Index > stageIndex))
@@ -244,7 +274,30 @@ public sealed partial class NodeOdxTaskRunner
                     throw new NodeTaskCanceledException("NodeODX task was canceled.");
             }
 
-            await Task.Delay(_pollInterval, ct);
+            await Task.Delay(_pollInterval, _time, ct);
+        }
+    }
+
+    // A node that could not be reached or answered with a server error may answer the next poll; one that answers 4xx
+    // (the task is not there, the request is wrong) will not
+    private static bool IsTransient(HttpRequestException ex) => ex.StatusCode is null or >= System.Net.HttpStatusCode.InternalServerError;
+
+    /// <summary>The polls the node has not answered in a row: since when, and how many.</summary>
+    private sealed class Unreachable
+    {
+        private int _failures;
+
+        /// <summary>When the first poll of the row failed (the timestamp of the clock the run uses).</summary>
+        public long Since { get; private set; }
+
+        public void Answered() => _failures = 0;
+
+        /// <summary>Counts a failed poll; returns how long to wait for the next one: the poll interval doubled for each failure, up to <paramref name="max"/>.</summary>
+        public TimeSpan Failed(TimeProvider time, TimeSpan interval, TimeSpan max)
+        {
+            if (_failures++ == 0)
+                Since = time.GetTimestamp();
+            return TimeSpan.FromTicks(Math.Min(max.Ticks, (long)(interval.Ticks * Math.Pow(2, Math.Min(_failures, 30)))));
         }
     }
 

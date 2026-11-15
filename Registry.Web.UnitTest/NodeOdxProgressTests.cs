@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -39,7 +40,8 @@ public class NodeOdxProgressTests
         new("uuid-1", code, error, progress, 2);
 
     private static (NodeOdxTaskRunner Runner, Mock<INodeOdxClient> Client) Runner(
-        IEnumerable<NodeOdxTaskInfo> infos, IEnumerable<string[]> output, bool keepFailed = false)
+        IEnumerable<NodeOdxTaskInfo> infos, IEnumerable<string[]> output, bool keepFailed = false,
+        TimeProvider? time = null, int maxBackoffSeconds = 30)
     {
         var client = new Mock<INodeOdxClient>();
         client.Setup(c => c.CreateTaskAsync(It.IsAny<NodeOdxEndpoint>(), "run", It.IsAny<IReadOnlyList<string>>(),
@@ -56,9 +58,10 @@ public class NodeOdxProgressTests
         var platform = TestSettings.Options<ProcessingPlatformSettings>(new AppSettings
         {
             ProcessingPlatform = new ProcessingPlatformSettings
-                { RemoteNodePollIntervalSeconds = 1, KeepFailedNodeTasks = keepFailed }
+                { RemoteNodePollIntervalSeconds = 1, RemoteNodePollMaxBackoffSeconds = maxBackoffSeconds,
+                  RemoteNodeRequestTimeoutSeconds = 30, KeepFailedNodeTasks = keepFailed }
         });
-        return (new NodeOdxTaskRunner(client.Object, new NodeOdxNodeRegistry(platform), TestScratch.Provider, platform), client);
+        return (new NodeOdxTaskRunner(client.Object, new NodeOdxNodeRegistry(platform), TestScratch.Provider, platform, time), client);
     }
 
     // ---- FR-PRC-32 ----
@@ -238,6 +241,85 @@ public class NodeOdxProgressTests
         ex.Message.ShouldBe("NodeODX node 'n1' did not answer in time.");
         client.Verify(c => c.CancelTaskAsync(It.IsAny<NodeOdxEndpoint>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         client.Verify(c => c.RemoveTaskAsync(It.IsAny<NodeOdxEndpoint>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // The waits of the poll are timers of the clock the runner is given: the test says which timer it expects next
+    // before it moves the clock to the one before, so it never races the run
+    private static async Task AdvanceThrough(FakeTime time, Task firstArmed, params int[] waitsInSeconds)
+    {
+        var armed = firstArmed.WaitAsync(TimeSpan.FromSeconds(10));
+        for (var i = 0; i < waitsInSeconds.Length; i++)
+        {
+            await armed;
+            if (i + 1 < waitsInSeconds.Length)
+                armed = time.WhenTimerArmed(TimeSpan.FromSeconds(waitsInSeconds[i + 1])).WaitAsync(TimeSpan.FromSeconds(10));
+            time.Advance(TimeSpan.FromSeconds(waitsInSeconds[i]));
+        }
+    }
+
+    [Test]
+    public async Task APollTheNodeDoesNotAnswer_IsTriedAgainWithGrowingWaits_AndTheTaskCompletes()
+    {
+        var time = new FakeTime(new DateTime(2026, 11, 15, 0, 0, 0, DateTimeKind.Utc));
+        var (runner, client) = Runner([], [[]], time: time);
+        client.SetupSequence(c => c.GetTaskInfoAsync(It.IsAny<NodeOdxEndpoint>(), "uuid-1", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("Connection refused"))
+            .ThrowsAsync(new HttpRequestException("Bad Gateway", null, System.Net.HttpStatusCode.BadGateway))
+            .ReturnsAsync(Info(NodeOdxTaskStatusCode.Running, 50))
+            .ReturnsAsync(Info(NodeOdxTaskStatusCode.Completed, 100));
+        var reports = new Reports();
+        var firstWait = time.WhenTimerArmed(TimeSpan.FromSeconds(2));
+
+        var run = runner.RunAsync(Node, "run", ["a.jpg", "b.jpg"], null, reports, CancellationToken.None);
+        await firstWait.WaitAsync(TimeSpan.FromSeconds(10));
+        var secondWait = time.WhenTimerArmed(TimeSpan.FromSeconds(4)).WaitAsync(TimeSpan.FromSeconds(10));
+        time.Advance(TimeSpan.FromSeconds(2));
+        await secondWait;
+        var pollWait = time.WhenTimerArmed(TimeSpan.FromSeconds(1)).WaitAsync(TimeSpan.FromSeconds(10));
+        time.Advance(TimeSpan.FromSeconds(4));
+        await pollWait;
+        time.Advance(TimeSpan.FromSeconds(1));
+        using var bundle = await run.WaitAsync(TimeSpan.FromSeconds(10));
+
+        client.Verify(c => c.GetTaskInfoAsync(It.IsAny<NodeOdxEndpoint>(), "uuid-1", It.IsAny<CancellationToken>()), Times.Exactly(4));
+        reports.All.Select(r => r.LogChunk).OfType<string>().Where(l => l.Contains("did not answer")).ToArray().ShouldBe([
+            "NodeODX node 'n1' did not answer (Connection refused); trying again in 2 s",
+            "NodeODX node 'n1' did not answer (Bad Gateway); trying again in 4 s"]);
+        reports.All.Select(r => r.Phase).ShouldContain("completed");
+        client.Verify(c => c.CancelTaskAsync(It.IsAny<NodeOdxEndpoint>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task ANodeThatStaysUnreachable_FailsTheRunAfterTheRequestTimeout_WithWaitsCappedAtTheMaxBackoff()
+    {
+        var time = new FakeTime(new DateTime(2026, 11, 15, 0, 0, 0, DateTimeKind.Utc));
+        var (runner, client) = Runner([], [[]], time: time, maxBackoffSeconds: 4);
+        client.Setup(c => c.GetTaskInfoAsync(It.IsAny<NodeOdxEndpoint>(), "uuid-1", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("Connection refused"));
+        var firstWait = time.WhenTimerArmed(TimeSpan.FromSeconds(2));
+
+        var run = runner.RunAsync(Node, "run", ["a.jpg", "b.jpg"], null, new Reports(), CancellationToken.None);
+        // 2 s, then 4 s (the cap) for every other wait, until the node has not answered for the 30 s of a request
+        await AdvanceThrough(time, firstWait, 2, 4, 4, 4, 4, 4, 4, 4);
+
+        var ex = await Should.ThrowAsync<TimeoutException>(() => run.WaitAsync(TimeSpan.FromSeconds(10)));
+
+        ex.Message.ShouldBe("NodeODX node 'n1' did not answer in time.");
+        client.Verify(c => c.CancelTaskAsync(It.IsAny<NodeOdxEndpoint>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        client.Verify(c => c.RemoveTaskAsync(It.IsAny<NodeOdxEndpoint>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task APollTheNodeRefuses_WithAClientError_IsNotTriedAgain()
+    {
+        var (runner, client) = Runner([], [[]]);
+        client.Setup(c => c.GetTaskInfoAsync(It.IsAny<NodeOdxEndpoint>(), "uuid-1", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("Not Found", null, System.Net.HttpStatusCode.NotFound));
+
+        await Should.ThrowAsync<HttpRequestException>(() =>
+            runner.RunAsync(Node, "run", ["a.jpg", "b.jpg"], null, new Reports(), CancellationToken.None));
+
+        client.Verify(c => c.GetTaskInfoAsync(It.IsAny<NodeOdxEndpoint>(), "uuid-1", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
