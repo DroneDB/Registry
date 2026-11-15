@@ -127,18 +127,28 @@ public sealed class EntryQueryService : IEntryQueryService
             : new FileStreamDescriptor($"{orgSlug}-{dsSlug}-{CommonUtils.RandomString(8)}.zip", "application/zip", ddb,
                 files, folders, includeDdb ? FileDescriptorType.Dataset : FileDescriptorType.Multiple, _logger, _zip);
 
-        // Anonymous users cannot download bulk archives (the whole dataset, folders, several files) when
-        // the policy says so; single files stay allowed
-        if (_downloads.DisableAnonymousBulkDownloads && descriptor.Type != FileDescriptorType.Single &&
-            await _authManager.GetCurrentUser() == null)
-        {
-            _logger.LogWarning("Blocked anonymous bulk download for '{OrgSlug}/{DsSlug}' (type={Type}, paths='{Paths}')",
-                orgSlug, dsSlug, descriptor.Type, paths != null ? string.Join(",", paths) : "(none)");
-            throw new UnauthorizedException(
-                "Bulk downloads are not allowed for anonymous users. Please log in to download multiple files or entire datasets.");
-        }
+        // Single files stay allowed to anonymous callers
+        if (descriptor.Type != FileDescriptorType.Single)
+            await EnsureBulkDownloadAllowedAsync(orgSlug, dsSlug, descriptor.Type, paths);
 
         return descriptor;
+    }
+
+    /// <summary>
+    /// Anonymous users cannot download bulk archives (the whole dataset, its index, folders, several files) when the
+    /// policy says so (<c>DisableAnonymousBulkDownloads</c>): the one rule of every download that is an archive.
+    /// </summary>
+    /// <exception cref="UnauthorizedException">The policy refuses archives and the caller is anonymous.</exception>
+    private async Task EnsureBulkDownloadAllowedAsync(string orgSlug, string dsSlug, FileDescriptorType type,
+        string[]? paths)
+    {
+        if (!_downloads.DisableAnonymousBulkDownloads || await _authManager.GetCurrentUser() != null)
+            return;
+
+        _logger.LogWarning("Blocked anonymous bulk download for '{OrgSlug}/{DsSlug}' (type={Type}, paths='{Paths}')",
+            orgSlug, dsSlug, type, paths != null ? string.Join(",", paths) : "(none)");
+        throw new UnauthorizedException(
+            "Bulk downloads are not allowed for anonymous users. Please log in to download multiple files or entire datasets.");
     }
 
     // The file itself, with the type the policy for user content gives it
@@ -149,6 +159,8 @@ public sealed class EntryQueryService : IEntryQueryService
     public async Task<FileStreamDescriptor> GetDdbAsync(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
         var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct)).Ddb;
+
+        await EnsureBulkDownloadAllowedAsync(orgSlug, dsSlug, FileDescriptorType.Dataset, null);
 
         return new FileStreamDescriptor($"{orgSlug}-{dsSlug}-ddb.zip", "application/zip", ddb, [], [],
             FileDescriptorType.Dataset, _logger, _zip);
