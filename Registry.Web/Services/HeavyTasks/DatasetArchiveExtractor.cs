@@ -23,7 +23,7 @@ namespace Registry.Web.Services.HeavyTasks;
 /// <param name="DestinationFolder">The normalized dataset path the entries go under; "" for the dataset root.</param>
 /// <param name="IsExtensionAllowed">The import policy: an entry whose extension it refuses is skipped.</param>
 /// <param name="KeepExisting">True when the file that holds the name of the entry must be kept (the entry is skipped); it
-/// gets the location of the name (<see cref="Locate"/>): the dataset path to write at and the entry that holds the name.</param>
+/// gets the location of the name (<see cref="Dataset"/>): the dataset path to write at and the entry that holds the name.</param>
 /// <param name="MaxBytes">The cap on the bytes the extraction writes (it counts only the entries that it writes, never a
 /// skipped one); 0 (or less) disables it. The caller passes the smaller of the archive size limit and the bytes the owner of
 /// the organization may still store (FR-XC-26).</param>
@@ -36,9 +36,10 @@ namespace Registry.Web.Services.HeavyTasks;
 /// apart from <paramref name="IsExtensionAllowed"/>. Null: nothing is excluded.</param>
 /// <param name="MaxBytesMessage">The text of the failure when <paramref name="MaxBytes"/> is reached, for a cap that is the
 /// storage quota of the owner (the 507 text, FR-XC-26); null: the text of the archive size limit.</param>
-/// <param name="Locate">Where a dataset path is in the dataset under the name rule (names clash without regard to letter
-/// case, <see cref="DatasetEntryLookup.Locate"/>): an entry written at <c>a/x.jpg</c> goes to the path of the existing
-/// <c>A/X.JPG</c>, in its letter case, instead of beside it. Null: the dataset path as it is, with no existing entry.</param>
+/// <param name="Dataset">The dataset, to find where a name is under the name rule (names clash without regard to letter
+/// case, <see cref="DatasetEntryLookup.Resolver"/>): an entry written at <c>a/x.jpg</c> goes to the path of the existing
+/// <c>A/X.JPG</c>, in its letter case, instead of beside it. Null: no entry of the dataset is known, only the names that
+/// the extraction claims itself.</param>
 public sealed record ArchiveExtractionRequest(
     string ArchivePath,
     string DatasetFolder,
@@ -50,7 +51,7 @@ public sealed record ArchiveExtractionRequest(
     Registry.Ports.Import.IImportWriteRecord? Writes = null,
     Func<string, bool>? Exclude = null,
     string? MaxBytesMessage = null,
-    Func<string, EntryLocation>? Locate = null);
+    IDDB? Dataset = null);
 
 /// <summary>Why an entry of an archive was not extracted (FR-PRC-30).</summary>
 public enum ArchiveSkipReason
@@ -198,7 +199,7 @@ public sealed class DatasetArchiveExtractor
         ArgumentNullException.ThrowIfNull(existingBytes);
 
         using var session = OpenSession(request.ArchivePath);
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var names = new DatasetEntryLookup.Resolver(request.Dataset);
         long total = 0;
         foreach (var (_, target) in FileEntries(session, request.DestinationFolder, CancellationToken.None))
         {
@@ -209,10 +210,11 @@ public sealed class DatasetArchiveExtractor
                 continue;
 
             // The file that the entry replaces is the one that holds its name, in its letter case; a name is counted once
-            var location = Resolve(request, path);
-            if (request.KeepExisting(location) || !seen.Add(location.Path))
+            var location = names.Locate(path);
+            if (request.KeepExisting(location) || names.WasClaimed(location.Path))
                 continue;
 
+            names.Claim(location);
             total += Math.Max(0, existingBytes(location.Path));
         }
 
@@ -265,9 +267,9 @@ public sealed class DatasetArchiveExtractor
         var skipped = new List<ArchiveSkippedEntry>();
         var done = 0;
         var batch = new List<StagedEntry>();
-        // The names that this extraction writes, in the letter case of the first entry of each: an entry that differs from
-        // it only in letter case clashes with it (the name rule); the very same path again is the last-wins duplicate
-        var claimed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        // The names of the dataset and the ones that this extraction writes, listed once per folder: an entry that differs
+        // from a name only in letter case is that name (the name rule)
+        var names = new DatasetEntryLookup.Resolver(request.Dataset);
 
         try
         {
@@ -282,7 +284,7 @@ public sealed class DatasetArchiveExtractor
                 {
                     var skippedBefore = skipped.Count;
                     var target = Target(entry.Key, path, skipped);
-                    var (reason, location) = target == null ? (null, null) : Skip(request, target, claimed);
+                    var (reason, location) = target == null ? (null, null) : Skip(request, target, names);
                     if (target != null && reason is { } skipReason)
                     {
                         skipped.Add(new ArchiveSkippedEntry(target, skipReason));
@@ -425,15 +427,12 @@ public sealed class DatasetArchiveExtractor
         }
     }
 
-    // Where the dataset path is under the name rule: the request's lookup, or the path itself when it has none
-    private static EntryLocation Resolve(ArchiveExtractionRequest request, string target) =>
-        request.Locate?.Invoke(target) ?? new EntryLocation(target, null);
-
     // Why the entry at the dataset path is not extracted, or null when it is (with its location: where it is written):
-    // excluded by the caller, refused by the import policy (a file type), a file kept, or a name that an earlier entry of
-    // the archive holds in another letter case
+    // excluded by the caller, refused by the import policy (a file type), a file kept, or a file that an earlier entry of
+    // the archive holds in another letter case (the same path again is the last-wins duplicate, and a folder in another
+    // letter case is the folder that the extraction created)
     private (ArchiveSkipReason? Reason, EntryLocation Location) Skip(ArchiveExtractionRequest request, string target,
-        Dictionary<string, string> claimed)
+        DatasetEntryLookup.Resolver names)
     {
         var location = new EntryLocation(target, null);
         if (request.Exclude?.Invoke(target) == true)
@@ -445,19 +444,22 @@ public sealed class DatasetArchiveExtractor
             return (ArchiveSkipReason.FileTypeNotAllowed, location);
         }
 
-        location = Resolve(request, target);
+        location = names.Locate(target);
         if (request.KeepExisting(location))
             return (ArchiveSkipReason.KeptExisting, location);
 
-        if (claimed.TryGetValue(location.Path, out var first) && !string.Equals(first, location.Path, StringComparison.Ordinal))
+        if (names.WasClaimed(location.Path) &&
+            !string.Equals(NameOf(target), NameOf(location.Path), StringComparison.Ordinal))
         {
-            _logger.LogWarning("Skipping archive entry '{Path}': '{First}' holds the name", location.Path, first);
+            _logger.LogWarning("Skipping archive entry '{Path}': '{Held}' holds the name", target, location.Path);
             return (ArchiveSkipReason.KeptExisting, location);
         }
 
-        claimed[location.Path] = location.Path;
+        names.Claim(location);
         return (null, location);
     }
+
+    private static string NameOf(string path) => path[(path.LastIndexOf('/') + 1)..];
 
     /// <summary>
     /// What one extraction changed in the dataset, so it can be undone: the files moved into it, the files replaced

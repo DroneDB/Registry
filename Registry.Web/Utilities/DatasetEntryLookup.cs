@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Registry.Ports.DroneDB;
@@ -96,30 +97,41 @@ public static class DatasetEntryLookup
         RecurseSubdirectories = false
     };
 
-    // Walks the path one segment at a time: the entry of the index with that name (an exact match first, so two entries
-    // that differ only in case resolve to the one asked for), else the name on disk, both without regard to case. Each
-    // segment costs one index query filtered by the name and, when the index has no such entry, one folder
-    // enumeration filtered by it: a burst of uploads into a large folder never lists it once per file. Returns whether
-    // every segment matched, the path in the case of the segments that did followed by the others, and the indexed
-    // type of the last one (null when only the disk has it)
+    // The lookup of one name in the index and then on disk, a segment at a time (Locate): each segment costs one index
+    // query filtered by the name and, when the index has no such entry, one folder enumeration filtered by it. Returns
+    // whether every segment matched, the path in the case of the segments that did followed by the others, and the
+    // indexed type of the last one (null when only the disk has it)
     private static (bool Found, string Path, EntryType? IndexedType) WalkIgnoringCase(IDDB ddb, string path)
+    {
+        EntryType? indexedType = null;
+        var (found, located) = Walk(path, (folder, name, _) =>
+        {
+            var indexed = IndexedChild(ddb, folder, name);
+            indexedType = indexed?.Type;
+            return indexed is null ? NameOnDisk(ddb.GetLocalPath(folder), name) : NameOf(indexed.Path);
+        });
+        return (found, located, indexedType);
+    }
+
+    // The one walk of a path under the name rule, a segment at a time: `child` gives the name, in its own letter case, of
+    // the entry of the folder (the path so far, in that case) that holds the segment (the exact name first), or null when
+    // there is none (or it cannot hold the rest of the path: a file in the middle). Returns whether every segment
+    // matched, and the path in the case of the segments that did followed by the others as they are
+    private static (bool Found, string Path) Walk(string path, Func<string, string, bool, string?> child)
     {
         var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
         var current = string.Empty;
-        EntryType? indexedType = null;
 
         for (var i = 0; i < segments.Length; i++)
         {
-            var indexed = IndexedChild(ddb, current, segments[i]);
-            var name = indexed is null ? NameOnDisk(ddb.GetLocalPath(current), segments[i]) : NameOf(indexed.Path);
+            var name = child(current, segments[i], i == segments.Length - 1);
             if (name is null)
-                return (false, Join(current, string.Join('/', segments[i..])), null);
+                return (false, Join(current, string.Join('/', segments[i..])));
 
-            indexedType = indexed?.Type;
             current = Join(current, name);
         }
 
-        return (segments.Length > 0, segments.Length > 0 ? current : path, indexedType);
+        return (segments.Length > 0, segments.Length > 0 ? current : path);
     }
 
     // The indexed child of `folder` called `name` without regard to case (the exact name first), or null. libddb's
@@ -167,5 +179,118 @@ public static class DatasetEntryLookup
     {
         var slash = path.LastIndexOf('/');
         return slash < 0 ? path : path[(slash + 1)..];
+    }
+
+    /// <summary>
+    /// The lookup of <see cref="Locate"/> for a writer that places many names in one run (an archive extraction): the
+    /// names of a folder are listed once (the index, then the disk), whatever the number of names asked in it, and the
+    /// names that the run claims are added to that view, so a name asked later finds them. The rule is the same walk
+    /// (the exact name first, then without regard to letter case): <c>A/2.jpg</c> goes into the folder <c>a</c> that
+    /// the run created for <c>a/1.jpg</c>, and a second spelling of a claimed file is told by <see cref="WasClaimed"/>.
+    /// Not thread-safe: one run, one caller.
+    /// </summary>
+    public sealed class Resolver(IDDB? ddb)
+    {
+        private sealed record Child(string Name, bool IsFolder, bool Claimed);
+
+        // The entries of one folder: by exact name, and by name without regard to letter case (the first one listed)
+        private sealed class Folder
+        {
+            public readonly Dictionary<string, Child> Exact = new(StringComparer.Ordinal);
+            public readonly Dictionary<string, Child> IgnoringCase = new(StringComparer.OrdinalIgnoreCase);
+
+            public void Add(Child child)
+            {
+                Exact.TryAdd(child.Name, child);
+                IgnoringCase.TryAdd(child.Name, child);
+            }
+
+            public Child? Find(string name) =>
+                Exact.TryGetValue(name, out var exact) ? exact : IgnoringCase.GetValueOrDefault(name);
+        }
+
+        private readonly Dictionary<string, Folder> _folders = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _claimedFiles = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Where <paramref name="path"/> is: as <see cref="DatasetEntryLookup.Locate"/> does for the dataset, and for the
+        /// names claimed by this run (they are never <see cref="EntryLocation.Existing"/>: they are the run's own).
+        /// </summary>
+        /// <param name="path">A normalized dataset path.</param>
+        public EntryLocation Locate(string path)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+            Child? last = null;
+            var (found, located) = Walk(path, (folder, name, isLast) =>
+            {
+                var child = FolderOf(folder).Find(name);
+                // A file cannot hold the rest of the path
+                if (child is null || (!isLast && !child.IsFolder))
+                    return null;
+
+                last = child;
+                return child.Name;
+            });
+
+            return !found || last is not { Claimed: false } existing
+                ? new EntryLocation(located, null)
+                : new EntryLocation(located, new ExistingEntry(located, existing.IsFolder));
+        }
+
+        /// <summary>
+        /// Takes the name of <paramref name="location"/> (from <see cref="Locate"/>) for this run: the file and the folders
+        /// above it that do not exist yet are added to the view, in the letter case of the location.
+        /// </summary>
+        public void Claim(EntryLocation location)
+        {
+            var segments = location.Path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var folder = string.Empty;
+            for (var i = 0; i < segments.Length; i++)
+            {
+                var isFile = i == segments.Length - 1;
+                // A folder that is not in the view was not found by the walk: it is new, and empty
+                var view = FolderOf(folder, isNew: true);
+                if (view.Find(segments[i]) is null)
+                    view.Add(new Child(segments[i], !isFile, Claimed: true));
+
+                folder = Join(folder, segments[i]);
+            }
+
+            _claimedFiles.Add(location.Path);
+        }
+
+        /// <summary>Whether this run claimed the file at <paramref name="path"/> (a path of <see cref="Locate"/>).</summary>
+        public bool WasClaimed(string path) => _claimedFiles.Contains(path);
+
+        // The view of a folder, listed on first use: the index (one query for its children), then what the disk has that
+        // the index does not list. A folder of the run that is new is empty: nothing to list
+        private Folder FolderOf(string folder, bool isNew = false)
+        {
+            if (_folders.TryGetValue(folder, out var known))
+                return known;
+
+            var view = new Folder();
+            _folders[folder] = view;
+            if (isNew || ddb is null)
+                return view;
+
+            foreach (var entry in ddb.FindSummaries(new EntryQuery(folder, Recursive: false)) ?? [])
+            {
+                if (entry.Path is { Length: > 0 } && string.Equals(ParentOf(entry.Path), folder, StringComparison.Ordinal))
+                    view.Add(new Child(NameOf(entry.Path), entry.Type == EntryType.Directory, Claimed: false));
+            }
+
+            var local = ddb.GetLocalPath(folder);
+            var onDisk = string.IsNullOrEmpty(local) ? null : new DirectoryInfo(local);
+            if (onDisk is not { Exists: true })
+                return view;
+
+            foreach (var info in onDisk.EnumerateFileSystemInfos("*", OneNameIgnoringCase))
+                if (!view.Exact.ContainsKey(info.Name))
+                    view.Add(new Child(info.Name, info is DirectoryInfo, Claimed: false));
+
+            return view;
+        }
     }
 }

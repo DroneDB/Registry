@@ -206,10 +206,6 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
             DefaultFileName: null, ContentType: null, ReplacedBytes: replaced);
     }
 
-    // Where a dataset path is under the name rule: names clash without regard to letter case, so an entry goes to the
-    // path of the existing entry that holds its name
-    private static Func<string, EntryLocation> LocateIn(IDDB ddb) => path => DatasetEntryLookup.Locate(ddb, path);
-
     // Whether an entry that holds the name is kept: always without overwrite, and a folder always (a file never replaces it)
     private static Func<EntryLocation, bool> KeepsExisting(bool overwrite) =>
         location => location.Existing is { } existing && (!overwrite || existing.IsFolder);
@@ -222,7 +218,7 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
             : _archives.ReplacedBytes(
                 new ArchiveExtractionRequest(localArchive, ddb.DatasetFolderPath, destPath,
                     _importSettings.IsExtensionAllowed, KeepsExisting(overwrite: true), MaxBytes: 0, SafetyMarginBytes: 0,
-                    Locate: LocateIn(ddb)),
+                    Dataset: ddb),
                 path => WorkerStorageQuota.IndexedBytes(ddb, path));
 
     protected override async Task<HeavyToolArtifact?> ExecuteAsync(
@@ -261,7 +257,7 @@ public sealed class ArchiveExtractTool : HeavyToolBase<ArchiveExtractTool.Parame
                 _importSettings.IsExtensionAllowed,
                 KeepsExisting(overwrite),
                 maxBytes, _settings.DiskSafetyMarginBytes, writes, MaxBytesMessage: maxBytesMessage,
-                Locate: LocateIn(ctx.Ddb)),
+                Dataset: ctx.Ddb),
             new CallbackProgress<ArchiveExtractionProgress>(p => ReportProgress(progress, p, sourcePath)), ct);
         var extractedPaths = extraction.Extracted.ToList();
 

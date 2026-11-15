@@ -88,6 +88,32 @@ public class DatasetArchiveExtractorTests
         File.ReadAllText(Path.Combine(_dataset, "x.jpg")).ShouldBe("first");
     }
 
+    // The folders of the archive follow the name rule too: a/1.jpg and A/2.jpg are in one folder, the one the extraction
+    // created first (not two folders that differ only in letter case, which a case-sensitive file system would keep)
+    [TestCase(100)]
+    [TestCase(1)]
+    public async Task TwoNewFoldersThatDifferOnlyInLetterCase_AreOneFolder_InTheLetterCaseOfTheFirst(int batchSize)
+    {
+        Zip(("a/1.jpg", "one"), ("A/2.jpg", "two"), ("A/B/3.jpg", "three"), ("a/b/4.jpg", "four"));
+        var extractor = new DatasetArchiveExtractor(new SharpCompressArchiveExtractor(), TestPaths.Policy,
+            TestScratch.Provider, new Registry.Adapters.FileSystem(), TestHeadroom.Default, TestArchives.Settings(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<DatasetArchiveExtractor>.Instance)
+        {
+            PlaceBatchSize = batchSize
+        };
+
+        var result = await extractor.ExtractAsync(
+            new ArchiveExtractionRequest(_archive, _dataset, string.Empty, _ => true, _ => false, 0, 0), null,
+            CancellationToken.None);
+
+        result.Extracted.ShouldBe(["a/1.jpg", "a/2.jpg", "a/B/3.jpg", "a/B/4.jpg"]);
+        result.Skipped.ShouldBeEmpty();
+        Directory.GetDirectories(_dataset).Select(Path.GetFileName).Where(n => n != IDDB.UploadsFolderName)
+            .ShouldBe(["a"]);
+        Directory.GetDirectories(Path.Combine(_dataset, "a")).Select(Path.GetFileName).ShouldBe(["B"]);
+        Directory.GetFiles(Path.Combine(_dataset, "a")).Select(Path.GetFileName).Order().ShouldBe(["1.jpg", "2.jpg"]);
+    }
+
     // An entry goes to the path of the existing entry that holds its name, in that entry's letter case, and the existing
     // entry decides whether it is kept
     [TestCase(false, "old")]
@@ -103,7 +129,7 @@ public class DatasetArchiveExtractorTests
 
         var result = await ExtractAsync(
             keepExisting: location => location.Existing != null && !overwrite,
-            locate: path => DatasetEntryLookup.Locate(ddb.Object, path));
+            dataset: ddb.Object);
 
         result.Extracted.ShouldBe(overwrite ? ["A/X.JPG"] : []);
         result.Skipped.Count.ShouldBe(overwrite ? 0 : 1);
@@ -379,11 +405,11 @@ public class DatasetArchiveExtractorTests
         IProgress<ArchiveExtractionProgress>? progress = null, Func<string, bool>? isExtensionAllowed = null,
         Func<EntryLocation, bool>? keepExisting = null, Func<string, bool>? exclude = null, long maxBytes = 0,
         string? maxBytesMessage = null, ProcessingPlatformSettings? settings = null,
-        Func<string, EntryLocation>? locate = null) =>
+        IDDB? dataset = null) =>
         TestArchives.Extractor(new SharpCompressArchiveExtractor(), headroom, settings).ExtractAsync(
             new ArchiveExtractionRequest(_archive, _dataset, string.Empty, isExtensionAllowed ?? (_ => true),
                 keepExisting ?? (_ => false), maxBytes, safetyMargin, Exclude: exclude, MaxBytesMessage: maxBytesMessage,
-                Locate: locate),
+                Dataset: dataset),
             progress, CancellationToken.None);
 
     private void Zip(params (string Name, string Content)[] entries)
