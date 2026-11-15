@@ -107,4 +107,50 @@ public class ScratchFileProviderTests
 
         reported.ShouldBeOfType<IOException>();
     }
+
+    // A scratch file handed over to a reader lives as long as its stream: it is read whole after the scratch file is
+    // disposed, and gone once the stream is closed, also when the reader stopped early
+    [TestCase(true)]
+    [TestCase(false)]
+    public void OpenForReadingOnce_TheFileIsGoneWhenTheStreamIsClosed(bool readToTheEnd)
+    {
+        var scratch = TestScratch.For(Path.Combine(_root, "temp"));
+        string path;
+        Stream stream;
+        using (var file = scratch.Create("export-", ".tif"))
+        {
+            path = file.Path;
+            File.WriteAllBytes(path, [1, 2, 3, 4]);
+            stream = file.OpenForReadingOnce();
+        }
+
+        File.Exists(path).ShouldBeTrue();
+        using (stream)
+        {
+            if (readToTheEnd)
+            {
+                using var copy = new MemoryStream();
+                stream.CopyTo(copy);
+                copy.ToArray().ShouldBe(new byte[] { 1, 2, 3, 4 });
+            }
+            else
+                stream.ReadByte().ShouldBe(1);
+        }
+
+        File.Exists(path).ShouldBeFalse();
+    }
+
+    // A file that cannot be opened stays the scratch file's to delete
+    [Test]
+    public void OpenForReadingOnce_WhenTheFileCannotBeOpened_DisposeStillDeletesIt()
+    {
+        var fs = new Mock<IFileSystem>();
+        fs.Setup(f => f.OpenReadDeletingOnClose("/tmp/x.tif")).Throws(new IOException("busy"));
+        fs.Setup(f => f.Exists("/tmp/x.tif")).Returns(true);
+
+        using (var file = new Registry.Web.Services.Ports.ScratchFile("/tmp/x.tif", fs.Object, (_, _) => { }))
+            Should.Throw<IOException>(() => file.OpenForReadingOnce());
+
+        fs.Verify(f => f.Delete("/tmp/x.tif"), Times.Once);
+    }
 }

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO.Ogc;
+using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities.Ogc;
 
@@ -62,6 +63,6 @@ public class OgcApiTilesManager : OgcManagerBase
         }
         RequireBuiltRaster(layer, "collectionId");
         return await _rasterTiles.GetTileAsync(orgSlug, dsSlug, ddb, layer,
-            ResolveRasterArtifact(ddb, layer, "collectionId"), z, x, y, "png", ct);
+            ResolveRasterArtifact(ddb, layer, "collectionId"), z, x, y, TileFormat.Png, ct);
     }
 }

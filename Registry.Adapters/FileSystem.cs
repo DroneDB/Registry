@@ -122,6 +122,13 @@ public class FileSystem : IFileSystem
         return File.OpenRead(path);
     }
 
+    public Stream OpenReadDeletingOnClose(string path)
+    {
+        // The read side of a download: the same buffer and hints as the other streamed files
+        return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 81920,
+            FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.DeleteOnClose);
+    }
+
     public Stream OpenWrite(string path, FileMode mode = FileMode.Create)
     {
         // Large (1 MiB) buffer + async + sequential-scan hints for high-throughput large-file writes.

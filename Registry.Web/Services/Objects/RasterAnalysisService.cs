@@ -30,17 +30,15 @@ public sealed class RasterAnalysisService
     private readonly RenderSources _sources;
     private readonly INativeWorkGate _gate;
     private readonly ScratchFileProvider _scratch;
-    private readonly IFileSystem _fs;
     private readonly DownloadOptions _downloads;
     private readonly ILogger<RasterAnalysisService> _logger;
 
     public RasterAnalysisService(RenderSources sources, INativeWorkGate gate, ScratchFileProvider scratch,
-        IFileSystem fs, IOptions<DownloadOptions> downloads, ILogger<RasterAnalysisService> logger)
+        IOptions<DownloadOptions> downloads, ILogger<RasterAnalysisService> logger)
     {
         _sources = sources;
         _gate = gate;
         _scratch = scratch;
-        _fs = fs;
         _downloads = downloads.Value;
         _logger = logger;
     }
@@ -203,8 +201,11 @@ public sealed class RasterAnalysisService
             o.ValueOptions()), ct);
     }
 
-    /// <summary>The raster as a GeoTIFF with the visualization applied, within the export size limit.</summary>
-    public async Task<StorageDataDto> ExportRasterAsync(string orgSlug, string dsSlug, string path,
+    /// <summary>
+    /// The raster as a GeoTIFF with the visualization applied, within the export size limit: a stream of the scratch
+    /// file the export wrote, which is deleted when the stream is closed (by the file result once the response ends).
+    /// </summary>
+    public async Task<StorageStreamDto> ExportRasterAsync(string orgSlug, string dsSlug, string path,
         RasterVisualization visualization, CancellationToken ct = default)
     {
         RasterOptionRules.RequireNodata(visualization.Nodata);
@@ -220,7 +221,7 @@ public sealed class RasterAnalysisService
         await EnsureExportSizeWithinLimitAsync(orgSlug, dsSlug, path, new RasterAnalysisOptions(visualization.Nodata), ct);
 
         var stem = Path.GetFileNameWithoutExtension(source.Path);
-        // The configured temp folder; deleted when the bytes are read
+        // The configured temp folder; deleted here when the export fails, else when its stream is closed
         using var output = _scratch.Create(stem + "_export_", ".tif");
 
         await _gate.RunAsync(NativeLane.Heavy, () =>
@@ -234,10 +235,11 @@ public sealed class RasterAnalysisService
                     v.Colormap, v.Rescale, 0, options, null, ct);
         }, ct);
 
-        return new StorageDataDto
+        // Streamed: an export may be up to the size limit (1 GiB), which the response does not need in memory
+        return new StorageStreamDto
         {
             Name = stem + "_export.tif",
-            Data = await _fs.ReadAllBytesAsync(output.Path, ct),
+            Data = output.OpenForReadingOnce(),
             ContentType = "image/tiff"
         };
     }

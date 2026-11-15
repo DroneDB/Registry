@@ -98,10 +98,8 @@ public sealed class ObjectRenderService : IObjectRenderService
 
     public Task<StorageDataDto> GenerateTileDataAsync(ReadableObject obj, int tz, int tx, int ty, bool retina,
         TileFormat format, CancellationToken ct = default) =>
-        CachedTileAsync(ty, format, () => _cache.GetAsync(MagicStrings.TileCacheSeed, ForDataset(obj.OrgSlug, obj.DsSlug),
-            ct, obj.Hash, tx, ty, tz, retina, format.MediaType,
-            new Func<CancellationToken, Task<byte[]>>(token => _gate.RunAsync(NativeLane.Tiles,
-                () => obj.Ddb.GenerateTile(obj.SourcePath, tz, tx, ty, retina, obj.Hash, format.DdbName), token))));
+        CachedTileAsync(ty, format, () => PlainTileCache.GetAsync(_cache, _gate, obj.OrgSlug, obj.DsSlug, obj.Ddb,
+            obj.SourcePath, obj.Hash, tz, tx, ty, retina, format, ct));
 
     public async Task<StorageDataDto> GenerateThumbnailDataExAsync(string orgSlug, string dsSlug, string path,
         int? size, RasterVisualization visualization, CancellationToken ct = default)

@@ -46,6 +46,12 @@ public interface IFileSystem
     Stream OpenRead(string path);
     Stream OpenWrite(string path, FileMode mode = FileMode.Create);
 
+    /// <summary>
+    /// Opens a file for reading that is deleted when the stream is closed, also when the reader fails or stops
+    /// early: the file is gone with its last reader, without a step of its own to delete it.
+    /// </summary>
+    Stream OpenReadDeletingOnClose(string path);
+
     #endregion
 
     #region File/Folder Information

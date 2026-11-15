@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Registry.Ports;
 
 namespace Registry.Web.Services.Ports;
@@ -26,6 +27,17 @@ public sealed class ScratchFile : IDisposable
 
     /// <summary>The file was moved or handed over: <see cref="Dispose"/> leaves it alone.</summary>
     public void Release() => _released = true;
+
+    /// <summary>
+    /// Hands the written file over to a reader: a stream that deletes the file when it is closed (whether the reader
+    /// read it all, failed or stopped early). When the file cannot be opened it stays this scratch file's to delete.
+    /// </summary>
+    public Stream OpenForReadingOnce()
+    {
+        var stream = _fs.OpenReadDeletingOnClose(Path);
+        Release();
+        return stream;
+    }
 
     public void Dispose()
     {

@@ -14,6 +14,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Utilities.Ogc;
 using Shouldly;
 using AccessType = Registry.Web.Services.Managers.AccessType;
+using Registry.Web.Services.Objects;
 
 namespace Registry.Web.Test.Ogc;
 
@@ -57,7 +58,7 @@ public class OgcApiTilesManagerTests
             .ReturnsAsync(Unbuilt);
 
         _tiles = new Mock<IOgcRasterTileSource>();
-        _tiles.Setup(t => t.GetTileAsync(Org, Ds, It.IsAny<IDDB>(), It.IsAny<OgcLayerDto>(), Cog, 3, 1, 2, "png",
+        _tiles.Setup(t => t.GetTileAsync(Org, Ds, It.IsAny<IDDB>(), It.IsAny<OgcLayerDto>(), Cog, 3, 1, 2, TileFormat.Png,
             It.IsAny<CancellationToken>())).ReturnsAsync([1, 2, 3]);
         var artifacts = Mock.Of<IBuildArtifactResolver>(a =>
             a.FindArtifactFile(It.IsAny<IDDB>(), Layer.EntryHash, ArtifactRoles.RasterCog, null, It.IsAny<string?>()) == Cog);

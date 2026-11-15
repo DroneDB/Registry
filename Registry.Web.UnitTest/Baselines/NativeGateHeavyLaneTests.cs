@@ -178,10 +178,17 @@ public sealed class NativeGateHeavyLaneTests : IDisposable
     public async Task Export_RunsTheSizeEstimateAndTheExportInTheHeavyLane()
     {
         Native(d => d.GetRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>()), Info);
-        NativeVoid(d => d.ExportRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(),
-            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()));
+        // The export writes the scratch file it is given, which the result then streams
+        _ddb.Setup(d => d.ExportRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Callback((string _, string output, string? _, string? _, string? _, string? _, string? _, string? _) =>
+            {
+                _inFlight.Add(_gate.InFlight(NativeLane.Heavy));
+                File.WriteAllBytes(output, [1]);
+            });
 
-        await _services.Raster.ExportRasterAsync(OrgSlug, DsSlug, "ortho.tif", new RasterVisualization());
+        await using var export =
+            await _services.Raster.ExportRasterAsync(OrgSlug, DsSlug, "ortho.tif", new RasterVisualization());
 
         ShouldHaveRunInTheHeavyLane(calls: 2);
     }

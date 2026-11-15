@@ -626,14 +626,17 @@ public class ObjectsManagerThumbnailTests : TestBase
     {
         SetupSourceAndCogWithDifferentGrids("""{"pixelCount": 100, "validPixelCount": 100}""",
             """{"pixelCount": 100, "validPixelCount": 100}""");
-        _fsMock.Setup(x => x.ReadAllBytesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync([1, 2]);
         RasterAnalysisOptions? sent = null;
         _ddbMock.Setup(x => x.ExportRaster(".ddb/build/raster1/cog/cog.tif", It.IsAny<string>(), null, null, "CELSIUS",
                 null, "ironbow", "280,310", 0, It.IsAny<RasterAnalysisOptions?>(), null, It.IsAny<CancellationToken>()))
             .Callback<string, string, string?, string?, string?, string?, string?, string?, int, RasterAnalysisOptions?,
-                Action<double, string?>?, CancellationToken>((_, _, _, _, _, _, _, _, _, o, _, _) => sent = o);
+                Action<double, string?>?, CancellationToken>((_, output, _, _, _, _, _, _, _, o, _, _) =>
+                {
+                    sent = o;
+                    File.WriteAllBytes(output, [1, 2]);
+                });
 
-        await CreateManager().Raster.ExportRasterAsync(OrgSlug, DsSlug, "ortho.tif",
+        await using var export = await CreateManager().Raster.ExportRasterAsync(OrgSlug, DsSlug, "ortho.tif",
             new RasterVisualization(Formula: "CELSIUS", Colormap: "ironbow", Rescale: "280,310", RescaleUnit: "K"));
 
         sent.ShouldNotBeNull();
@@ -740,15 +743,21 @@ public class ObjectsManagerThumbnailTests : TestBase
         // Source: 200,000,000 x 4 = 800,000,000 bytes; the COG: 300,000,000 x 4 = 1,200,000,000 > 1 GiB
         SetupSourceAndCogWithDifferentGrids("""{"pixelCount": 250000000, "validPixelCount": 200000000}""",
             """{"pixelCount": 400000000, "validPixelCount": 300000000}""");
-        _fsMock.Setup(x => x.ReadAllBytesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync([1, 2]);
+        // libddb writes the export to the scratch file it is given
+        _ddbMock.Setup(x => x.ExportRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Callback((string _, string output, string? _, string? _, string? _, string? _, string? _, string? _) =>
+                File.WriteAllBytes(output, [1, 2]));
         var raster = CreateManager().Raster;
 
         var info = await raster.GetRasterValueInfoAsync(OrgSlug, DsSlug, "ortho.tif");
-        var export = await raster.ExportRasterAsync(OrgSlug, DsSlug, "ortho.tif", new RasterVisualization());
+        await using var export = await raster.ExportRasterAsync(OrgSlug, DsSlug, "ortho.tif", new RasterVisualization());
 
         using var doc = System.Text.Json.JsonDocument.Parse(info);
         doc.RootElement.GetProperty("estimatedExportBytes").GetInt64().ShouldBe(800_000_000);
-        export.Data.ShouldBe(new byte[] { 1, 2 });
+        using var sent = new MemoryStream();
+        await export.Data.CopyToAsync(sent);
+        sent.ToArray().ShouldBe(new byte[] { 1, 2 });
         _ddbMock.Verify(x => x.ExportRaster(".ddb/build/raster1/cog/cog.tif", It.IsAny<string>(), It.IsAny<string?>(),
             It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()),
             Times.Once);
