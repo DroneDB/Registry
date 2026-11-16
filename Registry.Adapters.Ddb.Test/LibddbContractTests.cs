@@ -192,7 +192,7 @@ public unsafe class LibddbContractTests : TestBase
     }
 
     /// <summary>
-    /// The loaded libddb is the one the Registry runs (ABI 2.6): it reports the ABI the handshake requires and lists the
+    /// The loaded libddb is the one the Registry runs (ABI 2.6 or later): it reports the ABI the handshake requires and lists the
     /// exports that report progress, which the wrapper always calls.
     /// </summary>
     [Test]

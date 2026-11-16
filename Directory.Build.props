@@ -60,18 +60,20 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-11-15): the DroneDB v2.6.0 release (ABI 2.6; the handshake requires ABI 2.6:
-        DdbAbi.Minor 6). 2.6 adds the DDBConfigure setting artefactCacheMb (Ddb:ArtefactCacheMb), the
-        bound of libddb's artefact cache, which an older libddb refuses; its tiles, thumbnails and
-        COG and COPC builds come from ddb-tilers. 2.5 added DDBMemoryTileEx3, DDBRenderRasterRegionEx2
-        and DDBRenderRasterIndexEx, which the Registry does not call. The SHA256 values are those of
+        Pinned now (2026-11-16): the DroneDB v2.7.1 release (ABI 2.7; the handshake requires ABI 2.6:
+        DdbAbi.Minor 6, since 2.7 adds no export or setting). 2.7.1 gives the exported and region
+        GeoTIFFs the metadata, scale and offset of their source again, which 2.7.0 lost. 2.7 reads the
+        rasters of the process with ddb-tilers, runs the operations on users' rasters (mask, merge,
+        alignment, the photos of the splat export) in the raster helper on the user's file, and no
+        longer links PDAL. 2.6 added the DDBConfigure setting artefactCacheMb (Ddb:ArtefactCacheMb), the
+        bound of libddb's artefact cache, which an older libddb refuses. The SHA256 values are those of
         the release's SHA256SUMS.
     -->
     <PropertyGroup>
         <DdbSource>release</DdbSource>
-        <DdbVersion>2.6.0</DdbVersion>
-        <DdbDebSha256>fb51c19278754e86e6713b5b6f61bd7e8e40b7b8fb06db1484fd141ff616232b</DdbDebSha256>
-        <DdbWindowsZipSha256>fe1b53018697eb2e2e18c082d084f5a44c35641d61412bf7f8ea825b12194c19</DdbWindowsZipSha256>
+        <DdbVersion>2.7.1</DdbVersion>
+        <DdbDebSha256>5d398a3bf6baaa1189de21d0eab39991fed1560be9f3f8d2e70e96761779edcc</DdbDebSha256>
+        <DdbWindowsZipSha256>62082710950656dacbe04d25c939b471f59efd55e0fce3dfc24c2a37eb189a24</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
