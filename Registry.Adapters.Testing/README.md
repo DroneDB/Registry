@@ -187,10 +187,11 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   `artefactCacheMb` (integer, the bound in MiB of libddb's artefact cache, 0 for none), which the Registry sends as
   `Ddb:ArtefactCacheMb` and reads back in `DdbEffectiveConfig.ArtefactCacheMb`; `Contract/README.md` has the 2.5.0 and
   2.6.0 entries. No other fixture, schema or vector changed.
-* 2026-11-16: DroneDB `bc21afc4e44dd7e34f7657074b2729bf31cf1643` (the DroneDB v2.7.1 release, the pinned build, libddb
+* 2026-11-16: DroneDB `00bcd2d2c009735f85e7e4d8b2892dd350095e2b` (the DroneDB v2.7.2 release, the pinned build, libddb
   ABI 2.7, no export added or removed: `DdbAbi.Minor` stays 6, the lowest ABI the Registry needs). `capabilities` has
   `abi.minor` 7; `Contract/README.md` has the 2.7.0 entry (raster reads and renders through ddb-tilers, the operations
   on users' rasters in the raster helper, PDAL no longer linked) and the 2.7.1 entry (the exported and region GeoTIFFs
   have the metadata, scale and offset of their source again, a PixelIsPoint raster is exported where it is, the index
-  render as a TIFF, the "PDAL" error of an unreadable point cloud). No other fixture, schema or vector changed and no
-  adapter change.
+  render as a TIFF, the "PDAL" error of an unreadable point cloud) and the 2.7.2 entry (palette and masked rasters
+  exported, built and rendered with the colour table, mask and overviews 2.6.0 gave them). No other fixture, schema
+  or vector changed and no adapter change.

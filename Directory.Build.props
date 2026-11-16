@@ -60,8 +60,9 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-11-16): the DroneDB v2.7.1 release (ABI 2.7; the handshake requires ABI 2.6:
-        DdbAbi.Minor 6, since 2.7 adds no export or setting). 2.7.1 gives the exported and region
+        Pinned now (2026-11-16): the DroneDB v2.7.2 release (ABI 2.7; the handshake requires ABI 2.6:
+        DdbAbi.Minor 6, since 2.7 adds no export or setting). 2.7.2 writes palette and masked rasters
+        as 2.6.0 did (their colour table, mask and overviews); 2.7.1 gives the exported and region
         GeoTIFFs the metadata, scale and offset of their source again, which 2.7.0 lost. 2.7 reads the
         rasters of the process with ddb-tilers, runs the operations on users' rasters (mask, merge,
         alignment, the photos of the splat export) in the raster helper on the user's file, and no
@@ -71,9 +72,9 @@
     -->
     <PropertyGroup>
         <DdbSource>release</DdbSource>
-        <DdbVersion>2.7.1</DdbVersion>
-        <DdbDebSha256>5d398a3bf6baaa1189de21d0eab39991fed1560be9f3f8d2e70e96761779edcc</DdbDebSha256>
-        <DdbWindowsZipSha256>62082710950656dacbe04d25c939b471f59efd55e0fce3dfc24c2a37eb189a24</DdbWindowsZipSha256>
+        <DdbVersion>2.7.2</DdbVersion>
+        <DdbDebSha256>ab7c5b2f4e83f2603cc24ff735832c707139428da931a20992c93beb1bb56acb</DdbDebSha256>
+        <DdbWindowsZipSha256>b7718bf64154f5f33f7317f0cc4f82ba8bc76ae3c4f8a320003179568060db68</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>

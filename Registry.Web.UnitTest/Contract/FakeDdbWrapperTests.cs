@@ -120,7 +120,7 @@ public sealed class FakeDdbWrapperTests
     /// <summary>
     /// The recorded capabilities (fixtures/capabilities.json) are those of the libddb the Registry runs: ABI 2.7, which
     /// the startup handshake accepts (major 2, minor at least <see cref="DdbAbi.Minor"/>), with every export Registry
-    /// calls. The fixtures are vendored from the release commit of DroneDB 2.7.1 (update-contract.sh).
+    /// calls. The fixtures are vendored from the release commit of DroneDB 2.7.2 (update-contract.sh).
     /// </summary>
     [Test]
     public void TheRecordedCapabilities_HaveTheAbiTheHandshakeRequires()
