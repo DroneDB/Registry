@@ -235,6 +235,42 @@ public class AuthSnapshotTests
     }
 
     [Test]
+    public async Task AnInvalidationBetweenTheCheckAndTheWrite_IsNotUndone()
+    {
+        var stale = new UserAuthSnapshot(true, "member", true, false);
+        var fresh = new UserAuthSnapshot(true, "member", false, false);
+        var cache = new WriteHookedCache(new MemoryCache(new MemoryCacheOptions()));
+        _snapshots = new UserAuthSnapshotCache(cache, TimeSpan.FromMinutes(5));
+        // The role removal commits after the load checked the generation, before its write reaches the cache
+        cache.BeforeWrite = () =>
+        {
+            cache.BeforeWrite = null;
+            _snapshots.Invalidate(_member.Id);
+        };
+
+        (await _snapshots.GetOrLoadAsync(_member.Id, () => Task.FromResult(stale))).ShouldBe(stale);
+
+        var next = await _snapshots.GetOrLoadAsync(_member.Id, () => Task.FromResult(fresh));
+        next.ShouldBe(fresh);
+    }
+
+    // A memory cache that runs an action before each write (an entry is created, then committed when disposed)
+    private sealed class WriteHookedCache(IMemoryCache inner) : IMemoryCache
+    {
+        public Action? BeforeWrite { get; set; }
+
+        public ICacheEntry CreateEntry(object key)
+        {
+            BeforeWrite?.Invoke();
+            return inner.CreateEntry(key);
+        }
+
+        public bool TryGetValue(object key, out object? value) => inner.TryGetValue(key, out value);
+        public void Remove(object key) => inner.Remove(key);
+        public void Dispose() => inner.Dispose();
+    }
+
+    [Test]
     public async Task RegistryUserManager_RoleChangesAndDeletionInvalidate()
     {
         var store = new Mock<IUserRoleStore<User>>();

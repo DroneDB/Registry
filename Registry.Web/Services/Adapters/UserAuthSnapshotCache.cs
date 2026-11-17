@@ -12,9 +12,10 @@ namespace Registry.Web.Services.Adapters;
 /// <summary>
 /// Process-wide store of <see cref="UserAuthSnapshot"/>s (singleton). A snapshot is kept for
 /// <see cref="CachingOptions.AuthorizationCacheExpiration"/>; <see cref="Invalidate"/> drops it
-/// at once. Each invalidation bumps a per-user generation, and a load only stores its result
-/// if the generation did not change while it ran, so a load that read the identity store
-/// before a role change cannot put the old roles back after the invalidation.
+/// at once. Each invalidation bumps a per-user generation; a snapshot is stored with the
+/// generation it was loaded at and served only while that generation is current, so a load
+/// that read the identity store before a role change cannot put the old roles back, even when
+/// the invalidation lands between its check and its write.
 /// </summary>
 public class UserAuthSnapshotCache
 {
@@ -37,19 +38,24 @@ public class UserAuthSnapshotCache
 
     private static string Key(string userId) => "user-auth-snapshot:" + userId;
 
+    // A snapshot and the generation of the user it was loaded at
+    private sealed record Entry(UserAuthSnapshot Snapshot, long Generation);
+
     public async Task<UserAuthSnapshot> GetOrLoadAsync(string userId, Func<Task<UserAuthSnapshot>> load)
     {
         if (_expiration <= TimeSpan.Zero)
             return await load();
 
-        if (_cache.TryGetValue(Key(userId), out UserAuthSnapshot? cached) && cached != null)
-            return cached;
-
         var generation = GenerationOf(userId);
+        if (_cache.TryGetValue(Key(userId), out Entry? cached) && cached != null && cached.Generation == generation)
+            return cached.Snapshot;
+
         var snapshot = await load();
 
+        // A load that an invalidation overtook stores nothing; one that the invalidation overtakes between this
+        // check and the write stores its old generation, which no read serves
         if (GenerationOf(userId) == generation)
-            _cache.Set(Key(userId), snapshot, _expiration);
+            _cache.Set(Key(userId), new Entry(snapshot, generation), _expiration);
 
         return snapshot;
     }
