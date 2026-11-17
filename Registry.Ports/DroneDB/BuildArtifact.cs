@@ -59,6 +59,11 @@ public sealed class BuildArtifact
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? FallbackFor { get; set; }
 
+    /// <summary>The coordinate system of the artifact (a point cloud's COPC); null when libddb gives none.</summary>
+    [JsonPropertyName("crs")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ArtifactCrs? Crs { get; set; }
+
     /// <summary>
     /// Identifies the bytes of the file a client opens (the file, or the <see cref="Index"/> of a directory) as they
     /// are now: libddb changes it whenever a build rewrites or replaces that file under the same hash (a forced

@@ -87,6 +87,25 @@ public sealed class ArtifactLinksTests
         ]);
     }
 
+    // libddb names the CRS of a point cloud's COPC, which can differ from the uploaded file's (a cloud in
+    // longitude/latitude is streamed in UTM); the Hub says so, and the link carries it unchanged
+    [Test]
+    public void TheCrsOfAnArtifact_IsOnItsLink_AndAbsentWhenLibddbGivesNone()
+    {
+        var copc = TestBuilds.File("pointcloud.copc", "copc/cloud.copc.laz", "application/vnd.laszip+copc");
+        copc.Crs = new ArtifactCrs { Name = "WGS 84 / UTM zone 33N", Epsg = 32633, Transformed = true };
+        var build = TestBuilds.Build(Folder, "cloud.laz", EntryType.PointCloud, Hash, BuildState.Complete, copc,
+            TestBuilds.File("pointcloud.extra", "copc/extra.bin"));
+
+        var links = Urls.ArtifactLinks("org", "ds", build);
+
+        links[0].Crs.ShouldNotBeNull();
+        links[0].Crs!.Name.ShouldBe("WGS 84 / UTM zone 33N");
+        links[0].Crs!.Epsg.ShouldBe(32633);
+        links[0].Crs!.Transformed.ShouldBeTrue();
+        links[1].Crs.ShouldBeNull();
+    }
+
     [Test]
     public void ASidecar_HasNoLinks_ItsBuildIsItsMainFiles()
     {

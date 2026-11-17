@@ -46,7 +46,8 @@ public class UrlBuilder : IUrlBuilder
                 Url = BuildFileUrl(orgSlug, dsSlug, own.BuildKey!, a.Version,
                     a.Index is { Length: > 0 } index ? $"{a.Path}/{index}" : a.Path),
                 MediaType = a.MediaType,
-                DownloadName = a.DownloadName
+                DownloadName = a.DownloadName,
+                Crs = a.Crs
             })
         ];
     }

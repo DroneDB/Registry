@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Models.DTO;
 
@@ -26,4 +27,12 @@ public sealed class ArtifactLinkDto
     [JsonPropertyName("downloadName")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? DownloadName { get; init; }
+
+    /// <summary>
+    /// The artifact's coordinate system as libddb names it, else null. A point cloud's COPC can be in another CRS
+    /// than the uploaded file (see <see cref="ArtifactCrs"/>).
+    /// </summary>
+    [JsonPropertyName("crs")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ArtifactCrs? Crs { get; init; }
 }
