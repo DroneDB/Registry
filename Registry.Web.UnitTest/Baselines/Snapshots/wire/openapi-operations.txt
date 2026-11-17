@@ -322,6 +322,7 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/mvt/{hash}/metadata.json
   404 application/problem+json ProblemDetails
 GET /orgs/{orgSlug}/ds/{dsSlug}/mvt/{hash}/{z}/{x}/{y}.pbf
   200
+  204
   401 application/problem+json ProblemDetails
   403 application/problem+json ProblemDetails
   404 application/problem+json ProblemDetails

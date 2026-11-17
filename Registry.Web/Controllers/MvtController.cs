@@ -1,8 +1,10 @@
 using System.ComponentModel.DataAnnotations;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Filters;
@@ -35,17 +37,26 @@ public class MvtController : ControllerBaseEx
     private readonly IDatasetAccessResolver _access;
     private readonly IBuildArtifactResolver _artifacts;
     private readonly IAuthManager _auth;
+    private readonly IFileSystem _fs;
 
-    public MvtController(IDatasetAccessResolver access, IBuildArtifactResolver artifacts, IAuthManager auth)
+    public MvtController(IDatasetAccessResolver access, IBuildArtifactResolver artifacts, IAuthManager auth,
+        IFileSystem fs)
     {
         _access = access;
         _artifacts = artifacts;
         _auth = auth;
+        _fs = fs;
     }
 
-    /// <summary>A vector tile of a vector file's build (gzip-compressed Mapbox Vector Tile).</summary>
+    /// <summary>A vector tile of a vector file's build, or 204 No Content for an empty tile of its pyramid.</summary>
+    /// <remarks>
+    /// A tile is a gzip-compressed Mapbox Vector Tile. GDAL writes no file for a tile of the pyramid without features:
+    /// such a tile is 204, since a 404 would make every map log an error for the tiles around the data. A file
+    /// without a pyramid, or a tile off its zoom levels or grid, is 404.
+    /// </remarks>
     [HttpGet("{hash}/{z:int}/{x:int}/{y:int}.pbf")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)] // OGC exception XML (OgcAuthorizationFilter)
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -62,16 +73,41 @@ public class MvtController : ControllerBaseEx
         var access = await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
         var tilePath = _artifacts.FindArtifactFile(access.Ddb, hash, ArtifactRoles.VectorMvt, MvtTiles.Tile(z, x, y));
         if (tilePath == null)
-            return NotFound();
+        {
+            var pyramid = _artifacts.FindArtifactFile(access.Ddb, hash, ArtifactRoles.VectorMvt);
+            if (pyramid == null || !MvtTiles.Covers(await ReadDescriptor(pyramid, ct), z, x, y))
+                return NotFound();
+
+            // An empty tile of a build is as lasting as a full one
+            await SetTileCacheControl(access);
+            return NoContent();
+        }
 
         // Tiles are already gzip-compressed (COMPRESS=YES in MVT driver). The tag names the tile of a build: it never
-        // changes, so a client that has it gets a 304. A shared cache may keep it only when anyone may read the dataset:
-        // a tile of a private dataset is the caller's only
+        // changes, so a client that has it gets a 304
         Response.Headers.ContentEncoding = "gzip";
-        Response.Headers.CacheControl =
-            (await _auth.IsReadableAnonymously(access.Dataset) ? "public, " : "private, ") + TileFreshness;
+        await SetTileCacheControl(access);
         return ValidatedPhysicalFile(tilePath, "application/vnd.mapbox-vector-tile", $"\"{hash}-{z}-{x}-{y}\"");
     }
+
+    // The text of a pyramid's descriptor, or null when it went away since it was found (a rebuild)
+    private async Task<string?> ReadDescriptor(string path, CancellationToken ct)
+    {
+        try
+        {
+            return await _fs.ReadAllTextAsync(path, ct);
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+    }
+
+    // A tile of a build never changes. A shared cache may keep it only when anyone may read the dataset: a tile of a
+    // private dataset is the caller's only
+    private async Task SetTileCacheControl(DatasetAccess access) =>
+        Response.Headers.CacheControl =
+            (await _auth.IsReadableAnonymously(access.Dataset) ? "public, " : "private, ") + TileFreshness;
 
     /// <summary>The metadata (metadata.json) of the vector tiles of a vector file's build.</summary>
     [HttpGet("{hash}/metadata.json")]

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using NUnit.Framework;
+using Registry.Adapters;
 using Registry.Ports.DroneDB;
 using Registry.Web.Controllers;
 using Registry.Web.Data.Models;
@@ -53,7 +54,7 @@ public class MvtCacheControlTests
         var auth = new Mock<IAuthManager>();
         auth.Setup(a => a.IsReadableAnonymously(dataset)).ReturnsAsync(readableAnonymously);
 
-        var controller = new MvtController(access.Object, artifacts.Object, auth.Object)
+        var controller = new MvtController(access.Object, artifacts.Object, auth.Object, new FileSystem())
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
