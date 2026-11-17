@@ -23,6 +23,18 @@
       "hint": null
     }
   },
+  "Registry.Ports.DroneDB.ArtifactCrs": {
+    "full": {
+      "name": "Name-text",
+      "epsg": 42,
+      "transformed": true
+    },
+    "sparse": {
+      "name": null,
+      "epsg": null,
+      "transformed": false
+    }
+  },
   "Registry.Ports.DroneDB.BatchAddItemError": {
     "full": {
       "path": "Path-text",
@@ -240,6 +252,11 @@
       "index": "Index-text",
       "legacy": true,
       "fallbackFor": "FallbackFor-text",
+      "crs": {
+        "name": "Name-text",
+        "epsg": 42,
+        "transformed": true
+      },
       "version": "Version-text"
     },
     "sparse": {
@@ -263,6 +280,11 @@
           "index": "Index-text",
           "legacy": true,
           "fallbackFor": "FallbackFor-text",
+          "crs": {
+            "name": "Name-text",
+            "epsg": 42,
+            "transformed": true
+          },
           "version": "Version-text"
         }
       ],
@@ -446,6 +468,11 @@
           "index": "Index-text",
           "legacy": true,
           "fallbackFor": "FallbackFor-text",
+          "crs": {
+            "name": "Name-text",
+            "epsg": 42,
+            "transformed": true
+          },
           "version": "Version-text"
         }
       ]
@@ -493,6 +520,11 @@
             "index": "Index-text",
             "legacy": true,
             "fallbackFor": "FallbackFor-text",
+            "crs": {
+              "name": "Name-text",
+              "epsg": 42,
+              "transformed": true
+            },
             "version": "Version-text"
           }
         ]
@@ -950,7 +982,12 @@
       "role": "Role-text",
       "url": "Url-text",
       "mediaType": "MediaType-text",
-      "downloadName": "DownloadName-text"
+      "downloadName": "DownloadName-text",
+      "crs": {
+        "name": "Name-text",
+        "epsg": 42,
+        "transformed": true
+      }
     },
     "sparse": {
       "role": null,
@@ -1878,7 +1915,12 @@
           "role": "Role-text",
           "url": "Url-text",
           "mediaType": "MediaType-text",
-          "downloadName": "DownloadName-text"
+          "downloadName": "DownloadName-text",
+          "crs": {
+            "name": "Name-text",
+            "epsg": 42,
+            "transformed": true
+          }
         }
       ]
     },
@@ -3375,7 +3417,12 @@
           "role": "Role-text",
           "url": "Url-text",
           "mediaType": "MediaType-text",
-          "downloadName": "DownloadName-text"
+          "downloadName": "DownloadName-text",
+          "crs": {
+            "name": "Name-text",
+            "epsg": 42,
+            "transformed": true
+          }
         }
       ]
     },
@@ -4392,7 +4439,12 @@
             "role": "Role-text",
             "url": "Url-text",
             "mediaType": "MediaType-text",
-            "downloadName": "DownloadName-text"
+            "downloadName": "DownloadName-text",
+            "crs": {
+              "name": "Name-text",
+              "epsg": 42,
+              "transformed": true
+            }
           }
         ]
       },
