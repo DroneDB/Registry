@@ -894,6 +894,31 @@ public class NativeDdbWrapperTests : TestBase
         DdbWrapper.GetBuildArtifacts(ddbPath, []).ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// The COPC of a projected point cloud (24,503 points in WGS 84 / UTM zone 15N) is built in the CRS of the cloud,
+    /// and the manifest says so: its artifact names that CRS and its EPSG code, not transformed.
+    /// </summary>
+    [Test]
+    public void GetBuildArtifacts_BuiltProjectedPointCloud_TheCopcHasTheCrsOfTheCloud()
+    {
+        using var area = new TestArea(nameof(GetBuildArtifacts_BuiltProjectedPointCloud_TheCopcHasTheCrsOfTheCloud));
+        DdbWrapper.Init(area.TestFolder);
+        using var tempFile = new TempFile(TestPointCloudUrl, BaseTestFolder);
+        var cloud = Path.GetFileName(tempFile.FilePath);
+        File.Move(tempFile.FilePath, Path.Combine(area.TestFolder, cloud));
+        DdbWrapper.Add(area.TestFolder, Path.Combine(area.TestFolder, cloud));
+
+        DdbWrapper.Build(area.TestFolder, cloud);
+
+        var build = BuildOf(area.TestFolder, cloud).ShouldNotBeNull();
+        build.State.ShouldBe(BuildState.Complete);
+        var copc = build.Artifacts.Single(a => a.Role == ArtifactRoles.PointCloudCopc);
+        var crs = copc.Crs.ShouldNotBeNull();
+        crs.Name.ShouldBe("WGS 84 / UTM zone 15N");
+        crs.Epsg.ShouldBe(32615);
+        crs.Transformed.ShouldBeFalse();
+    }
+
     [Test]
     public void IsBuildable_TextFile_False()
     {

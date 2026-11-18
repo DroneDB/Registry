@@ -42,7 +42,7 @@ public class EntryTypeFeaturesNativeTests
         (raster.Name, raster.Buildable, raster.Thumbnail).ShouldBe(("GeoRaster", true, "file"));
         raster.SidecarExtensions.ShouldBeEmpty();
         raster.Roles.ShouldBe(["raster.cog"]);
-        types.Single(t => t.Id == (int)EntryType.Vector).SidecarExtensions.ShouldBe(["cpg", "dbf", "shx", "prj"]);
+        types.Single(t => t.Id == (int)EntryType.Vector).SidecarExtensions.ShouldBe(["cpg", "dbf", "shx", "prj", "xsd", "gfs"]);
         types.Single(t => t.Id == (int)EntryType.PointCloud).Roles.ShouldBe(["pointcloud.copc", "pointcloud.ept"]);
     }
 }

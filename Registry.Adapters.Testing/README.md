@@ -195,3 +195,14 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   render as a TIFF, the "PDAL" error of an unreadable point cloud) and the 2.7.2 entry (palette and masked rasters
   exported, built and rendered with the colour table, mask and overviews 2.6.0 gave them). No other fixture, schema
   or vector changed and no adapter change.
+* 2026-11-18: DroneDB `0eff9316cbd02061df0199fd92493be5f168e674` (the DroneDB v2.8.0 release, the pinned build, libddb
+  ABI 2.8, no export added or removed: `DdbAbi.Minor` stays 6, the lowest ABI the Registry needs). `capabilities` has
+  `abi.minor` 8. The `pointcloud.copc` artifact gains `crs` (`{name, epsg, transformed}`: the CRS of the COPC, which
+  the build chooses for a geographic or geocentric cloud), in `build-artifacts.schema.json` and the new fixture
+  `build-artifacts-pointcloud` (cloud.las built), which `ArtifactCrs` reads (`FakeDdbWrapperTests` reads the fixture
+  directly: the fake serves `build-artifacts`, where cloud.las is not built). Entry properties gain `crsStatus` of a
+  point cloud and `hasMask` and the `noData` of each band of a GeoRaster (`add`, `list`, `list-entries`, `info-*`,
+  `stac-*` and `gdal-util-probe` fixtures; `entry.schema.json`, `gdal-util-probe.schema.json`), and `warningCode`
+  the build warnings `3dtiles-not-generated` and `textures-outside-dataset`; the Registry passes all of them through.
+  `entry-types`: the `Vector` type has the sidecars `xsd` and `gfs`. `Contract/README.md` has the 2.8.0 entry. No
+  vector changed and no adapter change.

@@ -48,7 +48,7 @@ public class EntryTypeFeaturesTests
         types.Length.ShouldBe(System.Enum.GetValues<EntryType>().Length);
         Flat(types.Single(t => t.Name == "GeoRaster")).ShouldBe("4|GeoRaster|True|file||raster.cog");
         types.Single(t => t.Name == "PointCloud").Thumbnail.ShouldBe("build");
-        types.Single(t => t.Name == "Vector").SidecarExtensions.ShouldBe(["cpg", "dbf", "shx", "prj"]);
+        types.Single(t => t.Name == "Vector").SidecarExtensions.ShouldBe(["cpg", "dbf", "shx", "prj", "xsd", "gfs"]);
     }
 
     [Test]

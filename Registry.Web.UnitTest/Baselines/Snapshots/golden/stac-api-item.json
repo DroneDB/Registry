@@ -101,6 +101,7 @@
         }
       ],
       "datetime": "<datetime:Z>",
+      "hasMask": false,
       "proj:code": "EPSG:32632",
       "proj:shape": [
         32,

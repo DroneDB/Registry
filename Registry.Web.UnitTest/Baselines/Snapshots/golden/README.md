@@ -221,3 +221,7 @@ after the scheme's own challenge: production's JWT scheme adds `WWW-Authenticate
   creation date), `null` for the others (the shared public organization in `orgs-list`, `orgs-public`). Datasets: `lastModified` in
   `orgs-datasets`, `orgs-datasets-paged`, `orgs-datasets-create` and `ds-ex`; `null` here because the fake libddb has no index file
   (`OrganizationManagerTest`, `DatasetListQueryTests`).
+* libddb 2.8 (the contract fixtures of DroneDB 2.8.0), passed through as libddb gives them: the entries of
+  `ds-list-root`, `ds-search`, `stac-api-items` and `stac-api-search` have the `crsStatus` of the point cloud
+  (`"projected"`), and those and `stac-item`, `stac-api-item` the `hasMask` of the GeoRaster (`false`); `sys-features`:
+  the `Vector` entry type has the sidecars `xsd` and `gfs` (the schemas of a GML). Additive, no member changed.

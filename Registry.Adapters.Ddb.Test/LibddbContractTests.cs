@@ -339,7 +339,7 @@ public unsafe class LibddbContractTests : TestBase
         ShouldEqualJson(types[(int)EntryType.Generic], ParseJson("""
             {"buildable": false, "id": 2, "name": "Generic", "roles": [], "sidecarExtensions": [], "thumbnail": "none"}
             """));
-        types[(int)EntryType.Vector]["sidecarExtensions"]!.Values<string>().ShouldBe(["cpg", "dbf", "shx", "prj"]);
+        types[(int)EntryType.Vector]["sidecarExtensions"]!.Values<string>().ShouldBe(["cpg", "dbf", "shx", "prj", "xsd", "gfs"]);
         types[(int)EntryType.PointCloud]["roles"]!.Values<string>().ShouldBe(["pointcloud.copc", "pointcloud.ept"]);
     }
 

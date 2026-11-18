@@ -533,7 +533,7 @@ public class PendingRecoveryIntegrationTests
     }
 
     [Test]
-    public async Task PermanentDependencyEscape_ConsumesOwnMarkerAndOtherPendingEntryDoesNotTriggerRetry()
+    public async Task PermanentFailure_ConsumesOwnMarkerAndOtherPendingEntryDoesNotTriggerRetry()
     {
         var ddb = await PendingModel("permanent");
         Add(ddb, "other.obj", "mtllib other.mtl\n" + GridObj());
@@ -543,7 +543,10 @@ public class PendingRecoveryIntegrationTests
         Add(ddb, "other.mtl", "newmtl plain\nKd 1 1 1\n");
         ddb.GetPendingBuildInfo().Length.ShouldBe(2);
         ddb.IsBuildPending().ShouldBeTrue();
-        Add(ddb, "late.mtl", "newmtl plain\nmap_Kd ../../outside.png\n");
+        // The material that releases model.obj names a texture that is not an image: its build fails for good (a
+        // texture outside the dataset is no longer such a failure: the model is built without it, with a warning)
+        Add(ddb, "texture.png", "not an image");
+        Add(ddb, "late.mtl", "newmtl plain\nmap_Kd texture.png\n");
         var job = StageEntry(ddb, "permanent", "model.obj");
         StartWorkers();
         Promote(job);

@@ -434,7 +434,9 @@
           "cpg",
           "dbf",
           "shx",
-          "prj"
+          "prj",
+          "xsd",
+          "gfs"
         ],
         "roles": [
           "vector.gpkg",

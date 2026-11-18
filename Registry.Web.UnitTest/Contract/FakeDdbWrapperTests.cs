@@ -87,6 +87,9 @@ public sealed class FakeDdbWrapperTests
     [
         // Recorded on another dataset (a Shapefile without .shx): read directly
         "pending-build-info", "build-artifacts-pending",
+        // Recorded after a build of cloud.las, which build-artifacts records as not built (the fake answers one
+        // state per path): read directly
+        "build-artifacts-pointcloud",
         // Deprecated exports Registry no longer calls (GetBuildArtifacts replaces the build status; the entry
         // listing is ListEntries)
         "build-status", "list", "list-folder",
@@ -118,19 +121,40 @@ public sealed class FakeDdbWrapperTests
     private static string[] ServedRuntimeFixtures() => [.. RuntimeCalls.Keys];
 
     /// <summary>
-    /// The recorded capabilities (fixtures/capabilities.json) are those of the libddb the Registry runs: ABI 2.7, which
+    /// The recorded capabilities (fixtures/capabilities.json) are those of the libddb the Registry runs: ABI 2.8, which
     /// the startup handshake accepts (major 2, minor at least <see cref="DdbAbi.Minor"/>), with every export Registry
-    /// calls. The fixtures are vendored from the release commit of DroneDB 2.7.2 (update-contract.sh).
+    /// calls. The fixtures are vendored from the release commit of DroneDB 2.8.0 (update-contract.sh).
     /// </summary>
     [Test]
     public void TheRecordedCapabilities_HaveTheAbiTheHandshakeRequires()
     {
         var capabilities = new FakeDdbRuntime().Capabilities;
 
-        (capabilities.AbiMajor, capabilities.AbiMinor).ShouldBe((2, 7));
+        (capabilities.AbiMajor, capabilities.AbiMinor).ShouldBe((2, 8));
         capabilities.AbiMajor.ShouldBe(DdbAbi.Major);
         capabilities.AbiMinor.ShouldBeGreaterThanOrEqualTo(DdbAbi.Minor);
         DdbAbi.RequiredSymbols.Where(s => !capabilities.Symbols.Contains(s)).ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// The COPC of a built point cloud names its CRS in the manifest (fixtures/build-artifacts-pointcloud.json), read
+    /// with the options of the native adapter, so a member libddb renames fails here and not in a client.
+    /// </summary>
+    [Test]
+    public void TheRecordedPointCloudBuild_GivesTheCopcItsCrs()
+    {
+        var entries = ContractFixture.Load("build-artifacts-pointcloud").Output
+            .Deserialize<EntryBuildArtifacts[]>(NativeJson.Options).ShouldNotBeNull();
+
+        var entry = entries.ShouldHaveSingleItem();
+        entry.Path.ShouldBe("cloud.las");
+        entry.Build.ShouldNotBeNull().State.ShouldBe(BuildState.Complete);
+        var copc = entry.Build.Artifacts.ShouldHaveSingleItem();
+        copc.Role.ShouldBe(ArtifactRoles.PointCloudCopc);
+        var crs = copc.Crs.ShouldNotBeNull();
+        crs.Name.ShouldBe("WGS 84 / UTM zone 32N");
+        crs.Epsg.ShouldBe(32632);
+        crs.Transformed.ShouldBeFalse();
     }
 
     [TestCaseSource(nameof(ServedFixtures))]
