@@ -3,17 +3,15 @@
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <LangVersion>13</LangVersion>
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.7" />
-      <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+      <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\Registry.Common\Registry.Common.csproj" />
+      <ProjectReference Include="..\Registry.Web.Data\Registry.Web.Data.csproj" />
     </ItemGroup>
 
 </Project>

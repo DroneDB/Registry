@@ -1,5 +1,3 @@
-using Registry.Web.Models.Configuration;
-
 namespace Registry.Web.Models.DTO;
 
 /// <summary>

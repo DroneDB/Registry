@@ -1,0 +1,74 @@
+{
+  "request": "GET /stac",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json",
+  "bodyKind": "json",
+  "body": {
+    "type": "Catalog",
+    "stac_version": "1.1.0",
+    "id": "DroneDB Catalog",
+    "description": "DroneDB public datasets catalog",
+    "links": [
+      {
+        "href": "http://localhost/stac",
+        "rel": "self",
+        "type": "application/json",
+        "title": "DroneDB public datasets catalog"
+      },
+      {
+        "href": "http://localhost/stac",
+        "rel": "root",
+        "type": "application/json",
+        "title": "DroneDB public datasets catalog"
+      },
+      {
+        "href": "http://localhost/stac/conformance",
+        "rel": "conformance",
+        "type": "application/json"
+      },
+      {
+        "href": "http://localhost/stac/collections",
+        "rel": "data",
+        "type": "application/json"
+      },
+      {
+        "href": "http://localhost/stac/search",
+        "rel": "search",
+        "type": "application/geo+json",
+        "method": "GET"
+      },
+      {
+        "href": "http://localhost/stac/search",
+        "rel": "search",
+        "type": "application/geo+json",
+        "method": "POST"
+      },
+      {
+        "href": "http://localhost/swagger/v1/swagger.json",
+        "rel": "service-desc",
+        "type": "application/json"
+      },
+      {
+        "href": "http://localhost/scalar/v1",
+        "rel": "service-doc",
+        "type": "text/html"
+      },
+      {
+        "href": "http://localhost/stac/collections/golden-org/golden-ds",
+        "rel": "child",
+        "type": "application/json",
+        "title": "Golden dataset"
+      }
+    ],
+    "conformsTo": [
+      "https://api.stacspec.org/v1.0.0/core",
+      "https://api.stacspec.org/v1.0.0/collections",
+      "https://api.stacspec.org/v1.0.0/ogcapi-features",
+      "https://api.stacspec.org/v1.0.0/item-search",
+      "http://www.opengis.net/spec/ogcapi-features-1/1.0/conf/core",
+      "http://www.opengis.net/spec/ogcapi-features-1/1.0/conf/oas30",
+      "http://www.opengis.net/spec/ogcapi-features-1/1.0/conf/geojson"
+    ]
+  }
+}

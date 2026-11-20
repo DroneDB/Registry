@@ -1,8 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -17,11 +19,11 @@ public class RemoteThumbnailGenerator : IThumbnailGenerator
 {
     private readonly ILogger<RemoteThumbnailGenerator> _logger;
     private readonly RemoteThumbnailGeneratorSettings _settings;
-    private static readonly HttpClient _httpClient;
+    private static readonly HttpClient SharedHttpClient;
 
     static RemoteThumbnailGenerator()
     {
-        _httpClient = new HttpClient
+        SharedHttpClient = new HttpClient
         {
             Timeout = TimeSpan.FromSeconds(30)
         };
@@ -34,7 +36,7 @@ public class RemoteThumbnailGenerator : IThumbnailGenerator
         _settings = options.Value;
     }
 
-    public async Task GenerateThumbnailAsync(string filePath, int size, Stream output)
+    public async Task GenerateThumbnailAsync(string filePath, int size, Stream output, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(filePath);
         ArgumentNullException.ThrowIfNull(output);
@@ -54,13 +56,10 @@ public class RemoteThumbnailGenerator : IThumbnailGenerator
 
         try
         {
-            var content = new FormUrlEncodedContent([
-                new KeyValuePair<string, string>("path", filePath),
-                new KeyValuePair<string, string>("size", size.ToString())
-            ]);
+            using var request = CreateRequest(_settings, filePath, size);
 
             _logger.LogDebug("Sending POST request to remote thumbnail generator: {Url}", _settings.Url);
-            var response = await _httpClient.PostAsync(_settings.Url, content);
+            using var response = await SharedHttpClient.SendAsync(request, ct);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -70,14 +69,14 @@ public class RemoteThumbnailGenerator : IThumbnailGenerator
                 throw new InvalidOperationException($"Remote thumbnail generation failed with status {response.StatusCode}: {response.ReasonPhrase}");
             }
 
-            await response.Content.CopyToAsync(output);
+            await response.Content.CopyToAsync(output, ct);
 
             stopwatch.Stop();
             var contentLength = response.Content.Headers.ContentLength ?? output.Length;
             _logger.LogInformation("Successfully generated remote thumbnail for '{FilePath}', size: {Size}, data: ~{DataSize} bytes, elapsed: {ElapsedMs}ms",
                 filePath, size, contentLength, stopwatch.ElapsedMilliseconds);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             stopwatch.Stop();
             _logger.LogError(ex, "Failed to generate remote thumbnail for '{FilePath}', size: {Size} after {ElapsedMs}ms. Error: {ErrorMessage}",
@@ -86,4 +85,27 @@ public class RemoteThumbnailGenerator : IThumbnailGenerator
         }
     }
 
+    /// <summary>
+    /// Builds the <c>POST</c> request sent to the ThumbnailGenerator host for <paramref name="filePath"/>,
+    /// authenticated with <see cref="RemoteThumbnailGeneratorSettings.Token"/>.
+    /// </summary>
+    public static HttpRequestMessage CreateRequest(RemoteThumbnailGeneratorSettings settings, string filePath,
+        int size)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, settings.Url)
+        {
+            Content = new FormUrlEncodedContent([
+                new KeyValuePair<string, string>("path", filePath),
+                new KeyValuePair<string, string>("size", size.ToString(CultureInfo.InvariantCulture))
+            ])
+        };
+
+        // The host answers 401 without the shared token
+        if (!string.IsNullOrEmpty(settings.Token))
+            request.Headers.Add(RemoteThumbnailGeneratorSettings.TokenHeaderName, settings.Token);
+
+        return request;
+    }
 }

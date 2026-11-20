@@ -1,10 +1,8 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+using Registry.Web.Exceptions;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
-using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
 
@@ -17,18 +15,11 @@ public class LocalLoginManager : ILoginManager
 {
     private readonly UserManager<User> _userManager;
     private readonly SignInManager<User> _signInManager;
-    private readonly ILogger<LocalLoginManager> _logger;
-    private readonly AppSettings _settings;
 
-    public LocalLoginManager(UserManager<User> userManager,
-        SignInManager<User> signInManager,
-        ILogger<LocalLoginManager> logger,
-        IOptions<AppSettings> settings)
+    public LocalLoginManager(UserManager<User> userManager, SignInManager<User> signInManager)
     {
         _userManager = userManager;
-        _logger = logger;
         _signInManager = signInManager;
-        _settings = settings.Value;
     }
 
     public AuthProviderCapabilities Capabilities => AuthProviderCapabilities.Local;
@@ -42,7 +33,13 @@ public class LocalLoginManager : ILoginManager
         });
     }
 
-    // This is basically a stub
+    /// <summary>
+    /// Checks the password under Identity's lockout: a wrong password is a failed access, the account is locked after
+    /// the configured number of failures (5, for 5 minutes) and a locked account is refused with 429 and Retry-After,
+    /// even with its right password, until the lockout ends; a right password clears the failures. The sign-in route
+    /// also limits the attempts of each client address (SignInThrottle), which a lockout alone does not.
+    /// </summary>
+    /// <exception cref="TooManyRequestsException">The account is locked out.</exception>
     public async Task<LoginResultDto> CheckAccess(string userName, string password)
     {
         var user = await _userManager.FindByNameAsync(userName);
@@ -54,7 +51,9 @@ public class LocalLoginManager : ILoginManager
                 UserName = userName
             };
 
-        var res = await _signInManager.CheckPasswordSignInAsync(user, password, false);
+        var res = await _signInManager.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true);
+        if (res.IsLockedOut)
+            throw TooManyRequestsException.AccountLockedOut(await _userManager.GetLockoutEndDateAsync(user));
 
         return new LoginResultDto
         {

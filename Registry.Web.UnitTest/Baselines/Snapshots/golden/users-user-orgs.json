@@ -1,0 +1,19 @@
+{
+  "request": "GET /users/golden-owner/orgs",
+  "caller": "admin",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": [
+    {
+      "slug": "golden-org",
+      "name": "Golden organization",
+      "description": "Golden JSON contract tests",
+      "isPublic": false,
+      "isOwner": true,
+      "permissions": null,
+      "grantedAt": null,
+      "grantedBy": null
+    }
+  ]
+}

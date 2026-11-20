@@ -1,0 +1,122 @@
+using System;
+using System.IO;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Moq;
+using NUnit.Framework;
+using Registry.Ports;
+using Registry.Web.Middlewares;
+using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Ports;
+using Registry.Web.Services.UpdateCheck;
+using Shouldly;
+
+namespace Registry.Web.Test.UpdateCheck;
+
+/// <summary>
+/// The middleware that remembers the public URL: only the request of an administrator records it, a request never fails
+/// because the disk would not take the note, and a bug is not hidden.
+/// Run: dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~ObservedBaseUrlMiddlewareTests"
+/// </summary>
+[TestFixture]
+public class ObservedBaseUrlMiddlewareTests
+{
+    private Mock<IFileSystem> _fs = null!;
+    private Mock<IUrlBuilder> _urls = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _fs = new Mock<IFileSystem>();
+        _fs.Setup(f => f.ReadAllText(It.IsAny<string>())).Throws<FileNotFoundException>();
+        _urls = new Mock<IUrlBuilder>();
+        _urls.Setup(u => u.GetLocalHost(It.IsAny<bool>())).Returns("https://hub.example.org");
+    }
+
+    // Who sends the request: an administrator unless said otherwise; "claimsAdmin" is what the token says, "storeAdmin" what
+    // the identity store says
+    private async Task<bool> Invoke(string? externalUrl = null, bool authenticated = true, bool claimsAdmin = true,
+        bool storeAdmin = true)
+    {
+        var snapshots = new Mock<IUserAuthSnapshotProvider>();
+        snapshots.Setup(s => s.GetAsync("alice")).ReturnsAsync(new UserAuthSnapshot(true, "alice", storeAdmin, false));
+        var store = new ObservedBaseUrlStore(UpdateCheckTestKit.Storage("/storage"), _fs.Object, TimeProvider.System,
+            NullLogger<ObservedBaseUrlStore>.Instance);
+        var middleware = new ObservedBaseUrlMiddleware(_urls.Object, snapshots.Object, store,
+            Microsoft.Extensions.Options.Options.Create(new HttpHostOptions { ExternalUrlOverride = externalUrl }), NullLogger<ObservedBaseUrlMiddleware>.Instance);
+
+        var reachedNext = false;
+        await middleware.InvokeAsync(new DefaultHttpContext(), context =>
+        {
+            // The authentication of the pipeline after the middleware
+            if (authenticated)
+                context.User = new ClaimsPrincipal(new ClaimsIdentity([
+                    new Claim(ClaimTypes.Name, "alice"),
+                    new Claim("admin", claimsAdmin ? "true" : "false", ClaimValueTypes.Boolean)
+                ], "Test"));
+            reachedNext = true;
+            return Task.CompletedTask;
+        });
+        return reachedNext;
+    }
+
+    [TestCase(typeof(IOException))]
+    [TestCase(typeof(UnauthorizedAccessException))]
+    public async Task ADiskThatRefusesTheNote_DoesNotFailTheRequest(Type failure)
+    {
+        _fs.Setup(f => f.FolderCreate(It.IsAny<string>())).Throws((Exception)Activator.CreateInstance(failure)!);
+
+        (await Invoke()).ShouldBeTrue();
+        _fs.Verify(f => f.FolderCreate(It.IsAny<string>()), Times.Once);
+    }
+
+    [Test]
+    public async Task AConfiguredExternalUrl_LeavesTheDiskAlone()
+    {
+        (await Invoke("https://configured.example.org")).ShouldBeTrue();
+
+        _fs.Verify(f => f.FolderCreate(It.IsAny<string>()), Times.Never);
+        _fs.Verify(f => f.ReadAllText(It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
+    public async Task AnAnonymousRequest_RecordsNothing()
+    {
+        (await Invoke(authenticated: false)).ShouldBeTrue();
+
+        _urls.Verify(u => u.GetLocalHost(It.IsAny<bool>()), Times.Never);
+        _fs.Verify(f => f.ReadAllText(It.IsAny<string>()), Times.Never);
+        _fs.Verify(f => f.FolderCreate(It.IsAny<string>()), Times.Never);
+    }
+
+    [TestCase(false, false)]   // a signed-in user: any user can send the Host they like
+    [TestCase(true, false)]    // a token that says admin for a user the identity store no longer has as one
+    [TestCase(false, true)]    // an administrator whose token does not say so (yet)
+    public async Task TheRequestOfAUserWhoIsNoAdministrator_RecordsNothing(bool claimsAdmin, bool storeAdmin)
+    {
+        (await Invoke(claimsAdmin: claimsAdmin, storeAdmin: storeAdmin)).ShouldBeTrue();
+
+        _urls.Verify(u => u.GetLocalHost(It.IsAny<bool>()), Times.Never);
+        _fs.Verify(f => f.ReadAllText(It.IsAny<string>()), Times.Never);
+        _fs.Verify(f => f.FolderCreate(It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
+    public async Task TheRequestOfAnAdministrator_RecordsTheUrl()
+    {
+        (await Invoke()).ShouldBeTrue();
+
+        _fs.Verify(f => f.FolderCreate(It.IsAny<string>()), Times.Once);
+    }
+
+    [Test]
+    public async Task ABugInTheUrlBuilder_IsNotHidden()
+    {
+        _urls.Setup(u => u.GetLocalHost(It.IsAny<bool>())).Throws<InvalidOperationException>();
+
+        await Should.ThrowAsync<InvalidOperationException>(() => Invoke());
+    }
+}

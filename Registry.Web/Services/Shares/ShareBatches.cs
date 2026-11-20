@@ -1,0 +1,85 @@
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Registry.Web.Data.Models;
+using Registry.Web.Exceptions;
+using Registry.Web.Models.DTO;
+using Registry.Web.Services.Hub;
+using Registry.Web.Services.Ports;
+
+namespace Registry.Web.Services.Shares;
+
+/// <summary>The life of a share batch: its start (on the dataset <see cref="ShareTargets"/> resolves), its commit, its rollback.</summary>
+public sealed class ShareBatches
+{
+    private readonly ShareBatchStore _batches;
+    private readonly ShareBatchRollback _rollback;
+    private readonly ShareTargets _targets;
+    private readonly IAuthManager _authManager;
+    private readonly IStorageQuota _quota;
+    private readonly ILogger<ShareBatches> _logger;
+
+    public ShareBatches(ShareBatchStore batches, ShareBatchRollback rollback, ShareTargets targets, IAuthManager authManager, IStorageQuota quota, ILogger<ShareBatches> logger)
+    {
+        _batches = batches;
+        _rollback = rollback;
+        _targets = targets;
+        _authManager = authManager;
+        _quota = quota;
+        _logger = logger;
+    }
+
+    public async Task<ShareInitResultDto> Initialize(ShareInitDto parameters, CancellationToken ct = default)
+    {
+        if (parameters == null)
+            throw new BadRequestException("Invalid parameters");
+
+        var currentUser = await _authManager.GetCurrentUser();
+        if (currentUser == null)
+            throw new UnauthorizedException("Invalid user");
+
+        // Honoured until the target (which may be a new dataset) and the batch are written
+        ct.ThrowIfCancellationRequested();
+
+        // The owner of the organization the share goes to must have room for any file (FR-XC-26). Checked once the
+        // access of the user is (SEC-003: an organization the user may not write to answers its access error, never
+        // the state of its owner's storage), and before a dataset is created
+        var target = await _targets.ResolveAsync(parameters, currentUser,
+            ownerId => _quota.CheckOwnerStorageAsync(ownerId, 0, ct));
+        var batch = await _batches.StartAsync(target.Dataset, target.Created);
+
+        return new ShareInitResultDto
+        {
+            Token = batch.Token
+        };
+    }
+
+    public async Task<CommitResultDto> Commit(string token, CancellationToken ct = default)
+    {
+        var batch = await _batches.GetRunningAsync(token, ct);
+
+        _logger.LogInformation("Committing batch '{Token}' @ {BatchEndDate} {BatchEndTime}", token,
+            batch.End?.ToLongDateString(), batch.End?.ToLongTimeString());
+
+        await _batches.CloseAsync(batch, BatchStatus.Committed);
+
+        _logger.LogInformation("Batch '{Token}' committed", token);
+
+        return new CommitResultDto
+        {
+            Url = HubLinks.DatasetPath(batch.Dataset.Organization.Slug, batch.Dataset.Slug),
+            Tag = new TagDto(batch.Dataset.Organization.Slug, batch.Dataset.Slug)
+        };
+    }
+
+    public async Task Rollback(string token, CancellationToken ct = default)
+    {
+        var batch = await _batches.GetRunningAsync(token, ct);
+
+        _logger.LogInformation("Rolling back  batch '{Token}'", token);
+
+        // The dataset goes with a batch that created it (FR-UPL-01); a batch on an existing dataset removes only its own files
+        await _rollback.RollbackAsync(batch, deleteDataset: batch.CreatedDataset);
+    }
+}

@@ -1,4 +1,3 @@
-﻿#nullable enable
 using System;
 
 namespace Registry.Web.Models;
@@ -15,7 +14,13 @@ public record IndexPayload(
     string ToolVersion = "1",
     string? RequestHash = null,
     string? ParentJobId = null,
-    string? WorkflowExecutionId = null)
+    string? WorkflowExecutionId = null,
+    // Heavy tasks (FR-XC-25, D-013): the files the task writes (a JSON array) and the label of its target files
+    string? OutputPathsJson = null,
+    string? TargetLabel = null,
+    // The write record the task starts with (FR-XC-27): the dataset created for it at submit, so that a rollback finds it
+    // from the first moment the task exists, whatever happens to the job
+    string? WriteRecordJson = null)
 {
     public void EnsureValid()
     {

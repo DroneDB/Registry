@@ -29,19 +29,4 @@ public static class OrganizationPermissionsExtensions
     {
         return permission >= OrganizationPermissions.Admin;
     }
-
-    /// <summary>
-    /// Gets the display name for the permission level
-    /// </summary>
-    public static string GetDisplayName(this OrganizationPermissions permission)
-    {
-        return permission switch
-        {
-            OrganizationPermissions.ReadOnly => "Read Only",
-            OrganizationPermissions.ReadWrite => "Read/Write",
-            OrganizationPermissions.ReadWriteDelete => "Read/Write/Delete",
-            OrganizationPermissions.Admin => "Admin",
-            _ => "Unknown"
-        };
-    }
 }

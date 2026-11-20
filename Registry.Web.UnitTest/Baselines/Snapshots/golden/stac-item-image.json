@@ -1,0 +1,82 @@
+{
+  "request": "GET /orgs/golden-org/ds/golden-ds/stac/c3ViL2ltZy5qcGc=",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "assets": {
+      "sub/img.jpg": {
+        "href": "http://localhost/orgs/golden-org/ds/golden-ds/download?path=sub%2Fimg.jpg",
+        "roles": [
+          "data"
+        ],
+        "title": "sub/img.jpg",
+        "type": "image/jpeg"
+      },
+      "thumbnail": {
+        "href": "http://localhost/orgs/golden-org/ds/golden-ds/thumb?path=sub%2Fimg.jpg&size=512",
+        "roles": [
+          "thumbnail"
+        ],
+        "title": "Thumbnail",
+        "type": "image/webp"
+      }
+    },
+    "bbox": [
+      8.25,
+      46.841667,
+      8.25,
+      46.841667
+    ],
+    "collection": "golden-org/golden-ds",
+    "geometry": {
+      "coordinates": [
+        8.25,
+        46.841667,
+        120
+      ],
+      "type": "Point"
+    },
+    "id": "path-sub-img-jpg",
+    "links": [
+      {
+        "href": "http://localhost/stac",
+        "rel": "root",
+        "type": "application/json"
+      },
+      {
+        "href": "http://localhost/orgs/golden-org/ds/golden-ds/stac",
+        "rel": "parent",
+        "type": "application/json"
+      },
+      {
+        "href": "http://localhost/orgs/golden-org/ds/golden-ds/stac",
+        "rel": "collection",
+        "type": "application/json"
+      },
+      {
+        "href": "http://localhost/orgs/golden-org/ds/golden-ds/stac/c3ViL2ltZy5qcGc=",
+        "rel": "self",
+        "type": "application/geo+json"
+      }
+    ],
+    "properties": {
+      "cameraPitch": -90.0,
+      "cameraRoll": 0.0,
+      "cameraYaw": 0.0,
+      "captureTime": 1714972089000.0,
+      "datetime": "<datetime:Z>",
+      "hasCameraOrientation": false,
+      "height": 24,
+      "make": "Contract",
+      "model": "Camera",
+      "orientation": 1,
+      "sensor": "contract camera",
+      "title": "sub/img.jpg",
+      "width": 32
+    },
+    "stac_version": "1.1.0",
+    "type": "Feature"
+  }
+}

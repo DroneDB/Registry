@@ -1,14 +1,14 @@
-﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
 // Let's copy AddActionDto for no reason
 public class AddAction
 {
-    [JsonProperty("path")]
+    [JsonPropertyName("path")]
     public string Path { get;  }
 
-    [JsonProperty("hash")]
+    [JsonPropertyName("hash")]
     public string Hash { get;  }
 
     public AddAction(string path, string hash)

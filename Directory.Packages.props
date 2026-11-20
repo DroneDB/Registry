@@ -1,0 +1,122 @@
+<Project>
+
+    <!--
+        Central package management: every NuGet package version is set here, once.
+        A project lists the package with <PackageReference Include="..." /> and no Version.
+        PrivateAssets/IncludeAssets stay on the PackageReference in the project.
+
+        Packages that ship together move together, so they share one version property:
+          - DotNetPackagesVersion: ASP.NET Core, EF Core and Microsoft.Extensions.* packages
+            of the .NET 10 servicing train (EF Core packages must all have the same version).
+          - HangfireVersion, AspNetCoreHealthChecksVersion and SkiaSharpVersion: the packages
+            of one family (SkiaSharp and its native assets must match).
+        Packages whose assemblies ship in the shared framework (Microsoft.NETCore.App or
+        Microsoft.AspNetCore.App) are not referenced: NuGet reports them as NU1510.
+
+        Transitive pinning (CentralPackageTransitivePinningEnabled) is on: a version set here also
+        applies where the package only comes in transitively. Packages that no project references
+        are listed under "Transitive pins", each with the reason; remove a pin once the package
+        that brings it in depends on a fixed version itself.
+    -->
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+        <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+        <DotNetPackagesVersion>10.0.14</DotNetPackagesVersion>
+        <HangfireVersion>1.8.25</HangfireVersion>
+        <AspNetCoreHealthChecksVersion>9.0.0</AspNetCoreHealthChecksVersion>
+        <SkiaSharpVersion>4.154.0</SkiaSharpVersion>
+    </PropertyGroup>
+
+    <!-- .NET 10 servicing train -->
+    <ItemGroup>
+        <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(DotNetPackagesVersion)" />
+        <PackageVersion Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" Version="$(DotNetPackagesVersion)" />
+        <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="$(DotNetPackagesVersion)" />
+        <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(DotNetPackagesVersion)" />
+        <PackageVersion Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="$(DotNetPackagesVersion)" />
+        <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="$(DotNetPackagesVersion)" />
+        <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="$(DotNetPackagesVersion)" />
+        <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="$(DotNetPackagesVersion)" />
+        <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(DotNetPackagesVersion)" />
+        <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="$(DotNetPackagesVersion)" />
+        <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="$(DotNetPackagesVersion)" />
+        <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="$(DotNetPackagesVersion)" />
+        <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="$(DotNetPackagesVersion)" />
+        <PackageVersion Include="Microsoft.Extensions.Options" Version="$(DotNetPackagesVersion)" />
+        <PackageVersion Include="System.DirectoryServices.Protocols" Version="$(DotNetPackagesVersion)" />
+    </ItemGroup>
+
+    <!-- Data access -->
+    <ItemGroup>
+        <PackageVersion Include="Microting.EntityFrameworkCore.MySql" Version="10.0.13" />
+    </ItemGroup>
+
+    <!-- Background jobs and health checks -->
+    <ItemGroup>
+        <PackageVersion Include="AspNetCore.HealthChecks.Hangfire" Version="$(AspNetCoreHealthChecksVersion)" />
+        <PackageVersion Include="AspNetCore.HealthChecks.UI.Client" Version="$(AspNetCoreHealthChecksVersion)" />
+        <PackageVersion Include="Hangfire.AspNetCore" Version="$(HangfireVersion)" />
+        <PackageVersion Include="Hangfire.Core" Version="$(HangfireVersion)" />
+        <PackageVersion Include="Hangfire.Console" Version="1.4.3" />
+        <PackageVersion Include="Hangfire.InMemory" Version="1.0.0" />
+        <PackageVersion Include="Hangfire.MySqlStorage" Version="2.0.3" />
+    </ItemGroup>
+
+    <!-- Logging -->
+    <ItemGroup>
+        <PackageVersion Include="Serilog" Version="4.4.0" />
+        <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+        <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
+        <PackageVersion Include="Serilog.Enrichers.Thread" Version="4.0.0" />
+        <PackageVersion Include="Serilog.Extensions.Hosting" Version="10.0.0" />
+        <PackageVersion Include="Serilog.Extensions.Logging" Version="10.0.0" />
+        <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
+        <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+    </ItemGroup>
+
+    <!-- Web API, security and tooling -->
+    <ItemGroup>
+        <PackageVersion Include="CommandLineParser" Version="2.9.1" />
+        <PackageVersion Include="MailKit" Version="4.18.2" />
+        <PackageVersion Include="Scalar.AspNetCore" Version="2.18.5" />
+        <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.3.1" />
+        <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
+    </ItemGroup>
+
+    <!-- General purpose libraries -->
+    <ItemGroup>
+        <PackageVersion Include="MimeMapping" Version="4.0.0" />
+        <PackageVersion Include="MimeTypes" Version="2.5.2" />
+        <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
+        <PackageVersion Include="Polly" Version="8.9.0" />
+        <PackageVersion Include="SharpCompress" Version="0.50.7" />
+        <PackageVersion Include="SkiaSharp" Version="$(SkiaSharpVersion)" />
+        <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="$(SkiaSharpVersion)" />
+    </ItemGroup>
+
+    <!-- Transitive pins -->
+    <ItemGroup>
+        <!--
+            Hangfire.MySqlStorage 2.0.3 (the latest) depends on Dapper 1.50.5, which depends on
+            System.Data.SqlClient 4.4.0 (GHSA-98g6-xh36-x2p7, GHSA-8g2p-5pqh-5jmc). Registry never
+            connects to SQL Server, but the package ships with it; 4.9.1 is the last fixed version.
+        -->
+        <PackageVersion Include="System.Data.SqlClient" Version="4.9.1" />
+    </ItemGroup>
+
+    <!-- Tests -->
+    <ItemGroup>
+        <!-- Checks the payload of the update check against its JSON Schema (test only) -->
+        <PackageVersion Include="JsonSchema.Net" Version="9.5.0" />
+        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+        <PackageVersion Include="Moq" Version="4.21.0" />
+        <PackageVersion Include="NUnit" Version="5.0.0" />
+        <!-- NUnit rules (fixture lifecycle, assertions, TestContext output) for every NUnit project -->
+        <PackageVersion Include="NUnit.Analyzers" Version="4.15.0" />
+        <PackageVersion Include="NUnit3TestAdapter" Version="6.3.1" />
+        <PackageVersion Include="Shouldly" Version="4.3.0" />
+        <PackageVersion Include="Testcontainers" Version="4.16.0" />
+        <PackageVersion Include="Testcontainers.MariaDb" Version="4.16.0" />
+    </ItemGroup>
+
+</Project>

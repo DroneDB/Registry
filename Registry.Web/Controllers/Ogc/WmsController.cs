@@ -1,10 +1,12 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Exceptions;
 using Registry.Web.Filters;
 using Registry.Web.Models;
-using Registry.Web.Services.Ports;
+using Registry.Web.Services.Managers;
 using Registry.Web.Utilities;
 using Registry.Web.Utilities.Ogc;
 
@@ -12,25 +14,33 @@ namespace Registry.Web.Controllers.Ogc;
 
 /// <summary>WMS 1.3.0 controller (with best-effort 1.1.1 negotiation).</summary>
 [ApiController]
-[ServiceFilter(typeof(BasicAuthFilter))]
+[BasicAuthentication]
 [ServiceFilter(typeof(OgcAuthorizationFilter))]
 [TypeFilter(typeof(OgcExceptionFilter))]
-[Route(RoutesHelper.OrganizationsRadix + "/" + RoutesHelper.OrganizationSlug + "/" +
-       RoutesHelper.DatasetRadix + "/" + RoutesHelper.DatasetSlug)]
+[ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status401Unauthorized, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status403Forbidden, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status404NotFound, "text/xml", "application/xml")]
+[ProducesResponseType(typeof(string), StatusCodes.Status503ServiceUnavailable, "text/xml", "application/xml")]
+[Route(RoutesHelper.DatasetPrefix)]
 public class WmsController : ControllerBaseEx
 {
-    private readonly IWmsManager _mgr;
-    public WmsController(IWmsManager mgr) { _mgr = mgr; }
+    private readonly WmsManager _mgr;
+    public WmsController(WmsManager mgr) { _mgr = mgr; }
 
+    /// <summary>WMS KVP request: GetCapabilities (XML), GetMap (an image) or GetFeatureInfo.</summary>
     [HttpGet("wms")]
-    public Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug)
-        => Dispatch(orgSlug, dsSlug, null);
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "text/xml", "application/xml", "text/plain", "application/json", "image/png", "image/jpeg", "image/webp")]
+    public Task<IActionResult> Kvp([FromRoute] string orgSlug, [FromRoute] string dsSlug, CancellationToken ct)
+        => Dispatch(orgSlug, dsSlug, null, ct);
 
+    /// <summary>WMS KVP request for the layers of a folder of the dataset.</summary>
     [HttpGet("wms/p/{*folder}")]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK, "text/xml", "application/xml", "text/plain", "application/json", "image/png", "image/jpeg", "image/webp")]
     public Task<IActionResult> KvpFolder([FromRoute] string orgSlug, [FromRoute] string dsSlug,
-        [FromRoute] string folder) => Dispatch(orgSlug, dsSlug, folder);
+        [FromRoute] string? folder, CancellationToken ct) => Dispatch(orgSlug, dsSlug, folder, ct);
 
-    private async Task<IActionResult> Dispatch(string orgSlug, string dsSlug, string? folderPath)
+    private async Task<IActionResult> Dispatch(string orgSlug, string dsSlug, string? folderPath, CancellationToken ct)
     {
         var q = Request.Query;
         OgcKvpValidator.ValidateService(q, "WMS");
@@ -40,7 +50,7 @@ public class WmsController : ControllerBaseEx
         switch (request.ToUpperInvariant())
         {
             case "GETCAPABILITIES":
-                return Content(await _mgr.GetCapabilitiesAsync(orgSlug, dsSlug, version, folderPath),
+                return Content(await _mgr.GetCapabilitiesAsync(orgSlug, dsSlug, version, folderPath, ct: ct),
                     "text/xml; charset=utf-8");
 
             case "GETMAP":
@@ -69,7 +79,7 @@ public class WmsController : ControllerBaseEx
                 var trans = string.Equals(OgcRequestParser.Get(q, "TRANSPARENT"), "TRUE",
                     StringComparison.OrdinalIgnoreCase);
                 var bytes = await _mgr.GetMapAsync(orgSlug, dsSlug, layers, styles, bbox, resolvedCrs,
-                    width, height, format, bg, trans);
+                    width, height, format, bg, trans, ct: ct);
                 return File(bytes, format);
             }
 
@@ -101,7 +111,7 @@ public class WmsController : ControllerBaseEx
                 var info = OgcRequestParser.Get(q, "INFO_FORMAT") ?? "application/json";
                 WmsValidator.ValidateInfoFormat(info);
                 var body = await _mgr.GetFeatureInfoAsync(orgSlug, dsSlug, queryLayers[0], bbox, resolvedCrs,
-                    width, height, i, j, info);
+                    width, height, i, j, info, ct: ct);
                 return Content(body, info);
             }
 

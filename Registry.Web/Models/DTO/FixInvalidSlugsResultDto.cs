@@ -16,17 +16,17 @@ public class FixInvalidSlugsResultDto
 public class SlugFixEntryDto
 {
     /// <summary>"organization" or "dataset".</summary>
-    public string Kind { get; set; }
+    public string? Kind { get; set; }
 
     /// <summary>Organization slug before the fix (for datasets: the organization they belong to).</summary>
-    public string OrganizationSlug { get; set; }
+    public string? OrganizationSlug { get; set; }
 
-    public string OldSlug { get; set; }
+    public string? OldSlug { get; set; }
 
-    public string NewSlug { get; set; }
+    public string? NewSlug { get; set; }
 
     /// <summary>"planned", "renamed", "skipped" or "failed".</summary>
-    public string Status { get; set; }
+    public string? Status { get; set; }
 
-    public string Reason { get; set; }
+    public string? Reason { get; set; }
 }

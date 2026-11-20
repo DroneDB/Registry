@@ -1,158 +1,36 @@
-using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
-using Registry.Common.Model;
-using Registry.Ports.DroneDB;
-using Registry.Web.Models;
 using Registry.Web.Models.DTO;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Ports;
 
+/// <summary>
+/// The entry operations other features use (shares, CAD coordinate systems, system maintenance): adding a
+/// file or a folder, streaming a file to the dataset volume and committing it, deleting an entry. A facade
+/// over the objects slice: the object controllers use the focused services in
+/// <see cref="Objects"/> (entries, transfers, renders, builds, raster analysis and processing).
+/// </summary>
 public interface IObjectsManager
 {
-    Task<IEnumerable<EntryDto>> List(string orgSlug, string dsSlug, string path = null, bool recursive = false, EntryType? type = null);
-    Task<IEnumerable<EntryDto>> Search(string orgSlug, string dsSlug, string query = null, string path = null,
-        bool recursive = true, EntryType? type = null);
-    Task<StorageEntryDto> Get(string orgSlug, string dsSlug, string path);
-    Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, byte[] data);
-    Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, Stream stream = null);
+    /// <summary>
+    /// Adds the file <paramref name="stream"/> at <paramref name="path"/> through the upload pipeline (validation,
+    /// atomic move, index, quarantine on index failure, quota), or creates the folder <paramref name="path"/>
+    /// when there is no stream.
+    /// </summary>
+    Task<EntryDto> AddNew(string orgSlug, string dsSlug, string path, Stream? stream = null);
 
     /// <summary>
     /// Streams a forward-only upload body to a temporary file on the dataset's storage volume,
     /// so it can later be moved (not copied) into place. Used by the streaming upload endpoint.
     /// </summary>
-    /// <returns>The temp file path and the bytes written.</returns>
-    Task<(string TempPath, long Bytes)> StreamToTempAsync(string orgSlug, string dsSlug, Stream source);
+    /// <returns>The temp file, its size and the SHA-256 computed while writing it.</returns>
+    Task<StreamedFile> StreamToTempAsync(string orgSlug, string dsSlug, Stream source);
 
     /// <summary>
     /// Finalizes a streamed upload produced by <see cref="StreamToTempAsync"/>: validates access
     /// and quota, atomically moves the temp file into its final location and indexes it.
     /// </summary>
     /// <returns>The created entry.</returns>
-    Task<EntryDto> CommitStreamedAsync(string orgSlug, string dsSlug, string path, string tempFilePath, long writeBytes);
-
-    Task<EntryDto> Move(string orgSlug, string dsSlug, string source, string dest);
-
-    /// <summary>
-    /// Copies a file or folder within the same dataset. Reuses the existing
-    /// build folder (content-addressed by hash, so no duplication on disk).
-    /// </summary>
-    Task<EntryDto> Copy(string orgSlug, string dsSlug, string source, string dest, bool overwrite = false);
-
-    Task Delete(string orgSlug, string dsSlug, string path);
-    Task DeleteAll(string orgSlug, string dsSlug);
-    Task<FileStreamDescriptor> DownloadStream(string orgSlug, string dsSlug, string[] paths);
-    Task<StorageDataDto> GenerateThumbnailData(string orgSlug, string dsSlug, string? path, int? size, bool recreate = false);
-    Task<StorageDataDto> GenerateTileData(string orgSlug, string dsSlug, string path, int tz, int tx, int ty, bool retina);
-    Task<FileStreamDescriptor> GetDdb(string orgSlug, string dsSlug);
-    Task Build(string orgSlug, string dsSlug, string path, bool force = false);
-    Task<string> GetBuildFile(string orgSlug, string dsSlug, string hash, string path);
-    Task<bool> CheckBuildFile(string orgSlug, string dsSlug, string hash, string path);
-
-    /// <summary>
-    /// Resolves an entry path to its build artifact path and returns the full
-    /// on-disk path, content type, and download file name. Used for direct
-    /// download of pre-built visualization artifacts (COG, COPC, GPKG).
-    /// </summary>
-    /// <returns>Tuple of (fullPath, contentType, downloadFileName).</returns>
-    Task<(string FullPath, string ContentType, string FileName)> GetBuildArtifactPath(
-        string orgSlug, string dsSlug, string entryPath);
-
-    Task<EntryType?> GetEntryType(string orgSlug, string dsSlug, string path);
-
-    Task Transfer(string sourceOrgSlug, string sourceDsSlug, string sourcePath, string destOrgSlug,
-        string destDsSlug, string destPath = null, bool overwrite = false, bool keepSource = false);
-
-    /// <summary>
-    /// Gets information about pending (deferred) builds in a dataset, i.e. builds
-    /// skipped because one or more dependencies (companion files or external
-    /// tools) were missing at the time of the last attempt.
-    /// </summary>
-    Task<IEnumerable<PendingBuildInfoDto>> GetPendingBuilds(string orgSlug, string dsSlug);
-
-    Task<int> ClearCompletedBuilds(string orgSlug, string dsSlug);
-    Task Delete(string orgSlug, string dsSlug, string[] paths);
-    Task<DeleteBatchResponse> DeleteBatch(string orgSlug, string dsSlug, string[] paths);
-
-    /// <summary>
-    /// Invalidates all cached data for a dataset (tiles, thumbnails, dataset thumbnail, build-pending).
-    /// </summary>
-    Task InvalidateAllDatasetCaches(string orgSlug, string dsSlug);
-
-    /// <summary>Get raster info including bands, sensor profile, and presets</summary>
-    Task<string> GetRasterInfo(string orgSlug, string dsSlug, string path);
-
-    /// <summary>Get raster statistics and histogram for a band or formula</summary>
-    Task<string> GetRasterMetadata(string orgSlug, string dsSlug, string path, string? formula = null, string? bandFilter = null);
-
-    /// <summary>Generate thumbnail with extended visualization params</summary>
-    Task<StorageDataDto> GenerateThumbnailDataEx(string orgSlug, string dsSlug, string path, int? size,
-        string? preset = null, string? bands = null, string? formula = null,
-        string? bandFilter = null, string? colormap = null, string? rescale = null);
-
-    /// <summary>Generate tile with extended visualization params</summary>
-    Task<StorageDataDto> GenerateTileDataEx(string orgSlug, string dsSlug, string path,
-        int tz, int tx, int ty, bool retina,
-        string? preset = null, string? bands = null, string? formula = null,
-        string? bandFilter = null, string? colormap = null, string? rescale = null);
-
-    /// <summary>Validate merge-multispectral inputs</summary>
-    Task<string> ValidateMergeMultispectral(string orgSlug, string dsSlug, string[] paths);
-
-    /// <summary>Preview merge-multispectral result</summary>
-    Task<byte[]> PreviewMergeMultispectral(string orgSlug, string dsSlug, string[] paths, string? previewBands = null, int thumbSize = 512);
-
-    /// <summary>Merge single-band rasters into multi-band COG</summary>
-    Task MergeMultispectral(string orgSlug, string dsSlug, string[] paths, string outputPath);
-
-    /// <summary>Validate that source and reference rasters are compatible for alignment</summary>
-    Task<string> ValidateAlignRaster(string orgSlug, string dsSlug, string sourcePath, string referencePath);
-
-    /// <summary>Export raster with visualization params applied as GeoTIFF</summary>
-    Task<StorageDataDto> ExportRaster(string orgSlug, string dsSlug, string path,
-        string? preset = null, string? bands = null, string? formula = null,
-        string? bandFilter = null, string? colormap = null, string? rescale = null);
-
-    /// <summary>
-    /// Estimates the output size (in bytes) of a GeoTIFF export for the given raster path.
-    /// Uses raw input data size (width × height × bytesPerPixel × bandCount) as a conservative upper bound.
-    /// </summary>
-    Task<long> EstimateExportSize(string orgSlug, string dsSlug, string path);
-
-    /// <summary>Get raster value info (min/max/unit/dimensions), including thermal calibration if applicable</summary>
-    Task<string> GetRasterValueInfo(string orgSlug, string dsSlug, string path);
-
-    /// <summary>Get raster value (temperature/elevation/etc.) at a specific pixel location</summary>
-    Task<string> GetRasterPointValue(string orgSlug, string dsSlug, string path, int x, int y);
-
-    /// <summary>Get raster value statistics for a rectangular area</summary>
-    Task<string> GetRasterAreaStats(string orgSlug, string dsSlug, string path, int x0, int y0, int x1, int y1);
-
-    /// <summary>Sample raster values along a GeoJSON LineString (WGS84)</summary>
-    Task<string> GetRasterProfile(string orgSlug, string dsSlug, string path, string geoJsonLineString, int samples);
-
-    /// <summary>Calculate stockpile volume (cut/fill/net) over a polygon on a DEM raster</summary>
-    Task<string> CalculateVolume(string orgSlug, string dsSlug, string path, string polygonGeoJson, string baseMethod, double flatElevation);
-
-    /// <summary>Auto-detect a stockpile footprint starting from a click on the raster</summary>
-    Task<string> DetectStockpile(string orgSlug, string dsSlug, string path, double lat, double lon, double radiusMeters, float sensitivity);
-
-    /// <summary>Auto-detect ALL stockpile footprints by full-DEM scan</summary>
-    Task<string> DetectAllStockpiles(string orgSlug, string dsSlug, string path, float sensitivity, double minAreaM2, int maxResults);
-
-    /// <summary>Generate contour lines from a single-band elevation raster (DEM/DSM/DTM).</summary>
-    Task<string> GenerateContours(string orgSlug, string dsSlug, string path,
-                                  double? interval, int? count,
-                                  double baseOffset,
-                                  double? minElev, double? maxElev,
-                                  double simplifyTolerance,
-                                  int bandIndex);
-
-    /// <summary>Check if a masked version of the orthophoto already exists</summary>
-    Task<MaskBordersCheckResponseDto> CheckMaskedFileExists(string orgSlug, string dsSlug, string path);
-
-    /// <summary>Mask orthophoto borders making them transparent</summary>
-    Task MaskBorders(string orgSlug, string dsSlug, string path, int nearDist, bool white);
+    Task<EntryDto> CommitStreamedAsync(string orgSlug, string dsSlug, string path, StreamedFile file);
 }

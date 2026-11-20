@@ -8,9 +8,9 @@ namespace Registry.Web.Filters;
 
 public class BasePathDocumentFilter : IDocumentFilter
 {
-    private readonly AppSettings _settings;
+    private readonly HttpHostOptions _settings;
 
-    public BasePathDocumentFilter(IOptions<AppSettings> settings)
+    public BasePathDocumentFilter(IOptions<HttpHostOptions> settings)
     {
         _settings = settings.Value;
     }

@@ -1,0 +1,5 @@
+@inherits EmailBody<TestEmailModel>
+
+<p style="margin:0 0 16px;">This is a test e-mail from @Branding.AppName.</p>
+<p style="margin:0 0 16px;">You received it, so the outgoing e-mail settings work.</p>
+<p style="margin:0;font-size:14px;color:#6b7280;">Sent at the request of @Model.RequestedBy on @(Model.SentAt.ToString("u", CultureInfo.InvariantCulture)).</p>

@@ -1,5 +1,4 @@
-#nullable enable
-using System.Collections.Generic;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Registry.Web.Models.DTO;
@@ -27,13 +26,17 @@ public interface ITasksManager
         CancellationToken ct = default);
 
     /// <summary>
-    /// Returns the dataset's task history, newest first.
+    /// A page of the dataset's tasks with an entity tag: equal tags mean equal pages, so a client
+    /// that already has the page gets a 304 instead of the list again.
     /// </summary>
-    /// <param name="toolId">Optional tool filter.</param>
-    /// <param name="state">Optional state filter.</param>
-    /// <returns>The requested page of task summaries.</returns>
-    Task<TaskSummaryDto[]> ListAsync(string orgSlug, string dsSlug, string? toolId, string? state,
+    Task<TaskListPage> ListPageAsync(string orgSlug, string dsSlug, string? toolId, string? state,
         int skip, int take, CancellationToken ct = default);
+
+    /// <summary>
+    /// Calls <paramref name="onChange"/> whenever the dataset's task list changes, until disposed
+    /// (read access required).
+    /// </summary>
+    Task<IDisposable> SubscribeAsync(string orgSlug, string dsSlug, Action onChange);
 
     /// <summary>
     /// Permanently removes concluded tasks from the dataset history and purges their artifacts.
@@ -62,9 +65,11 @@ public interface ITasksManager
     Task<TaskArtifactFile> GetResultAsync(string orgSlug, string dsSlug, string id, CancellationToken ct = default);
 
     /// <summary>
-    /// Cancels a task, removing it from the job store.
+    /// Cancels a queued or running task, removing it from the job store; a task whose job the store no
+    /// longer has ends too.
     /// </summary>
-    /// <returns>True when the job store accepted the deletion.</returns>
+    /// <returns>True when the task was cancelled; false when it ended meanwhile.</returns>
+    /// <exception cref="Registry.Web.Exceptions.BadRequestException">The task has already ended.</exception>
     Task<bool> CancelAsync(string orgSlug, string dsSlug, string id, CancellationToken ct = default);
 
     /// <summary>
@@ -88,3 +93,6 @@ public interface ITasksManager
 /// <param name="ContentType">MIME type inferred from the file name.</param>
 /// <param name="ETag">Quoted ETag derived from the artifact checksum, or null when unknown.</param>
 public sealed record TaskArtifactFile(string FilePath, string FileName, string ContentType, string? ETag);
+
+/// <summary>A page of the task list and its entity tag.</summary>
+public sealed record TaskListPage(TaskSummaryDto[] Items, string ETag);

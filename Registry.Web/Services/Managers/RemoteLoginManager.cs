@@ -1,10 +1,10 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json;
+using System.Text.Json;
 using Registry.Common;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
@@ -18,11 +18,11 @@ namespace Registry.Web.Services.Managers;
 public class RemoteLoginManager : ILoginManager
 {
     private readonly ILogger<ILoginManager> _logger;
-    private readonly AppSettings _settings;
+    private readonly IdentityProviderOptions _settings;
     private readonly IHttpClientFactory _httpClientFactory;
 
     public RemoteLoginManager(ILogger<RemoteLoginManager> logger,
-        IOptions<AppSettings> settings,
+        IOptions<IdentityProviderOptions> settings,
         IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
@@ -53,7 +53,7 @@ public class RemoteLoginManager : ILoginManager
 
             var result = await res.Content.ReadAsStringAsync();
 
-            var obj = JsonConvert.DeserializeObject<Dictionary<string, object>>(result);
+            var obj = PlainValue.ObjectFrom(JsonDocument.Parse(result).RootElement);
 
             _logger.LogInformation("CheckAccess (token): {Result}", result);
 
@@ -106,7 +106,7 @@ public class RemoteLoginManager : ILoginManager
             var result = await res.Content.ReadAsStringAsync();
             _logger.LogInformation("CheckAccess for user {User}: {Result}", userName, result);
 
-            var obj = JsonConvert.DeserializeObject<Dictionary<string, object>>(result);
+            var obj = PlainValue.ObjectFrom(JsonDocument.Parse(result).RootElement);
 
             return new LoginResultDto
             {

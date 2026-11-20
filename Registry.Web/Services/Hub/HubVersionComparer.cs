@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Registry.Web.Services.Hub;
 
@@ -20,7 +21,7 @@ public static class HubVersionComparer
     /// </summary>
     /// <param name="onDiskVersion">Content of the on-disk version marker, or <c>null</c> if missing.</param>
     /// <param name="embeddedVersion">Version stamped into the embedded archive.</param>
-    public static bool ShouldUpgrade(string onDiskVersion, string embeddedVersion)
+    public static bool ShouldUpgrade(string? onDiskVersion, string? embeddedVersion)
     {
         if (string.IsNullOrWhiteSpace(embeddedVersion))
             return false;
@@ -41,7 +42,7 @@ public static class HubVersionComparer
     /// Parses a semver-like string (major.minor.patch[-prerelease][+build]).
     /// Pre-release and build suffixes are ignored - only the numeric core is compared.
     /// </summary>
-    public static bool TryParse(string raw, out Version version)
+    public static bool TryParse(string? raw, [NotNullWhen(true)] out Version? version)
     {
         version = null;
         if (string.IsNullOrWhiteSpace(raw)) return false;

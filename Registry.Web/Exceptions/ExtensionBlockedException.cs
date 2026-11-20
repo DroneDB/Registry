@@ -2,15 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Microsoft.AspNetCore.Http;
 using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Exceptions;
 
 /// <summary>
 /// Thrown when a file upload or import is rejected because its extension violates the
-/// configured block-list or allow-list policy. The error is non-retriable.
+/// configured block-list or allow-list policy (HTTP 400). The error is non-retriable.
 /// </summary>
-public class ExtensionBlockedException : Exception
+public class ExtensionBlockedException : RegistryException
 {
     /// <summary>The file name(s) that were rejected.</summary>
     public IEnumerable<string> FileNames { get; }
@@ -18,15 +19,15 @@ public class ExtensionBlockedException : Exception
     /// <summary><c>true</c> when the rejection was due to allow-list mode (not block-list).</summary>
     public bool AllowListMode { get; }
 
-    public ExtensionBlockedException(string fileName, ImportSettings settings, bool allowListMode)
-        : base(BuildSingleMessage(fileName, allowListMode))
+    public ExtensionBlockedException(string fileName, bool allowListMode)
+        : base(StatusCodes.Status400BadRequest, BuildSingleMessage(fileName, allowListMode), noRetry: true)
     {
         FileNames = [fileName];
         AllowListMode = allowListMode;
     }
 
     public ExtensionBlockedException(IEnumerable<string> fileNames, ImportSettings settings)
-        : base(BuildBatchMessage([.. fileNames], settings))
+        : base(StatusCodes.Status400BadRequest, BuildBatchMessage([.. fileNames], settings), noRetry: true)
     {
         var names = fileNames.ToArray();
         FileNames = names;

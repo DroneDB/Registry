@@ -1,0 +1,14 @@
+{
+  "request": "POST /users/authenticate",
+  "caller": "anonymous",
+  "status": 429,
+  "contentType": "application/problem+json",
+  "bodyKind": "json",
+  "body": {
+    "title": "Too Many Requests",
+    "status": 429,
+    "detail": "Too many sign-in attempts, try again later",
+    "traceId": "<trace-id>",
+    "noRetry": false
+  }
+}

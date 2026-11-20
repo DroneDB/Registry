@@ -1,0 +1,20 @@
+{
+  "request": "GET /orgs/public",
+  "caller": "anonymous",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": [
+    {
+      "slug": "public",
+      "name": "Public",
+      "description": "Organization",
+      "creationDate": "<datetime:Z>",
+      "owner": null,
+      "isPublic": true,
+      "datasetCount": null,
+      "lastModified": null,
+      "permissions": null
+    }
+  ]
+}

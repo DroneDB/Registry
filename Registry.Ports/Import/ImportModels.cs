@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Ports.Import;
 
 /// <summary>
@@ -10,13 +9,17 @@ namespace Registry.Ports.Import;
 /// <param name="Message">Human-readable status or error message.</param>
 /// <param name="EstimatedBytes">Total size estimate when it can be obtained cheaply, otherwise null.</param>
 /// <param name="FileCount">Number of files discovered, when known.</param>
-/// <param name="SuggestedName">A suggested dataset name (e.g. the remote dataset slug), when available.</param>
+/// <param name="SuggestedName">A suggested dataset name (the display name of the remote dataset, else its slug), when available.</param>
+/// <param name="SuggestedTagline">A suggested dataset tagline (the tagline of the remote dataset), when it has one.</param>
+/// <param name="SuggestedSlug">A suggested dataset slug (the slug of the remote dataset) when it is better than the slug of the name, else null.</param>
 public sealed record ImportSourceProbe(
     bool Reachable,
     string? Message,
     long? EstimatedBytes,
     int? FileCount,
-    string? SuggestedName);
+    string? SuggestedName,
+    string? SuggestedTagline = null,
+    string? SuggestedSlug = null);
 
 /// <summary>
 /// Incremental progress emitted by an import source during <see cref="IImportSource.FetchAsync"/>.

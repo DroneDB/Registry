@@ -1,6 +1,5 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
-using Registry.Common.Model;
 using Registry.Ports.DroneDB;
 
 namespace Registry.Web.Data.Models;
@@ -16,11 +15,11 @@ public class Entry
 
     /// <summary>File path within the dataset.</summary>
     [Required]
-    public string Path { get; set; }
+    public string Path { get; set; } = null!;
 
     /// <summary>Content hash of the uploaded file.</summary>
     [Required]
-    public string Hash { get; set; }
+    public string Hash { get; set; } = null!;
 
     /// <summary>DroneDB entry type (image, video, pointcloud, etc.).</summary>
     [Required]
@@ -34,7 +33,13 @@ public class Entry
     [Required]
     public DateTime AddedOn { get; set; }
 
+    /// <summary>
+    /// The path was indexed in the dataset before the batch wrote it (the batch replaced a file): a rollback of the
+    /// batch keeps it (FR-XC-27). False for an entry recorded before the column existed.
+    /// </summary>
+    public bool Replaced { get; set; }
+
     /// <summary>Parent batch this entry belongs to.</summary>
     [Required]
-    public Batch Batch { get; set; }
+    public Batch Batch { get; set; } = null!;
 }

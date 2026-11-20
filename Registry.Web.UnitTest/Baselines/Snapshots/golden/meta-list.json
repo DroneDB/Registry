@@ -1,0 +1,24 @@
+{
+  "request": "GET /orgs/golden-org/ds/golden-ds/meta/list",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": [
+    {
+      "count": 1,
+      "key": "name",
+      "path": ""
+    },
+    {
+      "count": 2,
+      "key": "tags",
+      "path": ""
+    },
+    {
+      "count": 1,
+      "key": "annotation",
+      "path": "sub/img.jpg"
+    }
+  ]
+}

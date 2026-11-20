@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.DTO;
 
@@ -10,7 +10,7 @@ public class RemoveResponse
     /// <summary>
     /// The number of items that were removed.
     /// </summary>
-    [JsonProperty("removed")]
+    [JsonPropertyName("removed")]
     public int Removed { get; set; }
 
     public RemoveResponse()

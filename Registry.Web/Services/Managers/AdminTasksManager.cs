@@ -1,18 +1,20 @@
-#nullable enable
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Registry.Ports;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Adapters;
+using Registry.Web.Services.HeavyTasks;
+using Registry.Web.Services.PlatformTasks;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Managers;
@@ -22,69 +24,112 @@ namespace Registry.Web.Services.Managers;
 /// existing JobIndex query layer and resolves task owner identities across the
 /// Identity DbContext (no cross-context SQL join).
 /// </summary>
-public sealed class AdminTasksManager : IAdminTasksManager
+public sealed class AdminTasksManager
 {
     private readonly IJobIndexQuery _query;
     private readonly IJobIndexWriter _writer;
-    private readonly IAuthManager _authManager;
     private readonly UserManager<User> _userManager;
     private readonly int _artifactTtlHours;
     private readonly string _tempPath;
+    private readonly IFileSystem _fs;
+    private readonly BuildTaskWaits _waits;
 
     public AdminTasksManager(
         IJobIndexQuery query,
         IJobIndexWriter writer,
-        IAuthManager authManager,
         UserManager<User> userManager,
-        IOptions<AppSettings> appSettings)
+        IOptions<ProcessingPlatformSettings> platformSettings,
+        ScratchFileProvider scratch,
+        IFileSystem fs,
+        BuildTaskWaits waits)
     {
         _query = query;
         _writer = writer;
-        _authManager = authManager;
         _userManager = userManager;
-        _artifactTtlHours = (appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings()).ArtifactTtlHours;
-        _tempPath = appSettings.Value.TempPath ?? Path.Combine(Path.GetTempPath(), "registry");
+        _artifactTtlHours = platformSettings.Value.ArtifactTtlHours;
+        _tempPath = scratch.Root;
+        _fs = fs;
+        _waits = waits;
     }
 
+    /// <summary>
+    /// Deletes a single terminal (Succeeded/Failed/Deleted) job from the JobIndex table
+    /// and purges any associated artifacts. Admin-only.
+    /// </summary>
     public async Task<bool> DeleteTaskAsync(string jobId, CancellationToken ct = default)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can delete tasks from the global list");
-
         // Writer performs the direct lookup and terminal-state check
         var (deleted, _, _) = await _writer.DeleteTerminalJobByIdAsync(jobId, ct);
         if (!deleted)
             return false;
 
         // Best-effort artifact cleanup
-        TaskJobHelpers.TryDeleteArtifacts(jobId, _tempPath);
+        TaskJobHelpers.DeleteArtifacts(_fs, jobId, _tempPath);
 
         return true;
     }
 
+    /// <summary>The wire names of the sortable columns of the list (FR-PRC-28), the whitelist of <c>sortField</c>.</summary>
+    private static readonly (string Name, JobIndexSortField Field)[] SortFields =
+    [
+        ("createdAt", JobIndexSortField.CreatedAt),
+        ("state", JobIndexSortField.State),
+        ("toolId", JobIndexSortField.ToolId)
+    ];
+
+    /// <summary>
+    /// Lists the tasks of every dataset, one page at a time. <paramref name="sortField"/> is one of
+    /// <c>createdAt</c> (default), <c>state</c>, <c>toolId</c>; <paramref name="sortOrder"/> is <c>asc</c> or
+    /// <c>desc</c> (default); an empty value is the default, any other value is a 400 that names the field.
+    /// </summary>
     public async Task<AdminTaskListDto> ListAsync(string? toolId, string? state, string? userId,
-        int skip, int take, CancellationToken ct = default)
+        int skip, int take, string? sortField = null, string? sortOrder = null, CancellationToken ct = default)
     {
-        if (!await _authManager.IsUserAdmin())
-            throw new UnauthorizedException("Only admins can list all tasks");
+        var field = ParseSortField(sortField);
+        var order = ParseSortOrder(sortOrder);
 
         take = Math.Clamp(take, 1, 200);
         skip = Math.Max(0, skip);
 
-        var filter = new JobIndexGlobalQueryFilter(toolId, state, userId, skip, take);
+        var filter = new JobIndexGlobalQueryFilter(toolId, state, userId, skip, take, field, order);
 
         // Sequential: both queries share the same (non-thread-safe) RegistryContext.
         var rows = await _query.QueryGlobalAsync(filter, ct);
         var total = await _query.CountGlobalAsync(toolId, state, userId, ct);
 
         var ownerNames = await ResolveOwnerNamesAsync(rows, ct);
+        var waits = await _waits.FindAsync(rows, ct);
 
-        var items = rows.Select(j => ToSummary(j, ownerNames)).ToArray();
+        var items = rows.Select(j => ToSummary(j, ownerNames, waits.MissingFilesOf(j.JobId))).ToArray();
         return new AdminTaskListDto(items, total, skip, take);
     }
 
+    private static JobIndexSortField ParseSortField(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return JobIndexSortField.CreatedAt;
+
+        foreach (var (name, field) in SortFields)
+            if (string.Equals(name, value, StringComparison.OrdinalIgnoreCase))
+                return field;
+
+        var allowed = string.Join(", ", SortFields.Select(f => f.Name));
+        throw FieldRefusal("sortField", $"'{value}' is not a sortable column. Use one of: {allowed}.");
+    }
+
+    private static JobIndexSortOrder ParseSortOrder(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return JobIndexSortOrder.Descending;
+        if (string.Equals(value, "asc", StringComparison.OrdinalIgnoreCase)) return JobIndexSortOrder.Ascending;
+        if (string.Equals(value, "desc", StringComparison.OrdinalIgnoreCase)) return JobIndexSortOrder.Descending;
+
+        throw FieldRefusal("sortOrder", $"'{value}' is not a sort order. Use one of: asc, desc.");
+    }
+
+    private static BadRequestException FieldRefusal(string field, string message) =>
+        new(message) { FieldErrors = new Dictionary<string, string[]> { [field] = [message] } };
+
     /// <summary>
-    /// Batch-resolves userId → userName for the current page. JobIndex lives in
+    /// Batch-resolves userId → userName for the current page: the owners and the users who cancelled a task (D-038). JobIndex lives in
     /// RegistryContext while users live in the Identity DbContext, so we collect the
     /// distinct ids and look them up via the Identity store (no cross-context join).
     /// </summary>
@@ -92,8 +137,9 @@ public sealed class AdminTasksManager : IAdminTasksManager
         IReadOnlyCollection<JobIndex> rows, CancellationToken ct)
     {
         var ids = rows
-            .Where(r => !string.IsNullOrEmpty(r.UserId))
-            .Select(r => r.UserId!)
+            .SelectMany(r => new[] { r.UserId, r.CancelledBy })
+            .Where(id => !string.IsNullOrEmpty(id))
+            .Select(id => id!)
             .Distinct()
             .ToArray();
 
@@ -111,15 +157,24 @@ public sealed class AdminTasksManager : IAdminTasksManager
         return map;
     }
 
-    private AdminTaskSummaryDto ToSummary(JobIndex j, IReadOnlyDictionary<string, string> ownerNames)
+    private AdminTaskSummaryDto ToSummary(JobIndex j, Dictionary<string, string> ownerNames,
+        IReadOnlyList<string>? missingFiles)
     {
         string? owner = null;
         if (!string.IsNullOrEmpty(j.UserId) && ownerNames.TryGetValue(j.UserId, out var name))
             owner = name;
 
+        string? cancelledBy = null;
+        if (j.CancelledBy is not null)
+            cancelledBy = ownerNames.GetValueOrDefault(j.CancelledBy, j.CancelledBy);
+
+        // An admin may do with every task what its state allows (D-024)
         return new AdminTaskSummaryDto(
             j.JobId, j.OrgSlug, j.DsSlug, j.ToolId, j.ToolVersion, j.CurrentState,
             j.ProgressPercent, j.PhaseMessage, j.CreatedAtUtc, j.ProcessingAtUtc, TaskJobHelpers.FinishedAt(j),
-            j.Path, j.UserId, owner, j.ErrorType, TaskJobHelpers.ArtifactExpiresAt(j, _artifactTtlHours));
+            j.Path, j.UserId, owner, j.ErrorType, j.ErrorMessage, TaskJobHelpers.ArtifactExpiresAt(j, _artifactTtlHours),
+            missingFiles != null, missingFiles, j.TargetLabel,
+            TaskActions.For(j.CurrentState, mayTouch: true, canWrite: true, TaskWriteRecord.IsCommitted(j.WriteRecordJson)),
+            j.WaitingForNode, cancelledBy);
     }
 }

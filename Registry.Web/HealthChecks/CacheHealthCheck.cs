@@ -1,13 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Registry.Web.Services.Adapters;
 
 namespace Registry.Web.HealthChecks;
 
@@ -24,7 +20,8 @@ public class CacheHealthCheck : IHealthCheck
     {
         var testKey = Guid.NewGuid().ToString();
 
-        var data = new Dictionary<string, object> { { "TestKey", testKey }, { "Provider", _cache.GetType().FullName } };
+        // The runtime type of an object always has a full name (only generic parameters have none)
+        var data = new Dictionary<string, object> { { "TestKey", testKey }, { "Provider", _cache.GetType().FullName! } };
 
         try
         {
