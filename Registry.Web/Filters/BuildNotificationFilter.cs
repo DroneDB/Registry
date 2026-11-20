@@ -5,28 +5,31 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.BuildNotifications;
+using Registry.Web.Services.Builds;
 
 namespace Registry.Web.Filters;
 
 /// <summary>
-/// Hangfire state filter that reports a finished entry build (<see cref="FinishedBuildJob"/>: a build, a background
-/// rebuild, a build task) to its requester's build notifications, on the host that applies the state. Whether the end is
-/// final is libddb's answer about the entry (<see cref="FinishedBuildReporter"/>); this filter changes nothing that
-/// answer or the other filters read. A failed entry build that is run again (a user's retry keeps the job id) starts a new
-/// request (<see cref="FinishedBuildReporter.ReportRunAgainAsync"/>), so the end of that run is told even when it is the
-/// outcome already sent.
+/// Hangfire state filter that hands a finished entry build (<see cref="FinishedBuildJob"/>: a build, a background
+/// rebuild, a build task) to <see cref="FinishedBuildHandler"/>, on the host that applies the state: its requester's
+/// build notifications get the outcome, and a build that still waits for files keeps one task. Whether the end is
+/// final is libddb's answer about the entry; this filter changes nothing that answer or the other filters read. A
+/// failed entry build that is run again (a user's retry keeps the job id) starts a new request
+/// (<see cref="FinishedBuildHandler.RunAgainAsync"/>), so the end of that run is told even when it is the outcome
+/// already sent.
 /// </summary>
 /// <remarks>
-/// Installed after <see cref="JobIndexStateFilter"/>: who asked is read from the job index, whose row of this job then
-/// holds its final state. The pending builds whose retries run out are reported by <see cref="BuildRetrySchedulerFilter"/>,
-/// which is where the retry budget is decided; a failure this filter sees with a pending marker left is theirs.
+/// Installed after <see cref="JobIndexStateFilter"/>: who asked and which builds of the entry ended before are read from
+/// the job index, whose row of this job then holds its final state. The pending builds whose retries run out are
+/// reported by <see cref="BuildRetrySchedulerFilter"/>, which is where the retry budget is decided; a failure this filter
+/// sees with a pending marker left is theirs.
 /// </remarks>
 public sealed class BuildNotificationFilter(
     IServiceScopeFactory scopes,
     ILogger<BuildNotificationFilter> log) : IApplyStateFilter
 {
     public void OnStateApplied(ApplyStateContext context, IWriteOnlyTransaction transaction) =>
-        StateFilterGuard.Run(log, context, "reporting the build notification", () =>
+        StateFilterGuard.Run(log, context, "handling the end of the build", () =>
         {
             var runAgain = IsRunAgainFromFailure(context);
             var build = runAgain ? null : FinishedBuildJob.Of(context.BackgroundJob, context.NewState, context.Connection);
@@ -34,10 +37,10 @@ public sealed class BuildNotificationFilter(
                 return;
 
             using var scope = scopes.CreateScope();
-            var reporter = scope.ServiceProvider.GetRequiredService<FinishedBuildReporter>();
+            var builds = scope.ServiceProvider.GetRequiredService<FinishedBuildHandler>();
             (build == null
-                    ? reporter.ReportRunAgainAsync(context.BackgroundJob.Id, CancellationToken.None)
-                    : reporter.ReportAsync(build, CancellationToken.None))
+                    ? builds.RunAgainAsync(context.BackgroundJob.Id, CancellationToken.None)
+                    : builds.EndedAsync(build, CancellationToken.None))
                 .GetAwaiter().GetResult();
         });
 

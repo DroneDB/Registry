@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.BuildNotifications;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.TaskNotifications;
 
@@ -32,6 +33,8 @@ public static class BuildNotificationServiceCollectionExtensions
         services.AddScoped<BuildNotificationDigests>();
         services.AddScoped<IBuildNotificationRecorder, BuildNotificationRecorder>();
         services.AddScoped<FinishedBuildReporter>();
+        // The end of an entry build: its notification, and one task for a build that waits for files
+        services.AddScoped<FinishedBuildHandler>();
         services.AddScoped<BuildNotificationCleanup>();
 
         // The e-mail about a heavy task that ended (FR-PRC-40)

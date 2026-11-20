@@ -52,6 +52,7 @@ public class ArtifactCompletenessCheckerService
     private readonly IDdbManager _ddbManager;
     private readonly BuildScheduler _builds;
     private readonly IJobIndexQuery _jobIndex;
+    private readonly IJobIndexWriter _jobIndexWriter;
     private readonly ILogger<ArtifactCompletenessCheckerService> _logger;
 
     public ArtifactCompletenessCheckerService(
@@ -60,6 +61,7 @@ public class ArtifactCompletenessCheckerService
         IDdbManager ddbManager,
         BuildScheduler builds,
         IJobIndexQuery jobIndex,
+        IJobIndexWriter jobIndexWriter,
         ILogger<ArtifactCompletenessCheckerService> logger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
@@ -67,6 +69,7 @@ public class ArtifactCompletenessCheckerService
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _builds = builds ?? throw new ArgumentNullException(nameof(builds));
         _jobIndex = jobIndex ?? throw new ArgumentNullException(nameof(jobIndex));
+        _jobIndexWriter = jobIndexWriter ?? throw new ArgumentNullException(nameof(jobIndexWriter));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -92,13 +95,18 @@ public class ArtifactCompletenessCheckerService
                     stats.SkippedNotBuildable + stats.SkippedActive + stats.SkippedComplete + stats.SkippedPending +
                     stats.SkippedBackoff,
                     stats.Queued);
+            if (stats.WaitingTasksRemoved > 0)
+                console.Info("{Dataset}: removed {Removed} task(s) of earlier attempts of builds that wait for files",
+                    ds.Key, stats.WaitingTasksRemoved);
         }, cancellationToken);
 
         console.Info("Artifact completeness check completed: {Succeeded}/{Datasets} datasets, scanned {Scanned} entries " +
                      "(not buildable: {NotBuildable}, active: {Active}, complete: {Complete}, pending: {Pending}, " +
-                     "backing off after failures: {Backoff}), queued {Queued} rebuild(s), {Failed} dataset failure(s)",
+                     "backing off after failures: {Backoff}), queued {Queued} rebuild(s), removed {WaitingTasks} task(s) " +
+                     "of earlier attempts of builds that wait for files, {Failed} dataset failure(s)",
             result.Succeeded, result.Datasets, totals.Scanned, totals.SkippedNotBuildable, totals.SkippedActive,
-            totals.SkippedComplete, totals.SkippedPending, totals.SkippedBackoff, totals.Queued, result.Failed);
+            totals.SkippedComplete, totals.SkippedPending, totals.SkippedBackoff, totals.Queued,
+            totals.WaitingTasksRemoved, result.Failed);
     }
 
     /// <summary>
@@ -139,6 +147,7 @@ public class ArtifactCompletenessCheckerService
         var entries = ddb.FindSummaries(EntryQuery.All);
         var candidates = new List<EntrySummary>();
         var inBackground = new HashSet<string>(StringComparer.Ordinal);
+        var awaitingFiles = new List<EntrySummary>();
         var builds = GetBuilds(ddb, entries, key);
 
         foreach (var entry in entries)
@@ -167,6 +176,8 @@ public class ArtifactCompletenessCheckerService
                         continue;
                     case BuildState.Pending:
                         stats.SkippedPending++;
+                        if (build.AwaitingFiles)
+                            awaitingFiles.Add(entry);
                         continue;
                     case BuildState.Complete:
                         stats.SkippedComplete++;
@@ -184,6 +195,8 @@ public class ArtifactCompletenessCheckerService
                     key, entry.Path);
             }
         }
+
+        stats.WaitingTasksRemoved = await KeepOneWaitingTaskAsync(orgSlug, dsSlug, awaitingFiles, ct);
 
         if (candidates.Count == 0)
             return stats;
@@ -314,6 +327,30 @@ public class ArtifactCompletenessCheckerService
         return result;
     }
 
+    /// <summary>
+    /// An entry that waits for files keeps one task: the builds of it that ran before the files arrived each ended
+    /// succeeded without building (libddb defers such a build with a normal return), and the newest of them is the
+    /// task the lists show waiting (<see cref="IJobIndexWriter.DeleteEarlierSucceededBuildsAsync"/>). The end of a
+    /// build removes the earlier ones itself; this sweep does it for the tasks of earlier releases and for an end
+    /// that was missed.
+    /// </summary>
+    /// <returns>How many tasks were removed.</returns>
+    private async Task<int> KeepOneWaitingTaskAsync(string orgSlug, string dsSlug,
+        IReadOnlyList<EntrySummary> awaitingFiles, CancellationToken ct)
+    {
+        var removed = 0;
+        foreach (var entry in awaitingFiles)
+        {
+            // An entry without a hash names no content: its tasks are left alone
+            if (string.IsNullOrEmpty(entry.Hash))
+                continue;
+
+            removed += await _jobIndexWriter.DeleteEarlierSucceededBuildsAsync(orgSlug, dsSlug, entry.Path, entry.Hash, ct);
+        }
+
+        return removed;
+    }
+
     private sealed class DatasetStats
     {
         public int Scanned;
@@ -323,6 +360,7 @@ public class ArtifactCompletenessCheckerService
         public int SkippedPending;
         public int SkippedBackoff;
         public int Queued;
+        public int WaitingTasksRemoved;
     }
 
     private sealed class Totals
@@ -334,6 +372,7 @@ public class ArtifactCompletenessCheckerService
         public int SkippedPending;
         public int SkippedBackoff;
         public int Queued;
+        public int WaitingTasksRemoved;
 
         public void Add(DatasetStats s)
         {
@@ -344,6 +383,7 @@ public class ArtifactCompletenessCheckerService
             SkippedPending += s.SkippedPending;
             SkippedBackoff += s.SkippedBackoff;
             Queued += s.Queued;
+            WaitingTasksRemoved += s.WaitingTasksRemoved;
         }
     }
 }

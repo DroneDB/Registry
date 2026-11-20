@@ -1,11 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
@@ -13,61 +10,46 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.BuildNotifications;
 
 /// <summary>
-/// Turns the ends of builds into build notifications: a finished entry build job (<see cref="FinishedBuildJob"/>), judged
-/// against libddb's view of the entry (<see cref="IBuildOutcomeClassifier"/>: built, failed for good, or waiting for
-/// files it names), and the pending builds whose automatic retries ran out, which failed for good. Both go to <see cref="IBuildNotificationRecorder"/>.
+/// Turns the ends of builds into build notifications: a finished entry build job (<see cref="FinishedBuildJob"/>) with
+/// libddb's verdict about its entry (<see cref="ClassifiedBuild"/>: built, failed for good, or waiting for files it
+/// names), and the pending builds whose automatic retries ran out, which failed for good. Both go to <see cref="IBuildNotificationRecorder"/>.
 /// </summary>
 public sealed class FinishedBuildReporter
 {
     private readonly IEmailService _email;
-    private readonly DatasetSweep _datasets;
-    private readonly IDdbManager _ddbManager;
-    private readonly IBuildOutcomeClassifier _classifier;
     private readonly IBuildNotificationRecorder _recorder;
     private readonly BuildNotificationOutbox _outbox;
-    private readonly ILogger<FinishedBuildReporter> _logger;
 
-    public FinishedBuildReporter(IEmailService email, DatasetSweep datasets, IDdbManager ddbManager,
-        IBuildOutcomeClassifier classifier, IBuildNotificationRecorder recorder, BuildNotificationOutbox outbox,
-        ILogger<FinishedBuildReporter> logger)
+    public FinishedBuildReporter(IEmailService email, IBuildNotificationRecorder recorder, BuildNotificationOutbox outbox)
     {
         _email = email ?? throw new ArgumentNullException(nameof(email));
-        _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
-        _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
-        _classifier = classifier ?? throw new ArgumentNullException(nameof(classifier));
         _recorder = recorder ?? throw new ArgumentNullException(nameof(recorder));
         _outbox = outbox ?? throw new ArgumentNullException(nameof(outbox));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <summary>Reports <paramref name="build"/> when its end is the final outcome of the entry's build.</summary>
-    public async Task ReportAsync(FinishedBuildJob build, CancellationToken ct)
+    /// <summary>Whether an end is reported at all: without e-mail the recorder would drop it.</summary>
+    public bool IsEnabled => _email.IsEnabled;
+
+    /// <summary>
+    /// Reports <paramref name="build"/>, whose end is the final outcome <paramref name="classified"/> of the entry's
+    /// build. <paramref name="datasetFolder"/> is the folder of the dataset, which the message of a failure never shows.
+    /// </summary>
+    public async Task ReportAsync(FinishedBuildJob build, ClassifiedBuild classified, string datasetFolder,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(build);
+        ArgumentNullException.ThrowIfNull(classified);
 
-        // The recorder would drop it anyway: spare the dataset lookup and the native calls
-        if (!_email.IsEnabled)
+        if (!IsEnabled)
             return;
-
-        var ddb = await OpenAsync(build.OrgSlug, build.DsSlug).ConfigureAwait(false);
-        if (ddb == null)
-            return;
-
-        var classified = _classifier.Classify(ddb, build.Path, build.Hash, build.Succeeded);
-        if (classified == null)
-        {
-            _logger.LogDebug("Build job {JobId} of {Org}/{Ds}/{Path} did not end the build: no notification",
-                build.JobId, build.OrgSlug, build.DsSlug, build.Path);
-            return;
-        }
 
         var error = classified.Outcome switch
         {
-            BuildOutcome.Failed => BuildReport.ShortError(JobLogText.UserMessage(build.Failure, ddb.DatasetFolderPath),
-                ddb.DatasetFolderPath),
+            BuildOutcome.Failed => BuildReport.ShortError(JobLogText.UserMessage(build.Failure, datasetFolder),
+                datasetFolder),
             // libddb names the missing files relative to the dataset
             BuildOutcome.WaitingForFiles => BuildReport.ShortError(string.Join(", ", classified.MissingFiles),
-                ddb.DatasetFolderPath),
+                datasetFolder),
             _ => null
         };
         await _recorder.RecordAsync(new BuildReport(build.OrgSlug, build.DsSlug, build.Path, classified.Hash,
@@ -91,7 +73,7 @@ public sealed class FinishedBuildReporter
     {
         ArgumentNullException.ThrowIfNull(pending);
 
-        if (!_email.IsEnabled)
+        if (!IsEnabled)
             return;
 
         foreach (var entry in pending.Where(p => !string.IsNullOrWhiteSpace(p.Path) && !string.IsNullOrWhiteSpace(p.Hash)))
@@ -107,21 +89,4 @@ public sealed class FinishedBuildReporter
         BuildReport.ShortError(entry.MissingDependencies is { Length: > 0 } missing
             ? $"Not built after the automatic retries; missing: {string.Join(", ", missing)}"
             : "Not built after the automatic retries", null)!;
-
-    private async Task<IDDB?> OpenAsync(string orgSlug, string dsSlug)
-    {
-        var dataset = await _datasets.FindAsync(orgSlug, dsSlug).ConfigureAwait(false);
-        if (dataset?.Organization == null)
-            return null;
-
-        try
-        {
-            return _ddbManager.Open(orgSlug, dataset.InternalRef);
-        }
-        catch (DirectoryNotFoundException)
-        {
-            // Deleted since: nobody is told about its builds
-            return null;
-        }
-    }
 }

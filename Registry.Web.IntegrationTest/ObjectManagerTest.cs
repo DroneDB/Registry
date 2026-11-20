@@ -1961,4 +1961,87 @@ public class ObjectManagerTest : TestBase
     }
 
     #endregion
+
+    #region Build of an entry that waits for files
+
+    // BuildAsync on "model.obj" with libddb reporting `build` for it; the jobs queued are recorded
+    private (Func<bool, Task> Build, Mock<IBackgroundJobsProcessor> Jobs) BuildOf(RegistryContext context,
+        EntryBuildArtifacts build)
+    {
+        _settingsOptions.Value = TestSettings.Default;
+        _authManagerMock.Setup(o => o.IsUserAdmin()).Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.RequestAccess(It.IsAny<Dataset>(), It.IsAny<AccessType>()))
+            .Returns(Task.FromResult(true));
+        _authManagerMock.Setup(o => o.GetCurrentUser()).Returns(Task.FromResult<User?>(new User
+        {
+            Id = Guid.NewGuid().ToString(), UserName = "admin", Email = "admin@test.com"
+        }));
+
+        var ddbMock = new Mock<IDDB>();
+        ddbMock.Setup(x => x.GetEntry(It.IsAny<string>()))
+            .Returns(new Registry.Ports.DroneDB.Entry { Path = "model.obj", Type = EntryType.Model, Hash = "abc123" });
+        ddbMock.SetupBuilds(build);
+        ddbMock.Setup(x => x.Meta).Returns(new MockMeta());
+        _ddbFactoryMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddbMock.Object);
+
+        var webUtils = TestPorts.All(context, TestSettings.Options<AccountOptions>(_settingsOptions),
+            TestSettings.Options<HttpHostOptions>(_settingsOptions), _httpContextAccessorMock.Object,
+            TestCaches.Summaries(_ddbFactoryMock.Object));
+        var jobs = new Mock<IBackgroundJobsProcessor>();
+        var objectManager = ObjectsManagerFor(context, webUtils, _ddbFactoryMock.Object)
+            .WithBackgroundJobs(jobs.Object).Build();
+
+        return (force => objectManager.Builds.BuildAsync(MagicStrings.PublicOrganizationSlug,
+            MagicStrings.DefaultDatasetSlug, "model.obj", force: force), jobs);
+    }
+
+    private static int QueuedBuilds(Mock<IBackgroundJobsProcessor> jobs) =>
+        jobs.Invocations.Count(i => i.Method.Name == nameof(IBackgroundJobsProcessor.EnqueueIndexed));
+
+    /// <summary>
+    /// A build of an entry that waits for files builds nothing until a file arrives, which starts it: without force
+    /// it is refused with the files it waits for, and no job is queued (it would only add a task).
+    /// </summary>
+    [TestCase(new[] { "model.mtl" }, "'model.obj' waits for model.mtl: add it to the dataset and the build starts by itself")]
+    [TestCase(new[] { "model.mtl", "textures/wall.png" },
+        "'model.obj' waits for model.mtl, textures/wall.png: add them to the dataset and the build starts by itself")]
+    public async Task Build_EntryThatWaitsForFiles_NoForce_IsRefusedWithTheFiles(string[] missing, string message)
+    {
+        await using var context = GetTest1Context();
+        var (build, jobs) = BuildOf(context,
+            TestBuilds.Pending("/datasets/ds", "model.obj", EntryType.Model, "abc123", missing));
+
+        var ex = await Should.ThrowAsync<ConflictException>(() => build(false));
+
+        ex.Message.ShouldBe(message);
+        QueuedBuilds(jobs).ShouldBe(0);
+    }
+
+    /// <summary>Force builds it all the same: the way out if libddb's marker is ever out of date.</summary>
+    [Test]
+    public async Task Build_EntryThatWaitsForFiles_WithForce_IsQueued()
+    {
+        await using var context = GetTest1Context();
+        var (build, jobs) = BuildOf(context,
+            TestBuilds.Pending("/datasets/ds", "model.obj", EntryType.Model, "abc123", "model.mtl"));
+
+        await build(true);
+
+        QueuedBuilds(jobs).ShouldBe(1);
+    }
+
+    /// <summary>A pending build that awaits no file (a file released its marker, or libddb retries a failure) is built.</summary>
+    [Test]
+    public async Task Build_PendingEntryThatAwaitsNoFile_NoForce_IsQueued()
+    {
+        await using var context = GetTest1Context();
+        var (build, jobs) = BuildOf(context,
+            TestBuilds.Pending("/datasets/ds", "model.obj", EntryType.Model, "abc123"));
+
+        await build(false);
+
+        QueuedBuilds(jobs).ShouldBe(1);
+    }
+
+    #endregion
 }

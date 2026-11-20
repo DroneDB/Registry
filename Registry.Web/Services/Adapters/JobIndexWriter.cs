@@ -438,6 +438,42 @@ public class JobIndexWriter(RegistryContext db, ILogger<JobIndexWriter> log,
         return ids;
     }
 
+    public async Task<int> DeleteEarlierSucceededBuildsAsync(string orgSlug, string dsSlug, string path, string hash,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        ArgumentException.ThrowIfNullOrEmpty(hash);
+
+        var builds = await db.JobIndices.AsNoTracking()
+            .Where(j => j.OrgSlug == orgSlug && j.DsSlug == dsSlug && j.ToolId == HeavyToolIds.Build &&
+                        j.CurrentState == SucceededState.StateName && j.Path == path)
+            .Select(j => new { j.JobId, j.OrgSlug, j.DsSlug, j.Path, j.Hash, j.CreatedAtUtc })
+            .ToListAsync(ct);
+
+        // The dataset and the path as they are named (the MariaDB collation matches "Model.obj" to "model.obj"); the
+        // newest stays
+        var earlier = builds
+            .Where(j => string.Equals(j.OrgSlug, orgSlug, StringComparison.Ordinal) &&
+                        string.Equals(j.DsSlug, dsSlug, StringComparison.Ordinal) &&
+                        string.Equals(j.Path, path, StringComparison.Ordinal) &&
+                        (string.IsNullOrEmpty(j.Hash) || string.Equals(j.Hash, hash, StringComparison.Ordinal)))
+            .OrderByDescending(j => j.CreatedAtUtc).ThenByDescending(j => j.JobId, StringComparer.Ordinal)
+            .Skip(1)
+            .Select(j => j.JobId)
+            .ToArray();
+        if (earlier.Length == 0)
+            return 0;
+
+        // Still succeeded: a job run again meanwhile under the same id is a new attempt
+        var deleted = await db.JobIndices
+            .Where(j => earlier.Contains(j.JobId) && j.CurrentState == SucceededState.StateName)
+            .ExecuteDeleteAsync(ct);
+
+        await InvalidateTasksListCacheAsync(orgSlug, dsSlug, ct);
+
+        return deleted;
+    }
+
     public async Task<(bool deleted, string? orgSlug, string? dsSlug)> DeleteTerminalJobByIdAsync(
         string jobId, CancellationToken ct = default)
     {

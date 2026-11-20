@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
 using Registry.Ports;
@@ -135,6 +136,34 @@ public class TaskWaitingForFilesTests
         _builds.Verify(b => b.GetBuilds(_ddb.Object,
             It.Is<IReadOnlyList<string>>(p => p.Count == 2 && p.Contains(Model) && p.Contains("ortho.tif"))), Times.Once);
         _ddb.Verify(d => d.GetPendingBuildInfo(), Times.Once);
+    }
+
+    /// <summary>
+    /// Every attempt to build the model before its .mtl arrives ends succeeded without building, and each of them
+    /// matches the wait of the entry. The end of an attempt (and the completeness sweep, for earlier ones) leaves the
+    /// newest in the job index, so the list shows one task that waits.
+    /// </summary>
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task List_AfterTheEarlierAttemptsAreRemoved_OneTaskWaitsForTheModel(bool canonical)
+    {
+        ModelWaitsForItsMtl();
+        AddTask("first", Model, minutesAgo: 120);
+        AddTask("retried", Model, minutesAgo: 60);
+        AddTask("latest", Model);
+        AddTask("task-without-hash", Model, hash: null, minutesAgo: 30);
+        (await ListAsync(canonical)).Count(t => t.WaitingForFiles).ShouldBe(4);
+        _db.ChangeTracker.Clear();
+
+        var removed = await new JobIndexWriter(_db, NullLogger<JobIndexWriter>.Instance, Mock.Of<IRecordCache>())
+            .DeleteEarlierSucceededBuildsAsync("org", "ds", Model, ModelHash);
+
+        removed.ShouldBe(3);
+        var page = await ListAsync(canonical);
+        page.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
+            t => t.TaskId.ShouldBe("latest"),
+            t => t.WaitingForFiles.ShouldBeTrue(),
+            t => t.MissingFiles.ShouldBe([Mtl]));
     }
 
     // FR-PRC-23 (D-020): the same .obj in two folders has two markers; each task waits for the .mtl of its own folder

@@ -74,6 +74,17 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
         return result;
     }
 
+    public async Task<bool> HasSeveralSucceededJobsAsync(string orgSlug, string dsSlug, string toolId, string path,
+        CancellationToken ct = default) =>
+        await db.JobIndices
+            .AsNoTracking()
+            .Where(x => x.OrgSlug == orgSlug && x.DsSlug == dsSlug && x.ToolId == toolId && x.Path == path &&
+                        x.CurrentState == SucceededStateName)
+            .Take(2)
+            .CountAsync(ct) > 1;
+
+    private const string SucceededStateName = "Succeeded";
+
     public async Task<JobIndex?> GetByJobIdAsync(string orgSlug, string dsSlug, string jobId, CancellationToken ct = default)
         => await db.JobIndices
             .AsNoTracking()
@@ -185,7 +196,7 @@ public class JobIndexQuery(RegistryContext db) : IJobIndexQuery
 
         return await SameRequest(orgSlug, dsSlug, toolId, requestHash, ownedBy)
             .Where(x => ActiveStates.Contains(x.CurrentState)
-                        || (x.CurrentState == "Succeeded" && x.CreatedAtUtc >= cutoff))
+                        || (x.CurrentState == SucceededStateName && x.CreatedAtUtc >= cutoff))
             .OrderByDescending(x => x.CreatedAtUtc)
             .FirstOrDefaultAsync(ct);
     }

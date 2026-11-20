@@ -15,6 +15,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Caching;
 using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Shouldly;
@@ -40,7 +41,8 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
 
     private ArtifactCompletenessCheckerService Service(RegistryContext context, IJobIndexQuery? jobIndex = null) =>
         new(context, new DatasetSweep(context), _ddbManagerMock.Object, TestJobs.Scheduler(_backgroundJobMock.Object),
-            jobIndex ?? new JobIndexQuery(context), _logger);
+            jobIndex ?? new JobIndexQuery(context),
+            new JobIndexWriter(context, CreateTestLogger<JobIndexWriter>(), Mock.Of<IRecordCache>()), _logger);
 
     [Test]
     public async Task CheckAndQueueAsync_EmptyDatabase_DoesNothing()
@@ -339,6 +341,70 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
             .CheckAndQueueAsync(null, CancellationToken.None);
 
         EnqueuedCount().ShouldBe(0);
+    }
+
+    // ---- an entry that waits for files keeps one task ----
+
+    private static string[] BuildJobs(RegistryContext context, string path) =>
+        context.JobIndices.AsNoTracking().Where(j => j.Path == path).OrderBy(j => j.CreatedAtUtc)
+            .Select(j => new { j.CurrentState, j.CreatedAtUtc }).ToArray()
+            .Select(j => $"{j.CurrentState}@{j.CreatedAtUtc.Day} {j.CreatedAtUtc.Hour:00}").ToArray();
+
+    private static readonly DateTime Day = new(2026, 10, 26, 0, 0, 0, DateTimeKind.Utc);
+
+    [Test]
+    public async Task CheckAndQueueAsync_EntryThatWaitsForFiles_KeepsTheNewestOfItsAttempts()
+    {
+        await using var context = GetTest1Context();
+        SingleIncompleteEntry("site.dwg", "h1", ["site.prj"]);
+        // Each attempt found the file missing and ended succeeded without building
+        AddBuildJob(context, "site.dwg", "h1", "Succeeded", Day.AddHours(1));
+        AddBuildJob(context, "site.dwg", "h1", "Succeeded", Day.AddHours(3));
+        AddBuildJob(context, "site.dwg", "h1", "Succeeded", Day.AddHours(2));
+        AddBuildJob(context, "site.dwg", "h1", "Failed", Day.AddHours(0));
+        AddBuildJob(context, "site.dwg", "earlier-content", "Succeeded", Day.AddHours(0));
+        AddBuildJob(context, "other.dwg", "h1", "Succeeded", Day.AddHours(1));
+        AddBuildJob(context, "other.dwg", "h1", "Succeeded", Day.AddHours(2));
+        context.ChangeTracker.Clear();
+
+        await Service(context).CheckAndQueueAsync(null, CancellationToken.None);
+
+        BuildJobs(context, "site.dwg").ShouldBe(["Failed@26 00", "Succeeded@26 00", "Succeeded@26 03"]);
+        BuildJobs(context, "other.dwg").ShouldBe(["Succeeded@26 01", "Succeeded@26 02"]);
+        EnqueuedCount().ShouldBe(0);
+    }
+
+    [Test]
+    public async Task CheckAndQueueAsync_PendingEntryThatAwaitsNoFile_KeepsItsTasks()
+    {
+        // A marker a file released, or a failure libddb retries: its builds may have built
+        await using var context = GetTest1Context();
+        SingleIncompleteEntry("site.dwg", "h1", []);
+        AddBuildJob(context, "site.dwg", "h1", "Succeeded", Day.AddHours(1));
+        AddBuildJob(context, "site.dwg", "h1", "Succeeded", Day.AddHours(2));
+        context.ChangeTracker.Clear();
+
+        await Service(context).CheckAndQueueAsync(null, CancellationToken.None);
+
+        BuildJobs(context, "site.dwg").ShouldBe(["Succeeded@26 01", "Succeeded@26 02"]);
+    }
+
+    [Test]
+    public async Task CheckAndQueueAsync_BuiltEntry_KeepsTheTasksOfItsBuilds()
+    {
+        await using var context = GetTest1Context();
+        var ddb = new Mock<IDDB>();
+        ddb.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>()))
+            .Returns([new DdbEntry { Path = "ortho.tif", Hash = "h-ortho.tif" }]);
+        ddb.SetupBuilds(Build("ortho.tif", BuildState.Complete));
+        _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
+        AddBuildJob(context, "ortho.tif", "h-ortho.tif", "Succeeded", Day.AddHours(1));
+        AddBuildJob(context, "ortho.tif", "h-ortho.tif", "Succeeded", Day.AddHours(2));
+        context.ChangeTracker.Clear();
+
+        await Service(context).CheckAndQueueAsync(null, CancellationToken.None);
+
+        BuildJobs(context, "ortho.tif").ShouldBe(["Succeeded@26 01", "Succeeded@26 02"]);
     }
 
     [Test]

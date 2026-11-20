@@ -82,6 +82,7 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/build
   401 application/problem+json ProblemDetails
   403 application/problem+json ProblemDetails
   404 application/problem+json ProblemDetails
+  409 application/problem+json ProblemDetails
 GET /orgs/{orgSlug}/ds/{dsSlug}/build-artifact
   200 application/json string(binary)
   400 application/problem+json ProblemDetails

@@ -36,6 +36,14 @@ public interface IJobIndexQuery
     Task<IReadOnlyDictionary<string, LatestJob>> GetLatestJobsByPathAsync(string orgSlug, string dsSlug, string toolId,
         IReadOnlyCollection<string> paths, CancellationToken ct = default);
 
+    /// <summary>
+    /// Whether <paramref name="path"/> has more than one succeeded job of <paramref name="toolId"/>: a build of it
+    /// ended before the one that just did. The database compares the path (MariaDB ignores its case), so the answer
+    /// may be true for a path that differs by case only: it says whether to look, not what to remove.
+    /// </summary>
+    Task<bool> HasSeveralSucceededJobsAsync(string orgSlug, string dsSlug, string toolId, string path,
+        CancellationToken ct = default);
+
     Task<JobIndex[]> GetByStateAsync(string state, int skip = 0, int take = 1000, CancellationToken ct = default);
 
     /// <summary>Flexible TaskHistory query filtered by tool/state/path/user/workflow.</summary>

@@ -70,6 +70,19 @@ public interface IJobIndexWriter
     Task<IReadOnlyList<string>> DeleteTerminalForDatasetAsync(string orgSlug, string dsSlug,
         string? toolId = null, CancellationToken ct = default);
 
+    /// <summary>
+    /// Leaves one task for the build of an entry that waits for files: of the succeeded build jobs of
+    /// <paramref name="path"/> for the content <paramref name="hash"/> (a job that names no hash is one of them: it
+    /// built the content the entry had), the newest stays and the earlier ones are removed. libddb defers a build
+    /// that finds files missing with a normal return, so each attempt ends succeeded and built nothing; the task
+    /// lists show the one that stays as the task that waits. Call it only while the entry waits for files for that
+    /// content. Jobs that have not ended, failed jobs and the jobs of another path (compared as libddb names it,
+    /// case included) or of other content stay.
+    /// </summary>
+    /// <returns>How many records were removed.</returns>
+    Task<int> DeleteEarlierSucceededBuildsAsync(string orgSlug, string dsSlug, string path, string hash,
+        CancellationToken ct = default);
+
     /// <summary>Updates incremental progress, phase message and truncated log tail for a task.</summary>
     Task UpdateProgressAsync(string jobId, int? percent, string? phaseMessage,
         string? logTailJson, DateTime updatedAtUtc, CancellationToken ct = default);

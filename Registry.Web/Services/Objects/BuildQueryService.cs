@@ -43,8 +43,12 @@ public sealed class BuildQueryService
 
     /// <summary>
     /// Queues a build of <paramref name="path"/> (nothing when it is not buildable); <paramref name="force"/>
-    /// builds again even while a build lock is held (a stale lock of a crashed build).
+    /// builds again even while a build lock is held (a stale lock of a crashed build), or while the entry waits
+    /// for files.
     /// </summary>
+    /// <exception cref="ConflictException">
+    /// Without <paramref name="force"/>: a build of the entry runs, or the entry waits for files (the message names them).
+    /// </exception>
     public async Task BuildAsync(string orgSlug, string dsSlug, string? path, bool force = false,
         CancellationToken ct = default)
     {
@@ -67,9 +71,22 @@ public sealed class BuildQueryService
         if (!force && build.HasLiveBuild())
             throw new ConflictException($"A build is already in progress for '{entry.Path}'");
 
+        // A build that waits for files builds nothing until one of them arrives, which starts it: another one now
+        // would only add a task. Force still builds: the way out if libddb's marker is ever out of date
+        if (!force && build.AwaitsFiles())
+            throw new ConflictException(WaitsForFiles(entry.Path, build.Build?.MissingDependencies ?? []));
+
         var jobId = await _builds.QueueAsync(BuildTarget.Of(access, orgSlug, dsSlug), path, entry.Hash, force);
         _logger.LogInformation("Building '{Path}' asynchronously, background job id is {JobId}", path, jobId);
     }
+
+    // Why the build of an entry that waits for files is refused; libddb names the files relative to the dataset
+    private static string WaitsForFiles(string path, IReadOnlyList<string> missing) => missing.Count switch
+    {
+        0 => $"'{path}' waits for files: add them to the dataset and the build starts by itself",
+        1 => $"'{path}' waits for {missing[0]}: add it to the dataset and the build starts by itself",
+        _ => $"'{path}' waits for {string.Join(", ", missing)}: add them to the dataset and the build starts by itself"
+    };
 
     /// <summary>
     /// The file <paramref name="path"/> of the build <paramref name="hash"/>: its local path and, for a declared

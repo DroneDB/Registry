@@ -143,9 +143,7 @@ internal sealed class NotificationHarness : IDisposable
     public FinishedBuildReporter Reporter()
     {
         var db = _db.NewContext();
-        return new FinishedBuildReporter(Email.Object, new Services.Jobs.DatasetSweep(db), Mock.Of<Registry.Ports.IDdbManager>(),
-            Mock.Of<IBuildOutcomeClassifier>(), Recorder(), new BuildNotificationOutbox(db, Time),
-            NullLogger<FinishedBuildReporter>.Instance);
+        return new FinishedBuildReporter(Email.Object, Recorder(), new BuildNotificationOutbox(db, Time));
     }
 
     /// <summary>Adds the job index row of a build of <paramref name="path"/> that ended <paramref name="minute"/> minutes after now.</summary>

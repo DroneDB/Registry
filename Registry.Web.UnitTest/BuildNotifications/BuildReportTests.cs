@@ -56,17 +56,6 @@ public class BuildReportTests
     public async Task Reporter_AFailedBuild_ReportsTheUserMessage()
     {
         using var db = TestDb.CreateContext<RegistryContext>();
-        var org = Seed.Organization(db, "org");
-        var dataset = Seed.Dataset(db, org, "ds");
-        db.SaveChanges();
-
-        var ddb = new Mock<IDDB>();
-        ddb.SetupGet(d => d.DatasetFolderPath).Returns(Folder);
-        var ddbManager = new Mock<IDdbManager>();
-        ddbManager.Setup(m => m.Open("org", dataset.InternalRef)).Returns(ddb.Object);
-        var classifier = new Mock<IBuildOutcomeClassifier>();
-        classifier.Setup(c => c.Classify(ddb.Object, "ortho.tif", "h", false))
-            .Returns(new ClassifiedBuild(BuildOutcome.Failed, "h"));
         var email = new Mock<IEmailService>();
         email.SetupGet(e => e.IsEnabled).Returns(true);
         BuildReport? reported = null;
@@ -74,14 +63,13 @@ public class BuildReportTests
         recorder.Setup(r => r.RecordAsync(It.IsAny<BuildReport>(), It.IsAny<CancellationToken>()))
             .Callback<BuildReport, CancellationToken>((r, _) => reported = r)
             .Returns(Task.CompletedTask);
-        var reporter = new FinishedBuildReporter(email.Object, new DatasetSweep(db), ddbManager.Object,
-            classifier.Object, recorder.Object, new BuildNotificationOutbox(db, new FakeTime(DateTime.UtcNow)),
-            NullLogger<FinishedBuildReporter>.Instance);
+        var reporter = new FinishedBuildReporter(email.Object, recorder.Object,
+            new BuildNotificationOutbox(db, new FakeTime(DateTime.UtcNow)));
 
         await reporter.ReportAsync(new FinishedBuildJob("j1", "org", "ds", "ortho.tif", "h", "user",
             new InvalidOperationException("Cannot build 'ortho.tif'",
                 new DdbException($"'{Folder}/ortho.tif' not recognized as a supported file format."))),
-            CancellationToken.None);
+            new ClassifiedBuild(BuildOutcome.Failed, "h"), Folder, CancellationToken.None);
 
         reported.ShouldNotBeNull();
         reported.Path.ShouldBe("ortho.tif");

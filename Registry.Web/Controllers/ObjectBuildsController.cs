@@ -46,13 +46,19 @@ public class ObjectBuildsController : ControllerBaseEx
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>
     /// <param name="path">The path to the object to build.</param>
-    /// <param name="force">Whether to force rebuild.</param>
-    /// <returns>Ok on success.</returns>
+    /// <param name="force">
+    /// Whether to force rebuild: also while a build of the object runs, or while the object waits for files.
+    /// </param>
+    /// <returns>
+    /// Ok on success. 409 without <paramref name="force"/> when a build of the object runs, or when the object waits
+    /// for files the dataset lacks (the detail names them: its build starts by itself when they are added).
+    /// </returns>
     [HttpPost("build", Name = nameof(ObjectsController) + "." + nameof(Build))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Build(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,

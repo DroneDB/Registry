@@ -269,6 +269,13 @@ public static class BuildManifestExtensions
     public static bool HasLiveBuild(this EntryBuildArtifacts build) => build.Build?.State == BuildState.Building;
 
     /// <summary>
+    /// The build of the entry waits for files the dataset lacks (<see cref="EntryBuild.AwaitingFiles"/>: the .mtl or a
+    /// texture of an .obj): libddb defers it until a file of one of those names is added, so a build started
+    /// before then builds nothing.
+    /// </summary>
+    public static bool AwaitsFiles(this EntryBuildArtifacts build) => build.Build?.AwaitingFiles == true;
+
+    /// <summary>
     /// The build lists an artifact of an older layout (<see cref="BuildArtifact.Legacy"/>): libddb lists it only
     /// while the current artifact of its role is missing, so the entry is incomplete and a rebuild replaces it.
     /// </summary>

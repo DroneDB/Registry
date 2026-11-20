@@ -9,6 +9,7 @@ using Hangfire.Common;
 using Hangfire.InMemory;
 using Hangfire.States;
 using Hangfire.Storage;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -23,6 +24,8 @@ using Registry.Web.Filters;
 using Registry.Web.Hosting;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.BuildNotifications;
+using Registry.Web.Services.Builds;
+using Registry.Web.Services.Caching;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.Jobs;
@@ -99,6 +102,11 @@ public class BuildNotificationFilterTests
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<BuildNotificationOutbox>();
         services.AddScoped<FinishedBuildReporter>();
+        services.AddSingleton(Mock.Of<IRecordCache>());
+        services.AddSingleton<IJobIndexQuery, JobIndexQuery>();
+        services.AddSingleton<IJobIndexWriter>(p => new JobIndexWriter(_context,
+            NullLogger<JobIndexWriter>.Instance, p.GetRequiredService<IRecordCache>()));
+        services.AddScoped<FinishedBuildHandler>();
         _provider = services.BuildServiceProvider();
         _filter = new BuildNotificationFilter(_provider.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<BuildNotificationFilter>.Instance);
@@ -467,6 +475,121 @@ public class BuildNotificationFilterTests
         Apply(BuildJob(), new DeletedState(), oldState: FailedState.StateName);
 
         (await Outbox().AddAsync(FailedReport(), Requester, CancellationToken.None)).ShouldBeNull();
+    }
+
+    // --- A build that waits for files keeps one task ---
+
+    // The row the job index has for a build job of the entry; JobIndexStateFilter, which runs first, has written the
+    // final state of the job that ends
+    private void Indexed(string jobId, int minutesAgo, string state = "Succeeded", string? hash = Hash)
+    {
+        var at = DateTime.UtcNow.AddMinutes(-minutesAgo);
+        _context.JobIndices.Add(new JobIndex
+        {
+            JobId = jobId, OrgSlug = Org, DsSlug = Ds, Path = Path, Hash = hash, CurrentState = state,
+            UserId = MagicStrings.AutoBuildServiceUserId, CreatedAtUtc = at, LastStateChangeUtc = at
+        });
+        _context.SaveChanges();
+        _context.ChangeTracker.Clear();
+    }
+
+    private string[] IndexedJobs() =>
+        _context.JobIndices.AsNoTracking().Select(j => j.JobId).ToArray().Order(StringComparer.Ordinal).ToArray();
+
+    private void EarlierAttemptsAndThisOne()
+    {
+        Indexed("attempt-1", 180);
+        Indexed("attempt-2", 60);
+        Indexed(JobId, 0);
+    }
+
+    [TestCase(true, TestName = "A build that still waits for files keeps one task, with e-mail on")]
+    [TestCase(false, TestName = "A build that still waits for files keeps one task, with e-mail off")]
+    public void EntryBuild_SucceededStillWaitingForFiles_RemovesTheTasksOfTheEarlierAttempts(bool emailOn)
+    {
+        _email.SetupGet(e => e.IsEnabled).Returns(emailOn);
+        Entry(BuildState.Pending);
+        _ddb.Setup(d => d.GetPendingBuildInfo()).Returns([Waiting()]);
+        EarlierAttemptsAndThisOne();
+
+        Apply(BuildJob(), new SucceededState(null, 0, 0));
+
+        IndexedJobs().ShouldBe([JobId]);
+        // The notification is as before: told when e-mail is on (the outbox tells a wait once)
+        _reports.Select(r => r.Outcome).ShouldBe(emailOn ? [BuildOutcome.WaitingForFiles] : []);
+    }
+
+    [Test]
+    public void BuildTask_SucceededStillWaitingForFiles_RemovesTheEarlierAttempts_ByTheHashOfTheEntry()
+    {
+        Entry(BuildState.Pending);
+        _ddb.Setup(d => d.GetPendingBuildInfo()).Returns([Waiting()]);
+        Indexed("attempt-1", 180);
+        Indexed("task-attempt", 60, hash: null);
+        Indexed(JobId, 0, hash: null);
+
+        // The task carries no hash: the entry's, from libddb
+        Apply(Job.FromExpression<HeavyTaskJobWrapper>(w => w.Run(HeavyToolIds.Build, "1", "{}", null!, CancellationToken.None)),
+            new SucceededState(null, 0, 0), hash: null, path: Path);
+
+        IndexedJobs().ShouldBe([JobId]);
+    }
+
+    [TestCase(true)]
+    [TestCase(false)]
+    public void EntryBuild_SucceededAndBuilt_KeepsTheTasksOfItsEarlierBuilds(bool emailOn)
+    {
+        // A rebuild of a built entry: its earlier builds built it too
+        _email.SetupGet(e => e.IsEnabled).Returns(emailOn);
+        EarlierAttemptsAndThisOne();
+
+        Apply(BuildJob(), new SucceededState(null, 0, 0));
+
+        IndexedJobs().ShouldBe(["attempt-1", "attempt-2", JobId]);
+    }
+
+    [Test]
+    public void EntryBuild_SucceededWithAMarkerAFileAlreadyReleased_KeepsTheEarlierTasks()
+    {
+        // A missing file arrived after the build looked: the entry no longer waits, it builds now
+        Entry(BuildState.Pending);
+        _ddb.Setup(d => d.GetPendingBuildInfo()).Returns([Waiting(awaitingFiles: false)]);
+        EarlierAttemptsAndThisOne();
+
+        Apply(BuildJob(), new SucceededState(null, 0, 0));
+
+        IndexedJobs().ShouldBe(["attempt-1", "attempt-2", JobId]);
+    }
+
+    [Test]
+    public void EntryBuild_Failed_KeepsTheEarlierTasks_AndWithEmailOffAsksLibddbNothing()
+    {
+        _email.SetupGet(e => e.IsEnabled).Returns(false);
+        Entry(BuildState.Pending);
+        _ddb.Setup(d => d.GetPendingBuildInfo()).Returns([Waiting()]);
+        Indexed("attempt-1", 180);
+        Indexed("attempt-2", 60);
+        Indexed(JobId, 0, state: "Failed");
+
+        Apply(BuildJob(), Failed());
+
+        IndexedJobs().ShouldBe(["attempt-1", "attempt-2", JobId]);
+        _builds.Verify(b => b.GetBuild(It.IsAny<IDDB>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
+    public void EmailOff_TheFirstBuildOfAnEntry_AsksLibddbNothing_EvenWhenItWaits()
+    {
+        // Nobody to tell and no earlier task to remove
+        _email.SetupGet(e => e.IsEnabled).Returns(false);
+        Entry(BuildState.Pending);
+        _ddb.Setup(d => d.GetPendingBuildInfo()).Returns([Waiting()]);
+        Indexed(JobId, 0);
+
+        Apply(BuildJob(), new SucceededState(null, 0, 0));
+
+        IndexedJobs().ShouldBe([JobId]);
+        _builds.Verify(b => b.GetBuild(It.IsAny<IDDB>(), It.IsAny<string>()), Times.Never);
     }
 
     // --- Guards ---
