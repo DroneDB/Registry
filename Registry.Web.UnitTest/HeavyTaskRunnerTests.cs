@@ -235,6 +235,63 @@ public class HeavyTaskRunnerTests
             It.IsAny<string>(), It.IsAny<TaskOwnerScope?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // An earlier task queued with requestHash: the index finds it for that hash only
+    private void EarlierTaskOf(string tool, string jobId, string requestHash) =>
+        _index.Setup(q => q.FindDedupCandidateAsync(Org, Ds, tool, requestHash, It.IsAny<int>(),
+                It.IsAny<TaskOwnerScope?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new JobIndex { JobId = jobId, ToolId = tool, CurrentState = "Succeeded" });
+
+    private static HeavyTaskSubmitRequest SubmitOf(string tool, string path) =>
+        new(Org, Ds, tool, null, path, JsonSerializer.SerializeToElement(new { interval = 1 }), false, "user", null);
+
+    [Test]
+    public async Task TheSameRequestForAnotherFile_IsANewTask_TheSameFileGetsTheEarlierTask()
+    {
+        // The contours of dtm.tif, then of dtm.original.tif with the same options: the second got the lines of the first
+        _tools["export"] = new PathTool("export", producesArtifact: true);
+        await Runner().SubmitAsync(SubmitOf("export", "odm_dem/dtm.tif"));
+        EarlierTaskOf("export", "task-1", _enqueued.ShouldHaveSingleItem().RequestHash!);
+
+        var other = await Runner().SubmitAsync(SubmitOf("export", "odm_dem/dtm.original.tif"));
+        var same = await Runner().SubmitAsync(SubmitOf("export", "odm_dem/dtm.tif"));
+
+        other.Deduplicated.ShouldBeFalse();
+        other.TaskId.ShouldBe("task-2");
+        same.Deduplicated.ShouldBeTrue();
+        same.TaskId.ShouldBe("task-1");
+    }
+
+    [Test]
+    public async Task AFileReplacedAtTheSamePath_IsANewTask()
+    {
+        // A file uploaded again at its path within the lookback: its task does not reuse the result of the old content
+        _tools["export"] = new PathTool("export", producesArtifact: true);
+        var ddb = new Mock<IDDB>();
+        ddb.Setup(d => d.GetEntry("dem.tif")).Returns(new Registry.Ports.DroneDB.Entry { Path = "dem.tif", Hash = "old" });
+        _dataset = ddb.Object;
+        await Runner().SubmitAsync(SubmitOf("export", "dem.tif"));
+        EarlierTaskOf("export", "task-1", _enqueued.ShouldHaveSingleItem().RequestHash!);
+
+        ddb.Setup(d => d.GetEntry("dem.tif")).Returns(new Registry.Ports.DroneDB.Entry { Path = "dem.tif", Hash = "new" });
+        var result = await Runner().SubmitAsync(SubmitOf("export", "dem.tif"));
+
+        result.Deduplicated.ShouldBeFalse();
+        result.TaskId.ShouldBe("task-2");
+    }
+
+    [Test]
+    public void TheRequestHash_NamesThePathAndTheContent()
+    {
+        var prms = JsonSerializer.SerializeToElement(new { interval = 1 });
+        var hash = HeavyTaskRequestHash.Compute("raster-contours", "1", "a.tif", "c1", prms);
+
+        HeavyTaskRequestHash.Compute("raster-contours", "1", "b.tif", "c1", prms).ShouldNotBe(hash);
+        HeavyTaskRequestHash.Compute("raster-contours", "1", "a.tif", "c2", prms).ShouldNotBe(hash);
+        HeavyTaskRequestHash.Compute("raster-contours", "1", null, "c1", prms).ShouldNotBe(hash);
+        HeavyTaskRequestHash.Compute("raster-contours", "1", "a.tif", "c1",
+            JsonSerializer.SerializeToElement(new { interval = 1 })).ShouldBe(hash);
+    }
+
     [Test]
     public async Task WithDeduplicationOff_NoTaskIsReused()
     {

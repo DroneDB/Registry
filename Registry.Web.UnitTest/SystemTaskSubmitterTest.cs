@@ -61,7 +61,7 @@ public class SystemTaskSubmitterTest
         _payload.Queue.ShouldBe(JobQueues.Tasks);
         _payload.ToolId.ShouldBe("rescan-index");
         _payload.UserId.ShouldBe("admin");
-        _payload.RequestHash.ShouldBe(HeavyTaskRequestHash.Compute("rescan-index", "1", null, prms));
+        _payload.RequestHash.ShouldBe(HeavyTaskRequestHash.Compute("rescan-index", "1", null, null, prms));
     }
 
     [Test]

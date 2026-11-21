@@ -36,7 +36,7 @@ public sealed class SystemTaskSubmitter : ISystemTaskSubmitter
         // The same task record as a user submit: what the tool writes and the label of its target
         var declared = HeavyToolPaths.Declared(tool, request);
         return _processor.EnqueueHeavyTask(request, userId,
-            requestHash: HeavyTaskRequestHash.Compute(tool.Id, tool.Version, null, prms),
+            requestHash: HeavyTaskRequestHash.Of(request, ddb),
             outputPaths: declared.Outputs, targetLabel: declared.Label, addsDatasetFiles: tool.AddsDatasetFiles);
     }
 }

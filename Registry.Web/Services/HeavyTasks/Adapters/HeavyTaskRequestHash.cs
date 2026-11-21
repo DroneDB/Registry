@@ -4,18 +4,34 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Registry.Ports.DroneDB;
+using Registry.Web.Services.HeavyTasks.Models;
 
 namespace Registry.Web.Services.HeavyTasks.Adapters;
 
 /// <summary>
-/// Stable hash of a heavy-task request (tool, version, entry hash, params with sorted keys),
-/// stored as <c>JobIndex.RequestHash</c> and used to deduplicate submits.
+/// Stable hash of a heavy-task request (tool, version, source path, content hash of the source, params with sorted keys),
+/// stored as <c>JobIndex.RequestHash</c> and used to deduplicate submits. Two submits that differ only by their path
+/// are two requests: the contours or the export of one raster are not those of another raster with the same options.
+/// The content hash makes a file replaced at the same path a new request too, so its task does not reuse the result
+/// of the file it replaced.
 /// </summary>
 public static class HeavyTaskRequestHash
 {
-    public static string Compute(string toolId, string version, string? entryHash, JsonElement prms)
+    /// <summary>
+    /// The hash of <paramref name="request"/>: <paramref name="contentHash"/> when the caller knows the content it
+    /// submits for (a build task), else the hash of the entry at the path of the request (none for a folder, a path
+    /// that is not indexed or a request without path).
+    /// </summary>
+    public static string Of(HeavyToolRequest request, IDDB ddb, string? contentHash = null) =>
+        Compute(request.ToolId, request.Version, request.Path,
+            contentHash ?? (string.IsNullOrEmpty(request.Path) ? null : ddb.GetEntry(request.Path)?.Hash),
+            request.Params);
+
+    public static string Compute(string toolId, string version, string? path, string? contentHash, JsonElement prms)
     {
-        var canonical = $"{toolId}|{version}|{entryHash}|{CanonicalJson(prms)}";
+        // The path is a JSON string, so no path can read as another path followed by a content hash
+        var canonical = $"{toolId}|{version}|{JsonSerializer.Serialize(path)}|{contentHash}|{CanonicalJson(prms)}";
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }

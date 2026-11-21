@@ -95,7 +95,7 @@ public sealed class HeavyTaskRunner : IHeavyTaskRunner
         }
 
         var plan = tool.Plan(toolRequest, validationCtx);
-        var requestHash = HeavyTaskRequestHash.Compute(tool.Id, tool.Version, request.Hash, request.Params);
+        var requestHash = HeavyTaskRequestHash.Of(toolRequest, ddb, request.Hash);
 
         // Check-then-enqueue is atomic per dataset: two submits (a double click, two hosts) cannot both pass
         using var _ = _submitLock.Acquire(request.OrgSlug, request.DsSlug);
