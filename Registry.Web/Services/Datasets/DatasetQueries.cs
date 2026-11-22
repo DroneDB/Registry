@@ -19,23 +19,29 @@ using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Datasets;
 
+/// <summary>
+/// What the dataset list shows of each dataset besides its row: its summary (sizes and properties, cached until its index
+/// changes) and whether a task imports it or rescans its index now (<see cref="IDatasetActivity"/>, read live).
+/// </summary>
+public sealed record DatasetListState(IDatasetSummaryProvider Summaries, IDatasetActivity Activity);
+
 /// <summary>The datasets as their readers see them: the datasets of an organization listed to them, one dataset, its root entry, its stamp.</summary>
 public sealed class DatasetQueries
 {
     private readonly IDatasetAccessResolver _access;
     private readonly IAuthManager _authManager;
     private readonly RegistryContext _context;
-    private readonly IDatasetSummaryProvider _summaries;
+    private readonly DatasetListState _state;
     private readonly IDdbManager _ddbManager;
     private readonly IUrlBuilder _urls;
     private readonly ThumbnailOptions _thumbnails;
 
-    public DatasetQueries(IDatasetAccessResolver access, IAuthManager authManager, RegistryContext context, IDatasetSummaryProvider summaries, IDdbManager ddbManager, IUrlBuilder urls, IOptions<ThumbnailOptions> thumbnails)
+    public DatasetQueries(IDatasetAccessResolver access, IAuthManager authManager, RegistryContext context, DatasetListState state, IDdbManager ddbManager, IUrlBuilder urls, IOptions<ThumbnailOptions> thumbnails)
     {
         _access = access;
         _authManager = authManager;
         _context = context;
-        _summaries = summaries;
+        _state = state;
         _ddbManager = ddbManager;
         _urls = urls;
         _thumbnails = thumbnails.Value;
@@ -105,7 +111,7 @@ public sealed class DatasetQueries
         foreach (var (ds, permissions) in datasets)
         {
             // Sizes and properties are cached per dataset until its index changes
-            var summary = _summaries.Get(orgSlug, ds.InternalRef);
+            var summary = _state.Summaries.Get(orgSlug, ds.InternalRef);
 
             listed.Add((new DatasetDto
             {
@@ -123,9 +129,17 @@ public sealed class DatasetQueries
         // The total counts with every filter of the page, only without the paging (FR-DEV-14)
         var total = (query with { Skip = 0, Take = null }).Apply(listed.Select(r => r.Dto)).Count();
 
-        // The only per-dataset native call left: for the page shown, not the whole organization
+        // The datasets of the page that a task imports or rescans, in one query: the list shows them as busy
+        var busy = await _state.Activity.GetForOrgAsync(orgSlug, [.. matching.Select(d => d.Slug)], ct);
+        foreach (var dto in matching)
+            dto.Busy = busy.TryGetValue(dto.Slug, out var state)
+                ? new DatasetBusyDto { Kind = state.Kind, TaskId = state.TaskId, Progress = state.ProgressPercent }
+                : null;
+
+        // The only per-dataset native call left: for the page shown, not the whole organization, and not on a busy
+        // dataset (its index is being rewritten)
         if (includeThumbnailCheck)
-            foreach (var dto in matching)
+            foreach (var dto in matching.Where(d => d.Busy == null))
                 dto.HasThumbnail = CheckHasThumbnail(_ddbManager.Get(orgSlug, bySlug[dto.Slug].InternalRef));
 
         return (matching, total);

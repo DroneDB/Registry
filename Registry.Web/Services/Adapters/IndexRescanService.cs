@@ -10,6 +10,7 @@ using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Models;
+using Registry.Web.Services.Datasets;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.HeavyTasks.Ports;
@@ -32,6 +33,7 @@ public class IndexRescanService
     private readonly IDdbManager _ddbManager;
     private readonly ISystemTaskSubmitter _taskSubmitter;
     private readonly RescanRebuild _rebuild;
+    private readonly IDatasetActivity _activity;
     private readonly ILogger<IndexRescanService> _logger;
 
     public IndexRescanService(
@@ -39,12 +41,14 @@ public class IndexRescanService
         IDdbManager ddbManager,
         ISystemTaskSubmitter taskSubmitter,
         RescanRebuild rebuild,
+        IDatasetActivity activity,
         ILogger<IndexRescanService> logger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
         _taskSubmitter = taskSubmitter ?? throw new ArgumentNullException(nameof(taskSubmitter));
         _rebuild = rebuild ?? throw new ArgumentNullException(nameof(rebuild));
+        _activity = activity ?? throw new ArgumentNullException(nameof(activity));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -52,7 +56,8 @@ public class IndexRescanService
     /// Rescans the entries of <paramref name="filter"/> in one dataset, now, and rebuilds only those whose build key
     /// changed (<see cref="RescanResult.BuildKeyChanged"/>, D-020): the rescan of an upgrade (<see cref="Initialization.UpgradeRescanStartupTask"/>).
     /// The rescan does not stop at an entry it cannot read: it is reported in the outcome and logged. A dataset with
-    /// no matching entry is not opened for a rescan.
+    /// no matching entry is not opened for a rescan, and a dataset that a task imports or rescans now is left as it is
+    /// (<see cref="DatasetRescanOutcome.Busy"/>).
     /// </summary>
     /// <param name="builds">Queues the rebuilds (the entries of a rescan are rebuilt, not the dataset).</param>
     /// <exception cref="ArgumentException">The filter selects every entry (a rescan across datasets must not re-hash all data).</exception>
@@ -64,6 +69,13 @@ public class IndexRescanService
         ArgumentNullException.ThrowIfNull(filter);
         ArgumentNullException.ThrowIfNull(builds);
         filter.RequireNotEmpty();
+
+        if (await _activity.GetAsync(orgSlug, dsSlug, ct) is { } busy)
+        {
+            _logger.LogInformation("Rescan of {Org}/{Ds} skipped: the dataset is {Busy} (task {TaskId})", orgSlug,
+                dsSlug, busy.Kind, busy.TaskId);
+            return DatasetRescanOutcome.Busy;
+        }
 
         var ddb = _ddbManager.Get(orgSlug, internalRef);
         if (!ddb.FindSummaries(filter.ToEntryQuery()).Any(filter.Matches))
@@ -111,12 +123,21 @@ public class IndexRescanService
 
         var prms = RescanIndexTool.CreateParams(filter, stopOnError);
 
-        int submitted = 0, matched = 0, failed = 0;
+        int submitted = 0, matched = 0, failed = 0, busy = 0;
         foreach (var ds in datasets)
         {
             var key = $"{ds.OrgSlug}/{ds.Slug}";
             try
             {
+                // A dataset that a task imports or rescans now is left to it
+                if (await _activity.GetAsync(ds.OrgSlug, ds.Slug) is { } holder)
+                {
+                    busy++;
+                    console.Info("{Dataset}: skipped, the dataset is {Busy} (task {TaskId})", key, holder.Kind,
+                        holder.TaskId);
+                    continue;
+                }
+
                 var ddb = _ddbManager.Get(ds.OrgSlug, ds.InternalRef);
                 var count = ddb.FindSummaries(filter.ToEntryQuery()).Count(filter.Matches);
                 if (count == 0)
@@ -135,8 +156,8 @@ public class IndexRescanService
         }
 
         console.Info("Rescan submitted: {Submitted} task(s) for {Matched} matching entries, " +
-                     "{WithoutMatches} dataset(s) without matches, {Failed} failure(s)",
-            submitted, matched, datasets.Length - submitted - failed, failed);
+                     "{WithoutMatches} dataset(s) without matches, {Busy} busy dataset(s) skipped, {Failed} failure(s)",
+            submitted, matched, datasets.Length - submitted - failed - busy, busy, failed);
     }
 }
 
@@ -145,8 +166,14 @@ public class IndexRescanService
 /// <param name="Unreadable">The entries it could not read.</param>
 /// <param name="Rebuilt">The rebuilds it queued (the entries whose build key changed).</param>
 /// <param name="RebuildFailures">The rebuilds it could not queue.</param>
-public sealed record DatasetRescanOutcome(int Rescanned, int Unreadable, int Rebuilt, int RebuildFailures)
+/// <param name="SkippedBusy">The dataset was busy (a task imports or rescans it): nothing was rescanned, and the
+/// rescan is still to do.</param>
+public sealed record DatasetRescanOutcome(int Rescanned, int Unreadable, int Rebuilt, int RebuildFailures,
+    bool SkippedBusy = false)
 {
     /// <summary>The dataset has no entry of the filter's types: nothing was rescanned.</summary>
     public static DatasetRescanOutcome NothingToRescan { get; } = new(0, 0, 0, 0);
+
+    /// <summary>A task imports or rescans the dataset now: it was left as it is, to rescan another time.</summary>
+    public static DatasetRescanOutcome Busy { get; } = new(0, 0, 0, 0, SkippedBusy: true);
 }

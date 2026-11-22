@@ -8,6 +8,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Caching;
+using Registry.Web.Services.PlatformTasks;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -19,20 +20,30 @@ namespace Registry.Web.Services.Datasets;
 /// delete (<see cref="DatasetCommands.Delete"/>, after the access check) and the system delete of a dataset that a
 /// rolled-back task created (<see cref="RemoveAsSystemAsync"/>, FR-XC-27) are this one path. Registered on every job
 /// host.
+/// <para>
+/// A task that imports the dataset or rescans its index (<see cref="IDatasetActivity"/>) is stopped at once
+/// (<see cref="TaskCanceller"/>): an import can then no longer commit. The cleanup stops the other jobs, and deletes the
+/// folder only once no worker of the dataset is still running.
+/// </para>
 /// </summary>
 public sealed class DatasetRemoval
 {
     private readonly RegistryContext _context;
     private readonly IDatasetListingInvalidator _listings;
     private readonly IBackgroundJobsProcessor _backgroundJob;
+    private readonly IDatasetActivity _activity;
+    private readonly TaskCanceller _canceller;
     private readonly ILogger<DatasetRemoval> _logger;
 
     public DatasetRemoval(RegistryContext context, IDatasetListingInvalidator listings,
-        IBackgroundJobsProcessor backgroundJob, ILogger<DatasetRemoval> logger)
+        IBackgroundJobsProcessor backgroundJob, IDatasetActivity activity, TaskCanceller canceller,
+        ILogger<DatasetRemoval> logger)
     {
         _context = context;
         _listings = listings;
         _backgroundJob = backgroundJob;
+        _activity = activity;
+        _canceller = canceller;
         _logger = logger;
     }
 
@@ -71,9 +82,12 @@ public sealed class DatasetRemoval
         // It leaves every listing
         await _listings.ListingChangedAsync(orgSlug, internalRef, CancellationToken.None);
 
+        // The import or the rescan that holds it stops now, not when the cleanup runs: from here on an import cannot
+        // commit. After the rows moved: a worker that stops from now on finds the tombstone (TaskWorkerMarker)
+        await StopLockingTasksAsync(orgSlug, SlugKeyedRows.TombstoneSlug(internalRef));
+
         // Schedule background cleanup job for: cancelling active jobs, removing JobIndex entries, deleting filesystem
-        var jobId = BestEffort.Get<string?>(() => _backgroundJob.Enqueue<DatasetCleanupService>(
-            service => service.CleanupDeletedAsync(orgSlug, internalRef, null)), ex =>
+        var jobId = BestEffort.Get<string?>(() => DatasetCleanupService.Queue(_backgroundJob, orgSlug, internalRef), ex =>
         {
             _logger.LogError(ex,
                 "Failed to enqueue cleanup job for dataset {OrgSlug}/{DsSlug} with internalRef {InternalRef}",
@@ -94,5 +108,19 @@ public sealed class DatasetRemoval
                 "Dataset {OrgSlug}/{DsSlug} removed from DB, cleanup job scheduled with JobId {JobId}",
                 orgSlug, dsSlug, jobId);
         }
+    }
+
+    // The locking tasks of the deleted dataset (its rows are under its tombstone slug): a failure to stop one is logged,
+    // the cleanup tries again
+    private async Task StopLockingTasksAsync(string orgSlug, string tombstone)
+    {
+        foreach (var taskId in await _activity.ActiveTaskIdsAsync(orgSlug, tombstone, CancellationToken.None))
+            await BestEffort.RunAsync(async () =>
+            {
+                if (await _canceller.CancelAsync(taskId, orgSlug, tombstone, CancellationToken.None))
+                    _logger.LogInformation("Stopped task {TaskId} of the deleted dataset {OrgSlug}/{Tombstone}",
+                        taskId, orgSlug, tombstone);
+            }, ex => _logger.LogWarning(ex, "Cannot stop task {TaskId} of the deleted dataset {OrgSlug}/{Tombstone}: " +
+                                           "its cleanup tries again", taskId, orgSlug, tombstone));
     }
 }

@@ -6,7 +6,7 @@ endpoint the Hub calls (`Registry.Web/ClientApp/webapp/js/libs/ddb/*.js`), reque
 fixtures, `TestAuthHandler` identities).
 
 These goldens are the safety net of the wire format (ProblemDetails errors, System.Text.Json).
-**Any difference must be on purpose.** The entries of `ds-list-root` and `ds-search` carry `artifacts` (the built `ortho.tif`: its `raster.cog` link), additive. `sys-features` has `entryTypes` (libddb's `DDBGetEntryTypes`, passed through) and `archiveExtensions` (the extractor's rule) for the Hub, additive: no existing member changed. Update on purpose, then review the diff:
+**Any difference must be on purpose.** The entries of `ds-list-root` and `ds-search` carry `artifacts` (the built `ortho.tif`: its `raster.cog` link), additive. `sys-features` has `entryTypes` (libddb's `DDBGetEntryTypes`, passed through) and `archiveExtensions` (the extractor's rule) for the Hub, additive: no existing member changed. The datasets (`orgs-datasets*`, `ds-ex`) carry `busy`: null, or the task that imports the dataset or rescans its index (`kind`, `taskId`, `progress`), additive; `error-409-dataset-busy` is the refusal of a busy dataset (members `datasetBusy` and `taskId`), and its import task, seeded in the write organization, is the item of `sys-tasks` and the dataset counted by `orgs-list-admin` and `users-detailed`. Update on purpose, then review the diff:
 
 ```
 REGISTRY_UPDATE_SNAPSHOTS=1 dotnet test Registry.Web.UnitTest --filter "FullyQualifiedName~GoldenJsonTests"

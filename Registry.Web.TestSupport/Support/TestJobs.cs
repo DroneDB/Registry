@@ -53,6 +53,26 @@ public static class TestJobs
             ddbManager ?? Mock.Of<IDdbManager>(), context,
             NullLogger<Services.PlatformTasks.BuildTaskWaits>.Instance);
 
+    /// <summary>
+    /// The one stop of a task (<see cref="Services.PlatformTasks.TaskCanceller"/>) on the test's database: the real
+    /// job index writer and write record store, <paramref name="jobs"/> as the job store and a loose rollback unless given.
+    /// </summary>
+    public static Services.PlatformTasks.TaskCanceller Canceller(RegistryContext context, IBackgroundJobsProcessor jobs,
+        ITaskRollback? rollback = null) =>
+        new(jobs, new JobIndexWriter(context, NullLogger<JobIndexWriter>.Instance, Mock.Of<Services.Caching.IRecordCache>()),
+            new TaskWriteRecordStore(context, Mock.Of<Services.Caching.IRecordCache>(),
+                NullLogger<TaskWriteRecordStore>.Instance),
+            rollback ?? Mock.Of<ITaskRollback>(), NullLogger<Services.PlatformTasks.TaskCanceller>.Instance);
+
+    /// <summary>
+    /// The cleanup of deleted datasets over the test's database: <paramref name="servers"/> are the live job servers (none
+    /// unless given), and its job cancels go to <paramref name="jobs"/>.
+    /// </summary>
+    public static DatasetCleanupService Cleanup(RegistryContext context, IBackgroundJobsProcessor jobs,
+        IDdbManager ddbManager, ILiveJobServers? servers = null) =>
+        new(context, ddbManager, Canceller(context, jobs), servers ?? new FakeLiveJobServers(),
+            NullLogger<DatasetCleanupService>.Instance);
+
     /// <summary>The budget of a job host with 8 cores and 16 GB, with these processing settings (defaults when null).</summary>
     public static HostResourceBudget Budget(ProcessingBudgetSettings? processing = null) =>
         HostResourceBudget.Create(InstanceType.Default, new HostFacts(8, 16L << 30),

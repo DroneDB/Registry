@@ -114,4 +114,10 @@ public class JobIndex : IDatasetSlugKeyed
 
     /// <summary>JSON write record: the dataset the task created and the paths it wrote, for rollback (D-045, FR-XC-27).</summary>
     public string? WriteRecordJson { get; set; }
+
+    /// <summary>
+    /// The id of the Hangfire server whose worker runs the task now; null when no worker runs it. The cleanup of a deleted
+    /// dataset keeps the folder while a row of the dataset names a live server: that worker may still write there.
+    /// </summary>
+    public string? WorkerServerId { get; set; }
 }

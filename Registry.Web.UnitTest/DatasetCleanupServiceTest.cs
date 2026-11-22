@@ -3,7 +3,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Shouldly;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
 using Registry.Ports;
@@ -16,215 +15,107 @@ using Registry.Web.Test.Support;
 
 namespace Registry.Web.Test;
 
+/// <summary>
+/// The cleanup of a deleted dataset: it stops the jobs queued or running in any blocking state (the one stop of a task,
+/// <c>TaskCanceller</c>), removes the rows and deletes the folder; a job that cannot be stopped does not stop the others.
+/// What it does while a worker still runs is in <c>DatasetDeleteOrderingTests</c>.
+/// </summary>
 [TestFixture]
 public class DatasetCleanupServiceTest : TestBase
 {
-    private Mock<IDdbManager> _ddbManagerMock;
-    private Mock<IBackgroundJobsProcessor> _backgroundJobMock;
-    private Mock<IJobIndexQuery> _jobIndexQueryMock;
-    private ILogger<DatasetCleanupService> _logger;
+    private const string OrgSlug = "test-org";
+    private const string DsSlug = "test-ds";
+
+    private Mock<IDdbManager> _ddbManagerMock = null!;
+    private Mock<IBackgroundJobsProcessor> _jobs = null!;
 
     [SetUp]
     public void Setup()
     {
         _ddbManagerMock = new Mock<IDdbManager>();
-        _backgroundJobMock = new Mock<IBackgroundJobsProcessor>();
-        _jobIndexQueryMock = new Mock<IJobIndexQuery>();
-        _logger = CreateTestLogger<DatasetCleanupService>();
+        _jobs = new Mock<IBackgroundJobsProcessor>();
     }
+
+    private DatasetCleanupService Service(RegistryContext context) =>
+        TestJobs.Cleanup(context, _jobs.Object, _ddbManagerMock.Object);
+
+    private static JobIndex Job(string id, string state) => new()
+    {
+        JobId = id, OrgSlug = OrgSlug, DsSlug = DsSlug, CurrentState = state, CreatedAtUtc = DateTime.UtcNow
+    };
+
+    private static RegistryContext ContextWith(params JobIndex[] jobs) => TestDb.CreateContext<RegistryContext>(context =>
+    {
+        context.JobIndices.AddRange(jobs);
+        context.SaveChanges();
+    });
 
     [Test]
     public async Task CleanupDeletedDatasetAsync_NoActiveJobs_DeletesFilesystem()
     {
-        // Arrange
-        const string orgSlug = "test-org";
-        const string dsSlug = "test-ds";
         var internalRef = Guid.NewGuid();
+        await using var context = ContextWith();
 
-        await using var context = GetEmptyContext();
+        await Service(context).CleanupDeletedDatasetAsync(OrgSlug, DsSlug, internalRef, null);
 
-        // No active jobs
-        _jobIndexQueryMock.Setup(x => x.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue, default))
-            .ReturnsAsync([]);
-
-        var service = new DatasetCleanupService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _jobIndexQueryMock.Object,
-            _logger
-        );
-
-        // Act
-        await service.CleanupDeletedDatasetAsync(orgSlug, dsSlug, internalRef, null);
-
-        // Assert - Should delete filesystem
-        _ddbManagerMock.Verify(x => x.Delete(orgSlug, internalRef), Times.Once);
-        // Should not try to cancel any jobs
-        _backgroundJobMock.Verify(x => x.Delete(It.IsAny<string>()), Times.Never);
+        _ddbManagerMock.Verify(x => x.Delete(OrgSlug, internalRef), Times.Once);
+        _jobs.Verify(x => x.Delete(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
-    [Test]
-    public async Task CleanupDeletedDatasetAsync_WithActiveJobs_CancelsJobsFirst()
+    /// <summary>Every blocking state is stopped, Indexing too (the cleanup used to keep a list of its own without it).</summary>
+    [TestCase("Indexing")]
+    [TestCase("Awaiting")]
+    [TestCase("Scheduled")]
+    [TestCase("Enqueued")]
+    [TestCase("Processing")]
+    public async Task CleanupDeletedDatasetAsync_StopsAJobIn(string state)
     {
-        // Arrange
-        const string orgSlug = "test-org";
-        const string dsSlug = "test-ds";
         var internalRef = Guid.NewGuid();
+        await using var context = ContextWith(Job("job-1", state), Job("job-2", "Succeeded"));
+        _jobs.Setup(x => x.Delete("job-1", state)).Returns(true);
 
-        await using var context = GetEmptyContext();
+        await Service(context).CleanupDeletedDatasetAsync(OrgSlug, DsSlug, internalRef, null);
 
-        // Create some active jobs
-        var jobs = new[]
-        {
-            new JobIndex { JobId = "job-1", OrgSlug = orgSlug, DsSlug = dsSlug, CurrentState = "Processing" },
-            new JobIndex { JobId = "job-2", OrgSlug = orgSlug, DsSlug = dsSlug, CurrentState = "Enqueued" },
-            new JobIndex { JobId = "job-3", OrgSlug = orgSlug, DsSlug = dsSlug, CurrentState = "Succeeded" } // Not active
-        };
-
-        _jobIndexQueryMock.Setup(x => x.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue, default))
-            .ReturnsAsync(jobs);
-
-        _backgroundJobMock.Setup(x => x.Delete(It.IsAny<string>())).Returns(true);
-
-        var service = new DatasetCleanupService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _jobIndexQueryMock.Object,
-            _logger
-        );
-
-        // Act
-        await service.CleanupDeletedDatasetAsync(orgSlug, dsSlug, internalRef, null);
-
-        // Assert - Should cancel only active jobs (Processing and Enqueued)
-        _backgroundJobMock.Verify(x => x.Delete("job-1"), Times.Once);
-        _backgroundJobMock.Verify(x => x.Delete("job-2"), Times.Once);
-        _backgroundJobMock.Verify(x => x.Delete("job-3"), Times.Never); // Succeeded is not active
-        // Should still delete filesystem
-        _ddbManagerMock.Verify(x => x.Delete(orgSlug, internalRef), Times.Once);
+        _jobs.Verify(x => x.Delete("job-1", state), Times.Once);
+        _jobs.Verify(x => x.Delete("job-2", It.IsAny<string>()), Times.Never, "a job that ended is not stopped");
+        _ddbManagerMock.Verify(x => x.Delete(OrgSlug, internalRef), Times.Once);
     }
 
     [Test]
     public async Task CleanupDeletedDatasetAsync_RemovesJobIndexEntries()
     {
-        // Arrange
-        const string orgSlug = "test-org";
-        const string dsSlug = "test-ds";
-        var internalRef = Guid.NewGuid();
+        await using var context = ContextWith(Job("job-1", "Succeeded"), Job("job-2", "Failed"), Job("job-3", "Processing"),
+            new JobIndex { JobId = "other", OrgSlug = OrgSlug, DsSlug = "other-ds", CurrentState = "Processing" });
 
-        await using var context = GetContextWithJobIndices(orgSlug, dsSlug);
+        await Service(context).CleanupDeletedDatasetAsync(OrgSlug, DsSlug, Guid.NewGuid(), null);
 
-        // Verify entries exist before cleanup
-        var entriesBefore = await context.JobIndices.CountAsync();
-        entriesBefore.ShouldBe(3);
-
-        _jobIndexQueryMock.Setup(x => x.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue, default))
-            .ReturnsAsync([]);
-
-        var service = new DatasetCleanupService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _jobIndexQueryMock.Object,
-            _logger
-        );
-
-        // Act
-        await service.CleanupDeletedDatasetAsync(orgSlug, dsSlug, internalRef, null);
-
-        // Assert - All JobIndex entries for this dataset should be removed
-        var entriesAfter = await context.JobIndices
-            .Where(j => j.OrgSlug == orgSlug && j.DsSlug == dsSlug)
-            .CountAsync();
-        entriesAfter.ShouldBe(0);
+        (await context.JobIndices.Select(j => j.JobId).ToArrayAsync()).ShouldBe(["other"]);
     }
 
     [Test]
     public async Task CleanupDeletedDatasetAsync_FilesystemDeleteFails_DoesNotThrow()
     {
-        // Arrange
-        const string orgSlug = "test-org";
-        const string dsSlug = "test-ds";
         var internalRef = Guid.NewGuid();
-
-        await using var context = GetEmptyContext();
-
-        _jobIndexQueryMock.Setup(x => x.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue, default))
-            .ReturnsAsync([]);
-
+        await using var context = ContextWith();
         // Simulate filesystem delete failure (file locked)
-        _ddbManagerMock.Setup(x => x.Delete(orgSlug, internalRef))
+        _ddbManagerMock.Setup(x => x.Delete(OrgSlug, internalRef))
             .Throws(new System.IO.IOException("The process cannot access the file because it is being used"));
 
-        var service = new DatasetCleanupService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _jobIndexQueryMock.Object,
-            _logger
-        );
-
-        // Act & Assert - Should not throw, just log warning
-        await Should.NotThrowAsync(async () =>
-            await service.CleanupDeletedDatasetAsync(orgSlug, dsSlug, internalRef, null));
+        await Should.NotThrowAsync(() => Service(context).CleanupDeletedDatasetAsync(OrgSlug, DsSlug, internalRef, null));
     }
 
     [Test]
     public async Task CleanupDeletedDatasetAsync_JobCancellationFails_ContinuesWithOtherJobs()
     {
-        // Arrange
-        const string orgSlug = "test-org";
-        const string dsSlug = "test-ds";
         var internalRef = Guid.NewGuid();
-
-        await using var context = GetEmptyContext();
-
-        var jobs = new[]
-        {
-            new JobIndex { JobId = "job-1", OrgSlug = orgSlug, DsSlug = dsSlug, CurrentState = "Processing" },
-            new JobIndex { JobId = "job-2", OrgSlug = orgSlug, DsSlug = dsSlug, CurrentState = "Enqueued" }
-        };
-
-        _jobIndexQueryMock.Setup(x => x.GetByOrgDsAsync(orgSlug, dsSlug, 0, int.MaxValue, default))
-            .ReturnsAsync(jobs);
-
+        await using var context = ContextWith(Job("job-1", "Processing"), Job("job-2", "Enqueued"));
         // First job cancellation fails, second succeeds
-        _backgroundJobMock.Setup(x => x.Delete("job-1")).Throws(new InvalidOperationException("Job not found"));
-        _backgroundJobMock.Setup(x => x.Delete("job-2")).Returns(true);
+        _jobs.Setup(x => x.Delete("job-1", It.IsAny<string>())).Throws(new InvalidOperationException("Job not found"));
+        _jobs.Setup(x => x.Delete("job-2", "Enqueued")).Returns(true);
 
-        var service = new DatasetCleanupService(
-            context,
-            _ddbManagerMock.Object,
-            _backgroundJobMock.Object,
-            _jobIndexQueryMock.Object,
-            _logger
-        );
+        await Service(context).CleanupDeletedDatasetAsync(OrgSlug, DsSlug, internalRef, null);
 
-        // Act
-        await service.CleanupDeletedDatasetAsync(orgSlug, dsSlug, internalRef, null);
-
-        // Assert - Should still try to cancel second job and delete filesystem
-        _backgroundJobMock.Verify(x => x.Delete("job-2"), Times.Once);
-        _ddbManagerMock.Verify(x => x.Delete(orgSlug, internalRef), Times.Once);
-    }
-
-    private static RegistryContext GetEmptyContext()
-    {
-        return TestDb.CreateContext<RegistryContext>();
-    }
-
-    private static RegistryContext GetContextWithJobIndices(string orgSlug, string dsSlug)
-    {
-        return TestDb.CreateContext<RegistryContext>(context =>
-        {
-            context.JobIndices.AddRange(
-                new JobIndex { JobId = "job-1", OrgSlug = orgSlug, DsSlug = dsSlug, CurrentState = "Succeeded", CreatedAtUtc = DateTime.UtcNow },
-                new JobIndex { JobId = "job-2", OrgSlug = orgSlug, DsSlug = dsSlug, CurrentState = "Failed", CreatedAtUtc = DateTime.UtcNow },
-                new JobIndex { JobId = "job-3", OrgSlug = orgSlug, DsSlug = dsSlug, CurrentState = "Processing", CreatedAtUtc = DateTime.UtcNow }
-            );
-            context.SaveChanges();
-        });
+        _jobs.Verify(x => x.Delete("job-2", "Enqueued"), Times.Once);
+        _ddbManagerMock.Verify(x => x.Delete(OrgSlug, internalRef), Times.Once);
     }
 }

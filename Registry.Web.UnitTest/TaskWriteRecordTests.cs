@@ -664,8 +664,8 @@ public class TaskRollbackTests
 
         // The delayed delete: the system removes it without the access check of a user
         var listings = new Mock<IDatasetListingInvalidator>();
-        var job = new CreatedDatasetRollbackJob(_env.Store, _env.Db, DdbManager(), new DatasetRemoval(_env.Db,
-            listings.Object, _jobs.Object, NullLogger<DatasetRemoval>.Instance), _jobs.Object,
+        var job = new CreatedDatasetRollbackJob(_env.Store, _env.Db, DdbManager(), TestDatasets.Removal(_env.Db,
+            _jobs.Object, listings.Object), _jobs.Object,
             NullLogger<CreatedDatasetRollbackJob>.Instance);
         await job.DeleteAsync("1", created, "alice");
 
@@ -698,8 +698,8 @@ public class TaskRollbackTests
         var createdRef = new TaskCreatedDataset(WriteRecordEnv.Org, created, "new-ds");
         // Retried by the user: the record starts again (open) with the dataset
         _env.SeedTask("1", "Enqueued", TaskWriteRecord.ForCreatedDataset(createdRef).ToJson());
-        var job = new CreatedDatasetRollbackJob(_env.Store, _env.Db, DdbManager(), new DatasetRemoval(_env.Db,
-            Mock.Of<IDatasetListingInvalidator>(), _jobs.Object, NullLogger<DatasetRemoval>.Instance),
+        var job = new CreatedDatasetRollbackJob(_env.Store, _env.Db, DdbManager(), TestDatasets.Removal(_env.Db,
+            _jobs.Object),
             _jobs.Object, NullLogger<CreatedDatasetRollbackJob>.Instance);
 
         await job.DeleteAsync("1", created, null);
@@ -717,6 +717,38 @@ public class TaskRollbackTests
         await job.DeleteAsync("1", created, null);
         _env.Db.Datasets.Any(d => d.InternalRef == created).ShouldBeTrue();
         _env.Record("1")!.CreatedDatasetDeleteJob.ShouldBeNull("the job decided: the startup sweep leaves it alone");
+    }
+
+    /// <summary>
+    /// The user deleted the dataset while its import ran (the delete stops the import, whose rollback schedules this job):
+    /// the dataset is gone already, so the delayed delete does nothing more, and decides.
+    /// </summary>
+    [Test]
+    public async Task TheDelayedDelete_OfADatasetTheUserDeletedMeanwhile_DoesNothing()
+    {
+        var created = Guid.NewGuid();
+        var record = TaskWriteRecord.ForCreatedDataset(new TaskCreatedDataset(WriteRecordEnv.Org, created, "new-ds"));
+        record.State = TaskWriteState.RolledBack;
+        record.CreatedDatasetDeleteJob = "delete-job";
+        _env.SeedTask("1", "Deleted", record.ToJson(), ds: Registry.Web.Data.SlugKeyedRows.TombstoneSlug(created));
+        var listings = new Mock<IDatasetListingInvalidator>();
+        var job = new CreatedDatasetRollbackJob(_env.Store, _env.Db, DdbManager(),
+            TestDatasets.Removal(_env.Db, _jobs.Object, listings.Object), _jobs.Object,
+            NullLogger<CreatedDatasetRollbackJob>.Instance);
+        var datasets = _env.Db.Datasets.Count();
+
+        await job.DeleteAsync("1", created, "alice");
+
+        _env.Db.ChangeTracker.Clear();
+        _env.Db.Datasets.Count().ShouldBe(datasets);
+        listings.VerifyNoOtherCalls();
+        _jobs.Verify(j => j.Enqueue(It.IsAny<Expression<Func<Registry.Web.Services.Adapters.DatasetCleanupService, Task>>>()),
+            Times.Never, "no second cleanup");
+        _env.Record("1")!.CreatedDatasetDeleteJob.ShouldBeNull("the job decided: the startup sweep leaves it alone");
+
+        // Its row already removed by the cleanup: nothing either
+        await job.DeleteAsync("gone", created, "alice");
+        _env.Db.Datasets.Count().ShouldBe(datasets);
     }
 
     [Test]
@@ -901,8 +933,7 @@ public class TaskRollbackTests
     }
 
     private CreatedDatasetRollbackJob DeleteJob() =>
-        new(_env.Store, _env.Db, DdbManager(), new DatasetRemoval(_env.Db, Mock.Of<IDatasetListingInvalidator>(),
-            _jobs.Object, NullLogger<DatasetRemoval>.Instance), _jobs.Object,
+        new(_env.Store, _env.Db, DdbManager(), TestDatasets.Removal(_env.Db, _jobs.Object), _jobs.Object,
             NullLogger<CreatedDatasetRollbackJob>.Instance);
 
     private void SetTaskState(string jobId, string state)

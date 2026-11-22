@@ -61,7 +61,7 @@ public class JobsAcrossSlugChangesTests
 
     private static DatasetCleanupService Cleanup(RegistryContext context, Mock<IBackgroundJobsProcessor> jobs,
         Mock<IDdbManager> ddb) =>
-        new(context, ddb.Object, jobs.Object, new JobIndexQuery(context), NullLogger<DatasetCleanupService>.Instance);
+        TestJobs.Cleanup(context, jobs.Object, ddb.Object);
 
     /// <summary>
     /// A is deleted; before its cleanup runs B is renamed to A's slug and enqueues a job there. The cleanup removes A's rows
@@ -89,8 +89,8 @@ public class JobsAcrossSlugChangesTests
         [
             ("b-failed", "acme", "alpha"), ("b-new", "acme", "alpha"), ("b-old", "acme", "alpha")
         ], "B keeps its history and its running job");
-        queue.Jobs.Verify(j => j.Delete("a-running"), Times.Once, "the running job of the deleted dataset is cancelled");
-        queue.Jobs.Verify(j => j.Delete(It.Is<string>(id => id != "a-running")), Times.Never);
+        queue.Jobs.Verify(j => j.Delete("a-running", "Processing"), Times.Once, "the running job of the deleted dataset is cancelled");
+        queue.Jobs.Verify(j => j.Delete(It.Is<string>(id => id != "a-running"), It.IsAny<string>()), Times.Never);
         ddb.Verify(m => m.Delete("acme", RefA), Times.Once);
         ddb.Verify(m => m.Delete("acme", RefB), Times.Never);
     }
@@ -105,7 +105,7 @@ public class JobsAcrossSlugChangesTests
         await queue.RunAsync(Cleanup(context, queue.Jobs, new Mock<IDdbManager>()));
 
         Jobs(context).ShouldBe([("b-failed", "acme", "beta"), ("b-old", "acme", "beta")]);
-        queue.Jobs.Verify(j => j.Delete("a-running"), Times.Once);
+        queue.Jobs.Verify(j => j.Delete("a-running", "Processing"), Times.Once);
     }
 
     /// <summary>A job queued before the tombstone names the slug: it still runs as it was queued (it cleans by slug).</summary>
@@ -118,7 +118,7 @@ public class JobsAcrossSlugChangesTests
         await Cleanup(context, jobs, new Mock<IDdbManager>()).CleanupDeletedDatasetAsync("acme", "alpha", RefA, null);
 
         Jobs(context).ShouldBe([("b-failed", "acme", "beta"), ("b-old", "acme", "beta")]);
-        jobs.Verify(j => j.Delete("a-running"), Times.Once);
+        jobs.Verify(j => j.Delete("a-running", "Processing"), Times.Once);
     }
 
     [TestCase("Created")]

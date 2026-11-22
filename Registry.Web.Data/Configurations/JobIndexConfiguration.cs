@@ -35,6 +35,7 @@ internal sealed class JobIndexConfiguration : IEntityTypeConfiguration<JobIndex>
         e.Property(x => x.TargetLabel).HasMaxLength(256);
         e.Property(x => x.WaitingForNode).HasDefaultValue(false);
         e.Property(x => x.CancelledBy).HasMaxLength(128);
+        e.Property(x => x.WorkerServerId).HasMaxLength(128);
 
         e.HasIndex(x => new { x.OrgSlug, x.DsSlug });
         e.HasIndex(x => new { x.OrgSlug, x.DsSlug, x.Hash });

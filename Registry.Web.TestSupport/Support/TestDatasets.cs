@@ -22,15 +22,24 @@ public static class TestDatasets
     {
         var access = new DatasetAccessResolver(ports.Datasets, authManager, ddbManager, TestPaths.Policy);
         var commands = new DatasetCommands(context, ports.Datasets, access, ddbManager, listings,
-            new DatasetRemoval(context, listings, jobs, NullLogger<DatasetRemoval>.Instance),
-            NullLogger<DatasetCommands>.Instance);
+            Removal(context, jobs, listings), NullLogger<DatasetCommands>.Instance);
         return new DatasetsManager(
-            new DatasetQueries(access, authManager, context, TestCaches.Summaries(ddbManager), ddbManager, ports.Urls,
-                thumbnails),
+            new DatasetQueries(access, authManager, context,
+                new DatasetListState(TestCaches.Summaries(ddbManager), new DatasetActivity(context)), ddbManager,
+                ports.Urls, thumbnails),
             commands,
             new DatasetMover(context, ports.Datasets, commands, ddbManager, fileSystem, listings,
                 NullLogger<DatasetMover>.Instance));
     }
+
+    /// <summary>
+    /// The removal of a dataset (<see cref="DatasetRemoval"/>) on the test's database: <paramref name="jobs"/> gets the
+    /// cleanup job and the cancels of the tasks that hold the dataset.
+    /// </summary>
+    public static DatasetRemoval Removal(RegistryContext context, IBackgroundJobsProcessor jobs,
+        IDatasetListingInvalidator? listings = null) =>
+        new(context, listings ?? Mock.Of<IDatasetListingInvalidator>(), jobs, new DatasetActivity(context),
+            TestJobs.Canceller(context, jobs), NullLogger<DatasetRemoval>.Instance);
 
     /// <summary>
     /// The datasets API for a test that renames and moves datasets: the caller is an administrator (every access is

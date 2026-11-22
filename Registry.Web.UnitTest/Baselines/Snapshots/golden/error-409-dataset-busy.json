@@ -1,0 +1,17 @@
+{
+  "request": "GET /orgs/golden-write/ds/golden-importing/ex",
+  "caller": "organization owner (write org)",
+  "status": 409,
+  "contentType": "application/problem+json",
+  "bodyKind": "json",
+  "body": {
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+    "title": "Conflict",
+    "status": 409,
+    "detail": "Dataset 'golden-write/golden-importing' is importing: it can only be deleted until the import ends",
+    "traceId": "<trace-id>",
+    "noRetry": true,
+    "datasetBusy": "importing",
+    "taskId": "golden-import-task"
+  }
+}

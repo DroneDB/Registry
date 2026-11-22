@@ -72,6 +72,25 @@ public sealed class HeavyTaskJobWrapper : DdbRetriedJob
         using var scope = _scopeFactory.CreateScope();
         var records = scope.ServiceProvider.GetRequiredService<HeavyTaskRecords>();
 
+        // The row names this worker's server before the dataset is resolved, and until the run (its rollback included)
+        // has stopped: the cleanup of a dataset deleted meanwhile keeps its folder until then (TaskWorkerMarker)
+        var serverId = records.Worker.ServerIdOf(ctx);
+        if (serverId is not null)
+            await records.Worker.SetAsync(taskId, serverId, cancellationToken);
+        try
+        {
+            await RunAsync(toolId, toolVersion, requestJson, ctx, scope, records, taskId, cancellationToken);
+        }
+        finally
+        {
+            if (serverId is not null)
+                await records.Worker.ClearAsync(taskId);
+        }
+    }
+
+    private async Task RunAsync(string toolId, string toolVersion, string requestJson, PerformContext ctx,
+        IServiceScope scope, HeavyTaskRecords records, string taskId, CancellationToken cancellationToken)
+    {
         // A task that cannot even start (its tool gone, its request unreadable, its dataset deleted) failed too: it
         // records why, as one that fails while it runs does, and what was created for it (a dataset, at submit) goes
         Prepared prepared;

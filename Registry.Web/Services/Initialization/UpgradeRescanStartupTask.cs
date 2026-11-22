@@ -112,6 +112,15 @@ internal sealed class UpgradeRescanStartupTask : IBackgroundStartupTask
                 var outcome = await _rescans.RescanDatasetNowAsync(dataset.OrgSlug, dataset.Slug, dataset.InternalRef,
                     UpgradeRescanSteps.FilterOf(datasetSteps), new BackgroundRebuilds(_builds, target), stoppingToken);
 
+                if (outcome.SkippedBusy)
+                {
+                    // Not recorded: a task imports or rescans it now, and the next start rescans it
+                    failed++;
+                    _logger.LogInformation("Upgrade rescan of {Dataset} postponed: a task imports or rescans it now; " +
+                                           "the next start tries it again", name);
+                    return;
+                }
+
                 if (outcome.Unreadable > 0 || outcome.RebuildFailures > 0)
                 {
                     // Not recorded: the next start rescans it, and rebuilds what is still in the wrong folder

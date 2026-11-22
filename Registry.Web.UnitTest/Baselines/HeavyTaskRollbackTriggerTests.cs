@@ -125,6 +125,7 @@ public class HeavyTaskRollbackTriggerTests
             Microsoft.Extensions.Logging.Abstractions.NullLogger<Registry.Web.Services.HeavyTasks.TaskEntryChanges>.Instance));
         services.AddScoped(_ => TestJobs.DdbJobs(manager.Object));
         services.AddScoped<Registry.Web.Services.Builds.BuildScheduler>(_ => TestJobs.Scheduler(_jobs.Object));
+        services.AddScoped<TaskWorkerMarker>();
         services.AddScoped<HeavyTaskRecords>();
         services.AddScoped<HeavyTaskDatasetServices>();
         _provider = services.BuildServiceProvider();

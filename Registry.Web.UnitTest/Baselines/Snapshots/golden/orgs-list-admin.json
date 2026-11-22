@@ -28,7 +28,7 @@
       "creationDate": "<datetime:Z>",
       "owner": "golden-writer",
       "isPublic": false,
-      "datasetCount": 0,
+      "datasetCount": 1,
       "lastModified": "<datetime:Z>",
       "permissions": {
         "canRead": true,

@@ -347,6 +347,10 @@ namespace Registry.Web.Data.Mysql.Migrations
                         .HasColumnType("tinyint(1)")
                         .HasDefaultValue(false);
 
+                    b.Property<string>("WorkerServerId")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
                     b.Property<string>("WorkflowExecutionId")
                         .HasMaxLength(36)
                         .HasColumnType("varchar(36)");

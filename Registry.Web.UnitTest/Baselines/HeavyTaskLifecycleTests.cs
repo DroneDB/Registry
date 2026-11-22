@@ -2,6 +2,7 @@ using System.Globalization;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Text.Json;
 using System.Threading;
@@ -10,6 +11,7 @@ using Hangfire;
 using Hangfire.Common;
 using Hangfire.Server;
 using Hangfire.Storage;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -21,6 +23,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
@@ -113,6 +116,7 @@ public class HeavyTaskLifecycleTests
         services.AddScoped(sp => new Registry.Web.Services.HeavyTasks.TaskEntryChanges(
             Mock.Of<Registry.Web.Services.Ports.IDatasetCacheInvalidator>(), sp.GetRequiredService<RegistryContext>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<Registry.Web.Services.HeavyTasks.TaskEntryChanges>.Instance));
+        services.AddScoped<TaskWorkerMarker>();
         services.AddScoped<HeavyTaskRecords>();
         services.AddScoped<HeavyTaskDatasetServices>();
         _provider = services.BuildServiceProvider();
@@ -178,6 +182,84 @@ public class HeavyTaskLifecycleTests
             Directory.Exists(ctx.WorkDir).ShouldBeTrue("the tool gets its work folder");
             return Task.FromResult(execute(ctx, ct));
         }
+    }
+
+    // The attempt run by a worker of server serverId (its Processing state names the server)
+    private static PerformContext ProcessingContext(string serverId)
+    {
+        var connection = new Mock<IStorageConnection>();
+        connection.Setup(c => c.GetStateData(TaskId)).Returns(new StateData
+        {
+            Name = "Processing", Data = new Dictionary<string, string> { ["ServerId"] = serverId }
+        });
+        return new(null, connection.Object,
+            new BackgroundJob(TaskId, Job.FromExpression<HealthCheckJob>(j => j.Ping(null)), DateTime.UtcNow),
+            Mock.Of<IJobCancellationToken>());
+    }
+
+    /// <summary>
+    /// The worker names its server on the task's row while it runs and clears it once it has stopped: the cleanup of a
+    /// dataset deleted meanwhile keeps the folder until then, and the end of the run queues the cleanup again.
+    /// </summary>
+    [Test]
+    public async Task TheWorker_MarksItsRowWhileItRuns_AndQueuesTheCleanupOfADatasetDeletedMeanwhile()
+    {
+        using (var context = _db.NewContext())
+        {
+            context.JobIndices.Add(new JobIndex
+            {
+                JobId = TaskId, OrgSlug = Org, DsSlug = Ds, ToolId = "t", CurrentState = "Processing",
+                CreatedAtUtc = DateTime.UtcNow
+            });
+            context.SaveChanges();
+        }
+
+        string? markWhileRunning = null;
+        Guid deleted = default;
+        var tool = new Tool((_, _) =>
+        {
+            using var context = _db.NewContext();
+            markWhileRunning = context.JobIndices.Single(j => j.JobId == TaskId).WorkerServerId;
+            // The dataset is deleted while the tool runs
+            var ds = context.Datasets.AsTracking().Single(d => d.Slug == Ds);
+            deleted = ds.InternalRef;
+            TestDatasets.Removal(context, Mock.Of<IBackgroundJobsProcessor>()).RemoveAsync(Org, ds).GetAwaiter().GetResult();
+            return null;
+        });
+
+        await Wrapper(tool).Run("t", "1", Request(), ProcessingContext("host:1:a"), CancellationToken.None);
+
+        markWhileRunning.ShouldBe("host:1:a");
+        using (var context = _db.NewContext())
+        {
+            var row = context.JobIndices.Single(j => j.JobId == TaskId);
+            row.WorkerServerId.ShouldBeNull("the mark goes once the worker has stopped");
+            row.DsSlug.ShouldBe(Registry.Web.Data.SlugKeyedRows.TombstoneSlug(deleted));
+        }
+
+        _jobs.Verify(j => j.Enqueue(It.Is<Expression<Func<DatasetCleanupService, Task>>>(call =>
+            call.ToString().Contains(nameof(DatasetCleanupService.CleanupDeletedAsync)))), Times.Once);
+    }
+
+    [Test]
+    public async Task AWorkerWithoutADelete_ClearsItsMark_AndQueuesNoCleanup()
+    {
+        using (var context = _db.NewContext())
+        {
+            context.JobIndices.Add(new JobIndex
+            {
+                JobId = TaskId, OrgSlug = Org, DsSlug = Ds, ToolId = "t", CurrentState = "Processing",
+                CreatedAtUtc = DateTime.UtcNow
+            });
+            context.SaveChanges();
+        }
+
+        await Wrapper(new Tool((_, _) => null)).Run("t", "1", Request(), ProcessingContext("host:1:a"),
+            CancellationToken.None);
+
+        using (var context = _db.NewContext())
+            context.JobIndices.Single(j => j.JobId == TaskId).WorkerServerId.ShouldBeNull();
+        _jobs.Verify(j => j.Enqueue(It.IsAny<Expression<Func<DatasetCleanupService, Task>>>()), Times.Never);
     }
 
     [Test]

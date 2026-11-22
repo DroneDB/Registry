@@ -29,6 +29,7 @@
       "canWrite": true,
       "canDelete": true
     },
-    "hasThumbnail": false
+    "hasThumbnail": false,
+    "busy": null
   }
 }

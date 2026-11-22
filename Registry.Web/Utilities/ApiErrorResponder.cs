@@ -31,6 +31,12 @@ public sealed class ApiErrorResponder
     /// <summary>Extension member of a name clash (<see cref="NameClashException"/>): the dataset path of the existing entry.</summary>
     public const string ConflictPathMember = "conflictPath";
 
+    /// <summary>Extension member of a request on a busy dataset (<see cref="DatasetBusyException"/>): what the task does to it.</summary>
+    public const string DatasetBusyMember = "datasetBusy";
+
+    /// <summary>Extension member of a request on a busy dataset (<see cref="DatasetBusyException"/>): the task that holds it.</summary>
+    public const string TaskIdMember = "taskId";
+
     /// <summary>Extension member of an export over the limit (<see cref="ExportTooLargeException"/>): the estimated size, in bytes.</summary>
     public const string EstimatedExportBytesMember = "estimatedExportBytes";
 
@@ -72,6 +78,11 @@ public sealed class ApiErrorResponder
                 : Create(httpContext, descriptor.StatusCode, descriptor.Message, descriptor.NoRetry);
         if (problem != null && exception is NameClashException clash)
             problem.Extensions[ConflictPathMember] = clash.ConflictPath;
+        if (problem != null && exception is DatasetBusyException busy)
+        {
+            problem.Extensions[DatasetBusyMember] = busy.Kind;
+            problem.Extensions[TaskIdMember] = busy.TaskId;
+        }
         if (problem != null && exception is ExportTooLargeException tooLarge)
         {
             problem.Extensions[EstimatedExportBytesMember] = tooLarge.EstimatedBytes;

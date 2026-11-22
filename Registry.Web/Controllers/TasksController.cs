@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Registry.Web.Attributes;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Ports;
@@ -61,6 +62,7 @@ public class TasksController : ControllerBaseEx
 
     /// <summary>Lists the tasks of the dataset, one page at a time.</summary>
     /// <remarks>The answer has an entity tag: a request with <c>If-None-Match</c> gets 304 when the page did not change.</remarks>
+    [AllowWhileDatasetBusy]
     [HttpGet(Name = nameof(TasksController) + "." + nameof(List))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status304NotModified)]
@@ -89,6 +91,7 @@ public class TasksController : ControllerBaseEx
     /// line is sent every 25 seconds so proxies keep the
     /// connection open; <c>X-Accel-Buffering: no</c> keeps nginx from buffering the stream.
     /// </remarks>
+    [AllowWhileDatasetBusy]
     [HttpGet("events", Name = nameof(TasksController) + "." + nameof(Events))]
     [Produces("text/event-stream")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -153,6 +156,7 @@ public class TasksController : ControllerBaseEx
     // ---- GET /tasks/{id} --------------------------------------------------
 
     /// <summary>The state of a task.</summary>
+    [AllowWhileDatasetBusy]
     [HttpGet("{id}", Name = nameof(TasksController) + "." + nameof(GetStatus))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -164,6 +168,7 @@ public class TasksController : ControllerBaseEx
     // ---- GET /tasks/{id}/log ----------------------------------------------
 
     /// <summary>The log of a task: the lines after the cursor since (0: the whole available tail).</summary>
+    [AllowWhileDatasetBusy]
     [HttpGet("{id}/log", Name = nameof(TasksController) + "." + nameof(GetLog))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<ActionResult<TaskLogDto>> GetLog(
@@ -174,6 +179,7 @@ public class TasksController : ControllerBaseEx
     // ---- GET /tasks/{id}/result -------------------------------------------
 
     /// <summary>Downloads the result file of a task.</summary>
+    [AllowWhileDatasetBusy]
     [HttpGet("{id}/result", Name = nameof(TasksController) + "." + nameof(GetResult))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -188,6 +194,7 @@ public class TasksController : ControllerBaseEx
     // ---- DELETE /tasks/{id} -----------------------------------------------
 
     /// <summary>Cancels a queued or running task.</summary>
+    [AllowWhileDatasetBusy]
     [HttpDelete("{id}", Name = nameof(TasksController) + "." + nameof(Cancel))]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

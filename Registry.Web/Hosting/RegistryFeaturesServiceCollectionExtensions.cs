@@ -64,6 +64,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<OrganizationMembers>();
         services.AddScoped<IDatasetsManager, DatasetsManager>();
         services.AddScoped<DatasetQueries>();
+        services.AddScoped<DatasetListState>();
         services.AddScoped<DatasetLocationQueries>();
         services.AddScoped<IDatasetLocationProvider, DatasetLocationProvider>();
         services.AddScoped<DatasetCommands>();
@@ -89,7 +90,6 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<PushCommit>();
         services.AddSingleton<PushSessionStore>();
         services.AddSystemAdministration();
-        services.AddScoped<RescanManager>();
         services.AddScoped<IMetaManager, MetaManager>();
         services.AddScoped<IBuildStatusService, BuildStatusService>();
 

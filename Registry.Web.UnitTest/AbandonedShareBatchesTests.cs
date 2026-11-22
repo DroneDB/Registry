@@ -171,8 +171,7 @@ public class AbandonedShareBatchesTests
 
     private AbandonedShareBatchesService Service() =>
         new(_context,
-            new DatasetRemoval(_context, _listings.Object, Mock.Of<IBackgroundJobsProcessor>(),
-                NullLogger<DatasetRemoval>.Instance),
+            TestDatasets.Removal(_context, Mock.Of<IBackgroundJobsProcessor>(), _listings.Object),
             DdbManager(),
             new TaskEntryChanges(Mock.Of<IDatasetCacheInvalidator>(), _context, NullLogger<TaskEntryChanges>.Instance),
             new Registry.Adapters.FileSystem(), NullLogger<AbandonedShareBatchesService>.Instance, _time);

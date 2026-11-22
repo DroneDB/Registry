@@ -61,6 +61,7 @@ public sealed class GoldenJsonTests : IDisposable
     private const string Org = "golden-org";
     private const string Ds = "golden-ds";
     private const string WriteOrg = "golden-write";
+    private const string BusyDs = "golden-importing";
     private const string MissingDs = "golden-missing";
 
     private const string DsApi = "/orgs/" + Org + "/ds/" + Ds;
@@ -277,6 +278,8 @@ public sealed class GoldenJsonTests : IDisposable
         yield return new("error-403-non-member", Caller.User, get, DsApi, 403);
         yield return new("error-403-non-admin", Caller.User, get, "/sys/config", 403);
         yield return new("error-404-missing-dataset", Caller.Owner, get, $"/orgs/{Org}/ds/{MissingDs}", 404);
+        // a dataset that a task imports answers 409 with the task (datasetBusy, taskId) until the task ends
+        yield return new("error-409-dataset-busy", Caller.Writer, get, $"/orgs/{WriteOrg}/ds/{BusyDs}/ex", 409);
         yield return new("error-404-missing-organization", Caller.Owner, get, "/orgs/golden-nowhere/", 404);
     }
 
@@ -429,7 +432,14 @@ public sealed class GoldenJsonTests : IDisposable
             var org = Seed.Organization(context, Org, "Golden organization", ownerId: owner.Id,
                 description: "Golden JSON contract tests");
             var dataset = Seed.Dataset(context, org, Ds);
-            Seed.Organization(context, WriteOrg, "Golden write organization", ownerId: writer.Id);
+            var writeOrg = Seed.Organization(context, WriteOrg, "Golden write organization", ownerId: writer.Id);
+            Seed.Dataset(context, writeOrg, BusyDs);
+            context.JobIndices.Add(new Registry.Web.Data.Models.JobIndex
+            {
+                JobId = "golden-import-task", OrgSlug = WriteOrg, DsSlug = BusyDs,
+                ToolId = Registry.Web.Services.HeavyTasks.HeavyToolIds.ImportDataset, CurrentState = "Processing",
+                ProgressPercent = 40, CreatedAtUtc = DateTime.UtcNow
+            });
             await context.SaveChangesAsync();
 
             _ddb.AddContractDataset(dataset.InternalRef);

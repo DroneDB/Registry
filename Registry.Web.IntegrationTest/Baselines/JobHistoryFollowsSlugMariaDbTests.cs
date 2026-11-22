@@ -105,15 +105,14 @@ public class JobHistoryFollowsSlugMariaDbTests
         await database.Context.SaveChangesAsync();
 
         var ddb = new Moq.Mock<Registry.Ports.IDdbManager>();
-        await queue.RunAsync(new DatasetCleanupService(database.Context, ddb.Object, queue.Jobs.Object,
-            new JobIndexQuery(database.Context), NullLogger<DatasetCleanupService>.Instance));
+        await queue.RunAsync(TestJobs.Cleanup(database.Context, queue.Jobs.Object, ddb.Object));
 
         Jobs(database.Check()).ShouldBe(
         [
             ("c", "source", "moving"), ("new", "source", "moving"), ("d", "other", "moving"), ("orphan", "SOURCE", "MOVING")
         ], ignoreOrder: true);
-        queue.Jobs.Verify(j => j.Delete("moving-running"), Moq.Times.Once);
-        queue.Jobs.Verify(j => j.Delete("new"), Moq.Times.Never);
+        queue.Jobs.Verify(j => j.Delete("moving-running", "Processing"), Moq.Times.Once);
+        queue.Jobs.Verify(j => j.Delete("new", Moq.It.IsAny<string>()), Moq.Times.Never);
     }
 
     private static (string Job, string Org, string Dataset)[] Jobs(RegistryContext context) =>

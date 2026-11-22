@@ -5,9 +5,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Registry.Ports.DroneDB;
+using Registry.Web.Attributes;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.HeavyTasks;
+using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -24,13 +26,13 @@ public class DatasetsController : ControllerBaseEx
 {
     private readonly IDatasetsManager _datasetsManager;
     private readonly ShareManager _shareManager;
-    private readonly RescanManager _rescanManager;
+    private readonly ITasksManager _tasksManager;
 
-    public DatasetsController(IDatasetsManager datasetsManager, ShareManager shareManager, RescanManager rescanManager)
+    public DatasetsController(IDatasetsManager datasetsManager, ShareManager shareManager, ITasksManager tasksManager)
     {
         _datasetsManager = datasetsManager;
         _shareManager = shareManager;
-        _rescanManager = rescanManager;
+        _tasksManager = tasksManager;
     }
 
     /// <summary>
@@ -230,9 +232,12 @@ public class DatasetsController : ControllerBaseEx
     /// <summary>
     /// Deletes a dataset.
     /// </summary>
+    /// <remarks>Also while a task imports the dataset or rescans its index: the task is stopped, and the files are
+    /// deleted once its worker has stopped.</remarks>
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>
     /// <returns>No content on success.</returns>
+    [AllowWhileDatasetBusy]
     [HttpDelete(RoutesHelper.DatasetSlug, Name = nameof(DatasetsController) + "." + nameof(Delete))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -247,29 +252,40 @@ public class DatasetsController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Rescans the index of a dataset to update metadata.
-    /// Only administrators can perform this operation.
+    /// Rescans the index of a dataset to update its metadata, then rebuilds what changed.
     /// </summary>
+    /// <remarks>
+    /// Queues a <c>rescan-index</c> task (forced: a new task even when the same rescan ran just before) and answers 202
+    /// with it; its progress and its end are those of the dataset's tasks. Until the task ends the dataset is busy: it can
+    /// only be deleted. Users with write access to the dataset only.
+    /// </remarks>
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>
     /// <param name="types">Optional comma-separated list of entry types to rescan (e.g., "image,geoimage,pointcloud"). If not specified, all types are rescanned.</param>
-    /// <param name="stopOnError">Whether to stop processing on first error. Default is true.</param>
+    /// <param name="stopOnError">Whether to stop processing on first error. Default is false: an entry that cannot be read is reported and the others are rescanned.</param>
     /// <param name="extensions">Optional comma-separated list of file extensions to rescan (e.g., "dwg,dxf"). An entry must match both filters. With a filter only the rescanned entries are rebuilt.</param>
-    /// <returns>The rescan result with processed entries and statistics.</returns>
+    /// <returns>The queued task.</returns>
     [HttpPost(RoutesHelper.DatasetSlug + "/rescan", Name = nameof(DatasetsController) + "." + nameof(RescanIndex))]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(SubmitTaskResponseDto), StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<RescanResultDto>> RescanIndex(
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<SubmitTaskResponseDto>> RescanIndex(
         [FromRoute, Required] string orgSlug,
         [FromRoute, Required] string dsSlug,
         [FromQuery] string? types = null,
-        [FromQuery] bool stopOnError = true,
+        [FromQuery] bool stopOnError = false,
         [FromQuery] string? extensions = null, CancellationToken ct = default)
     {
-        return await _rescanManager.RescanDatasetIndex(orgSlug, dsSlug,
-            new RescanOptions(types, extensions, stopOnError), ct: ct);
+        var task = await _tasksManager.SubmitAsync(orgSlug, dsSlug, new SubmitTaskRequestDto
+        {
+            ToolId = HeavyToolIds.RescanIndex,
+            Params = RescanIndexTool.CreateParams(RescanFilter.Parse(types, extensions), stopOnError),
+            Force = true
+        }, ct);
+
+        return Accepted(task.StatusUrl, task);
     }
 
 }

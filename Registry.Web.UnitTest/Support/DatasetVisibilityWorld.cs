@@ -144,8 +144,9 @@ public sealed class DatasetVisibilityWorld : IDisposable
         var auth = Auth(caller);
         var summaries = new Mock<IDatasetSummaryProvider>();
         summaries.Setup(s => s.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(new DatasetSummary(0, null, null));
-        return new DatasetQueries(Access(auth), auth, Context, summaries.Object, DdbManager.Object,
-            Mock.Of<IUrlBuilder>(), Microsoft.Extensions.Options.Options.Create(new ThumbnailOptions()));
+        return new DatasetQueries(Access(auth), auth, Context,
+            new DatasetListState(summaries.Object, new Registry.Web.Services.Datasets.DatasetActivity(Context)),
+            DdbManager.Object, Mock.Of<IUrlBuilder>(), Microsoft.Extensions.Options.Options.Create(new ThumbnailOptions()));
     }
 
     /// <summary>The STAC catalog for <paramref name="caller"/>; the listings it caches are kept per caller.</summary>

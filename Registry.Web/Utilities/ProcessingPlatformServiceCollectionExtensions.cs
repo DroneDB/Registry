@@ -4,6 +4,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Caching;
 using Registry.Web.Services.Datasets;
 using Registry.Web.Services.Initialization;
+using Registry.Web.Services.PlatformTasks;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.NodeOdx;
@@ -94,6 +95,13 @@ public static class ProcessingPlatformServiceCollectionExtensions
         services.AddScoped<TaskEntryChanges>();
         services.AddScoped<CreatedDatasetRollbackJob>();
         services.AddScoped<DatasetRemoval>();
+        // The one stop of a task (the user cancel, the dataset delete and its cleanup), the datasets a task imports or
+        // rescans (busy until it ends), and the worker mark that keeps the folder of a deleted dataset until its worker
+        // has stopped (the live job servers tell a running worker from one that crashed)
+        services.AddScoped<TaskCanceller>();
+        services.AddScoped<IDatasetActivity, DatasetActivity>();
+        services.AddScoped<TaskWorkerMarker>();
+        services.AddScoped<ILiveJobServers, HangfireLiveJobServers>();
         // The system creation of the dataset a task makes for its results (photogrammetry, D-031)
         services.AddScoped<DatasetCreation>();
         services.AddScoped<ResultsDatasetServices>();

@@ -530,11 +530,12 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/rename
   404 application/problem+json ProblemDetails
   409 application/problem+json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/rescan
-  200 application/json RescanResultDto
+  202 application/json SubmitTaskResponseDto
   400 application/problem+json ProblemDetails
   401 application/problem+json ProblemDetails
   403 application/problem+json ProblemDetails
   404 application/problem+json ProblemDetails
+  409 application/problem+json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/search
   body multipart/form-data object
   200 application/json array<EntryDto>
@@ -1218,8 +1219,9 @@ schema CreateImportRequestDto { sourceType:string, params:map<string>, slug:stri
 schema CreateRoleRequestDto { roleName:string }
 schema CreateUserRequest { userName:string, password:string, email:string, roles:array<string> }
 schema CronRuleDto { disableWords:array<string>, minFields:integer(int32), maxFields:integer(int32), macros:array<string>, description:string }
+schema DatasetBusyDto { kind:string, taskId:string, progress:integer(int32) }
 schema DatasetCleanupBuildDto { removedEntries:array<string>, removedBuilds:array<string> }
-schema DatasetDto { slug:string, creationDate:string(date-time), properties:map<any>, size:integer(int64), lastModified:string(date-time), permissions:DatasetPermissionsDto, hasThumbnail:boolean }
+schema DatasetDto { slug:string, creationDate:string(date-time), properties:map<any>, size:integer(int64), lastModified:string(date-time), permissions:DatasetPermissionsDto, hasThumbnail:boolean, busy:DatasetBusyDto }
 schema DatasetLocationDto { slug:string, name:string, tagline:string, bbox:array<number(double)>, point:array<number(double)> }
 schema DatasetPermissionsDto { canRead:boolean, canWrite:boolean, canDelete:boolean }
 schema DeleteBatchResponse { deleted:array<string>, failed:map<string> }
@@ -1298,10 +1300,8 @@ schema RemoteImportStatusDto { jobId:string, state:string, result:ImportResultDt
 schema RemoveBatchErrorDto { token:string, organization:string, dataset:string, message:string }
 schema RemoveResponse { removed:integer(int32) }
 schema RemovedBatchDto { token:string, userName:string, status:BatchStatus, start:string(date-time), end:string(date-time), organization:string, dataset:string }
-schema RescanEntryResultDto { path:string, hash:string, success:boolean, error:string }
 schema RescanJobDto { jobId:string }
 schema RescanRequestDto { organizationSlug:string, datasetSlug:string, types:array<string>, extensions:array<string>, stopOnError:boolean }
-schema RescanResultDto { organizationSlug:string, datasetSlug:string, totalProcessed:integer(int32), successCount:integer(int32), errorCount:integer(int32), entries:array<RescanEntryResultDto> }
 schema ShareInitResultDto { token:string }
 schema SlugFixEntryDto { kind:string, organizationSlug:string, oldSlug:string, newSlug:string, status:string, reason:string }
 schema StacCatalogDto { type:string, stac_version:string, id:string, description:string, links:array<StacLinkDto>, conformsTo:array<string> }

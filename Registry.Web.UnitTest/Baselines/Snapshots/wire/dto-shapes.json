@@ -1516,6 +1516,18 @@
       "description": null
     }
   },
+  "Registry.Web.Models.DTO.DatasetBusyDto": {
+    "full": {
+      "kind": "Kind-text",
+      "taskId": "TaskId-text",
+      "progress": 42
+    },
+    "sparse": {
+      "kind": null,
+      "taskId": null,
+      "progress": null
+    }
+  },
   "Registry.Web.Models.DTO.DatasetCleanupBuildDto": {
     "full": {
       "removedEntries": [
@@ -1575,7 +1587,12 @@
         "canWrite": true,
         "canDelete": true
       },
-      "hasThumbnail": true
+      "hasThumbnail": true,
+      "busy": {
+        "kind": "Kind-text",
+        "taskId": "TaskId-text",
+        "progress": 42
+      }
     },
     "sparse": {
       "slug": null,
@@ -1584,7 +1601,8 @@
       "size": 0,
       "lastModified": null,
       "permissions": null,
-      "hasThumbnail": null
+      "hasThumbnail": null,
+      "busy": null
     }
   },
   "Registry.Web.Models.DTO.DatasetEditDto": {
@@ -3666,20 +3684,6 @@
       "dataset": null
     }
   },
-  "Registry.Web.Models.DTO.RescanEntryResultDto": {
-    "full": {
-      "path": "Path-text",
-      "hash": "Hash-text",
-      "success": true,
-      "error": "Error-text"
-    },
-    "sparse": {
-      "path": null,
-      "hash": null,
-      "success": false,
-      "error": null
-    }
-  },
   "Registry.Web.Models.DTO.RescanJobDto": {
     "full": {
       "jobId": "JobId-text"
@@ -3706,31 +3710,6 @@
       "types": null,
       "extensions": null,
       "stopOnError": false
-    }
-  },
-  "Registry.Web.Models.DTO.RescanResultDto": {
-    "full": {
-      "organizationSlug": "OrganizationSlug-text",
-      "datasetSlug": "DatasetSlug-text",
-      "totalProcessed": 42,
-      "successCount": 42,
-      "errorCount": 42,
-      "entries": [
-        {
-          "path": "Path-text",
-          "hash": "Hash-text",
-          "success": true,
-          "error": "Error-text"
-        }
-      ]
-    },
-    "sparse": {
-      "organizationSlug": null,
-      "datasetSlug": null,
-      "totalProcessed": 0,
-      "successCount": 0,
-      "errorCount": 0,
-      "entries": null
     }
   },
   "Registry.Web.Models.DTO.ShareInitDto": {

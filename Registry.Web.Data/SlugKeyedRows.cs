@@ -41,6 +41,17 @@ public static class SlugKeyedRows
     /// <summary>Whether <paramref name="dsSlug"/> is a <see cref="TombstoneSlug"/>: its dataset was deleted.</summary>
     public static bool IsTombstone(string? dsSlug) => dsSlug?.StartsWith(TombstonePrefix, StringComparison.Ordinal) == true;
 
+    /// <summary>
+    /// The folder id of the deleted dataset that <paramref name="dsSlug"/> names, when it is a <see cref="TombstoneSlug"/>:
+    /// what a worker that ends after the delete needs to queue the cleanup of the folder again.
+    /// </summary>
+    public static bool TryParseTombstone(string? dsSlug, out Guid internalRef)
+    {
+        internalRef = Guid.Empty;
+        return IsTombstone(dsSlug) &&
+               Guid.TryParseExact(dsSlug.AsSpan(TombstonePrefix.Length), "N", out internalRef);
+    }
+
     /// <summary>How every <see cref="TombstoneSlug"/> starts, for a query that keeps or drops the rows of deleted datasets.</summary>
     public const string TombstonePrefix = "~deleted-";
 

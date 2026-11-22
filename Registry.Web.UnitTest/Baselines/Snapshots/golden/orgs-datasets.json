@@ -30,7 +30,8 @@
         "canWrite": true,
         "canDelete": true
       },
-      "hasThumbnail": null
+      "hasThumbnail": null,
+      "busy": null
     }
   ]
 }

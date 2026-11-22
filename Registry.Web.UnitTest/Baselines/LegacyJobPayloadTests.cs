@@ -104,7 +104,8 @@ public sealed class LegacyJobPayloadTests : IDisposable
         services.AddSingleton(Mock.Of<IJobIndexQuery>());
         _context = TestDb.CreateContext<Registry.Web.Data.RegistryContext>();
         services.AddSingleton(_context);
-        services.AddScoped<DatasetCleanupService>();
+        services.AddScoped(sp => TestJobs.Cleanup(_context, sp.GetRequiredService<IBackgroundJobsProcessor>(),
+            sp.GetRequiredService<IDdbManager>()));
         services.AddSingleton(TestJobs.Scheduler());
         services.AddScoped<PendingBuildEnqueuer>();
         services.AddSingleton(TestJobs.Budget());

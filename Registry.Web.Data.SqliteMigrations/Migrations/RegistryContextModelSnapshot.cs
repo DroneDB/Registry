@@ -336,6 +336,10 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(false);
 
+                    b.Property<string>("WorkerServerId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("WorkflowExecutionId")
                         .HasMaxLength(36)
                         .HasColumnType("TEXT");

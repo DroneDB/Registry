@@ -15,12 +15,14 @@ namespace Registry.Web.Services.HeavyTasks.Adapters;
 /// <param name="Rollback">The attempt rule and the rollback of what the task wrote.</param>
 /// <param name="WriteRecords">The task's write record (its commit).</param>
 /// <param name="EntryChanges">The announce of the entries the task wrote or removed.</param>
+/// <param name="Worker">The mark of the worker that runs the task, which keeps the folder of a deleted dataset until it stops.</param>
 public sealed record HeavyTaskRecords(
     IJobIndexWriter Index,
     IBackgroundJobsProcessor Jobs,
     ITaskRollback Rollback,
     ITaskWriteRecordStore WriteRecords,
-    TaskEntryChanges EntryChanges);
+    TaskEntryChanges EntryChanges,
+    TaskWorkerMarker Worker);
 
 /// <summary>
 /// What a heavy task needs of its dataset to run, from the run's own scope (<see cref="HeavyTaskJobWrapper"/>): the

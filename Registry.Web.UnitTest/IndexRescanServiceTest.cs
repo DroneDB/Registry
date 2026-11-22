@@ -13,6 +13,7 @@ using Registry.Ports.DroneDB;
 using Registry.Test.Common;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Ports;
@@ -104,6 +105,47 @@ public class IndexRescanServiceTest : TestBase
         _submitted.Select(s => $"{s.Org}/{s.Ds}").ShouldBe(["org-a/plans"]);
     }
 
+    /// <summary>A dataset that a task imports or rescans now is left to it: no rescan task is queued on it.</summary>
+    [TestCase(HeavyToolIds.ImportDataset)]
+    [TestCase(HeavyToolIds.RescanIndex)]
+    public async Task SubmitAsync_SkipsABusyDataset(string tool)
+    {
+        await using var context = CreateContext(
+            ("org-a", "busy", [Entry("a.dwg", EntryType.Generic)]),
+            ("org-a", "plans", [Entry("b.dwg", EntryType.Generic)]));
+        context.JobIndices.Add(new JobIndex
+        {
+            JobId = "holder", OrgSlug = "org-a", DsSlug = "busy", ToolId = tool, CurrentState = "Processing",
+            CreatedAtUtc = DateTime.UtcNow
+        });
+        await context.SaveChangesAsync();
+
+        await CreateService(context).SubmitAsync(null, null, null, "dwg", false, null);
+
+        _submitted.Select(s => $"{s.Org}/{s.Ds}").ShouldBe(["org-a/plans"]);
+    }
+
+    /// <summary>The rescan of an upgrade leaves a busy dataset as it is, to rescan another time.</summary>
+    [Test]
+    public async Task RescanDatasetNowAsync_LeavesABusyDataset_ForLater()
+    {
+        await using var context = CreateContext(("org-a", "busy", [Entry("a.dwg", EntryType.Generic)]));
+        var ds = context.Datasets.Single();
+        context.JobIndices.Add(new JobIndex
+        {
+            JobId = "holder", OrgSlug = "org-a", DsSlug = "busy", ToolId = HeavyToolIds.ImportDataset,
+            CurrentState = "Enqueued", CreatedAtUtc = DateTime.UtcNow
+        });
+        await context.SaveChangesAsync();
+
+        var outcome = await CreateService(context).RescanDatasetNowAsync("org-a", "busy", ds.InternalRef,
+            RescanFilter.Parse(null, "dwg"), Mock.Of<IRescanBuildRunner>());
+
+        outcome.ShouldBe(DatasetRescanOutcome.Busy);
+        outcome.SkippedBusy.ShouldBeTrue();
+        _ddbManagerMock.Verify(m => m.Get(It.IsAny<string>(), It.IsAny<Guid>()), Times.Never, "the dataset is not opened");
+    }
+
     [Test]
     public async Task SubmitAsync_NoFilter_Throws()
     {
@@ -117,7 +159,7 @@ public class IndexRescanServiceTest : TestBase
     private IndexRescanService CreateService(RegistryContext context) =>
         new(context, _ddbManagerMock.Object, _taskSubmitterMock.Object,
             new RescanRebuild(Mock.Of<IDatasetCacheInvalidator>(), CreateTestLogger<RescanRebuild>()),
-            CreateTestLogger<IndexRescanService>());
+            new Registry.Web.Services.Datasets.DatasetActivity(context), CreateTestLogger<IndexRescanService>());
 
     private static DdbEntry Entry(string path, EntryType type) => new() { Path = path, Type = type, Hash = path };
 

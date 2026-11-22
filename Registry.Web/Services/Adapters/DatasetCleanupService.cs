@@ -5,51 +5,55 @@ using Hangfire;
 using Hangfire.Server;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Ports;
 using Registry.Web.Data;
-using Registry.Web.Services.Ports;
-
+using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.Jobs;
+using Registry.Web.Services.PlatformTasks;
+using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
-/// Service for cleaning up deleted datasets.
-/// Handles cancellation of active build jobs, removal of JobIndex entries,
-/// and filesystem cleanup in a background job.
+/// The cleanup of a deleted dataset, in a background job: it stops the dataset's queued and running jobs
+/// (<see cref="TaskCanceller"/>), removes their rows and deletes the dataset's folder.
+/// <para>
+/// The folder is deleted only when no worker of the dataset is still running: a task stopped while it runs (a native
+/// rescan cannot be interrupted, an import keeps copying until it sees the cancel) may still write there. A row that names
+/// a live job server (<see cref="TaskWorkerMarker"/>, <see cref="ILiveJobServers"/>) is kept with the folder, and that
+/// worker queues this cleanup again when it stops. A mark left by a server that crashed does not count: the job store drops
+/// the server from the live list after its heartbeat timeout.
+/// </para>
 /// </summary>
 public class DatasetCleanupService
 {
     private readonly RegistryContext _context;
     private readonly IDdbManager _ddbManager;
-    private readonly IBackgroundJobsProcessor _backgroundJob;
-    private readonly IJobIndexQuery _jobIndexQuery;
+    private readonly TaskCanceller _canceller;
+    private readonly ILiveJobServers _servers;
     private readonly ILogger<DatasetCleanupService> _logger;
     private readonly IDatasetIndexQueue? _indexQueue;
-
-    // Active Hangfire job states that should be cancelled. These string values map directly to
-    // Hangfire's built-in job state names (e.g., Created, Enqueued, Processing, Scheduled, Awaiting).
-    // Only "active"/non-terminal states are included here; terminal states such as Succeeded/Failed/Deleted
-    // are intentionally excluded because they should not be cancelled. If Hangfire adds or changes
-    // job states, update this list accordingly based on Hangfire's job state documentation.
-    // See: https://docs.hangfire.io/en/latest/background-methods/using-job-states.html
-    private static readonly string[] ActiveJobStates = ["Created", "Enqueued", "Processing", "Scheduled", "Awaiting"];
 
     public DatasetCleanupService(
         RegistryContext context,
         IDdbManager ddbManager,
-        IBackgroundJobsProcessor backgroundJob,
-        IJobIndexQuery jobIndexQuery,
+        TaskCanceller canceller,
+        ILiveJobServers servers,
         ILogger<DatasetCleanupService> logger,
         IDatasetIndexQueue? indexQueue = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _ddbManager = ddbManager ?? throw new ArgumentNullException(nameof(ddbManager));
-        _backgroundJob = backgroundJob ?? throw new ArgumentNullException(nameof(backgroundJob));
-        _jobIndexQuery = jobIndexQuery ?? throw new ArgumentNullException(nameof(jobIndexQuery));
+        _canceller = canceller ?? throw new ArgumentNullException(nameof(canceller));
+        _servers = servers ?? throw new ArgumentNullException(nameof(servers));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _indexQueue = indexQueue;
     }
+
+    /// <summary>Queues the cleanup of the dataset <paramref name="internalRef"/> of <paramref name="orgSlug"/>, deleted (<see cref="CleanupDeletedAsync"/>); the job id.</summary>
+    public static string Queue(IBackgroundJobsProcessor jobs, string orgSlug, Guid internalRef) =>
+        jobs.Enqueue<DatasetCleanupService>(service => service.CleanupDeletedAsync(orgSlug, internalRef, null));
 
     /// <summary>
     /// Cleans up a deleted dataset by cancelling its active jobs, removing its JobIndex entries and deleting the
@@ -82,24 +86,49 @@ public class DatasetCleanupService
         console.Info("Starting cleanup for deleted dataset {OrgSlug}/{DsSlug} (InternalRef: {InternalRef})",
             orgSlug, dsSlug, internalRef);
 
-        // 1. Cancel all active jobs for this dataset
-        var cancelledCount = await CancelActiveJobsAsync(orgSlug, dsSlug, console);
+        var rows = await _context.JobIndices.AsNoTracking()
+            .Where(j => j.OrgSlug == orgSlug && j.DsSlug == dsSlug)
+            .Select(j => new { j.JobId, j.CurrentState, j.WorkerServerId })
+            .ToArrayAsync();
+
+        // 1. Stop the jobs that are queued or running
+        var cancelledCount = 0;
+        foreach (var job in rows.Where(j => SlugKeyedRows.BlockingJobStates.Contains(j.CurrentState)))
+            await BestEffort.RunAsync(async () =>
+            {
+                if (await _canceller.CancelAsync(job.JobId, orgSlug, dsSlug))
+                    cancelledCount++;
+            }, ex => console.Warning(ex, "Failed to cancel job {JobId}: {Error}", job.JobId, ex.Message));
         console.Info("Cancelled {Count} active jobs", cancelledCount);
 
-        // 2. Remove all JobIndex entries for this dataset
-        var removedCount = await RemoveJobIndexEntriesAsync(orgSlug, dsSlug);
+        // 2. The rows whose worker is still running stay (the worker queues this cleanup again when it stops); the
+        //    others are removed
+        var live = rows.Any(j => j.WorkerServerId != null) ? _servers.Ids() : null;
+        var running = rows.Where(j => j.WorkerServerId != null && live!.Contains(j.WorkerServerId))
+            .Select(j => j.JobId).ToArray();
+        var removedCount = await _context.JobIndices
+            .Where(j => j.OrgSlug == orgSlug && j.DsSlug == dsSlug && !running.Contains(j.JobId))
+            .ExecuteDeleteAsync();
         console.Info("Removed {Count} JobIndex entries", removedCount);
 
-        // 2.5. Release the dataset's per-dataset index lane so it is not retained after the
-        //      dataset ceases to exist (new enqueues transparently recreate a fresh lane for
-        //      the remainder of the shutdown).
+        // 3. Release the dataset's per-dataset index lane so it is not retained after the
+        //    dataset ceases to exist (new enqueues transparently recreate a fresh lane for
+        //    the remainder of the shutdown).
         if (_indexQueue != null)
         {
             _indexQueue.Release(new DatasetKey(orgSlug, internalRef));
             console.Info("Released index lane for the removed dataset");
         }
 
-        // 3. Delete filesystem folder
+        // 4. Delete the filesystem folder, once no worker can write there
+        if (running.Length > 0)
+        {
+            console.Info("Kept the folder of {OrgSlug}/{InternalRef}: {Count} task(s) still running on a worker " +
+                         "({Tasks}); the last one to stop queues this cleanup again", orgSlug, internalRef,
+                running.Length, string.Join(", ", running));
+            return;
+        }
+
         try
         {
             _ddbManager.Delete(orgSlug, internalRef);
@@ -113,52 +142,5 @@ public class DatasetCleanupService
         }
 
         console.Info("Cleanup completed for {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
-    }
-
-    /// <summary>
-    /// Cancels all active jobs for the specified dataset.
-    /// </summary>
-    private async Task<int> CancelActiveJobsAsync(string orgSlug, string dsSlug, JobConsole console)
-    {
-        var jobs = await _jobIndexQuery.GetByOrgDsAsync(orgSlug, dsSlug, take: int.MaxValue);
-        var activeJobs = jobs.Where(j => ActiveJobStates.Contains(j.CurrentState)).ToList();
-
-        var cancelledCount = 0;
-        foreach (var job in activeJobs)
-        {
-            try
-            {
-                if (_backgroundJob.Delete(job.JobId))
-                {
-                    cancelledCount++;
-                    _logger.LogDebug("Cancelled job {JobId} (state: {State}) for deleted dataset {OrgSlug}/{DsSlug}",
-                        job.JobId, job.CurrentState, orgSlug, dsSlug);
-                }
-            }
-            catch (Exception ex)
-            {
-                console.Warning(ex, "Failed to cancel job {JobId}: {Error}", job.JobId, ex.Message);
-            }
-        }
-
-        return cancelledCount;
-    }
-
-    /// <summary>
-    /// Removes all JobIndex entries for the specified dataset.
-    /// </summary>
-    private async Task<int> RemoveJobIndexEntriesAsync(string orgSlug, string dsSlug)
-    {
-        var jobIndicesToRemove = await _context.JobIndices
-            .Where(j => j.OrgSlug == orgSlug && j.DsSlug == dsSlug)
-            .ToListAsync();
-
-        if (jobIndicesToRemove.Count > 0)
-        {
-            _context.JobIndices.RemoveRange(jobIndicesToRemove);
-            await _context.SaveChangesAsync();
-        }
-
-        return jobIndicesToRemove.Count;
     }
 }
