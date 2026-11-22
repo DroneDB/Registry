@@ -144,7 +144,14 @@ public sealed class RescanFilter
 
     public override string ToString() =>
         $"types: {TypesArgument ?? "all"}, extensions: {ExtensionsArgument ?? "all"}" +
-        (Paths.Count == 0 ? string.Empty : $", paths: {string.Join(", ", Paths)}");
+        (Paths.Count == 0 ? string.Empty : $", paths: {PathsSummary}");
+
+    // The paths in a log line: the first ones, then how many more, so a rescan of a large selection logs one short line
+    private const int LoggedPaths = 5;
+
+    private string PathsSummary => Paths.Count <= LoggedPaths
+        ? string.Join(", ", Paths)
+        : $"{string.Join(", ", Paths.Take(LoggedPaths))} and {Paths.Count - LoggedPaths} more";
 
     private static bool IsAtOrUnder(string entryPath, string path) =>
         entryPath.StartsWith(path, StringComparison.Ordinal) &&

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using NUnit.Framework;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
@@ -115,6 +116,14 @@ public class RescanFilterTest
         filter.Types.ShouldBeEmpty();
         filter.Extensions.ShouldBeEmpty();
         filter.ToString().ShouldContain("paths: a/b.jpg, folder/sub, c.tif");
+    }
+
+    [Test]
+    public void ToString_OfManyPaths_NamesTheFirstFiveAndCountsTheRest()
+    {
+        var filter = RescanFilter.ForPaths(TestPaths.Policy, Enumerable.Range(1, 12).Select(i => $"f{i}.jpg"));
+
+        filter.ToString().ShouldEndWith("paths: f1.jpg, f2.jpg, f3.jpg, f4.jpg, f5.jpg and 7 more");
     }
 
     [TestCase("")]
