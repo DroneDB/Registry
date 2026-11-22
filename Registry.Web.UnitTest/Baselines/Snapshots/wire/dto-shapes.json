@@ -3389,6 +3389,56 @@
       "canManageMembers": false
     }
   },
+  "Registry.Web.Models.DTO.OrganizationReportSettingsDto": {
+    "full": {
+      "version": 42,
+      "templates": [
+        {
+          "id": "Id-text",
+          "name": "Name-text",
+          "logo": "Logo-text",
+          "primary": "Primary-text",
+          "accent": "Accent-text",
+          "paper": "Paper-text",
+          "orientation": "Orientation-text",
+          "headerText": "HeaderText-text",
+          "footerText": "FooterText-text",
+          "disclaimer": "Disclaimer-text",
+          "defaultSections": [
+            "DefaultSections-text"
+          ]
+        }
+      ],
+      "schema": {
+        "categories": [
+          {
+            "id": "Id-text",
+            "name": "Name-text",
+            "colour": "Colour-text"
+          }
+        ],
+        "severities": [
+          {
+            "id": "Id-text",
+            "name": "Name-text",
+            "colour": "Colour-text"
+          }
+        ],
+        "statuses": [
+          {
+            "id": "Id-text",
+            "name": "Name-text",
+            "closed": true
+          }
+        ]
+      }
+    },
+    "sparse": {
+      "version": 0,
+      "templates": null,
+      "schema": null
+    }
+  },
   "Registry.Web.Models.DTO.OrganizationRequestDto": {
     "full": {
       "slug": "Slug-text",
@@ -3682,6 +3732,206 @@
       "end": null,
       "organization": null,
       "dataset": null
+    }
+  },
+  "Registry.Web.Models.DTO.ReportLogoDto": {
+    "full": {
+      "logo": "Logo-text",
+      "version": 42
+    },
+    "sparse": {
+      "logo": null,
+      "version": 0
+    }
+  },
+  "Registry.Web.Models.DTO.ReportSchemaChoiceDto": {
+    "full": {
+      "id": "Id-text",
+      "name": "Name-text",
+      "colour": "Colour-text"
+    },
+    "sparse": {
+      "id": null,
+      "name": null,
+      "colour": null
+    }
+  },
+  "Registry.Web.Models.DTO.ReportSchemaDto": {
+    "full": {
+      "categories": [
+        {
+          "id": "Id-text",
+          "name": "Name-text",
+          "colour": "Colour-text"
+        }
+      ],
+      "severities": [
+        {
+          "id": "Id-text",
+          "name": "Name-text",
+          "colour": "Colour-text"
+        }
+      ],
+      "statuses": [
+        {
+          "id": "Id-text",
+          "name": "Name-text",
+          "closed": true
+        }
+      ]
+    },
+    "sparse": {
+      "categories": null,
+      "severities": null,
+      "statuses": null
+    }
+  },
+  "Registry.Web.Models.DTO.ReportSchemaStatusDto": {
+    "full": {
+      "id": "Id-text",
+      "name": "Name-text",
+      "closed": true
+    },
+    "sparse": {
+      "id": null,
+      "name": null,
+      "closed": false
+    }
+  },
+  "Registry.Web.Models.DTO.ReportSettingsDto": {
+    "full": {
+      "templates": [
+        {
+          "id": "Id-text",
+          "name": "Name-text",
+          "logo": "Logo-text",
+          "primary": "Primary-text",
+          "accent": "Accent-text",
+          "paper": "Paper-text",
+          "orientation": "Orientation-text",
+          "headerText": "HeaderText-text",
+          "footerText": "FooterText-text",
+          "disclaimer": "Disclaimer-text",
+          "defaultSections": [
+            "DefaultSections-text"
+          ]
+        }
+      ],
+      "schema": {
+        "categories": [
+          {
+            "id": "Id-text",
+            "name": "Name-text",
+            "colour": "Colour-text"
+          }
+        ],
+        "severities": [
+          {
+            "id": "Id-text",
+            "name": "Name-text",
+            "colour": "Colour-text"
+          }
+        ],
+        "statuses": [
+          {
+            "id": "Id-text",
+            "name": "Name-text",
+            "closed": true
+          }
+        ]
+      }
+    },
+    "sparse": {
+      "templates": null,
+      "schema": null
+    }
+  },
+  "Registry.Web.Models.DTO.ReportSettingsUpdateDto": {
+    "full": {
+      "templates": [
+        {
+          "id": "Id-text",
+          "name": "Name-text",
+          "logo": "Logo-text",
+          "primary": "Primary-text",
+          "accent": "Accent-text",
+          "paper": "Paper-text",
+          "orientation": "Orientation-text",
+          "headerText": "HeaderText-text",
+          "footerText": "FooterText-text",
+          "disclaimer": "Disclaimer-text",
+          "defaultSections": [
+            "DefaultSections-text"
+          ]
+        }
+      ],
+      "schema": {
+        "categories": [
+          {
+            "id": "Id-text",
+            "name": "Name-text",
+            "colour": "Colour-text"
+          }
+        ],
+        "severities": [
+          {
+            "id": "Id-text",
+            "name": "Name-text",
+            "colour": "Colour-text"
+          }
+        ],
+        "statuses": [
+          {
+            "id": "Id-text",
+            "name": "Name-text",
+            "closed": true
+          }
+        ]
+      },
+      "version": 42
+    },
+    "sparse": {
+      "templates": null,
+      "schema": null,
+      "version": null
+    }
+  },
+  "Registry.Web.Models.DTO.ReportSettingsVersionDto": {
+    "full": {
+      "version": 42
+    },
+    "sparse": {
+      "version": 0
+    }
+  },
+  "Registry.Web.Models.DTO.ReportTemplateDto": {
+    "full": {
+      "id": "Id-text",
+      "name": "Name-text",
+      "logo": "Logo-text",
+      "primary": "Primary-text",
+      "accent": "Accent-text",
+      "paper": "Paper-text",
+      "orientation": "Orientation-text",
+      "headerText": "HeaderText-text",
+      "footerText": "FooterText-text",
+      "disclaimer": "Disclaimer-text",
+      "defaultSections": [
+        "DefaultSections-text"
+      ]
+    },
+    "sparse": {
+      "id": null,
+      "name": null,
+      "logo": null,
+      "primary": null,
+      "accent": null,
+      "paper": null,
+      "orientation": null,
+      "headerText": null,
+      "footerText": null,
+      "disclaimer": null,
+      "defaultSections": null
     }
   },
   "Registry.Web.Models.DTO.RescanJobDto": {

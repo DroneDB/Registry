@@ -9,6 +9,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
+using Registry.Web.Services.Reports;
 
 namespace Registry.Web.Services.Organizations;
 
@@ -20,17 +21,19 @@ public sealed class OrganizationMerger
     private readonly RegistryContext _context;
     private readonly IDatasetResolver _datasets;
     private readonly IDatasetsManager _datasetManager;
+    private readonly ReportLogoStore _logos;
     private readonly ILogger<OrganizationMerger> _logger;
 
     public OrganizationMerger(IAuthManager authManager, OrganizationMembershipService memberships,
         RegistryContext context, IDatasetResolver datasets, IDatasetsManager datasetManager,
-        ILogger<OrganizationMerger> logger)
+        ReportLogoStore logos, ILogger<OrganizationMerger> logger)
     {
         _authManager = authManager;
         _memberships = memberships;
         _context = context;
         _datasets = datasets;
         _datasetManager = datasetManager;
+        _logos = logos;
         _logger = logger;
     }
 
@@ -118,6 +121,9 @@ public sealed class OrganizationMerger
 
                 _context.Organizations.Remove(sourceOrg);
                 await _context.SaveChangesAsync(CancellationToken.None);
+
+                // The settings row went with the organization (cascade); its files go too
+                _logos.DeleteOrganization(sourceOrgSlug);
 
                 result.SourceOrganizationDeleted = true;
             }

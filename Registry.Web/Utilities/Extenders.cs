@@ -119,7 +119,7 @@ public static class Extenders
 
     /// <summary>
     /// Converts a <see cref="Dataset"/> and its root <see cref="Entry"/> into a <see cref="DatasetDto"/>, without the
-    /// saved map views of its metadata (<see cref="DatasetMeta.WithoutViews"/>).
+    /// saved map views and report definitions of its metadata (<see cref="DatasetMeta.WithoutHiddenKeys"/>).
     /// </summary>
     /// <param name="dataset">The dataset entity to convert.</param>
     /// <param name="entry">The dataset's root entry, providing size and metadata.</param>
@@ -130,7 +130,7 @@ public static class Extenders
         {
             Slug = dataset.Slug,
             CreationDate = dataset.CreationDate,
-            Properties = DatasetMeta.WithoutViews(entry.Properties),
+            Properties = DatasetMeta.WithoutHiddenKeys(entry.Properties),
             Size = entry.Size
         };
     }

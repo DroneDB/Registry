@@ -1100,7 +1100,7 @@ public class DatasetManagerTest : TestBase
 
     #endregion
 
-    #region Saved map views
+    #region Saved map views and reports
 
     // The root meta of a dataset that has saved map views, as libddb writes it: single keys as { data }, lists as arrays
     private static Entry InfoWithViews() => new()
@@ -1111,7 +1111,8 @@ public class DatasetManagerTest : TestBase
                 {
                   "name": { "data": "Default" },
                   "tagline": { "data": "A tagline" },
-                  "views": [ { "id": "a", "data": { "name": "View A" } }, { "id": "b", "data": { "name": "View B" } } ]
+                  "views": [ { "id": "a", "data": { "name": "View A" } }, { "id": "b", "data": { "name": "View B" } } ],
+                  "reports": [ { "id": "r_k3x9q2m7", "data": { "name": "North pit" } } ]
                 }
                 """))),
         Size = 1000,
@@ -1142,13 +1143,14 @@ public class DatasetManagerTest : TestBase
     {
         var meta = properties.ShouldNotBeNull()["meta"];
         meta.TryGetProperty("views", out _).ShouldBeFalse();
+        meta.TryGetProperty("reports", out _).ShouldBeFalse();
         meta.GetProperty("name").GetProperty("data").GetString().ShouldBe("Default");
         meta.GetProperty("tagline").GetProperty("data").GetString().ShouldBe("A tagline");
         properties["entries"].GetInt32().ShouldBe(3);
     }
 
     [Test]
-    public async Task GetEntry_LeavesTheSavedViewsOutOfTheMeta()
+    public async Task GetEntry_LeavesTheSavedViewsAndReportsOutOfTheMeta()
     {
         await using var context = GetTest1Context();
         var manager = ManagerOverInfoWithViews(context);
@@ -1160,7 +1162,7 @@ public class DatasetManagerTest : TestBase
     }
 
     [Test]
-    public async Task Get_LeavesTheSavedViewsOutOfTheMeta()
+    public async Task Get_LeavesTheSavedViewsAndReportsOutOfTheMeta()
     {
         await using var context = GetTest1Context();
         var manager = ManagerOverInfoWithViews(context);
@@ -1171,7 +1173,7 @@ public class DatasetManagerTest : TestBase
     }
 
     [Test]
-    public async Task List_LeavesTheSavedViewsOutOfTheMeta()
+    public async Task List_LeavesTheSavedViewsAndReportsOutOfTheMeta()
     {
         await using var context = GetTest1Context();
         var manager = ManagerOverInfoWithViews(context);
@@ -1182,7 +1184,7 @@ public class DatasetManagerTest : TestBase
     }
 
     [Test]
-    public async Task AddNew_LeavesTheSavedViewsOutOfTheMeta()
+    public async Task AddNew_LeavesTheSavedViewsAndReportsOutOfTheMeta()
     {
         await using var context = GetTest1Context();
         var manager = ManagerOverInfoWithViews(context);

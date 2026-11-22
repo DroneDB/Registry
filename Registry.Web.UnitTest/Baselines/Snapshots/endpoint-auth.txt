@@ -92,6 +92,8 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/raster-point-value -> none [open] @ RasterAnalys
 POST /orgs/{orgSlug}/ds/{dsSlug}/raster-profile -> none [open] @ RasterAnalysisController.GetRasterProfile
 GET /orgs/{orgSlug}/ds/{dsSlug}/raster-value-info -> none [open] @ RasterAnalysisController.GetRasterValueInfo
 POST /orgs/{orgSlug}/ds/{dsSlug}/rename -> none [open] @ DatasetsController.Rename
+GET /orgs/{orgSlug}/ds/{dsSlug}/report-settings -> none [open] @ ReportSettingsController.GetForDataset
+GET /orgs/{orgSlug}/ds/{dsSlug}/report-settings/logo/{templateId} -> none [open] @ ReportSettingsController.GetDatasetLogo
 POST /orgs/{orgSlug}/ds/{dsSlug}/rescan -> none [open] @ DatasetsController.RescanIndex
 POST /orgs/{orgSlug}/ds/{dsSlug}/search -> none [open] @ ObjectsController.Search
 GET /orgs/{orgSlug}/ds/{dsSlug}/stac/{pathBase64?} -> none [open] @ StacController.GetStacChild
@@ -134,6 +136,11 @@ GET /orgs/{orgSlug}/members -> none [open] @ OrganizationsController.GetMembers
 POST /orgs/{orgSlug}/members -> none [open] @ OrganizationsController.AddMember
 DELETE /orgs/{orgSlug}/members/{userName} -> none [open] @ OrganizationsController.RemoveMember
 PUT /orgs/{orgSlug}/members/{userName} -> none [open] @ OrganizationsController.UpdateMemberPermission
+GET /orgs/{orgSlug}/report-settings -> Authorize [authenticated] @ ReportSettingsController.Get
+PUT /orgs/{orgSlug}/report-settings -> Authorize [authenticated] @ ReportSettingsController.Put
+DELETE /orgs/{orgSlug}/report-settings/templates/{templateId}/logo -> Authorize [authenticated] @ ReportSettingsController.DeleteLogo
+GET /orgs/{orgSlug}/report-settings/templates/{templateId}/logo -> Authorize [authenticated] @ ReportSettingsController.GetLogo
+PUT /orgs/{orgSlug}/report-settings/templates/{templateId}/logo -> Authorize [authenticated] @ ReportSettingsController.PutLogo
 ANY /quickhealth -> Authorize + Policy(inline: AdminOrMonitorTokenRequirement) [admin] @ Health checks
 GET /scalar/favicon.svg -> AllowAnonymous [anonymous] @ HTTP: GET /scalar/favicon.svg
 GET /scalar/scalar.aspnetcore.js -> AllowAnonymous [anonymous] @ HTTP: GET /scalar/scalar.aspnetcore.js

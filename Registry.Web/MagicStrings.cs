@@ -84,6 +84,12 @@ public static class MagicStrings
     public const string BrandingFolder = "branding";
 
     /// <summary>
+    /// Folder under <c>StoragePath</c> for the files an organization owns (one subfolder per organization slug): the
+    /// logos of its report templates. Not served as static files: the endpoints that read them check access first.
+    /// </summary>
+    public const string OrganizationAssetsFolder = "org-assets";
+
+    /// <summary>
     /// URL prefix at which the branding folder is served.
     /// </summary>
     public const string BrandingUrlPrefix = "/branding";

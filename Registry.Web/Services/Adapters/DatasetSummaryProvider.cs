@@ -43,8 +43,8 @@ public class DatasetSummaryProvider : IDatasetSummaryProvider
             return cached.Summary;
 
         var info = ddb.GetInfo();
-        // The views are cut before the summary is cached: every listing shares it
-        var summary = new DatasetSummary(info.Size, DatasetMeta.WithoutViews(info.Properties), state?.LastWriteUtc);
+        // The views and reports are cut before the summary is cached: every listing shares it
+        var summary = new DatasetSummary(info.Size, DatasetMeta.WithoutHiddenKeys(info.Properties), state?.LastWriteUtc);
 
         if (fingerprint != null)
             _cache.Set(Key(internalRef), new CachedSummary(fingerprint, summary),

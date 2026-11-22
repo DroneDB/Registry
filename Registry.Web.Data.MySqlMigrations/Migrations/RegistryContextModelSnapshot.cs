@@ -415,6 +415,37 @@ namespace Registry.Web.Data.Mysql.Migrations
                     b.ToTable("Organizations");
                 });
 
+            modelBuilder.Entity("Registry.Web.Data.Models.OrganizationReportSettings", b =>
+                {
+                    b.Property<string>("OrganizationSlug")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<string>("Schema")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Templates")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("OrganizationSlug");
+
+                    b.ToTable("OrganizationReportSettings");
+                });
+
             modelBuilder.Entity("Registry.Web.Data.Models.OrganizationUser", b =>
                 {
                     b.Property<string>("OrganizationSlug")
@@ -470,6 +501,15 @@ namespace Registry.Web.Data.Mysql.Migrations
                         .IsRequired();
 
                     b.Navigation("Batch");
+                });
+
+            modelBuilder.Entity("Registry.Web.Data.Models.OrganizationReportSettings", b =>
+                {
+                    b.HasOne("Registry.Web.Data.Models.Organization", null)
+                        .WithOne()
+                        .HasForeignKey("Registry.Web.Data.Models.OrganizationReportSettings", "OrganizationSlug")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Registry.Web.Data.Models.OrganizationUser", b =>

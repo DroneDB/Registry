@@ -27,15 +27,18 @@ public sealed class OrganizationMembers
     private readonly RegistryContext _context;
     private readonly ApplicationDbContext _appContext;
     private readonly IOptions<AccountOptions> _accounts;
+    private readonly OrganizationRights _rights;
 
     public OrganizationMembers(IAuthManager authManager, OrganizationMembershipService memberships,
-        RegistryContext context, ApplicationDbContext appContext, IOptions<AccountOptions> accounts)
+        RegistryContext context, ApplicationDbContext appContext, IOptions<AccountOptions> accounts,
+        OrganizationRights rights)
     {
         _authManager = authManager;
         _memberships = memberships;
         _context = context;
         _appContext = appContext;
         _accounts = accounts;
+        _rights = rights;
     }
 
     public bool IsMemberManagementEnabled => _accounts.Value.EnableOrganizationMemberManagement;
@@ -50,16 +53,10 @@ public sealed class OrganizationMembers
         if (org == null)
             throw new NotFoundException($"Organization '{orgSlug}' not found");
 
-        // Check if current user can view members
+        // An administrator, the owner or a member can view the members
         var currentUser = await _authManager.GetCurrentUser();
-        if (!await _authManager.IsUserAdmin() &&
-            org.OwnerId != currentUser?.Id)
-        {
-            // Check if user is a member with sufficient permissions
-            var userMembership = org.Users?.FirstOrDefault(u => u.UserId == currentUser?.Id);
-            if (userMembership == null)
-                throw new ForbiddenException("Access denied");
-        }
+        if (!await _rights.IsMemberAsync(org, currentUser?.Id, ct))
+            throw new ForbiddenException("Access denied");
 
         var members = new List<OrganizationMemberDto>();
 
@@ -96,7 +93,7 @@ public sealed class OrganizationMembers
         var org = await _memberships.GetWithMembersAsync(orgSlug, ct);
 
         var currentUser = await _authManager.GetCurrentUser();
-        if (currentUser == null || !await CanManageMembers(org, currentUser))
+        if (currentUser == null || !await _rights.CanManageAsync(org, currentUser.Id, ct))
             throw new ForbiddenException("You don't have permission to manage members");
 
         if (!IsMemberManagementEnabled)
@@ -126,20 +123,5 @@ public sealed class OrganizationMembers
     {
         var (org, currentUser) = await GetOrganizationToManageMembers(orgSlug, ct);
         await _memberships.RemoveAsync(org, userName, currentUser, CancellationToken.None);
-    }
-
-    private async Task<bool> CanManageMembers(Organization org, User user)
-    {
-        // System admin can always manage
-        if (await _authManager.IsUserAdmin()) return true;
-
-        // Owner can always manage
-        if (org.OwnerId == user.Id) return true;
-
-        // Check if member has Admin permission
-        var orgUser = org.Users?.FirstOrDefault(u => u.UserId == user.Id);
-        if (orgUser == null) return false;
-
-        return orgUser.Permissions.CanManageMembers();
     }
 }

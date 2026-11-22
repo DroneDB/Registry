@@ -529,6 +529,16 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/rename
   403 application/problem+json ProblemDetails
   404 application/problem+json ProblemDetails
   409 application/problem+json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/report-settings
+  200 application/json ReportSettingsDto
+  401 application/problem+json ProblemDetails
+  403 application/problem+json ProblemDetails
+  404 application/problem+json ProblemDetails
+GET /orgs/{orgSlug}/ds/{dsSlug}/report-settings/logo/{templateId}
+  200
+  401 application/problem+json ProblemDetails
+  403 application/problem+json ProblemDetails
+  404 application/problem+json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/rescan
   202 application/json SubmitTaskResponseDto
   400 application/problem+json ProblemDetails
@@ -784,6 +794,40 @@ PUT /orgs/{orgSlug}/members/{userName}
   401 application/problem+json ProblemDetails
   403 application/problem+json ProblemDetails
   404 application/problem+json ProblemDetails
+GET /orgs/{orgSlug}/report-settings
+  200 application/json OrganizationReportSettingsDto
+  401 application/problem+json ProblemDetails
+  403 application/problem+json ProblemDetails
+  404 application/problem+json ProblemDetails
+PUT /orgs/{orgSlug}/report-settings
+  body application/json ReportSettingsUpdateDto
+  200 application/json OrganizationReportSettingsDto
+  400 application/problem+json ProblemDetails
+  401 application/problem+json ProblemDetails
+  403 application/problem+json ProblemDetails
+  404 application/problem+json ProblemDetails
+  409 application/problem+json ProblemDetails
+  413 application/problem+json ProblemDetails
+DELETE /orgs/{orgSlug}/report-settings/templates/{templateId}/logo
+  200 application/json ReportSettingsVersionDto
+  401 application/problem+json ProblemDetails
+  403 application/problem+json ProblemDetails
+  404 application/problem+json ProblemDetails
+  409 application/problem+json ProblemDetails
+GET /orgs/{orgSlug}/report-settings/templates/{templateId}/logo
+  200
+  401 application/problem+json ProblemDetails
+  403 application/problem+json ProblemDetails
+  404 application/problem+json ProblemDetails
+PUT /orgs/{orgSlug}/report-settings/templates/{templateId}/logo
+  body multipart/form-data object
+  200 application/json ReportLogoDto
+  400 application/problem+json ProblemDetails
+  401 application/problem+json ProblemDetails
+  403 application/problem+json ProblemDetails
+  404 application/problem+json ProblemDetails
+  409 application/problem+json ProblemDetails
+  413 application/problem+json ProblemDetails
 POST /share/commit/{token}
   200 application/json CommitResultDto
   400 application/problem+json ProblemDetails
@@ -1288,6 +1332,7 @@ schema OrganizationDto { slug:string, name:string, description:string, creationD
 schema OrganizationMemberDto { userName:string, email:string, permissions:OrganizationPermissions, grantedAt:string(date-time), grantedBy:string }
 schema OrganizationPermissions {  }
 schema OrganizationPermissionsDto { canRead:boolean, canWrite:boolean, canDelete:boolean, canManageMembers:boolean }
+schema OrganizationReportSettingsDto { templates:array<ReportTemplateDto>, schema:ReportSchemaDto, version:integer(int32) }
 schema PasswordPolicyDto { minLength:integer(int32), requireDigit:boolean, requireUppercase:boolean, requireLowercase:boolean, requireNonAlphanumeric:boolean }
 schema PendingBuildInfoDto { path:string, hash:string, missingDependencies:array<string>, lastAttempt:string(date-time), awaitingFiles:boolean, artifacts:array<ArtifactLinkDto> }
 schema ProblemDetails { type:string, title:string, status:integer(int32), detail:string, instance:string }
@@ -1300,6 +1345,14 @@ schema RemoteImportStatusDto { jobId:string, state:string, result:ImportResultDt
 schema RemoveBatchErrorDto { token:string, organization:string, dataset:string, message:string }
 schema RemoveResponse { removed:integer(int32) }
 schema RemovedBatchDto { token:string, userName:string, status:BatchStatus, start:string(date-time), end:string(date-time), organization:string, dataset:string }
+schema ReportLogoDto { logo:string, version:integer(int32) }
+schema ReportSchemaChoiceDto { id:string, name:string, colour:string }
+schema ReportSchemaDto { categories:array<ReportSchemaChoiceDto>, severities:array<ReportSchemaChoiceDto>, statuses:array<ReportSchemaStatusDto> }
+schema ReportSchemaStatusDto { id:string, name:string, closed:boolean }
+schema ReportSettingsDto { templates:array<ReportTemplateDto>, schema:ReportSchemaDto }
+schema ReportSettingsUpdateDto { templates:array<ReportTemplateDto>, schema:ReportSchemaDto, version:integer(int32) }
+schema ReportSettingsVersionDto { version:integer(int32) }
+schema ReportTemplateDto { id:string, name:string, logo:string, primary:string, accent:string, paper:string, orientation:string, headerText:string, footerText:string, disclaimer:string, defaultSections:array<string> }
 schema RescanJobDto { jobId:string }
 schema RescanRequestDto { organizationSlug:string, datasetSlug:string, types:array<string>, extensions:array<string>, stopOnError:boolean }
 schema ShareInitResultDto { token:string }

@@ -176,7 +176,7 @@ public sealed class DatasetQueries
         info.Path = _urls.GenerateDatasetUrl(dataset, true);
 
         var dto = info.ToDto();
-        dto.Properties = DatasetMeta.WithoutViews(dto.Properties);
+        dto.Properties = DatasetMeta.WithoutHiddenKeys(dto.Properties);
 
         // Add permissions to properties
         if (dto.Properties == null)

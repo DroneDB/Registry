@@ -9,6 +9,7 @@ using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Organizations;
 using Registry.Web.Services.Ports;
+using Registry.Web.Services.Reports;
 
 namespace Registry.Web.Test.Support;
 
@@ -23,12 +24,15 @@ public static class TestOrganizations
         ApplicationDbContext appContext, IOptions<AccountOptions> accounts, OrganizationMembershipService memberships,
         IDdbManager? ddbManager = null)
     {
+        var logos = new ReportLogoStore(Mock.Of<IFileSystem>(), Microsoft.Extensions.Options.Options.Create(new StorageOptions()),
+            NullLogger<ReportLogoStore>.Instance);
         var queries = new OrganizationQueries(authManager, access, context, appContext, ddbManager ?? Mock.Of<IDdbManager>());
         return new OrganizationsManager(
             queries,
-            new OrganizationCommands(authManager, access, context, datasets, datasetsManager, queries),
+            new OrganizationCommands(authManager, access, context, datasets, datasetsManager, queries, logos),
             new OrganizationMerger(authManager, memberships, context, datasets, datasetsManager,
-                NullLogger<OrganizationMerger>.Instance),
-            new OrganizationMembers(authManager, memberships, context, appContext, accounts));
+                logos, NullLogger<OrganizationMerger>.Instance),
+            new OrganizationMembers(authManager, memberships, context, appContext, accounts,
+                new OrganizationRights(authManager, context)));
     }
 }

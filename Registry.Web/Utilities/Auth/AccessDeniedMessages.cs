@@ -19,6 +19,12 @@ public static class AccessDeniedMessages
     /// <summary>Message of a 403 of the authorization middleware for a rule that has no message of its own.</summary>
     public const string OperationRefused = "The current user is not allowed to perform this operation";
 
+    /// <summary>Message of the rules that only the administrators of an organization (its owner, a member with the Admin permission, an administrator of the instance) pass.</summary>
+    public const string OrganizationAdminRequired = "Only organization administrators can perform this operation";
+
+    /// <summary>Message of the rules that only the members of an organization (and the administrators of the instance) pass.</summary>
+    public const string OrganizationMemberRequired = "Only members of the organization can perform this operation";
+
     /// <summary>The refusal of <paramref name="access"/> to a dataset.</summary>
     public static string Dataset(AccessType access) => $"The current user is not allowed to {Verb(access)} this dataset";
 

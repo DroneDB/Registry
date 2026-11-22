@@ -72,6 +72,9 @@ public sealed class RequestBindingTests : IDisposable
         // organizationsApi.js
         yield return new BindingCase("hub-add-member", typeof(AddOrganizationMemberDto), """{"userName":"carol","permissions":1}""");
         yield return new BindingCase("hub-update-member", typeof(UpdateMemberPermissionsDto), """{"permissions":0}""");
+        // reportSettings.js
+        yield return new BindingCase("hub-put-report-settings", typeof(ReportSettingsUpdateDto),
+            """{"version":2,"templates":[{"id":"standard","name":"Standard","logo":"report-logo-standard.png","primary":"#0070e0","accent":"#0891b2","paper":"A4","orientation":"portrait","headerText":"","footerText":"","disclaimer":"","defaultSections":["cover","summary"]}],"schema":{"categories":[{"id":"general","name":"General","colour":"#64748b"}],"severities":[],"statuses":[{"id":"open","name":"Open","closed":false}]}}""");
         // organization.js (import)
         yield return new BindingCase("hub-import-verify", typeof(VerifyImportRequestDto),
             """{"sourceType":"registry","params":{"url":"https://hub.example","username":"u","password":"p"}}""");

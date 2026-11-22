@@ -160,6 +160,9 @@ public class JobHistoryFollowsSlugTests
         [
             // the keys themselves and the foreign keys that point at them (changed with their row)
             "Organization.Slug", "Dataset.Slug", "Dataset.OrganizationSlug", "OrganizationUser.OrganizationSlug",
+            // written only through routes that accept a valid slug, so the organizations the repair renames (the invalid
+            // slugs) have no such row
+            "OrganizationReportSettings.OrganizationSlug",
             // the rows named by slug, followed by SlugKeyedRows
             "JobIndex.OrgSlug", "JobIndex.DsSlug", "BuildNotification.OrgSlug", "BuildNotification.DsSlug"
         ], ignoreOrder: true);

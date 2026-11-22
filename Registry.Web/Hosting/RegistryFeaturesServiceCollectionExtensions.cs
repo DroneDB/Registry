@@ -25,6 +25,7 @@ using Registry.Web.Services.Ports;
 using Registry.Web.Services.Processing;
 using Registry.Web.Services.Push;
 using Registry.Web.Services.RemoteImport;
+using Registry.Web.Services.Reports;
 using Registry.Web.Services.Shares;
 using Registry.Web.Services.Uploads;
 using Registry.Web.Services.Users;
@@ -62,6 +63,9 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<OrganizationCommands>();
         services.AddScoped<OrganizationMerger>();
         services.AddScoped<OrganizationMembers>();
+        services.AddScoped<OrganizationRights>();
+        services.AddSingleton<ReportLogoStore>();
+        services.AddScoped<ReportSettingsManager>();
         services.AddScoped<IDatasetsManager, DatasetsManager>();
         services.AddScoped<DatasetQueries>();
         services.AddScoped<DatasetListState>();

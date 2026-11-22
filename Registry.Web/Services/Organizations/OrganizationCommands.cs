@@ -9,6 +9,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Registry.Web.Services.Reports;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Organizations;
@@ -22,9 +23,11 @@ public sealed class OrganizationCommands
     private readonly IDatasetResolver _datasets;
     private readonly IDatasetsManager _datasetManager;
     private readonly OrganizationQueries _queries;
+    private readonly ReportLogoStore _logos;
 
     public OrganizationCommands(IAuthManager authManager, IDatasetAccessResolver access, RegistryContext context,
-        IDatasetResolver datasets, IDatasetsManager datasetManager, OrganizationQueries queries)
+        IDatasetResolver datasets, IDatasetsManager datasetManager, OrganizationQueries queries,
+        ReportLogoStore logos)
     {
         _authManager = authManager;
         _access = access;
@@ -32,6 +35,7 @@ public sealed class OrganizationCommands
         _datasets = datasets;
         _datasetManager = datasetManager;
         _queries = queries;
+        _logos = logos;
     }
 
     /// <summary>Creates the private organization a new user gets, named after the user (no permission check: the caller is the sign-up).</summary>
@@ -160,5 +164,8 @@ public sealed class OrganizationCommands
 
         _context.Organizations.Remove(org);
         await _context.SaveChangesAsync(CancellationToken.None);
+
+        // The report settings went with the organization (cascade); the logo files go too
+        _logos.DeleteOrganization(org.Slug);
     }
 }

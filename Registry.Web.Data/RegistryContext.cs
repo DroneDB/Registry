@@ -28,4 +28,6 @@ public class RegistryContext : DbContext
     /// <summary>The lines of the build notification e-mails, waiting or sent (the outbox).</summary>
     public DbSet<BuildNotification> BuildNotifications => Set<BuildNotification>();
 
+    /// <summary>The report templates and annotation schema of the organizations that wrote them.</summary>
+    public DbSet<OrganizationReportSettings> OrganizationReportSettings => Set<OrganizationReportSettings>();
 }
