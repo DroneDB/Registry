@@ -211,7 +211,7 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   0.13.4: a point-cloud tile zoomed in past the density of the cloud draws a surface; Obj2Tiles v1.10.4: the 3D Tiles
   of an OBJ whose statements are indented with a tab, as ODM writes them). No fixture, schema or vector changed and no
   adapter change.
-* 2026-11-22: DroneDB `2ac850f9d3e1a0041b8b1c3ab3e3f9e7d5790f86` (libddb 2.9.0, ABI 2.9: `DdbAbi.Minor` 9, the
-  adapter calls `DDBRescanEx2` for every rescan and no longer imports `DDBRescan` and `DDBRescanEx`).
-  `capabilities` has `abi.minor` 9 and `DDBRescanEx2` in `symbols`; `Contract/README.md` has the 2.9.0 entry. No
-  other fixture, schema or vector changed.
+* 2026-11-22: DroneDB `9666bceb5139588bc31579276058d272fa97abc9` (the v2.9.0 release, libddb 2.9.0, ABI 2.9:
+  `DdbAbi.Minor` 9, the adapter calls `DDBRescanEx2` for every rescan and no longer imports `DDBRescan` and
+  `DDBRescanEx`). `capabilities` has `abi.minor` 9 and `DDBRescanEx2` in `symbols`; `Contract/README.md` has the 2.9.0
+  entry. No other fixture, schema or vector changed.

@@ -192,7 +192,7 @@ public unsafe class LibddbContractTests : TestBase
     }
 
     /// <summary>
-    /// The loaded libddb is the one the Registry runs (ABI 2.6 or later): it reports the ABI the handshake requires and lists the
+    /// The loaded libddb is the one the Registry runs (ABI 2.9 or later): it reports the ABI the handshake requires and lists the
     /// exports that report progress, which the wrapper always calls.
     /// </summary>
     [Test]
@@ -967,7 +967,7 @@ public unsafe class LibddbContractTests : TestBase
     /// The libddb entry points Registry.Adapters declares: every [DllImport("ddb")] method of the
     /// assembly, the ones LibraryImport generates included.
     /// </summary>
-    // The exports Registry requires (ABI 2.6)
+    // The exports Registry requires (ABI 2.9)
     private static string[] DeclaredExports() =>
         typeof(NativeDdbWrapper).Assembly.GetTypes()
             .SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic |

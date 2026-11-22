@@ -40,7 +40,7 @@
             MSBuild; ci: fetch-windows-zip) and fails the build when its SHA256 differs.
         scripts/ddb-release.sh check (CI) fails when the pin is malformed or written elsewhere, or
         when anything downloads releases/latest. Startup checks the ABI of the loaded library
-        (DdbAbi: libddb 2.x, ABI major 2, minor >= 6), not this version number.
+        (DdbAbi: libddb 2.x, ABI major 2, minor >= 9), not this version number.
 
         DdbSource:
           release  a published release: DdbVersion, and the SHA256 of ddb_<DdbVersion>_amd64.deb and
@@ -60,8 +60,11 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-11-22): the DroneDB v2.8.1 release (ABI 2.8; the handshake requires ABI 2.6:
-        DdbAbi.Minor 6, since 2.7 and 2.8 add no export or setting). 2.8.1 draws a point-cloud map tile
+        Pinned now (2026-11-22): the DroneDB v2.9.0 release (ABI 2.9; the handshake requires ABI 2.9:
+        DdbAbi.Minor 9). 2.9.0 adds DDBRescanEx2, the rescan of a list of entry paths (a file, or a folder
+        for the entries under it), each entry re-read outside the writer lock of the index and committed on
+        its own, which the rescan of selected entries (rescan-entries) uses; the adapter calls it for every
+        rescan. 2.8.1 draws a point-cloud map tile
         zoomed in past the density of the cloud as a surface (ddb-tilers 0.13.4) and builds the 3D Tiles of
         an OBJ whose statements are indented with a tab, as ODM writes them (Obj2Tiles v1.10.4). 2.8.0
         builds the COPC of a geographic or geocentric point cloud in a projected CRS (the crs of its build artifact), ignores
@@ -77,9 +80,9 @@
     -->
     <PropertyGroup>
         <DdbSource>release</DdbSource>
-        <DdbVersion>2.8.1</DdbVersion>
-        <DdbDebSha256>805bce27c2db358c88016e956cb6fbc880a08c221829187fe80fd2f199c6f904</DdbDebSha256>
-        <DdbWindowsZipSha256>ac7d2342759f9ed703b0484bfaf585e613d77d98796169e3030ceccef0c5fb57</DdbWindowsZipSha256>
+        <DdbVersion>2.9.0</DdbVersion>
+        <DdbDebSha256>e24ae4d46faa371b5920277467a82c6cbe622bbfada93ec66310e1cb0236f4ba</DdbDebSha256>
+        <DdbWindowsZipSha256>3b32e1f17c31405f33f8a7d94f8f20c0956a3d971823af72e559c52f4002582d</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
