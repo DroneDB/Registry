@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -31,12 +30,16 @@ public sealed class CoverageService
 
     private readonly IDatasetAccessResolver _access;
     private readonly INativeWorkGate _gate;
+    private readonly TimeProvider _time;
     private readonly ILogger<CoverageService> _logger;
 
-    public CoverageService(IDatasetAccessResolver access, INativeWorkGate gate, ILogger<CoverageService> logger)
+    /// <param name="time">The clock that measures a request against <see cref="SlowRequest"/>.</param>
+    public CoverageService(IDatasetAccessResolver access, INativeWorkGate gate, TimeProvider time,
+        ILogger<CoverageService> logger)
     {
         _access = access;
         _gate = gate;
+        _time = time;
         _logger = logger;
     }
 
@@ -56,17 +59,18 @@ public sealed class CoverageService
             throw new InvalidFieldException("limit", $"limit must be between {MinLimit} and {MaxLimit}");
 
         var geometry = request.Geometry.GetRawText();
-        var clock = Stopwatch.StartNew();
+        var started = _time.GetTimestamp();
         try
         {
             return await _gate.RunAsync(NativeLane.Heavy, () => access.Ddb.FindCoverage(geometry, request.Limit), ct);
         }
         finally
         {
-            if (clock.Elapsed > SlowRequest)
+            var elapsed = _time.GetElapsedTime(started);
+            if (elapsed > SlowRequest)
                 _logger.LogWarning(
                     "Coverage of '{OrgSlug}/{DsSlug}' took {DurationMs} ms for a geometry of {Vertices} positions",
-                    orgSlug, dsSlug, (long)clock.Elapsed.TotalMilliseconds, vertices);
+                    orgSlug, dsSlug, (long)elapsed.TotalMilliseconds, vertices);
         }
     }
 }

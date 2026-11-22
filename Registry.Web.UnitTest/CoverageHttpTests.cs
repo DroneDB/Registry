@@ -6,7 +6,6 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json.Nodes;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,6 +44,8 @@ public sealed class CoverageHttpTests : IDisposable
     private const string Polygon = """{"type":"Polygon","coordinates":[[[9.0,45.0],[9.001,45.0],[9.001,45.001],[9.0,45.0]]]}""";
 
     private readonly LogCapture _logs = new();
+    // The clock of the endpoint: a request takes as long as a test advances it while libddb answers
+    private readonly FakeTime _time = new(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
     private readonly ConcurrentDictionary<string, byte> _publicRefs = new();
     private RegistryWebFactory _factory = null!;
     private HttpClient _client = null!;
@@ -54,7 +55,11 @@ public sealed class CoverageHttpTests : IDisposable
     {
         _factory = new RegistryWebFactory(
             new Dictionary<string, string> { ["Serilog:LevelSwitches:$controlSwitch"] = "Information" },
-            services => services.AddSingleton<ILogEventSink>(_logs));
+            services =>
+            {
+                services.AddSingleton<ILogEventSink>(_logs);
+                services.AddScoped(sp => ActivatorUtilities.CreateInstance<CoverageService>(sp, _time));
+            });
         // A dataset is private unless its reference is one of the public ones (native ddb throws on a missing key)
         _factory.DdbWrapper.Setup(d => d.MetaGet(It.IsAny<string>(), "visibility", It.IsAny<string?>()))
             .Returns((string path, string _, string? _) => _publicRefs.Keys.Any(path.Contains)
@@ -392,15 +397,19 @@ public sealed class CoverageHttpTests : IDisposable
 
     #region The log
 
-    [Test]
-    public async Task ARequestOverASecond_IsLogged_WithTheDatasetTheVerticesAndTheDuration()
-    {
+    // libddb answers after the clock of the endpoint has moved on by the duration
+    private void LibddbTakes(TimeSpan duration) =>
         _factory.DdbWrapper.Setup(d => d.FindCoverage(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int?>()))
             .Returns(() =>
             {
-                Thread.Sleep(CoverageService.SlowRequest + TimeSpan.FromMilliseconds(150));
+                _time.Advance(duration);
                 return [];
             });
+
+    [Test]
+    public async Task ARequestOverASecond_IsLogged_WithTheDatasetTheVerticesAndTheDuration()
+    {
+        LibddbTakes(CoverageService.SlowRequest + TimeSpan.FromMilliseconds(150));
 
         (await PostAsync(Request(LineOf(3)))).Status.ShouldBe(200);
 
@@ -411,7 +420,17 @@ public sealed class CoverageHttpTests : IDisposable
         slow[0].Message.ShouldContain(PrivateDs);
         slow[0].Message.ShouldContain("3 positions");
         var milliseconds = int.Parse(slow[0].Message.Split(" took ")[1].Split(" ms")[0], CultureInfo.InvariantCulture);
-        milliseconds.ShouldBeGreaterThan(1000);
+        milliseconds.ShouldBe(1150);
+    }
+
+    [Test]
+    public async Task ARequestOfExactlyASecond_IsNotLogged()
+    {
+        LibddbTakes(CoverageService.SlowRequest);
+
+        (await PostAsync(Request(Point))).Status.ShouldBe(200);
+
+        _logs.Records.Where(r => r.Category == typeof(CoverageService).FullName).ShouldBeEmpty();
     }
 
     [Test]

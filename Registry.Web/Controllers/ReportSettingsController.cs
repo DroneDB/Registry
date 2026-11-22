@@ -24,7 +24,7 @@ namespace Registry.Web.Controllers;
 public class ReportSettingsController : ControllerBaseEx
 {
     private const string OrganizationSettings = "report-settings";
-    private const string DatasetSettings = RoutesHelper.DatasetRadix + "/" + RoutesHelper.DatasetSlug + "/report-settings";
+    private const string DatasetSettings = "/" + RoutesHelper.DatasetPrefix + "/report-settings";
     private const string TemplateLogo = OrganizationSettings + "/templates/{templateId}/logo";
 
     // The settings are a few tens of KB at their limits (20 templates with their texts, the schema)

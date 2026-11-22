@@ -143,8 +143,11 @@ public sealed class ReportSettingsManager
         var template = StoredTemplate(current, templateId);
         var logo = ReportLogo.Inspect(content);
 
+        // The file is this request's own (ReportLogoStore.Save): an upload that loses the race to another deletes only it,
+        // never the file the winner's settings name
         var previous = template.Logo;
-        template.Logo = _logos.Save(orgSlug, templateId, logo);
+        var stored = _logos.Save(orgSlug, templateId, logo);
+        template.Logo = stored;
 
         Current saved;
         try
@@ -153,18 +156,15 @@ public sealed class ReportSettingsManager
         }
         catch
         {
-            // The settings do not name the new file: do not leave it behind (a file that replaced the old one in place
-            // is the old logo's name, which the settings still hold)
-            if (template.Logo != previous)
-                _logos.Delete(orgSlug, template.Logo);
+            _logos.Delete(orgSlug, stored);
             throw;
         }
 
-        // A logo of another type than the new one is not named any more
-        if (previous != null && previous != template.Logo)
+        // The settings name the new file: the one they named before is no one's
+        if (previous != null)
             _logos.Delete(orgSlug, previous);
 
-        return new ReportLogoDto { Logo = template.Logo, Version = saved.Version };
+        return new ReportLogoDto { Logo = stored, Version = saved.Version };
     }
 
     /// <summary>Removes the logo of a stored template (administrators of the organization): the version goes up. A template with no logo is left as it is.</summary>

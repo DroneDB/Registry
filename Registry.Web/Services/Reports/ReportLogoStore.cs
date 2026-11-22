@@ -10,9 +10,11 @@ using Registry.Web.Utilities;
 namespace Registry.Web.Services.Reports;
 
 /// <summary>
-/// The logo files of the report templates, at <c>{StoragePath}/org-assets/{orgSlug}/report-logo-{templateId}.{ext}</c>:
+/// The logo files of the report templates, at <c>{StoragePath}/org-assets/{orgSlug}/report-logo-{templateId}-{unique}.{ext}</c>:
 /// outside the public branding folder, so only the endpoints that check access send them. Every name that reaches the
-/// disk has passed the rules of a slug and of a template id, so none can leave the folder.
+/// disk has passed the rules of a slug and of a logo file name, so none can leave the folder. Each upload has a file
+/// of its own: two uploads to one template never write the same file, so the one whose settings are not saved deletes
+/// its file and never the one the settings name.
 /// </summary>
 public sealed partial class ReportLogoStore
 {
@@ -29,29 +31,32 @@ public sealed partial class ReportLogoStore
         _root = Path.GetFullPath(Path.Combine(storage.Value.StoragePath ?? ".", MagicStrings.OrganizationAssetsFolder));
     }
 
-    [GeneratedRegex(@"^report-logo-([a-z0-9-]{1,32})\.(png|jpg|webp|svg)\z")]
+    // The template id, then the unique part of the upload; a name without it was stored before each upload had a
+    // file of its own, and is still served and deleted
+    [GeneratedRegex(@"^report-logo-[a-z0-9-]{1,32}(?:-[0-9a-f]{32})?\.(png|jpg|webp|svg)\z")]
     private static partial Regex FileNamePattern();
 
-    /// <summary>The name of the logo file of a template, <c>report-logo-{templateId}.{extension}</c>.</summary>
-    public static string FileName(string templateId, string extension) => $"{FilePrefix}{templateId}.{extension}";
+    /// <summary>A new name for a logo file of a template, <c>report-logo-{templateId}-{unique}.{extension}</c>: no other upload has it.</summary>
+    public static string NewFileName(string templateId, string extension) =>
+        $"{FilePrefix}{templateId}-{Guid.NewGuid():N}.{extension}";
 
     /// <summary>
-    /// Stores <paramref name="logo"/> as the logo of the template and returns the name of its file. The file is written
-    /// whole beside its place and renamed over it, so a reader sees the old logo or the new one, never a part. A logo
-    /// of another type that the template had stays until the caller removes it (<see cref="Delete"/>), after the
-    /// settings point at the new one.
+    /// Stores <paramref name="logo"/> as a new file of the template and returns its name. The file is no one else's: it
+    /// is not the logo of the template until the settings name it, so the caller deletes it (<see cref="Delete"/>) when
+    /// they are not saved, and deletes the file they named before when they are. It is written whole beside its place
+    /// and then renamed, so a reader never sees a part.
     /// </summary>
     public string Save(string orgSlug, string templateId, ReportLogo logo)
     {
-        var fileName = FileName(templateId, logo.Extension);
+        var fileName = NewFileName(templateId, logo.Extension);
         var path = PathOf(orgSlug, fileName);
 
         _fs.FolderCreate(Path.GetDirectoryName(path)!);
-        var temporary = $"{path}.{Guid.NewGuid():N}.tmp";
+        var temporary = $"{path}.tmp";
         try
         {
             _fs.WriteAllBytes(temporary, logo.Content);
-            _fs.Move(temporary, path, overwrite: true);
+            _fs.Move(temporary, path, overwrite: false);
         }
         finally
         {
@@ -72,30 +77,40 @@ public sealed partial class ReportLogoStore
     /// <summary>Deletes a logo file (nothing when it is already gone). A failure is logged, never thrown: the settings no longer name the file.</summary>
     public void Delete(string orgSlug, string fileName)
     {
-        try
+        var path = PathOf(orgSlug, fileName);
+        Quietly(() =>
         {
-            var path = PathOf(orgSlug, fileName);
             if (_fs.Exists(path))
                 _fs.Delete(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            _logger.LogWarning(ex, "The logo file {FileName} of organization {OrgSlug} could not be deleted", fileName, orgSlug);
-        }
+        }, ex => _logger.LogWarning(ex, "The logo file {FileName} of organization {OrgSlug} could not be deleted",
+            fileName, orgSlug));
     }
 
     /// <summary>Deletes every file of an organization (its folder), with the organization. A failure is logged, never thrown.</summary>
     public void DeleteOrganization(string orgSlug)
     {
-        try
+        var folder = FolderOf(orgSlug);
+        Quietly(() =>
         {
-            var folder = FolderOf(orgSlug);
             if (_fs.FolderExists(folder))
                 _fs.FolderDelete(folder);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        }, ex => _logger.LogWarning(ex, "The files of organization {OrgSlug} could not be deleted", orgSlug));
+    }
+
+    // A removal of files that nothing names any more: a failure of the disk is the caller's log line, never its error
+    private static void Quietly(Action remove, Action<Exception> logFailure)
+    {
+        try
         {
-            _logger.LogWarning(ex, "The files of organization {OrgSlug} could not be deleted", orgSlug);
+            remove();
+        }
+        catch (IOException ex)
+        {
+            logFailure(ex);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            logFailure(ex);
         }
     }
 

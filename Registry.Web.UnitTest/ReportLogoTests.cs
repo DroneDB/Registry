@@ -169,19 +169,21 @@ public class ReportLogoTests
         Microsoft.Extensions.Options.Options.Create(new StorageOptions { StoragePath = _root }), NullLogger<ReportLogoStore>.Instance);
 
     [Test]
-    public void TheStore_PutsTheLogoOutsideTheBrandingFolder_AndReplacesItWhole()
+    public void TheStore_PutsTheLogoOutsideTheBrandingFolder_InAFileOfEachUpload()
     {
         var store = Store();
 
         var name = store.Save("acme", "standard", ReportLogo.Inspect(Png));
         var again = store.Save("acme", "standard", ReportLogo.Inspect([.. Png, 9]));
 
-        name.ShouldBe("report-logo-standard.png");
-        again.ShouldBe(name);
+        name.ShouldBeLogoOf("standard", "png");
+        again.ShouldBeLogoOf("standard", "png");
+        again.ShouldNotBe(name, "two uploads never write one file");
         var path = store.Find("acme", name).ShouldNotBeNull();
-        path.ShouldBe(Path.Combine(_root, "org-assets", "acme", "report-logo-standard.png"));
-        File.ReadAllBytes(path).ShouldBe([.. Png, 9]);
-        Directory.GetFiles(Path.GetDirectoryName(path)!).Length.ShouldBe(1, "no temporary file is left");
+        path.ShouldBe(Path.Combine(_root, "org-assets", "acme", name));
+        File.ReadAllBytes(path).ShouldBe(Png);
+        File.ReadAllBytes(store.Find("acme", again).ShouldNotBeNull()).ShouldBe([.. Png, 9]);
+        Directory.GetFiles(Path.GetDirectoryName(path)!).Length.ShouldBe(2, "no temporary file is left");
         Directory.Exists(Path.Combine(_root, "branding")).ShouldBeFalse();
     }
 
@@ -189,19 +191,34 @@ public class ReportLogoTests
     public void TheStore_DeletesAFile_AndAnOrganizationsFolder()
     {
         var store = Store();
-        store.Save("acme", "a", ReportLogo.Inspect(Png));
-        store.Save("acme", "b", ReportLogo.Inspect(Jpeg));
-        store.Save("other", "a", ReportLogo.Inspect(Png));
+        var a = store.Save("acme", "a", ReportLogo.Inspect(Png));
+        var b = store.Save("acme", "b", ReportLogo.Inspect(Jpeg));
+        var otherA = store.Save("other", "a", ReportLogo.Inspect(Png));
 
-        store.Delete("acme", "report-logo-a.png");
-        store.Delete("acme", "report-logo-a.png");
-        store.Find("acme", "report-logo-a.png").ShouldBeNull();
-        store.Find("acme", "report-logo-b.jpg").ShouldNotBeNull();
+        store.Delete("acme", a);
+        store.Delete("acme", a);
+        store.Find("acme", a).ShouldBeNull();
+        store.Find("acme", b).ShouldNotBeNull();
 
         store.DeleteOrganization("acme");
         store.DeleteOrganization("acme");
         Directory.Exists(Path.Combine(_root, "org-assets", "acme")).ShouldBeFalse();
-        store.Find("other", "report-logo-a.png").ShouldNotBeNull();
+        store.Find("other", otherA).ShouldNotBeNull();
+    }
+
+    [TestCase("report-logo-standard.png")]
+    [TestCase("report-logo-standard-0123456789abcdef0123456789abcdef.svg")]
+    [TestCase("report-logo-a-b-0123456789abcdef0123456789abcdef.jpg")]
+    public void TheStore_KnowsTheNamesOfItsFiles_AndThoseStoredBeforeEachUploadHadItsOwn(string name)
+    {
+        var store = Store();
+        Directory.CreateDirectory(Path.Combine(_root, "org-assets", "acme"));
+        File.WriteAllBytes(Path.Combine(_root, "org-assets", "acme", name), Png);
+
+        ReportLogoStore.IsLogoFileName(name).ShouldBeTrue();
+        store.Find("acme", name).ShouldNotBeNull();
+        store.Delete("acme", name);
+        store.Find("acme", name).ShouldBeNull();
     }
 
     [TestCase("../x.png")]
@@ -209,6 +226,8 @@ public class ReportLogoTests
     [TestCase("report-logo-a.exe")]
     [TestCase("report-logo-A.png")]
     [TestCase("report-logo-a.png\n")]
+    [TestCase("report-logo-a-0123456789ABCDEF0123456789ABCDEF.png")]
+    [TestCase("report-logo-a-0123456789abcdef0123456789abcdef.png.tmp")]
     [TestCase("logo.png")]
     [TestCase("/etc/passwd")]
     public void TheStore_RefusesAName_ThatIsNotALogoFileName(string name)
@@ -226,4 +245,12 @@ public class ReportLogoTests
         Should.Throw<ArgumentException>(() => Store().Save(slug, "standard", ReportLogo.Inspect(Png)));
 
     #endregion
+}
+
+/// <summary>The names the logo store gives its files, as tests check them.</summary>
+internal static class ReportLogoNames
+{
+    /// <summary>A logo file of <paramref name="templateId"/> and of the type <paramref name="extension"/>, of one upload.</summary>
+    public static void ShouldBeLogoOf(this string? name, string templateId, string extension) =>
+        name.ShouldNotBeNull().ShouldMatch($@"^report-logo-{templateId}-[0-9a-f]{{32}}\.{extension}$");
 }

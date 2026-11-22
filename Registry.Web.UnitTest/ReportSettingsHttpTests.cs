@@ -1,12 +1,16 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +18,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using NUnit.Framework;
 using Registry.Common;
+using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
@@ -53,13 +58,21 @@ public sealed class ReportSettingsHttpTests : IDisposable
     private RegistryWebFactory _factory = null!;
     private HttpClient _client = null!;
     private int _orgCounter;
+    private Action? _beforeLogoWrite;
 
     [OneTimeSetUp]
     public async Task OneTimeSetUp()
     {
         _factory = new RegistryWebFactory(
             new Dictionary<string, string> { ["Serilog:LevelSwitches:$controlSwitch"] = "Information" },
-            services => services.AddSingleton<ILogEventSink>(_logs));
+            services =>
+            {
+                services.AddSingleton<ILogEventSink>(_logs);
+                // The logo store of the Registry, on a file system that runs the step a test sets just before it writes
+                services.AddSingleton(sp => ActivatorUtilities.CreateInstance<ReportLogoStore>(sp,
+                    SteppedFileSystem.Over(sp.GetRequiredService<IFileSystem>(),
+                        () => Interlocked.Exchange(ref _beforeLogoWrite, null))));
+            });
         // A dataset is private unless its reference is one of the public ones (native ddb throws on a missing key)
         _factory.DdbWrapper.Setup(d => d.MetaGet(It.IsAny<string>(), "visibility", It.IsAny<string?>()))
             .Returns((string path, string _, string? _) => _publicRefs.Keys.Any(path.Contains)
@@ -90,7 +103,11 @@ public sealed class ReportSettingsHttpTests : IDisposable
     }
 
     [SetUp]
-    public void SetUp() => _logs.Clear();
+    public void SetUp()
+    {
+        _logs.Clear();
+        _beforeLogoWrite = null;
+    }
 
     #region Fixtures
 
@@ -175,6 +192,43 @@ public sealed class ReportSettingsHttpTests : IDisposable
 
     private static string? Stored(Reply settings, string template, string member) =>
         settings.Json["templates"]!.AsArray().Single(t => t!["id"]!.GetValue<string>() == template)![member]?.ToString();
+
+    /// <summary>
+    /// A file system that runs a step of the test (once, when the test has set one) just before the next file is
+    /// written, and otherwise is the one it wraps: a request can be held at the point where it writes, with the
+    /// settings it read, while another runs whole.
+    /// </summary>
+    [SuppressMessage("Performance", "CA1852", Justification = "DispatchProxy.Create refuses a sealed proxy type")]
+    private class SteppedFileSystem : DispatchProxy
+    {
+        private IFileSystem _inner = null!;
+        private Func<Action?> _takeStep = null!;
+
+        public static IFileSystem Over(IFileSystem inner, Func<Action?> takeStep)
+        {
+            var proxy = Create<IFileSystem, SteppedFileSystem>();
+            var stepped = (SteppedFileSystem)(object)proxy;
+            stepped._inner = inner;
+            stepped._takeStep = takeStep;
+            return proxy;
+        }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            if (targetMethod!.Name is nameof(IFileSystem.WriteAllBytes) or nameof(IFileSystem.WriteAllBytesDurable))
+                _takeStep()?.Invoke();
+
+            try
+            {
+                return targetMethod.Invoke(_inner, args);
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException != null)
+            {
+                ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+                throw;
+            }
+        }
+    }
 
     #endregion
 
@@ -423,13 +477,14 @@ public sealed class ReportSettingsHttpTests : IDisposable
         var reply = await PutLogo(org, "standard", Png);
 
         reply.Status.ShouldBe(200, reply.Text);
-        reply.Json["logo"]!.GetValue<string>().ShouldBe("report-logo-standard.png");
+        var logo = reply.Json["logo"]!.GetValue<string>();
+        logo.ShouldBeLogoOf("standard", "png");
         reply.Json["version"]!.GetValue<int>().ShouldBe(1);
         var stored = await GetSettings(org);
         stored.Json["version"]!.GetValue<int>().ShouldBe(1);
-        Stored(stored, "standard", "logo").ShouldBe("report-logo-standard.png");
+        Stored(stored, "standard", "logo").ShouldBe(logo);
         stored.Json["schema"]!["categories"]!.AsArray().Count.ShouldBe(5);
-        File.ReadAllBytes(Path.Combine(LogoFolder(org), "report-logo-standard.png")).ShouldBe(Png);
+        File.ReadAllBytes(Path.Combine(LogoFolder(org), logo)).ShouldBe(Png);
         (await PutSettings(org, Update(1, "standard", "second"))).Status.ShouldBe(200);
     }
 
@@ -451,7 +506,7 @@ public sealed class ReportSettingsHttpTests : IDisposable
 
         save.Status.ShouldBe(200);
         save.Json["templates"]!.AsArray().Single(t => t!["id"]!.GetValue<string>() == "brand")!["logo"]!.GetValue<string>()
-            .ShouldBe("report-logo-brand.png");
+            .ShouldBe(logo.Json["logo"]!.GetValue<string>());
         (await PutSettings(org, Update(1, "standard", "brand"))).Status.ShouldBe(409);
     }
 
@@ -490,14 +545,15 @@ public sealed class ReportSettingsHttpTests : IDisposable
 
         // A PNG under a .svg name and a JPEG under a PNG content type are what their bytes say
         var asSvgName = await PutLogo(org, "standard", Png, fileName: "logo.svg");
-        asSvgName.Json["logo"]!.GetValue<string>().ShouldBe("report-logo-standard.png");
+        asSvgName.Json["logo"]!.GetValue<string>().ShouldBeLogoOf("standard", "png");
         var jpeg = await PutLogo(org, "standard", Jpeg);
-        jpeg.Json["logo"]!.GetValue<string>().ShouldBe("report-logo-standard.jpg");
+        jpeg.Json["logo"]!.GetValue<string>().ShouldBeLogoOf("standard", "jpg");
 
         var webp = await PutLogo(org, "standard", [.. "RIFF"u8, 4, 0, 0, 0, .. "WEBP"u8, 1]);
-        webp.Json["logo"]!.GetValue<string>().ShouldBe("report-logo-standard.webp");
-        // One logo per template: the file of the type before is gone
-        Directory.GetFiles(LogoFolder(org)).Select(Path.GetFileName).ShouldBe(["report-logo-standard.webp"]);
+        var logo = webp.Json["logo"]!.GetValue<string>();
+        logo.ShouldBeLogoOf("standard", "webp");
+        // One logo per template: the file before is gone
+        Directory.GetFiles(LogoFolder(org)).Select(Path.GetFileName).ShouldBe([logo]);
     }
 
     [Test]
@@ -545,7 +601,8 @@ public sealed class ReportSettingsHttpTests : IDisposable
 
         var reply = await PutLogo(org, "standard", Encoding.UTF8.GetBytes(svg), fileName: "logo.png");
 
-        reply.Json["logo"]!.GetValue<string>().ShouldBe("report-logo-standard.svg");
+        var logo = reply.Json["logo"]!.GetValue<string>();
+        logo.ShouldBeLogoOf("standard", "svg");
         var served = await SendAsync(HttpMethod.Get, Logo(org, "standard"), Member);
         served.Status.ShouldBe(200);
         served.Header("Content-Type").ShouldStartWith("image/svg+xml");
@@ -553,7 +610,7 @@ public sealed class ReportSettingsHttpTests : IDisposable
         served.Text.ShouldNotContain("script");
         served.Text.ShouldNotContain("alert");
         served.Text.ShouldNotContain("evil.test");
-        File.ReadAllText(Path.Combine(LogoFolder(org), "report-logo-standard.svg")).ShouldBe(served.Text);
+        File.ReadAllText(Path.Combine(LogoFolder(org), logo)).ShouldBe(served.Text);
     }
 
     [Test]
@@ -580,7 +637,7 @@ public sealed class ReportSettingsHttpTests : IDisposable
     public async Task TheLogoOfAPrivateOrganization_IsNotForAnonymousUsersOrStrangers_AndIsNotInTheBrandingFolder()
     {
         var org = await NewOrganizationAsync();
-        await PutLogo(org, "standard", Png);
+        var logo = (await PutLogo(org, "standard", Png)).Json["logo"]!.GetValue<string>();
 
         (await SendAsync(HttpMethod.Get, Logo(org, "standard"), null)).Status.ShouldBe(401);
         (await SendAsync(HttpMethod.Get, Logo(org, "standard"), Outsider)).Status.ShouldBe(403);
@@ -589,8 +646,8 @@ public sealed class ReportSettingsHttpTests : IDisposable
 
         foreach (var path in new[]
                  {
-                     "/branding/report-logo-standard.png", $"/branding/org-assets/{org}/report-logo-standard.png",
-                     $"/branding/../org-assets/{org}/report-logo-standard.png"
+                     $"/branding/{logo}", $"/branding/org-assets/{org}/{logo}",
+                     $"/branding/../org-assets/{org}/{logo}"
                  })
         {
             var reply = await SendAsync(HttpMethod.Get, path, null);
@@ -615,11 +672,38 @@ public sealed class ReportSettingsHttpTests : IDisposable
         (await SendAsync(HttpMethod.Get, Logo(org, "standard"), null)).Status.ShouldBe(401);
     }
 
+    [TestCase(null)]
+    [TestCase("png")]
+    [TestCase("jpg")]
+    public async Task TwoLogosAtOnce_TheOneThatLoses_LeavesTheWinnersFileAsItWasWritten(string? before)
+    {
+        var org = await NewOrganizationAsync();
+        if (before != null)
+            (await PutLogo(org, "standard", before == "png" ? Png : Jpeg)).Status.ShouldBe(200);
+        byte[] winnerBytes = [.. Png, 7];
+        byte[] loserBytes = [.. Png, 8];
+        Reply? winner = null;
+        // The loser has read the settings and is about to write its file when the winner sets the logo and saves
+        _beforeLogoWrite = () => winner = PutLogo(org, "standard", winnerBytes, OrgAdmin).GetAwaiter().GetResult();
+
+        var loser = await PutLogo(org, "standard", loserBytes);
+
+        winner.ShouldNotBeNull().Status.ShouldBe(200, winner.Text);
+        loser.Status.ShouldBe(409, loser.Text);
+        var logo = winner.Json["logo"]!.GetValue<string>();
+        Stored(await GetSettings(org), "standard", "logo").ShouldBe(logo);
+        var served = await SendAsync(HttpMethod.Get, Logo(org, "standard"), Owner);
+        served.Status.ShouldBe(200);
+        served.Bytes.ShouldBe(winnerBytes);
+        // Neither the loser's file nor the logo before stays behind
+        Directory.GetFiles(LogoFolder(org)).Select(Path.GetFileName).ShouldBe([logo]);
+    }
+
     [Test]
     public async Task RemovingALogo_IsTheNextVersion_AndDeletesTheFile()
     {
         var org = await NewOrganizationAsync();
-        await PutLogo(org, "standard", Png);
+        var logo = (await PutLogo(org, "standard", Png)).Json["logo"]!.GetValue<string>();
 
         var removed = await SendAsync(HttpMethod.Delete, Logo(org, "standard"), OrgAdmin);
 
@@ -627,7 +711,7 @@ public sealed class ReportSettingsHttpTests : IDisposable
         removed.Json["version"]!.GetValue<int>().ShouldBe(2);
         Stored(await GetSettings(org), "standard", "logo").ShouldBeNull();
         (await SendAsync(HttpMethod.Get, Logo(org, "standard"), Owner)).Status.ShouldBe(404);
-        File.Exists(Path.Combine(LogoFolder(org), "report-logo-standard.png")).ShouldBeFalse();
+        File.Exists(Path.Combine(LogoFolder(org), logo)).ShouldBeFalse();
         (await PutSettings(org, Update(2, "standard"))).Status.ShouldBe(200);
     }
 
@@ -649,14 +733,14 @@ public sealed class ReportSettingsHttpTests : IDisposable
         var org = await NewOrganizationAsync();
         (await PutSettings(org, Update(0, "standard", "brand", "other"))).Status.ShouldBe(200);
         await PutLogo(org, "brand", Png);
-        await PutLogo(org, "other", Jpeg);
+        var otherLogo = (await PutLogo(org, "other", Jpeg)).Json["logo"]!.GetValue<string>();
         Directory.GetFiles(LogoFolder(org)).Length.ShouldBe(2);
 
         var reply = await PutSettings(org, Update(3, "standard", "other"));
 
         reply.Status.ShouldBe(200);
-        Directory.GetFiles(LogoFolder(org)).Select(Path.GetFileName).ShouldBe(["report-logo-other.jpg"]);
-        Stored(reply, "other", "logo").ShouldBe("report-logo-other.jpg");
+        Directory.GetFiles(LogoFolder(org)).Select(Path.GetFileName).ShouldBe([otherLogo]);
+        Stored(reply, "other", "logo").ShouldBe(otherLogo);
 
         var again = await PutSettings(org, Update(4, "standard", "other", "brand"));
 
