@@ -97,11 +97,9 @@ public sealed class FileUrlTransfer
         progress.Report(new HeavyToolProgress(-1, "downloading",
             LogChunk: $"Downloading {fileName} from {uri.Host}"));
 
+        var log = new DownloadProgressLog();
         var sink = new CallbackProgress<FileDownloadProgress>(p =>
-            progress.Report(new HeavyToolProgress(p.Fraction, "downloading",
-                p.TotalBytes is > 0
-                    ? $"Downloaded {CommonUtils.GetBytesReadable(p.BytesSoFar)} / {CommonUtils.GetBytesReadable(p.TotalBytes.Value)}"
-                    : $"Downloaded {CommonUtils.GetBytesReadable(p.BytesSoFar)}")));
+            progress.Report(new HeavyToolProgress(p.Fraction, "downloading", log.LineFor(p))));
 
         long downloaded;
         try

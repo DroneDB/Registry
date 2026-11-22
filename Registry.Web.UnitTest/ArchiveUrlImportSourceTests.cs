@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -8,6 +9,7 @@ using System.Threading.Tasks;
 using NUnit.Framework;
 using Registry.Adapters.Archives;
 using Registry.Web.Models.Configuration;
+using Registry.Ports.Import;
 using Registry.Web.Services.Import;
 using Registry.Web.Test.Support;
 using Shouldly;
@@ -121,6 +123,73 @@ public class ArchiveUrlImportSourceTests
 
         probe.Reachable.ShouldBeFalse();
         probe.Message.ShouldNotBeNull().ShouldContain("404");
+    }
+
+    /// <summary>
+    /// The log of the download has one line per whole percent, while the progress follows every chunk read (red before:
+    /// one line per chunk, thousands for a 100 MB archive).
+    /// </summary>
+    [Test]
+    public async Task TheDownload_LogsALinePerPercent_NotPerChunk()
+    {
+        var archive = new System.IO.MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(archive, System.IO.Compression.ZipArchiveMode.Create, true))
+        {
+            using var entry = zip.CreateEntry("data.bin", System.IO.Compression.CompressionLevel.NoCompression).Open();
+            entry.Write(new byte[4 * 1024 * 1024]);
+        }
+
+        var bytes = archive.ToArray();
+        var source = SourceFor(new Handler(_ =>
+        {
+            // A network read returns a few KB at a time
+            var resp = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new SmallReads(new System.IO.MemoryStream(bytes), 16 * 1024))
+            };
+            resp.Content.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
+            resp.Content.Headers.ContentLength = bytes.Length;
+            return resp;
+        }));
+        var reports = new System.Collections.Generic.List<ImportProgress>();
+        var dest = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "archive-progress-" + Guid.NewGuid().ToString("N"));
+        var writes = new Moq.Mock<Registry.Ports.Import.IImportWriteRecord>();
+        writes.Setup(w => w.MayWrite(Moq.It.IsAny<string>())).Returns(true);
+        try
+        {
+            await source.FetchAsync(Params(), dest, writes.Object, new SyncProgress(reports.Add), CancellationToken.None);
+        }
+        finally
+        {
+            if (System.IO.Directory.Exists(dest)) System.IO.Directory.Delete(dest, true);
+        }
+
+        var downloading = reports.Where(r => r.Phase == "downloading").ToArray();
+        downloading.Length.ShouldBeGreaterThan(110, "the progress follows every chunk read");
+        var lines = downloading.Select(r => r.Message).OfType<string>().ToArray();
+        lines.Length.ShouldBeLessThanOrEqualTo(101);
+        lines.Distinct().Count().ShouldBe(lines.Length);
+        lines[^1].ShouldStartWith("Downloaded 4");
+    }
+
+    // A stream whose reads return at most maxRead bytes
+    private sealed class SmallReads(System.IO.Stream inner, int maxRead) : System.IO.Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => inner.Length;
+        public override long Position { get => inner.Position; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, Math.Min(count, maxRead));
+        public override long Seek(long offset, System.IO.SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private sealed class SyncProgress(Action<ImportProgress> report) : IProgress<ImportProgress>
+    {
+        public void Report(ImportProgress value) => report(value);
     }
 
     private sealed class Handler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler

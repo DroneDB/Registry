@@ -158,7 +158,7 @@ public class IndexRescanServiceTest : TestBase
 
     private IndexRescanService CreateService(RegistryContext context) =>
         new(context, _ddbManagerMock.Object, _taskSubmitterMock.Object,
-            new RescanRebuild(Mock.Of<IDatasetCacheInvalidator>(), CreateTestLogger<RescanRebuild>()),
+            TestJobs.Rebuild(context),
             new Registry.Web.Services.Datasets.DatasetActivity(context), CreateTestLogger<IndexRescanService>());
 
     private static DdbEntry Entry(string path, EntryType type) => new() { Path = path, Type = type, Hash = path };

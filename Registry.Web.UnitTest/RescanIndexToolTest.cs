@@ -10,11 +10,13 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
 using Registry.Ports.DroneDB;
+using Registry.Web.Data;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Tools;
 using Registry.Web.Services.Ports;
+using Registry.Ports;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -22,8 +24,12 @@ namespace Registry.Web.Test;
 [TestFixture]
 public class RescanIndexToolTest
 {
+    private static readonly Guid DatasetRef = Guid.Parse("cccccccc-0000-0000-0000-000000000003");
+
     private Mock<IDDB> _ddb = null!;
     private Mock<IDatasetCacheInvalidator> _cacheInvalidator = null!;
+    private Mock<IBackgroundJobsProcessor> _jobs = null!;
+    private TestDb<RegistryContext> _db = null!;
     private RescanIndexTool _tool = null!;
 
     [SetUp]
@@ -32,12 +38,88 @@ public class RescanIndexToolTest
         _ddb = new Mock<IDDB>();
         _ddb.SetupGet(x => x.DatasetFolderPath).Returns("/data/ds");
         _cacheInvalidator = new Mock<IDatasetCacheInvalidator>();
+        _jobs = new Mock<IBackgroundJobsProcessor>();
+        _db = TestDb.Create<RegistryContext>();
+        using (var context = _db.NewContext())
+        {
+            Seed.Dataset(context, Seed.Organization(context, "org", ownerId: "owner"), "ds", DatasetRef);
+            context.SaveChanges();
+        }
 
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddSingleton(_cacheInvalidator.Object);
-        services.AddScoped<RescanRebuild>();
+        services.AddScoped(_ => TestJobs.Rebuild(_db.NewContext(), _jobs.Object, _cacheInvalidator.Object));
         _tool = new RescanIndexTool(services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>());
+    }
+
+    [TearDown]
+    public void TearDown() => _db.Dispose();
+
+    // The builds queued as an upload queues them, by path
+    private List<string?> QueuedBuilds()
+    {
+        var paths = new List<string?>();
+        foreach (var call in _jobs.Invocations.Where(i => i.Method.Name == nameof(IBackgroundJobsProcessor.EnqueueIndexed)))
+            paths.Add(((Registry.Web.Models.IndexPayload)call.Arguments[1]!).Path);
+        return paths;
+    }
+
+    // An unfiltered rescan whose rebuild of the dataset stops with stop; the dataset holds a.tif (buildable), notes.txt
+    // (not buildable) and a folder
+    private async Task<Exception> RebuildStopsWith(Exception stop)
+    {
+        _ddb.Setup(x => x.RescanIndex(new RescanOptions(null, null, false)))
+            .Returns([new RescanResult { Path = "a.tif", Success = true, Hash = "h1" }]);
+        _ddb.Setup(x => x.Build(null!, null, true)).Throws(stop);
+        _ddb.Setup(x => x.FindSummaries(EntryQuery.All)).Returns([
+            new EntrySummary { Path = "a.tif", Type = EntryType.GeoRaster, Hash = "h1" },
+            new EntrySummary { Path = "notes.txt", Type = EntryType.Generic, Hash = "h2" },
+            new EntrySummary { Path = "folder", Type = EntryType.Directory }
+        ]);
+        _ddb.Setup(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>())).Returns((IReadOnlyList<string> paths) => paths
+            .Select(p => p == "a.tif"
+                ? TestBuilds.Build("/data/ds", p, EntryType.GeoRaster, "h1", BuildState.None)
+                : TestBuilds.NotBuildable(p)).ToArray());
+
+        return await Should.ThrowAsync<Exception>(() => Execute(new { }));
+    }
+
+    /// <summary>
+    /// The rescan cleared the build cache, then its rebuild was cancelled: the builds of the entries are queued as their
+    /// upload queued them, so the dataset gets its derived files back; the cancel is still the outcome of the task.
+    /// </summary>
+    [Test]
+    public async Task Execute_NoFilter_ARebuildCancelledAfterTheClear_QueuesTheBuildsOfTheEntries()
+    {
+        var thrown = await RebuildStopsWith(new OperationCanceledException());
+
+        thrown.ShouldBeAssignableTo<OperationCanceledException>();
+        _ddb.Verify(x => x.ClearBuildCache(), Times.Once);
+        QueuedBuilds().ShouldBe(["a.tif"]);
+    }
+
+    [Test]
+    public async Task Execute_NoFilter_ARebuildThatFailsAfterTheClear_QueuesTheBuildsOfTheEntries()
+    {
+        var thrown = await RebuildStopsWith(new InvalidOperationException("cannot build"));
+
+        thrown.ShouldBeOfType<InvalidOperationException>();
+        QueuedBuilds().ShouldBe(["a.tif"]);
+    }
+
+    /// <summary>The dataset was deleted (the delete stopped its rescan): nothing is queued for it.</summary>
+    [Test]
+    public async Task Execute_NoFilter_ARebuildStoppedByTheDeleteOfTheDataset_QueuesNothing()
+    {
+        using (var context = _db.NewContext())
+        {
+            context.Datasets.RemoveRange(context.Datasets);
+            context.SaveChanges();
+        }
+
+        await RebuildStopsWith(new OperationCanceledException());
+
+        QueuedBuilds().ShouldBeEmpty();
     }
 
     [Test]
@@ -90,6 +172,7 @@ public class RescanIndexToolTest
         _ddb.Verify(x => x.ClearBuildCache(), Times.Once);
         // A null path builds the whole dataset; the port declares the parameter non-nullable.
         _ddb.Verify(x => x.Build(null!, null, true), Times.Once);
+        QueuedBuilds().ShouldBeEmpty("a rebuild that ends queues nothing more");
         _ddb.Verify(x => x.Build("a.tif", It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
         _cacheInvalidator.Verify(x => x.InvalidateAllDatasetCachesAsync("org", "ds"), Times.Once);
     }
@@ -109,7 +192,7 @@ public class RescanIndexToolTest
     {
         var request = new HeavyToolRequest("rescan-index", "1", "org", "ds", null,
             JsonSerializer.SerializeToElement(prms));
-        var ctx = TestJobs.ExecutionContext(_ddb.Object);
+        var ctx = TestJobs.ExecutionContext(_ddb.Object, internalRef: DatasetRef);
         return _tool.ExecuteAsync(request, ctx, new Progress<HeavyToolProgress>(), CancellationToken.None);
     }
 }

@@ -675,6 +675,42 @@ public class TaskRollbackTests
         listings.Verify(l => l.ListingChangedAsync(WriteRecordEnv.Org, created, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// The user cancelled the import: there is no error to read, so the empty dataset it created is deleted at once (a
+    /// job queued now, not one scheduled after the delay a failure keeps); red before, it stayed openable for minutes.
+    /// The delete runs even though the task's row still reads Processing: the job store already says Deleted.
+    /// </summary>
+    [Test]
+    public async Task TheCreatedDataset_OfATaskTheUserCancelled_IsDeletedAtOnce()
+    {
+        NewDataset("new-ds", out var created);
+        _env.SeedTask("1", "Processing",
+            TaskWriteRecord.ForCreatedDataset(new TaskCreatedDataset(WriteRecordEnv.Org, created, "new-ds")).ToJson(),
+            ds: "new-ds", userId: "alice");
+        using (var db = _env.NewContext())
+        {
+            db.JobIndices.Single(j => j.JobId == "1").CancelledBy = "alice";
+            db.SaveChanges();
+        }
+
+        Expression<Func<CreatedDatasetRollbackJob, Task>>? queued = null;
+        _jobs.Setup(j => j.Enqueue(It.IsAny<Expression<Func<CreatedDatasetRollbackJob, Task>>>()))
+            .Callback((Expression<Func<CreatedDatasetRollbackJob, Task>> call) => queued = call)
+            .Returns("delete-now");
+        _jobs.Setup(j => j.GetJobStatus("1")).Returns(JobStatus.Deleted);
+
+        (await Rollback().RollBackAsync("1")).ShouldBe(TaskRollbackOutcome.RolledBack);
+
+        _scheduledDeletes.ShouldBeEmpty("no delay: the user cancelled the task");
+        queued.ShouldNotBeNull();
+        _env.Record("1")!.CreatedDatasetDeleteJob.ShouldBe("delete-now");
+
+        _env.Db.ChangeTracker.Clear();
+        await queued.Compile()(DeleteJob());
+        _env.Db.ChangeTracker.Clear();
+        _env.Db.Datasets.Any(d => d.InternalRef == created).ShouldBeFalse();
+    }
+
     [Test]
     public async Task TheCreatedDataset_IsKept_WhenItHoldsOtherEntries()
     {

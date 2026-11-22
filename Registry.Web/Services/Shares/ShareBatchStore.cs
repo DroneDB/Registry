@@ -9,6 +9,7 @@ using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.Datasets;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
 using Entry = Registry.Web.Data.Models.Entry;
@@ -23,10 +24,12 @@ public sealed class ShareBatchStore
     private readonly IDatasetAccessResolver _access;
     private readonly IBatchTokenGenerator _batchTokenGenerator;
     private readonly TimeProvider _time;
+    private readonly IDatasetActivity _activity;
     private readonly ILogger<ShareBatchStore> _logger;
 
-    public ShareBatchStore(RegistryContext context, IAuthManager authManager, IDatasetAccessResolver access, IBatchTokenGenerator batchTokenGenerator, TimeProvider time, ILogger<ShareBatchStore> logger)
+    public ShareBatchStore(RegistryContext context, IAuthManager authManager, IDatasetAccessResolver access, IBatchTokenGenerator batchTokenGenerator, TimeProvider time, IDatasetActivity activity, ILogger<ShareBatchStore> logger)
     {
+        _activity = activity;
         _context = context;
         _authManager = authManager;
         _access = access;
@@ -50,6 +53,10 @@ public sealed class ShareBatchStore
 
         await _access.EnsureAccessAsync(batch.Dataset, AccessType.Read);
 
+        // A batch names its dataset by its token, not by the route the busy-dataset gate reads: every use of a running
+        // batch (its info, uploads, commit and rollback) comes through here
+        await EnsureNotBusyAsync(batch.Dataset, ct);
+
         if (batch.Status != BatchStatus.Running)
             throw new BadRequestException("Only running batches can be rollbacked");
 
@@ -60,6 +67,14 @@ public sealed class ShareBatchStore
 
         return batch;
     }
+
+    /// <summary>
+    /// Refuses a share on <paramref name="dataset"/> while a task imports it or rescans its index
+    /// (<see cref="IDatasetActivity"/>), as a request on its route is refused.
+    /// </summary>
+    /// <exception cref="DatasetBusyException">The dataset is busy.</exception>
+    public Task EnsureNotBusyAsync(Dataset dataset, CancellationToken ct = default) =>
+        _activity.EnsureNotBusyAsync(dataset.Organization.Slug, dataset.Slug, ct);
 
     public async Task<IsBatchReadyResult> IsReadyAsync(string token, CancellationToken ct = default)
     {

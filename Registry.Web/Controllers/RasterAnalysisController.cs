@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Registry.Web.Attributes;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
@@ -97,6 +98,7 @@ public class RasterAnalysisController : ControllerBaseEx
     }
 
     /// <summary>Generate tile with extended visualization params.</summary>
+    [SkipDatasetBusyCheck]
     [HttpGet("tiles-ex/{tz:int}/{tx:int}/{tyRaw}.{ext:regex(^(" + TileFormat.RouteExtensions + ")$)}",
         Name = nameof(ObjectsController) + "." + nameof(GenerateTileEx))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]

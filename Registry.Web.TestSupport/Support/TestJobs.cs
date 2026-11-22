@@ -73,6 +73,14 @@ public static class TestJobs
         new(context, ddbManager, Canceller(context, jobs), servers ?? new FakeLiveJobServers(),
             NullLogger<DatasetCleanupService>.Instance);
 
+    /// <summary>
+    /// What a rescan rebuilds (<see cref="RescanRebuild"/>) on the test's database; the builds it queues after a stopped
+    /// rebuild go to <paramref name="jobs"/> (a loose mock unless given).
+    /// </summary>
+    public static RescanRebuild Rebuild(RegistryContext context, IBackgroundJobsProcessor? jobs = null,
+        IDatasetCacheInvalidator? caches = null) =>
+        new(caches ?? Mock.Of<IDatasetCacheInvalidator>(), context, Scheduler(jobs), NullLogger<RescanRebuild>.Instance);
+
     /// <summary>The budget of a job host with 8 cores and 16 GB, with these processing settings (defaults when null).</summary>
     public static HostResourceBudget Budget(ProcessingBudgetSettings? processing = null) =>
         HostResourceBudget.Create(InstanceType.Default, new HostFacts(8, 16L << 30),

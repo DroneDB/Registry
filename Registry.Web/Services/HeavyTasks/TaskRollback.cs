@@ -20,7 +20,8 @@ namespace Registry.Web.Services.HeavyTasks;
 /// (<see cref="TaskEntryChanges"/>). A
 /// dataset the task created is found by its folder id (never by its slug, which may have changed or been taken by
 /// another dataset) and, when nothing else is indexed in it, deleted by the system a few minutes later
-/// (<see cref="CreatedDatasetRollbackJob"/>), so that the task's error can still be read meanwhile.
+/// (<see cref="CreatedDatasetRollbackJob"/>), so that the task's error can still be read meanwhile; at once when the user
+/// cancelled the task, which leaves no error to read.
 /// </summary>
 public sealed class TaskRollback : ITaskRollback
 {
@@ -467,13 +468,18 @@ public sealed class TaskRollback : ITaskRollback
             return null;
         }
 
-        var userId = await _db.JobIndices.AsNoTracking().Where(j => j.JobId == taskId).Select(j => j.UserId)
-            .FirstOrDefaultAsync(ct);
-        var jobId = _processor.Schedule<CreatedDatasetRollbackJob>(
-            job => job.DeleteAsync(taskId, created.InternalRef, userId), CreatedDatasetDeleteDelay);
+        var task = await _db.JobIndices.AsNoTracking().Where(j => j.JobId == taskId)
+            .Select(j => new { j.UserId, j.CancelledBy }).FirstOrDefaultAsync(ct);
+        var userId = task?.UserId;
+        // A task the user cancelled has no error to read: its empty dataset goes at once, not after the delay
+        var delay = task?.CancelledBy != null ? TimeSpan.Zero : CreatedDatasetDeleteDelay;
+        var jobId = delay == TimeSpan.Zero
+            ? _processor.Enqueue<CreatedDatasetRollbackJob>(job => job.DeleteAsync(taskId, created.InternalRef, userId))
+            : _processor.Schedule<CreatedDatasetRollbackJob>(
+                job => job.DeleteAsync(taskId, created.InternalRef, userId), delay);
         _log.LogWarning("The dataset {Org}/{Slug} ({InternalRef}) that task {TaskId} of user {UserId} created is deleted " +
                         "in {Delay} (job {JobId})", dataset.Organization.Slug, dataset.Slug, created.InternalRef, taskId,
-            userId ?? "(system)", CreatedDatasetDeleteDelay, jobId);
+            userId ?? "(system)", delay, jobId);
         await NameDeleteJobAsync(taskId, created, jobId, ct);
         return jobId;
     }

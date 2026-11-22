@@ -184,7 +184,7 @@ public class AbandonedShareBatchesTests
         auth.Setup(a => a.SafeGetCurrentUserName()).ReturnsAsync("alice");
         auth.Setup(a => a.IsUserAdmin()).ReturnsAsync(false);
         return new ShareBatchStore(context ?? _context, auth.Object, Mock.Of<IDatasetAccessResolver>(),
-            Mock.Of<IBatchTokenGenerator>(), _time, NullLogger<ShareBatchStore>.Instance);
+            Mock.Of<IBatchTokenGenerator>(), _time, Mock.Of<Registry.Web.Services.Datasets.IDatasetActivity>(), NullLogger<ShareBatchStore>.Instance);
     }
 
     // Null: the batch is gone, deleted (cascade) with the dataset it created
@@ -581,7 +581,7 @@ public class AbandonedShareBatchesTests
         var auth = new Mock<IAuthManager>();
         auth.Setup(a => a.SafeGetCurrentUserName()).ReturnsAsync("alice");
         var store = new ShareBatchStore(_context, auth.Object, Mock.Of<IDatasetAccessResolver>(), tokens.Object, _time,
-            NullLogger<ShareBatchStore>.Instance);
+            Mock.Of<Registry.Web.Services.Datasets.IDatasetActivity>(), NullLogger<ShareBatchStore>.Instance);
 
         var batch = await store.StartAsync(_context.Datasets.Single(d => d.Id == ds.Id), createdDataset: false);
 

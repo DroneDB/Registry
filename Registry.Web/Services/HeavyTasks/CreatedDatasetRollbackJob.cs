@@ -54,12 +54,14 @@ public sealed class CreatedDatasetRollbackJob
         }
 
         // Retried by the user before its rollback finished (its record stays rolling back until the new run starts,
-        // which deletes what is left and keeps the dataset): queued or running again, it keeps its dataset. Both the
-        // task's row and the live state of its job are read: the row follows the job a moment later
-        var state = await _db.JobIndices.AsNoTracking().Where(j => j.JobId == taskId).Select(j => j.CurrentState)
-            .FirstOrDefaultAsync();
-        if (state == null || TaskStateCatalog.IsTerminal(state))
-            state = JobRunsAgain(taskId);
+        // which deletes what is left and keeps the dataset): queued or running again, it keeps its dataset. The live
+        // state of its job decides, when the job store has it: the row follows the job a moment later, so a task
+        // cancelled a moment ago (whose delete is queued at once) may still read Processing there
+        var live = _jobs.GetJobStatus(taskId);
+        var state = live != JobStatus.Unknown
+            ? live.ToString()
+            : await _db.JobIndices.AsNoTracking().Where(j => j.JobId == taskId).Select(j => j.CurrentState)
+                .FirstOrDefaultAsync();
         if (state != null && !TaskStateCatalog.IsTerminal(state))
         {
             _log.LogInformation("Task {TaskId} is {State} again: the dataset {InternalRef} it created is kept", taskId,
@@ -99,14 +101,6 @@ public sealed class CreatedDatasetRollbackJob
             r.CreatedDatasetDeleteJob = null;
             return r;
         });
-
-    // The live state of the task's job when it waits or runs (a retry re-queued it), else null; a job the storage
-    // cannot read is not running
-    private string? JobRunsAgain(string taskId) =>
-        _jobs.GetJobStatus(taskId) is var status and (JobStatus.Enqueued or JobStatus.Scheduled or JobStatus.Processing
-            or JobStatus.Awaiting)
-            ? status.ToString()
-            : null;
 
     /// <summary>Whether anything is indexed in the dataset.</summary>
     internal static bool HasEntries(IDDB ddb) => ddb.FindSummaries(new EntryQuery(Recursive: false)) is { Count: > 0 };

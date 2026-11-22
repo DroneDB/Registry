@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
+using Registry.Web.Attributes;
 using Registry.Web.Exceptions;
 using Registry.Web.Filters;
 using Registry.Web.Services.Managers;
@@ -54,6 +55,7 @@ public class MvtController : ControllerBaseEx
     /// such a tile is 204, since a 404 would make every map log an error for the tiles around the data. A file
     /// without a pyramid, or a tile off its zoom levels or grid, is 404.
     /// </remarks>
+    [SkipDatasetBusyCheck]
     [HttpGet("{hash}/{z:int}/{x:int}/{y:int}.pbf")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

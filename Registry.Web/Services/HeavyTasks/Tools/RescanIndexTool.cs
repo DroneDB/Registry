@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models;
 using Registry.Web.Services.Adapters;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Ports;
@@ -105,7 +106,7 @@ public sealed class RescanIndexTool : HeavyToolBase<RescanIndexTool.Parameters>
         // (including processing nodes) unlike the full IObjectsManager.
         using var scope = _scopeFactory.CreateScope();
         var rebuild = await scope.ServiceProvider.GetRequiredService<RescanRebuild>().RunAsync(
-            request.OrgSlug, request.DsSlug, ctx.Ddb, filter, results, new InlineBuilds(ctx),
+            new BuildTarget(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug), filter, results, new InlineBuilds(ctx),
             f => progress.Report(new HeavyToolProgress(f, "rebuilding")), ct: ct);
 
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: rebuild.WholeDataset

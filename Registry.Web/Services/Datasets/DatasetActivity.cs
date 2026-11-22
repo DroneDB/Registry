@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -85,15 +86,26 @@ public sealed class DatasetActivity : IDatasetActivity
     }
 
     public async Task<DatasetBusy?> GetAsync(string orgSlug, string dsSlug, CancellationToken ct = default) =>
-        Newest(await ActiveAsync(orgSlug, [dsSlug], ct)).GetValueOrDefault(dsSlug);
+        Newest(await ActiveOfDatasetAsync(orgSlug, dsSlug, ct)).GetValueOrDefault(dsSlug);
 
     public async Task<IReadOnlyDictionary<string, DatasetBusy>> GetForOrgAsync(string orgSlug,
-        IReadOnlyCollection<string> dsSlugs, CancellationToken ct = default) =>
-        dsSlugs.Count == 0 ? new Dictionary<string, DatasetBusy>() : Newest(await ActiveAsync(orgSlug, dsSlugs, ct));
+        IReadOnlyCollection<string> dsSlugs, CancellationToken ct = default)
+    {
+        if (dsSlugs.Count == 0)
+            return new Dictionary<string, DatasetBusy>();
+
+        var slugs = dsSlugs.ToArray();
+        var rows = await _context.JobIndices.AsNoTracking()
+            .Where(j => j.OrgSlug == orgSlug && slugs.Contains(j.DsSlug))
+            .Where(ActiveLocking)
+            .Select(Row)
+            .ToArrayAsync(ct);
+        return Newest(Ordinal(rows, orgSlug, slugs));
+    }
 
     public async Task<IReadOnlyList<string>> ActiveTaskIdsAsync(string orgSlug, string dsSlug,
         CancellationToken ct = default) =>
-        [.. (await ActiveAsync(orgSlug, [dsSlug], ct)).Select(r => r.JobId)];
+        [.. (await ActiveOfDatasetAsync(orgSlug, dsSlug, ct)).Select(r => r.JobId)];
 
     public async Task EnsureNotBusyAsync(string orgSlug, string dsSlug, CancellationToken ct = default)
     {
@@ -104,20 +116,41 @@ public sealed class DatasetActivity : IDatasetActivity
     private sealed record ActiveRow(string JobId, string OrgSlug, string DsSlug, string ToolId, int? ProgressPercent,
         DateTime CreatedAtUtc);
 
-    // The queued and running tasks of the locking tools on these datasets: the lookup index of the task requests
-    // (OrgSlug, DsSlug, ToolId, ...) narrows them. The slugs and the tool are compared again ordinally in memory (the
-    // MariaDB collation matches "SOURCE" to "source")
-    private async Task<ActiveRow[]> ActiveAsync(string orgSlug, IReadOnlyCollection<string> dsSlugs,
-        CancellationToken ct)
-    {
-        var slugs = dsSlugs.ToArray();
-        var rows = await _context.JobIndices.AsNoTracking()
-            .Where(j => j.OrgSlug == orgSlug && slugs.Contains(j.DsSlug) && LockingToolIds.Contains(j.ToolId) &&
-                        TaskStateCatalog.Active.Contains(j.CurrentState))
-            .Select(j => new ActiveRow(j.JobId, j.OrgSlug, j.DsSlug, j.ToolId, j.ProgressPercent, j.CreatedAtUtc))
-            .ToArrayAsync(ct);
+    private static readonly Expression<Func<JobIndex, ActiveRow>> Row =
+        j => new ActiveRow(j.JobId, j.OrgSlug, j.DsSlug, j.ToolId, j.ProgressPercent, j.CreatedAtUtc);
 
-        var wanted = slugs.ToHashSet(StringComparer.Ordinal);
+    // A task of a locking tool in an active state. The tools and the states are constants of the query, not bound
+    // values: the plan is the same for every request, and the index (OrgSlug, DsSlug, ToolId, CurrentState) answers it
+    // without reading the history of the dataset
+    private static readonly Expression<Func<JobIndex, bool>> ActiveLocking = ActiveLockingPredicate();
+
+    // The locking tasks of one dataset in an active state: one indexed lookup
+    private async Task<ActiveRow[]> ActiveOfDatasetAsync(string orgSlug, string dsSlug, CancellationToken ct) =>
+        Ordinal(await _context.JobIndices.AsNoTracking()
+            .Where(j => j.OrgSlug == orgSlug && j.DsSlug == dsSlug)
+            .Where(ActiveLocking)
+            .Select(Row)
+            .ToArrayAsync(ct), orgSlug, [dsSlug]);
+
+    // ToolId in the locking tools and CurrentState in the active states, each as member == value || ...
+    private static Expression<Func<JobIndex, bool>> ActiveLockingPredicate()
+    {
+        var job = Expression.Parameter(typeof(JobIndex), "j");
+
+        Expression OneOf(string member, IEnumerable<string> values) => values
+            .Select(v => (Expression)Expression.Equal(Expression.Property(job, member), Expression.Constant(v)))
+            .Aggregate(Expression.OrElse);
+
+        return Expression.Lambda<Func<JobIndex, bool>>(Expression.AndAlso(
+            OneOf(nameof(JobIndex.ToolId), LockingToolIds),
+            OneOf(nameof(JobIndex.CurrentState), TaskStateCatalog.Active)), job);
+    }
+
+    // The rows of these datasets, compared again ordinally in memory (the MariaDB collation matches "SOURCE" to "source"),
+    // of a locking tool spelt as the catalog spells it
+    private static ActiveRow[] Ordinal(IEnumerable<ActiveRow> rows, string orgSlug, IReadOnlyCollection<string> dsSlugs)
+    {
+        var wanted = dsSlugs.ToHashSet(StringComparer.Ordinal);
         return [.. rows.Where(r => string.Equals(r.OrgSlug, orgSlug, StringComparison.Ordinal) &&
                                    wanted.Contains(r.DsSlug) && LockingTools.ContainsKey(r.ToolId))];
     }

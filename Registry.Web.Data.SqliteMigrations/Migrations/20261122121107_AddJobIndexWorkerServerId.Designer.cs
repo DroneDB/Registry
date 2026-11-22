@@ -366,6 +366,9 @@ namespace Registry.Web.Data.SqliteMigrations.Migrations
 
                     b.HasIndex("OrgSlug", "DsSlug", "Hash");
 
+                    b.HasIndex("OrgSlug", "DsSlug", "ToolId", "CurrentState")
+                        .HasDatabaseName("IX_JobIndex_DatasetToolState");
+
                     b.HasIndex("OrgSlug", "DsSlug", "ToolId", "RequestHash")
                         .HasDatabaseName("IX_JobIndex_RequestHash");
 

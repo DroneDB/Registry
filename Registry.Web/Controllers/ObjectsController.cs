@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Ports.DroneDB;
+using Registry.Web.Attributes;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.Configuration;
@@ -116,6 +117,7 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="ext">The tile image extension: the format of the image served (png, webp or jpg).</param>
     /// <param name="v">Optional entry hash; when it matches the entry, the response may be cached without revalidation.</param>
     /// <returns>The tile image file.</returns>
+    [SkipDatasetBusyCheck]
     [HttpGet("tiles/{tz:int}/{tx:int}/{tyRaw}.{ext:regex(^(" + TileFormat.RouteExtensions + ")$)}",
         Name = nameof(ObjectsController) + "." + nameof(GenerateTile))]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
@@ -335,6 +337,7 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="destPath">The destination path (optional).</param>
     /// <param name="overwrite">Whether to overwrite existing files.</param>
     /// <returns>No content on success.</returns>
+    [DatasetInForm("destOrgSlug", "destDsSlug")]
     [HttpPost("transfer", Name = nameof(ObjectsController) + "." + nameof(Transfer))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]

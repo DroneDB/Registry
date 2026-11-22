@@ -47,6 +47,10 @@ internal sealed class JobIndexConfiguration : IEntityTypeConfiguration<JobIndex>
             .HasDatabaseName("IX_JobIndex_Tool_State");
         e.HasIndex(x => new { x.OrgSlug, x.DsSlug, x.ToolId, x.RequestHash })
             .HasDatabaseName("IX_JobIndex_RequestHash");
+        // The busy state of a dataset, read by every request on it: its import or rescan in an active state, found
+        // without reading the dataset's task history
+        e.HasIndex(x => new { x.OrgSlug, x.DsSlug, x.ToolId, x.CurrentState })
+            .HasDatabaseName("IX_JobIndex_DatasetToolState");
         e.HasIndex(x => x.WorkflowExecutionId)
             .HasDatabaseName("IX_JobIndex_Workflow");
         e.HasIndex(x => x.ParentJobId)

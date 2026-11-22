@@ -79,7 +79,8 @@ public class ShareChunkedUploadsTests
         auth.Setup(a => a.GetCurrentUserId()).ReturnsAsync(() => IdOf(_user));
         auth.Setup(a => a.IsUserAdmin()).ReturnsAsync(false);
         var store = new ShareBatchStore(_context, auth.Object, Mock.Of<IDatasetAccessResolver>(),
-            Mock.Of<IBatchTokenGenerator>(), TimeProvider.System, NullLogger<ShareBatchStore>.Instance);
+            Mock.Of<IBatchTokenGenerator>(), TimeProvider.System, Mock.Of<Registry.Web.Services.Datasets.IDatasetActivity>(),
+            NullLogger<ShareBatchStore>.Instance);
 
         var ddb = new Mock<IDDB>();
         ddb.SetupGet(d => d.DatasetFolderPath).Returns(_root);

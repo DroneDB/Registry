@@ -153,7 +153,7 @@ public class BuildKeyTests
 
     private static IndexRescanService Service(RegistryContext context, IDdbManager ddbManager) =>
         new(context, ddbManager, Mock.Of<ISystemTaskSubmitter>(),
-            new RescanRebuild(Mock.Of<IDatasetCacheInvalidator>(), NullLogger<RescanRebuild>.Instance),
+            TestJobs.Rebuild(context),
             new Registry.Web.Services.Datasets.DatasetActivity(context), NullLogger<IndexRescanService>.Instance);
 
     // §8.3 "Rescan test: only changed keys rebuild"
@@ -274,7 +274,7 @@ public class BuildKeyTests
                 .Returns("job");
 
             var service = new IndexRescanService(Context, manager.Object, Mock.Of<ISystemTaskSubmitter>(),
-                new RescanRebuild(Mock.Of<IDatasetCacheInvalidator>(), NullLogger<RescanRebuild>.Instance),
+                TestJobs.Rebuild(Context),
                 new Registry.Web.Services.Datasets.DatasetActivity(Context), NullLogger<IndexRescanService>.Instance);
             return new UpgradeRescanStartupTask(Context, service, steps.Length == 0 ? [new BuildKeyRescanStep()] : steps,
                 manager.Object, TestJobs.Scheduler(jobs.Object),

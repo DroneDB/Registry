@@ -3,9 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Ports.DroneDB;
+using Registry.Web.Data;
 using Registry.Web.Models;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Services.Adapters;
@@ -27,11 +31,16 @@ public sealed record RescanRebuildResult(bool WholeDataset, int Built, int Faile
 public sealed class RescanRebuild
 {
     private readonly IDatasetCacheInvalidator _caches;
+    private readonly RegistryContext _context;
+    private readonly BuildScheduler _scheduler;
     private readonly ILogger<RescanRebuild> _logger;
 
-    public RescanRebuild(IDatasetCacheInvalidator caches, ILogger<RescanRebuild> logger)
+    public RescanRebuild(IDatasetCacheInvalidator caches, RegistryContext context, BuildScheduler scheduler,
+        ILogger<RescanRebuild> logger)
     {
         _caches = caches ?? throw new ArgumentNullException(nameof(caches));
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -40,17 +49,17 @@ public sealed class RescanRebuild
     /// Rebuild only the rescanned entries whose build key changed (the rescan of a filtered scope only: an
     /// unfiltered rescan rebuilds the dataset).
     /// </param>
-    public async Task<RescanRebuildResult> RunAsync(string orgSlug, string dsSlug, IDDB ddb, RescanFilter filter,
+    public async Task<RescanRebuildResult> RunAsync(BuildTarget target, RescanFilter filter,
         IReadOnlyCollection<RescanResult> results, IRescanBuildRunner builds, Action<double>? onProgress = null,
         bool onlyChangedKeys = false, CancellationToken ct = default)
     {
+        var (ddb, orgSlug, dsSlug) = (target.Ddb, target.OrgSlug, target.DsSlug);
         if (filter.IsEmpty)
         {
             _logger.LogInformation("Clearing build cache and rebuilding {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
             ddb.ClearBuildCache();
             await _caches.InvalidateAllDatasetCachesAsync(orgSlug, dsSlug);
-            await builds.BuildDataset();
-            await builds.BuildPending();
+            await RebuildClearedAsync(target, builds, ct);
             return new RescanRebuildResult(true, 0, 0);
         }
 
@@ -82,6 +91,45 @@ public sealed class RescanRebuild
 
         await builds.BuildPending();
         return new RescanRebuildResult(false, built, failed);
+    }
+
+    // From the clear of the build cache until its rebuild ends, the dataset has no derived files. A rebuild that stops
+    // before (cancelled, failed) queues the builds of the entries as their upload queued them, so the dataset gets them
+    // back without waiting for the completeness check; a deleted dataset gets nothing. The stop itself is the outcome
+    // of the rescan: it goes on to the caller
+    private async Task RebuildClearedAsync(BuildTarget target, IRescanBuildRunner builds, CancellationToken ct)
+    {
+        var rebuilt = false;
+        try
+        {
+            await builds.BuildDataset();
+            await builds.BuildPending();
+            ct.ThrowIfCancellationRequested();
+            rebuilt = true;
+        }
+        finally
+        {
+            if (!rebuilt)
+                await BestEffort.RunAsync(() => QueueEntryBuildsAsync(target),
+                    ex => _logger.LogError(ex, "Cannot queue the builds of {OrgSlug}/{DsSlug} after its rebuild " +
+                                               "stopped: the artifact completeness check queues them", target.OrgSlug,
+                        target.DsSlug), CancellationToken.None);
+        }
+    }
+
+    private async Task QueueEntryBuildsAsync(BuildTarget target)
+    {
+        if (!await _context.Datasets.AsNoTracking()
+                .AnyAsync(d => d.InternalRef == target.Dataset.InternalRef, CancellationToken.None))
+            return;
+
+        var paths = target.Ddb.FindSummaries(EntryQuery.All)
+            .Where(e => e.Type != EntryType.Directory)
+            .Select(e => e.Path)
+            .ToArray();
+        var queued = await _scheduler.QueueAddedAsync(target, paths, BuildOrigin.Service, CancellationToken.None);
+        _logger.LogWarning("The rebuild of {OrgSlug}/{DsSlug} stopped after its build cache was cleared: {Count} " +
+                           "build(s) queued", target.OrgSlug, target.DsSlug, queued.Count);
     }
 
     private List<RescanResult> BuildableEntries(IDDB ddb, IEnumerable<RescanResult> results)

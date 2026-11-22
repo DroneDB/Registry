@@ -117,13 +117,17 @@ public sealed class DatasetBusyHttpTests : IDisposable
         ("GET", Dataset, () => null),
         ("GET", Dataset + "/ex", () => null),
         ("GET", Dataset + "/list", () => null),
-        ("GET", Dataset + "/tiles/1/1/1.png?path=ortho.tif", () => null),
         ("POST", Dataset + "/meta/set/annotations", () => Form(("data", "[]"))),
         ("POST", Dataset + "/obj", Upload),
         ("POST", Dataset + "/tasks", () => Json("""{"toolId":"build"}""")),
         ("POST", Dataset + "/rename", () => Form(("slug", "renamed"))),
         ("POST", Dataset + "/rescan", () => null),
         ("POST", Dataset + "/push/init", () => Form(("checksum", "x"), ("stampJson", "{}"))),
+        // A dataset named in the form: the destination of a transfer from another dataset
+        ("POST", "/orgs/" + Org + "/ds/" + Idle + "/transfer",
+            () => Form(("sourcePath", "a.tif"), ("destOrgSlug", Org), ("destDsSlug", Busy))),
+        // A new share batch on it
+        ("POST", "/share/init", () => Form(("tag", Org + "/" + Busy))),
         ("GET", "/stac/collections/" + Org + "/" + Busy + "/items/a.tif", () => null)
     ];
 
@@ -142,6 +146,66 @@ public sealed class DatasetBusyHttpTests : IDisposable
         problem[ApiErrorResponder.NoRetryMember]!.GetValue<bool>().ShouldBeTrue();
         problem["detail"]!.GetValue<string>()
             .ShouldBe($"Dataset '{Org}/{Busy}' is importing: it can only be deleted until the import ends");
+    }
+
+    private static void ShouldBeBusy((int Status, JsonNode? Body) answer)
+    {
+        var (status, problem) = answer;
+        status.ShouldBe(StatusCodes.Status409Conflict);
+        problem.ShouldNotBeNull();
+        problem[ApiErrorResponder.DatasetBusyMember]!.GetValue<string>().ShouldBe(DatasetActivity.Importing);
+        problem[ApiErrorResponder.TaskIdMember]!.GetValue<string>().ShouldBe(ImportTask);
+    }
+
+    /// <summary>
+    /// A share batch names its dataset by its token: a batch started before the dataset became busy can no longer be
+    /// read, uploaded to, committed or rolled back, and nothing reaches the dataset (red before: all of them answered and
+    /// the upload and commit wrote into the dataset the import was filling).
+    /// </summary>
+    [Test]
+    public async Task ARunningShareBatch_OfABusyDataset_IsRefused()
+    {
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<RegistryContext>();
+            context.JobIndices.RemoveRange(context.JobIndices);
+            await context.SaveChangesAsync();
+        }
+
+        var (initStatus, init) = await SendAsync(HttpMethod.Post, "/share/init", Form(("tag", Org + "/" + Busy)));
+        initStatus.ShouldBe(StatusCodes.Status200OK, init?.ToJsonString());
+        var token = init!["token"]!.GetValue<string>();
+        await SetUp();
+
+        ShouldBeBusy(await SendAsync(HttpMethod.Get, "/share/info/" + token));
+        ShouldBeBusy(await SendAsync(HttpMethod.Post, "/share/upload/" + token, Upload()));
+        var chunk = new MultipartFormDataContent
+        {
+            { new StringContent("file-1"), "fileId" }, { new StringContent("0"), "chunkIndex" },
+            { new StringContent("1"), "totalChunks" }, { new StringContent("4"), "totalFileSize" },
+            { new StringContent("a.txt"), "path" }, { new StringContent("data"), "file", "a.txt" }
+        };
+        ShouldBeBusy(await SendAsync(HttpMethod.Post, "/share/upload-chunk/" + token, chunk));
+        ShouldBeBusy(await SendAsync(HttpMethod.Post, "/share/commit/" + token));
+        ShouldBeBusy(await SendAsync(HttpMethod.Post, "/share/rollback/" + token));
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var batch = await scope.ServiceProvider.GetRequiredService<RegistryContext>().Batches.AsNoTracking()
+                .Include(b => b.Entries).SingleAsync(b => b.Token == token);
+            batch.Status.ShouldBe(BatchStatus.Running);
+            batch.Entries.ShouldBeEmpty();
+        }
+    }
+
+    /// <summary>The map tiles skip the check (the hot path of every map): a tile of a busy dataset is not refused as busy.</summary>
+    [Test]
+    public async Task AMapTile_OfABusyDataset_IsNotChecked()
+    {
+        var (status, problem) = await SendAsync(HttpMethod.Get, Dataset + "/tiles/1/1/1.png?path=ortho.tif");
+
+        status.ShouldNotBe(StatusCodes.Status409Conflict);
+        (problem as JsonObject)?.ContainsKey(ApiErrorResponder.DatasetBusyMember).ShouldNotBe(true);
     }
 
     /// <summary>Only a caller who may read the dataset learns that it is busy: the others get the answer of the access check.</summary>

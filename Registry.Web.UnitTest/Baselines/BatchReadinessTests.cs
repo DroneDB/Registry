@@ -53,7 +53,7 @@ public sealed class BatchReadinessTests
         _auth.Setup(a => a.SafeGetCurrentUserName()).ReturnsAsync(UserName);
         _auth.Setup(a => a.IsUserAdmin()).ReturnsAsync(false);
         _store = new ShareBatchStore(_db.NewContext(), _auth.Object, Mock.Of<IDatasetAccessResolver>(),
-            Mock.Of<IBatchTokenGenerator>(), TimeProvider.System, NullLogger<ShareBatchStore>.Instance);
+            Mock.Of<IBatchTokenGenerator>(), TimeProvider.System, Mock.Of<Registry.Web.Services.Datasets.IDatasetActivity>(), NullLogger<ShareBatchStore>.Instance);
     }
 
     [TearDown]

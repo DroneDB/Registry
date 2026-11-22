@@ -25,7 +25,8 @@ public static class TestShares
         ChunkStore? chunks = null, IDdbManager? ddbManager = null)
     {
         ddbManager ??= EmptyDatasets();
-        var store = new ShareBatchStore(context, authManager, access, tokens, time, NullLogger<ShareBatchStore>.Instance);
+        var store = new ShareBatchStore(context, authManager, access, tokens, time,
+            new Registry.Web.Services.Datasets.DatasetActivity(context), NullLogger<ShareBatchStore>.Instance);
         var rollback = new ShareBatchRollback(context, access, store, datasetsManager, entries, ddbManager,
             NullLogger<ShareBatchRollback>.Instance);
         var targets = new ShareTargets(context, datasets, organizations,

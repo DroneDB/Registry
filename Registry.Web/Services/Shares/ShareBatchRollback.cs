@@ -121,8 +121,10 @@ public sealed class ShareBatchRollback
     /// <summary>Rolls back the running batches of <paramref name="dataset"/> (a new batch replaces them).</summary>
     public async Task RollbackRunningAsync(Dataset dataset)
     {
-        // A new batch replaces the running ones: only who may write to the dataset may do that
+        // A new batch replaces the running ones: only who may write to the dataset may do that, and not while a task
+        // imports it or rescans its index (refused before a running batch is touched)
         await _access.EnsureAccessAsync(dataset, AccessType.Write);
+        await _batches.EnsureNotBusyAsync(dataset);
 
         _logger.LogInformation("Checking for running batches");
         await _context.Entry(dataset).Collection(item => item.Batches).LoadAsync();

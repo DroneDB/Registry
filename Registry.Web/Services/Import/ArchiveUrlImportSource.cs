@@ -109,13 +109,12 @@ public sealed class ArchiveUrlImportSource : IImportSource
         // The COMPRESSED size is intentionally NOT capped (maxBytes: 0): what counts against the
         // storage budget is the EXTRACTED footprint, enforced per-entry in ExtractIntoAsync. We still
         // apply the low-speed/stall guard and the temp-volume disk head-room here (via the downloader).
+        var log = new DownloadProgressLog();
         var sink = new CallbackProgress<FileDownloadProgress>(fp =>
             progress.Report(new ImportProgress(
                 fp.TotalBytes is > 0 ? Math.Min(0.5, 0.5 * fp.Fraction) : -1,
                 Phase: "downloading",
-                Message: fp.TotalBytes is > 0
-                    ? $"Downloaded {CommonUtils.GetBytesReadable(fp.BytesSoFar)} / {CommonUtils.GetBytesReadable(fp.TotalBytes.Value)}"
-                    : $"Downloaded {CommonUtils.GetBytesReadable(fp.BytesSoFar)}")));
+                Message: log.LineFor(fp))));
 
         await _downloader.DownloadAsync(
             url: new Uri(p.Url),

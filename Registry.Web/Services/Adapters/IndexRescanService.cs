@@ -10,6 +10,7 @@ using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Models;
+using Registry.Web.Services.Builds;
 using Registry.Web.Services.Datasets;
 using Registry.Web.Services.HeavyTasks;
 using Registry.Web.Services.HeavyTasks.Tools;
@@ -89,7 +90,8 @@ public class IndexRescanService
         foreach (var entry in unreadable)
             _logger.LogWarning("Rescan of {Path} in {Org}/{Ds} failed: {Error}", entry.Path, orgSlug, dsSlug, entry.Error);
 
-        var rebuilt = await _rebuild.RunAsync(orgSlug, dsSlug, ddb, filter, results, builds, ct: CancellationToken.None,
+        var rebuilt = await _rebuild.RunAsync(new BuildTarget(ddb, new DatasetKey(orgSlug, internalRef), orgSlug, dsSlug),
+            filter, results, builds, ct: CancellationToken.None,
             onlyChangedKeys: true);
 
         _logger.LogInformation(

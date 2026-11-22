@@ -30,7 +30,7 @@ public static class RegistryApiServiceCollectionExtensions
         {
             o.Filters.Add<ApiExceptionFilter>();
             // A dataset that a task imports or rescans answers only its delete and its tasks until the task ends
-            o.Filters.Add<DatasetBusyFilter>();
+            o.Conventions.Add(new DatasetBusyConvention());
             // Dataset paths are checked by libddb's rule while the request is bound
             o.ModelBinderProviders.Insert(0, new DatasetPathModelBinderProvider());
         });
