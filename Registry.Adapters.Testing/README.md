@@ -219,3 +219,7 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   `DdbAbi.Minor` 10, the adapter imports `DDBFindCoverage`, the images whose footprint intersects a geometry).
   `capabilities` has `abi.minor` 10 and `DDBFindCoverage` in `symbols`; `Contract/README.md` has the 2.10.0 entry. No
   other fixture, schema or vector changed.
+* 2026-11-22: DroneDB `3c5d3ecfc0aa86662857f20f2dde38f7f452e20e` (libddb 2.10.0, not yet released): only the 2.10.0
+  entry of `Contract/README.md` changed, which now lists a geometry spanning more than 180 degrees of longitude, or one
+  that cannot be projected, among the `DDBERR_INVALIDARGS` refusals of `DDBFindCoverage`. No fixture, schema or vector
+  changed.
